@@ -113,6 +113,8 @@ def main():
     ap.add_argument("--disk", default="/dev/nvme0n1", help="midget: the disk the installer must erase (checked against what the live system sees)")
     ap.add_argument("--no-desktop", action="store_true")
     ap.add_argument("--ui", action="store_true", help="drive the on-screen installer by keyboard instead of the unattended preset")
+    ap.add_argument("--compositor", choices=["labwc", "bifrost-wm"], default="labwc",
+                    help="bifrost-wm: after the stock checks, install the window server from this tree and check again under it")
     ap.add_argument("--label", default="")
     a = ap.parse_args()
     if a.loop:
@@ -267,22 +269,22 @@ def screen():
     return next((l.split("=", 1)[1] for l in st.splitlines() if l.startswith("screen=")), "")
 
 
-def desktop_checks():
+def desktop_checks(prefix=""):
     """Unlock (the lab account has no passcode: Enter), then open Settings, Terminal and Files by id, one screen each."""
     t = time.time()
-    shot_vm("10-lock")
+    shot_vm(f"{prefix}10-lock")
     sh(QMP + ["key", "enter"], timeout=20)
     if not wait_for(lambda: screen() not in ("", "lock"), 30, 1):
         notes.append(f"the lock screen did not unlock (screen={screen() or 'no answer'})")
-    mark("unlock", t)
+    mark(f"{prefix}unlock", t)
     time.sleep(2)
-    shot_vm("11-desktop")
+    shot_vm(f"{prefix}11-desktop")
     for name, app in (("settings", "bifrost.settings"), ("terminal", "is.olibuijr.term"), ("files", "is.olibuijr.files.desktop")):
         reply = control(f"open-app {app}").strip()
         if reply != "ok":
             notes.append(f"open-app {app}: {reply or 'no answer'}")
         time.sleep(3)
-        shot_vm(f"12-{name}")
+        shot_vm(f"{prefix}12-{name}")
 
 
 def lab_password():
@@ -435,7 +437,33 @@ def vm_unattended(a):
     timings["shell_version"] = ssh("ls /var/lib/pacman/local | grep springboard-shell", 10).strip()
     if not a.no_desktop:
         desktop_checks()
+    if a.compositor == "bifrost-wm" and not window_server(a):
+        return finish(a, ok=False)
     return finish(a, ok=not any(n.startswith(("open-app", "the lock")) for n in notes))
+
+
+def window_server(a):
+    """Switch the installed session to bifrost-wm (docs/window-server.md) and run the checks again under it."""
+    t = time.time()
+    if not a.skip_build:
+        r = sh(["cargo", "build", "--profile", "fast", "-p", "bifrost-wm"], timeout=1200, cwd=os.path.join(REPO, "springboard"))
+        if r.returncode:
+            notes.append("bifrost-wm build failed: " + r.stderr[-400:])
+            return False
+    for src, dst in (("springboard/target/fast/bifrost-wm", "/tmp/bifrost-wm"), ("packaging/arch/wayland/session", "/tmp/bifrost-session")):
+        sh(SCP + [src, f"root@127.0.0.1:{dst}"], timeout=120)
+    ssh("install -m755 /tmp/bifrost-wm /usr/bin/bifrost-wm && install -m755 /tmp/bifrost-session /usr/lib/bifrost/session"
+        " && mkdir -p /etc/bifrost && echo bifrost-wm > /etc/bifrost/compositor && systemctl restart springboard", 60)
+    up = wait_for(lambda: "ready=1" in control("state") and "bifrost-wm" in ssh("pgrep -a bifrost-wm", 10), 90, 3)
+    timings["wm_session_ready"] = round(time.time() - t, 1)
+    open(os.path.join(out_dir, "wm-journal.txt"), "w").write(ssh("journalctl -b -u springboard --no-pager | grep -aE 'bifrost-wm|springboard:' | tail -60", 30))
+    if not up:
+        notes.append("the session did not come up under bifrost-wm (see wm-journal.txt)")
+        shot_vm("wm-10-failed")
+        return False
+    if not a.no_desktop:
+        desktop_checks("wm-")
+    return True
 
 
 def loop(a):
