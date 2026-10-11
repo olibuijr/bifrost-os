@@ -644,6 +644,8 @@ pub mod widget_list;
 pub mod media_search;
 pub mod extension;
 pub mod extensions;
+pub mod clip_buffer;
+pub mod recording;
 pub mod vcard;
 pub mod contact_groups;
 pub mod contact_changes;
