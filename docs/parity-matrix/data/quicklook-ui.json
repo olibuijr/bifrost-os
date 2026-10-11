@@ -1,0 +1,84 @@
+{
+  "framework": "QuickLook UI",
+  "doc": "https://developer.apple.com/documentation/quicklookui",
+  "macos_since": "12.0",
+  "status": "partial",
+  "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/src/files/preview.rs, springboard/src/files/mod.rs",
+  "summary": "The SDK has a Quick Look-style panel model that apps can fill from a list or pull from a data source, with per-item display state and a thumbnail path cache. The shell still does not draw the floating panel, and apps get no view, extension or data-based preview API. Files has its own in-app previews for text, image, audio, PDF, folder and info cards.",
+  "rea_evidence": "ev_1d4e873e87bea38bea30ec31b6971f7d4b059ac6e26e01c45a2e2b8a95a46597",
+  "features": [
+    {
+      "feature": "Preview panel (QLPreviewPanel)",
+      "apple": "QLPreviewPanel: shared(), dataSource, reloadData(), refreshCurrentPreviewItem(), currentController",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, load_from, reload_data_from, step, toggle, reload_data, refresh_current_item, make_key_and_order_front, close); springboard/proto/src/peek.rs (ToShell::Preview 0x1e0, PreviewClose 0x1e1)",
+      "status": "partial",
+      "note": "The SDK sends the messages, but the shell has no consumer for ToShell::Preview, so nothing is drawn. refresh_current_item re-sends the whole list because the wire has no per-item message. No shared() singleton, no currentController responder chain, no display state for the panel itself."
+    },
+    {
+      "feature": "Preview items (QLPreviewItem)",
+      "apple": "QLPreviewItem: previewItemURL, previewItemTitle, previewItemDisplayState",
+      "bifrost": "springboard/sdk/src/peek.rs (re-exports PreviewItem from proto; ItemState; set_display_state, display_state); springboard/proto/src/peek.rs",
+      "status": "partial",
+      "note": "URL and title are carried (URL cut to 256 bytes, title to 96, at most 16 items). previewItemDisplayState is kept in the SDK as ItemState (Loading, Ready, Failed) and is not sent to the shell yet."
+    },
+    {
+      "feature": "Panel data source and delegate",
+      "apple": "QLPreviewPanelDataSource, QLPreviewPanelDelegate, QLPreviewItemLoadingBlock",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewDataSource trait, impl for Vec<PreviewItem>; PreviewPanel::load_from, reload_data_from)",
+      "status": "partial",
+      "note": "A data source protocol now pulls items (at most MAX_ITEMS) through number_of_items and item_at. No delegate callbacks, and no lazy loading block: item_at is synchronous, so an app with slow items must load them before the pull."
+    },
+    {
+      "feature": "Embedded preview view (QLPreviewView)",
+      "apple": "QLPreviewView: init(frame:style:), previewItem, refreshPreviewItem(), displayState, autostarts, close",
+      "bifrost": "springboard/src/files/preview.rs (Preview enum, line 10); springboard/src/files/mod.rs (spawn_preview, line 396)",
+      "status": "gap",
+      "note": "The preview is a Files-owned page, not an SDK view an app can place in its own view hierarchy."
+    },
+    {
+      "feature": "Built-in previews for common file types",
+      "apple": "Quick Look generates previews for common file types (text, images, audio, video, PDF, documents)",
+      "bifrost": "springboard/src/files/preview.rs (preview_for, line 28: text, image, audio card, video, PDF, folder summary, info card); springboard/src/files/mod.rs (spawn_preview: PDF text via the Books engine)",
+      "status": "partial",
+      "note": "Only the Files app uses these. The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
+    },
+    {
+      "feature": "Thumbnails (QLThumbnailGenerator)",
+      "apple": "QLThumbnailGenerator: request, update handlers, multiple representations",
+      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, line 95; ThumbnailCache, line 104, best_representation)",
+      "status": "partial",
+      "note": "Caches PNG paths under the bifrost-quicklook cache directory. The caller renders each thumbnail. No update handlers, and a single result per request."
+    },
+    {
+      "feature": "Stepping through a preview list",
+      "apple": "Arrow keys and panel navigation through the data source; Space toggles the panel",
+      "bifrost": "springboard/sdk/src/peek.rs (step, toggle, line 49 and 59); springboard/src/files/mod.rs (step_preview, line 438: previous or next file in the folder)",
+      "status": "partial",
+      "note": "Files steps through its folder without wrapping. The SDK panel's step and toggle have no shell-side key handling yet."
+    },
+    {
+      "feature": "Preview extensions (QLPreviewingController)",
+      "apple": "QLPreviewingController: preparePreviewOfFile(at:completionHandler:), preparePreviewOfSearchableItem(...), providePreview(for:completionHandler:)",
+      "bifrost": "none found in springboard/sdk/src or springboard/src",
+      "status": "gap",
+      "note": "No mechanism for an app to register a preview for its own file types, and no searchable item preview."
+    },
+    {
+      "feature": "Data-based preview extensions (QLPreviewProvider)",
+      "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment)",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No out-of-process preview extension that returns data, PDF or HTML replies."
+    }
+  ],
+  "gaps": [
+    "The shell does not draw the Quick Look panel: ToShell::Preview and PreviewClose are decoded and ignored (springboard/proto/src/lib.rs:677-679).",
+    "No delegate protocol for the panel and no asynchronous item loading block: PreviewDataSource::item_at is synchronous.",
+    "Display state is not sent to the shell, so a Loading or Failed item cannot show its state on screen.",
+    "No app-facing preview extension point: no equivalent of QLPreviewingController or QLPreviewProvider.",
+    "No embeddable preview view (QLPreviewView) in the SDK.",
+    "The SDK has no built-in file renderers for thumbnail generation; each app renders its own thumbnails.",
+    "No thumbnail update handlers or multi-representation requests.",
+    "The Files Quick Look menu item is not in springboard/apps/files/src/main.rs: the index returned a MENU_QUICK_LOOK constant there, but a grep of the current file finds none."
+  ]
+}
