@@ -37,6 +37,31 @@ impl Coordinate {
         let a = (dlat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
         2.0 * EARTH_RADIUS_M * a.sqrt().min(1.0).asin()
     }
+
+    /// Initial great-circle bearing from `self` to `other`, in degrees clockwise from true north, in 0..360.
+    /// Returns 0 when the two points are the same.
+    pub fn bearing_to(self, other: Coordinate) -> f64 {
+        let (lat1, lat2) = (self.latitude.to_radians(), other.latitude.to_radians());
+        let dlon = (other.longitude - self.longitude).to_radians();
+        let y = dlon.sin() * lat2.cos();
+        let x = lat1.cos() * lat2.sin() - lat1.sin() * lat2.cos() * dlon.cos();
+        (y.atan2(x).to_degrees() + 360.0) % 360.0
+    }
+
+    /// The point `distance_m` metres from `self` along the great circle that starts at `bearing_deg`.
+    /// `None` when either input is not finite or the result is not a valid coordinate.
+    pub fn destination(self, bearing_deg: f64, distance_m: f64) -> Option<Coordinate> {
+        if !bearing_deg.is_finite() || !distance_m.is_finite() {
+            return None;
+        }
+        let d = distance_m / EARTH_RADIUS_M;
+        let t = bearing_deg.to_radians();
+        let (lat1, lon1) = (self.latitude.to_radians(), self.longitude.to_radians());
+        let lat2 = (lat1.sin() * d.cos() + lat1.cos() * d.sin() * t.cos()).asin();
+        let lon2 = lon1 + (t.sin() * d.sin() * lat1.cos()).atan2(d.cos() - lat1.sin() * lat2.sin());
+        let lon = (lon2.to_degrees() + 540.0) % 360.0 - 180.0;
+        Coordinate::new(lat2.to_degrees(), lon)
+    }
 }
 
 /// A point on the projected world, with x and y running from 0 to `WORLD_POINTS` (`NativeMapPoint`).
@@ -468,5 +493,32 @@ mod tests {
         assert_eq!(format_distance(-5.0, DistanceUnits::Metric), "0 m");
         assert_eq!(format_distance(30.48, DistanceUnits::Imperial), "100 ft");
         assert_eq!(format_distance(1609.344, DistanceUnits::Imperial), "1.0 mi");
+    }
+
+    #[test]
+    fn bearing_points_along_the_compass() {
+        let origin = c(0.0, 0.0);
+        assert!((origin.bearing_to(c(1.0, 0.0)) - 0.0).abs() < 1e-9);
+        assert!((origin.bearing_to(c(0.0, 1.0)) - 90.0).abs() < 1e-9);
+        assert!((origin.bearing_to(c(-1.0, 0.0)) - 180.0).abs() < 1e-9);
+        assert!((origin.bearing_to(c(0.0, -1.0)) - 270.0).abs() < 1e-9);
+        assert_eq!(origin.bearing_to(origin), 0.0);
+    }
+
+    #[test]
+    fn destination_lands_at_the_requested_distance_and_bearing() {
+        let start = c(64.1466, -21.9426);
+        let end = start.destination(45.0, 12_500.0).expect("valid destination");
+        assert!((start.distance_m(end) - 12_500.0).abs() < 0.01);
+        assert!((start.bearing_to(end) - 45.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn destination_refuses_non_finite_input_and_wraps_longitude() {
+        let start = c(0.0, 179.9);
+        assert!(start.destination(f64::NAN, 100.0).is_none());
+        assert!(start.destination(90.0, f64::INFINITY).is_none());
+        let east = start.destination(90.0, 50_000.0).expect("valid destination");
+        assert!(east.longitude < 0.0 && east.longitude >= -180.0);
     }
 }

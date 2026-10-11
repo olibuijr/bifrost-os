@@ -708,3 +708,5 @@ pub mod record_asset;
 pub mod weather_model;
 pub mod language;
 pub mod segment;
+pub mod location;
+pub mod geofence;
