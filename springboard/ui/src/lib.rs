@@ -749,3 +749,5 @@ pub mod weather_attribution;
 pub mod hid_report;
 pub mod linkmeta;
 pub mod captions;
+pub mod blit;
+pub mod vertex_descriptor;
