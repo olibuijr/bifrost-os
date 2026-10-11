@@ -1,0 +1,33 @@
+{
+  "framework": "Game Controller",
+  "doc": "https://developer.apple.com/documentation/gamecontroller",
+  "macos_since": "10.9",
+  "status": "partial",
+  "bifrost": "springboard/core/src/gamepad.rs (controller discovery, connect and disconnect registry); springboard/ui/src/gamepad.rs (gamepad elements, dead-zone normalisation and state); springboard/src/bare/input.rs (evdev pointer, touch and key decoding, unchanged); springboard/src/bare/vibrator.rs (device vibrator check for Keyboard Haptics); springboard/src/bare/bluetooth.rs (Bluetooth adapter, not a game controller profile); no app-facing SDK module for controllers",
+  "summary": "BifrOSt has pure models for a gamepad: a classifier that tells a controller's input node from a pointer, touch panel or keyboard, a registry that reports each connect and disconnect once, and a state model that turns raw buttons, sticks, triggers and the direction pad into normalised values. None of it is wired into the live input path or exposed to apps, so an app still cannot discover a controller or read its state, and haptics, battery, light and motion are missing.",
+  "rea_evidence": "ev_ff53898eca6b648f970bb4815e6180d58c7ae0c2ca3afd4259bf68122bd86030",
+  "rea_evidence_previous": "ev_bde24e23f467e2d68b90e844d442131976f037dab9c6aee769ca836cfdcb6436",
+  "features": [
+    {"feature": "Controller discovery and hot-plug", "apple": "GCController, GCDevice, GCController.controllers(), controllerDidConnectNotification", "bifrost": "springboard/core/src/gamepad.rs (Capabilities::is_game_controller, Registry::connected and disconnected); springboard/src/bare/chord_recovery.rs (inotify on /dev/input for hot-plug, used by the recovery chord only)", "status": "partial", "note": "Classification and the connect and disconnect events are pure and tested. The live hot-plug watch does not feed the registry yet, and no SDK call returns the controller list or its events."},
+    {"feature": "Input events (polling and callbacks)", "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput", "bifrost": "springboard/ui/src/gamepad.rs (Gamepad::feed, Change, Gamepad::is_pressed, axis, dpad); springboard/src/bare/input.rs (pointer and touch decoding, unchanged); springboard/sdk/src/control.rs (app control socket, not input)", "status": "partial", "note": "Raw gamepad records are normalised into button edges, axis values and direction-pad changes. The decoder does not route gamepad codes to the model, and no SDK type exposes the state, so no app receives input yet."},
+    {"feature": "Button, axis, switch and direction-pad elements", "apple": "GCButtonElement, GCAxisElement, GCSwitchElement, GCDirectionPadElement, GCPhysicalInputElementCollection", "bifrost": "springboard/ui/src/gamepad.rs (Button, Axis, Element, AxisRange)", "status": "partial", "note": "Buttons, stick and trigger axes and the direction pad have names and dead-zone rescaling. No switch element, no element collection and no physical input source (remapping) exist."},
+    {"feature": "Keyboard and mouse as game input", "apple": "GCKeyboard, GCMouse", "bifrost": "springboard/shell/hwkeys.rs (hardware-keyboard shortcuts); springboard/shell/evkeys.rs (evdev key to character); springboard/src/bare/input.rs (pointer decoding)", "status": "os", "note": "The shell reads keyboards and mice itself for its own shortcuts. Apps get no keyboard or mouse profile in the SDK."},
+    {"feature": "Haptics and rumble", "apple": "GCDeviceHaptics, GCDevice.haptics", "bifrost": "springboard/src/bare/vibrator.rs (vibrator_available() checks for a device node, used for Keyboard Haptics)", "status": "gap", "note": "The vibrator check serves the keyboard feedback setting only. No rumble or haptic-locality API exists for controllers or apps."},
+    {"feature": "Battery and light on controllers", "apple": "GCDeviceBattery, GCDeviceLight", "bifrost": "none; springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would carry a wireless pad, but it reads no pad profile", "status": "gap", "note": "No controller battery or light query."},
+    {"feature": "Motion sensing (gyro and accelerometer)", "apple": "GCMotion", "bifrost": "none", "status": "gap", "note": "No motion or orientation input is read from controllers or from the device."},
+    {"feature": "Virtual on-screen controller", "apple": "GCVirtualController", "bifrost": "none", "status": "gap", "note": "The touch layer could feed a virtual pad, but no virtual controller exists in the SDK."},
+    {"feature": "Racing wheels, paddles and gear shifters", "apple": "GCRacingWheel, GCRacingWheelInput, GCGearShifterElement, GCSteeringWheelElement", "bifrost": "none", "status": "gap", "note": "No wheel, gear shifter or force-feedback model exists."},
+    {"feature": "Gamepad input in web content", "apple": "Not part of Game Controller (web Gamepad API)", "bifrost": "springboard/apps/browser/engine/Cargo.toml (Servo built with the gamepad feature)", "status": "partial", "note": "The browser engine is compiled with Servo's gamepad feature. Whether that feature receives evdev controller events is not verified in this pass, so this row is not confirmed for web pages."}
+  ],
+  "gaps": [
+    "No SDK API for apps: no controller list, connect event or input state reaches bifrost_app (the models in springboard/core/src/gamepad.rs and springboard/ui/src/gamepad.rs are not exposed).",
+    "The live input path is not wired: springboard/src/bare/input.rs does not route gamepad codes to bifrost_ui::gamepad, and the hot-plug watch does not feed bifrost_core::gamepad::Registry.",
+    "No haptics or rumble API for controllers (springboard/src/bare/vibrator.rs only checks for a vibrator node).",
+    "No controller battery, light or motion data.",
+    "No virtual controller for touch-only devices.",
+    "No Home button or controller settings manager (GCControllerHomeButtonSettingsManager) and no controller pages in Settings (springboard/src/shell/pages.rs has no controller page).",
+    "No switch element, element collection or physical input source (remapping) in springboard/ui/src/gamepad.rs.",
+    "No racing wheel model (steering wheel, gear shifter, paddles) and no force feedback.",
+    "Web Gamepad API status unverified (springboard/apps/browser/engine/Cargo.toml enables Servo's gamepad feature)."
+  ]
+}
