@@ -347,8 +347,22 @@ const LIVE_FILES: &[&str] = &["/usr/share/bifrost/splash.efi"];
 const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost"];
 const STAGE: &str = "/run/bifrost-stage";
 
+/// Waits (at most 2 min) while the lab sync is still writing the newest installer files and assets into the medium:
+/// the installer starts without waiting for the network, and a copy taken mid-sync sees files vanish.
+fn wait_for_lab_sync() {
+    let running = || {
+        Command::new("systemctl").args(["show", "-p", "ActiveState", "--value", "bifrost-lab-sync.service"]).output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "activating").unwrap_or(false)
+    };
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while running() && std::time::Instant::now() < end {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+}
+
 pub fn stage_live_files() -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
+    wait_for_lab_sync();
     let _ = std::fs::remove_dir_all(STAGE);
     std::fs::create_dir_all(STAGE).map_err(|e| e.to_string())?;
     std::fs::set_permissions(STAGE, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
@@ -356,8 +370,9 @@ pub fn stage_live_files() -> Result<(), String> {
         let dest = format!("{STAGE}{f}");
         std::fs::create_dir_all(std::path::Path::new(&dest).parent().unwrap()).map_err(|e| e.to_string())?;
         let source=if std::path::Path::new(f).is_dir() { std::fs::create_dir_all(&dest).map_err(|e|e.to_string())?; format!("{f}/.") } else { (*f).to_string() };
-        let st = Command::new("cp").args(["-a", &source, &dest]).status().map_err(|e| e.to_string())?;
-        if !st.success() {
+        // one retry: a file replaced while it is copied (a late sync) fails the first pass
+        let copy = || Command::new("cp").args(["-a", &source, &dest]).status().map(|s| s.success()).unwrap_or(false);
+        if !copy() && !{ std::thread::sleep(std::time::Duration::from_secs(1)); copy() } {
             return Err(format!("cannot read {f} from the installer medium"));
         }
     }
