@@ -1,5 +1,15 @@
 # BifrOSt changelog
 
+## 0.5.33 — 2026-10-11
+
+Five SDK and shell parity rounds (docs/bifrost-ui.md has a section for each, with the gaps that remain):
+
+- State restoration: apps save and restore their state (`encode_restorable_state` / `restore_state`, `invalidate_restorable_state` coalesces writes, sudden termination waits for the write). The shell records open windows and reopens them at login; the Restart and Shut Down alerts carry "Reopen windows when logging back in", and General has "Close windows when quitting an application". Notes restores the open note and folder.
+- Window animations: windows animate open, minimize to their Dock tile and back, and zoom (Scale effect; the Funnel choice falls back to Scale). Reduce Motion cross-fades. Apps can set `animation_behavior` (default, document, utility, alert, none). Close does not animate yet.
+- Undo: named actions ("Undo Typing", "Undo Move"), nested and per-event grouping, levels of undo, per-target removal; the Edit menu shows the action names. Notes and Files adopt it.
+- Accessibility text: label, title and help are separate; text fields report caret, selection and visible range over AT-SPI, with text-changed and caret events for screen readers; `announce` sends live announcements; secure fields expose only their length.
+- Workspace: open links and documents with the default app, open with a chosen app, reveal in Files, move to Trash (Put Back works), icons by file or type, frontmost and running apps, and launch, terminate and activate events. Every file goes through the app's document grants.
+
 ## 0.5.32 — 2026-10-11
 
 - Login: the desktop no longer stays black behind the menu bar and dock after logging in. At unlock the compositor still held both desktop buffers (the lock surface's last frame and the one queued behind it), so the first desktop frame was skipped, and the idle shell drew nothing more until the next minute's clock tick. A frame skipped for want of a buffer is now redrawn when the next one is released; the wallpaper is on screen about 0.4 s after the password is accepted.
