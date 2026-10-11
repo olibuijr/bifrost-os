@@ -27,7 +27,57 @@ pub struct Font<'a> {
     pub upem: f32,
     pub ascent: f32,
     pub descent: f32,
+    /// Font units, read once in `parse`; zero when the table is absent.
+    line_gap: f32,
+    x_height: f32,
+    cap_height: f32,
+    underline_position: f32,
+    underline_thickness: f32,
     cache: GlyphCache,
+}
+
+/// Vertical metrics of a font at one size, in px (`NativeFontMetrics`). Descent is positive, as the platform
+/// reports it; the other values keep their sign from the font (the underline position is usually negative).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineMetrics {
+    pub ascent: f32,
+    pub descent: f32,
+    pub leading: f32,
+    pub cap_height: f32,
+    pub x_height: f32,
+    pub underline_position: f32,
+    pub underline_thickness: f32,
+}
+
+impl LineMetrics {
+    /// Line height with no extra spacing: ascent, descent and leading.
+    pub fn line_height(&self) -> f32 {
+        self.ascent + self.descent + self.leading
+    }
+}
+
+/// The first face in `faces` with a glyph for `ch`, or None when no face covers it. A face with glyph 0 does not
+/// count as covering the character (`.notdef` is what a miss renders as).
+pub fn face_for_char(faces: &[Font<'_>], ch: char) -> Option<usize> {
+    faces.iter().position(|f| f.glyph(ch) != 0)
+}
+
+/// Splits `text` into runs of (face index, text): a run is a stretch of characters that share a face. Characters no
+/// face covers go to face 0, the requested font, so they still render as its `.notdef`. `faces` must not be empty.
+pub fn cascade_runs<'t>(faces: &[Font<'_>], text: &'t str) -> Vec<(usize, &'t str)> {
+    let mut runs: Vec<(usize, usize, usize)> = Vec::new(); // (face, start, end) byte offsets
+    for (i, ch) in text.char_indices() {
+        let face = face_for_char(faces, ch).unwrap_or(0);
+        let end = i + ch.len_utf8();
+        if runs.last().is_some_and(|r| r.0 == face) {
+            if let Some(run) = runs.last_mut() {
+                run.2 = end;
+            }
+        } else {
+            runs.push((face, i, end));
+        }
+    }
+    runs.into_iter().map(|(face, s, e)| (face, &text[s..e])).collect()
 }
 
 fn u16_at(d: &[u8], o: usize) -> Option<u16> {
@@ -115,7 +165,17 @@ impl<'a> Font<'a> {
             None => (find(b"glyf")?, find(b"loca")?),
         };
         let axes = table(b"fvar").and_then(gvar::axes).unwrap_or_default();
+        // OS/2 carries the x-height and cap height from version 2 on; post carries the underline (both optional).
+        let os2 = find(b"OS/2").filter(|&o| u16_at(data, o).is_some_and(|v| v >= 2));
+        let os2_field = |off: usize| os2.and_then(|o| i16_at(data, o + off)).unwrap_or(0) as f32;
+        let post = find(b"post");
+        let post_field = |off: usize| post.and_then(|o| i16_at(data, o + off)).unwrap_or(0) as f32;
         Some(Font {
+            line_gap: i16_at(data, hhea + 8).unwrap_or(0) as f32,
+            x_height: os2_field(86),
+            cap_height: os2_field(88),
+            underline_position: post_field(8),
+            underline_thickness: post_field(10),
             data,
             cff,
             gvar: table(b"gvar").filter(|_| !axes.is_empty()).and_then(Gvar::parse),
@@ -190,6 +250,21 @@ impl<'a> Font<'a> {
     pub fn advance(&self, gid: u16) -> f32 {
         let i = gid.min(self.num_hmetrics.saturating_sub(1)) as usize;
         u16_at(self.data, self.hmtx + 4 * i).unwrap_or(0) as f32
+    }
+
+    /// Vertical metrics at `px` (`NativeFontMetrics`): ascent and descent from hhea, leading from its line gap,
+    /// x-height and cap height from OS/2, underline from post. A missing table gives zero for its values.
+    pub fn line_metrics(&self, px: f32) -> LineMetrics {
+        let k = px / self.upem;
+        LineMetrics {
+            ascent: self.ascent * k,
+            descent: -self.descent * k,
+            leading: self.line_gap * k,
+            cap_height: self.cap_height * k,
+            x_height: self.x_height * k,
+            underline_position: self.underline_position * k,
+            underline_thickness: self.underline_thickness * k,
+        }
     }
 
     /// The variation axes (empty for static fonts).
@@ -1004,5 +1079,40 @@ mod tests {
             f.render("WgÞ@", &st);
         }
         assert!(f.cache.total_cost() <= CACHE_BYTES);
+    }
+
+    #[test]
+    fn line_metrics_scale_with_size_and_stay_sane() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let m = f.line_metrics(20.0);
+        assert!(m.ascent > 0.0 && m.descent > 0.0, "{m:?}");
+        assert!(m.leading >= 0.0 && m.underline_thickness >= 0.0, "{m:?}");
+        assert!(m.cap_height >= m.x_height && m.x_height >= 0.0, "{m:?}");
+        assert!((m.line_height() - (m.ascent + m.descent + m.leading)).abs() < 1e-4);
+        let double = f.line_metrics(40.0);
+        assert!((double.ascent - 2.0 * m.ascent).abs() < 1e-3, "linear in size");
+        assert!((double.underline_position - 2.0 * m.underline_position).abs() < 1e-3);
+        assert!((m.ascent - f.ascent * 20.0 / f.upem).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_character_takes_the_first_face_that_covers_it() {
+        let data = sf();
+        let faces = vec![Font::parse(&data).unwrap(), Font::parse(&data).unwrap()];
+        assert_eq!(face_for_char(&faces, 'A'), Some(0));
+        assert_eq!(face_for_char(&faces, '\u{10FFFD}'), None, "a noncharacter is in no face");
+    }
+
+    #[test]
+    fn cascade_runs_merge_neighbours_and_keep_misses_on_the_first_face() {
+        let data = sf();
+        let faces = vec![Font::parse(&data).unwrap(), Font::parse(&data).unwrap()];
+        let text = "A\u{10FFFD}\u{00E9}A";
+        let runs = cascade_runs(&faces, text);
+        assert_eq!(runs, vec![(0usize, text)], "one run: every character maps to face 0");
+        assert_eq!(cascade_runs(&faces, "").len(), 0);
+        let rejoined: String = runs.iter().map(|r| r.1).collect();
+        assert_eq!(rejoined, text, "runs cover the whole text in order");
     }
 }
