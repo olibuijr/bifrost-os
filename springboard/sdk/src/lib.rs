@@ -53,6 +53,8 @@ pub mod transfer;
 pub mod layout;
 pub mod control;
 pub mod intents;
+pub mod intent_resolve;
+pub mod donation;
 pub mod extension;
 pub mod quicksearch;
 pub mod peek;
