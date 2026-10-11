@@ -465,14 +465,19 @@ def vm_installed(a, booted=False):
 def window_server(a):
     """Switch the installed session to bifrost-wm (docs/window-server.md) and run the checks again under it."""
     t = time.time()
+    # the window server, the session and the shell from this tree (the shell's Wayland side must match the compositor)
     if not a.skip_build:
-        r = sh(["cargo", "build", "--profile", "fast", "-p", "bifrost-wm"], timeout=1200, cwd=os.path.join(REPO, "springboard"))
-        if r.returncode:
-            notes.append("bifrost-wm build failed: " + r.stderr[-400:])
-            return False
-    for src, dst in (("springboard/target/fast/bifrost-wm", "/tmp/bifrost-wm"), ("packaging/arch/wayland/session", "/tmp/bifrost-session")):
+        for cmd in (["cargo", "build", "--profile", "fast", "-p", "bifrost-wm"],
+                    ["cargo", "build", "--profile", "fast", "--features", "desktop-wayland", "--bin", "shell"]):
+            r = sh(cmd, timeout=1200, cwd=os.path.join(REPO, "springboard"))
+            if r.returncode:
+                notes.append(f"{' '.join(cmd[-2:])} build failed: " + r.stderr[-400:])
+                return False
+    for src, dst in (("springboard/target/fast/bifrost-wm", "/tmp/bifrost-wm"), ("packaging/arch/wayland/session", "/tmp/bifrost-session"),
+                     ("springboard/target/fast/shell", "/tmp/springboard")):
         sh(SCP + [src, f"root@127.0.0.1:{dst}"], timeout=120)
     ssh("install -m755 /tmp/bifrost-wm /usr/bin/bifrost-wm && install -m755 /tmp/bifrost-session /usr/lib/bifrost/session"
+        " && install -m755 /tmp/springboard /usr/bin/springboard && rm -f /var/lib/springboard/boot_attempts && systemctl reset-failed springboard"
         " && mkdir -p /etc/bifrost && echo bifrost-wm > /etc/bifrost/compositor && systemctl restart springboard", 60)
     up = wait_for(lambda: "ready=1" in control("state") and "bifrost-wm" in ssh("pgrep -a bifrost-wm", 10), 90, 3)
     timings["wm_session_ready"] = round(time.time() - t, 1)
