@@ -72,10 +72,11 @@ pub struct Progress {
 }
 
 impl Progress {
-    /// Whole minutes left, once enough has been done to estimate.
+    /// Whole minutes left, once enough has been done to estimate. Not before 15 %: the first percents are disk setup and
+    /// pacman's database sync with no bytes written, so a straight line from them said "9 min" for a 100 s lab install.
     pub fn eta_minutes(&self) -> Option<u64> {
         let el = self.started?.elapsed().as_secs_f64();
-        (self.percent >= 4 && !self.done).then(|| ((el / self.percent as f64 * (100.0 - self.percent as f64) / 60.0 - 0.05).ceil().max(1.0)) as u64)
+        (self.percent >= 15 && !self.done).then(|| ((el / self.percent as f64 * (100.0 - self.percent as f64) / 60.0 - 0.05).ceil().max(1.0)) as u64)
     }
 }
 
@@ -474,9 +475,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         r.chroot(&["pacman", "-Sy", "--noconfirm", "springboard-shell"])?;
 
         r.set(2, 89, "Installing default apps from App Store");
-        for id in ["is.olibuijr.browser.desktop", "is.olibuijr.files.desktop"] {
-            r.chroot(&["/usr/bin/springboard", "--install-store-app", id])?;
-        }
+        install_default_apps(&r, &cfg.mirror)?;
         r.set(2, 90, "Creating your account");
         let name = if cfg.full_name.is_empty() { &cfg.username } else { &cfg.full_name };
         r.chroot(&["useradd", "-m", "-G", "wheel,audio,video,input,storage", "-s", "/bin/bash", "-c", name, &cfg.username])?;
@@ -560,6 +559,57 @@ pub fn install(cfg: &Config, progress: &Shared) {
     }
 }
 
+const DEFAULT_APPS: [&str; 2] = ["is.olibuijr.browser.desktop", "is.olibuijr.files.desktop"];
+
+/// A store package on the lab server next to the offline mirror (tools/lab-push.sh links its `store/`), or None outside
+/// the lab and for anything but a plain `/store/...` path.
+pub fn lab_package_url(mirror: &str, package: &str) -> Option<String> {
+    let base = mirror.strip_suffix("/mirror/").filter(|b| b.starts_with("http://"))?;
+    (package.starts_with("/store/") && !package.contains("..")).then(|| format!("{base}{package}"))
+}
+
+/// The default apps, through the App Store. A lab install takes each package's checksum from the store's HTTPS catalogue
+/// but the bytes from the lab server: the store's 54 MB browser came at 2 MB/s through the public tunnel (25 s of a
+/// still progress bar), and the lab link is gigabit. Any miss falls back to the App Store download.
+fn install_default_apps(r: &Run, mirror: &str) -> Result<(), String> {
+    use crate::shell::store::{api, net};
+    let catalogue = if mirror.is_empty() {
+        vec![]
+    } else {
+        r.cmd(&["curl", "-fsS", "--max-time", "20", &net::absolute("/api/v1/pc/apps.json")])
+            .ok()
+            .and_then(|t| api::parse_catalog(&t).ok())
+            .unwrap_or_default()
+    };
+    for id in DEFAULT_APPS {
+        let lab = catalogue.iter().find(|a| a.id == id).and_then(|a| Some((lab_package_url(mirror, &a.package)?, a.sha256.to_ascii_lowercase())));
+        let local = lab.and_then(|(url, sha)| {
+            let file = format!("/mnt/tmp/{id}.aap");
+            r.cmd(&["curl", "-fsS", "--max-time", "60", "-o", &file, &url]).ok()?;
+            let sum = r.cmd(&["sha256sum", &file]).ok()?;
+            if sum.split_whitespace().next() != Some(sha.as_str()) {
+                r.log(format!("{id}: lab package checksum mismatch; using the App Store"));
+                let _ = std::fs::remove_file(&file);
+                return None;
+            }
+            Some(file)
+        });
+        match local {
+            Some(file) => {
+                let res = r.chroot(&["/usr/bin/springboard", "--install-package", file.trim_start_matches("/mnt")]);
+                let _ = std::fs::remove_file(&file);
+                if res.is_err() {
+                    r.chroot(&["/usr/bin/springboard", "--install-store-app", id])?;
+                }
+            }
+            None => {
+                r.chroot(&["/usr/bin/springboard", "--install-store-app", id])?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn part_number(path: &str) -> String {
     path.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<Vec<_>>().into_iter().rev().collect()
 }
@@ -633,11 +683,26 @@ mod tests {
     fn eta_needs_progress_first() {
         let mut p = Progress { percent: 2, started: Some(std::time::Instant::now()), ..Default::default() };
         assert_eq!(p.eta_minutes(), None);
+        p.percent = 4;
+        p.started = Some(std::time::Instant::now() - std::time::Duration::from_secs(22));
+        assert_eq!(p.eta_minutes(), None, "disk setup and the db sync alone would extrapolate to 9 min");
         p.percent = 50;
         p.started = Some(std::time::Instant::now() - std::time::Duration::from_secs(120));
         assert_eq!(p.eta_minutes(), Some(2));
         p.done = true;
         assert_eq!(p.eta_minutes(), None);
+    }
+
+    #[test]
+    fn lab_installs_fetch_store_packages_from_the_lab_server() {
+        let pkg = "/store/is.olibuijr.files.desktop/is.olibuijr.files.desktop-1.15.1.aap";
+        assert_eq!(
+            lab_package_url("http://10.99.0.1:8078/mirror/", pkg).as_deref(),
+            Some("http://10.99.0.1:8078/store/is.olibuijr.files.desktop/is.olibuijr.files.desktop-1.15.1.aap")
+        );
+        assert_eq!(lab_package_url("", pkg), None, "no lab mirror: the App Store as usual");
+        assert_eq!(lab_package_url("http://10.99.0.1:8078/mirror/", "https://elsewhere/x.aap"), None, "only store paths");
+        assert_eq!(lab_package_url("http://10.99.0.1:8078/mirror/", "/store/../etc/x.aap"), None);
     }
 
     #[test]

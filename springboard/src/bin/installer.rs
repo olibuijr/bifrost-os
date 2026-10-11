@@ -121,7 +121,7 @@ fn run() -> std::io::Result<()> {
     if let Some((_, _, cfg)) = preset {
         app.begin(cfg);
     }
-    let mut reported = false;
+    let (mut reported, mut done_at) = (false, None::<f64>);
 
     // lab hooks (remote testing): `touch /run/bifrost-shot-on` makes the installer write /run/bifrost-screen.png about twice a
     // second; lines written to /run/bifrost-input become input events (down/move/up X Y, key CODE 1|0)
@@ -219,8 +219,14 @@ fn run() -> std::io::Result<()> {
                 eprintln!("bifrost-installer: unattended install done; rebooting into the installed system");
                 unattended::finish();
                 reported = true;
-                app.want_restart = true;
+                // the done page for a moment instead of a cut from 98 % to the firmware
+                done_at = Some(t);
+                dirty = true;
             }
+        }
+        if done_at.is_some_and(|at| t - at >= 1500.0) {
+            done_at = None;
+            app.want_restart = true;
         }
         if app.want_restart {
             // Reboot at once without stopping services: a normal shutdown kills this process (the console appears) and can

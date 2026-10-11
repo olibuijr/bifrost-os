@@ -19,6 +19,9 @@ for f in session session-env apps environment autostart rc.xml open-url bifrost-
   cp "packaging/arch/wayland/$f" "$SYNC/wayland-$f"
 done
 cp packaging/archiso/airootfs/usr/lib/systemd/system/bifrost-installer.service "$SYNC/bifrost-installer.service"
+# the App Store's packages over the lab link: lab installs fetch the default apps here (checksums from the HTTPS catalogue)
+STORE=${BIFROST_STORE_DIR:-$HOME/Projects/bifrost-site/data/store}
+[ -d "$STORE" ] && ln -sfn "$STORE" "$SYNC/store"
 D=packaging/archiso/airootfs/usr/share/bifrost
 cp "$D/installer/logo.png" "$D/installer/bg.jpg" "$SYNC/"
 cp "$D"/video/*.mp4 "$SYNC/" 2>/dev/null || true

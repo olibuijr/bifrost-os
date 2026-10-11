@@ -43,7 +43,8 @@ for _ in $(seq 20); do curl -s http://127.0.0.1:26000/ >/dev/null && break; slee
 # start the PXE service on the lab NIC ONLY (the UI defaults to the LAN interface; never use that)
 curl -s http://127.0.0.1:26000/iventoy/json -H 'Content-Type: application/json' \
   -d "{\"method\":\"start_server\",\"ip\":\"$LAB_IP\",\"mask\":\"255.255.255.0\",\"gw\":\"$LAB_IP\",\"pool_begin\":\"10.99.0.200\",\"pool_end\":\"10.99.0.219\",\"dns_server\":\"1.1.1.1\",\"nic\":\"$LAB_NIC\"}"; echo
-# unattended netboot (MCP lifecycle netboot/reinstall): the newest lab ISO boots after 5 s without a keypress.
+# unattended netboot (MCP lifecycle netboot/reinstall): the newest lab ISO boots after LAB_MENU_TIMEOUT s (default 1:
+# only one image is ever offered, and every second of menu is a still screen in each reinstall) without a keypress.
 # iVentoy only accepts config changes while its PXE service is stopped.
 J() { curl -s -m10 http://127.0.0.1:26000/iventoy/json -H 'Content-Type: application/json' -d "$1"; }
 "$(dirname "$0")"/iventoy-prune.sh 1 || true   # only the latest image exists (owner rule)
@@ -52,8 +53,8 @@ if [[ -n $NEWEST ]]; then
   J '{"method":"stop_server"}' >/dev/null; J '{"method":"refresh_img_list"}' >/dev/null; sleep 2
   ID=$(J '{"method":"get_img_tree"}' | python3 -c "import sys,json; print(next((i['imgid'] for i in json.load(sys.stdin) if i['name']=='$NEWEST'),''))")
   [[ -n $ID ]] && J "{\"method\":\"set_default_image\",\"id\":$ID}" >/dev/null
-  J '{"method":"set_default_timeout","deftimeout":5}' >/dev/null
+  J "{\"method\":\"set_default_timeout\",\"deftimeout\":${LAB_MENU_TIMEOUT:-1}}" >/dev/null
   J "{\"method\":\"set_boot_resolution\",\"resolution\":\"$LAB_RESOLUTION\"}" >/dev/null
   J "{\"method\":\"start_server\",\"ip\":\"$LAB_IP\",\"mask\":\"255.255.255.0\",\"gw\":\"$LAB_IP\",\"pool_begin\":\"10.99.0.200\",\"pool_end\":\"10.99.0.219\",\"dns_server\":\"1.1.1.1\",\"nic\":\"$LAB_NIC\"}"; echo
 fi
-echo "lab up: iVentoy on $LAB_NIC ($LAB_IP), default image ${NEWEST:-none} after 5 s, boot display $(J '{"method":"get_config_all"}' | python3 -c 'import sys,json; print(json.load(sys.stdin).get("boot_resolution","?"))')"
+echo "lab up: iVentoy on $LAB_NIC ($LAB_IP), default image ${NEWEST:-none} after ${LAB_MENU_TIMEOUT:-1} s, boot display $(J '{"method":"get_config_all"}' | python3 -c 'import sys,json; print(json.load(sys.stdin).get("boot_resolution","?"))')"
