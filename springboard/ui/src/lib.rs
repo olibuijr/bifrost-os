@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod relations;
+pub mod history;
+pub mod model_store;
 #[cfg(test)]
 mod bench;
 
