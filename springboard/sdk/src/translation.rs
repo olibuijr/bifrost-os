@@ -3,9 +3,48 @@
 //! language packs or system translation popover; `TranslationMemory` is the built-in engine, a table of strings
 //! translated ahead of time.
 
+use crate::error::ErrorCode;
 use bifrost_ui::translation::{language_code, LanguageAvailability, TranslationError};
 use std::cell::Cell;
 use std::collections::HashMap;
+
+/// The domain of [`TranslationError`] in an [`AppError`](crate::error::AppError).
+pub const TRANSLATION_DOMAIN: &str = "bifrost.translation";
+
+/// Codes 1 to 8 in declaration order: the general cases, then the unsupported-language cases.
+impl ErrorCode for TranslationError {
+    const DOMAIN: &'static str = TRANSLATION_DOMAIN;
+
+    fn code(&self) -> i64 {
+        match self {
+            TranslationError::NothingToTranslate => 1,
+            TranslationError::UnableToIdentifyLanguage => 2,
+            TranslationError::NotInstalled => 3,
+            TranslationError::UnsupportedSourceLanguage => 4,
+            TranslationError::UnsupportedTargetLanguage => 5,
+            TranslationError::UnsupportedLanguagePairing => 6,
+            TranslationError::InternalError => 7,
+            TranslationError::AlreadyCancelled => 8,
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            TranslationError::NothingToTranslate => "NothingToTranslate",
+            TranslationError::UnableToIdentifyLanguage => "UnableToIdentifyLanguage",
+            TranslationError::NotInstalled => "NotInstalled",
+            TranslationError::UnsupportedSourceLanguage => "UnsupportedSourceLanguage",
+            TranslationError::UnsupportedTargetLanguage => "UnsupportedTargetLanguage",
+            TranslationError::UnsupportedLanguagePairing => "UnsupportedLanguagePairing",
+            TranslationError::InternalError => "InternalError",
+            TranslationError::AlreadyCancelled => "AlreadyCancelled",
+        }
+    }
+
+    fn description(&self) -> &'static str {
+        self.error_description()
+    }
+}
 
 /// The engine a session calls. It receives normalised language codes and a non-empty text.
 pub trait Translator {

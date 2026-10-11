@@ -152,9 +152,63 @@ impl From<URLError> for AppError {
     }
 }
 
+/// A typed error of one domain, as the official error code enums are: each case has a numeric code in
+/// [`ErrorCode::DOMAIN`], a case name and a localized description. Codes follow declaration order from 1, so a code
+/// stays the same across builds as long as new cases are added at the end.
+pub trait ErrorCode {
+    /// The error domain, such as `bifrost.accounts`.
+    const DOMAIN: &'static str;
+    /// The numeric code of this case in [`ErrorCode::DOMAIN`].
+    fn code(&self) -> i64;
+    /// The case name without the framework prefix, such as `NotFound`.
+    fn name(&self) -> &'static str;
+    /// The localized description of this case.
+    fn description(&self) -> &'static str;
+
+    /// The case as an [`AppError`]: the domain, the code, and the description as `localizedDescription`.
+    fn to_app_error(&self) -> AppError {
+        AppError::new(Self::DOMAIN, self.code()).with_description(self.description())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_typed_error_becomes_an_app_error_with_its_domain_code_and_text() {
+        use crate::accounts::{AccountError, ACCOUNT_DOMAIN};
+        let e = AccountError::NotFound.to_app_error();
+        assert!(e.is(ACCOUNT_DOMAIN, 5));
+        assert_eq!(e.localized_description(), AccountError::NotFound.description());
+        assert_eq!(AccountError::NotFound.name(), "NotFound");
+    }
+
+    #[test]
+    fn error_codes_are_unique_within_a_domain_and_start_at_one() {
+        use crate::accounts::AccountError as A;
+        let all = [
+            A::MissingRequiredProperty,
+            A::AccountTypeInvalid,
+            A::PermissionDenied,
+            A::UpdatingNonexistentAccount,
+            A::NotFound,
+            A::CredentialNotFound,
+            A::FailedSerializingAccountInfo,
+        ];
+        let mut codes: Vec<i64> = all.iter().map(|c| c.code()).collect();
+        codes.sort();
+        assert_eq!(codes, (1..=all.len() as i64).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn translation_errors_carry_the_translation_domain() {
+        use crate::translation::{TranslationError, TRANSLATION_DOMAIN};
+        let e = TranslationError::NotInstalled.to_app_error();
+        assert!(e.is(TRANSLATION_DOMAIN, TranslationError::NotInstalled.code()));
+        assert_ne!(TranslationError::NotInstalled.code(), TranslationError::InternalError.code());
+        assert_eq!(e.localized_description(), TranslationError::NotInstalled.description());
+    }
 
     #[test]
     fn without_a_description_the_text_names_the_domain_and_code() {
