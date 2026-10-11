@@ -595,6 +595,7 @@ pub mod tensor;
 pub mod graph;
 pub mod nn;
 pub mod save_sync;
+pub mod gamepad;
 #[cfg(test)]
 mod bench;
 
