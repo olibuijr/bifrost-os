@@ -832,3 +832,14 @@ fn a_scroll_view_clips_rows_and_draws_content_at_the_offset() {
     assert!(s.px[100 * 200..].iter().all(|&p| p == bg));
     assert_eq!(w.view::<Button>(fid).unwrap().frame().y, 300.0, "frames restored after drawing");
 }
+
+#[test]
+fn window_undo_titles_follow_the_action_name() {
+    let (mut w, _) = window();
+    let mut m = Model::default();
+    assert_eq!(w.undo_titles(), ("Undo".to_string(), "Redo".to_string()));
+    w.undo.register("Increment", |m: &mut Model| m.n -= 1, |m: &mut Model| m.n += 1);
+    assert_eq!(w.undo_titles().0, "Undo Increment");
+    w.send("undo", &mut m);
+    assert_eq!(w.undo_titles(), ("Undo".to_string(), "Redo Increment".to_string()));
+}

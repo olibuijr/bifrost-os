@@ -1021,6 +1021,16 @@ impl Notes {
         matches!(self.screen, Screen::Editor(_))
     }
 
+    /// Whether Edit > Undo and Redo have something to do in the open note.
+    pub fn can_undo_redo(&self) -> (bool, bool) {
+        (self.is_editing() && self.editor.can_undo(), self.is_editing() && self.editor.can_redo())
+    }
+
+    /// The Edit menu titles of the open note's undo history ("Undo Typing").
+    pub fn undo_titles(&self) -> (String, String) {
+        if self.is_editing() { self.editor.undo_titles() } else { Default::default() }
+    }
+
     /// A new note id from the wall clock: milliseconds since the epoch, with the sub-second part of `t` as the tie-break.
     fn fresh_id(&self, t: f64) -> String {
         let ms = std::time::Duration::from_secs(1).as_millis() as f64;

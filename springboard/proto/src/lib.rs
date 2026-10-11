@@ -596,6 +596,9 @@ pub enum ToShell {
     /// `NativePasteboard.clearContents` + `setData` for every (UTType id, bytes) item, atomically.
     PasteboardSet { items: Vec<(String, Vec<u8>)> },
     Commands(Commands),
+    /// The Edit menu titles of the undo manager (`undoMenuItemTitle`, `redoMenuItemTitle`): "Undo Typing", "Redo Move".
+    /// An empty string means the plain "Undo" or "Redo". Tag 0x220.
+    UndoTitles { undo: String, redo: String },
     Controls(Vec<Node>),
     RemoteSharing { on: bool },
     ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
@@ -784,6 +787,7 @@ mod tag {
     pub const LOG: u32 = 0x108;
     pub const SET_CLIPBOARD: u32 = 0x109;
     pub const COMMANDS: u32 = 0x10a;
+    pub const UNDO_TITLES: u32 = 0x220;
     pub const CONTROLS: u32 = 0x10b;
     pub const REMOTE_SHARING: u32 = 0x10c;
     pub const CONTEXT_MENU:u32=0x10d;
@@ -1387,6 +1391,7 @@ impl ToShell {
                 }
             }
             ToShell::Commands(commands) => {u32_(&mut b,tag::COMMANDS);u32_(&mut b,commands.0);}
+            ToShell::UndoTitles { undo, redo } => {u32_(&mut b,tag::UNDO_TITLES);str_(&mut b,&undo.chars().take(64).collect::<String>());str_(&mut b,&redo.chars().take(64).collect::<String>());}
             ToShell::DocumentState { title, edited, represented } => {
                 u32_(&mut b, tag::DOCUMENT_STATE);
                 str_(&mut b, &short(title));
@@ -1503,6 +1508,7 @@ impl ToShell {
                 for _ in 0..count {let low=r.u32()? as u64;let id=low|((r.u32()? as u64)<<32);let role=match r.u32()?{0=>Role::Button,1=>Role::TextField,2=>Role::List,3=>Role::Row,4=>Role::Toggle,5=>Role::Checkbox,6=>Role::Slider,7=>Role::SegmentedControl,8=>Role::StaticText,9=>Role::MenuItem,10=>Role::Window,11=>Role::ProgressIndicator,_=>return Err(DecodeError::BadValue)};let enabled=r.u8()?!=0;let bounds=UiRect{x:r.f32()?,y:r.f32()?,w:r.f32()?,h:r.f32()?};if ![bounds.x,bounds.y,bounds.w,bounds.h].iter().all(|v|v.is_finite())||bounds.w<0.||bounds.h<0.{return Err(DecodeError::BadValue);}nodes.push(Node{id,role,enabled,bounds,label:r.str()?,value:r.str()?});}ToShell::Controls(nodes)
             }
             tag::COMMANDS => ToShell::Commands(Commands(r.u32()?)),
+            tag::UNDO_TITLES => ToShell::UndoTitles { undo: r.str()?, redo: r.str()? },
             tag::HELLO => ToShell::Hello { sdk_version: r.u32()?, app_id: r.str()? },
             tag::BUFFERS => ToShell::Buffers { w: r.u32()?, h: r.u32()? },
             tag::FRAME => {
@@ -1871,6 +1877,7 @@ mod tests {
             ToShell::KeyboardOut(KeyboardOut::Click(2)),
             ToShell::KeyboardOut(KeyboardOut::Language(1)),
             ToShell::Commands(Commands(15)),
+            ToShell::UndoTitles { undo: "Undo Typing".into(), redo: String::new() },
             ToShell::Controls(vec![Node{id:u64::MAX,role:Role::TextField,label:"Search".into(),value:"café".into(),bounds:UiRect{x:1.,y:2.,w:100.,h:44.},enabled:true}]),
             ToShell::RemoteSharing{on:true},
             ToShell::RemoteSharing{on:false},

@@ -848,6 +848,10 @@ impl<S: Responder> Window<S> {
             _ => state.validate(action).unwrap_or(false),
         }
     }
+    /// The Edit menu titles from the undo manager: `("Undo Typing", "Redo")`.
+    pub fn undo_titles(&self) -> (String, String) {
+        (self.undo.undo_menu_item_title(), self.undo.redo_menu_item_title())
+    }
     /// The `App::commands` bitmask: every [`Command`] whose action is enabled.
     pub fn commands(&self, state: &S) -> Commands {
         Command::ALL.iter().fold(Commands::default(), |c, &cmd| c.with(cmd, self.is_enabled(app::action_for(cmd), state)))

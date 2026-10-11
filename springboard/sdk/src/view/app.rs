@@ -209,6 +209,10 @@ impl<S: Responder + 'static> ViewApp<S> {
     pub fn commands(&self) -> Commands {
         self.window.commands(&self.state)
     }
+    /// For `App::undo_titles`.
+    pub fn undo_titles(&self) -> (String, String) {
+        self.window.undo_titles()
+    }
     pub fn draw(&mut self, ctx: &Ctx, s: &mut Surface) -> Damage {
         let d = self.window.draw(s, &ctx.ui);
         self.sync_text_input(ctx);

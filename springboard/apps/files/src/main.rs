@@ -267,10 +267,14 @@ impl App for Files {
             return self.query.commands(clipboard);
         }
         Commands::default()
+            .with(Command::Undo, !self.undo.is_empty())
             .with(Command::Copy, !self.selection.is_empty())
             .with(Command::Cut, !self.selection.is_empty())
             .with(Command::Paste, self.clip.is_some())
             .with(Command::SelectAll, true)
+    }
+    fn undo_titles(&self, _: &Ctx) -> (String, String) {
+        if self.naming.is_some() || self.searching { (String::new(), String::new()) } else { self.file_undo_titles() }
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
         if self.goto_input(&input) {

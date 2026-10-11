@@ -1416,3 +1416,38 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
 - A sheet slides from the title bar (`motion::Kind::SheetSlide`; progress is 1 at once under Reduce Motion), dims the parent (28% black) and swallows clicks on it (`Hit::Blocked`).
 - Metrics: segmented 24 pt, stepper 13 x 22 pt, pop-up button 22 pt, focus ring 3 pt, sheet radius 10 pt, alert width 260 pt.
 - Gaps: sheet buttons size by character count (no text measuring); the top corners of the panel are hidden by extending it upward inside the parent, not clipped.
+
+## Undo (NSUndoManager parity)
+
+`bifrost_ui::undo::UndoManager<T>` (`springboard/ui/src/undo.rs`) is the SDK's `NSUndoManager`. Window-based apps get one
+per window (`Window::undo`); Edit > Undo and Redo reach it as the `undo` and `redo` actions.
+
+API (Apple name in brackets):
+
+| Method | Meaning |
+|---|---|
+| `register(name, undo, redo)`, `register_for(target, ...)` | `registerUndoWithTarget:`; a pair of closures instead of an invocation |
+| `set_action_name(name)` | `setActionName:`, names the open group, else the newest step |
+| `undo_menu_item_title()`, `redo_menu_item_title()` | `undoMenuItemTitle`: "Undo Typing", plain "Undo" when empty or unnamed |
+| `begin_undo_grouping()`, `end_undo_grouping()`, `grouping_level()` | nestable; only the outermost close makes a step |
+| `set_groups_by_event(on)`, `end_event()` | `groupsByEvent`: edits within one event are one step; the app calls `end_event` at the end of each event |
+| `register_coalesced(key, now_ms, gap_ms, ...)` | typing: pairs with the same key within `gap_ms` join the newest step |
+| `can_undo()`, `can_redo()`, `is_undoing()`, `is_redoing()` | same names |
+| `levels_of_undo()`, `set_levels_of_undo(n)` | `levelsOfUndo`; 0 is unlimited, shrinking drops the oldest steps at once |
+| `remove_all_actions(target)`, `clear()` | `removeAllActionsWithTarget:` and `removeAllActions` |
+
+Menu titles: `App::undo_titles(ctx) -> (undo, redo)` reports the titles; the runtime sends `ToShell::UndoTitles`
+(tag 0x220) when they change and the shell's Edit menu shows them ("Undo Move", "Redo Typing"). An empty string keeps
+the plain word. The row stays disabled unless the app's `commands` reports Undo or Redo, so a window app gets this for
+free through `Window::commands` and `Window::undo_titles`. Cmd+Z and Cmd+Shift+Z are unchanged.
+
+Decisions: a step holds its own inverse and repeat closures, so undoing a step moves it to the redo stack and redoing
+moves it back (Apple's "registrations made while undoing become the redo"); a new action clears the redo stack
+(`ChangeCount` keeps edited-state tracking exact). Adopted: Notes (typing grouped per word, named "Typing", titles from
+the editor) and Files (named Move, Rename, Trash, New Folder; Undo only).
+
+Gaps: no `prepareWithInvocationTarget:` or selector registration (closures replace it), so registering from inside an
+undo handler is not supported; `remove_all_actions(target)` drops a whole group when any of its parts matches;
+`groupsByEvent` is off by default and needs the app to call `end_event`; `actionIsUndoable` and `undoNestedGroup` are
+not provided; Files has no Redo (its stack is a plain list of reversible operations); the control-socket undo
+(`undo` RPC) is separate from the menu titles.
