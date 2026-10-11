@@ -612,3 +612,6 @@ pub enum Event {
     Screenshot,
 }
 pub mod ax;
+pub mod scan;
+pub mod analysis;
+pub mod docscan;

@@ -1,0 +1,82 @@
+{
+  "framework": "VisionKit",
+  "doc": "https://developer.apple.com/documentation/visionkit",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/camera/qr.rs, springboard/src/shell/camera/mod.rs, springboard/ui/src/detect.rs (controls::detect), springboard/ui/src/scan.rs, springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/apps/notes-desktop",
+  "summary": "Covers the plain-text side of data detection (links, dates, addresses, phone numbers) and a QR-only camera scanner inside the system Camera app. The pure models for live scan items (ScanSession), text selection over recognised image text with data detection inside the selection (Overlay), and document page geometry with a perspective warp (DocumentScan) now exist in bifrost-ui. None of them is connected to a camera feed, a text recognizer or an app-facing SDK API yet. No text recognition (OCR), no subject lifting, no Visual Look Up, no document scanning UI and no SDK API for camera scanning.",
+  "rea_evidence": "ev_d89b4abf3a05a97aa7678cfb36629c289e35d7ffc9b94746adbc748b48741fe4",
+  "features": [
+    {
+      "feature": "Barcode and QR scanning through the camera",
+      "apple": "DataScannerViewController, RecognizedItem (barcode items), DataScannerViewControllerDelegate",
+      "bifrost": "springboard/src/shell/camera/qr.rs (decode_luma), springboard/src/shell/camera/mod.rs (QR scanner, QR_SCAN_MS)",
+      "status": "os",
+      "note": "Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies."
+    },
+    {
+      "feature": "Live text scanning through the camera",
+      "apple": "DataScannerViewController (text), RecognizedItem (text items)",
+      "bifrost": "springboard/ui/src/scan.rs (ScanSession, Item, ItemKind::Text, Changes)",
+      "status": "partial",
+      "note": "The item model exists: a session keeps the visible text items by stable id, reports added, updated and removed items per frame, and hit-tests an item outline. There is no text recognizer, so nothing feeds the session from the camera, and no SDK API exposes it to apps."
+    },
+    {
+      "feature": "Text recognition and selection in images",
+      "apple": "ImageAnalyzer, ImageAnalysis, ImageAnalysisInteraction (text selection, copy)",
+      "bifrost": "springboard/ui/src/analysis.rs (Overlay, select_word, select_range, select_all, selected_text)",
+      "status": "partial",
+      "note": "Selection model over caller-supplied recognised text blocks: word selection by char class, ranges across blocks in reading order, copied text with a newline between blocks. No text recognition in images and no copy or look-up buttons; Photos and Notes do not use it yet."
+    },
+    {
+      "feature": "Data detectors in recognized image text",
+      "apple": "ImageAnalysisInteraction (data detectors: URLs, phone numbers, dates, tracking numbers)",
+      "bifrost": "springboard/ui/src/analysis.rs (Overlay::data_matches), springboard/ui/src/detect.rs (find), springboard/apps/notes-desktop (TextArea::set_detect_links)",
+      "status": "partial",
+      "note": "Detection runs on the selected text only, per segment, and maps matches back to block offsets for drawing. Same detector as plain text: links, dates, street addresses and phone numbers, with no transit information and no tracking-number kind. Notes taps open links; the image text path has no caller yet."
+    },
+    {
+      "feature": "Subject lifting and background removal",
+      "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No subject segmentation found in the repo, including PhotoCraft and the render crate."
+    },
+    {
+      "feature": "Visual Look Up",
+      "apple": "ImageAnalysisInteraction (visual Look Up button)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."
+    },
+    {
+      "feature": "Document scanning through the camera",
+      "apple": "VNDocumentCameraViewController, VNDocumentCameraViewControllerDelegate, VNDocumentCameraScan",
+      "bifrost": "springboard/ui/src/docscan.rs (DocumentScan, Page, order_corners, page_size, homography, apply)",
+      "status": "partial",
+      "note": "Page model with a perspective warp: corners are ordered, the flat page size is computed, and output pixels map to camera points through a homography. No page edge detection, no scanning UI in the Camera app and no SDK API; the JPEG path is springboard/src/shell/camera/jpeg.rs."
+    },
+    {
+      "feature": "Stabilised camera region of interest",
+      "apple": "CameraRegionView",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No view that shows a stabilised region of the camera feed to apps."
+    },
+    {
+      "feature": "Image analysis overlay and delegate callbacks",
+      "apple": "ImageAnalysisOverlayView, ImageAnalysisOverlayViewDelegate, ImageAnalysisInteractionDelegate",
+      "bifrost": "springboard/ui/src/analysis.rs (Overlay::block_at, Overlay::selection)",
+      "status": "partial",
+      "note": "Hit testing and selection state for an overlay are modelled in bifrost-ui. No view in the SDK under springboard/sdk/src/view/ draws the overlay, and no delegate callbacks are delivered to apps."
+    }
+  ],
+  "gaps": [
+    "No text recognition (OCR) for camera frames or images. The scan and selection models take recognised text as input, so Live Text, DataScanner text and ImageAnalyzer have no recognizer behind them.",
+    "No document scanning UI: the Camera app has no page-by-page document mode and no page edge detection. The DocumentScan model takes the corners from the caller.",
+    "No subject lifting or background removal for images.",
+    "No Visual Look Up.",
+    "Camera scanning exists only inside the system Camera app for QR model 2 codes. The item session has no camera feed and no SDK API, and there are no other barcode formats.",
+    "No SDK view or delegate for the image-analysis overlay or the stabilised camera region. Plain-text data detection (controls::detect) has no transit or tracking-number kind."
+  ]
+}
