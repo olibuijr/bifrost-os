@@ -90,6 +90,7 @@ pub mod notification;
 pub mod workspace;
 pub mod distributed;
 pub mod observable;
+pub mod observable_object;
 pub mod ndarray;
 pub mod inference;
 pub mod music_understanding;
