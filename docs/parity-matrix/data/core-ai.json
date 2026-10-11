@@ -1,0 +1,32 @@
+{
+  "framework": "Core AI",
+  "doc": "https://developer.apple.com/documentation/coreai",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "Typed model signatures and tensors in springboard/sdk/src/inference.rs and springboard/sdk/src/ndarray.rs (no execution). Remote model clients only: springboard/apps/daw/src/ai.rs, springboard/apps/assistant-desktop/src/model.rs. Text prediction is a word list, not a model: springboard/apps/keyboard/src/predict.rs",
+  "summary": "Core AI runs specialized models on Apple silicon (CPU, GPU, Neural Engine) with model assets, cached specialization, inference functions and tensor types. BifrOSt now has the data side of that API for apps: float32-and-other scalar arrays with row-major descriptors, typed inference signatures that validate a call, and image-to-array conversion. It still has no on-device inference runtime, no compute streams, and no model cache, and its AI features call the Anthropic cloud API.",
+  "rea_evidence": "ev_372a521dd406a876e0a1dd90a743919e1e501f6a757c89507f1e3dc53f7f5ce0",
+  "features": [
+    {"feature": "Integrating on-device models", "apple": "AIModel, AIModelAsset (Core AI landing page, Essentials)", "bifrost": "none", "status": "gap", "note": "No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."},
+    {"feature": "Inference functions and values", "apple": "InferenceFunction, InferenceFunctionDescriptor, InferenceValue", "bifrost": "springboard/sdk/src/inference.rs (InferenceFunctionDescriptor, InferenceValue, check_inputs)", "status": "partial", "note": "Named inputs and outputs with array or image descriptors, unique names, and a check that rejects a call with a missing, unknown, repeated or mismatched input. InferenceFunction is not modelled: nothing executes a function, and there are no state descriptors (stateNames)."},
+    {"feature": "Multidimensional arrays", "apple": "NDArray, NDArrayDescriptor", "bifrost": "springboard/sdk/src/ndarray.rs (NDArray<T>, NDArrayDescriptor, ScalarType)", "status": "partial", "note": "Row-major storage with preferredStrides, minimumByteCount, offset, get, set and reshape, for Int8, Int16, Int32, UInt8, Float32 and Float64. Not modelled: Float16 and Int64 scalars, dynamic dimensions, interleaved layouts, and the typed and raw memory views."},
+    {"feature": "Image input descriptors", "apple": "ImageDescriptor", "bifrost": "springboard/sdk/src/inference.rs (ImageDescriptor, PixelFormat, to_ndarray); springboard/render/src/imgdec.rs (PNG and JPEG decode)", "status": "partial", "note": "Width, height and pixel format (Gray8, Rgb8, Rgba8), and conversion of packed bytes to a float32 array in height-width-channel order. The four-character pixel format code is not modelled, and no descriptor feeds a model that runs."},
+    {"feature": "Compute streams", "apple": "ComputeStream", "bifrost": "none for apps", "status": "gap", "note": "The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."},
+    {"feature": "Background inference", "apple": "Background Inference entitlement (Neural Engine)", "bifrost": "none", "status": "n/a", "note": "The Neural Engine is Apple hardware. No counterpart on the Linux PC."},
+    {"feature": "Compute unit selection", "apple": "ComputeUnitKind, SpecializationOptions", "bifrost": "none", "status": "n/a", "note": "The options name CPU, GPU and Neural Engine units. The PC has no Neural Engine, so there is nothing to choose between."},
+    {"feature": "Model cache and specialization", "apple": "AIModelCache, managing model specialization and caching", "bifrost": "none", "status": "gap", "note": "The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."},
+    {"feature": "Ahead-of-time model compilation", "apple": "coreai-build command-line tool, compiling Core AI models ahead of time", "bifrost": "none", "status": "gap", "note": "No build step converts or compiles models."},
+    {"feature": "Model debugging and profiling", "apple": "Debug gauge, Instruments, Core AI Debugger", "bifrost": "springboard/core/src/log.rs (unified logging), bifrost pc log", "status": "partial", "note": "General logging and performance tooling exist (tools/bench.py). Nothing traces inference or tensor values."},
+    {"feature": "On-device text prediction", "apple": "Not a Core AI feature. Relates to Foundation Models and language models", "bifrost": "springboard/apps/keyboard/src/predict.rs (prefix trie, bigram bonus, edit-distance-1 autocorrect)", "status": "partial", "note": "Prediction runs on-device but uses frequency lists, not a neural model. The Assistant app (springboard/apps/assistant-desktop/src/model.rs) sends its requests to the cloud."},
+    {"feature": "Inference errors", "apple": "AssetError", "bifrost": "springboard/sdk/src/inference.rs (InferenceError), springboard/sdk/src/ndarray.rs (NDArrayError)", "status": "n/a", "note": "The error type belongs to Core AI's asset pipeline, which BifrOSt does not have. The BifrOSt errors cover shape and signature checks only."}
+  ],
+  "gaps": [
+    "No on-device model runtime (load, specialize, run) for apps in the SDK or the system layer.",
+    "No inference function execution: a signature can be checked, but no function runs.",
+    "NDArray covers six scalar types. Float16 and Int64, dynamic dimensions, interleaved layouts and memory views are missing.",
+    "No compute stream API for apps, so GPU or CPU inference cannot be offloaded from an app.",
+    "No model cache or ahead-of-time compile step.",
+    "No inference-level profiling or tracing in the debug tools.",
+    "The AI features (daw/ai.rs, assistant model.rs) depend on the cloud API, not local inference."
+  ]
+}
