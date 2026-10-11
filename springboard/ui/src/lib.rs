@@ -633,6 +633,7 @@ pub mod downloadqueue;
 pub mod environment;
 pub mod preferences;
 pub mod call;
+pub mod markup;
 #[cfg(test)]
 mod bench;
 
