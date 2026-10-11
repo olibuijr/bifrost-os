@@ -355,6 +355,11 @@ def vm_unattended(a):
         notes.append("lab-push failed: " + (r.stderr or r.stdout)[-400:])
         return finish(a, ok=False)
     lab_password()
+    # every package pacstrap installs, local (tools/lab-mirror.sh; only changed packages download)
+    r = sh(["tools/lab-mirror.sh"], timeout=1800)
+    if r.returncode:
+        notes.append("lab-mirror failed: " + (r.stderr or r.stdout)[-400:])
+        return finish(a, ok=False)
     if not lab_http():
         notes.append("the lab server (10.99.0.1:8078) is not up and out/lab/sync has no installer")
         return finish(a, ok=False)
@@ -394,8 +399,11 @@ def vm_unattended(a):
     # pacstrap's downloads timed out. QEMU's own DNS proxy (10.0.2.3) uses titan's resolver.
     ssh("for i in /sys/class/net/*; do n=${i##*/}; [ $n = lo ] && continue; resolvectl dns $n 10.0.2.3; resolvectl domain $n '~.'; done;"
         " resolvectl flush-caches", 15)
-    # 12 parallel package downloads stall on QEMU's user network ("Less than 1 bytes/sec"); one runs at ~18 MB/s
-    ssh("sed -i 's/^ParallelDownloads.*/ParallelDownloads = 3/' /etc/pacman.conf", 10)
+    # pacstrap from titan's offline mirror (Omarchy's pacman-offline.conf): no package comes from the internet through
+    # QEMU's NAT, where 12 parallel downloads stalled and the rest took most of the install
+    ssh("cp -n /etc/pacman.conf /etc/pacman.conf.online; printf '%s\\n' '[options]' 'HoldPkg = pacman glibc' 'Architecture = auto'"
+        " 'ParallelDownloads = 4' 'SigLevel = Required DatabaseOptional' 'LocalFileSigLevel = Optional' '[offline]' 'SigLevel = Never'"
+        " 'Server = http://10.99.0.1:8078/mirror/' > /etc/pacman.conf", 10)
     # the unattended run starts now the network is right
     ssh("systemctl start bifrost-installer", 30)
 
