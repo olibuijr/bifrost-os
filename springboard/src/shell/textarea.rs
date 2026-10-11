@@ -267,6 +267,12 @@ impl TextArea {
         self.history.can_redo()
     }
 
+    /// The Edit menu titles (`undoMenuItemTitle`): an open run of typing is "Undo Typing".
+    pub fn undo_titles(&self) -> (String, String) {
+        let undo = if self.typing.is_some() { "Undo Typing".to_string() } else { self.history.undo_menu_item_title() };
+        (undo, self.history.redo_menu_item_title())
+    }
+
     /// The number of undo steps (a run of typing counts once), for tests.
     #[cfg(test)]
     fn steps(&self) -> usize {
@@ -1114,6 +1120,17 @@ mod tests {
         ta.edit(&ui, &Out::Named("Undo"), 5.0);
         ta.edit(&ui, &Out::Named("Redo"), 6.0);
         assert_eq!(ta.text(), "a\u{1F1EE}\u{1F1F8}");
+    }
+
+    #[test]
+    fn typing_is_named_in_the_edit_menu_titles() {
+        let ui = ui();
+        let mut ta = area(&ui, 400.0);
+        assert_eq!(ta.undo_titles(), ("Undo".to_string(), "Redo".to_string()));
+        typed(&mut ta, &ui, "hello", 0.0);
+        assert_eq!(ta.undo_titles().0, "Undo Typing");
+        ta.undo(&ui, 1.0);
+        assert_eq!(ta.undo_titles(), ("Undo".to_string(), "Redo Typing".to_string()));
     }
 
     #[test]

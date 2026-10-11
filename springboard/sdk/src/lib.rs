@@ -109,6 +109,9 @@ pub trait App {
     }
     /// Available semantic commands for the focused control.
     fn commands(&self, _ctx: &Ctx) -> Commands { Commands::default() }
+    /// The Edit menu titles for Undo and Redo (`undoMenuItemTitle`): `("Undo Typing", "Redo Move")`; an empty string
+    /// keeps the plain "Undo" or "Redo". Sent to the shell only when they change.
+    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) { (String::new(), String::new()) }
     /// The app's own main-menu items (`NativeApp.mainMenu`), shown by the desktop bar after the app-name menu while the
     /// app is in front. Called after every event and frame; the runtime sends the menus only when they differ from
     /// the last ones, so enabled and checked state is recomputed here (`validateMenuItem:`).

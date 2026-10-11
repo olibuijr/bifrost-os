@@ -140,7 +140,12 @@ impl App for NotesApp {
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
         let Some(n) = &self.notes else { return Commands::default() };
-        Commands::default().with(Command::Undo, n.is_editing()).with(Command::Redo, n.is_editing())
+        let (undo, redo) = n.can_undo_redo();
+        Commands::default().with(Command::Undo, undo).with(Command::Redo, redo)
+    }
+
+    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
+        self.notes.as_ref().map(|n| n.undo_titles()).unwrap_or_default()
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {

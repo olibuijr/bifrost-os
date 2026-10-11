@@ -297,6 +297,8 @@ pub struct AppHost {
     pub wants_keyboard: bool,
     pub hello: bool,
     pub commands: bifrost_proto::Commands,
+    /// the app's Edit menu titles for Undo and Redo (empty: the plain words)
+    pub undo_titles: (String, String),
     pub controls: Vec<bifrost_proto::Node>,
     /// The app's own main-menu items (`ToShell::AppMenus`), shown by the desktop bar while the app is in front.
     pub app_menus: Vec<bifrost_proto::AppMenu>,
@@ -379,6 +381,7 @@ impl AppHost {
             wants_keyboard: false,
             hello: false,
             commands: bifrost_proto::Commands::default(),
+            undo_titles: Default::default(),
             controls: Vec::new(),
             app_menus: Vec::new(),
             controls_tree: Vec::new(),
@@ -578,6 +581,7 @@ impl AppHost {
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
+            ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.frame=true;}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
             other => out.requests.push(other),
         }

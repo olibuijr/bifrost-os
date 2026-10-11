@@ -427,6 +427,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut clip_seen = kit::clipboard::text();
     let mut open = true;
     let mut commands_seen = None;
+    let mut undo_titles_seen: (String, String) = Default::default();
     let mut menus_seen: Vec<crate::proto::AppMenu> = Vec::new();
     let mut controls_seen = Vec::new();
     let mut tree_seen: Vec<crate::proto::NodeExt> = Vec::new();
@@ -709,6 +710,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let menus=app.main_menu(c);
         if menus!=menus_seen {let _=chan.send(&ToShell::AppMenus(menus.clone()).encode(),&[]);menus_seen=menus;}
         if commands_seen != Some(commands) {commands_seen=Some(commands);let _=chan.send(&ToShell::Commands(commands).encode(),&[]);}
+        let titles=app.undo_titles(c);
+        if titles!=undo_titles_seen {let _=chan.send(&ToShell::UndoTitles{undo:titles.0.clone(),redo:titles.1.clone()}.encode(),&[]);undo_titles_seen=titles;}
         // the system keyboard was asked for (or dismissed) through a `Keyboard`
         if let Some(on) = springboard::shell::keyboard::take_app_request() {
             c.wants_keyboard(on);

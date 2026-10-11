@@ -12,6 +12,18 @@ pub(crate) enum Undo {
     NewFolder(PathBuf),
 }
 
+impl Undo {
+    /// The action name for the Edit menu ("Undo Move").
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Undo::Move(pairs) if pairs.iter().all(|(a, b)| a.parent() == b.parent()) => "Rename",
+            Undo::Move(_) => "Move",
+            Undo::Trash(_) => "Trash",
+            Undo::NewFolder(_) => "New Folder",
+        }
+    }
+}
+
 /// Steps kept; older ones fall off.
 pub(crate) const UNDO_DEPTH: usize = 20;
 
@@ -68,6 +80,10 @@ impl Files {
             self.undo.remove(0);
         }
     }
+    /// The Edit menu titles: the newest step's name ("Undo Trash"); Redo is not offered for file operations.
+    pub(crate) fn file_undo_titles(&self) -> (String, String) {
+        (self.undo.last().map(|u| format!("Undo {}", u.name())).unwrap_or_default(), String::new())
+    }
     /// Edit > Undo for file operations.
     pub(crate) fn undo_file_op(&mut self) {
         let Some(step) = self.undo.pop() else { return };
@@ -87,6 +103,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn undo_steps_are_named_for_the_edit_menu() {
+        let rename = Undo::Move(vec![(PathBuf::from("/d/old"), PathBuf::from("/d/new"))]);
+        let moved = Undo::Move(vec![(PathBuf::from("/a/f"), PathBuf::from("/b/f"))]);
+        assert_eq!((rename.name(), moved.name()), ("Rename", "Move"));
+        assert_eq!(Undo::Trash(vec![]).name(), "Trash");
+        assert_eq!(Undo::NewFolder(PathBuf::from("/d/n")).name(), "New Folder");
     }
 
     #[test]
