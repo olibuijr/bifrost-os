@@ -630,6 +630,8 @@ pub mod widget_list;
 pub mod media_search;
 pub mod extension;
 pub mod extensions;
+pub mod script;
+pub mod writing_assist;
 pub mod vcard;
 pub mod contact_groups;
 pub mod contact_changes;
