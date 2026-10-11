@@ -7,6 +7,7 @@
 //! memory for the app's process; a store shared between apps and the user's access prompt are still gaps (see
 //! `docs/parity/accounts.md`). The framework is deprecated by its vendor, so this exists for apps that still read it.
 
+use crate::error::ErrorCode;
 use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -143,7 +144,43 @@ pub enum AccountError {
 
 impl fmt::Display for AccountError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+        f.write_str(ErrorCode::description(self))
+    }
+}
+
+/// The domain of [`AccountError`] in an [`AppError`](crate::error::AppError).
+pub const ACCOUNT_DOMAIN: &str = "bifrost.accounts";
+
+impl ErrorCode for AccountError {
+    const DOMAIN: &'static str = ACCOUNT_DOMAIN;
+
+    /// Codes 1 to 7 in declaration order. The official list has more cases; the store produces only these.
+    fn code(&self) -> i64 {
+        match self {
+            AccountError::MissingRequiredProperty => 1,
+            AccountError::AccountTypeInvalid => 2,
+            AccountError::PermissionDenied => 3,
+            AccountError::UpdatingNonexistentAccount => 4,
+            AccountError::NotFound => 5,
+            AccountError::CredentialNotFound => 6,
+            AccountError::FailedSerializingAccountInfo => 7,
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            AccountError::MissingRequiredProperty => "MissingRequiredProperty",
+            AccountError::AccountTypeInvalid => "AccountTypeInvalid",
+            AccountError::PermissionDenied => "PermissionDenied",
+            AccountError::UpdatingNonexistentAccount => "UpdatingNonexistentAccount",
+            AccountError::NotFound => "NotFound",
+            AccountError::CredentialNotFound => "CredentialNotFound",
+            AccountError::FailedSerializingAccountInfo => "FailedSerializingAccountInfo",
+        }
+    }
+
+    fn description(&self) -> &'static str {
+        match self {
             AccountError::MissingRequiredProperty => "the account has no username",
             AccountError::AccountTypeInvalid => "the account type is not registered",
             AccountError::PermissionDenied => "the app may not use this account type",
@@ -151,7 +188,7 @@ impl fmt::Display for AccountError {
             AccountError::NotFound => "no account has this identifier",
             AccountError::CredentialNotFound => "the account has no credential",
             AccountError::FailedSerializingAccountInfo => "the credential could not be read or written",
-        })
+        }
     }
 }
 
