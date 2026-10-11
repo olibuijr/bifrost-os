@@ -16,6 +16,11 @@ pub enum DataType {
 }
 
 impl DataType {
+    /// True for the floating-point element types.
+    pub fn is_float(self) -> bool {
+        matches!(self, DataType::Float16 | DataType::BFloat16 | DataType::Float32)
+    }
+
     /// Bytes per element.
     pub fn size(self) -> usize {
         match self {
@@ -35,6 +40,14 @@ pub enum ShapeError {
     ElementCount,
     /// A payload's byte length differs from what its type needs.
     ByteCount,
+    /// The operator needs a different number of dimensions (for example a matrix product on a vector).
+    Rank,
+    /// A concatenation or reduction axis is outside the tensor's dimensions.
+    Axis,
+    /// A transpose order is not a permutation of the dimensions.
+    Permutation,
+    /// A concatenation was given no inputs.
+    Empty,
 }
 
 /// The dimensions of a tensor, outermost first. A scalar has no dimensions and one element.
