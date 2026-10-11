@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Boot the BifrOSt installer ISO in a headed UEFI VM on Hyprland workspace 2, fullscreen,
 # with a blank 16G target disk. ISO_BOOT_IMG (optional) is a FAT image tried before the ISO.
+# The target is a SCSI disk with a fixed WWN (VM_WWN) and the NIC a fixed MAC (VM_MAC): the unattended installer's
+# preset names both (docs/installer.md "Unattended install"), and virtio-blk disks have no WWN.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 V=out/arch-vm; ISO=${ISO:-$(ls -t out/iso/*.iso | head -1)}
@@ -24,8 +26,9 @@ fi
 nohup setsid qemu-system-x86_64 -name "BifrOSt Installer" -machine q35,accel=kvm -cpu host -smp 4 -m "${VM_RAM:-4096}" \
  -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd -drive if=pflash,format=raw,unit=1,file=$V/installer-vars.fd \
  ${ISO_NONE:+} "${cd[@]}" "${extra[@]}" \
- -drive file=$V/installer-target.raw,if=virtio,format=raw "${GPU[@]}" -device virtio-keyboard-pci -device virtio-tablet-pci \
- -virtfs local,path=packaging/archiso/airootfs,mount_tag=dev,security_model=none,readonly=on -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2252-:22 -device virtio-net-pci,netdev=n0 "${DISP[@]}" -audio none \
+ -device virtio-scsi-pci,id=scsi0 -drive file=$V/installer-target.raw,if=none,id=hd,format=raw -device scsi-hd,drive=hd,bus=scsi0.0,wwn=${VM_WWN:-0x5000c500b1f00001} \
+ "${GPU[@]}" -device virtio-keyboard-pci -device virtio-tablet-pci \
+ -virtfs local,path=packaging/archiso/airootfs,mount_tag=dev,security_model=none,readonly=on -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2252-:22 -device virtio-net-pci,netdev=n0,mac=${VM_MAC:-52:54:00:b1:f0:01} "${DISP[@]}" -audio none \
  -chardev socket,id=s0,path=$V/installer-serial.sock,server=on,wait=off,logfile=$V/installer-serial.log -serial chardev:s0 -qmp unix:$V/installer-qmp.sock,server=on,wait=off >$V/installer-qemu.log 2>&1 </dev/null &
 [ -z "${HEADLESS:-}" ] || exit 0
 for _ in $(seq 50); do

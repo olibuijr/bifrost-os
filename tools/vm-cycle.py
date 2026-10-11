@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Autonomous BifrOSt reinstall in the x86 QEMU VM: build, boot the live ISO, drive the real installer UI by keyboard,
-screenshot every page, time every phase, boot the installed disk, unlock, open apps, write a report. No ISO rebuild.
+"""Autonomous BifrOSt reinstall in the x86 QEMU VM, no ISO rebuild, no LLM in the loop.
 
-usage: tools/vm-cycle.py [--skip-build] [--iso PATH] [--user NAME] [--password PW] [--no-desktop] [--label TEXT]
+Default (the installer's unattended path, as `midget reinstall`): publish the installer to the lab server
+(tools/lab-push.sh), wipe the VM disk and seed it with an ESP holding EFI/BIFROST/unattended.toml (disk WWN, VM MAC,
+password URL on titan), boot the lab ISO; the live system pulls the new installer (bifrost-lab-sync), which finds the
+preset, installs without input and boots the new system. Then: update guard, shell ready, unlock, apps by id.
+--ui drives the on-screen installer by keyboard instead (Welcome, Language, Account, Disk, Confirm).
+
+usage: tools/vm-cycle.py [--ui] [--skip-build] [--iso PATH] [--user NAME] [--password PW] [--no-desktop] [--label TEXT]
 Output: out/vm-runs/<stamp>/{report.md,timings.json,*.png}. Every wait is bounded; a failed phase is recorded and the run goes on
 as far as it can. Stdlib only. Needs the lab ISO (it has the lab SSH key and the screenshot hook), Hyprland workspace 2 for the window.
 """
@@ -14,6 +19,13 @@ KEY = "out/lab/id_ed25519"
 SSH = ["ssh", "-i", KEY, "-p", "2252", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", "root@127.0.0.1"]
 SCP = ["scp", "-i", KEY, "-P", "2252", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "LogLevel=ERROR"]
 QMP = ["python3", "tools/arch-vm-qmp.py", "out/arch-vm/installer-qmp.sock", "1280", "720"]
+# the VM's identity in the unattended preset (tools/arch-vm-iso.sh gives the disk this WWN and the NIC this MAC)
+VM_WWN = os.environ.get("VM_WWN", "0x5000c500b1f00001")
+VM_MAC = os.environ.get("VM_MAC", "52:54:00:b1:f0:01")
+VM_DISK = "/dev/sda"
+TARGET = "out/arch-vm/installer-target.raw"
+LAB_SYNC = "out/lab/sync"
+PASSWORD_URL = "http://10.99.0.1:8078/lab/tester.pw"  # the guest reaches titan's lab address through QEMU's user network
 # evdev key codes for the characters the account form needs
 CODES = {**{c: 30 + i for i, c in enumerate("asdfghjkl")}, **{c: 16 + i for i, c in enumerate("qwertyuiop")}, **{c: 44 + i for i, c in enumerate("zxcvbnm")},
          **{str(d): 2 + (d - 1) % 10 for d in range(1, 10)}, "0": 11}
@@ -100,6 +112,7 @@ def main():
     ap.add_argument("--target", choices=["vm", "midget"], default="vm", help="vm: the QEMU VM; midget: the real ThinkCentre on titan's eno2 (reboots itself into netboot via UEFI BootNext)")
     ap.add_argument("--disk", default="/dev/nvme0n1", help="midget: the disk the installer must erase (checked against what the live system sees)")
     ap.add_argument("--no-desktop", action="store_true")
+    ap.add_argument("--ui", action="store_true", help="drive the on-screen installer by keyboard instead of the unattended preset")
     ap.add_argument("--label", default="")
     a = ap.parse_args()
     if a.loop:
@@ -110,6 +123,8 @@ def main():
 
     if a.target == "midget":
         return midget(a)
+    if not a.ui:
+        return vm_unattended(a)
     # 1. the installer binary (fast profile)
     t = time.time()
     if not a.skip_build:
@@ -203,7 +218,7 @@ def main():
         return finish(a, ok=False)
 
     # 5b. the installed ESP boots the BifrOSt loader from its own namespace, and the firmware entry names it
-    esp = ssh("p=$(lsblk -lnpo NAME,PARTTYPE /dev/vda | awk '$2==\"c12a7328-f81f-11d2-ba4b-00a0c93ec93b\"{print $1}');"
+    esp = ssh(f"p=$(lsblk -lnpo NAME,PARTTYPE {VM_DISK} | awk '$2==\"c12a7328-f81f-11d2-ba4b-00a0c93ec93b\"{{print $1}}');"
               " mkdir -p /run/esp && mount -o ro $p /run/esp && cmp /run/esp/EFI/BIFROST/BOOTx64.efi /run/esp/EFI/BOOT/BOOTx64.efi"
               " && test -s /run/esp/EFI/BIFROST/boot.cfg && echo layout-ok; umount /run/esp;"
               " efibootmgr -v | grep -i 'BifrOSt' | grep -qi 'EFI.BIFROST.BOOTX64.EFI' && echo entry-ok", 30)
@@ -236,14 +251,168 @@ def main():
 
     # 7. unlock and open apps in desktop mode
     if not a.no_desktop:
-        sh(QMP + ["key", "enter"], timeout=20)
-        time.sleep(3)
-        shot_vm("11-desktop")
-        for name, x in ([("settings", 543), ("terminal", 589), ("files", 720)]):
-            sh(QMP + ["tap", str(x), "700"], timeout=20)
-            time.sleep(2)
-            shot_vm(f"12-{name}")
+        desktop_checks()
     return finish(a, ok=True)
+
+
+def control(line, timeout=15):
+    """One line to the shell's control socket (127.0.0.1:7777) over ssh; the reply text."""
+    script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(10); s.sendall(" + repr((line + "\n").encode()) + "); "
+              "d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
+    return ssh("python3 -c " + json.dumps(script), timeout)
+
+
+def screen():
+    st = control("state")
+    return next((l.split("=", 1)[1] for l in st.splitlines() if l.startswith("screen=")), "")
+
+
+def desktop_checks():
+    """Unlock (the lab account has no passcode: Enter), then open Settings, Terminal and Files by id, one screen each."""
+    t = time.time()
+    shot_vm("10-lock")
+    sh(QMP + ["key", "enter"], timeout=20)
+    if not wait_for(lambda: screen() not in ("", "lock"), 30, 1):
+        notes.append(f"the lock screen did not unlock (screen={screen() or 'no answer'})")
+    mark("unlock", t)
+    time.sleep(2)
+    shot_vm("11-desktop")
+    for name, app in (("settings", "bifrost.settings"), ("terminal", "is.olibuijr.term"), ("files", "is.olibuijr.files.desktop")):
+        reply = control(f"open-app {app}").strip()
+        if reply != "ok":
+            notes.append(f"open-app {app}: {reply or 'no answer'}")
+        time.sleep(3)
+        shot_vm(f"12-{name}")
+
+
+def lab_password():
+    """The tester password: out/lab/tester.password (untracked, 0600, made once), published for the installer only."""
+    pw_file = "out/lab/tester.password"
+    if not os.path.exists(pw_file):
+        import secrets
+        fd = os.open(pw_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(12) + "\n")
+    os.makedirs(os.path.join(LAB_SYNC, "lab"), exist_ok=True)
+    with open(os.path.join(LAB_SYNC, "lab", "tester.pw"), "w") as f:
+        f.write(open(pw_file).read().strip() + "\n")
+    return pw_file
+
+
+def lab_http():
+    """The lab server bifrost-lab-sync and the preset's password URL use (10.99.0.1:8078, serving out/lab/sync)."""
+    if ":8078 " in sh(["ss", "-ltn"]).stdout:
+        return True
+    if not os.path.exists(os.path.join(LAB_SYNC, "bifrost-installer")):
+        return False
+    subprocess.Popen(["python3", "-m", "http.server", "8078", "--bind", "10.99.0.1"], cwd=LAB_SYNC, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    time.sleep(1)
+    return True
+
+
+def preset_toml(user):
+    """The same preset `bifrost-mcp lifecycle reinstall` writes (springboard/mcp/src/lifecycle.rs), for the VM's disk and NIC."""
+    now = int(time.time())
+    return (f"# written by tools/vm-cycle.py; read by bifrost-installer on the lab ISO\nversion = 1\ndisk_id = \"{VM_WWN}\"\n"
+            f"mac = \"{VM_MAC}\"\nhostname = \"bifrost\"\nlocale = \"en_US.UTF-8\"\nkeyboard = \"us\"\ntimezone = \"Atlantic/Reykjavik\"\n"
+            f"username = \"{user}\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\npassword_url = \"{PASSWORD_URL}\"\n"
+            f"created_epoch = {now}\nexpires_s = 1800\njob = \"{now}-vm-reinstall\"\n")
+
+
+def seed_disk(preset):
+    """Wipes the VM disk and leaves a GPT with one ESP holding EFI/BIFROST/unattended.toml (the installer erases it all)."""
+    sh(["truncate", "-s", "0", TARGET])
+    sh(["truncate", "-s", "16G", TARGET])
+    r = sh(["sfdisk", "--quiet", TARGET], input="label: gpt\nstart=2048, size=131072, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n")
+    if r.returncode:
+        return "sfdisk: " + r.stderr.strip()
+    img = f"{TARGET}@@1M"
+    path = os.path.join(out_dir, "unattended.toml")
+    open(path, "w").write(preset)
+    for cmd in (["mformat", "-i", img, "-F", "-T", "131072", "-v", "ESP", "::"], ["mmd", "-i", img, "::/EFI", "::/EFI/BIFROST"],
+                ["mcopy", "-i", img, path, "::/EFI/BIFROST/unattended.toml"]):
+        r = sh(cmd)
+        if r.returncode:
+            return " ".join(cmd[:1]) + ": " + r.stderr.strip()
+    return ""
+
+
+def vm_unattended(a):
+    """The installer's unattended path in the VM; phases timed like `midget reinstall`."""
+    # 1. the installer, shell and session under test, published where the live system pulls them
+    t = time.time()
+    r = sh(["tools/lab-push.sh"] + (["--skip-cargo"] if a.skip_build else []), timeout=1200)
+    if r.returncode:
+        notes.append("lab-push failed: " + (r.stderr or r.stdout)[-400:])
+        return finish(a, ok=False)
+    lab_password()
+    if not lab_http():
+        notes.append("the lab server (10.99.0.1:8078) is not up and out/lab/sync has no installer")
+        return finish(a, ok=False)
+    mark("publish", t)
+
+    # 2. a wiped disk carrying only the preset, then the live ISO
+    t = time.time()
+    iso = a.iso or (sorted(glob.glob("out/iso-lab-*/*.iso"), key=os.path.getmtime) or [None])[-1]
+    if not iso:
+        notes.append("no lab ISO found")
+        return finish(a, ok=False)
+    sh(["pkill", "-f", "name BifrOSt Installer"])
+    time.sleep(2)
+    err = seed_disk(preset_toml(a.user))
+    if err:
+        notes.append("could not seed the preset: " + err)
+        return finish(a, ok=False)
+    sh(["tools/arch-vm-iso.sh"], timeout=60, env={**os.environ, "ISO": iso, "VM_WWN": VM_WWN, "VM_MAC": VM_MAC, **({"HEADLESS": "1"} if a.headless else {})})
+    live = lambda: ssh("test -d /run/archiso && echo live || echo installed", 8).strip()
+    if not wait_for(lambda: live() == "live", 180, 2):
+        notes.append("the live system never answered on ssh")
+        return finish(a, ok=False)
+    mark("live_boot_to_ssh", t)
+
+    # 3. the unattended install: follow the installer's own log until the machine reboots into the new system
+    t = time.time()
+    seen = {}
+
+    def installing():
+        j = ssh("journalctl -u bifrost-installer -b --no-pager -n 400 2>/dev/null | grep -aE 'unattended|bifrost-installer: \\[' | tail -n 1", 15).strip()
+        if j and j not in seen:
+            seen[j] = round(time.time() - t, 1)
+            print("    " + j[-150:], flush=True)
+            if len(seen) % 2 == 1:
+                shot_vm(f"08-progress-{len(seen):02d}")
+        if "refused or failed" in j:
+            raise RuntimeError(j)
+        return live() == "installed"
+
+    try:
+        ok = wait_for(installing, 1200, 5)
+    except RuntimeError as e:
+        notes.append(f"the installer refused or failed the preset: {e}")
+        return finish(a, ok=False)
+    timings["install_log"] = {(k.split("] ", 1)[-1] if "] " in k else k)[-90:]: v for k, v in seen.items()}
+    mark("install_to_installed_ssh", t)
+    if not ok:
+        notes.append("the installed system did not come up (no ssh with the lab key)")
+        return finish(a, ok=False)
+    if not any("unattended" in k for k in seen):
+        notes.append("never saw an 'unattended' installer line: was the preset found?")
+
+    # 4. the new system booted cleanly and the shell is ready
+    t = time.time()
+    def booted_ok():
+        g = ssh("bifrost-update-guard status", 15) or ""
+        return ("phase=accepted" in g or "phase=\n" in g + "\n") and "ready=1" in control("state")
+    if not wait_for(booted_ok, 300, 5):
+        notes.append("the new system did not boot cleanly (update guard phase or shell not ready)")
+        open(os.path.join(out_dir, "installed-journal.txt"), "w").write(ssh("journalctl -b -u springboard --no-pager | tail -60", 30))
+        return finish(a, ok=False)
+    mark("shell_ready", t)
+    timings["shell_version"] = ssh("ls /var/lib/pacman/local | grep springboard-shell", 10).strip()
+    if not a.no_desktop:
+        desktop_checks()
+    return finish(a, ok=not any(n.startswith(("open-app", "the lock")) for n in notes))
 
 
 def loop(a):
