@@ -50,6 +50,7 @@ pub mod dnd;
 pub mod layout;
 pub mod control;
 pub mod intents;
+pub mod extension;
 pub mod quicksearch;
 pub mod peek;
 pub mod webview;

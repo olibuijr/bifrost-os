@@ -1,0 +1,53 @@
+{
+  "framework": "ExtensionFoundation",
+  "doc": "https://developer.apple.com/documentation/extensionfoundation",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/extension.rs (points, identities, registry), springboard/core/src/extension_process.rs (process table, in-memory connections), springboard/sdk/src/extension.rs (app-facing re-exports and manifest text)",
+  "summary": "Points, identities, discovery of enabled extensions and a process table with in-memory connections are built as pure models. The shell does not yet scan installed packages into the registry or start extension processes, and apps have no connection handler, so extensions cannot run yet.",
+  "rea_evidence": "ev_e615caa5d29ed49a04e88768d64f3924695d174c1e3d217708ca4b8ff48f3aed",
+  "features": [
+    {
+      "feature": "Adding support for app extensions to your app",
+      "apple": "Create an app extension model by defining extension points and communicating with app extensions at runtime",
+      "bifrost": "springboard/ui/src/extension.rs, springboard/sdk/src/extension.rs",
+      "status": "partial",
+      "note": "Points, identities and the registry exist as pure data. No app calls them at runtime and the shell does not load them from packages yet"
+    },
+    {
+      "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",
+      "apple": "Declare extension content and handle incoming XPC connections",
+      "bifrost": "springboard/sdk/src/extension.rs (manifest text), springboard/sdk/src/control.rs (per-app socket, not an extension entry point)",
+      "status": "partial",
+      "note": "An extension can declare its identity in a manifest. There is no connection handler type, so an extension cannot receive connections from a host"
+    },
+    {
+      "feature": "Discovering extensions (AppExtensionIdentity)",
+      "apple": "Find available extensions that match a host's extension points",
+      "bifrost": "springboard/ui/src/extension.rs (Identity, Registry::discover, Registry::matching)",
+      "status": "partial",
+      "note": "Matching by point, enabled flag and name order are tested. Installed packages are not scanned, and no change stream reports availability updates"
+    },
+    {
+      "feature": "Launching and managing extension processes (AppExtensionProcess)",
+      "apple": "Host launches an extension in a separate process and connects to it",
+      "bifrost": "springboard/core/src/extension_process.rs (ProcessTable); launcher that starts apps: springboard/src/bare/app_policy.rs",
+      "status": "partial",
+      "note": "Process reuse per bundle and point, launching and running states, and connections with ordered queues are modelled. The table starts no OS process; the shell launcher has to report running and exit"
+    },
+    {
+      "feature": "Extension-point management (AppExtensionPoint, ExtensionPointDefining)",
+      "apple": "Declare a host's extension points and bind extensions to them, with scope rules",
+      "bifrost": "springboard/ui/src/extension.rs (Point, Scope)",
+      "status": "partial",
+      "note": "Declaration is checked against the owner's namespace, and scope is any or same developer. No user-interface or enhanced-security attributes, and no ExtensionPointDefining equivalent"
+    }
+  ],
+  "gaps": [
+    "Shell reads package manifests into the extension registry at login, on install and on removal",
+    "Shell launcher starts an extension process for a host request and reports running and exit to the process table",
+    "Connection handler type: an extension receives host connections through a closure, as the SDK's control socket does for apps",
+    "Share-sheet extensions installed by apps: the share menu does not read the registry yet",
+    "Extension point attributes (user interface, enhanced security) and an availability update stream"
+  ]
+}
