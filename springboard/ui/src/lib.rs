@@ -651,6 +651,8 @@ pub mod music;
 pub mod indexset;
 pub mod tracking;
 pub mod evaluation;
+pub mod notifattach;
+pub mod notifmedia;
 pub mod progress;
 pub mod privacy;
 pub mod relations;
