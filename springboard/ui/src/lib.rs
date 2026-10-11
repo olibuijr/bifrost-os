@@ -664,6 +664,8 @@ pub mod model_store;
 pub mod ml_tensor;
 pub mod features;
 pub mod compute;
+pub mod postal;
+pub mod recordsearch;
 #[cfg(test)]
 mod bench;
 
