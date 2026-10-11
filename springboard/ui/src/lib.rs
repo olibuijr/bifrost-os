@@ -717,3 +717,4 @@ pub mod location;
 pub mod geofence;
 pub mod switch_scan;
 pub mod ax_audit;
+pub mod state_report;
