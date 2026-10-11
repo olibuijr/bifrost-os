@@ -1,0 +1,17 @@
+{
+  "framework": "GeoToolbox",
+  "doc": "https://developer.apple.com/documentation/geotoolbox",
+  "macos_since": "26.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "GeoToolbox builds PlaceDescriptor values that Apple's map services use to look up rich place data (phone, website). BifrOSt has no maps service and no place-lookup API; the Weather app uses Open-Meteo for coordinates only, so there is no counterpart to build on.",
+  "rea_evidence": "ev_345e1d163d945f951f68859cd6bf1e8815bae5efc4be7a76661eae3b8ea20ff6",
+  "features": [
+    {"feature": "Place descriptor type", "apple": "GeoToolbox.PlaceDescriptor", "bifrost": "nothing found", "status": "n/a", "note": "Tied to Apple map services and MKMapItem"},
+    {"feature": "Creating a descriptor from a map item", "apple": "PlaceDescriptor.init(item:)", "bifrost": "nothing found", "status": "n/a", "note": "Needs MapKit items, which BifrOSt does not have"},
+    {"feature": "Creating a descriptor from representations", "apple": "PlaceDescriptor.init(representations:commonName:supportingRepresentations:)", "bifrost": "nothing found", "status": "n/a", "note": "Provider-specific identifiers"},
+    {"feature": "Physical place representations", "apple": "PlaceDescriptor.PlaceRepresentation", "bifrost": "nothing found", "status": "n/a", "note": ""},
+    {"feature": "Provider-specific place attributes", "apple": "PlaceDescriptor.SupportingPlaceRepresentation", "bifrost": "nothing found", "status": "n/a", "note": ""}
+  ],
+  "gaps": []
+}

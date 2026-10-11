@@ -1,0 +1,27 @@
+{
+  "framework": "Automator",
+  "doc": "https://developer.apple.com/documentation/automator",
+  "macos_since": "10.4",
+  "status": "partial",
+  "bifrost": "springboard/apps/shortcuts-desktop/src/model.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
+  "summary": "Apple's Automator is a workflow engine that runs ordered action bundles and shell or AppleScript actions, with a workflow view and controller. BifrOSt has no workflow engine and no loadable action bundles. Its closest parts are the Shortcuts app, which stores and edits ordered lists of built-in actions, and the App Intents SDK, which gives apps typed actions. Shortcuts runs nothing yet: its actions are only logged because the shell cannot receive them over the app protocol.",
+  "rea_evidence": "ev_92931747df2475eb5c7c1609143dbc235c17a2ebaeacf97a4e6864461e6a6ed8",
+  "features": [
+    {"feature": "Action bundles (loadable actions)", "apple": "AMAction, AMBundleAction, AMBundleAction.parameters, AMAction.run(withInput:)", "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, IntentResult); springboard/sdk/src/lib.rs:221 (App::intents, App::perform_intent)", "status": "partial", "note": "Apps declare typed intents in code and manifest.toml [[intent]] tables and serve them over the control socket. There is no bundle format, no install location scan (Automator loads /System/Library/Automator, /Library/Automator, ~/Library/Automator) and no view for action parameters."},
+    {"feature": "Shell script actions", "apple": "AMShellScriptAction (inputFieldSeparator, outputFieldSeparator, remapLineEndings)", "bifrost": "none in the SDK", "status": "gap", "note": "No SDK API runs a shell script as a workflow step. The control socket (springboard/sdk/src/control.rs) is for calling apps, not for scripted steps."},
+    {"feature": "Workflow model (ordered actions and input/output)", "apple": "AMWorkflow (actions, addAction, insertAction, moveAction, removeAction, input, output, valueForVariable)", "bifrost": "springboard/apps/shortcuts-desktop/src/model.rs (Shortcut { name, color, actions }, Action enum, parse/serialise one line per shortcut)", "status": "partial", "note": "Shortcuts stores an ordered list of up to 24 built-in actions per shortcut, capped at 64 shortcuts. It has no variables, no input or output passing between steps, and no workflow file format beyond shortcuts.tsv in the app data directory."},
+    {"feature": "Running a workflow", "apple": "AMWorkflow.run(at:withInput:), AMWorkspace.runWorkflow(atPath:withInput:), AMWorkflowController.run/pause/step/stop/reset", "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:365 (run_all), :142 (show_run_unavailable), :148 (take_runs); springboard/apps/shortcuts-desktop/src/main.rs (take_runs drives the unavailable message)", "status": "gap", "note": "run_all only queues actions into a list and shows a toast. main.rs logs them as unavailable. Nothing executes Wi-Fi, Do Not Disturb, brightness, screenshot, timer or open-app actions, and there is no pause, step or stop."},
+    {"feature": "Workflow editor view", "apple": "AMWorkflowView (isEditable, workflowController)", "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs (View::Editor, the Add Action list driven by model.rs KINDS)", "status": "partial", "note": "The editor adds, removes and reorders built-in actions. It cannot edit action parameters through a generic view and cannot be embedded by other apps."},
+    {"feature": "Runnable intents from other apps", "apple": "AMAction offering actions to workflows; Shortcuts listing actions from installed apps", "bifrost": "springboard/src/shell/intents.rs (manifest [[intent]] parsing); docs/bifrost-ui.md section 'App Intents' (line 936)", "status": "partial", "note": "The shell lists shortcut = true intents in Spotlight and runs parameterless ones. The Shortcuts app does not yet list or run intents from other apps (documented gap in docs/bifrost-ui.md around line 978)."},
+    {"feature": "Workflow errors", "apple": "AMError, AMAutomatorErrorDomain, AMActionErrorKey, AMAction.finishRunningWithError(_:)", "bifrost": "springboard/sdk/src/intents.rs (RpcError and failed())", "status": "partial", "note": "Intent calls return JSON-RPC errors. There is no workflow-level error domain and no way to stop a multi-step run on a failed step, because multi-step runs do not exist."},
+    {"feature": "AppleScript actions (deprecated)", "apple": "AMAppleScriptAction (script, on run handler)", "bifrost": "none", "status": "n/a", "note": "Apple marks this class deprecated and it depends on OSA scripting. BifrOSt has no AppleScript runtime and does not plan one."}
+  ],
+  "gaps": [
+    "No workflow engine: multi-step runs, variables and input/output passing between actions do not exist.",
+    "Shortcuts actions that need the shell (Wi-Fi, Low Power, Do Not Disturb, brightness, open app, screenshot, timer) are logged, not executed (springboard/apps/shortcuts-desktop/src/main.rs).",
+    "No action bundle format or install scan: no equivalent of /System/Library/Automator, /Library/Automator or ~/Library/Automator.",
+    "No workflow controller (run, pause, step, stop, reset) and no runWorkflow-by-path API.",
+    "Shortcuts does not list or run intents from other installed apps yet (docs/bifrost-ui.md, App Intents gaps).",
+    "No shell script action API for workflow steps."
+  ]
+}

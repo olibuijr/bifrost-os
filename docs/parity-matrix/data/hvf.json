@@ -1,0 +1,18 @@
+{
+  "framework": "hvf (Hierarchical Variable Font)",
+  "doc": "https://developer.apple.com/documentation/hvf",
+  "macos_since": "15.4",
+  "status": "n/a",
+  "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (variable-font outlines, not HVF)",
+  "summary": "The hvf library renders HVGL hierarchical glyph parts for font editors and font tooling. BifrOSt's font engine reads TrueType variations (gvar) and CFF outlines but has no HVGL or HVF support, and no font editor needs it; the HVF format is an Apple font-tooling format with no counterpart on Linux.",
+  "rea_evidence": "ev_bc9bb2613df6866c5a90bffd918ccde66984c596a3977b9451dc6f387f553df4",
+  "features": [
+    {"feature": "HVGL part loading", "apple": "HVGLPartLoader", "bifrost": "nothing found", "status": "n/a", "note": "Parses HVGL tables in memory-mapped fonts"},
+    {"feature": "Part rendering", "apple": "PartRenderer", "bifrost": "springboard/render/src/font.rs (glyph outlines for the UI)", "status": "n/a", "note": "Renders HVF parts only; the BifrOSt renderer does not read HVF"},
+    {"feature": "Custom part sources", "apple": "CustomPartLoader, PartGenerator, ShapeWriter, CompositeWriter", "bifrost": "nothing found", "status": "n/a", "note": "Font-editor plumbing"},
+    {"feature": "Composite and shape data", "apple": "CompositeSubpart, CompositeSubpartTranslation, CompositeExtremumIndex", "bifrost": "nothing found", "status": "n/a", "note": ""},
+    {"feature": "Path geometry enums", "apple": "AxisExtremum, PointCoordinate, SegmentPoint, SegmentBlendType, PartResult", "bifrost": "nothing found", "status": "n/a", "note": ""},
+    {"feature": "Variable font outlines (related, not hvf)", "apple": "Not part of hvf", "bifrost": "springboard/render/src/gvar.rs", "status": "n/a", "note": "BifrOSt applies TrueType gvar variations; it does not read HVGL"}
+  ],
+  "gaps": []
+}

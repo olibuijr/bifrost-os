@@ -1,0 +1,20 @@
+{
+  "framework": "ShazamKit (Media)",
+  "doc": "https://developer.apple.com/documentation/shazamkit",
+  "macos_since": "12.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "ShazamKit matches captured audio against Apple's Shazam music catalogue or a developer's custom catalogue of reference signatures. BifrOSt has no audio fingerprinting or recognition service, and the Shazam catalogue is an Apple-only service, so there is no counterpart to map to. The audio capture side is covered by the audio service (springboard/audiod), but nothing turns it into signatures.",
+  "rea_evidence": "ev_f971d1b797bbbe52f11b77cc7b3ebeb10d0e5f462d0140dd0ad316065c49e7d2",
+  "features": [
+    {"feature": "Match audio against a catalogue", "apple": "SHSession, SHSessionDelegate, SHMatch, SHMatchedMediaItem, SHMediaItem", "bifrost": "nothing found", "status": "n/a", "note": "Needs the Shazam music catalogue, which is an Apple service"},
+    {"feature": "Managed recording and matching", "apple": "SHManagedSession", "bifrost": "springboard/audiod (capture path only)", "status": "n/a", "note": "The audio daemon captures audio but there is no matching step"},
+    {"feature": "Create signatures from audio", "apple": "SHSignature, SHSignatureGenerator", "bifrost": "nothing found", "status": "n/a", "note": "No audio fingerprinting code in springboard/"},
+    {"feature": "Custom reference catalogues", "apple": "SHCustomCatalog, SHCatalog", "bifrost": "nothing found", "status": "n/a", "note": "No catalogue or reference-signature store"},
+    {"feature": "Shazam library sync", "apple": "SHLibrary, SHMediaLibrary", "bifrost": "nothing found", "status": "n/a", "note": "Tied to an Apple account and the Shazam service"}
+  ],
+  "gaps": [
+    "No audio recognition or fingerprinting service on BifrOSt; if one were built it would need its own catalogue, which is not Apple's",
+    "No SDK API for matching captured audio against a catalogue"
+  ]
+}

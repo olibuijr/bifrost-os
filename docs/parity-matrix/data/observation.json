@@ -1,0 +1,66 @@
+{
+  "framework": "Observation",
+  "doc": "https://developer.apple.com/documentation/observation",
+  "macos_since": "14.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/observable.rs (bifrost_app::observable::Observable), springboard/ui/src/observe.rs (Observable<T>), springboard/sdk/src/process_info.rs (change observers)",
+  "summary": "BifrOSt has manual value observation: an Observable<T> that notifies subscribers only when the value changes, with Combine-style sink, map and remove_duplicates. It has none of Observation's automatic dependency tracking, the @Observable macro, or the async Observations sequence.",
+  "rea_evidence": "ev_59ddd532abf1677b1e3304c8d7443c1ffaef9a4e65513f0e7e8dd952321415d0",
+  "features": [
+    {
+      "feature": "Observable conformance (@Observable macro)",
+      "apple": "Observable() macro, Observable protocol",
+      "bifrost": "none (Rust; no macro)",
+      "status": "gap",
+      "note": "No per-type macro that synthesizes change notification for every stored property. Observable<T> wraps one whole value, not a model object's properties."
+    },
+    {
+      "feature": "Change notification on value change",
+      "apple": "Observable protocol, ObservationRegistrar",
+      "bifrost": "springboard/sdk/src/observable.rs (Observable::set, subscribe, sink); springboard/ui/src/observe.rs (Observable<T>::set, subscribe(old, new))",
+      "status": "partial",
+      "note": "Notifies only when the value differs (PartialEq). Two copies exist: the SDK one (Rc, Combine-style, sink delivers current value) and the UI-model one (old and new values passed to subscribers). A set from inside a subscriber of the same observable updates the value but notifies no one (docs/bifrost-ui.md:1435)."
+    },
+    {
+      "feature": "Automatic dependency tracking",
+      "apple": "withObservationTracking(_:onChange:), withObservationTracking(options:_:onChange:)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "Subscribers must be attached explicitly to each Observable. Nothing records which values a closure read. docs/bifrost-ui.md:1435 lists this gap."
+    },
+    {
+      "feature": "Async change sequence",
+      "apple": "Observations, withContinuousObservation(options:apply:)",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No async sequence of transactional changes. Subscribers are synchronous callbacks on the single UI thread (the SDK Observable is single-threaded, Rc)."
+    },
+    {
+      "feature": "Observation tracking options and tokens",
+      "apple": "ObservationTracking, ObservationTracking.Options, ObservationTracking.Token, ObservationTracking.Event",
+      "bifrost": "springboard/sdk/src/observable.rs (Subscription, Cancellables)",
+      "status": "partial",
+      "note": "Subscription cancels on drop (AnyCancellable). No event or options types for tracking."
+    },
+    {
+      "feature": "Ignore or track individual properties",
+      "apple": "ObservationIgnored(), ObservationTracked()",
+      "bifrost": "n/a",
+      "status": "n/a",
+      "note": "Macro-only behaviour of the Swift language; with no macro in BifrOSt there is nothing to mark."
+    },
+    {
+      "feature": "Notifications from system state",
+      "apple": "Observation Registrar for model state (manual)",
+      "bifrost": "springboard/sdk/src/process_info.rs (observe_thermal_state, observe_low_power_mode); docs/bifrost-ui.md:1214 (NotificationCenter add_observer, post); docs/bifrost-ui.md:1542 (workspace observe)",
+      "status": "partial",
+      "note": "Observer-style subscriptions exist for system events (NotificationCenter, workspace, thermal state, Low Power Mode). They are not Observation's property-level tracking."
+    }
+  ],
+  "gaps": [
+    "No automatic dependency capture (withObservationTracking) and no @Observable macro equivalent: each Observable must be wired by hand.",
+    "No async Observations sequence or withContinuousObservation.",
+    "A set from inside a subscriber of the same Observable notifies no one (docs/bifrost-ui.md:1435).",
+    "SwiftUI-style integration (view invalidation from observed model state) not verified in code; no binding found in this pass."
+  ]
+}

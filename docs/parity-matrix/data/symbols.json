@@ -1,0 +1,28 @@
+{
+  "framework": "Symbols",
+  "doc": "https://developer.apple.com/documentation/symbols",
+  "macos_since": "14.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES), springboard/render/src/symbols.rs (symbol font lookup), springboard/sdk/src/view/animation.rs (implicit animation), springboard/ui/src/anim.rs",
+  "summary": "The Symbols framework is Apple's set of universal symbol effects (appear, bounce, pulse, variableColor, replace and others) for SF Symbols images in AppKit, UIKit and SwiftUI. BifrOSt has a fixed set of 59 hand-drawn line glyphs named after SF Symbols and a generic implicit animation system, but no symbol-effect API and no symbol layers or rendering modes, so none of the effects can be applied to a symbol image.",
+  "rea_evidence": "ev_4228c223ea1ec28dfa7061baa7d6168c30cb9d1b86003c9d7dcf0cab875728f3",
+  "features": [
+    {"feature": "Symbol-based images (SF Symbols catalogue)", "apple": "Symbols collection; NSImage(systemSymbolName:) is the entry point in the official overview", "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES: 59 names); springboard/render/src/symbols.rs (Symbol enum, font lookup by glyph name then Unicode)", "status": "partial", "note": "59 named line drawings; unknown names draw nothing. Not the SF Symbols catalogue. The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"},
+    {"feature": "Appear, disappear and scale effects", "apple": "appear, disappear, scale (AppearSymbolEffect, DisappearSymbolEffect, ScaleSymbolEffect)", "bifrost": "none", "status": "gap", "note": "no SDK type or call applies a symbol effect to a glyph; glyphs are drawn once per frame with no per-layer state"},
+    {"feature": "Bounce and pulse effects", "apple": "bounce, pulse (BounceSymbolEffect, PulseSymbolEffect)", "bifrost": "springboard/ui/src/scroll.rs (bounce spring for scrolling only); springboard/render/src/motion.rs (DockBounce, a dock icon motion)", "status": "gap", "note": "the bounce spring and dock bounce are fixed motions for scrolling and the dock, not symbol effects an app can request"},
+    {"feature": "Variable color effect", "apple": "variableColor (VariableColorSymbolEffect)", "bifrost": "none", "status": "gap", "note": "no variable layers in glyphs.rs; each glyph is one colour"},
+    {"feature": "Content transitions (replace, automatic)", "apple": "replace, automatic (ReplaceSymbolEffect, AutomaticSymbolEffect, ContentTransitionSymbolEffect)", "bifrost": "springboard/sdk/src/view/animation.rs (cross-fades frame, opacity and background only)", "status": "gap", "note": "an app swapping one glyph for another gets a plain redraw, not a per-layer replace animation; implicit animation cannot tell a glyph change apart from any other opacity change"},
+    {"feature": "Discrete and indefinite effect protocols and options", "apple": "SymbolEffect, DiscreteSymbolEffect, IndefiniteSymbolEffect, TransitionSymbolEffect, SymbolEffectOptions", "bifrost": "none", "status": "gap", "note": "no effect trait, no repeat or speed options, and no way to start or stop a looping effect on a glyph"},
+    {"feature": "Breathe, rotate, wiggle, draw-on and draw-off effects", "apple": "BreatheSymbolEffect, RotateSymbolEffect, WiggleSymbolEffect, DrawOnSymbolEffect, DrawOffSymbolEffect", "bifrost": "none", "status": "gap", "note": "glyphs.rs draws each line in one pass; there is no stroke-progress state, so draw-on and draw-off cannot be done without a new renderer path"},
+    {"feature": "Symbol weights, scales and rendering modes", "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)", "bifrost": "springboard/sdk/src/glyphs.rs (one stroke width, t = side * 0.085)", "status": "gap", "note": "one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"},
+    {"feature": "Generic implicit animation of views", "apple": "Not part of the Symbols framework; the effects are the symbol-specific layer", "bifrost": "springboard/sdk/src/view/animation.rs (Window::animate interpolates frame, opacity, background); springboard/ui/src/anim.rs (Animation, Curve)", "status": "partial", "note": "the animation system exists and retargets mid-flight, but it animates whole views and cannot reach individual symbol layers, so it is a base for symbol effects rather than one"}
+  ],
+  "gaps": [
+    "No symbol-effect API: appear, bounce, disappear, pulse, scale, variableColor, replace and automatic cannot be applied to a glyph",
+    "No discrete or indefinite effect protocols and no SymbolEffectOptions (repeat, speed) for starting or stopping a looping effect",
+    "No content transition for swapping one symbol for another; a glyph change is a plain redraw",
+    "No draw-on and draw-off, breathe, rotate or wiggle effects; glyphs have no stroke-progress or per-layer state",
+    "The glyph set is 59 hand-drawn names, one weight, no variable or palette rendering, not the SF Symbols catalogue",
+    "The SF Symbols font path in springboard/render/src/symbols.rs has no symbol font on the device to resolve against"
+  ]
+}

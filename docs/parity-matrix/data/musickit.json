@@ -1,0 +1,22 @@
+{
+  "framework": "MusicKit",
+  "doc": "https://developer.apple.com/documentation/musickit",
+  "macos_since": "12.0",
+  "status": "n/a",
+  "bifrost": "nothing (Apple Music is an Apple subscription service with no BifrOSt counterpart); the nearest local pieces are springboard/apps/music-desktop/src/music.rs (Radio tab, internet radio streams) and springboard/sdk/src/widgets.rs (player capsule)",
+  "summary": "MusicKit is the client for Apple Music's catalog, subscriptions and tokens, which only exist as an Apple online service. BifrOSt has no catalog, subscription or Apple Music token layer, so nothing maps to it; local playback is covered by the Media Player row of the matrix instead.",
+  "rea_evidence": "ev_d7690439ef1b90bf248ad8f85a289ca9bc0719af4662eccee0330454d4515528",
+  "features": [
+    {"feature": "Catalog search and resource requests", "apple": "MusicCatalogSearchRequest, MusicCatalogResourceRequest, Filters", "bifrost": "nothing", "status": "n/a", "note": "Requires the Apple Music catalog API; no BifrOSt catalog service."},
+    {"feature": "Music items (Song, Album, Artist, Playlist, Station ...)", "apple": "Album, Artist, Song, Playlist, Station, Track", "bifrost": "nothing", "status": "n/a", "note": "Catalog item model belongs to Apple Music. Local library items are a separate concern (Media Library row)."},
+    {"feature": "Authorization and subscription state", "apple": "MusicAuthorization, MusicSubscription, MusicSubscriptionOffer", "bifrost": "nothing", "status": "n/a", "note": "Apple ID and Apple Music subscription offers; BifrOSt Cloud accounts (bifrost-cloud) do not sell music."},
+    {"feature": "Developer tokens", "apple": "MusicTokenProvider, MusicDeveloperTokenProvider, automatic developer token generation", "bifrost": "nothing", "status": "n/a", "note": "Tied to the MusicKit App Service in the Apple developer portal."},
+    {"feature": "Music player for catalog content", "apple": "ApplicationMusicPlayer, SystemMusicPlayer, MusicPlayer, PlayParameters", "bifrost": "springboard/sdk/src/lib.rs:88 (audio service client, svc::audio)", "status": "n/a", "note": "Playback of Apple Music catalog items needs the catalog service. The audio client plays local and stream media only."},
+    {"feature": "Artwork views", "apple": "Artwork, ArtworkImage", "bifrost": "springboard/sdk/src/widgets.rs (player artwork slot)", "status": "n/a", "note": "Artwork is supplied by the Apple Music catalog; BifrOSt apps draw their own artwork."},
+    {"feature": "Apple Music API raw requests", "apple": "MusicDataRequest, MusicDataResponse", "bifrost": "nothing", "status": "n/a", "note": "Raw calls to the Apple Music API. Generic HTTP is in the URL session SDK (springboard/sdk/src/url.rs), but there is no Apple Music endpoint."}
+  ],
+  "gaps": [
+    "No Apple Music catalog, subscription or token service; out of scope for a Linux desktop.",
+    "Apps that expect MusicKit can use the local Media Player and radio paths instead; the matrix does not treat that as parity."
+  ]
+}

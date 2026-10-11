@@ -1,0 +1,17 @@
+{
+  "framework": "DeveloperToolsSupport",
+  "doc": "https://developer.apple.com/documentation/developertoolssupport",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "nothing found; BifrOSt's own preview path is the host preview tooling (bifrost pc smoke / gallery, see CLAUDE.md and docs/golden-gate-sdk-adoption.md)",
+  "summary": "Xcode-only support for customising the Xcode library and preview macros. It has no meaning outside Xcode, and BifrOSt apps are not built in Xcode, so there is no counterpart to match.",
+  "rea_evidence": "ev_c2e36e20f3a227629032392ab8ee575818f6a736638a38d476cbba06cca47918",
+  "features": [
+    {"feature": "Xcode library customisation", "apple": "LibraryContentProvider, LibraryItem", "bifrost": "nothing found", "status": "n/a", "note": "Adds items to the Xcode library UI; no BifrOSt equivalent"},
+    {"feature": "Preview definition", "apple": "Preview, PreviewLayout, PreviewTrait, PreviewRegistry", "bifrost": "bifrost pc smoke / gallery (host preview of an app)", "status": "n/a", "note": "Xcode preview macros; BifrOSt previews are a host CLI, not an app-embedded API"},
+    {"feature": "Preview camera management", "apple": "PreviewCamera, PreviewCameraBuilder", "bifrost": "nothing found", "status": "n/a", "note": "3D preview viewpoints for RealityKit scenes; BifrOSt has no 3D preview"},
+    {"feature": "Resource definition", "apple": "ColorResource, ImageResource", "bifrost": "nothing found", "status": "n/a", "note": "Typed Xcode asset symbols; BifrOSt resources are not generated into typed symbols"},
+    {"feature": "Preview body builders", "apple": "PreviewBodyBuilder, PreviewMacroBodyBuilder, PreviewArguments", "bifrost": "nothing found", "status": "n/a", "note": "Swift result builders for the #Preview macro"}
+  ],
+  "gaps": ["No typed resource symbols generated for BifrOSt app assets (Apple-only tooling; not a parity target)"]
+}

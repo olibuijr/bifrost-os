@@ -1,0 +1,19 @@
+{
+  "framework": "Collaboration",
+  "doc": "https://developer.apple.com/documentation/collaboration",
+  "macos_since": "10.5",
+  "status": "n/a",
+  "bifrost": "springboard/src/shell/account.rs (local account only), springboard/src/shell/sharing.rs (share sheet, not an identity picker)",
+  "summary": "Collaboration reads and edits identities in an identity authority (local or network directory, such as Open Directory) and shows an identity picker for access control lists. BifrOSt has one local account created by the installer and no directory service or identity authority, so there is no counterpart to cover.",
+  "rea_evidence": "ev_22bbc0cc89efb725e2184f62e713dedcb0c411bdb0a4a1a9a4cfe9a85d91266c",
+  "features": [
+    {"feature": "Identity authorities", "apple": "CBIdentityAuthority", "bifrost": "springboard/src/shell/account.rs (one local account)", "status": "n/a", "note": "no identity database or network directory; the installer writes one account file"},
+    {"feature": "User and group identities", "apple": "CBUserIdentity, CBGroupIdentity, CBIdentity", "bifrost": "springboard/src/bare/app_policy.rs (Account: name, uid, gid, home)", "status": "n/a", "note": "POSIX uid and gid are used for sandboxing apps, not exposed as an identity API to apps"},
+    {"feature": "Identity picker", "apple": "CBIdentityPicker", "bifrost": "none", "status": "n/a", "note": "the picker promotes records to sharing accounts; BifrOSt has no sharing-account concept"},
+    {"feature": "Access control lists", "apple": "Collaboration ACL use with identities", "bifrost": "springboard/src/bare/docbroker.rs (file grants)", "status": "n/a", "note": "file grants are per-app portal grants, not identity-based ACLs"}
+  ],
+  "gaps": [
+    "No identity authority or directory lookup for users and groups (only the local account).",
+    "No identity picker sheet for choosing people to share with."
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "framework": "DeviceCheck",
+  "doc": "https://developer.apple.com/documentation/devicecheck",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "DeviceCheck is Apple's server-backed per-device bits (DCDevice tokens) and App Attest (DCAppAttestService), which depend on Apple's attestation servers and Apple hardware keys. BifrOSt has no counterpart and no planned equivalent in the repo; the account service in bifrost-cloud is not device attestation.",
+  "rea_evidence": "ev_27848290626e27879ae3fd8ce44c0b8ed4f938492f0c788fdf2dfd9d3375daf9",
+  "features": [
+    {"feature": "Per-device binary state (DCDevice tokens)", "apple": "DCDevice, two per-device bits stored on Apple servers", "bifrost": "none", "status": "n/a", "note": "Needs Apple's device-state server; no BifrOSt counterpart"},
+    {"feature": "App integrity (App Attest)", "apple": "DCAppAttestService, App Attest Environment", "bifrost": "none", "status": "n/a", "note": "Attestation key is generated in Apple hardware and verified by Apple; Linux has no equivalent"},
+    {"feature": "Attestation object validation", "apple": "Attestation Object Validation Guide (server side)", "bifrost": "none", "status": "n/a", "note": "Server verifies Apple-signed objects; not applicable to BifrOSt"},
+    {"feature": "Server-to-server fraud risk data", "apple": "Assessing fraud risk (server-to-server calls)", "bifrost": "none", "status": "n/a", "note": "Apple service only"},
+    {"feature": "Error reporting", "apple": "DCError, DCErrorDomain", "bifrost": "none", "status": "n/a", "note": "Only meaningful with DeviceCheck itself"}
+  ],
+  "gaps": ["Nothing to match: the service is Apple-hardware and Apple-server bound (App Attest needs Apple's attestation service and device keys)"]
+}

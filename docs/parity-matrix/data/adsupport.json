@@ -1,0 +1,14 @@
+{
+  "framework": "AdSupport",
+  "doc": "https://developer.apple.com/documentation/adsupport",
+  "macos_since": "10.14",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "AdSupport gives an app the per-device advertising identifier, which is gated by Apple's App Tracking Transparency prompt. BifrOSt has no advertising identifier and no tracking prompt, so there is no counterpart to expose.",
+  "rea_evidence": "ev_a1d3475e859a431899917ff0ad0d3368aff4aaa776de1d6c4ebd68b3f2e591e1",
+  "features": [
+    {"feature": "Advertising identifier", "apple": "ASIdentifierManager (shared(), advertisingIdentifier)", "bifrost": "nothing found", "status": "n/a", "note": "The Linux desktop has no per-device ad ID; the Bluetooth ID-like fields in springboard/src/bare/bluetooth.rs are unrelated"},
+    {"feature": "Tracking authorization", "apple": "AppTrackingTransparency prompt, NSUserTrackingUsageDescription", "bifrost": "nothing found", "status": "n/a", "note": "Apple policy tied to advertising; BifrOSt apps request capabilities through manifest permissions (springboard/apps/contacts-desktop/manifest.toml)"}
+  ],
+  "gaps": []
+}

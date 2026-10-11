@@ -1,0 +1,16 @@
+{
+"framework":"CallKit","doc":"https://developer.apple.com/documentation/callkit","macos_since":"13.0","status":"gap",
+"bifrost":"No call framework. Adjacent: springboard/sdk/src/usernotif.rs, springboard/audiod/src/",
+"summary":"BifrOSt has no VoIP, telephony or call-UI code. Only notifications and audio exist as building blocks; a calling feature would need its own API.",
+"rea_evidence":"ev_c384112764dab667ab3b20bceceb0c43a831cada06b9a38eabf6e189b83c4dc9",
+"features":[
+{"feature":"Provider and configuration","apple":"CXProvider, CXProviderDelegate, CXProviderConfiguration","bifrost":"none","status":"gap","note":"no call provider registration"},
+{"feature":"Incoming call UI","apple":"CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes","bifrost":"springboard/sdk/src/usernotif.rs (generic notifications only)","status":"gap","note":"no full-screen/banner call interface with answer and decline"},
+{"feature":"Outgoing calls","apple":"CXCallController, CXTransaction, CXStartCallAction","bifrost":"none","status":"gap","note":"no start-call request path"},
+{"feature":"Call actions","apple":"End, DTMF, group, hold, mute, translate actions","bifrost":"none","status":"gap","note":"audio devices exist in springboard/audiod/src/ but no call state"},
+{"feature":"Call observation","apple":"CXCall, CXCallObserver, CXHandle","bifrost":"none","status":"gap","note":"no list of active calls for apps"},
+{"feature":"Caller ID and blocking","apple":"CXCallDirectoryProvider, Manager, ExtensionContext","bifrost":"none","status":"gap","note":"no call directory extension"},
+{"feature":"Default calling app","apple":"Preparing your app to be the default calling app","bifrost":"none","status":"gap","note":"no default-app setting for calling"}
+],
+"gaps":["Call provider and call-state model in the SDK","Incoming and outgoing call UI in the shell","Active-call observation for apps","Caller ID/blocking directory","Default calling app setting"]
+}

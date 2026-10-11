@@ -1,0 +1,21 @@
+{
+  "framework": "User Notifications UI",
+  "doc": "https://developer.apple.com/documentation/usernotificationsui",
+  "macos_since": "11.0",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/usernotif.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/notify/mod.rs, springboard/src/shell/notify/banner.rs, springboard/src/shell/notify/center.rs",
+  "summary": "Apple's framework is one extension point: a notification content app extension (UNNotificationContentExtension) that supplies the view for a notification, with custom action handling and media play/pause controls. BifrOSt has no app-supplied notification view; its shell draws banner, lock-screen and Notification Center cards itself, and apps get delivery, categories and responses through the usernotif SDK.",
+  "rea_evidence": "ev_e426325cd580d278abf41dd9987944c7903fc63dfcd70d6880f16fa8db867358",
+  "features": [
+    {"feature": "Notification content app extension (custom notification view)", "apple": "UNNotificationContentExtension, didReceive(_:), Customizing the Appearance of Notifications", "bifrost": "springboard/src/shell/notify/mod.rs (start_banner, Card::new), springboard/src/shell/notify/banner.rs", "status": "gap", "note": "the shell draws every notification card; no app can supply a view controller or view for a delivered notification"},
+    {"feature": "Custom actions and response handling", "apple": "didReceive(_:completionHandler:), UNNotificationContentExtensionResponseOption", "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response), springboard/src/shell/usernotif.rs", "status": "partial", "note": "category actions (button, destructive, foreground, text reply) and Response events exist; no content-extension response options or per-view action dismissal"},
+    {"feature": "Media play and pause in notifications", "apple": "mediaPlayPauseButtonType, mediaPlayPauseButtonFrame, mediaPlayPauseButtonTintColor, mediaPlay(), mediaPause()", "bifrost": "none found", "status": "gap", "note": "no media button API on notification cards; the Music and Podcasts apps have their own playback controls but not in notifications"},
+    {"feature": "Delivering notifications to the notification UI", "apple": "UNNotificationContent delivery into the system banner, lock screen and Notification Center (framework context)", "bifrost": "springboard/src/shell/notify/mod.rs (Shell post path), springboard/src/shell/notify/center.rs, springboard/src/shell/notify/banner.rs", "status": "partial", "note": "banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo"}
+  ],
+  "gaps": [
+    "App-supplied notification view (UNNotificationContentExtension) with a view controller that renders delivered content",
+    "Media play and pause controls on a notification (mediaPlayPauseButton* and mediaPlay()/mediaPause())",
+    "Content-extension response options (UNNotificationContentExtensionResponseOption) and dismissal behaviour per action",
+    "Notification attachments and userInfo payloads for custom content (noted in docs/bifrost-ui.md, User notifications section)"
+  ]
+}

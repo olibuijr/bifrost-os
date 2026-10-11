@@ -1,0 +1,17 @@
+{
+  "framework": "Objective-C Runtime",
+  "doc": "https://developer.apple.com/documentation/objectivec",
+  "macos_since": "10.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "The Objective-C runtime and NSObject root types serve Objective-C and Swift class hierarchies. BifrOSt apps and the shell are Rust, with no Objective-C runtime, so there is no counterpart and none is needed.",
+  "rea_evidence": "ev_5270965bc2cae9719324e1d7a180fb05d9a665b2e736596e6b1c99c6e53af51c",
+  "features": [
+    {"feature": "NSObject root class", "apple": "NSObject", "bifrost": "nothing found", "status": "n/a", "note": "Apps are Rust; no Objective-C object model"},
+    {"feature": "NSObject protocol", "apple": "NSObjectProtocol", "bifrost": "nothing found", "status": "n/a", "note": ""},
+    {"feature": "Runtime class and protocol objects", "apple": "Protocol", "bifrost": "nothing found", "status": "n/a", "note": ""},
+    {"feature": "Runtime functions", "apple": "objc_copyImageHeaders(_:)", "bifrost": "nothing found", "status": "n/a", "note": "Mach-O image introspection; not applicable to the Rust shell"},
+    {"feature": "Runtime constants, types, macros", "apple": "Objective-C Structures, Constants, Functions, Data Types, Macros, Enumerations", "bifrost": "nothing found", "status": "n/a", "note": "C reference of the Apple runtime"}
+  ],
+  "gaps": []
+}

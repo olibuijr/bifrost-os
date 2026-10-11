@@ -1,0 +1,30 @@
+{
+  "framework": "TipKit",
+  "doc": "https://developer.apple.com/documentation/tipkit",
+  "macos_since": "14.0",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/widgets.rs (popover, ToolTip material), springboard/sdk/src/defaults.rs, springboard/sdk/src/testing.rs",
+  "summary": "TipKit is a contextual-tip framework: tip content, display rules, a persistent datastore, inline and popover views, and test hooks. BifrOSt has no tip concept, no tip datastore and no display rules. It has the building blocks a popover tip would need (a transient popover placed next to an anchor, a per-app persistent defaults store, a headless test window), but none of them is tied to tips.",
+  "rea_evidence": "ev_52620761eddabd85426b33bad7acd41d59b34a5052b8f491536005ef60cc81ba",
+  "features": [
+    {"feature": "Tip protocol (title, message, image, actions)", "apple": "Tip (protocol), Tips.Action, Tips.Option", "bifrost": "none", "status": "gap", "note": "No tip type, and no code or docs mention tips. The Help menu exists at springboard/src/shell/desktop_bar.rs:119 but holds no tip content."},
+    {"feature": "Display rules and events", "apple": "Tips.Rule, Tips.Parameter, Tips.Event", "bifrost": "none", "status": "gap", "note": "No rule engine that counts events or parameter changes to decide when a hint is eligible."},
+    {"feature": "Inline tip view and style", "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle", "bifrost": "springboard/sdk/src/widgets.rs (cards, materials)", "status": "gap", "note": "No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip."},
+    {"feature": "Popover tip", "apple": "View.popoverTip(_:arrowEdge:action:), TipNSPopover", "bifrost": "springboard/sdk/src/widgets.rs:969 (popover), springboard/ui/src/split.rs:71 (place_popover), springboard/render/src/ui.rs:82 (MATERIAL_POPOVER)", "status": "partial", "note": "A popover with an arrow, anchor placement and transient dismiss exists (widgets.rs:965-968). There is no tip content, no action callback and no anchor modifier on SDK views. An app would have to wire the popover to the anchor view by hand."},
+    {"feature": "Tip groups", "apple": "TipGroup", "bifrost": "none", "status": "gap", "note": "No ordered or first-eligible presentation of several hints."},
+    {"feature": "Configuration and datastore", "apple": "Tips.configure(_:), Tips.datastoreLocation(_:), Tips.displayFrequency(_:)", "bifrost": "springboard/sdk/src/defaults.rs (per-app typed preferences written to <app data>/defaults.txt)", "status": "partial", "note": "Per-app persistent typed key-value storage exists, so tip state could be stored there. There is no configure call, no display frequency limit and no tip-specific store."},
+    {"feature": "CloudKit sync of tip state", "apple": "Tips.cloudKitContainer(_:)", "bifrost": "none in the SDK; cloud sync for accounts and backups is in ~/Projects/bifrost-cloud", "status": "n/a", "note": "CloudKit is an Apple-only service. Tip state would need its own sync path if it were wanted."},
+    {"feature": "Tooltips", "apple": "No TipKit symbol. Tooltips are an AppKit behaviour (NSView.toolTip), not part of TipKit.", "bifrost": "springboard/sdk/src/widgets.rs:47-48 (Material::ToolTip), springboard/render/src/glass.rs:34", "status": "partial", "note": "The ToolTip material exists. docs/bifrost-ui.md:362 says menu items have no tooltips. No control shows a tooltip on hover."},
+    {"feature": "UIKit and AppKit tip views", "apple": "TipUIView, TipUIPopoverViewController, TipUICollectionViewCell, TipUICollectionReusableView, TipNSView, TipNSPopover", "bifrost": "none (BifrOSt apps are Rust with the bifrost_app SDK, not UIKit or AppKit)", "status": "n/a", "note": "Platform bindings. The popover concept is covered by the popover tip row."},
+    {"feature": "Testing hooks (show, hide, reset tips)", "apple": "Tips.showAllTipsForTesting(), showTipsForTesting(_:), hideAllTipsForTesting(), hideTipsForTesting(_:), resetDatastore()", "bifrost": "springboard/sdk/src/testing.rs (TestWindow, headless click and key), docs/bifrost-ui.md (Testing kit)", "status": "gap", "note": "The headless test window can drive any view, but there is no tip registry to force-show or reset."}
+  ],
+  "gaps": [
+    "No tip type, no tip content and no display rules (Tip, Rule, Parameter, Event).",
+    "No persistent tip datastore with display frequency limits, and no configure call.",
+    "No inline tip view or tip view style.",
+    "No anchor modifier that presents a tip popover from an SDK view; the popover exists only as a low-level helper.",
+    "No tip groups.",
+    "No testing hooks to show, hide or reset tips.",
+    "No tooltips on hover in controls or menus (docs/bifrost-ui.md:362)."
+  ]
+}

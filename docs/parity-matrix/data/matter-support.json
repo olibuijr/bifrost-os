@@ -1,0 +1,18 @@
+{
+  "framework": "MatterSupport",
+  "doc": "https://developer.apple.com/documentation/mattersupport",
+  "macos_since": "14.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "MatterSupport lets an ecosystem owner (a smart home platform such as Apple Home) add Matter accessories to its own setup flow. BifrOSt has no smart-home ecosystem, no Matter stack and no commissioning code, so there is nothing to map to.",
+  "rea_evidence": "ev_8339cad6af3f87580d98817e7ccf6401e05dafed6c63cb4c02d9c61624c8a8a0",
+  "features": [
+    {"feature": "Add-device request", "apple": "MatterAddDeviceRequest", "bifrost": "nothing found", "status": "n/a", "note": "A request to commission a device into an ecosystem; BifrOSt has no ecosystem to commission into"},
+    {"feature": "Extension request handler", "apple": "MatterAddDeviceExtensionRequestHandler", "bifrost": "nothing found", "status": "n/a", "note": "Setup handler extension; BifrOSt has no extension point for accessory setup"},
+    {"feature": "Matter standard itself", "apple": "Matter (see the separate Matter framework)", "bifrost": "nothing found", "status": "gap", "note": "No Matter, Thread or smart-home code in springboard/ or the SDK; a desktop-relevant gap only if smart-home control is wanted"}
+  ],
+  "gaps": [
+    "No smart-home ecosystem or accessory setup flow",
+    "No Matter or Thread stack in the system layer"
+  ]
+}

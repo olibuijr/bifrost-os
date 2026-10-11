@@ -1,0 +1,31 @@
+{
+  "framework": "AVFoundation (Capture, Audio)",
+  "doc": "https://developer.apple.com/documentation/avfoundation",
+  "macos_since": "10.7",
+  "status": "partial",
+  "bifrost": "bifrost_app::audio (springboard/src/svc.rs), springboard/audiod, springboard/src/media/capture.rs, v4l2.rs, springboard/src/shell/camera/",
+  "summary": "Audio playback and microphone recording work through an audio service with an SDK client, and the shell has a V4L2 camera pipeline for the Camera app. Apps get no camera capture API, no capture session model, no photo or depth capture, no audio engine graph and no speech synthesis.",
+  "rea_evidence": "ev_3454e00a1652a501787395c901dc99acf7b01ec817aac14225f902e711fb2d33",
+  "features": [
+    {"feature": "Capture setup (devices, sessions, inputs)", "apple": "AVCaptureSession, AVCaptureDevice, AVCaptureDeviceInput, discovery", "bifrost": "springboard/src/media/v4l2.rs (probe, Device::open, format enumeration)", "status": "os", "note": "V4L2 probing exists in the shell only; no session/input/output model and no SDK access for apps"},
+    {"feature": "Photo capture", "apple": "AVCapturePhotoOutput, Live Photos, photo settings", "bifrost": "springboard/src/shell/camera/mod.rs, springboard/src/shell/camera/jpeg.rs", "status": "os", "note": "Camera app takes JPEGs with EXIF, self-timer, square crop; no app-facing photo output, no Live Photos, RAW or settings objects"},
+    {"feature": "Audio and video capture (movie files, sample buffers)", "apple": "AVCaptureMovieFileOutput, AVCaptureVideoDataOutput, AVCaptureAudioDataOutput, preview layer", "bifrost": "springboard/src/media/capture.rs (Recorder, WAV), springboard/src/shell/camera/mod.rs (viewfinder)", "status": "partial", "note": "Microphone to WAV works via audiod; no video recording to file, no sample buffer outputs for apps, no preview layer API"},
+    {"feature": "Additional data capture (depth, metadata, synchronizer)", "apple": "AVCaptureDepthDataOutput, AVCaptureMetadataOutput, AVCaptureDataOutputSynchronizer", "bifrost": "springboard/src/shell/camera/qr.rs", "status": "gap", "note": "Only an in-app QR scanner; no depth, face or barcode metadata outputs, no synchronizer"},
+    {"feature": "Camera/microphone permission", "apple": "AVCaptureDevice.authorizationStatus, requestAccess", "bifrost": "docs/app-isolation.md", "status": "gap", "note": "Sandbox doc lists a portal for devices as future work; no per-app camera or microphone prompt"},
+    {"feature": "Audio playback", "apple": "AVAudioPlayer, AVPlayer audio, AVQueuePlayer", "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs, springboard/proto/src/svc.rs", "status": "parity", "note": "Queue, repeat, live streams, transport over a socket, client at bifrost_app::audio; used by Music and Podcasts. No AVAudioPlayer-style per-object players or pan/rate per player"},
+    {"feature": "Audio recording", "apple": "AVAudioRecorder", "bifrost": "springboard/src/media/capture.rs, springboard/audiod/src/main.rs, springboard/apps/voicememos-desktop/src/voicememos.rs", "status": "partial", "note": "Record start/stop to WAV through the audio service; no level metering API, no format settings, no AAC/ALAC recording"},
+    {"feature": "Audio engine and processing graph", "apple": "AVAudioEngine, AVAudioNode, AVAudioUnit effects, AVAudioFile, AVAudioPCMBuffer", "bifrost": "springboard/src/media/audiofile.rs, springboard/src/media/convert.rs", "status": "gap", "note": "File decode and conversion helpers exist; no node graph, effects, mixer nodes or buffer API for apps"},
+    {"feature": "Audio session and routing", "apple": "AVAudioSession-style categories, AVRouteDetector, output routes", "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/src/media/mixer.rs", "status": "os", "note": "Speaker/headphone route, volume memory and ALSA mixer in the shell; no app-facing session categories or route change notifications"},
+    {"feature": "Speech synthesis", "apple": "AVSpeechSynthesizer, AVSpeechUtterance, AVSpeechSynthesisVoice", "bifrost": "", "status": "gap", "note": "No text-to-speech engine or SDK API found in the repo; relevant for accessibility (VoiceOver counterpart)"},
+    {"feature": "Audio settings keys", "apple": "AVAudioSettings constants (format, sample rate, channels)", "bifrost": "springboard/src/media/capture.rs", "status": "gap", "note": "Recorder picks the first working PCM/format; no settings dictionary"}
+  ],
+  "gaps": [
+    "App-facing capture API (session, device discovery, inputs and outputs) for camera and microphone",
+    "Per-app camera and microphone permission prompts",
+    "Speech synthesis (voices, utterances, accessibility use)",
+    "Audio engine graph with effects and buffers",
+    "Video recording to file and sample buffer outputs",
+    "Depth, metadata and synchronized multi-output capture",
+    "Recording settings, metering and compressed formats"
+  ]
+}

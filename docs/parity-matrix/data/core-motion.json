@@ -1,0 +1,31 @@
+{
+  "framework": "Core Motion",
+  "doc": "https://developer.apple.com/documentation/coremotion",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/rotate.rs (orientation consumer), springboard/render/src/gfx/rotate.rs (Orientation enum)",
+  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt has only a four-way screen orientation consumer in the shell; it has no app-facing motion API, and the sensor feed it expects is not present in this repo.",
+  "rea_evidence": "ev_51a71831ac23446ada95e1b098049a910caee7a9704e07103908e3b63269cfe2",
+  "features": [
+    {"feature": "Device motion (attitude, rotation rate, gravity-free acceleration)", "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame", "bifrost": "springboard/src/shell/rotate.rs", "status": "gap", "note": "No attitude or rotation-rate values exist. The shell keeps only a discrete orientation from the sensor."},
+    {"feature": "Device orientation (four-way)", "apple": "Derived from CMAccelerometerData or CMDeviceMotion by the app", "bifrost": "springboard/src/shell/rotate.rs (set_orientation, Rotation Lock), springboard/render/src/gfx/rotate.rs (Orientation)", "status": "partial", "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. No in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests), so the sensor reader is missing or lives outside this repo."},
+    {"feature": "Raw accelerometer events", "apple": "CMAccelerometerData, CMAccelerometer updates via CMMotionManager", "bifrost": "none", "status": "gap", "note": "No SDK API. No accelerometer reader in springboard/sdk/src or springboard/src."},
+    {"feature": "Raw gyroscope events", "apple": "CMGyroData", "bifrost": "none", "status": "gap", "note": "No gyroscope reader or SDK API found."},
+    {"feature": "Magnetometer", "apple": "CMMagnetometerData", "bifrost": "none", "status": "gap", "note": "No magnetometer reader or SDK API found."},
+    {"feature": "Altitude and ambient pressure", "apple": "CMAltimeter, CMAltitudeData, CMAbsoluteAltitudeData, CMAmbientPressureData, CMRecordedPressureData", "bifrost": "none", "status": "gap", "note": "No barometer or altitude API. Desktop hardware rarely has these sensors."},
+    {"feature": "Recorded sensor data and batched history", "apple": "CMSensorRecorder, CMSensorDataList, CMRecordedAccelerometerData, CMBatchedSensorManager, CMLogItem", "bifrost": "none", "status": "gap", "note": "No sensor recording or history store."},
+    {"feature": "Motion activity (walking, running, stationary, automotive)", "apple": "CMMotionActivityManager, CMMotionActivity, CMHeadphoneActivityManager", "bifrost": "none", "status": "gap", "note": "No activity recognition API."},
+    {"feature": "Pedometer, step counter and odometer", "apple": "CMPedometer, CMPedometerData, CMPedometerEvent, CMStepCounter, CMOdometerData", "bifrost": "none", "status": "gap", "note": "No step or pedometer data. Desktop PCs are not carried by users, so this is low priority."},
+    {"feature": "Heart rate data (1 Hz)", "apple": "CMHighFrequencyHeartRateData", "bifrost": "none", "status": "n/a", "note": "Watch-only sensor data."},
+    {"feature": "Headphone motion", "apple": "CMHeadphoneMotionManager", "bifrost": "none", "status": "n/a", "note": "Requires Apple AirPods motion hardware."},
+    {"feature": "Water submersion", "apple": "CMWaterSubmersionManager, CMWaterSubmersionMeasurement, CMWaterTemperature", "bifrost": "none", "status": "n/a", "note": "Apple Watch Ultra only."},
+    {"feature": "Movement disorder symptoms", "apple": "CMMovementDisorderManager, CMTremorResult, CMDyskineticSymptomResult", "bifrost": "none", "status": "n/a", "note": "Apple Watch only, with a dedicated data-collection requirement."},
+    {"feature": "Fall detection", "apple": "CMFallDetectionManager, CMFallDetectionDelegate, CMFallDetectionEvent", "bifrost": "none", "status": "n/a", "note": "Apple Watch and iPhone only, tied to emergency services."}
+  ],
+  "gaps": [
+    "No app-facing Core Motion equivalent in springboard/sdk/src: no CMMotionManager-style API for accelerometer, gyroscope, device motion or attitude.",
+    "The orientation feed is missing from this repo: springboard/src/shell/rotate.rs documents set_orientation as fed by the accelerometer every 200 ms, but no non-test caller exists here.",
+    "No magnetometer, barometer or altitude readers.",
+    "No motion-activity recognition, pedometer or sensor recording or history."
+  ]
+}

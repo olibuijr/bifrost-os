@@ -1,0 +1,16 @@
+{
+  "framework": "Wallet Orders",
+  "doc": "https://developer.apple.com/documentation/walletorders",
+  "macos_since": "13.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Wallet Orders is a server-side web service that Apple Wallet calls to track orders and push updates to a user's device. It needs Apple Wallet and Apple Pay, and BifrOSt has neither, so there is no counterpart to build.",
+  "rea_evidence": "ev_07bdd48fbc14e1a3d133bf1fc8d96c6cd69472da6dacdc949fd2cb52d20f23a9",
+  "features": [
+    {"feature": "Order source and package", "apple": "Order, creating the source for an order, building a distributable order package", "bifrost": "nothing found", "status": "n/a", "note": "Order packages are signed for Wallet; no BifrOSt equivalent"},
+    {"feature": "Order retrieval for devices", "apple": "Retrieve the registrations for a device, Retrieve the latest version of an order", "bifrost": "nothing found", "status": "n/a", "note": "Web service endpoints the Wallet app calls on the merchant's server"},
+    {"feature": "Update notifications", "apple": "Register a device for update notifications, Unregister a device from update notifications, PushToken", "bifrost": "nothing found", "status": "n/a", "note": "APNs push tokens; BifrOSt has no APNs"},
+    {"feature": "Message logs", "apple": "Receive log messages, LogEntries", "bifrost": "nothing found", "status": "n/a", "note": "Log upload from Wallet to the merchant server"}
+  ],
+  "gaps": []
+}

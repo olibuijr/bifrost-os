@@ -1,0 +1,15 @@
+{
+  "framework": "ThreadNetwork",
+  "doc": "https://developer.apple.com/documentation/threadnetwork",
+  "macos_since": "14.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "ThreadNetwork configures Thread Border Routers and shares Thread credentials between Apple Home devices. It needs an 802.15.4 radio and Apple's credential store, which BifrOSt does not have; Thread is also a Thread Group trademark subject to certification.",
+  "rea_evidence": "ev_69fb4eccae3d1fd1b6ece6bdf22150274f94c1769491e1f461e3901a4a168d1f",
+  "features": [
+    {"feature": "Border Router setup", "apple": "ThreadNetwork border router configuration", "bifrost": "none", "status": "n/a", "note": "no 802.15.4 radio support in the tree"},
+    {"feature": "Thread network credentials", "apple": "THCredentials, THClient, manage-thread-network-credentials entitlement", "bifrost": "none", "status": "n/a", "note": "Wi-Fi credentials are in springboard/src/net/wifi.rs, not Thread"},
+    {"feature": "Device roles", "apple": "Thread Border Router, Thread Leader, End device, Sleepy End device", "bifrost": "none", "status": "n/a", "note": ""}
+  ],
+  "gaps": []
+}

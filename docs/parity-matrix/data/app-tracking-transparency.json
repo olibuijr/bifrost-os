@@ -1,0 +1,16 @@
+{
+  "framework": "App Tracking Transparency",
+  "doc": "https://developer.apple.com/documentation/apptrackingtransparency",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "The framework asks the person for permission before an app tracks them across other companies' apps and websites. BifrOSt has no advertising or cross-app tracking identifier, so there is nothing to ask permission for. The permission manifest in springboard/src/bare/app_policy.rs is the nearest counterpart and covers sandbox grants, not tracking.",
+  "rea_evidence": "ev_1811c7fce18cf52780e207134e608cf2910462b8ebfc25d4fe63a66092629add",
+  "features": [
+    {"feature": "Tracking authorization request", "apple": "ATTrackingManager.requestTrackingAuthorization(completionHandler:)", "bifrost": "nothing found", "status": "n/a", "note": "BifrOSt apps get no cross-app tracking identifier, so no prompt is needed."},
+    {"feature": "Expanded interface and additional information action", "apple": "requestTrackingAuthorization(preferExpandedInterface:additionalInformationAction:completionHandler:)", "bifrost": "nothing found", "status": "n/a", "note": "Part of the same prompt; not applicable without tracking."},
+    {"feature": "Usage description keys", "apple": "NSUserTrackingUsageDescription, NSUserTrackingMarkdownUsageDescription", "bifrost": "springboard/src/bare/app_policy.rs (permission manifest)", "status": "n/a", "note": "The manifest declares sandbox permissions such as keychain. It has no tracking key."},
+    {"feature": "Authorization status", "apple": "ATTrackingManager.trackingAuthorizationStatus, AuthorizationStatus", "bifrost": "nothing found", "status": "n/a", "note": "No status value to report."}
+  ],
+  "gaps": []
+}

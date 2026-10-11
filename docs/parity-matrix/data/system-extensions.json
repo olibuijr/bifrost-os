@@ -1,0 +1,17 @@
+{
+  "framework": "System Extensions",
+  "doc": "https://developer.apple.com/documentation/systemextensions",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "none; drivers are in-kernel (springboard/src/bare/kms.rs, bluetooth.rs), apps are sandboxed by springboard/src/bare/app_policy.rs",
+  "summary": "Apple's user-space driver and system extension install and activation flow (OSSystemExtensionManager) is tied to macOS kernel policy and the notarized app bundle. BifrOSt has no equivalent install-and-approve path for user-space drivers; hardware drivers live in the Linux kernel and the shell talks to them directly.",
+  "rea_evidence": "ev_2fb525b4803b2144c8acdd8d49445eee0a4283b3e2c13f424f2524c500ec9d77",
+  "features": [
+    {"feature": "Extension activation and deactivation", "apple": "OSSystemExtensionManager, OSSystemExtensionRequest", "bifrost": "none", "status": "n/a", "note": "Linux kernel modules are loaded by the system, not by apps; no user approval prompt exists"},
+    {"feature": "Usage descriptions", "apple": "NSSystemExtensionUsageDescriptionKey, OSBundleUsageDescriptionKey", "bifrost": "none", "status": "n/a", "note": "no install prompt for drivers"},
+    {"feature": "Extension info and workspace observer", "apple": "OSSystemExtensionInfo, OSSystemExtensionsWorkspace", "bifrost": "none", "status": "n/a", "note": "no user-space extension registry"},
+    {"feature": "Errors", "apple": "OSSystemExtensionError", "bifrost": "none", "status": "n/a", "note": ""},
+    {"feature": "Entitlements", "apple": "System Extension Entitlement, System Extension Redistributable Entitlement", "bifrost": "app_policy.rs sandbox profile (no extension entitlement)", "status": "n/a", "note": "app sandbox is bubblewrap, not Apple entitlements"}
+  ],
+  "gaps": []
+}

@@ -1,0 +1,35 @@
+{
+  "framework": "Contacts",
+  "doc": "https://developer.apple.com/documentation/contacts",
+  "macos_since": "10.11",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export); no SDK module",
+  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps get no SDK contacts API, and no permission, change-history, group, container or contacts-changed mechanism exists.",
+  "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
+  "features": [
+    {"feature": "Contact store access (CNContactStore)", "apple": "CNContactStore", "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save)", "status": "os", "note": "Store is a shell module. The Contacts app reaches it by crate path (springboard/apps/contacts-desktop/src/contacts.rs:20), not through springboard/sdk/src/. Apps have no fetch or save call."},
+    {"feature": "Authorization and privacy", "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker", "bifrost": "none", "status": "gap", "note": "No permission prompt or per-app grant. Any code in the shell reads the whole file."},
+    {"feature": "Contact data model (CNContact, CNMutableContact)", "apple": "CNContact, CNMutableContact", "bifrost": "springboard/src/shell/contactstore.rs:Contact", "status": "partial", "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. No multi-value lists (one phone, one email, one address), no birthday, dates, relations, social profiles, instant messages, URLs, images or nickname."},
+    {"feature": "Labeled values and predefined labels", "apple": "CNLabeledValue, CNContactProperty, localizedString(for:Label)", "bifrost": "springboard/src/shell/contactstore.rs:LABELS", "status": "partial", "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings."},
+    {"feature": "Fetch with key-based property selection", "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys", "bifrost": "springboard/src/shell/contactstore.rs:parse, search", "status": "gap", "note": "Every fetch loads all fields. No key list and no partial contacts. Search covers name, phone, email, notes, company and address."},
+    {"feature": "Save requests (CNSaveRequest)", "apple": "CNSaveRequest", "bifrost": "springboard/src/shell/contactstore.rs:save; springboard/src/shell/fsutil.rs (write_atomic)", "status": "partial", "note": "Whole-file atomic rewrite on each save. Invalid input is rejected and the old file is kept. No batch of add, update and delete operations and no per-record change."},
+    {"feature": "Containers and groups", "apple": "CNContainer, CNGroup, CNMutableGroup, CNContainerTypeKey", "bifrost": "none", "status": "gap", "note": "One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it."},
+    {"feature": "Change history and contacts-changed notification", "apple": "CNChangeHistoryFetchRequest, CNChangeHistoryEvent family, CNChangeHistoryEventVisitor, Contacts changed notifications", "bifrost": "none", "status": "gap", "note": "No change log and no notification to other apps when contacts change. Search results are rebuilt from the store when the file is loaded."},
+    {"feature": "Formatting names and addresses", "apple": "CNContactFormatter, CNPostalAddressFormatter", "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials", "status": "partial", "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter."},
+    {"feature": "vCard serialization", "apple": "CNContactVCardSerialization", "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card)", "status": "partial", "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API."},
+    {"feature": "Predefined display preferences", "apple": "CNContactsUserDefaults", "bifrost": "none", "status": "gap", "note": "No contact display preferences such as sort order or name order."},
+    {"feature": "Search index for system search", "apple": "Spotlight-style indexing of contacts (no direct CNContact symbol)", "bifrost": "springboard/src/shell/quicksearch.rs:201 (results_with_contacts); springboard/sdk/src/quicksearch.rs", "status": "partial", "note": "Shell Search returns contacts from the store. Apps index their own content through the SDK quicksearch module, which the contact store does not use."},
+    {"feature": "Contact picker and access UI (ContactsUI)", "apple": "Contact access button, Contact access picker (sample code)", "bifrost": "none", "status": "gap", "note": "No picker that lets an app receive one chosen contact without seeing the whole store."},
+    {"feature": "Errors and validation", "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys", "bifrost": "springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)", "status": "partial", "note": "Errors are std io errors with fixed text (Invalid contact, Contacts file too large, Unknown contacts format). No typed error codes for apps."},
+    {"feature": "Notes and images", "apple": "CNContactNoteKey, com.apple.developer.contacts.notes, CNContactImageDataKey, CNContactThumbnailImageDataKey", "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000)", "status": "partial", "note": "Notes are plain text with a 4000-character limit, with no entitlement. No contact photo or thumbnail data."}
+  ],
+  "gaps": [
+    "No SDK contacts module: apps cannot fetch, search, create or save contacts (springboard/sdk/src/ has no contacts file).",
+    "No permission model for contact access (NSContactsUsageDescription equivalent, per-app grant, contact access picker).",
+    "No groups, containers or subgroups.",
+    "No change history and no contacts-changed notification to apps.",
+    "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
+    "No vCard import and no vCard-to-contact parse.",
+    "No key-based partial fetch; every read loads the whole store (cap 10,000 contacts, 8 MiB file)."
+  ]
+}

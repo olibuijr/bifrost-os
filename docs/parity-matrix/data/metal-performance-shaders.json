@@ -1,0 +1,36 @@
+{
+  "framework": "Metal Performance Shaders",
+  "doc": "https://developer.apple.com/documentation/metalperformanceshaders",
+  "macos_since": "10.13",
+  "status": "partial",
+  "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path)",
+  "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and no Metal-style kernel layer; most of the framework has no counterpart.",
+  "rea_evidence": "ev_dc16a204f342e059f1a161b951e799bfe8079a8056c0055eac0b1c2c928fba5d",
+  "features": [
+    {"feature": "Device support check (MPSSupportsMTLDevice)", "apple": "MPSSupportsMTLDevice(_:)", "bifrost": "springboard/src/gpu/egl.rs (EGL/GLES device init on Mesa via GBM)", "status": "n/a", "note": "Metal-only device query. BifrOSt uses EGL/GLES on Linux, so the Apple call has no direct counterpart."},
+    {"feature": "Gaussian and box blur image filters", "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent", "bifrost": "springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)", "status": "partial", "note": "Blur exists only as shell-internal rendering for glass and shadows. There is no app API, no sigma-based gaussian, and no tent filter."},
+    {"feature": "Morphological filters (erode, dilate, area min and max)", "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax", "bifrost": "none found", "status": "gap", "note": "No morphology code in springboard/render or springboard/ui."},
+    {"feature": "Convolution, median, Sobel and Laplacian filters", "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian", "bifrost": "none found for images", "status": "gap", "note": "springboard/apps/daw/src/conv.rs is an audio convolver and is not an image counterpart."},
+    {"feature": "Pyramid filters (Gaussian, Laplacian)", "apple": "MPSImageGaussianPyramid, MPSImageLaplacianPyramid, MPSImageLaplacianPyramidAdd/Subtract", "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop)", "status": "partial", "note": "A fixed dual-Kawase down and up pyramid for glass only. No Laplacian pyramid and no app API."},
+    {"feature": "Thresholding", "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses", "bifrost": "none found", "status": "gap", "note": "No image thresholding in the repo."},
+    {"feature": "Histogram, histogram equalization and specification", "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification", "bifrost": "none found", "status": "gap", "note": "The index and a grep for histogram found nothing in the render or shell code."},
+    {"feature": "Integral images and statistics (mean, variance, min and max)", "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax", "bifrost": "none found", "status": "gap", "note": "No image statistics API."},
+    {"feature": "Scaling and resampling", "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale", "bifrost": "springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)", "status": "partial", "note": "Bilinear and area-average only. No Lanczos. Not exposed through an SDK image API."},
+    {"feature": "Image arithmetic and pixel conversion", "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose", "bifrost": "springboard/render/src/gfx.rs (premultiplied RGBA Image type, CPU compositing)", "status": "gap", "note": "Compositing is done on the CPU in gfx.rs. No GPU arithmetic kernels or colour-space conversion API."},
+    {"feature": "Reduction filters (row and column min, max, sum, mean)", "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes", "bifrost": "none found", "status": "gap", "note": "No reduction code."},
+    {"feature": "Euclidean distance transform, guided filter, keypoints", "apple": "MPSImageEuclideanDistanceTransform, MPSImageGuidedFilter, MPSImageFindKeypoints", "bifrost": "none found", "status": "gap", "note": "No vision primitives in the repo."},
+    {"feature": "Neural network graphs and CNN layers", "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes", "bifrost": "none found", "status": "gap", "note": "A search for inference, onnx and tensor across springboard returned nothing. No ML runtime exists."},
+    {"feature": "Recurrent neural network layers", "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer", "bifrost": "none found", "status": "gap", "note": "No recurrent layers."},
+    {"feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)", "apple": "MPSMatrix, MPSMatrixMultiplication, MPSMatrixDecompositionCholesky, MPSMatrixDecompositionLU, MPSMatrixSoftMax", "bifrost": "none found", "status": "gap", "note": "No GPU linear algebra in springboard."},
+    {"feature": "Ray tracing and acceleration structures", "apple": "MPSRayIntersector, MPSTriangleAccelerationStructure, MPSInstanceAccelerationStructure", "bifrost": "none found", "status": "n/a", "note": "Ray intersection is not a desktop-shell need, and the framework's acceleration structure classes are deprecated in the Apple docs."},
+    {"feature": "Kernel base classes and keyed archiving", "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver", "bifrost": "springboard/sdk/src/coding.rs (Codable and plist) for serialisation; no kernel base class", "status": "gap", "note": "There is no kernel abstraction for apps to subclass. Serialisation exists, but for app data, not GPU kernels."}
+  ],
+  "gaps": [
+    "No app-facing GPU compute or image-filter API. The GPU path (springboard/src/gpu/) serves the shell only.",
+    "No histogram, threshold, morphology, convolution or statistics filters for images.",
+    "No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.",
+    "No GPU matrix or linear algebra kernels.",
+    "Resampling is bilinear or area-average only. Lanczos is missing.",
+    "Blur is shell-internal, with no gaussian sigma parameter and no SDK entry point."
+  ]
+}

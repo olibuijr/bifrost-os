@@ -1,0 +1,25 @@
+{
+  "framework": "CrashReportExtension",
+  "doc": "https://developer.apple.com/documentation/crashreportextension",
+  "macos_since": "27.0",
+  "status": "os",
+  "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs, springboard/mcp/src/dev.rs, springboard/apps/console-desktop/src/model.rs, springboard/sdk/src/webview.rs",
+  "summary": "Apple's framework is an out-of-process app extension that lets a developer inspect a crashed app (reason, binary images, symbolication, a read-only corpse port) and send its own report. BifrOSt captures crashes at the system level only: the shell's panic hook and the Linux coredump list. No app-facing SDK API inspects another crashed process or builds a report from it.",
+  "rea_evidence": "ev_e3418b95610b968252223751baf4860e5de668b1c88d59df6389a9f3e42a89a3",
+  "features": [
+    {"feature": "Crash reporter extension point (CrashReporterExtension, processCrashReport(process:))", "apple": "CrashReporterExtension protocol, processCrashReport(process:), com.apple.crash-reporter.extension extension point", "bifrost": "none in springboard/sdk/src/; system capture in springboard/src/bare/crashlog.rs", "status": "gap", "note": "No app extension mechanism lets an app's own code run when another app crashes. Apple's handler runs out of process; BifrOSt has no equivalent hook."},
+    {"feature": "Crash reason (CrashedProcess.reason, CrashReason)", "apple": "CrashedProcess.reason, CrashReason", "bifrost": "springboard/src/shell/diag.rs (CrashEntry signature, from crash.log); springboard/apps/console-desktop/src/model.rs (parse_coredump_list: SIG mapped to Fault)", "status": "os", "note": "The reason is recorded by the shell and by systemd-coredump, but apps get it only through the Console and dev tooling, not through the SDK."},
+    {"feature": "Binary images and symbolication (binaryImages, symbolicateAddress(es), SymbolicatedFrame)", "apple": "CrashedProcess.binaryImages, BinaryImageInfo, symbolicateAddress(_:), symbolicateAddresses(_:), symbolAddress(imageName:symbolName:)", "bifrost": "none in springboard/sdk/src/; coredump tooling in springboard/mcp/src/dev.rs (crash info by pid or exe)", "status": "gap", "note": "Symbolication is done by hand (coredumpctl and gdb, per the diagnose-crash skill). No SDK call maps addresses to symbols inside another process."},
+    {"feature": "Corpse port (corpsePort, read-only Mach port)", "apple": "CrashedProcess.corpsePort", "bifrost": "none", "status": "n/a", "note": "Mach ports are an Apple kernel mechanism. The Linux equivalent is the core file, which is not exposed to apps."},
+    {"feature": "Sending a report to the developer", "apple": "Extension sends its report to the developer's own server after collection", "bifrost": "springboard/src/shell/diag.rs (bundle shared with the developer: build info, crash.log, heartbeat); springboard/src/shell/diagnostics_page.rs (Diagnostics page)", "status": "partial", "note": "A manual bundle the user shares. It covers the shell only. No app can send its own crash report through an SDK API."},
+    {"feature": "Crash record written by the shell and the runtime", "apple": "Framework-level crash data, collected by the system on crash", "bifrost": "springboard/src/bare/crashlog.rs (crash.log panics, last_exit, last_start, unclean-run note); springboard/mcp/src/dev.rs (panic_log)", "status": "os", "note": "Covers the shell's own panics and watchdog exits. Other apps' crashes come from systemd-coredump, not from this file."},
+    {"feature": "Crashed web content process notice", "apple": "WebKit process-termination callback (closest counterpart in the Web content API, not in CrashReportExtension)", "bifrost": "springboard/sdk/src/webview.rs (\"crashed\" event, line 732); docs/bifrost-ui.md section \"WebProcessPool crash recovery\"", "status": "partial", "note": "Web engine crashes reach the app as an event, and the browser restarts the engine. This is the closest SDK surface, but it covers web content only and does not produce a crash report."},
+    {"feature": "Crash log presentation in the Console app", "apple": "Not part of the framework (Console and Xcode Organizer read crash reports)", "bifrost": "springboard/apps/console-desktop/src/source.rs (coredump source); springboard/apps/console-desktop/src/model.rs (parse_coredump_list test)", "status": "os", "note": "A system app reads the coredump list. No SDK API exposes it to third-party apps."}
+  ],
+  "gaps": [
+    "No app extension point for an app to run its own crash handler on another app's crash (the CrashReporterExtension role).",
+    "No SDK API to read a crashed process's reason, binary images or stack, or to symbolicate addresses in it.",
+    "No SDK API for an app to build and send a crash report to its own server; the only path is the manual diagnostics bundle.",
+    "Crash records for apps come from systemd-coredump; the SDK does not surface them to apps."
+  ]
+}

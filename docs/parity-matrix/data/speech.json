@@ -1,0 +1,29 @@
+{
+  "framework": "Speech",
+  "doc": "https://developer.apple.com/documentation/speech",
+  "macos_since": "10.15",
+  "status": "gap",
+  "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/capture.rs, springboard/proto/src/svc.rs (audio service records WAV; no recognizer)",
+  "summary": "The Speech framework does speech-to-text on live or recorded audio. BifrOSt has no recognizer, no transcription module and no SDK API for it. The audio service can record microphone audio to WAV on explicit user request, which a recognizer could later consume. The keyboard's dictation key is a glyph that does nothing when tapped.",
+  "rea_evidence": "ev_83d419f1903e2491c4d2f87ecace3e8a120a051be00d72c9640c0513b97e4722",
+  "features": [
+    {"feature": "Speech recognition on live or recorded audio (framework overview)", "apple": "Speech (collection); SpeechAnalyzer, SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule", "bifrost": "none; springboard/audiod/src/main.rs records WAV only", "status": "gap", "note": "No transcription anywhere in springboard/sdk/src or springboard/ui/src. Apple's SpeechAnalyzer and module classes have no counterpart."},
+    {"feature": "Analyzer modules and voice activity detection", "apple": "SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule, LocaleDependentSpeechModule", "bifrost": "none", "status": "gap", "note": "No module protocol or voice activity detection."},
+    {"feature": "Audio input for analysis (file and microphone sequence providers, converter)", "apple": "AssetInputSequenceProvider, CaptureInputSequenceProvider, AnalyzerInputConverter, AnalyzerInput", "bifrost": "springboard/src/media/capture.rs (ALSA capture, interleaved S16, Recorder); springboard/audiod/src/main.rs", "status": "os", "note": "Microphone capture exists in the system layer only. No SDK type gives an app a time-coded buffer stream; capture is WAV to a path through the audio service."},
+    {"feature": "Microphone consent and ownership", "apple": "Microphone access for speech input (permission prompt)", "bifrost": "springboard/proto/src/svc.rs (RecordStart, RecordStop, RecordDone); springboard/docs/services.md:38", "status": "os", "note": "The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps."},
+    {"feature": "Recognition results (alternatives, confidence, time ranges)", "apple": "SpeechModuleResult, AnalyzerInput time codes, SFSpeechRecognitionResult", "bifrost": "none", "status": "gap", "note": "No result type with alternatives or confidence."},
+    {"feature": "Custom vocabulary and language models", "apple": "AnalysisContext, SFSpeechLanguageModel, SFSpeechLanguageModel.Configuration, SFCustomLanguageModelData", "bifrost": "none", "status": "gap", "note": "No custom language model or contextual strings."},
+    {"feature": "Asset and model installation", "apple": "AssetInventory, AssetInstallationRequest, SpeechModels", "bifrost": "none", "status": "gap", "note": "No on-device model download or install path for speech. springboard/updated handles system updates only."},
+    {"feature": "System dictation entry point", "apple": "Keyboard dictation (the framework says it matches keyboard dictation)", "bifrost": "springboard/apps/keyboard/src/keyboard.rs:77 (doc comment), :782 (Kind::Mic yields no action), :1516 (glyph draw); springboard/src/shell/glyphs.rs:87 (mic glyph)", "status": "gap", "note": "The Mic key draws a mic glyph and does nothing on tap. The doc comment says dictation is not available yet. Also listed as a gap in docs/bifrost-ui.md text input notes."},
+    {"feature": "Legacy Objective-C recognizer API", "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)", "bifrost": "none", "status": "gap", "note": "The shell and apps are Rust. The concept is missing, not the Objective-C binding. Apple's current docs point to SpeechAnalyzer."}
+  ],
+  "gaps": [
+    "No speech recognizer or transcription module (SpeechAnalyzer, SpeechTranscriber, DictationTranscriber) in the SDK, the UI kit or the shell.",
+    "No SDK API that streams time-coded microphone audio to an app, so a recognizer cannot be fed from an app.",
+    "No recognition result type with alternatives, confidence or time ranges.",
+    "No custom vocabulary or contextual strings for recognition.",
+    "No on-device speech model install or inventory path.",
+    "Keyboard Mic key is inert; system dictation is missing.",
+    "No app-facing microphone permission prompt. The audio service records only on an explicit user action (springboard/proto/src/svc.rs:218)."
+  ]
+}

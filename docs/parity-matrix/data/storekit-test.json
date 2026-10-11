@@ -1,0 +1,16 @@
+{
+  "framework": "StoreKit Test",
+  "doc": "https://developer.apple.com/documentation/storekittest",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "springboard/src/shell/store/api.rs (PC App Store listing; no in-app purchase API found)",
+  "summary": "Xcode-driven test harness for Apple In-App Purchase, subscriptions and SKAdNetwork ad postbacks. It only works against Apple's App Store and StoreKit, so BifrOSt has no counterpart. BifrOSt's own store has no purchase flow to test.",
+  "rea_evidence": "ev_2efecebfd3eb8fa17d82c94291913d8e1c9b7a3ca9b41d601c05d55b21c73235",
+  "features": [
+    {"feature": "In-app purchase test sessions", "apple": "SKTestSession, SKTestTransaction", "bifrost": "nothing found", "status": "n/a", "note": "Apple In-App Purchase only"},
+    {"feature": "StoreKit test errors", "apple": "SKTestError, SKTestErrorDomain, SKTestFailure", "bifrost": "nothing found", "status": "n/a", "note": "Errors of the StoreKit test environment"},
+    {"feature": "SKAdNetwork postback testing", "apple": "SKAdTestSession, SKAdTestPostback, SKAdTestPostbackResponse", "bifrost": "nothing found", "status": "n/a", "note": "Apple ad attribution; no BifrOSt equivalent"},
+    {"feature": "StoreKit API facades", "apple": "StoreKitPurchaseAPI, StoreKitLoadProductsAPI, StoreKitSubscriptionStatusAPI, StoreKitVerificationAPI", "bifrost": "springboard/src/shell/store/api.rs (app listing only)", "status": "n/a", "note": "Apple StoreKit calls; BifrOSt store has no purchase or subscription calls"}
+  ],
+  "gaps": ["BifrOSt's PC App Store has no purchase or subscription flow to test (not an Apple-parity target; decide separately whether paid apps are planned)"]
+}

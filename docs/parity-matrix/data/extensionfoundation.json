@@ -1,0 +1,14 @@
+{
+"framework":"ExtensionFoundation","doc":"https://developer.apple.com/documentation/extensionfoundation","macos_since":"13.0","status":"gap",
+"bifrost":"No app extension model. Nearby: springboard/src/bare/app_policy.rs, springboard/sdk/src/control.rs, springboard/sdk/src/intents.rs",
+"summary":"Apps run as sandboxed processes, but there is no API for an app to declare extension points, discover extensions from other packages, or launch them as separate processes with a connection. Related features (App Intents, share, app control socket) cover fixed system integrations only.",
+"rea_evidence":"ev_d1c4f8ce36f377938b28696b41679f6d283efbe97d6190b90b0558dc854c7623",
+"features":[
+{"feature":"Adding support for app extensions to your app","apple":"Extension model: define extension points, talk to extensions at runtime","bifrost":"none","status":"gap","note":"No extension model in SDK"},
+{"feature":"Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)","apple":"Declare extension content and handle incoming XPC connections","bifrost":"springboard/sdk/src/control.rs (per-app RPC socket, not an extension entry point)","status":"gap","note":"Control socket serves the app's own methods; no extension bundle type or connection handler"},
+{"feature":"Discovering extensions (AppExtensionIdentity)","apple":"Find available extensions matching a host's extension points","bifrost":"none","status":"gap","note":"docs/bifrost-ui.md notes no share-sheet extensions installed by apps"},
+{"feature":"Launching and managing extension processes (AppExtensionProcess)","apple":"Host launches extension in a separate process","bifrost":"springboard/src/bare/app_policy.rs, springboard/src/bare/app_manager.rs, springboard/src/shell/apphost.rs","status":"os","note":"Shell launches sandboxed app processes (bubblewrap, cgroups); only for whole apps, not host-requested extensions"},
+{"feature":"Extension-point management (AppExtensionPoint, ExtensionPointDefining)","apple":"Declare host extension points and bind extensions to them","bifrost":"springboard/sdk/src/intents.rs, springboard/sdk/src/share.rs (fixed system integrations)","status":"gap","note":"No third-party extension points; intents and share are fixed system channels"}
+],
+"gaps":["Extension point declaration and extension package type","Discovery of installed extensions by host apps","Host-initiated launch of an extension process in its own sandbox with a connection","Share-sheet extensions installed by apps"]
+}

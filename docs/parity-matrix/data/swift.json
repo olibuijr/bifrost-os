@@ -1,0 +1,31 @@
+{
+  "framework": "Swift",
+  "doc": "https://developer.apple.com/documentation/swift",
+  "macos_since": "10.10",
+  "status": "partial",
+  "bifrost": "bifrost_app::observable, bifrost_app::coding, bifrost_app::dispatch, bifrost_ui::observe, bifrost_ui::detect; Rust language and std (no Swift language)",
+  "summary": "Swift is a programming language, so most of its docs (types, protocols, closures, Objective-C and C++ interop, Swift 6 concurrency checking) do not map to BifrOSt, whose apps are written in Rust. The library-level parts with a counterpart are observable values, Codable, GCD-style dispatch and data detection; actors, the Regex builder and Distributed actors have no counterpart.",
+  "rea_evidence": "ev_a57cc897a001cfe2a0d1408c203cb581d6d1cc756ffa9e06c3d3d344bd34eb99",
+  "features": [
+    {"feature": "Language core (types, optionals, closures, value vs reference types)", "apple": "Swift language, Choosing Between Structures and Classes, Adopting Common Protocols", "bifrost": "Rust language and std", "status": "n/a", "note": "Swift language feature; BifrOSt apps are Rust, so there is no Swift counterpart to expose"},
+    {"feature": "Standard library collections and scalar types", "apple": "Int, Double, String, Array, Dictionary", "bifrost": "Rust std types", "status": "n/a", "note": "Rust std replaces the Swift standard library; no SDK wrapper is needed"},
+    {"feature": "Observation and observable values", "apple": "Observation, @Published / ObservableObject", "bifrost": "springboard/sdk/src/observable.rs, springboard/ui/src/observe.rs", "status": "partial", "note": "Observable<T> with sink and map and remove_duplicates; no withObservationTracking dependency capture, no objectWillChange aggregate, no debounce or combineLatest"},
+    {"feature": "Codable encoding and decoding", "apple": "Codable, JSONEncoder, JSONDecoder, PropertyListEncoder", "bifrost": "springboard/sdk/src/coding.rs (codable! macro, JSON and XML plist)", "status": "partial", "note": "JSON and XML plist are covered; no CodingKeys renaming, no binary plist, Data unsupported"},
+    {"feature": "Concurrency and dispatch", "apple": "Swift concurrency (async/await, Task), Adopting strict concurrency in Swift 6 apps", "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue, DispatchGroup, QoS)", "status": "partial", "note": "GCD-style queues and groups exist; no async/await syntax, no Task or actor isolation, no compile-time data-race checking"},
+    {"feature": "Actors and isolation", "apple": "Actor, @MainActor, Sendable", "bifrost": "none", "status": "gap", "note": "Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK"},
+    {"feature": "Distributed actors", "apple": "Distributed", "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter only)", "status": "gap", "note": "Only notification broadcast exists; no remote method calls between processes"},
+    {"feature": "Regular expression DSL", "apple": "RegexBuilder, Regex", "bifrost": "none in springboard/sdk/src or springboard/ui/src", "status": "gap", "note": "No regex builder API; text search in the SDK does not expose regex matching"},
+    {"feature": "Low-level atomic operations", "apple": "Synchronization (Atomic, Mutex)", "bifrost": "std::sync atomics and Mutex used in springboard/sdk/src/control.rs", "status": "os", "note": "Rust std primitives are used internally; no SDK API wraps them for apps"},
+    {"feature": "Data detection in text", "apple": "Swift Standard Library text handling with DataDetection (related)", "bifrost": "springboard/ui/src/detect.rs (links, dates, phone numbers)", "status": "partial", "note": "Covers NSDataDetector-style kinds; not a Swift API, listed for the text-processing counterpart"},
+    {"feature": "Objective-C and C interoperability", "apple": "Language Interoperability with Objective-C and C, Cocoa Design Patterns", "bifrost": "none (Rust FFI only)", "status": "n/a", "note": "Bridging to Objective-C runtime and Cocoa does not apply to BifrOSt"},
+    {"feature": "Objective-C and C++ interoperability", "apple": "Language Interoperability with C++", "bifrost": "none", "status": "n/a", "note": "Swift and C++ interop is Apple-toolchain specific"}
+  ],
+  "gaps": [
+    "Actor isolation and async/await for apps (no actor type in the SDK; springboard/sdk/src/dispatch.rs is callback-based)",
+    "Regex builder or regex matching API for app text search",
+    "Distributed actors (remote calls between app processes)",
+    "withObservationTracking-style automatic dependency capture in springboard/sdk/src/observable.rs",
+    "Codable CodingKeys renaming, binary plist and Data support in springboard/sdk/src/coding.rs",
+    "Synchronization module (Atomic, Mutex) as an SDK API"
+  ]
+}

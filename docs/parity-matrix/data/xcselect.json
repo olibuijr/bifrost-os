@@ -1,0 +1,16 @@
+{
+  "framework": "xcselect",
+  "doc": "https://developer.apple.com/documentation/xcselect",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "xcselect returns the path to a macOS SDK on the host, for build tools that do not run through Xcode. It is a build-time helper for Apple's toolchain. BifrOSt has no macOS SDK and no Xcode toolchain to locate.",
+  "rea_evidence": "ev_dcccf91330b0699462f9f4eb033c1f255be20d1cce46b1d4ccfab0875b70138f",
+  "features": [
+    {"feature": "Host SDK path lookup", "apple": "xcselect_host_sdk_path", "bifrost": "none", "status": "n/a", "note": "Returns a macOS SDK path. BifrOSt builds with Cargo and Linux toolchains, not macOS SDKs."},
+    {"feature": "Developer tools selection", "apple": "Command Line Tools and Xcode selection (framework overview)", "bifrost": "none", "status": "n/a", "note": "Selects the active Apple developer toolchain. Not applicable on Linux."}
+  ],
+  "gaps": [
+    "None for BifrOSt. Apps that need a toolchain path use Cargo and the Linux SDK, so there is no counterpart to add."
+  ]
+}

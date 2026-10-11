@@ -1,0 +1,15 @@
+{
+  "framework": "SafetyKit",
+  "doc": "https://developer.apple.com/documentation/safetykit",
+  "macos_since": "13.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "SafetyKit gives apps access to Crash Detection events from iPhone and Apple Watch crash sensors and the Emergency SOS flow. BifrOSt has no vehicle crash sensor, no emergency-call service and no counterpart, so nothing maps to it.",
+  "rea_evidence": "ev_bfd58be234fbd398e101ad82e967df1d3dda4bba0b452c6b068e80031d091704",
+  "features": [
+    {"feature": "Detecting a crash", "apple": "SACrashDetectionManager, SACrashDetectionEvent, SACrashDetectionDelegate, SAAuthorizationStatus", "bifrost": "none", "status": "n/a", "note": "needs an Apple vehicular crash event entitlement and phone or watch sensors"},
+    {"feature": "Responding to a crash", "apple": "SAEmergencyResponseManager, SAEmergencyResponseDelegate, SACrashDetectionEvent.Response", "bifrost": "none", "status": "n/a", "note": "depends on Apple's Emergency SOS service"},
+    {"feature": "Handling errors", "apple": "SAErrorDomain, SAError, SAError.Code", "bifrost": "none", "status": "n/a", "note": "error types belong to SafetyKit only"}
+  ],
+  "gaps": []
+}

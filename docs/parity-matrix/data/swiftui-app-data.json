@@ -1,0 +1,34 @@
+{
+  "framework": "SwiftUI (App structure, Data and storage)",
+  "doc": "https://developer.apple.com/documentation/swiftui",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/view/app.rs, springboard/sdk/src/document.rs, springboard/sdk/src/observable.rs, springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/ui/src/nav.rs",
+  "summary": "Apps are written in an imperative Rust App trait with retained views, not a declarative View/Scene/App protocol tree. Most App-structure and Data-and-storage topics have a feature-level counterpart (documents, sheets, toolbars, search field, observable values, defaults, state restoration); SwiftData-style model persistence, the Environment, preferences keys and app extensions in the SwiftUI sense have none.",
+  "rea_evidence": "ev_c9694d28e5b52b454b4265832cf0a84e86b67ecf4344b4a586154c5c4e2f2e39",
+  "features": [
+    {"feature": "Essentials (Liquid Glass adoption, updates, sample)", "apple": "Adopting Liquid Glass, SwiftUI updates, Landmarks sample", "bifrost": "springboard/render/src/glass.rs", "status": "partial", "note": "Glass material exists in the renderer; no adoption guide or sample app for the SwiftUI API since there is no SwiftUI API"},
+    {"feature": "App organization", "apple": "App protocol, @main entry point, app lifecycle", "bifrost": "springboard/sdk/src/view/app.rs", "status": "partial", "note": "App trait with hooks and a manifest; imperative, not a declarative App body"},
+    {"feature": "Scenes", "apple": "Scene, WindowGroup, scenePhase", "bifrost": "springboard/sdk/src/view/app.rs", "status": "partial", "note": "One window per app declared in the manifest; no multi-scene composition or scenePhase value"},
+    {"feature": "Windows", "apple": "Window, WindowGroup, openWindow, window styles and sizing", "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs", "status": "partial", "note": "Manifest window = full-size, layout constants; no openWindow API for several windows of one app"},
+    {"feature": "Immersive spaces", "apple": "ImmersiveSpace", "bifrost": "", "status": "n/a", "note": "visionOS only"},
+    {"feature": "Documents", "apple": "DocumentGroup, FileDocument, ReferenceFileDocument", "bifrost": "springboard/sdk/src/document.rs, springboard/sdk/src/file_coordination.rs", "status": "partial", "note": "NSDocument-style API with file grants; no declarative DocumentGroup or versioned-document UI"},
+    {"feature": "Navigation", "apple": "NavigationStack, NavigationSplitView, NavigationPath, TabView", "bifrost": "springboard/ui/src/nav.rs, springboard/ui/src/split.rs, springboard/ui/src/sidebar.rs", "status": "partial", "note": "Push/pop stack, split view, sidebar models; no value-based destinations or NavigationPath"},
+    {"feature": "Modal presentations", "apple": "sheet, alert, confirmationDialog, popover, fullScreenCover", "bifrost": "springboard/ui/src/sheet.rs, springboard/ui/src/nav.rs", "status": "partial", "note": "Sheets and alerts exist; popover and confirmation dialog not confirmed as separate APIs"},
+    {"feature": "Toolbars", "apple": "toolbar, ToolbarItem, ToolbarItemGroup, toolbar customization", "bifrost": "springboard/sdk/src/widgets.rs, springboard/ui/src/nav.rs", "status": "partial", "note": "widgets::toolbar with groups and overflow; no user toolbar customization"},
+    {"feature": "Search", "apple": "searchable, search suggestions, search scopes", "bifrost": "springboard/ui/src/search.rs, springboard/sdk/src/widgets.rs", "status": "partial", "note": "search_field control; no scopes, tokens or suggestions modifier"},
+    {"feature": "App extensions", "apple": "WidgetBundle, Widget, widget configuration", "bifrost": "springboard/sdk/src/intents.rs", "status": "gap", "note": "App Intents exist; no desktop widgets or extension points"},
+    {"feature": "Model data", "apple": "State, Binding, Observable, ObservableObject, Bindable", "bifrost": "springboard/sdk/src/observable.rs, springboard/ui/src/observe.rs", "status": "partial", "note": "Observable values with subscribers; no automatic view invalidation from dependency tracking"},
+    {"feature": "Environment values", "apple": "Environment, EnvironmentObject, EnvironmentValues", "bifrost": "springboard/render/src/appearance.rs, springboard/sdk/src/locale.rs", "status": "gap", "note": "Appearance and locale are readable globals; no view-hierarchy environment propagation"},
+    {"feature": "Preferences", "apple": "PreferenceKey, onPreferenceChange, anchor preferences", "bifrost": "", "status": "gap", "note": "No child-to-parent preference channel; layout is computed by the app"},
+    {"feature": "Persistent storage", "apple": "AppStorage, SceneStorage, SwiftData-backed storage", "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/coding.rs", "status": "partial", "note": "UserDefaults and state restoration cover AppStorage and SceneStorage; no SwiftData/Core Data object graph store"}
+  ],
+  "gaps": [
+    "No declarative App/Scene/View protocol tree",
+    "No multi-window openWindow API for one app",
+    "No environment values or preference keys propagated through a view hierarchy",
+    "No SwiftData/Core Data style model store",
+    "No desktop widgets or app extension points",
+    "No value-based NavigationPath destinations"
+  ]
+}

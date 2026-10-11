@@ -11,3 +11,4 @@ springboard/Cargo.toml:\.\./\.\./iOSTerm:external filesystem path outside this r
 *:mobilesafari:legacy icon id
 springboard/apps/remote/assets/novnc/*:.:vendored third-party noVNC source (comments and browser feature detection)
 springboard/Cargo.toml:ipad-deildu-rust:external sibling checkout path outside this repo
+tools/parity/*:.:parity matrix tooling reads the reference vendor's official documentation; its framework names are the data being compared

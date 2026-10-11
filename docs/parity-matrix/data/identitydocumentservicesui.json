@@ -1,0 +1,18 @@
+{
+  "framework": "IdentityDocumentServicesUI",
+  "doc": "https://developer.apple.com/documentation/identitydocumentservicesui",
+  "macos_since": "26.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "IdentityDocumentServicesUI provides the authorization UI that an identity document provider app shows during a presentment request, plus the web presentment controller that browsers use. It is the UI layer of IdentityDocumentServices, so it has no BifrOSt counterpart for the same reasons.",
+  "rea_evidence": "ev_bd62bccb77f0ebac76bc79f7c17586f41f7dd9a23bd0b1fcfdae2b5da5e8f830",
+  "features": [
+    {"feature": "Provider authorization UI", "apple": "IdentityDocumentProvider, IdentityDocumentRequestScene, IdentityDocumentRequestSceneBuilder", "bifrost": "none", "status": "n/a", "note": "Extension scene for approving a document request"},
+    {"feature": "ISO 18013 request scene and context", "apple": "ISO18013MobileDocumentRequestScene, ISO18013MobileDocumentRequestContext", "bifrost": "none", "status": "n/a", "note": "Needs mobile document requests"},
+    {"feature": "Web presentment controller", "apple": "IdentityDocumentWebPresentmentController, IdentityDocumentWebPresentmentControllerDelegate", "bifrost": "none", "status": "n/a", "note": "Browser side of the Digital Credentials API"},
+    {"feature": "Presentation context and anchor", "apple": "IdentityDocumentPresentmentControllerPresentationContextProviding, IdentityDocumentPresentationAnchor", "bifrost": "none", "status": "n/a", "note": "Presents the system authorization sheet over the app"}
+  ],
+  "gaps": [
+    "No identity document authorization sheet or web presentment controller (n/a: same dependency on Apple wallet documents as IdentityDocumentServices)"
+  ]
+}

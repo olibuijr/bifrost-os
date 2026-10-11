@@ -1,0 +1,21 @@
+{
+  "framework": "Kernel",
+  "doc": "https://developer.apple.com/documentation/kernel",
+  "macos_since": "10.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Kernel covers kernel extensions (kexts), the IOKit base classes for in-kernel drivers, and BSD/Mach kernel interfaces. These are specific to Apple's XNU kernel and kext loading model. BifrOSt runs on Linux, where drivers are in-tree or loaded by the Linux kernel itself, and BifrOSt ships no kernel extension or kernel-resident API for apps.",
+  "rea_evidence": "ev_04dec99a6c1f7907fcfd7ec40e64ed5108319340a7176281b72ffd17f6eb1c2a",
+  "features": [
+    {"feature": "Kernel extensions (kexts)", "apple": "Implementing drivers, system extensions, and kexts; Installing a Custom Kernel Extension", "bifrost": "nothing found", "status": "n/a", "note": "Apple kext loading does not exist on Linux; BifrOSt has no kext installer"},
+    {"feature": "Kernel debugging", "apple": "Debugging a Custom Kernel Extension; Generating a Non-Maskable Interrupt", "bifrost": "nothing found", "status": "n/a", "note": "Two-Mac kernel debugging is an Apple workflow; no counterpart in BifrOSt"},
+    {"feature": "IOKit driver base classes", "apple": "IOKit Fundamentals, Hardware Families, Driver Support, IOService, IOCatalogue", "bifrost": "springboard/src/bare/kms.rs (DRM card probing), springboard/src/media/v4l2.rs", "status": "os", "note": "Hardware is driven in Rust user space over Linux sysfs, DRM and v4l2; no SDK API exposes a driver model to apps"},
+    {"feature": "BSD and Mach interfaces", "apple": "kern, sys, vfs, vm, net, mach, mach-o", "bifrost": "Linux kernel via libc calls (for example springboard/src/bare/bluetooth.rs uses AF_BLUETOOTH sockets)", "status": "n/a", "note": "Apple's XNU interfaces are not a public surface on Linux; apps use the Linux kernel through libc"},
+    {"feature": "Kernel-side event services", "apple": "IOEventLink, IOWorkGroup, IOServiceStateNotificationDispatchSource", "bifrost": "nothing found", "status": "n/a", "note": "Specific to IOKit's kernel service registry"},
+    {"feature": "Deprecated kernel symbols", "apple": "Deprecated Symbols", "bifrost": "n/a", "status": "n/a", "note": "Nothing to map; BifrOSt has no equivalent of Apple's deprecation list"}
+  ],
+  "gaps": [
+    "No SDK API for app code to talk to a driver or read device state from the kernel; hardware access sits in the shell and daemons (springboard/src/bare/).",
+    "No kernel-level debugging workflow comparable to Apple's kext debugging (not needed for an app SDK, recorded for completeness)."
+  ]
+}

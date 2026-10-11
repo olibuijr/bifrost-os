@@ -1,0 +1,16 @@
+{
+  "framework": "AdServices",
+  "doc": "https://developer.apple.com/documentation/adservices",
+  "macos_since": "11.1",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "AdServices returns Apple Ads attribution tokens for App Store download campaigns. It depends on Apple's attribution server and the App Store, and BifrOSt has no store or ad network, so there is no counterpart.",
+  "rea_evidence": "ev_f8308780c0b87719b4af67433bea663de1262a24beea1edbf65fd434b11f9f5e",
+  "features": [
+    {"feature": "Attribution token request", "apple": "AAAttribution (attributionToken())", "bifrost": "nothing found", "status": "n/a", "note": "Token comes from Apple's attribution server for App Store campaigns; BifrOSt has no App Store attribution"},
+    {"feature": "Attribution record lookup", "apple": "RESTful API call with the token (Apple Ads Campaign Management API)", "bifrost": "nothing found", "status": "n/a", "note": "Server-side Apple Ads service; no equivalent"},
+    {"feature": "Attribution errors", "apple": "AAAttributionError, AAAttributionErrorDomain", "bifrost": "nothing found", "status": "n/a", "note": "Errors only exist for the token request above"},
+    {"feature": "Framework changelog", "apple": "Changelog article", "bifrost": "nothing found", "status": "n/a", "note": "Documentation only"}
+  ],
+  "gaps": []
+}

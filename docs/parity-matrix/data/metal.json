@@ -1,0 +1,37 @@
+{
+  "framework": "Metal",
+  "doc": "https://developer.apple.com/documentation/metal",
+  "macos_since": "10.11",
+  "status": "os",
+  "bifrost": "springboard/src/gpu/wl.rs (Presenter), springboard/src/gpu/desktop.rs, springboard/src/gpu/egl.rs, springboard/src/gpu/texture.rs, springboard/src/gpu/shaders.rs, springboard/render/src/glass.rs",
+  "summary": "BifrOSt has a GPU presenter in the system layer (GBM, EGL, GLES, dma-buf) that composes the desktop; its API is shaped like Metal but apps get no GPU API: no device, command queue, shader library, buffer, texture, compute or blit access from the SDK. Compute, ML, ray tracing, GPU profiling and HDR presentation are absent.",
+  "rea_evidence": "ev_400b01a0e4c413af7f891422c2938ff30887a3fc9969bc349a1eadadc846daa5",
+  "features": [
+    {"feature": "Device and GPU enumeration", "apple": "MTLDevice, MTLCreateSystemDefaultDevice", "bifrost": "springboard/src/gpu/desktop.rs (GBM device on a render node)", "status": "os", "note": "opened by the presenter only; no app-facing device object; one render node"},
+    {"feature": "Command queue and work submission", "apple": "MTLCommandQueue, MTLCommandBuffer", "bifrost": "springboard/src/gpu/wl.rs (Presenter::open, one render pass per present)", "status": "os", "note": "submission is internal to the compositor; no app command buffers"},
+    {"feature": "Drawables and onscreen presentation", "apple": "CAMetalLayer, CAMetalDrawable, MTKView", "bifrost": "springboard/src/gpu/wl.rs (create_surface, owe), springboard/src/gpu/desktop.rs (dma-buf buffers)", "status": "os", "note": "external Wayland apps use dma-buf buffers; built-in apps still submit SHM (docs/wayland-desktop.md)"},
+    {"feature": "Render passes and draw calls", "apple": "MTLRenderCommandEncoder, MTLRenderPipelineState", "bifrost": "springboard/src/gpu/egl.rs, springboard/src/gpu/quad.rs, springboard/src/gpu/batch.rs", "status": "os", "note": "fixed compositor pipelines (quad, glass, shadow); no app pipeline state objects"},
+    {"feature": "Shader functions and libraries", "apple": "MTLLibrary, MTLFunction, Metal Shading Language", "bifrost": "springboard/src/gpu/shaders.rs (built-in GLSL source)", "status": "gap", "note": "no app-supplied shaders, no shader compilation API; shaders are fixed in the compositor"},
+    {"feature": "Buffers and textures", "apple": "MTLBuffer, MTLTexture, MTLTextureDescriptor", "bifrost": "springboard/src/gpu/texture.rs (GL texture entries), springboard/src/gpu/desktop.rs (GBM buffers as dma-buf)", "status": "os", "note": "textures are compositor-internal; no app resource creation or upload API"},
+    {"feature": "Resource synchronization and buffer reuse", "apple": "MTLFence, MTLEvent, MTLHeap, resource barriers", "bifrost": "springboard/src/gpu/wl.rs (BufferInfo, create_surface buffer count), springboard/src/gpu/damage.rs", "status": "partial", "note": "damage tracking and multi-buffer swap exist; no app-visible fences, events or heaps"},
+    {"feature": "Compute passes", "apple": "MTLComputeCommandEncoder, compute pipelines", "bifrost": "none", "status": "gap", "note": "no compute path; BifrOSt raster renderer is CPU (docs/wayland-desktop.md)"},
+    {"feature": "Blit passes and copies", "apple": "MTLBlitCommandEncoder", "bifrost": "springboard/src/gpu/texture.rs (texture upload only)", "status": "gap", "note": "no app-facing buffer to texture copy"},
+    {"feature": "Indirect command encoding and ray tracing", "apple": "MTLIndirectCommandBuffer, MTLAccelerationStructure", "bifrost": "none", "status": "gap", "note": "not present in the compositor or the SDK"},
+    {"feature": "Machine learning passes", "apple": "MTLTensor, MPSGraph inference in a command encoder", "bifrost": "none", "status": "gap", "note": "no GPU inference path in the desktop"},
+    {"feature": "Materials: blur and glass compositing", "apple": "MetalFX and Core Image style effects on the GPU", "bifrost": "springboard/render/src/glass.rs (dual-Kawase blur), springboard/src/gpu/wl.rs (glass composite)", "status": "os", "note": "computed once per wallpaper and used by the shell only; not exposed to apps"},
+    {"feature": "Hardware video frames", "apple": "CVPixelBuffer and Metal texture interop", "bifrost": "springboard/src/gpu/nv12.rs, springboard/src/media", "status": "os", "note": "NV12 import and hardware decode feed the media path; no app-facing texture API"},
+    {"feature": "HDR presentation", "apple": "Metal HDR content and extended dynamic range layers", "bifrost": "none", "status": "gap", "note": "presenter is 8-bit SDR"},
+    {"feature": "GPU profiling, counters and frame capture", "apple": "MTLCaptureManager, GPU counter sample buffers", "bifrost": "tools/bench.py (host benches, CPU only)", "status": "gap", "note": "no GPU timing or capture for apps"},
+    {"feature": "Simulator and alternative render paths", "apple": "Metal in Simulator, render path fallback", "bifrost": "springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0)", "status": "partial", "note": "fallback to SHM exists for the compositor; no app-facing fallback"}
+  ],
+  "gaps": [
+    "No app-facing GPU device, command queue or command buffer in the SDK",
+    "No app shader library: apps cannot supply Metal or GLSL shaders",
+    "No app buffer or texture resource API",
+    "No compute, blit or indirect command encoding",
+    "No GPU ray tracing or ML inference path",
+    "No HDR presentation (presenter is 8-bit SDR)",
+    "No GPU counters, timing or frame capture for developers",
+    "The Vulkan backend behind the presenter is not started (docs/gpu-first.md)"
+  ]
+}

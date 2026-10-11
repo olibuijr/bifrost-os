@@ -1,0 +1,27 @@
+{
+  "framework": "Preference Panes",
+  "doc": "https://developer.apple.com/documentation/preferencepanes",
+  "macos_since": "10.1",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/settings.rs, springboard/src/shell/pages.rs (shell-owned Settings app; no third-party pane host)",
+  "summary": "Apple's framework lets third-party bundles plug panes into System Settings, with a lifecycle (select, unselect veto) and Help menu keys. BifrOSt has a shell-owned Settings app with its own page model and a fixed shell Help menu, but no bundle or plugin host for external panes, no pane lifecycle notifications, and apps cannot add Help menu items.",
+  "rea_evidence": "ev_db4bcaa92796c2404b766868425e19d408c6e791746e5b1425684b78be6c2b58",
+  "features": [
+    {"feature": "Preference pane class (NSPreferencePane)", "apple": "NSPreferencePane, init(bundle:), bundle, mainNibName", "bifrost": "springboard/src/shell/settings.rs (Settings is shell code)", "status": "gap", "note": "No API lets an app or bundle supply a pane; Settings builds every page from its own PageId enum (springboard/src/shell/pages.rs)."},
+    {"feature": "Loading the main view", "apple": "loadMainView(), assignMainView(), mainViewDidLoad(), mainView", "bifrost": "springboard/src/shell/settings.rs (Settings::build)", "status": "gap", "note": "Pages are built in code from specs; no nib or view load hook for external panes."},
+    {"feature": "Selecting and deselecting panes", "apple": "willSelect, didSelect, willUnselect, didUnselect, shouldUnselect, reply(toShouldUnselect:)", "bifrost": "springboard/src/shell/settings.rs", "status": "gap", "note": "Settings switches pages internally; no unselect veto is exposed to a pane."},
+    {"feature": "Pane notifications", "apple": "NSPreferencePrefPaneIsAvailable, NSPreferencePaneDoUnselect, NSPreferencePaneCancelUnselect, NSPreferencePaneSwitchToPane, NSPreferencePaneUpdateHelpMenu", "bifrost": "none found", "status": "gap", "note": "Code search for a pane notification or event bus found no equivalent; the Settings app is the only consumer of its pages."},
+    {"feature": "Keyboard focus chain in a pane", "apple": "firstKeyView, initialKeyView, lastKeyView, autoSaveTextFields", "bifrost": "springboard/ui/src/focus.rs (next, nearest)", "status": "partial", "note": "Focus traversal exists as a pure model (next/nearest over Focusable items), but there is no per-pane initial or last key view and no autosave of text fields on pane change."},
+    {"feature": "Help menu entries from a pane", "apple": "updateHelpMenu(with:), NSPrefPaneHelpMenuInfoPListKey, NSPrefPaneHelpMenuTitleKey, NSPrefPaneHelpMenuAnchorKey", "bifrost": "springboard/src/shell/desktop_bar.rs:193 (Help menu rows), springboard/proto/src/lib.rs:646 (AppMenu)", "status": "partial", "note": "The shell Help menu has fixed rows (BifrOSt Information, Search, App Switcher, Back, Home); app menus cannot use the Help title (desktop_bar.rs:338 keeps Help shell-supplied), and there is no anchor or help-book lookup."},
+    {"feature": "Settings pages for system preferences", "apple": "System Settings panes as shipped by the OS (no app API)", "bifrost": "springboard/src/shell/pages.rs (PageId), springboard/src/shell/settings.rs, springboard/src/shell/notify_page.rs", "status": "partial", "note": "The Settings app covers the OS preferences (network, display, notifications, focus, general) as its counterpart, but it is closed to third-party panes."},
+    {"feature": "Settings search", "apple": "Search across System Settings panes (not in the Preference Panes API)", "bifrost": "springboard/src/shell/settings.rs (settings_search::filter on the root page), springboard/src/shell/spotlight_math.rs", "status": "partial", "note": "Root search filters the shell's own pages only; external panes cannot be indexed."},
+    {"feature": "Pane bundle format and Info.plist keys", "apple": "Preference pane bundle, NSPrefPaneHelpMenu* keys in the bundle property list", "bifrost": "none found", "status": "gap", "note": "No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."}
+  ],
+  "gaps": [
+    "No plugin host that loads a third-party pane into the Settings app (NSPreferencePane equivalent), so apps cannot add a settings pane.",
+    "No pane lifecycle (select, deselect with veto) or pane notifications for a Settings page.",
+    "Apps cannot add items to the shell Help menu or use a help anchor; the Help menu rows are fixed in desktop_bar.rs.",
+    "No per-pane initial and last key view, and no text field autosave on pane change.",
+    "No pane bundle format or plist-declared pane and help keys."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "framework": "GameplayKit",
+  "doc": "https://developer.apple.com/documentation/gameplaykit",
+  "macos_since": "10.11",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/testing.rs (seed, PINNED_SEED); springboard/apps/games-desktop/src/games.rs (rand); springboard/apps/games-desktop/src/solitaire.rs (deal); springboard/apps/music-desktop/src/music/upnext.rs (shuffle_slice)",
+  "summary": "GameplayKit is a game-logic framework: entities and components, state machines, pathfinding and agents, noise, decision and rule systems, and seeded randomness. BifrOSt has no app-facing SDK API for any of the game-logic parts. Its only counterpart is randomness: a clock-or-pinned seed helper in the SDK testing kit, and each app keeps its own xorshift generator. The Games app and the Music app both use that pattern.",
+  "rea_evidence": "ev_877ebd0689456225972e844aefe8a9459b3e7bb5c9968cb832b44851f3f8f41a",
+  "features": [
+    {"feature": "Entities and components", "apple": "GKEntity, GKComponent, GKComponentSystem", "bifrost": "none", "status": "gap", "note": "No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."},
+    {"feature": "State machines", "apple": "GKStateMachine, GKState", "bifrost": "springboard/src/bare/bluetooth.rs (pure state machine, :320); springboard/src/shell/camera/logic.rs (countdown state machine, :99)", "status": "gap", "note": "State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules."},
+    {"feature": "Spatial partitioning", "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)", "bifrost": "none", "status": "gap", "note": "No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."},
+    {"feature": "Strategists (turn-based AI)", "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel", "bifrost": "none", "status": "gap", "note": "No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI."},
+    {"feature": "Decision trees and rule systems", "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule", "bifrost": "none", "status": "gap", "note": "No rule engine or decision tree. Predicate logic is written inline per app."},
+    {"feature": "Pathfinding and navigation graphs", "apple": "GKGraph, GKGridGraph, GKObstacleGraph, GKMeshGraph, GKGraphNode and subclasses", "bifrost": "none", "status": "gap", "note": "No graph or route search API. springboard/ui/src/constraint.rs is Cassowary layout, not navigation."},
+    {"feature": "Agents, goals and behaviors", "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate", "bifrost": "none", "status": "gap", "note": "No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."},
+    {"feature": "Obstacles", "apple": "GKObstacle, GKCircleObstacle, GKSphereObstacle, GKPolygonObstacle", "bifrost": "none", "status": "gap", "note": "No obstacle primitives. Depends on the pathfinding and agent rows."},
+    {"feature": "Procedural noise", "apple": "GKNoise, GKNoiseMap, GKPerlinNoiseSource, GKVoronoiNoiseSource and other noise sources", "bifrost": "springboard/apps/games-desktop/src/games.rs (rand); springboard/src/shell/kb_clicks.rs:34 (ad hoc click noise, not an API)", "status": "gap", "note": "No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."},
+    {"feature": "Randomization", "apple": "GKRandomSource, GKARC4RandomSource, GKMersenneTwisterRandomSource, GKRandomDistribution, GKGaussianDistribution, GKShuffledDistribution", "bifrost": "springboard/sdk/src/testing.rs:52 (seed(), PINNED_SEED); springboard/apps/games-desktop/src/games.rs:150 (xorshift rand); springboard/apps/games-desktop/src/solitaire.rs:73 (deal from seed); springboard/apps/music-desktop/src/music/upnext.rs:19 (shuffle_slice, Fisher-Yates)", "status": "partial", "note": "A seeded source exists only as a test-kit helper. Apps can take seed() and build their own xorshift. There is no SDK random source, no distribution API (uniform ranges, Gaussian, shuffled bag), and no generator choice. Each app repeats the same xorshift in its own code."},
+    {"feature": "Xcode and SpriteKit integration", "apple": "GKScene, GKSceneRootNodeType, GKSKNodeComponent, GKSCNNodeComponent", "bifrost": "none", "status": "n/a", "note": "Tied to Apple's SpriteKit and SceneKit scene graphs and the Xcode editor. BifrOSt has no SpriteKit or SceneKit equivalent."},
+    {"feature": "Constants, structures and enumerations", "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy", "bifrost": "none", "status": "gap", "note": "Value types depend on the spatial, graph and strategist rows, which are all missing."}
+  ],
+  "gaps": [
+    "No SDK pathfinding or navigation graph (GKGraph family): no grid, mesh or obstacle graph and no route search.",
+    "No SDK random source or distribution API: apps copy an xorshift generator, and only seed() is exposed, under the test kit.",
+    "No procedural noise (Perlin, Voronoi, billow, ridged) for apps.",
+    "No reusable state machine, entity-component system, or rule and decision system for game logic.",
+    "No spatial partitioning (quadtree, octree, R-tree) for apps.",
+    "No turn-based AI (minimax or Monte Carlo strategist) or agent steering (goals, behaviors, obstacles).",
+    "SpriteKit and SceneKit integration has no BifrOSt counterpart, so it is n/a."
+  ]
+}

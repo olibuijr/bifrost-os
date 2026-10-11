@@ -1,0 +1,30 @@
+{
+  "framework": "Music Understanding",
+  "doc": "https://developer.apple.com/documentation/musicunderstanding",
+  "macos_since": "27.0",
+  "status": "gap",
+  "bifrost": "springboard/apps/daw/src/lab.rs (loudness only, app-private); springboard/src/media/symfile.rs and mp3.rs (file decode); springboard/audiod/src/main.rs (playback and capture service)",
+  "summary": "The framework is audio analysis: a session that runs rhythm, key, loudness, pace, structure and instrument-activity analyses over a file or a buffer stream. BifrOSt has no analysis API. Only integrated loudness and true peak exist, as private DAW lab code, and there is no SDK surface for any of the six analyses.",
+  "rea_evidence": "ev_5ca98fba11b7d0d8290a0ab5f2bb01719eeda945e38cfc42f1cb97e6eccf7777",
+  "features": [
+    {"feature": "Analysis session (create, analyze, cancel)", "apple": "MusicUnderstandingSession: init(asset:), init(audioProvider:), analyze(), analyze(for:), cancel()", "bifrost": "none", "status": "gap", "note": "no session object or analysis entry point in springboard/sdk/src/ or springboard/ui/src/"},
+    {"feature": "Audio input (file asset and buffer stream)", "apple": "MusicUnderstandingSession init(asset:) (AVAsset) and init(audioProvider:) (AVAudioPCMBuffer stream)", "bifrost": "springboard/apps/daw/src/assets.rs (decodes via springboard::media); springboard/src/media/symfile.rs (FLAC, Ogg Vorbis, WAV); springboard/src/media/mp3.rs (MP3); springboard/audiod/src/main.rs (Recorder capture)", "status": "partial", "note": "decoding exists for DAW and playback apps; no SDK API hands decoded PCM to an app for analysis, and no buffer-stream input"},
+    {"feature": "Rhythm (beats, bars, BPM)", "apple": "RhythmResult: beats, bars, beatsPerMinute", "bifrost": "springboard/apps/daw/src/model.rs (Section.bpm, a project tempo, not detected); springboard/apps/daw/src/devices/fx.rs (Duck, tempo-synced from set BPM)", "status": "gap", "note": "tempo is only stored and used for playback sync; there is no beat or onset detection on audio"},
+    {"feature": "Key (musical key over time)", "apple": "KeyResult, AnalysisType.key", "bifrost": "springboard/apps/daw/src/compose.rs (best-fit chord from notes in the project, around line 508)", "status": "gap", "note": "compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio"},
+    {"feature": "Loudness (integrated, momentary, short-term, peak)", "apple": "LoudnessResult, loudnessResults async sequence, AnalysisType.loudness", "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs at line 81, measure at line 110, true peak, band energy); used by springboard/apps/daw/src/bin/daw-render.rs and daw-ai.rs", "status": "partial", "note": "integrated LUFS and true peak exist as ITU-R BS.1770 code for the DAW lab only; no momentary or short-term values, no streaming results, no SDK API"},
+    {"feature": "Pace", "apple": "PaceResult, AnalysisType.pace", "bifrost": "none", "status": "gap", "note": "no pace or tempo-change analysis"},
+    {"feature": "Structure (sections, segments, phrases)", "apple": "StructureResult, AnalysisType.structure", "bifrost": "springboard/apps/daw/src/model.rs (Section, a user-authored scene, not detected)", "status": "gap", "note": "the name Section is a project scene, not detected song structure"},
+    {"feature": "Instrument activity", "apple": "InstrumentActivityResult, AnalysisType.instrumentActivity", "bifrost": "none", "status": "gap", "note": "no source separation or per-instrument level detection"},
+    {"feature": "Result and support types (TimedValue, RangedValue, errors)", "apple": "MusicUnderstandingSession.TimedValue, RangedValue, SessionResult, MusicUnderstandingError", "bifrost": "none", "status": "gap", "note": "no equivalent result types; the closest is the private lab Metrics struct at springboard/apps/daw/src/lab.rs:63"},
+    {"feature": "Cancellation and partial delivery", "apple": "cancel(), loudnessResults async sequence", "bifrost": "springboard/sdk/src/dispatch.rs (generic GCD-style dispatch, no analysis job)", "status": "gap", "note": "no cancellable analysis job or result stream in the SDK"}
+  ],
+  "gaps": [
+    "No audio analysis API in the SDK: no session, no analyze call, no result types for any of the six analyses.",
+    "Beat, bar and BPM detection on audio (RhythmResult). Only the project's stored tempo exists.",
+    "Musical key detection on audio (KeyResult).",
+    "Structure segmentation (sections, segments, phrases) and pace analysis.",
+    "Instrument activity detection and source separation.",
+    "Loudness exists only as private DAW lab code: no momentary or short-term values, no streaming results, no SDK surface.",
+    "No buffer-stream input for analysis; decoders only return whole files to the DAW."
+  ]
+}

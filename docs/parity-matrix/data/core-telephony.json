@@ -1,0 +1,19 @@
+{
+  "framework": "Core Telephony",
+  "doc": "https://developer.apple.com/documentation/coretelephony",
+  "macos_since": "10.10",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Core Telephony exposes the home cellular carrier, eSIM provisioning, subscriber information and cellular data access for iPhone and iPad hardware. BifrOSt PC has no cellular modem support and no SDK API for carrier or SIM data, so there is no counterpart to map to.",
+  "rea_evidence": "ev_2cbb4b48f94655cbf2d97e8f6c26d61c9b085b4371630c3527521cd6233caf97",
+  "features": [
+    {"feature": "Service information (carrier, call info)", "apple": "CTTelephonyNetworkInfo; CTCarrier and CTCall (deprecated)", "bifrost": "none", "status": "n/a", "note": "Cellular carrier data needs a modem; BifrOSt PC is a Wi-Fi and Ethernet desktop (springboard/src/net/wifi.rs)"},
+    {"feature": "eSIM provisioning", "apple": "CTCellularPlanProvisioning, CTCellularPlanProvisioningRequest, CTCellularPlanProperties, CTCellularPlanCapability", "bifrost": "none", "status": "n/a", "note": "Carrier eSIM install is Apple hardware and carrier-specific"},
+    {"feature": "SIM status and plan availability", "apple": "CTCellularPlanStatus", "bifrost": "none", "status": "n/a", "note": "No SIM hardware path in the PC build"},
+    {"feature": "Subscriber information", "apple": "CTSubscriber, CTSubscriberInfo, CTSubscriberDelegate", "bifrost": "none", "status": "n/a", "note": "Cellular subscriber identity has no PC equivalent"},
+    {"feature": "Cellular data access", "apple": "CTCellularData", "bifrost": "none", "status": "n/a", "note": "Networking on PC goes through netd (springboard/src/net/), which has no cellular path"},
+    {"feature": "Network slicing", "apple": "CTSlicingManager", "bifrost": "none", "status": "n/a", "note": "Carrier 5G feature, no counterpart"},
+    {"feature": "Errors", "apple": "CTError", "bifrost": "none", "status": "n/a", "note": "Follows from the feature rows above"}
+  ],
+  "gaps": []
+}

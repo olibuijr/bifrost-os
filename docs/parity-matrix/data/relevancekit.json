@@ -1,0 +1,24 @@
+{
+  "framework": "RelevanceKit",
+  "doc": "https://developer.apple.com/documentation/relevancekit",
+  "macos_since": "n/a (Mac Catalyst 26.0, macOS 26.0 in the doc header; the overview says the API only has effect on watchOS)",
+  "status": "n/a",
+  "bifrost": "springboard/src/shell/today.rs (Smart Stack members, stack_members), springboard/src/shell/widgets/mod.rs (Kind::Stack), springboard/sdk/src/intents.rs (App Intents, closest app-facing hook)",
+  "summary": "RelevanceKit is a watchOS-only API that gives watchOS Smart Stack contextual clues (time, location, fitness, sleep, headphones) for ordering widgets. Apple's overview says calls on other platforms have no effect. BifrOSt's Today view has a Smart Stack of its own shell widgets, paged in a fixed order, with no relevance-ranking or app-facing clue API.",
+  "rea_evidence": "ev_265cc954ad4c4a1060994d618586ac93f25c528884ddaae07a138a2773fe1520",
+  "features": [
+    {"feature": "Smart Stack relevance clues (overview)", "apple": "RelevanceKit, RelevantContext, Smart Stacks in watchOS", "bifrost": "springboard/src/shell/today.rs:574 (stack_members)", "status": "n/a", "note": "Apple says RelevanceKit only acts on watchOS. BifrOSt has no watch target. The shell's Smart Stack pages members in their enabled order and does not rank them by context."},
+    {"feature": "Time clues", "apple": "RelevantContext.date(_:), date(_:kind:), date(interval:kind:), date(range:kind:), date(from:to:), DateKind", "bifrost": "none (springboard/sdk/src/intents.rs has Date params only, no relevance hint)", "status": "gap", "note": "A desktop widget could ask to be shown at a time. Apple's watch-only API is the reference; no BifrOSt counterpart exists."},
+    {"feature": "Location clues", "apple": "RelevantContext.location(_:) with CLRegion, location(inferred:), InferredLocation", "bifrost": "none", "status": "n/a", "note": "Needs location and inferred home or work places. BifrOSt has no location service exposed to apps."},
+    {"feature": "Fitness clues", "apple": "RelevantContext.fitness(_:), FitnessCondition", "bifrost": "none", "status": "n/a", "note": "Workout-driven relevance is tied to watch sensors."},
+    {"feature": "Hardware clues (headphones)", "apple": "RelevantContext.hardware(headphones:), HeadphonesCondition", "bifrost": "springboard/src/bare/bluetooth.rs (Bluetooth device state, not exposed as a relevance hint)", "status": "n/a", "note": "Apple-only headphone state for watch relevance. The shell tracks Bluetooth, but nothing feeds a widget ranking."},
+    {"feature": "Sleep clues", "apple": "RelevantContext.sleep(_:), SleepCondition", "bifrost": "none", "status": "n/a", "note": "Sleep schedule is a watch health signal. No BifrOSt counterpart."},
+    {"feature": "Widget suggestions via intent donation", "apple": "WidgetKit Smart Stack suggestions (widget-suggestions-in-smart-stacks article), App Intents donation", "bifrost": "springboard/sdk/src/intents.rs (IntentResult, Intent, shortcut flag); springboard/sdk/src/widgets.rs (widget drawing adapters)", "status": "partial", "note": "Intents are invoked on request over the control socket, with no donation or suggestion feed. Widgets do not declare relevance."}
+  ],
+  "gaps": [
+    "No app-facing relevance hint API for desktop widgets or the Today view's Smart Stack (the shell's Smart Stack pages members in fixed order, springboard/src/shell/today.rs:574).",
+    "No donation API: apps cannot tell the shell which intents are likely useful at a given time (springboard/sdk/src/intents.rs has invocation only).",
+    "Time-based relevance is the only clue type that could map to a desktop (time or date windows); location, fitness, sleep and headphones depend on watch hardware or services BifrOSt does not expose.",
+    "Decision needed: whether a desktop relevance hint is worth building, since Apple scopes the API to watchOS."
+  ]
+}

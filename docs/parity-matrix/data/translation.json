@@ -1,0 +1,24 @@
+{
+  "framework": "Translation",
+  "doc": "https://developer.apple.com/documentation/translation",
+  "macos_since": "15.0",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/locale.rs (localization only, no text translation); springboard/ui/src/format.rs (formatters only); springboard/sdk/src/spellcheck.rs (spelling only)",
+  "summary": "Apple's Translation framework translates text between a language pair on device, through a system translation popover, a session API and language-availability checks. BifrOSt has no text-to-text translation API for apps and no translation UI. Its locale and spellcheck code only localize strings, format numbers and dates, and check spelling in the same language.",
+  "rea_evidence": "ev_318b6155181a029fffc215b27f3997bb92800b4751200f5d8b7a005c5a848088",
+  "features": [
+    {"feature": "System translation popover", "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)", "bifrost": "none", "status": "gap", "note": "no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation"},
+    {"feature": "Translation session and tasks", "apple": "TranslationSession (init(installedSource:target:), translate(_:), translate(batch:), translations(from:), cancel(), prepareTranslation()), translationTask(_:action:), translationTask(source:target:action:)", "bifrost": "none", "status": "gap", "note": "no session type; no way for an app to request a translation between two languages"},
+    {"feature": "Language availability", "apple": "LanguageAvailability (supportedLanguages, status(from:to:), status(for:to:)), LanguageAvailability.Status", "bifrost": "springboard/sdk/src/locale.rs (Locale, Lang: en and is only)", "status": "gap", "note": "Locale describes the user's language but has no list of translatable pairs and no download-status query"},
+    {"feature": "Translation errors", "apple": "TranslationError (nothingToTranslate, unableToIdentifyLanguage, notInstalled, unsupported*Language, unsupportedLanguagePairing, internalError, alreadyCancelled)", "bifrost": "none", "status": "gap", "note": "no error model for translation; not applicable until a translation backend exists"},
+    {"feature": "Formatted-text translation", "apple": "TranslationSession.translate(_:) overload that preserves formatting (AttributedString input)", "bifrost": "springboard/sdk/src/attributed.rs (attributed text type, if present) ", "status": "gap", "note": "not checked in code; the attributed text type would be the input, but no translate step exists"},
+    {"feature": "Localized UI strings and number and date formats (related, not translation)", "apple": "Not part of Translation; related to Foundation Locale and localized strings", "bifrost": "springboard/sdk/src/locale.rs (Locale, Bundle::load, NumberFormatter, DateFormatter); docs/bifrost-ui.md (Locale and localization section)", "status": "partial", "note": "reads <app>/<lang>.lproj/Localizable.strings and formats numbers and dates for en and is only; it does not translate text between languages"}
+  ],
+  "gaps": [
+    "No on-device text translation between language pairs for apps (no TranslationSession equivalent).",
+    "No system translation popover or inline translate action for selected text.",
+    "No language-pair availability or download-status query (LanguageAvailability).",
+    "No translation error model (TranslationError).",
+    "Locale data covers only en and is, so even the related localization layer lacks the language pairs a translation feature would need (docs/bifrost-ui.md, Locale gaps)."
+  ]
+}

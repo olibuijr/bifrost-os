@@ -1,0 +1,17 @@
+{
+  "framework": "Paravirtualized Graphics",
+  "doc": "https://developer.apple.com/documentation/paravirtualizedgraphics",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Apple's framework for host-side GPU acceleration of a macOS guest in a virtual machine (Mac Catalyst 14.0, macOS 11.0). BifrOSt is a Linux desktop that runs on bare metal and has no virtual-machine host API, so there is no counterpart.",
+  "rea_evidence": "ev_5762a99d205255059f295c7aa92ce857c276c10b0579b7ab9145dd11e2dbc712",
+  "features": [
+    {"feature": "Guest graphics driver ABI", "apple": "PGDeviceDescriptor, PGDevice, PGCreateDeviceWithDescriptor(_:)", "bifrost": "nothing found", "status": "n/a", "note": "Apple-only VM graphics stack for macOS guests"},
+    {"feature": "PCI device identity for the guest", "apple": "PG_PCI_DEVICE_ID, PG_PCI_VENDOR_ID, PG_PCI_BAR_MMIO, PG_PCI_MAX_MSI_VECTORS", "bifrost": "nothing found", "status": "n/a", "note": "advertises a virtual PCI device to a guest; BifrOSt does not host guests"},
+    {"feature": "Virtual displays for the guest", "apple": "PGDisplayDescriptor, PGDisplay, PGDisplayMode", "bifrost": "nothing found", "status": "n/a", "note": "display mode reporting to a hypervisor host"},
+    {"feature": "Guest ROM image", "apple": "PGCopyOptionROMURL()", "bifrost": "nothing found", "status": "n/a", "note": "option ROM for the virtual GPU"},
+    {"feature": "Coordinate and size types", "apple": "PGDisplayCoord_t", "bifrost": "nothing found", "status": "n/a", "note": "pixel coordinate type for the display API only"}
+  ],
+  "gaps": []
+}

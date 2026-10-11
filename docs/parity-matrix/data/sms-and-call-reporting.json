@@ -1,0 +1,16 @@
+{
+  "framework": "SMS and Call Reporting (IdentityLookup)",
+  "doc": "https://developer.apple.com/documentation/identitylookup",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "IdentityLookup is app extensions for SMS/MMS filtering, spam reporting and Live Caller ID Lookup, all tied to the cellular phone and Apple's call directory. BifrOSt has no telephony, SMS or call-blocking stack, so there is no counterpart.",
+  "rea_evidence": "ev_8db478d9e08e0d597ac2418892390a98d36e2501b5e3c0deb8d7ddf22622e844",
+  "features": [
+    {"feature": "SMS and MMS message filtering", "apple": "Message Filter app extension (SMS and MMS Message Filtering)", "bifrost": "nothing found", "status": "n/a", "note": "no SMS or MMS stack on BifrOSt PC"},
+    {"feature": "Spam reporting", "apple": "Unwanted Communication app extension (SMS and Call Spam Reporting)", "bifrost": "nothing found", "status": "n/a", "note": "no phone calls or SMS to report"},
+    {"feature": "Live Caller ID Lookup", "apple": "LiveCallerIDLookupManager, LiveCallerIDLookupProtocol, CallLookupExtensionStatus", "bifrost": "nothing found", "status": "n/a", "note": "requires the system call directory; no telephony on the PC"},
+    {"feature": "Call blocking and identity data payloads (PIR)", "apple": "Formatting data for blocking and identity information; HTTP endpoints for Live Caller ID Lookup", "bifrost": "nothing found", "status": "n/a", "note": "server-side protocol tied to the Apple call directory"}
+  ],
+  "gaps": []
+}

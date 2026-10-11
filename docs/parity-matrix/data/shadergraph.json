@@ -1,0 +1,17 @@
+{
+  "framework": "ShaderGraph",
+  "doc": "https://developer.apple.com/documentation/shadergraph",
+  "macos_since": "15.0",
+  "status": "n/a",
+  "bifrost": "render/src/glass.rs (glass effect) and render/src/gfx/ (renderer); no node-graph material editor",
+  "summary": "A node-based material editor inside Reality Composer Pro that builds MaterialX materials for 3D RealityKit scenes. BifrOSt has a 2D desktop renderer and no 3D material authoring, so there is no counterpart.",
+  "rea_evidence": "ev_474ede2cb7b14100335ec191377035985f16b153afa3da679d43ea629c1bea8c",
+  "features": [
+    {"feature": "Node-based material editor", "apple": "Shader Graph in Reality Composer Pro", "bifrost": "nothing found", "status": "n/a", "note": "No node editor in BifrOSt"},
+    {"feature": "Procedural and texture nodes", "apple": "2D-Procedural, 2D-Texture, 3D-Procedural, 3D-Texture", "bifrost": "nothing found", "status": "n/a", "note": "Material generation for 3D content"},
+    {"feature": "Math, logic and data nodes", "apple": "Math, Logic, Data, Adjustment, Compositing, Organization", "bifrost": "nothing found", "status": "n/a", "note": "Shader graph operators; no counterpart"},
+    {"feature": "RealityKit and geometry nodes", "apple": "RealityKit, Geometric, Application", "bifrost": "nothing found", "status": "n/a", "note": "Scene-geometry access for RealityKit"},
+    {"feature": "MaterialX surface output", "apple": "Surface, Material nodes (MaterialX 1.38)", "bifrost": "nothing found", "status": "n/a", "note": "USD/MaterialX interop for 3D content"}
+  ],
+  "gaps": ["No 3D rendering or material authoring path; BifrOSt's renderer is 2D desktop compositing (render/src/gfx/, render/src/glass.rs)"]
+}

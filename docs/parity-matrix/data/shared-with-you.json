@@ -1,0 +1,17 @@
+{
+  "framework": "Shared with You",
+  "doc": "https://developer.apple.com/documentation/sharedwithyou",
+  "macos_since": "13.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Shared with You surfaces links and files that people received in Messages, Mail and FaceTime in a system shelf, and adds collaboration hooks for those services. BifrOSt has no Messages, Mail or FaceTime, so the shelf and its collaboration hooks have no counterpart. The generic share sheet is covered under sharing, not here.",
+  "rea_evidence": "ev_78caf3c796e9dc1ce7d2f966f3c09fe3446641409153cfc409d584b18ff3e6e6",
+  "features": [
+    {"feature": "Frameworks", "apple": "Shared with You Core", "bifrost": "none", "status": "n/a", "note": "depends on Apple's messaging apps"},
+    {"feature": "Shared content and shelf", "apple": "SWHighlight, SWAttribution view, universal links", "bifrost": "none", "status": "n/a", "note": "no shelf fed by a messaging service; springboard/sdk/src/share.rs covers sending and receiving only"},
+    {"feature": "Shared content interactions", "apple": "highlights and attribution views for participants", "bifrost": "none", "status": "n/a", "note": ""},
+    {"feature": "Collaboration", "apple": "Messages and FaceTime collaboration, CloudKit and iCloud Drive", "bifrost": "none", "status": "n/a", "note": "BifrOSt Cloud (~/Projects/bifrost-cloud) has accounts and sync, but no collaboration service"},
+    {"feature": "Framework versions and variables", "apple": "version number, version string, SWCopyRepresentationTypeIdentifier", "bifrost": "none", "status": "n/a", "note": ""}
+  ],
+  "gaps": []
+}

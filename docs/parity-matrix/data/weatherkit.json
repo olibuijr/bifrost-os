@@ -1,0 +1,34 @@
+{
+  "framework": "WeatherKit",
+  "doc": "https://developer.apple.com/documentation/weatherkit",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/weather/data.rs (Open-Meteo forecast fetch and parsing), springboard/apps/weather-desktop/src/weather.rs (Weather app); no app-facing weather API in springboard/sdk/src/",
+  "summary": "BifrOSt has a working forecast pipeline for the Weather app: current conditions, hourly and 10-day daily forecasts, UV, sunrise and sunset, fed by Open-Meteo rather than WeatherKit. There is no SDK weather service for other apps, and alerts, minute forecasts, moon data, historical statistics and attribution have no counterpart.",
+  "rea_evidence": "ev_640a3b252271e036de45d2e26c328a09c623b3a03e40a778617a658c969c3ffc",
+  "features": [
+    {"feature": "Weather service and queries", "apple": "WeatherService, WeatherQuery, WeatherMetadata", "bifrost": "springboard/src/shell/weather/data.rs (forecast_url, fetch_forecast, FORECAST_API)", "status": "partial", "note": "Fetch and parse exist, but only inside the Weather app's data module; no SDK type exposes a weather request to other apps. Data source is Open-Meteo, not Apple's service."},
+    {"feature": "Current conditions", "apple": "CurrentWeather, WeatherCondition", "bifrost": "springboard/src/shell/weather/data.rs (Current, Sky::from_code)", "status": "partial", "note": "Temperature, apparent temperature, humidity, wind speed, condition code and day flag are parsed. Condition is mapped to a local Sky enum from WMO codes."},
+    {"feature": "Wind", "apple": "Wind (speed, direction, gust)", "bifrost": "springboard/src/shell/weather/data.rs (Current.wind_kmh)", "status": "partial", "note": "Speed only. No direction or gust fields are requested or stored."},
+    {"feature": "Precipitation", "apple": "Precipitation, PrecipitationAmountByType, SnowfallAmount", "bifrost": "springboard/src/shell/weather/data.rs (Sky, weather code)", "status": "gap", "note": "Precipitation kind comes only from the weather code. No amounts, probabilities or snowfall are requested."},
+    {"feature": "Pressure trend", "apple": "PressureTrend", "bifrost": "none", "status": "gap", "note": "The forecast URL does not request pressure."},
+    {"feature": "UV index", "apple": "UVIndex", "bifrost": "springboard/src/shell/weather/data.rs (Day.uv from uv_index_max)", "status": "partial", "note": "Daily peak only, used by the Weather detail pane. No current or hourly UV."},
+    {"feature": "Hourly and daily forecasts", "apple": "Forecast, HourWeather, DayWeather, DayPartForecast", "bifrost": "springboard/src/shell/weather/data.rs (Hour, Day, parse_forecast); springboard/apps/weather-desktop/src/weather.rs (HOURLY_TOP, DAILY_TOP)", "status": "partial", "note": "Hourly temperature and code, and 10 daily max, min, code, UV, sunrise and sunset. No day-part forecasts."},
+    {"feature": "Minute forecast", "apple": "MinuteWeather", "bifrost": "none", "status": "gap", "note": "No minute-level precipitation request or type."},
+    {"feature": "Weather alerts", "apple": "WeatherAlert, WeatherSeverity, WeatherAvailability", "bifrost": "none", "status": "gap", "note": "The forecast URL requests no alert data, and no code in the repo models alerts. The notification layer (springboard/src/shell/usernotif.rs) has no weather source."},
+    {"feature": "Sun and moon events", "apple": "SunEvents, MoonEvents, MoonPhase", "bifrost": "springboard/src/shell/weather/data.rs (Day.sunrise, Day.sunset)", "status": "partial", "note": "Sunrise and sunset only. No dawn, dusk, moonrise, moonset or moon phase."},
+    {"feature": "Historical statistics and comparisons", "apple": "DailyWeatherStatistics, MonthlyWeatherStatistics, HourlyWeatherStatistics, Percentiles, Trend, HistoricalComparisons, WeatherChanges", "bifrost": "none", "status": "gap", "note": "No code in the repo requests or stores historical or statistical weather data. Open-Meteo is used only for the forecast endpoint."},
+    {"feature": "Weather errors", "apple": "WeatherError", "bifrost": "springboard/apps/weather-desktop/src/weather.rs (\"Can't reach Open-Meteo\"); springboard/src/shell/weather/data.rs (fetch_forecast returns io::Error)", "status": "partial", "note": "Failures are reported as plain strings or io errors. No typed error enum that apps can match on."},
+    {"feature": "Data attribution", "apple": "WeatherAttribution", "bifrost": "none", "status": "gap", "note": "No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI."}
+  ],
+  "gaps": [
+    "No app-facing weather SDK API in springboard/sdk/src/. Other apps cannot request weather without copying the Open-Meteo code.",
+    "No weather alerts (WeatherAlert, severity, availability) from any data source.",
+    "No minute forecast.",
+    "No historical or statistical weather data (daily and monthly statistics, trends, historical comparisons, percentiles, weather changes).",
+    "No moon events or moon phase, and no dawn or dusk times.",
+    "No pressure trend, wind direction or gust, or precipitation amounts and probabilities.",
+    "No typed WeatherError enum, and no attribution text for the data provider.",
+    "Data is Open-Meteo, not WeatherKit. Apple's coverage of data sources and quality does not carry over."
+  ]
+}

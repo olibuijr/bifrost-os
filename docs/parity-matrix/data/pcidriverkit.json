@@ -1,0 +1,17 @@
+{
+  "framework": "PCIDriverKit",
+  "doc": "https://developer.apple.com/documentation/pcidriverkit",
+  "macos_since": "11.1",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "DriverKit framework for writing user-space drivers for custom PCI and PCI Express hardware, installed through System Extensions (macOS 11.1). BifrOSt drivers are Linux kernel drivers and the shell has no DriverKit-style driver SDK, so there is no counterpart for apps.",
+  "rea_evidence": "ev_a047866e6a4e30b5407a3f6ea886b7730593bd92784df38d19c69ec8e180ee62",
+  "features": [
+    {"feature": "Driver entitlement for PCI devices", "apple": "com.apple.developer.driverkit.transport.pci", "bifrost": "nothing found", "status": "n/a", "note": "DriverKit entitlement; BifrOSt has no driver entitlements"},
+    {"feature": "PCI device provider object", "apple": "IOPCIDevice", "bifrost": "nothing found", "status": "n/a", "note": "config and memory access for a custom driver; Linux kernel drivers use their own bus API"},
+    {"feature": "PCI Express capability keys", "apple": "kIOPCIExpressDeviceCapabilitiesKey, kIOPCIMSIMessageControlKey and the other kIOPCI* macros", "bifrost": "nothing found", "status": "n/a", "note": "IORegistry capability constants for the DriverKit provider"},
+    {"feature": "Thunderbolt PCIe driver extension", "apple": "Creating Custom PCIe Drivers for Thunderbolt Devices", "bifrost": "nothing found", "status": "n/a", "note": "System Extensions install path; no BifrOSt equivalent"},
+    {"feature": "Driver samples", "apple": "DriverKit sample code, Connecting a network driver", "bifrost": "nothing found", "status": "n/a", "note": "reference material only"}
+  ],
+  "gaps": []
+}

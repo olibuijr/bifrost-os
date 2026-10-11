@@ -1,0 +1,16 @@
+{
+  "framework": "Playground Support",
+  "doc": "https://developer.apple.com/documentation/playgroundsupport",
+  "macos_since": "12.0",
+  "status": "n/a",
+  "bifrost": "nothing found for playgrounds; the closest key-value persistence is springboard/sdk/src/defaults.rs (UserDefaults)",
+  "summary": "Apple's Swift Playgrounds runtime: live views, an always-on live view process and a playground key-value store. It is tied to Xcode and Swift Playgrounds, which BifrOSt does not run, so there is no playground counterpart.",
+  "rea_evidence": "ev_80099478189334a8a37f2f24005a68b5a92387daea2fc4e67adfd51d6c7e6c0e",
+  "features": [
+    {"feature": "Playground pages", "apple": "PlaygroundPage", "bifrost": "nothing found", "status": "n/a", "note": "Page state for Swift Playgrounds"},
+    {"feature": "Live views", "apple": "PlaygroundLiveViewable, PlaygroundLiveViewRepresentation", "bifrost": "nothing found", "status": "n/a", "note": "Results shown inline in Xcode and Swift Playgrounds"},
+    {"feature": "Always-on live view messaging", "apple": "PlaygroundRemoteLiveViewProxy, PlaygroundLiveViewMessageHandler", "bifrost": "nothing found", "status": "n/a", "note": "Separate-process live view; no BifrOSt counterpart"},
+    {"feature": "Playground data persistence", "apple": "PlaygroundKeyValueStore, PlaygroundValue, playgroundSharedDataDirectory", "bifrost": "springboard/sdk/src/defaults.rs", "status": "n/a", "note": "The general key-value store exists for apps; no playground-specific store"}
+  ],
+  "gaps": ["No playground runtime; BifrOSt apps are not run in a live-view playground"]
+}

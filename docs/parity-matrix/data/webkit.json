@@ -1,0 +1,39 @@
+{
+  "framework": "WebKit",
+  "doc": "https://developer.apple.com/documentation/webkit",
+  "macos_since": "10.2",
+  "status": "partial",
+  "bifrost": "bifrost_app::webview (springboard/sdk/src/webview.rs), bifrost_app::webview_dev (springboard/sdk/src/webview_dev.rs), Browser app (springboard/apps/browser/), engine (springboard/apps/browser/engine/)",
+  "summary": "BifrOSt embeds the Servo 0.7.0 engine out of process behind a WebProcessPool with navigation events, find, zoom, and a developer-tools layer (JavaScript eval, PNG snapshot). Missing: WebKit for SwiftUI, WebKit's WKDOMNodeSnapshot, WebDriver, Safari-specific web-author pages, and web extensions; several WKWebView behaviours are stubbed or absent (stopLoading, custom user agent, user content scripts, context menus).",
+  "rea_evidence": "ev_c00e3910dd4fefc8089232cd0220229f53808dba7e19a37fe72997b31b283fe8",
+  "features": [
+    {"feature": "Web views and configuration", "apple": "WKWebView, WKWebViewConfiguration, WKPreferences, WKWebpagePreferences, WKProcessPool", "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewId, WebViewState)", "status": "partial", "note": "one engine process with many views; no configuration object, no WKPreferences equivalent, no ContentMode or HTTPS upgrade policy"},
+    {"feature": "Navigation and back-forward list", "apple": "WKNavigationDelegate, WKBackForwardList, WKNavigationAction/Response, WKFormInfo", "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent: LoadStarted, LoadCommitted, LoadFinished, HistoryChanged; go_back, go_forward, reload)", "status": "partial", "note": "no navigation policy callback (decide allow or cancel per request); no back-forward list object; stop_loading is a no-op because Servo 0.7.0 cannot cancel a load"},
+    {"feature": "Web data management (cookies, website data, URL scheme handling)", "apple": "WKWebsiteDataStore, WKHTTPCookieStore, WKURLSchemeHandler, WKURLSchemeTask, readAccessURL", "bifrost": "springboard/sdk/src/webview.rs (profile directory passed to WebProcessPool::spawn)", "status": "partial", "note": "cookies and storage persist in a profile directory; no API to inspect, delete or set cookies or site data; no custom URL scheme handler"},
+    {"feature": "Downloads", "apple": "WKDownload, WKDownloadDelegate", "bifrost": "none found in springboard/sdk/src/webview.rs or springboard/sdk/src/webview_dev.rs", "status": "gap", "note": "no download event or delegate; the engine does not report downloads"},
+    {"feature": "Page content, scripts and messaging", "apple": "WKUserContentController, WKUserScript, WKContentWorld, WKJSHandle, WKContentRuleListStore, WKFrameInfo", "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_collector as document-start script)", "status": "partial", "note": "evaluate_javaScript with token-matched result exists; no message handler from page to app, no content rule lists, no per-world isolation, promises are not awaited"},
+    {"feature": "Page-level search", "apple": "WKFindConfiguration, WKFindResult", "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::find, find_clear, WebViewState::find_matches)", "status": "partial", "note": "injected script count only; no highlight, no match index, no case or whole-word options"},
+    {"feature": "Snapshots and PDF output", "apple": "WKSnapshotConfiguration, WKPDFConfiguration, takeSnapshot, createPDF", "bifrost": "springboard/sdk/src/webview_dev.rs (dev_screenshot to PNG, ShotMode View/Rect/Full)", "status": "partial", "note": "PNG only; no PDF output; no snapshot scale; Full resizes the rendering context briefly"},
+    {"feature": "DOM node snapshot", "apple": "WKDOMNodeSnapshot", "bifrost": "none found", "status": "gap", "note": "no DOM tree snapshot object; dev_eval can read DOM state through script only"},
+    {"feature": "Contextual menus", "apple": "WKContextMenuElementInfo", "bifrost": "none; desktop pointer input is sent to the page as touch (springboard/sdk/src/webview.rs, pool.touch)", "status": "gap", "note": "no right click or context menu; the engine path does not expose link info"},
+    {"feature": "Web UI delegate (alerts, file panels, new windows, window features)", "apple": "WKUIDelegate, WKWindowFeatures, WKOpenPanelParameters", "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::CreateWebView, Closed)", "status": "partial", "note": "new window requests are reported as events; no alert, confirm, prompt or file-chooser delegate; select elements are not supported"},
+    {"feature": "Input and appearance", "apple": "Keyboard and pointer events in WKWebView, UIKit-hosted scrolling, appearance", "bifrost": "springboard/sdk/src/webview.rs (touch, key, set_dark, set_frame, set_zoom, set_viewport_override)", "status": "partial", "note": "no hover and no drag text selection; zoom is clamped 30 to 500 percent; the desktop pointer is delivered as touch"},
+    {"feature": "Custom user agent", "apple": "WKWebView.customUserAgent", "bifrost": "springboard/sdk/src/webview.rs (set_user_agent)", "status": "partial", "note": "set_user_agent exists but Servo reads the user agent at start-up only, so it is not applied"},
+    {"feature": "Web extensions", "apple": "WKWebExtension, WKWebExtensionController, WKWebExtensionContext and related delegates", "bifrost": "none found", "status": "gap", "note": "no extension manifest loading or runtime; out of scope for a first-party desktop unless the browser needs it"},
+    {"feature": "WebKit for SwiftUI", "apple": "WebView, WebPage, WebPage.Configuration, WebPage.NavigationDeciding", "bifrost": "bifrost_app::webview (no SwiftUI-equivalent layer; BifrOSt apps are not SwiftUI)", "status": "n/a", "note": "SwiftUI integration has no BifrOSt counterpart; the nearest API is the WebProcessPool above"},
+    {"feature": "WebDriver and automated testing", "apple": "WebDriver commands for Safari 11.1 and earlier and 12 and later; testing with WebDriver in Safari", "bifrost": "none for web content; springboard/sdk/src/testing.rs covers XCTest-style app tests only (docs/bifrost-ui.md, 'Testing kit')", "status": "gap", "note": "no WebDriver server for pages; springboard/src/shell/browser/js/window.rs sets navigator.webdriver to false, which is a fingerprint stub and not a WebDriver implementation"},
+    {"feature": "Safari support for web authors (optimizing sites, video delivery, Smart App Banners)", "apple": "Optimizing Your Website for Safari, Delivering Video Content for Safari, Promoting Apps with Smart App Banners", "bifrost": "none; the BifrOSt website lives in ~/Projects/bifrost-site/site/ and is not an SDK feature", "status": "n/a", "note": "documentation for web authors targeting Safari; not a framework API"}
+  ],
+  "gaps": [
+    "No WebDriver implementation for web content (Apple's WebDriver commands for Safari); the testing kit is XCTest-style only.",
+    "No WKDOMNodeSnapshot equivalent: no DOM tree snapshot object.",
+    "No downloads API (WKDownload, WKDownloadDelegate).",
+    "No navigation policy callback (per-request allow or cancel), and stop_loading does nothing because Servo 0.7.0 cannot cancel a load.",
+    "No alert, confirm, prompt or file-chooser UI delegate, and no select element support.",
+    "No page-to-app message handler (WKScriptMessageHandler equivalent) and no content rule lists.",
+    "No cookie or website-data API (WKHTTPCookieStore, WKWebsiteDataStore) for apps.",
+    "custom user agent is not applied: Servo reads it at start-up only.",
+    "No PDF snapshot output and no context menu support.",
+    "docs/bifrost-ui.md heading still says Browser 0.3.0, but springboard/apps/browser/manifest.toml and Cargo.toml say 0.9.0; the heading is stale."
+  ]
+}

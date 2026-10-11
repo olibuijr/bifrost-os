@@ -1,0 +1,23 @@
+{
+  "framework": "Group Activities",
+  "doc": "https://developer.apple.com/documentation/groupactivities",
+  "macos_since": "12.0",
+  "status": "n/a",
+  "bifrost": "nothing found; the closest local feature is the shell's multi-window model (springboard/src/shell/desk.rs), which is single-device",
+  "summary": "Group Activities (SharePlay) synchronizes app playback and state across devices through FaceTime infrastructure. BifrOSt has no shared-session service and no FaceTime-style transport, and the framework depends on Apple's hosted FaceTime service, so there is no sensible local counterpart.",
+  "rea_evidence": "ev_a55d2189fe6327903ddf29cce6e8c886f137322824d0496a275d85cb7b6d3c73",
+  "features": [
+    {"feature": "Activity definition and sharing", "apple": "GroupActivity, GroupActivityMetadata, GroupActivityTransferRepresentation, GroupActivityActivationResult", "bifrost": "nothing found", "status": "n/a", "note": "Depends on the FaceTime session that starts the activity"},
+    {"feature": "Share sheet and sharing controller", "apple": "GroupActivitySharingController", "bifrost": "springboard/sdk/src/share.rs (generic share sheet, no session start)", "status": "n/a", "note": "The generic share sheet does not start a shared activity"},
+    {"feature": "Session and participants", "apple": "GroupSession, Participant, CustomMessageIdentifiable", "bifrost": "nothing found", "status": "n/a", "note": "No multi-device session object"},
+    {"feature": "Message passing between participants", "apple": "GroupSessionMessenger", "bifrost": "nothing found (springboard/sdk/src/url.rs is client-side HTTP only)", "status": "n/a", "note": "No transport between BifrOSt devices"},
+    {"feature": "File and data transfer in a session", "apple": "GroupSessionJournal", "bifrost": "nothing found", "status": "n/a", "note": "Cloud sync lives in ~/Projects/bifrost-cloud, not in an app-facing session API"},
+    {"feature": "Spatial and visionOS sharing", "apple": "SystemCoordinator, groupActivityAssociation, SpatialTemplate family", "bifrost": "nothing found", "status": "n/a", "note": "visionOS only"},
+    {"feature": "System state of SharePlay", "apple": "GroupStateObserver", "bifrost": "nothing found", "status": "n/a", "note": "No system SharePlay availability to report"}
+  ],
+  "gaps": [
+    "No shared-session service for apps on more than one BifrOSt device",
+    "No app-facing API for starting a shared activity from the share sheet",
+    "Apple's transport depends on FaceTime, which BifrOSt does not provide"
+  ]
+}

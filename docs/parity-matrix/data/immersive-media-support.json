@@ -1,0 +1,22 @@
+{
+  "framework": "Immersive Media Support",
+  "doc": "https://developer.apple.com/documentation/immersivemediasupport",
+  "macos_since": "26.0",
+  "status": "n/a",
+  "bifrost": "nothing found; springboard/src/media/ (v4l2 capture and hardware video decode) is the closest local media stack and has no immersive metadata",
+  "summary": "Immersive Media Support reads and writes Apple Immersive Video (AIV) metadata for editorial and preview workflows. It targets Apple's immersive video format and Vision Pro-style rendering, which BifrOSt does not support.",
+  "rea_evidence": "ev_8498e5c32ce25a4a115d6f2921ee42b3fcbe778d03f877a6097367e597367d5c",
+  "features": [
+    {"feature": "Camera and lens metadata", "apple": "VenueDescriptor, ImmersiveCamera, ImmersiveCameraCalibration, ImmersiveCameraLensDefinition", "bifrost": "nothing found", "status": "n/a", "note": "AIV-specific calibration data"},
+    {"feature": "Masks", "apple": "ImmersiveCameraMask, ImmersiveDynamicMask, ImmersiveImageMask", "bifrost": "nothing found", "status": "n/a", "note": "AIV-specific"},
+    {"feature": "Presentation commands and descriptors", "apple": "PresentationDescriptor, PresentationDescriptorReader, FadeCommand, SetCameraCommand, ShotFlipCommand", "bifrost": "nothing found", "status": "n/a", "note": "Playback metadata for AIV tracks"},
+    {"feature": "Parametric immersive assets", "apple": "ParametricImmersiveAssetInfo", "bifrost": "nothing found", "status": "n/a", "note": "Wide-field-of-view conversion for AIV"},
+    {"feature": "Immersive frame rendering", "apple": "ImmersiveVideoFrame, ImmersiveCameraViewModel, ImmersivePreviewRenderer", "bifrost": "springboard/src/media/ (hardware video decode, no immersive projection)", "status": "n/a", "note": "No mesh or immersive projection renderer"},
+    {"feature": "Remote preview", "apple": "ImmersiveMediaRemotePreviewSender, ImmersiveMediaRemotePreviewReceiver", "bifrost": "nothing found", "status": "n/a", "note": "No immersive preview protocol"},
+    {"feature": "AIV validation", "apple": "AIVUValidator", "bifrost": "nothing found", "status": "n/a", "note": "Validates Apple-specific AIVU files"}
+  ],
+  "gaps": [
+    "No Apple Immersive Video metadata reader or writer",
+    "No immersive projection or mesh rendering in springboard/src/media/"
+  ]
+}

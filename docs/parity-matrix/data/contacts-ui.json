@@ -1,0 +1,24 @@
+{
+  "framework": "Contacts UI",
+  "doc": "https://developer.apple.com/documentation/contactsui",
+  "macos_since": "10.11",
+  "status": "gap",
+  "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (app-internal card and editor); springboard/src/shell/contactstore.rs (shell-internal store); springboard/src/shell/share/mod.rs (vCard item)",
+  "summary": "Apple's Contacts UI is three view controllers or controls: a contact viewer, a contact picker, and a limited-access button. BifrOSt has no app-facing SDK equivalent of any of them. The Contacts app draws its own card and editor, and the contact store lives in the shell, so other apps cannot reuse either.",
+  "rea_evidence": "ev_6fb05553c10a345f6320e9c365f241ee7902da18913291c6e693fb6100143bc4",
+  "features": [
+    {"feature": "Contact viewer", "apple": "CNContactViewController", "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (draw_detail, open_detail, show_contact)", "status": "partial", "note": "The Contacts app shows a contact card, but only inside that app. No SDK view controller exists for other apps to display a contact."},
+    {"feature": "Contact editor (new, unknown, existing)", "apple": "CNContactViewController in edit mode", "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (edit_contact, Edit menu)", "status": "partial", "note": "Editing exists in the Contacts app only. Saving happens when the form is done, and Cancel leaves the contact unchanged. Not exposed as an SDK API."},
+    {"feature": "Contact picker (popover and modal)", "apple": "CNContactPickerViewController, CNContactPicker", "bifrost": "none in springboard/sdk/src; springboard/sdk/src/share.rs show_picker picks apps for sharing, not contacts", "status": "gap", "note": "An app cannot ask the user to choose a contact and receive the result. The share picker only lists apps, so this needs a new SDK picker and a contact-selection result."},
+    {"feature": "Contact search and store access", "apple": "CNContactStore-backed UI (implicit in the framework's contact views)", "bifrost": "springboard/src/shell/contactstore.rs (search at line 126); springboard/sdk/src/quicksearch.rs (apps index their own content)", "status": "os", "note": "The shell keeps contacts in a local TSV store and searches them for the Search panel. No SDK call lets an app read or search contacts through a supported API."},
+    {"feature": "Sharing a contact as a card", "apple": "CNContact share via UI (no dedicated Contacts UI class)", "bifrost": "springboard/src/shell/share/mod.rs (Item::Card and vcard() at line 88)", "status": "partial", "note": "The shell builds a vCard 3.0 for a contact and the share menu sends it. Apps cannot create a contact card item themselves."},
+    {"feature": "Contact access button (limited access)", "apple": "ContactAccessButton (SwiftUI)", "bifrost": "none found; no contacts permission gate in springboard/sdk/src or springboard/src/bare/app_policy.rs", "status": "n/a", "note": "Apple's button tied to the iOS and macOS limited-access permission model. BifrOSt apps have no contacts permission to request, so there is no button to match. The gap is that contact access is not gated at all."}
+  ],
+  "gaps": [
+    "No SDK contact picker (CNContactPicker or CNContactPickerViewController equivalent) that returns the chosen contact to an app.",
+    "No SDK contact viewer or editor view that other apps can embed; the card and editor are private to contacts-desktop.",
+    "The contact store (springboard/src/shell/contactstore.rs) is not exposed to apps through the SDK, so no app can read or search contacts.",
+    "No contacts permission model. Apps cannot request access, and there is no limited-access state to match ContactAccessButton.",
+    "docs/bifrost-ui.md has no Contacts section. springboard/README.md (Contacts section) describes only the Contacts app itself."
+  ]
+}

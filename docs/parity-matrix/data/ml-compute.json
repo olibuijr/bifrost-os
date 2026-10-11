@@ -1,0 +1,16 @@
+{
+  "framework": "ML Compute (System)",
+  "doc": "https://developer.apple.com/documentation/mlcompute",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Apple's neural network training framework over BNNS and Metal Performance Shaders. The official page marks it deprecated in favour of Accelerate, Metal Performance Shaders and Core ML. BifrOSt has no ML training API in its SDK; ML inference work lives in the separate hamr project, which is not a BifrOSt desktop feature.",
+  "rea_evidence": "ev_805b77b723bceb34496b4e5cf0d4a0d4a7bc55bfec7ba6da917eba98a92ce8d5",
+  "features": [
+    {"feature": "Tensors", "apple": "MLCTensor", "bifrost": "nothing found", "status": "n/a", "note": "data object for the framework; no SDK tensor type"},
+    {"feature": "Platform settings", "apple": "MLCPlatform", "bifrost": "nothing found", "status": "n/a", "note": "global framework settings; no counterpart"},
+    {"feature": "Layers", "apple": "MLC layers (Layers collection)", "bifrost": "nothing found", "status": "n/a", "note": "neural network layer graph; no counterpart in SDK or ui"},
+    {"feature": "Training and validation", "apple": "Training and Validation collection", "bifrost": "nothing found", "status": "n/a", "note": "graph training on CPU and GPU; deprecated upstream and out of scope for a desktop shell"}
+  ],
+  "gaps": []
+}

@@ -1,0 +1,18 @@
+{
+ "framework":"Foundation (App Support)",
+ "doc":"https://developer.apple.com/documentation/foundation",
+ "macos_since":"10.0",
+ "status":"partial",
+ "bifrost":"springboard/sdk/src/notification.rs, process_info.rs, locale.rs, intents.rs, control.rs, runtime.rs",
+ "summary":"Notifications, process activity tracking, localized bundles and App Intents have SDK counterparts. Progress reporting, error types, XPC-style app extensions and AppleScript-like scripting have no general API; apps use the control socket RPC instead.",
+ "rea_evidence":"ev_63b0f1e52f23b2c8ab863af9b25e2447a76fb1b6f5bf6197613cd873163f9f3e",
+ "features":[
+  {"feature":"Task Management (ProcessInfo activities, sudden termination, thermal state, user activities)","apple":"ProcessInfo, NSUserActivity, Progress, ProgressManager","bifrost":"springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs","status":"partial","note":"Activity tracker, sudden termination and thermal state exist; continue_activity handles Spotlight activities. No Progress/ProgressManager tree or Handoff."},
+  {"feature":"Resources (Bundle, localized strings)","apple":"Bundle, NSLocalizedString, NSBundleResourceRequest","bifrost":"springboard/sdk/src/locale.rs","status":"partial","note":"Bundle::load and localized! cover strings (en, is). No on-demand resource requests or general bundle resource lookup API documented."},
+  {"feature":"Notifications (NotificationCenter, DistributedNotificationCenter)","apple":"NotificationCenter, DistributedNotificationCenter, NotificationQueue","bifrost":"springboard/sdk/src/notification.rs","status":"partial","note":"add_observer/post with sender object and cross-app distributed posts through the shell; user info is string-only; no NotificationQueue coalescing."},
+  {"feature":"App Extension Support","apple":"NSExtensionContext, NSExtensionItem, NSItemProvider","bifrost":"springboard/sdk/src/share.rs","status":"partial","note":"Share and Spotlight/intents hooks exist between apps and shell; no generic extension host or item provider API."},
+  {"feature":"Errors and Exceptions","apple":"NSError, NSException, error domains","bifrost":"springboard/sdk/src/url.rs (URLError only)","status":"gap","note":"Per-module Rust error enums only; no NSError-style domain/code/userInfo type or recovery attempter."},
+  {"feature":"Scripting Support","apple":"NSAppleScript, NSScriptCommand, NSUserScriptTask, scripting suites","bifrost":"springboard/sdk/src/control.rs; docs/agent-api.md","status":"partial","note":"JSON-RPC control sockets let scripts and agents drive apps (bifrost pc control). No scripting dictionaries, AppleScript engine or user script tasks."}
+ ],
+ "gaps":["Progress/ProgressManager hierarchy for task progress","NSError-style error type with domains and user info","NSUserActivity Handoff between devices","Generic app extension host and NSItemProvider","Scripting dictionaries / AppleScript-like automation","NotificationQueue coalescing and typed notification payloads"]
+}

@@ -1,0 +1,20 @@
+{
+  "framework": "Compute Graph",
+  "doc": "https://developer.apple.com/documentation/computegraph",
+  "macos_since": "27.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Compute Graph is a node-based GPU framework for RealityKit particle simulations, introduced in macOS 27 and tied to RealityKit and Reality Composer Pro. BifrOSt has a GPU presenter (springboard/src/gpu/) for compositing, not a particle or node-graph simulation framework, and no RealityKit counterpart.",
+  "rea_evidence": "ev_8107b5332cac089246ee52d287a2f718f152c67b6b6f81b2464af1f1024e2b82",
+  "features": [
+    {"feature": "Graph definition and assembly", "apple": "ComputeNodeGraph, ComputeNodeGraph.Assembly, ComputeNodeGraph.Pipelines", "bifrost": "none", "status": "n/a", "note": "Builds and compiles a node graph into Metal pipelines. BifrOSt's GPU code (springboard/src/gpu/) is fixed compositing shaders, not user-defined graphs."},
+    {"feature": "Node parameters and connections", "apple": "PortReference, BinaryOperation, UnaryOperation, StandardLibraryFunction", "bifrost": "none", "status": "n/a", "note": "Typed node ports and operations. No equivalent exists in the BifrOSt SDK."},
+    {"feature": "Simulation-stage nodes", "apple": "element, emitter, initialize, module, output, force", "bifrost": "none", "status": "n/a", "note": "Particle lifecycle stages. Not in BifrOSt."},
+    {"feature": "Utility and texture nodes", "apple": "graph, group, texture, random, matrix4x4f, matrix4x4h", "bifrost": "none", "status": "n/a", "note": "Helper nodes for time, sampling and transforms. Not in BifrOSt."},
+    {"feature": "Running a simulation", "apple": "ComputeGraphSimulation, ElementSpawnParameters, ElementGrouping, Sorting", "bifrost": "none", "status": "n/a", "note": "Per-frame GPU advance and element spawn, bound to Metal command buffers. BifrOSt uses OpenGL/EGL on Linux."},
+    {"feature": "Geometry and simulation inputs", "apple": "Topology, CoordinateSpace, StripOrientation, Viewpoint, MouseParams", "bifrost": "none", "status": "n/a", "note": "3D simulation inputs for RealityKit scenes. BifrOSt has no 3D scene graph."}
+  ],
+  "gaps": [
+    "None that fits a macOS-style desktop. A node-based particle framework would be a 3D engine feature outside the desktop's scope."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "framework": "Latent Semantic Mapping (System)",
+  "doc": "https://developer.apple.com/documentation/latentsemanticmapping",
+  "macos_since": "10.5",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Apple's legacy C API that classifies text into developer-defined categories by latent semantic maps. BifrOSt has no text classification API and no equivalent system service, and the framework is a legacy Apple-only API with no desktop counterpart.",
+  "rea_evidence": "ev_e28e77a1e097ea81edb012762bb56cbdc60f4c963ad1903cb5841200c4cad75d",
+  "features": [
+    {"feature": "Text classification maps", "apple": "LSMMap, LSMText, LSMResult", "bifrost": "nothing found", "status": "n/a", "note": "category maps built from text; no BifrOSt API or service"},
+    {"feature": "Error handling", "apple": "Error Codes", "bifrost": "nothing found", "status": "n/a", "note": "framework-specific error codes; nothing to map"}
+  ],
+  "gaps": []
+}

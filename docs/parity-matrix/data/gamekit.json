@@ -1,0 +1,22 @@
+{
+  "framework": "GameKit (Game Center)",
+  "doc": "https://developer.apple.com/documentation/gamekit",
+  "macos_since": "10.8",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "GameKit is the client API for Apple's Game Center service: player identity, leaderboards, achievements, friends, matches and turn-based play. The service is Apple-hosted and BifrOSt has no Game Center or equivalent online game service, so no counterpart is planned. Local game state is covered by the Games app and the seeded-deck test pin, not by GameKit.",
+  "rea_evidence": "ev_efdcc85c66c5d4a24f8d528b1b122fe09841b97cf6aa0fb3b9f20a909413b6ab",
+  "features": [
+    {"feature": "Local player authentication", "apple": "GKLocalPlayer, GKPlayerAuthenticationDidChangeNotificationName", "bifrost": "nothing found", "status": "n/a", "note": "Game Center sign-in. BifrOSt accounts are bifrost-cloud (bifrost.olibuijr.com/api/cloud/), a different service."},
+    {"feature": "Players and friends", "apple": "GKPlayer, GKBasePlayer, GKLocalPlayerListener", "bifrost": "nothing found", "status": "n/a", "note": "Friend graph lives in Apple's service."},
+    {"feature": "Game Center dashboard and access point", "apple": "GKAccessPoint, GKDialogController, GKViewController", "bifrost": "nothing found", "status": "n/a", "note": "Apple-hosted dashboard UI."},
+    {"feature": "Leaderboards", "apple": "GKLeaderboard, GKLeaderboardSet, GKLeaderboardScore", "bifrost": "nothing found", "status": "n/a", "note": "Server-side ranking."},
+    {"feature": "Achievements", "apple": "GKAchievement, GKAchievementDescription", "bifrost": "nothing found", "status": "n/a", "note": "Server-side award state."},
+    {"feature": "Real-time multiplayer matches", "apple": "GKMatchRequest, GKMatchmaker, GKMatch", "bifrost": "nothing found", "status": "n/a", "note": "Peer networking through Game Center matchmaking. No BifrOSt multiplayer transport exists."},
+    {"feature": "Turn-based matches", "apple": "GKTurnBasedMatch and related classes", "bifrost": "nothing found", "status": "n/a", "note": "Game Center stores and forwards match data."}
+  ],
+  "gaps": [
+    "No online game service, so no leaderboards, achievements or friends. This is an Apple-service dependency, not a missing local API.",
+    "No multiplayer peer transport in the SDK."
+  ]
+}

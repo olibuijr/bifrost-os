@@ -1,0 +1,24 @@
+{
+  "framework": "Media Intents",
+  "doc": "https://developer.apple.com/documentation/mediaintents",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "bifrost_app::intents (App Intents on the control socket), springboard/src/svc.rs (audio service client, re-exported as bifrost_app::audio), springboard/audiod (audio service), springboard/src/shell/music (lock-screen and Control Center now-playing)",
+  "summary": "Media Intents is the Siri audio search and playback type set (AudioSearch) that Apple delivers through App Intents. BifrOSt has the App Intents side (typed intents and entity queries, no Siri or voice) and a per-app audio playback service with shell now-playing controls, but no AudioSearch type and no voice request path.",
+  "rea_evidence": "ev_a39e06deb47221d7e378a755d1f9e231b874c4f5a1b7589e72ffdd0e9beeafe4",
+  "features": [
+    {"feature": "Audio search and playback requests from Siri", "apple": "Responding to audio search and playback requests (Siri, AudioSearch)", "bifrost": "springboard/sdk/src/intents.rs (intent.<id>, entity.query)", "status": "gap", "note": "No AudioSearch type, no Siri, no voice dialog; intents are called as JSON over the control socket and the dialog text is not spoken"},
+    {"feature": "AudioSearch request and metadata type", "apple": "AudioSearch (struct)", "bifrost": "springboard/sdk/src/intents.rs (ParamType, Param, IntentResult)", "status": "gap", "note": "Generic typed parameters exist (string, int, bool, date, url, entity), but no media-specific search fields such as artist, album, genre, mood or media type"},
+    {"feature": "Resolving free-text media requests to app results", "apple": "App Intents search type delivered by the system (Media Intents hands it to App Intents)", "bifrost": "springboard/apps/notes-desktop/src/main.rs (search-notes intent example), springboard/sdk/src/intents.rs (entities(matching:))", "status": "partial", "note": "entity.query with a string does the matching; there is no system-delivered audio search type, and parameters are not resolved by the shell (Spotlight runs parameterless shortcuts only, docs/bifrost-ui.md:966-973)"},
+    {"feature": "App-side audio playback engine", "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)", "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs", "status": "partial", "note": "Playback is a shared service that survives app restarts; the SDK exposes the client as bifrost_app::audio (springboard/sdk/src/lib.rs:88), but there is no media-item or queue type for apps to return to a voice request"},
+    {"feature": "Now-playing state shown outside the app", "apple": "Not in Media Intents itself (Now Playing and lock-screen controls are separate Apple APIs)", "bifrost": "springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs", "status": "os", "note": "The shell draws the lock-screen card and Control Center media controls for whatever the audio service plays; apps get no SDK call to publish their own metadata"},
+    {"feature": "Discovering intents without launching the app", "apple": "Intents surfaced to the system for Siri and Shortcuts", "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml)", "status": "partial", "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter; no Siri or Shortcuts-app listing"},
+    {"feature": "Voice and spoken dialog", "apple": "Siri voice responses and dialogs for media requests", "bifrost": "docs/bifrost-ui.md:973 (No Siri or voice)", "status": "gap", "note": "IntentResult dialog is returned to the caller and logged on failure, never spoken or shown by Spotlight"}
+  ],
+  "gaps": [
+    "No AudioSearch request type and no Siri or voice request path for media (Apple delivers audio search through App Intents, BifrOSt has no equivalent system-delivered search type).",
+    "No parameter resolution, disambiguation or confirmation for media intents (requestDisambiguation, requestConfirmation are not modelled, docs/bifrost-ui.md:966-973).",
+    "No SDK call for an app to publish media metadata or a queue to the shell or to voice requests; Music and Podcasts keep their own state.",
+    "Intents are served only while the app runs (docs/bifrost-ui.md:980); Apple media requests can launch and play without an open window."
+  ]
+}

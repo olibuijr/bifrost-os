@@ -1,0 +1,31 @@
+{
+  "framework": "App Intents Testing",
+  "doc": "https://developer.apple.com/documentation/appintentstesting",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/intents.rs (runtime and dispatch), springboard/sdk/src/testing.rs (headless window test kit), springboard/sdk/src/quicksearch.rs (Spotlight index), springboard/src/shell/intents.rs (shell side)",
+  "summary": "BifrOSt has an App Intents runtime served over the control socket (intent.list, intent.<id>, entity.query) and a headless UI test kit, and the intent dispatch function is public so Rust unit tests can run intents in-process. There is no intent test layer: no catalog type, no typed result or value-query result types, no entity annotation (onscreen context), and no type-erased test wrappers, so tests pass and compare raw JSON.",
+  "rea_evidence": "ev_543336330e7ad0192e202bf22b580637f737f40e4078c09d8857b7cb9865c71b",
+  "features": [
+    {"feature": "Running an intent out-of-process in tests", "apple": "AnyAppIntent.run(), IntentDefinitions", "bifrost": "springboard/sdk/src/intents.rs (pub fn dispatch, line 293; unit test dispatch_lists_performs_and_queries, line 508)", "status": "partial", "note": "Rust tests can call dispatch() on the app with JSON params; there is no test-session wrapper and the app runs in-process, not out-of-process"},
+    {"feature": "Intent catalog (IntentDefinitions)", "apple": "IntentDefinitions, AppIntentDefinition, intents", "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json at line 145)", "status": "partial", "note": "The catalog is served as intent.list JSON; there is no typed definition collection for tests"},
+    {"feature": "Entity queries (suggested, by id, by string)", "apple": "EntityQuery, AnyEntityQuery, entities(for:), suggestedEntities", "bifrost": "springboard/sdk/src/intents.rs (EntityQuery enum line 238, parse_entity_query line 268, entity.query in dispatch)", "status": "partial", "note": "Query variants Suggested, Ids and String exist; no AnyEntityQuery wrapper"},
+    {"feature": "Typed intent results (ResolvedIntentResult)", "apple": "ResolvedIntentResult, ValueKeyPath, dynamicMember subscripts", "bifrost": "springboard/sdk/src/intents.rs (IntentResult, line 246; to_json line 262)", "status": "partial", "note": "Results are {value, dialog} JSON; tests read fields by string, not by key path"},
+    {"feature": "Value query results (ResolvedValueQueryResult)", "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition", "bifrost": "none", "status": "gap", "note": "No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type}"},
+    {"feature": "Entity annotation and onscreen context", "apple": "ViewAnnotation (entity, isSelected)", "bifrost": "none", "status": "gap", "note": "No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link"},
+    {"feature": "Type-erased intent and entity wrappers", "apple": "AnyAppIntent, AnyAppEntity, AnyTransientAppEntity", "bifrost": "springboard/sdk/src/intents.rs (untyped Json values; Entity struct line 208)", "status": "partial", "note": "Everything is serde-style Json already; no named wrappers, and exported(as:) has no equivalent"},
+    {"feature": "Enums and transient entities", "apple": "AnyAppEnum, AnyTransientAppEntity, AppEnumDefinition, TransientAppEntityDefinition", "bifrost": "springboard/sdk/src/intents.rs (ParamType::Entity, line 22)", "status": "gap", "note": "Parameter types cover String, Int, Bool, Date, Url and Entity; no enum parameter type and no transient entities"},
+    {"feature": "Dynamic property paths", "apple": "DynamicPropertyPath, IntentValuePropertiesCallable", "bifrost": "none", "status": "gap", "note": "Tests address parameters by JSON key (str_param, params.get)"},
+    {"feature": "Spotlight and Siri verification", "apple": "Testing of system integration (Spotlight, Siri)", "bifrost": "springboard/src/shell/intents.rs; springboard/sdk/src/quicksearch.rs (CSSearchableIndex, line 74); springboard/src/shell/apphost.rs (Manifest::intents)", "status": "partial", "note": "Spotlight Shortcuts list intents with shortcut = true and no required parameter; no Siri, no dialog display, and no test hook to check what Spotlight shows"},
+    {"feature": "Headless test harness for app UI", "apple": "Test target harness (used by App Intents Testing for in-app checks)", "bifrost": "springboard/sdk/src/testing.rs (TestWindow line 62); springboard/sdk/src/runtime.rs (Ctx::testing line 178); springboard/sdk/tests/testing.rs", "status": "partial", "note": "Clicks, keys and accessibility queries work headless; nothing in it knows about intents or entities"}
+  ],
+  "gaps": [
+    "No intent test helpers: no test session that runs an intent by type and returns a checked result (dispatch() is public but returns raw Json).",
+    "No value query results or intent value queries (ResolvedValueQueryResult, IntentValueQueryDefinition).",
+    "No entity annotation or onscreen context (ViewAnnotation), so Spotlight and Siri cannot be told what is on screen.",
+    "No enum parameter type and no transient entities (AnyAppEnum, AnyTransientAppEntity).",
+    "No key-path access to nested intent values (DynamicPropertyPath); tests use string keys.",
+    "Intents run in-process in unit tests and only out-of-process through the control socket; there is no separate test runner.",
+    "Siri and voice dialog verification is not modelled (see docs/bifrost-ui.md App Intents gaps)."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+ "framework":"CloudKit","doc":"https://developer.apple.com/documentation/cloudkit","macos_since":"10.10","status":"gap",
+ "bifrost":"No app-facing record-sync SDK. Local pieces: springboard/sdk/src/defaults.rs, keychain.rs, share.rs, url.rs; ~/Projects/bifrost-cloud (server-side contacts/calendar sync)",
+ "summary":"BifrOSt has no generic record database, subscriptions or sync engine for apps. The cloud service in bifrost-cloud syncs contacts and calendar over ETag/If-Match HTTP APIs, and the shell backs up data to a local file.",
+ "rea_evidence":"ev_96b5b0a682a8f53e4fefa38a59cc06f85e1a0247b255ad50244854d5cfa22775",
+ "features":[
+ {"feature":"Containers and databases (public, private, shared)","apple":"CKContainer, CKDatabase","bifrost":"~/Projects/bifrost-cloud/crates/cloud-server/src/main.rs (fixed account API, no per-app containers)","status":"gap","note":"no per-app container or database scopes"},
+ {"feature":"Schemas, record zones and records","apple":"CKRecord, CKRecordZone, CKRecord.Reference, schema language","bifrost":"~/Projects/bifrost-cloud/crates/cloud-store-sqlite/src/contacts.rs (typed contacts and calendar tables only)","status":"gap","note":"server stores two fixed object types, not app-defined records"},
+ {"feature":"Assets","apple":"CKAsset","bifrost":"none","status":"gap","note":"no file attachment to synced records"},
+ {"feature":"Sync engine, change tokens, subscriptions","apple":"CKSyncEngine, remote records, subscriptions","bifrost":"~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (ETags, If-Match only)","status":"gap","note":"no change tokens, push or incremental fetch for apps"},
+ {"feature":"Conflict handling","apple":"CKError record-changed keys","bifrost":"~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition)","status":"partial","note":"optimistic concurrency per object, internal to contacts and calendar"},
+ {"feature":"Shared records","apple":"CKShare, share operations","bifrost":"springboard/sdk/src/share.rs (local share sheet, not record sharing)","status":"gap","note":"no multi-user record sharing"},
+ {"feature":"User discovery and identity","apple":"CKUserIdentity","bifrost":"~/Projects/bifrost-cloud/crates/cloud-server/src/main.rs (accounts, users)","status":"os","note":"accounts exist, no app discovery API"},
+ {"feature":"Web auth tokens","apple":"CKFetchWebAuthTokenOperation","bifrost":"none","status":"gap","note":"no app token API"},
+ {"feature":"Privacy: encryption and data export/delete","apple":"encrypted values, access and deletion articles","bifrost":"springboard/src/shell/backup.rs (local backup and restore); springboard/sdk/src/keychain.rs","status":"partial","note":"local backup only; keychain has no iCloud sync (docs/bifrost-ui.md)"},
+ {"feature":"Errors","apple":"CKError, CKError.Code","bifrost":"none","status":"gap","note":"no sync error type"},
+ {"feature":"Local key-value storage (complementary)","apple":"app local persistence","bifrost":"springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs","status":"os","note":"local only, not a CloudKit counterpart"}
+ ],
+ "gaps":["App record database with zones and queries","CKSyncEngine-style sync with change tokens","Subscriptions and push","Record sharing between users","Assets","Per-app containers"]
+}

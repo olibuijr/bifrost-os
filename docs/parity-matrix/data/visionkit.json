@@ -1,0 +1,28 @@
+{
+  "framework": "VisionKit",
+  "doc": "https://developer.apple.com/documentation/visionkit",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/camera/qr.rs, springboard/src/shell/camera/mod.rs, springboard/ui/src/detect.rs (controls::detect), springboard/apps/notes-desktop",
+  "summary": "Covers the plain-text side of data detection (links, dates, addresses, phone numbers) and a QR-only camera scanner inside the system Camera app. No image analysis (Live Text, text recognition in images), no subject lifting, no Visual Look Up, no document scanning and no SDK API for camera scanning.",
+  "rea_evidence": "ev_a51ac1d6ab8726e08a68c2fed8d36892880a7b75ade4e28d7e31023922e655cf",
+  "features": [
+    {"feature": "Barcode and QR scanning through the camera", "apple": "DataScannerViewController, RecognizedItem (barcode items), DataScannerViewControllerDelegate", "bifrost": "springboard/src/shell/camera/qr.rs (decode_luma), springboard/src/shell/camera/mod.rs (QR scanner, QR_SCAN_MS)", "status": "os", "note": "Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies."},
+    {"feature": "Live text scanning through the camera", "apple": "DataScannerViewController (text), RecognizedItem (text items)", "bifrost": "none", "status": "gap", "note": "No text recognition (OCR) code exists in the repo. The triage search for ocr, tesseract and live text returned nothing."},
+    {"feature": "Text recognition and selection in images", "apple": "ImageAnalyzer, ImageAnalysis, ImageAnalysisInteraction, ImageAnalysisOverlayView (text selection, copy)", "bifrost": "none", "status": "gap", "note": "Images cannot be analysed for text. Photos and Notes have no text-in-image selection."},
+    {"feature": "Data detectors in recognized image text", "apple": "ImageAnalysisInteraction (data detectors: URLs, phone numbers, dates, tracking numbers)", "bifrost": "springboard/ui/src/detect.rs (find), springboard/apps/notes-desktop (TextArea::set_detect_links)", "status": "partial", "note": "Detection works on plain text only: links, dates, street addresses and phone numbers, with no transit information and no image text. Notes taps open links; Contacts does not use it."},
+    {"feature": "Subject lifting and background removal", "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image", "bifrost": "none", "status": "gap", "note": "No subject segmentation found in the repo, including PhotoCraft and the render crate."},
+    {"feature": "Visual Look Up", "apple": "ImageAnalysisInteraction (visual Look Up button)", "bifrost": "none", "status": "gap", "note": "The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."},
+    {"feature": "Document scanning through the camera", "apple": "VNDocumentCameraViewController, VNDocumentCameraViewControllerDelegate, VNDocumentCameraScan", "bifrost": "none", "status": "gap", "note": "The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs."},
+    {"feature": "Stabilised camera region of interest", "apple": "CameraRegionView", "bifrost": "none", "status": "gap", "note": "No view that shows a stabilised region of the camera feed to apps."},
+    {"feature": "Image analysis overlay and delegate callbacks", "apple": "ImageAnalysisOverlayView, ImageAnalysisOverlayViewDelegate, ImageAnalysisInteractionDelegate", "bifrost": "none", "status": "gap", "note": "No overlay view for images in the SDK. Views are in springboard/sdk/src/view/."}
+  ],
+  "gaps": [
+    "No text recognition (OCR) for camera frames or images, so Live Text, DataScanner text and ImageAnalyzer have no counterpart.",
+    "No document scanning mode (VNDocumentCameraViewController equivalent) in the Camera app or in the SDK.",
+    "No subject lifting or background removal for images.",
+    "No Visual Look Up.",
+    "Camera scanning exists only inside the system Camera app for QR model 2 codes. It has no SDK API and no other barcode formats.",
+    "Plain-text data detection (controls::detect) has no image counterpart and does not cover transit information."
+  ]
+}

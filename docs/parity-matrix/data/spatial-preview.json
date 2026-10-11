@@ -1,0 +1,17 @@
+{
+  "framework": "Spatial Preview",
+  "doc": "https://developer.apple.com/documentation/spatialpreview",
+  "macos_since": "27.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Spatial Preview streams a macOS app's documents and USD stages to a paired visionOS device. It needs Apple Vision Pro hardware and visionOS, and BifrOSt has no spatial display or counterpart; nothing in springboard/ matches.",
+  "rea_evidence": "ev_7b17662de2ca7164d12fecaf21f761d935210df362b111d5ac1bcd029b7dde2d",
+  "features": [
+    {"feature": "Nearby visionOS devices", "apple": "SpatialPreviewEndpoint, SpatialPreviewDevicePicker, ConnectedSpatialEndpointObserver", "bifrost": "none", "status": "n/a", "note": "Targets visionOS hardware only"},
+    {"feature": "Preview sessions", "apple": "SpatialPreviewSession, DocumentPreviewSession, USDPreviewSession", "bifrost": "none", "status": "n/a", "note": "Streams content to a visionOS device; no BifrOSt equivalent"},
+    {"feature": "USD stage presentation", "apple": "USDPreviewSession (USDKit)", "bifrost": "none", "status": "n/a", "note": "No USD runtime in BifrOSt"},
+    {"feature": "Bridging an external OpenUSD runtime", "apple": "Shared layer sync (Essentials article)", "bifrost": "none", "status": "n/a", "note": "Depends on the visionOS target"},
+    {"feature": "Session state and errors", "apple": "SpatialPreviewSessionState, SpatialPreviewSessionError, USDPreviewSession.Event", "bifrost": "none", "status": "n/a", "note": "Connection health for a visionOS target only"}
+  ],
+  "gaps": ["Not applicable: BifrOSt has no visionOS or spatial companion target."]
+}

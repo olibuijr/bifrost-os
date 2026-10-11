@@ -1,0 +1,17 @@
+{
+  "framework": "Video Subscriber Account",
+  "doc": "https://developer.apple.com/documentation/videosubscriberaccount",
+  "macos_since": "10.14",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "The framework authenticates subscribers with TV providers and feeds subscription state to the Apple TV app. It depends on Apple's streaming service and TV provider accounts, which BifrOSt does not have. BifrOSt has no SDK API for TV provider sign-in or subscription lookup.",
+  "rea_evidence": "ev_e686a917d21c7e638e9ecfb1df5fa3e696e45bdbf5e93614cda6a514d5f78849",
+  "features": [
+    {"feature": "TV provider authentication", "apple": "VSAccountManager", "bifrost": "nothing found", "status": "n/a", "note": "Needs a TV provider's SAML authentication service; there is no provider integration in BifrOSt."},
+    {"feature": "TV app integration", "apple": "VSAppleSubscription, VSSubscriptionRegistrationCenter, VSAccountApplicationProvider", "bifrost": "nothing found", "status": "n/a", "note": "Feeds subscription state to the Apple TV app, which BifrOSt does not ship."},
+    {"feature": "User account management and single sign-on", "apple": "VSUserAccountManager, VSUserAccount", "bifrost": "bifrost-cloud (separate repo, ~/Projects/bifrost-cloud)", "status": "n/a", "note": "BifrOSt Account is for the BifrOSt cloud service, not for signing in to third-party media accounts."},
+    {"feature": "Errors", "apple": "VSError, VSErrorDomain, VSErrorInfoKey*", "bifrost": "nothing found", "status": "n/a", "note": "Errors only exist for the provider flows above."},
+    {"feature": "Subscription record (deprecated)", "apple": "VSSubscription", "bifrost": "nothing found", "status": "n/a", "note": "Deprecated by Apple."}
+  ],
+  "gaps": []
+}

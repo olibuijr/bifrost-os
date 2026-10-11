@@ -1,0 +1,2362 @@
+[
+ {
+  "title": "Accessibility",
+  "slug": "accessibility",
+  "path": "accessibility",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/accessibility",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Make your apps accessible to everyone who uses Apple devices."
+ },
+ {
+  "title": "AppKit",
+  "slug": "appkit",
+  "path": "appkit",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/appkit",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Construct and manage a graphical, event-driven user interface for your macOS app."
+ },
+ {
+  "title": "Bundle Resources",
+  "slug": "bundle-resources",
+  "path": "bundleresources",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/bundleresources",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Resources located in an app, framework, or plugin bundle."
+ },
+ {
+  "title": "Core Foundation",
+  "slug": "core-foundation",
+  "path": "corefoundation",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/corefoundation",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Access low-level functions, primitive data types, and various collection types that are bridged seamlessly with the Foundation framework."
+ },
+ {
+  "title": "Declared Age Range",
+  "slug": "declared-age-range",
+  "path": "declaredagerange",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/declaredagerange",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Create age-appropriate experiences in your app by asking people to share their age range."
+ },
+ {
+  "title": "Distributed",
+  "slug": "distributed",
+  "path": "distributed",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/distributed",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Build systems that run distributed code across multiple processes and devices."
+ },
+ {
+  "title": "Evaluations",
+  "slug": "evaluations",
+  "path": "evaluations",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/evaluations",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Measure the quality of your app\u2019s intelligence-powered features."
+ },
+ {
+  "title": "Foundation",
+  "slug": "foundation",
+  "path": "foundation",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/foundation",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Access essential data types, collections, and operating-system services to define the base layer of functionality for your app."
+ },
+ {
+  "title": "Foundation Models",
+  "slug": "foundation-models",
+  "path": "foundationmodels",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/foundationmodels",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Perform tasks with models that specialize in language understanding, structured output, and tool calling."
+ },
+ {
+  "title": "GeoToolbox",
+  "slug": "geotoolbox",
+  "path": "geotoolbox",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/geotoolbox",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Determine place descriptor information for map coordinates."
+ },
+ {
+  "title": "hvf",
+  "slug": "hvf",
+  "path": "hvf",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/hvf",
+  "macos_since": "15.4",
+  "deprecated": null,
+  "abstract": "Render Hierarchical Variable Font (HVF) glyph outlines, and support font editors and related tools."
+ },
+ {
+  "title": "Music Understanding",
+  "slug": "music-understanding",
+  "path": "musicunderstanding",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/musicunderstanding",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Analyze audio content and extract music information."
+ },
+ {
+  "title": "Objective-C Runtime",
+  "slug": "objective-c-runtime",
+  "path": "objectivec",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/objectivec",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Gain low-level access to the Objective-C runtime and the Objective-C root types."
+ },
+ {
+  "title": "Observation",
+  "slug": "observation",
+  "path": "observation",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/observation",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Make responsive apps that update the presentation when underlying data changes."
+ },
+ {
+  "title": "PaperKit",
+  "slug": "paperkit",
+  "path": "paperkit",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/paperkit",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Add drawings, shapes, and a consistent markup experience to your app."
+ },
+ {
+  "title": "PermissionKit",
+  "slug": "permissionkit",
+  "path": "permissionkit",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/permissionkit",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Create communication experiences between a child and their parent or guardian."
+ },
+ {
+  "title": "RegexBuilder",
+  "slug": "regexbuilder",
+  "path": "regexbuilder",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/regexbuilder",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Use an expressive domain-specific language to build regular expressions, for operations like searching and replacing in text."
+ },
+ {
+  "title": "RelevanceKit",
+  "slug": "relevancekit",
+  "path": "relevancekit",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/relevancekit",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Provide on-device intelligence with contextual clues that increase your widget\u2019s visibility on Apple Watch."
+ },
+ {
+  "title": "Spatial Preview",
+  "slug": "spatial-preview",
+  "path": "spatialpreview",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/spatialpreview",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Preview spatial content from a macOS app on a connected visionOS device."
+ },
+ {
+  "title": "StateReporting",
+  "slug": "statereporting",
+  "path": "statereporting",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/statereporting",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Communicate your app\u2019s state to the system to improve diagnostic actionability."
+ },
+ {
+  "title": "Swift",
+  "slug": "swift",
+  "path": "swift",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/swift",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Build apps using a powerful open language."
+ },
+ {
+  "title": "SwiftData",
+  "slug": "swiftdata",
+  "path": "swiftdata",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/swiftdata",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Write your model code declaratively to add managed persistence and efficient model fetching."
+ },
+ {
+  "title": "SwiftUI",
+  "slug": "swiftui",
+  "path": "swiftui",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/swiftui",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Declare the user interface and behavior for your app on every platform."
+ },
+ {
+  "title": "Symbols",
+  "slug": "symbols",
+  "path": "symbols",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/symbols",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Apply universal animations to symbol-based images."
+ },
+ {
+  "title": "USDKit",
+  "slug": "usdkit",
+  "path": "usdkit",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/usdkit",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Author, compose, and manipulate Universal Scene Description content from Swift."
+ },
+ {
+  "title": "Visual Intelligence",
+  "slug": "visual-intelligence",
+  "path": "visualintelligence",
+  "group": "App Frameworks",
+  "doc": "https://developer.apple.com/documentation/visualintelligence",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Include your app\u2019s content in search results that visual intelligence provides."
+ },
+ {
+  "title": "Accounts",
+  "slug": "accounts",
+  "path": "accounts",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/accounts",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Help users access and manage their external accounts from within your app, without requiring them to enter login credentials."
+ },
+ {
+  "title": "Address Book",
+  "slug": "address-book",
+  "path": "addressbook",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/addressbook",
+  "macos_since": "10.2",
+  "deprecated": null,
+  "abstract": "Access the centralized database for storing users\u2019 contacts."
+ },
+ {
+  "title": "AdServices",
+  "slug": "adservices",
+  "path": "adservices",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/adservices",
+  "macos_since": "11.1",
+  "deprecated": null,
+  "abstract": "Attribute app-download campaigns that originate from the App Store on iOS devices."
+ },
+ {
+  "title": "AdSupport",
+  "slug": "adsupport",
+  "path": "adsupport",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/adsupport",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Provide apps with access to an advertising identifier."
+ },
+ {
+  "title": "App Intents",
+  "slug": "app-intents",
+  "path": "appintents",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/appintents",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Make content and actions discoverable by Apple Intelligence and support system experiences like Siri, Spotlight, Shortcuts, and widgets."
+ },
+ {
+  "title": "Application Services",
+  "slug": "application-services",
+  "path": "applicationservices",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/applicationservices",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Perform common application tasks."
+ },
+ {
+  "title": "Automatic Assessment Configuration",
+  "slug": "automatic-assessment-configuration",
+  "path": "automaticassessmentconfiguration",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/automaticassessmentconfiguration",
+  "macos_since": "10.15.4",
+  "deprecated": null,
+  "abstract": "Enter single-app mode and prevent students from accessing specific system features while taking an exam."
+ },
+ {
+  "title": "Background Assets",
+  "slug": "background-assets",
+  "path": "backgroundassets",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/backgroundassets",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Improve or eliminate the time people wait while your app downloads assets."
+ },
+ {
+  "title": "CallKit",
+  "slug": "callkit",
+  "path": "callkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/callkit",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Display the system-calling UI for your app\u2019s VoIP services, and coordinate your calling services with other apps and the system."
+ },
+ {
+  "title": "ClassKit",
+  "slug": "classkit",
+  "path": "classkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/classkit",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Enable teachers to assign activities from your app\u2019s content and to view student progress."
+ },
+ {
+  "title": "CloudKit",
+  "slug": "cloudkit",
+  "path": "cloudkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/cloudkit",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Store structured app and user data in iCloud containers that all users of your app can share."
+ },
+ {
+  "title": "Combine",
+  "slug": "combine",
+  "path": "combine",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/combine",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Customize handling of asynchronous events by combining event-processing operators."
+ },
+ {
+  "title": "Contacts",
+  "slug": "contacts",
+  "path": "contacts",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/contacts",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Access the user\u2019s contacts, and format and localize contact information."
+ },
+ {
+  "title": "Contacts UI",
+  "slug": "contacts-ui",
+  "path": "contactsui",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/contactsui",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Provide an interface that allows people to display information about their contacts."
+ },
+ {
+  "title": "Core AI",
+  "slug": "core-ai",
+  "path": "coreai",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coreai",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Run AI models in your app on Apple silicon."
+ },
+ {
+  "title": "Core Data",
+  "slug": "core-data",
+  "path": "coredata",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coredata",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Persist or cache data on a single device, or sync data to multiple devices with CloudKit."
+ },
+ {
+  "title": "Core Location",
+  "slug": "core-location",
+  "path": "corelocation",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/corelocation",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Obtain the geographic location and orientation of a device."
+ },
+ {
+  "title": "Core ML",
+  "slug": "core-ml",
+  "path": "coreml",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coreml",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Integrate machine learning models into your app."
+ },
+ {
+  "title": "Core Motion",
+  "slug": "core-motion",
+  "path": "coremotion",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coremotion",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Process accelerometer, gyroscope, pedometer, and environment-related events."
+ },
+ {
+  "title": "Core Spotlight",
+  "slug": "core-spotlight",
+  "path": "corespotlight",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/corespotlight",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Add search capabilities to your app, and index your content so people can find it from Spotlight and Safari."
+ },
+ {
+  "title": "Core Text",
+  "slug": "core-text",
+  "path": "coretext",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coretext",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Create text layouts, optimize font handling, and access font metrics and glyph data."
+ },
+ {
+  "title": "Core Transferable",
+  "slug": "core-transferable",
+  "path": "coretransferable",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/coretransferable",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Declare a transfer representation for your model types to participate in system sharing and data transfer operations."
+ },
+ {
+  "title": "CrashReportExtension",
+  "slug": "crashreportextension",
+  "path": "crashreportextension",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/crashreportextension",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Inspect crashed processes to create crash reports."
+ },
+ {
+  "title": "Create ML",
+  "slug": "create-ml",
+  "path": "createml",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/createml",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Create machine learning models for use in your app."
+ },
+ {
+  "title": "Create ML Components",
+  "slug": "create-ml-components",
+  "path": "createmlcomponents",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/createmlcomponents",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Create more customizable machine learning models in your app."
+ },
+ {
+  "title": "DataDetection",
+  "slug": "datadetection",
+  "path": "datadetection",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/datadetection",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Access and utilize common types of data that the data detection system matches."
+ },
+ {
+  "title": "DeviceCheck",
+  "slug": "devicecheck",
+  "path": "devicecheck",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/devicecheck",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Reduce fraudulent use of your services by managing device state and asserting app integrity."
+ },
+ {
+  "title": "EventKit",
+  "slug": "eventkit",
+  "path": "eventkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/eventkit",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Create, view, and edit calendar and reminder events."
+ },
+ {
+  "title": "ExtensionFoundation",
+  "slug": "extensionfoundation",
+  "path": "extensionfoundation",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/extensionfoundation",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Create executable bundles to extend the functionality of other apps."
+ },
+ {
+  "title": "ExtensionKit",
+  "slug": "extensionkit",
+  "path": "extensionkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/extensionkit",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Make custom UI from an app extension available in a host app, and manage the list of enabled and disabled app extensions."
+ },
+ {
+  "title": "File Provider",
+  "slug": "file-provider",
+  "path": "fileprovider",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/fileprovider",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "An extension other apps use to access files and folders managed by your app and synced with a remote storage."
+ },
+ {
+  "title": "File Provider UI",
+  "slug": "file-provider-ui",
+  "path": "fileproviderui",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/fileproviderui",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Add actions to the document browser\u2019s context menu."
+ },
+ {
+  "title": "HealthKit",
+  "slug": "healthkit",
+  "path": "healthkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/healthkit",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Access and share health and fitness data while maintaining the user\u2019s privacy and control."
+ },
+ {
+  "title": "IdentityDocumentServices",
+  "slug": "identitydocumentservices",
+  "path": "identitydocumentservices",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/identitydocumentservices",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Share mobile documents using the Digital Credentials API."
+ },
+ {
+  "title": "IdentityDocumentServicesUI",
+  "slug": "identitydocumentservicesui",
+  "path": "identitydocumentservicesui",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/identitydocumentservicesui",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Provide an interface so people can present mobile documents."
+ },
+ {
+  "title": "JavaScriptCore",
+  "slug": "javascriptcore",
+  "path": "javascriptcore",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/javascriptcore",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Evaluate JavaScript programs from within an app, and support JavaScript scripting of your app."
+ },
+ {
+  "title": "MailKit",
+  "slug": "mailkit",
+  "path": "mailkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/mailkit",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Secure, customize, and act on email messages that users send and receive."
+ },
+ {
+  "title": "Managed App Distribution",
+  "slug": "managed-app-distribution",
+  "path": "managedappdistribution",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/managedappdistribution",
+  "macos_since": "26.4",
+  "deprecated": null,
+  "abstract": "Manage the distribution of apps within an organization."
+ },
+ {
+  "title": "MapKit",
+  "slug": "mapkit",
+  "path": "mapkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/mapkit",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Display map or satellite imagery within your app, call out points of interest, and determine placemark information for map coordinates."
+ },
+ {
+  "title": "Matter",
+  "slug": "matter",
+  "path": "matter",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/matter",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Communicate with and control smart home devices from a variety of manufacturers."
+ },
+ {
+  "title": "MatterSupport",
+  "slug": "mattersupport",
+  "path": "mattersupport",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/mattersupport",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Coordinate and control compatible smart home accessories."
+ },
+ {
+  "title": "Media Intents",
+  "slug": "media-intents",
+  "path": "mediaintents",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/mediaintents",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Enable people to use Siri to find and play media from your app."
+ },
+ {
+  "title": "Multipeer Connectivity",
+  "slug": "multipeer-connectivity",
+  "path": "multipeerconnectivity",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/multipeerconnectivity",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Support peer-to-peer connectivity and the discovery of nearby devices."
+ },
+ {
+  "title": "Natural Language",
+  "slug": "natural-language",
+  "path": "naturallanguage",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/naturallanguage",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Analyze natural language text and deduce its language-specific metadata."
+ },
+ {
+  "title": "Notification Center",
+  "slug": "notification-center",
+  "path": "notificationcenter",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/notificationcenter",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Create and manage widgets for the Today view."
+ },
+ {
+  "title": "PassKit (Apple Pay and Wallet)",
+  "slug": "passkit-apple-pay-and-wallet",
+  "path": "passkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/passkit",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Process Apple Pay payments in your app, and create and distribute passes for the Wallet app."
+ },
+ {
+  "title": "Preference Panes",
+  "slug": "preference-panes",
+  "path": "preferencepanes",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/preferencepanes",
+  "macos_since": "10.1",
+  "deprecated": null,
+  "abstract": "Integrate your app\u2019s custom preferences into the System Preferences app."
+ },
+ {
+  "title": "PushKit",
+  "slug": "pushkit",
+  "path": "pushkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/pushkit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Respond to push notifications related to your app\u2019s complications, file providers, and VoIP services."
+ },
+ {
+  "title": "Quick Look",
+  "slug": "quick-look",
+  "path": "quicklook",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/quicklook",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Create previews of files to use inside your app, or perform simple edits on previews."
+ },
+ {
+  "title": "QuickLook UI",
+  "slug": "quicklook-ui",
+  "path": "quicklookui",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/quicklookui",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Create previews of files to use inside your macOS app."
+ },
+ {
+  "title": "Safari Services",
+  "slug": "safari-services",
+  "path": "safariservices",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/safariservices",
+  "macos_since": "10.12",
+  "deprecated": null,
+  "abstract": "Enable web views and services in your app."
+ },
+ {
+  "title": "SafetyKit",
+  "slug": "safetykit",
+  "path": "safetykit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/safetykit",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Detect and respond to car crash events in your app."
+ },
+ {
+  "title": "Sensitive Content Analysis",
+  "slug": "sensitive-content-analysis",
+  "path": "sensitivecontentanalysis",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/sensitivecontentanalysis",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Provide a safer experience in your app by detecting and alerting people to sensitive content in images and videos before displaying them."
+ },
+ {
+  "title": "Shared with You",
+  "slug": "shared-with-you",
+  "path": "sharedwithyou",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/sharedwithyou",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Surface shared content and collaborate in your app."
+ },
+ {
+  "title": "SiriKit",
+  "slug": "sirikit",
+  "path": "sirikit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/sirikit",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Empower users to interact with their devices through voice, intelligent suggestions, and personalized workflows."
+ },
+ {
+  "title": "SMS and Call Reporting",
+  "slug": "sms-and-call-reporting",
+  "path": "identitylookup",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/identitylookup",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Create app extensions to manage and report unwanted SMS messages and spam calls."
+ },
+ {
+  "title": "Social",
+  "slug": "social",
+  "path": "social",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/social",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Post content to supported social networking services, using standard system interfaces."
+ },
+ {
+  "title": "Speech",
+  "slug": "speech",
+  "path": "speech",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/speech",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Perform speech recognition on live or prerecorded audio, and receive transcriptions, alternative interpretations, and confidence levels of the results."
+ },
+ {
+  "title": "StoreKit",
+  "slug": "storekit",
+  "path": "storekit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/storekit",
+  "macos_since": "10.7",
+  "deprecated": null,
+  "abstract": "Support Apple In-App Purchases and interactions with the App Store."
+ },
+ {
+  "title": "Suggested Actions",
+  "slug": "suggested-actions",
+  "path": "suggestedactions",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/suggestedactions",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Offer quick actions next to messages in your messaging app, based on context you provide."
+ },
+ {
+  "title": "Swift Charts",
+  "slug": "swift-charts",
+  "path": "charts",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/charts",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Construct and customize charts on every Apple platform."
+ },
+ {
+  "title": "Tabular Data",
+  "slug": "tabular-data",
+  "path": "tabulardata",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/tabulardata",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Import, organize, and prepare a table of data to train a machine learning model."
+ },
+ {
+  "title": "TipKit",
+  "slug": "tipkit",
+  "path": "tipkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/tipkit",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Display tips that help people discover features in your app."
+ },
+ {
+  "title": "Translation",
+  "slug": "translation",
+  "path": "translation",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/translation",
+  "macos_since": "14.4",
+  "deprecated": null,
+  "abstract": "Translate text in your app from one language to another."
+ },
+ {
+  "title": "User Notifications",
+  "slug": "user-notifications",
+  "path": "usernotifications",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/usernotifications",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Push user-facing notifications to the user\u2019s device from a server, or generate them locally from your app."
+ },
+ {
+  "title": "User Notifications UI",
+  "slug": "user-notifications-ui",
+  "path": "usernotificationsui",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/usernotificationsui",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Customize the interface that displays local and remote notifications."
+ },
+ {
+  "title": "VisionKit",
+  "slug": "visionkit",
+  "path": "visionkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/visionkit",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Identify and extract information in the environment using the device\u2019s camera, or in images that your app displays."
+ },
+ {
+  "title": "Wallet Orders",
+  "slug": "wallet-orders",
+  "path": "walletorders",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/walletorders",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Create, distribute, and update orders in Wallet."
+ },
+ {
+  "title": "WeatherKit",
+  "slug": "weatherkit",
+  "path": "weatherkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/weatherkit",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Deliver weather conditions and alerts to your users."
+ },
+ {
+  "title": "WebKit",
+  "slug": "webkit",
+  "path": "webkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/webkit",
+  "macos_since": "10.2",
+  "deprecated": null,
+  "abstract": "Integrate web content seamlessly into your app, and customize content interactions to meet your app\u2019s needs."
+ },
+ {
+  "title": "WidgetKit",
+  "slug": "widgetkit",
+  "path": "widgetkit",
+  "group": "App Services",
+  "doc": "https://developer.apple.com/documentation/widgetkit",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Extend the reach of your app by creating widgets, watch complications, Live Activities, and controls."
+ },
+ {
+  "title": "App Intents Testing",
+  "slug": "app-intents-testing",
+  "path": "appintentstesting",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/appintentstesting",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Test your app intents, entities, queries, and integration with system features like Siri or Spotlight."
+ },
+ {
+  "title": "Automator",
+  "slug": "automator",
+  "path": "automator",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/automator",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Develop actions that the Automator app can load and run. View, edit, and run Automator workflows in your app."
+ },
+ {
+  "title": "Developer Tools Support",
+  "slug": "developer-tools-support",
+  "path": "developertoolssupport",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/developertoolssupport",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Expose custom views and modifiers in the Xcode library."
+ },
+ {
+  "title": "Playground Support",
+  "slug": "playground-support",
+  "path": "playgroundsupport",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/playgroundsupport",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Share playground data, manage live views, and control the execution of a playground."
+ },
+ {
+  "title": "Scripting Bridge",
+  "slug": "scripting-bridge",
+  "path": "scriptingbridge",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/scriptingbridge",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Automate scriptable apps by sending and receiving Apple events."
+ },
+ {
+  "title": "ShaderGraph",
+  "slug": "shadergraph",
+  "path": "shadergraph",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/shadergraph",
+  "macos_since": "15.0",
+  "deprecated": null,
+  "abstract": "Create custom materials and effects for 3D content in Reality Composer Pro."
+ },
+ {
+  "title": "StoreKit Test",
+  "slug": "storekit-test",
+  "path": "storekittest",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/storekittest",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Create and automate tests in Xcode for your app\u2019s subscription and Apple In-App Purchase transactions, and SKAdNetwork implementations."
+ },
+ {
+  "title": "Synchronization",
+  "slug": "synchronization",
+  "path": "synchronization",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/synchronization",
+  "macos_since": "15.0",
+  "deprecated": null,
+  "abstract": "Build synchronization constructs using low-level, primitive operations."
+ },
+ {
+  "title": "XcodeKit",
+  "slug": "xcodekit",
+  "path": "xcodekit",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/xcodekit",
+  "macos_since": "10.12",
+  "deprecated": null,
+  "abstract": "Create extensions to add commands to the Xcode source editor."
+ },
+ {
+  "title": "xcselect",
+  "slug": "xcselect",
+  "path": "xcselect",
+  "group": "Developer Tools",
+  "doc": "https://developer.apple.com/documentation/xcselect",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Access the path of the macOS SDK available on the host system."
+ },
+ {
+  "title": "ColorSync",
+  "slug": "colorsync",
+  "path": "colorsync",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/colorsync",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Reproduce colors accurately across a range of input, output, and display devices."
+ },
+ {
+  "title": "Compute Graph",
+  "slug": "compute-graph",
+  "path": "computegraph",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/computegraph",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Build and run custom particle effects and compute simulations for RealityKit using a programmable node graph."
+ },
+ {
+  "title": "Core Animation",
+  "slug": "core-animation",
+  "path": "quartzcore",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/quartzcore",
+  "macos_since": "10.3",
+  "deprecated": null,
+  "abstract": "Render, compose, and animate visual elements."
+ },
+ {
+  "title": "Core Graphics",
+  "slug": "core-graphics",
+  "path": "coregraphics",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/coregraphics",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Harness the power of Quartz technology to perform lightweight 2D rendering with high-fidelity output. Handle path-based drawing, antialiased rendering, gradients, images, color management, PDF documents, and more."
+ },
+ {
+  "title": "Core Image",
+  "slug": "core-image",
+  "path": "coreimage",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/coreimage",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Use built-in or custom filters to process still and video images."
+ },
+ {
+  "title": "Game Controller",
+  "slug": "game-controller",
+  "path": "gamecontroller",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/gamecontroller",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Support hardware game controllers in your game."
+ },
+ {
+  "title": "GameKit",
+  "slug": "gamekit",
+  "path": "gamekit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/gamekit",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Enable players to interact with friends, compare leaderboard ranks, earn achievements, and participate in multiplayer games."
+ },
+ {
+  "title": "GameplayKit",
+  "slug": "gameplaykit",
+  "path": "gameplaykit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/gameplaykit",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Architect and organize your game logic.\u00a0Incorporate common gameplay behaviors such as random number generation, artificial intelligence, pathfinding, and agent behavior."
+ },
+ {
+  "title": "GameSave",
+  "slug": "gamesave",
+  "path": "gamesave",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/gamesave",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Store and sync your application\u2019s save files in iCloud."
+ },
+ {
+  "title": "GLKit",
+  "slug": "glkit",
+  "path": "glkit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/glkit",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Speed up OpenGL ES or OpenGL app development. Use math libraries, background texture loading, pre-created shader effects, and a standard view and view controller to implement your rendering loop."
+ },
+ {
+  "title": "Image I/O",
+  "slug": "image-i-o",
+  "path": "imageio",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/imageio",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Read and write most image file formats, and access an image\u2019s metadata."
+ },
+ {
+  "title": "Image Playground",
+  "slug": "image-playground",
+  "path": "imageplayground",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/imageplayground",
+  "macos_since": "15.1",
+  "deprecated": null,
+  "abstract": "Present a system interface to generate images based on descriptive information."
+ },
+ {
+  "title": "Metal",
+  "slug": "metal",
+  "path": "metal",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/metal",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Render advanced 3D graphics and compute data in parallel with graphics processors."
+ },
+ {
+  "title": "Metal Performance Shaders",
+  "slug": "metal-performance-shaders",
+  "path": "metalperformanceshaders",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/metalperformanceshaders",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Optimize graphics and compute performance with kernels that are fine-tuned for the unique characteristics of each Metal GPU family."
+ },
+ {
+  "title": "Metal Performance Shaders Graph",
+  "slug": "metal-performance-shaders-graph",
+  "path": "metalperformanceshadersgraph",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/metalperformanceshadersgraph",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Build, compile, and execute compute graphs utilizing all the different compute devices on the platform, including GPU, CPU, and Neural Engine."
+ },
+ {
+  "title": "MetalFX",
+  "slug": "metalfx",
+  "path": "metalfx",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/metalfx",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Boost your Metal app\u2019s performance by upscaling lower-resolution content to save GPU time."
+ },
+ {
+  "title": "MetalKit",
+  "slug": "metalkit",
+  "path": "metalkit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/metalkit",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Build Metal apps quicker and easier using a common set of utility classes."
+ },
+ {
+  "title": "Model I/O",
+  "slug": "model-i-o",
+  "path": "modelio",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/modelio",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Import, export, and manipulate 3D models using a common infrastructure that integrates MetalKit, GLKit, and SceneKit."
+ },
+ {
+  "title": "PDFKit",
+  "slug": "pdfkit",
+  "path": "pdfkit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/pdfkit",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Display and manipulate PDF documents in your apps."
+ },
+ {
+  "title": "PencilKit",
+  "slug": "pencilkit",
+  "path": "pencilkit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/pencilkit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Capture touch and Apple Pencil input as a drawing, and display that content from your app."
+ },
+ {
+  "title": "Quartz",
+  "slug": "quartz",
+  "path": "quartz",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/quartz",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Allow users to browse, edit, and save images, using slideshows and Core Image filters."
+ },
+ {
+  "title": "RealityKit",
+  "slug": "realitykit",
+  "path": "realitykit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/realitykit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Simulate and render 3D content for use in your augmented reality apps."
+ },
+ {
+  "title": "ReplayKit",
+  "slug": "replaykit",
+  "path": "replaykit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/replaykit",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Record or stream video from the screen, and audio from the app and microphone."
+ },
+ {
+  "title": "SceneKit",
+  "slug": "scenekit",
+  "path": "scenekit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/scenekit",
+  "macos_since": "10.8",
+  "deprecated": "26.0",
+  "abstract": "Create 3D games and add 3D content to apps using high-level scene descriptions, and easily add animations, physics simulation, particle effects, and realistic physically based rendering."
+ },
+ {
+  "title": "Spatial",
+  "slug": "spatial",
+  "path": "spatial",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/spatial",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Create and manipulate 3D mathematical primitives."
+ },
+ {
+  "title": "SpriteKit",
+  "slug": "spritekit",
+  "path": "spritekit",
+  "group": "Graphics and Games",
+  "doc": "https://developer.apple.com/documentation/spritekit",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Add high-performance 2D content with smooth animations to your app, or create a game with a high-level set of 2D game-based tools."
+ },
+ {
+  "title": "Audio Toolbox",
+  "slug": "audio-toolbox",
+  "path": "audiotoolbox",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/audiotoolbox",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Record or play audio, convert formats, parse audio streams, and configure your audio session."
+ },
+ {
+  "title": "Audio Unit",
+  "slug": "audio-unit",
+  "path": "audiounit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/audiounit",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Add sophisticated audio manipulation and processing capabilities to your app."
+ },
+ {
+  "title": "AVFAudio",
+  "slug": "avfaudio",
+  "path": "avfaudio",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/avfaudio",
+  "macos_since": "11.3",
+  "deprecated": null,
+  "abstract": "Play, record, and process audio; configure your app\u2019s system audio behavior."
+ },
+ {
+  "title": "AVFoundation",
+  "slug": "avfoundation",
+  "path": "avfoundation",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/avfoundation",
+  "macos_since": "10.7",
+  "deprecated": null,
+  "abstract": "Work with audiovisual assets, control device cameras, process audio, and configure system audio interactions."
+ },
+ {
+  "title": "AVKit",
+  "slug": "avkit",
+  "path": "avkit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/avkit",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Adopt the system\u2019s video playback interfaces, and integrate your camera app with capture hardware."
+ },
+ {
+  "title": "AVRouting",
+  "slug": "avrouting",
+  "path": "avrouting",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/avrouting",
+  "macos_since": "13.0",
+  "deprecated": null,
+  "abstract": "Display custom destinations to stream media in the system route picker."
+ },
+ {
+  "title": "Cinematic",
+  "slug": "cinematic",
+  "path": "cinematic",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/cinematic",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Integrate playback and editing of assets captured in Cinematic mode into your app."
+ },
+ {
+  "title": "Core Audio",
+  "slug": "core-audio",
+  "path": "coreaudio",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coreaudio",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Use the Core Audio framework to interact with device\u2019s audio hardware."
+ },
+ {
+  "title": "Core Audio Types",
+  "slug": "core-audio-types",
+  "path": "coreaudiotypes",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coreaudiotypes",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Use specialized data types to interact with audio streams, complex buffers, and audiovisual timestamps."
+ },
+ {
+  "title": "Core Media",
+  "slug": "core-media",
+  "path": "coremedia",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coremedia",
+  "macos_since": "10.7",
+  "deprecated": null,
+  "abstract": "Represent time-based audio-visual assets with essential data types."
+ },
+ {
+  "title": "Core Media I/O",
+  "slug": "core-media-i-o",
+  "path": "coremediaio",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coremediaio",
+  "macos_since": "10.7",
+  "deprecated": null,
+  "abstract": "Securely support custom camera devices in macOS."
+ },
+ {
+  "title": "Core MIDI",
+  "slug": "core-midi",
+  "path": "coremidi",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coremidi",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Communicate with MIDI devices such as hardware keyboards and synthesizers."
+ },
+ {
+  "title": "Core Video",
+  "slug": "core-video",
+  "path": "corevideo",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/corevideo",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Process digital video, including manipulation of individual frames, using a pipeline-based API and support for both Metal and OpenGL."
+ },
+ {
+  "title": "CoreAudioKit",
+  "slug": "coreaudiokit",
+  "path": "coreaudiokit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/coreaudiokit",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Add user interfaces to audio units."
+ },
+ {
+  "title": "DeviceDiscoveryExtension",
+  "slug": "devicediscoveryextension",
+  "path": "devicediscoveryextension",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/devicediscoveryextension",
+  "macos_since": "15.0",
+  "deprecated": null,
+  "abstract": "Stream media to a third-party device that a user selects in a system menu."
+ },
+ {
+  "title": "Group Activities",
+  "slug": "group-activities",
+  "path": "groupactivities",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/groupactivities",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Create app-specific activities your users can share and experience together."
+ },
+ {
+  "title": "ImageCaptureCore",
+  "slug": "imagecapturecore",
+  "path": "imagecapturecore",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/imagecapturecore",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Browse for media devices and control them programmatically from your app."
+ },
+ {
+  "title": "Immersive Media Support",
+  "slug": "immersive-media-support",
+  "path": "immersivemediasupport",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/immersivemediasupport",
+  "macos_since": "26.0",
+  "deprecated": null,
+  "abstract": "Read and write essential Apple Immersive Video metadata."
+ },
+ {
+  "title": "iTunes Library",
+  "slug": "itunes-library",
+  "path": "ituneslibrary",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/ituneslibrary",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Retrieve the properties of the media in the user\u2019s iTunes library."
+ },
+ {
+  "title": "Media Accessibility",
+  "slug": "media-accessibility",
+  "path": "mediaaccessibility",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/mediaaccessibility",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Make your app\u2019s media more accessible by supporting people\u2019s systemwide preferences for video and audio content."
+ },
+ {
+  "title": "Media Intelligence",
+  "slug": "media-intelligence",
+  "path": "mediaintelligence",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/mediaintelligence",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Analyze video content and group faces in images using on-device machine learning."
+ },
+ {
+  "title": "Media Library",
+  "slug": "media-library",
+  "path": "medialibrary",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/medialibrary",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Access read-only collections of the user\u2019s multimedia content."
+ },
+ {
+  "title": "Media Player",
+  "slug": "media-player",
+  "path": "mediaplayer",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/mediaplayer",
+  "macos_since": "10.12.1",
+  "deprecated": null,
+  "abstract": "Find and play songs, audio podcasts, audio books, and more from within your app."
+ },
+ {
+  "title": "Media Toolbox",
+  "slug": "media-toolbox",
+  "path": "mediatoolbox",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/mediatoolbox",
+  "macos_since": "10.9",
+  "deprecated": null,
+  "abstract": "Enable support for media format readers; tap and process audio from an audio mix."
+ },
+ {
+  "title": "MediaExtension",
+  "slug": "mediaextension",
+  "path": "mediaextension",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/mediaextension",
+  "macos_since": "15.0",
+  "deprecated": null,
+  "abstract": "This framework provides a means for developers to create format readers, video decoders, and RAW processors for media that the system doesn\u2019t natively support."
+ },
+ {
+  "title": "MusicKit",
+  "slug": "musickit",
+  "path": "musickit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/musickit",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Integrate your app with Apple Music."
+ },
+ {
+  "title": "Now Playing",
+  "slug": "now-playing",
+  "path": "nowplaying",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/nowplaying",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Make your app\u2019s media playback controls available on the Lock Screen, Control Center, and connected accessories."
+ },
+ {
+  "title": "PHASE",
+  "slug": "phase",
+  "path": "phase",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/phase",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Create dynamic audio experiences in your game or app that react to events and cues in the environment."
+ },
+ {
+  "title": "PhotoKit",
+  "slug": "photokit",
+  "path": "photokit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/photokit",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Work with image and video assets that the Photos app manages, including those from iCloud Photos and Live Photos."
+ },
+ {
+  "title": "Quick Look Thumbnailing",
+  "slug": "quick-look-thumbnailing",
+  "path": "quicklookthumbnailing",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/quicklookthumbnailing",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Generate thumbnails for common file types and add a Thumbnail Extension to your app to enable others to create thumbnails of your custom files."
+ },
+ {
+  "title": "Screen Saver",
+  "slug": "screen-saver",
+  "path": "screensaver",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/screensaver",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Animate screen savers, and interact with the screen saver infrastructure."
+ },
+ {
+  "title": "ScreenCaptureKit",
+  "slug": "screencapturekit",
+  "path": "screencapturekit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/screencapturekit",
+  "macos_since": "12.3",
+  "deprecated": null,
+  "abstract": "Stream screen content and audio to your app with fine-grained control over what you capture."
+ },
+ {
+  "title": "ShazamKit",
+  "slug": "shazamkit",
+  "path": "shazamkit",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/shazamkit",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Find information about a specific audio recording when a segment of it\u2019s part of captured sound in the Shazam catalog or your custom catalog."
+ },
+ {
+  "title": "Sound Analysis",
+  "slug": "sound-analysis",
+  "path": "soundanalysis",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/soundanalysis",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Classify various sounds by analyzing audio files or streams."
+ },
+ {
+  "title": "Video Subscriber Account",
+  "slug": "video-subscriber-account",
+  "path": "videosubscriberaccount",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/videosubscriberaccount",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Support TV provider and Apple TV app functionality."
+ },
+ {
+  "title": "Video Toolbox",
+  "slug": "video-toolbox",
+  "path": "videotoolbox",
+  "group": "Media",
+  "doc": "https://developer.apple.com/documentation/videotoolbox",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Work directly with hardware-accelerated video encoding and decoding capabilities."
+ },
+ {
+  "title": "Accelerate",
+  "slug": "accelerate",
+  "path": "accelerate",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/accelerate",
+  "macos_since": "10.3",
+  "deprecated": null,
+  "abstract": "Make large-scale mathematical computations and image calculations, optimized for high performance and low energy consumption."
+ },
+ {
+  "title": "Accessory Access",
+  "slug": "accessory-access",
+  "path": "accessoryaccess",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/accessoryaccess",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Manage access to connected USB accessories."
+ },
+ {
+  "title": "App Tracking Transparency",
+  "slug": "app-tracking-transparency",
+  "path": "apptrackingtransparency",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/apptrackingtransparency",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Request authorization to access app-related data that your app can use to track the person or the device."
+ },
+ {
+  "title": "Apple Archive",
+  "slug": "apple-archive",
+  "path": "applearchive",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/applearchive",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Perform multithreaded lossless compression of directories, files, and data."
+ },
+ {
+  "title": "Apple CryptoKit",
+  "slug": "apple-cryptokit",
+  "path": "cryptokit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/cryptokit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Perform cryptographic operations securely and efficiently."
+ },
+ {
+  "title": "Authentication Services",
+  "slug": "authentication-services",
+  "path": "authenticationservices",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/authenticationservices",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Make it easy for users to log into apps and services."
+ },
+ {
+  "title": "CFNetwork",
+  "slug": "cfnetwork",
+  "path": "cfnetwork",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/cfnetwork",
+  "macos_since": "10.8",
+  "deprecated": null,
+  "abstract": "Access network services and handle changes in network configurations. Build on abstractions of network protocols to simplify tasks such as working with BSD sockets, administering HTTP and FTP servers, and managing Bonjour services."
+ },
+ {
+  "title": "Collaboration",
+  "slug": "collaboration",
+  "path": "collaboration",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/collaboration",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Find and access identities, that is, users and groups. Display the Identity Picker, which lets users create and select identities."
+ },
+ {
+  "title": "Compression",
+  "slug": "compression",
+  "path": "compression",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/compression",
+  "macos_since": "10.11",
+  "deprecated": null,
+  "abstract": "Leverage compression algorithms for lossless data compression."
+ },
+ {
+  "title": "Core Bluetooth",
+  "slug": "core-bluetooth",
+  "path": "corebluetooth",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/corebluetooth",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Communicate with Bluetooth low energy and BR/EDR (\u201cClassic\u201d) Devices."
+ },
+ {
+  "title": "Core HID",
+  "slug": "core-hid",
+  "path": "corehid",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/corehid",
+  "macos_since": "15.0",
+  "deprecated": null,
+  "abstract": "Interact with keyboards, mice, and other human interface devices."
+ },
+ {
+  "title": "Core Services",
+  "slug": "core-services",
+  "path": "coreservices",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/coreservices",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Access and manage key operating system services, such as launch and identity services."
+ },
+ {
+  "title": "Core Telephony",
+  "slug": "core-telephony",
+  "path": "coretelephony",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/coretelephony",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Access information about a user\u2019s cellular service provider, such as its unique identifier and whether the carrier allows VoIP."
+ },
+ {
+  "title": "Core WLAN",
+  "slug": "core-wlan",
+  "path": "corewlan",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/corewlan",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Query AirPort interfaces and choose wireless networks."
+ },
+ {
+  "title": "CryptoTokenKit",
+  "slug": "cryptotokenkit",
+  "path": "cryptotokenkit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/cryptotokenkit",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Access security tokens and the cryptographic assets they store."
+ },
+ {
+  "title": "Darwin Notify",
+  "slug": "darwin-notify",
+  "path": "darwinnotify",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/darwinnotify",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Send and receive Darwin notifications."
+ },
+ {
+  "title": "Device Management",
+  "slug": "device-management",
+  "path": "devicemanagement",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/devicemanagement",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Manage your organization\u2019s devices remotely."
+ },
+ {
+  "title": "Disk Arbitration",
+  "slug": "disk-arbitration",
+  "path": "diskarbitration",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/diskarbitration",
+  "macos_since": "10.4",
+  "deprecated": null,
+  "abstract": "Provides mechanisms to register and block disk mount or unmount events."
+ },
+ {
+  "title": "DiskImageKit",
+  "slug": "diskimagekit",
+  "path": "diskimagekit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/diskimagekit",
+  "macos_since": "27.0",
+  "deprecated": null,
+  "abstract": "Create, open, and manage disk images."
+ },
+ {
+  "title": "Dispatch",
+  "slug": "dispatch",
+  "path": "dispatch",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/dispatch",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Execute code concurrently on multicore hardware by submitting work to dispatch queues managed by the system."
+ },
+ {
+  "title": "dnssd",
+  "slug": "dnssd",
+  "path": "dnssd",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/dnssd",
+  "macos_since": "10.12",
+  "deprecated": null,
+  "abstract": "Discover, publish, and resolve network services on a local area or wide area network."
+ },
+ {
+  "title": "DriverKit",
+  "slug": "driverkit",
+  "path": "driverkit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/driverkit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Develop device drivers that run in user space."
+ },
+ {
+  "title": "Endpoint Security",
+  "slug": "endpoint-security",
+  "path": "endpointsecurity",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/endpointsecurity",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Develop system extensions that enhance user security."
+ },
+ {
+  "title": "Exception Handling",
+  "slug": "exception-handling",
+  "path": "exceptionhandling",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/exceptionhandling",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Monitor and debug exceptional conditions in code."
+ },
+ {
+  "title": "Execution Policy",
+  "slug": "execution-policy",
+  "path": "executionpolicy",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/executionpolicy",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Provide functionality so developer tools can manage execution policy exceptions."
+ },
+ {
+  "title": "External Accessory",
+  "slug": "external-accessory",
+  "path": "externalaccessory",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/externalaccessory",
+  "macos_since": "10.13",
+  "deprecated": null,
+  "abstract": "Communicate with accessories that connect to a device with the Apple Lightning connector, or with Bluetooth wireless technology."
+ },
+ {
+  "title": "Finder Sync",
+  "slug": "finder-sync",
+  "path": "findersync",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/findersync",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Modify the Finder\u2019s user interface to express file synchronization and control."
+ },
+ {
+  "title": "Force Feedback",
+  "slug": "force-feedback",
+  "path": "forcefeedback",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/forcefeedback",
+  "macos_since": "10.2",
+  "deprecated": null,
+  "abstract": "Control force feedback devices attached to the system. Develop plug-ins that enable communication with force feedback hardware."
+ },
+ {
+  "title": "FSKit",
+  "slug": "fskit",
+  "path": "fskit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/fskit",
+  "macos_since": "15.4",
+  "deprecated": null,
+  "abstract": "Implement a file system that runs in user space."
+ },
+ {
+  "title": "GSS",
+  "slug": "gss",
+  "path": "gss",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/gss",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Conduct secure, authenticated network transactions."
+ },
+ {
+  "title": "HIDDriverKit",
+  "slug": "hiddriverkit",
+  "path": "hiddriverkit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/hiddriverkit",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Develop drivers for human-interface devices, such as keyboards, pointing devices, and digitizers like pens and touch pads."
+ },
+ {
+  "title": "Hypervisor",
+  "slug": "hypervisor",
+  "path": "hypervisor",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/hypervisor",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Build virtualization solutions on top of a lightweight hypervisor, without third-party kernel extensions."
+ },
+ {
+  "title": "InputMethodKit",
+  "slug": "inputmethodkit",
+  "path": "inputmethodkit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/inputmethodkit",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Develop input methods and manage communication with client applications, candidates windows, and input method modes."
+ },
+ {
+  "title": "IOBluetooth",
+  "slug": "iobluetooth",
+  "path": "iobluetooth",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/iobluetooth",
+  "macos_since": "10.2",
+  "deprecated": null,
+  "abstract": "Gain user-space access to Bluetooth devices."
+ },
+ {
+  "title": "IOBluetooth UI",
+  "slug": "iobluetooth-ui",
+  "path": "iobluetoothui",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/iobluetoothui",
+  "macos_since": "10.2",
+  "deprecated": null,
+  "abstract": "Present an interface through which users can pair their devices with other Bluetooth devices."
+ },
+ {
+  "title": "IOKit",
+  "slug": "iokit",
+  "path": "iokit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/iokit",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Access hardware devices and drivers from your apps and services."
+ },
+ {
+  "title": "IOSurface",
+  "slug": "iosurface",
+  "path": "iosurface",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/iosurface",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Share hardware-accelerated buffer data (framebuffers and textures) across multiple processes. Manage image memory more efficiently."
+ },
+ {
+  "title": "IOUSBHost",
+  "slug": "iousbhost",
+  "path": "iousbhost",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/iousbhost",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Create host-mode user space drivers for USB devices."
+ },
+ {
+  "title": "Kernel",
+  "slug": "kernel",
+  "path": "kernel",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/kernel",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Develop kernel-resident device drivers and kernel extensions."
+ },
+ {
+  "title": "Latent Semantic Mapping",
+  "slug": "latent-semantic-mapping",
+  "path": "latentsemanticmapping",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/latentsemanticmapping",
+  "macos_since": "10.5",
+  "deprecated": null,
+  "abstract": "Classify text and other token-based content into developer-defined categories."
+ },
+ {
+  "title": "LightweightCodeRequirements",
+  "slug": "lightweightcoderequirements",
+  "path": "lightweightcoderequirements",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/lightweightcoderequirements",
+  "macos_since": "14.4",
+  "deprecated": null,
+  "abstract": "Test the identity of executable code on disk and in running processes."
+ },
+ {
+  "title": "Local Authentication",
+  "slug": "local-authentication",
+  "path": "localauthentication",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/localauthentication",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Authenticate users biometrically or with a passphrase they already know."
+ },
+ {
+  "title": "Local Authentication Embedded UI",
+  "slug": "local-authentication-embedded-ui",
+  "path": "localauthenticationembeddedui",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/localauthenticationembeddedui",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Present a standard local authentication view icon in a custom authentication view."
+ },
+ {
+  "title": "MetricKit",
+  "slug": "metrickit",
+  "path": "metrickit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/metrickit",
+  "macos_since": "12.0",
+  "deprecated": null,
+  "abstract": "Measure your app\u2019s performance using daily metric and diagnostic reports from real users."
+ },
+ {
+  "title": "ML Compute",
+  "slug": "ml-compute",
+  "path": "mlcompute",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/mlcompute",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Accelerate training and validation of neural networks across the CPU and one or more GPUs."
+ },
+ {
+  "title": "Nearby Interaction",
+  "slug": "nearby-interaction",
+  "path": "nearbyinteraction",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/nearbyinteraction",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Locate and interact with nearby devices using identifiers, distance, and direction."
+ },
+ {
+  "title": "Network",
+  "slug": "network",
+  "path": "network",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/network",
+  "macos_since": "10.14",
+  "deprecated": null,
+  "abstract": "Create network connections to send and receive data using transport and security protocols."
+ },
+ {
+  "title": "Network Extension",
+  "slug": "network-extension",
+  "path": "networkextension",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/networkextension",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Customize and extend core networking features."
+ },
+ {
+  "title": "Open Directory",
+  "slug": "open-directory",
+  "path": "opendirectory",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/opendirectory",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Authenticate users, and search for contact information in Open Directory and LDAP directories."
+ },
+ {
+  "title": "os",
+  "slug": "os",
+  "path": "os",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/os",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Coordinate the scheduling and synchronization of your app\u2019s tasks, and log information to the console to diagnose issues."
+ },
+ {
+  "title": "OSLog",
+  "slug": "oslog",
+  "path": "oslog",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/oslog",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "A unified logging system for the reading of historical data."
+ },
+ {
+  "title": "Paravirtualized Graphics",
+  "slug": "paravirtualized-graphics",
+  "path": "paravirtualizedgraphics",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/paravirtualizedgraphics",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Add graphics acceleration to your guest driver stack."
+ },
+ {
+  "title": "PCIDriverKit",
+  "slug": "pcidriverkit",
+  "path": "pcidriverkit",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/pcidriverkit",
+  "macos_since": "11.1",
+  "deprecated": null,
+  "abstract": "Develop device drivers for Peripheral Component Interconnect (PCI) accessories."
+ },
+ {
+  "title": "Security",
+  "slug": "security",
+  "path": "security",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/security",
+  "macos_since": "10.0",
+  "deprecated": null,
+  "abstract": "Secure the data your app manages, and control access to your app."
+ },
+ {
+  "title": "Security Foundation",
+  "slug": "security-foundation",
+  "path": "securityfoundation",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/securityfoundation",
+  "macos_since": "10.3",
+  "deprecated": null,
+  "abstract": "Restrict a user\u2019s access to particular features in your Mac app or daemon."
+ },
+ {
+  "title": "Security Interface",
+  "slug": "security-interface",
+  "path": "securityinterface",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/securityinterface",
+  "macos_since": "10.3",
+  "deprecated": null,
+  "abstract": "Provide user interface elements for security features such as authorization, access to digital certificates, and access to items in keychains."
+ },
+ {
+  "title": "Service Management",
+  "slug": "service-management",
+  "path": "servicemanagement",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/servicemanagement",
+  "macos_since": "10.6",
+  "deprecated": null,
+  "abstract": "Manage startup items, launch agents, and launch daemons from within an app."
+ },
+ {
+  "title": "System",
+  "slug": "system",
+  "path": "system",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/system",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Perform low-level file operations using type-safe APIs."
+ },
+ {
+  "title": "System Configuration",
+  "slug": "system-configuration",
+  "path": "systemconfiguration",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/systemconfiguration",
+  "macos_since": "10.1",
+  "deprecated": null,
+  "abstract": "Allow applications to access a device\u2019s network configuration settings. Determine the reachability of the device, such as whether Wi-Fi or cell connectivity are active."
+ },
+ {
+  "title": "System Extensions",
+  "slug": "system-extensions",
+  "path": "systemextensions",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/systemextensions",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Install and manage user space code that extends the capabilities of macOS."
+ },
+ {
+  "title": "Thread Network",
+  "slug": "thread-network",
+  "path": "threadnetwork",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/threadnetwork",
+  "macos_since": "14.0",
+  "deprecated": null,
+  "abstract": "Create robust, smart device networks using Thread Border Routers."
+ },
+ {
+  "title": "Uniform Type Identifiers",
+  "slug": "uniform-type-identifiers",
+  "path": "uniformtypeidentifiers",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/uniformtypeidentifiers",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Provide uniform type identifiers that describe file types for storage or transfer."
+ },
+ {
+  "title": "Virtualization",
+  "slug": "virtualization",
+  "path": "virtualization",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/virtualization",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Create virtual machines and run macOS and Linux-based operating systems."
+ },
+ {
+  "title": "vmnet",
+  "slug": "vmnet",
+  "path": "vmnet",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/vmnet",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Connect with network interfaces to read and write packets on guest operating systems."
+ },
+ {
+  "title": "XPC",
+  "slug": "xpc",
+  "path": "xpc",
+  "group": "System",
+  "doc": "https://developer.apple.com/documentation/xpc",
+  "macos_since": "10.10",
+  "deprecated": null,
+  "abstract": "Access a low-level interprocess communication mechanism."
+ },
+ {
+  "title": "Link Presentation",
+  "slug": "link-presentation",
+  "path": "linkpresentation",
+  "group": "Web",
+  "doc": "https://developer.apple.com/documentation/linkpresentation",
+  "macos_since": "10.15",
+  "deprecated": null,
+  "abstract": "Fetch, provide, and present rich links in your app."
+ },
+ {
+  "title": "Screen Time",
+  "slug": "screen-time",
+  "path": "screentime",
+  "group": "Web",
+  "doc": "https://developer.apple.com/documentation/screentime",
+  "macos_since": "11.0",
+  "deprecated": null,
+  "abstract": "Share and manage web-usage data, and observe changes made by a parent or guardian."
+ }
+]

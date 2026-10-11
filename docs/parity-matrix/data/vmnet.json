@@ -1,0 +1,21 @@
+{
+  "framework": "vmnet",
+  "doc": "https://developer.apple.com/documentation/vmnet",
+  "macos_since": "10.10",
+  "status": "n/a",
+  "bifrost": "nothing app-facing; closest host pieces are springboard/src/net/mod.rs (rtnetlink, DHCP) and tools/arch-vm.sh (QEMU guest networking for tests)",
+  "summary": "vmnet is Apple's virtual NIC API for guest operating systems on macOS, with host and shared (NAT) modes and an entitlement gate. BifrOSt has no virtual machine framework or app-facing virtual network API; only a QEMU test harness for its own Arch VM.",
+  "rea_evidence": "ev_fc8cb262a7ba99feed2a25b9e670f9e003f8e735ab46dfcca3b83721660e17d2",
+  "features": [
+    {"feature": "Network configuration (host and shared modes)", "apple": "vmnet_network_configuration_create, vmnet_network_create", "bifrost": "none", "status": "n/a", "note": "no app-facing virtual network object"},
+    {"feature": "Starting and stopping virtual interfaces", "apple": "vmnet_start_interface, vmnet_interface_start_with_network, vmnet_stop_interface", "bifrost": "none", "status": "n/a", "note": "tools/arch-vm.sh starts a QEMU guest, not an SDK call"},
+    {"feature": "Interface events", "apple": "vmnet_interface_set_event_callback, interface_event_t", "bifrost": "none", "status": "n/a", "note": "no event API for guest interfaces"},
+    {"feature": "Reading and writing packets", "apple": "vmnet_read, vmnet_write, vmpktdesc", "bifrost": "none", "status": "n/a", "note": "host packet I/O lives in springboard/src/net/mod.rs, not exposed to apps"},
+    {"feature": "DHCP reservations and port forwarding", "apple": "vmnet_network_configuration_add_dhcp_reservation, vmnet_network_configuration_add_port_forwarding_rule", "bifrost": "none", "status": "n/a", "note": "no DHCP server for guests in BifrOSt"},
+    {"feature": "Entitlement for virtual networking", "apple": "com.apple.vm.networking", "bifrost": "none", "status": "n/a", "note": "app isolation is springboard/src/bare/app_policy.rs (bubblewrap); no networking entitlement"}
+  ],
+  "gaps": [
+    "No virtual machine framework for apps (no guest NIC, host or NAT mode API).",
+    "No app-facing packet I/O or interface events; springboard/src/net/mod.rs is private to the shell."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "framework": "Device Management",
+  "doc": "https://developer.apple.com/documentation/devicemanagement",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Apple's MDM framework is a server-side enterprise protocol for remotely managing organization-owned Apple devices through Apple School Manager and Apple Business Manager. BifrOSt has no MDM server, enrollment, declarative management or configuration-profile support, and the Apple deployment services have no Linux counterpart.",
+  "rea_evidence": "ev_9cedaa1108bf8905bc8a02cfff1b7a526f03c67142bc14dbb7ad7a6e06bcb388",
+  "features": [
+    {"feature": "Device enrollment", "apple": "Automated Device Enrollment, account-driven enrollment (Device enrollment topic)", "bifrost": "nothing found", "status": "n/a", "note": "Enrollment depends on Apple School Manager or Apple Business Manager accounts"},
+    {"feature": "MDM protocol: commands, queries and check-in", "apple": "Commands and queries; Check-in (MDM protocol topic)", "bifrost": "nothing found", "status": "n/a", "note": "Apple push-token MDM channel; no equivalent in BifrOSt"},
+    {"feature": "Declarative management", "apple": "Declarations; Status items (Declarative management topic)", "bifrost": "nothing found", "status": "n/a", "note": "Apple-specific declaration and status-report format"},
+    {"feature": "Configuration profiles", "apple": "Profile-specific payload keys (Configuration profiles topic)", "bifrost": "nothing found", "status": "n/a", "note": "Apple configuration-profile payload format"},
+    {"feature": "Identity management", "apple": "Platform Single Sign-on, Managed Device Attestation (Implementing device management topic)", "bifrost": "nothing found", "status": "n/a", "note": "Apple platform identity services; BifrOSt accounts live in ~/Projects/bifrost-cloud, not in this repo"},
+    {"feature": "Deployment services", "apple": "Device assignment, Roster management, App Book and Subscription Management, Apple School Manager and Apple Business APIs (Deployment services topic)", "bifrost": "nothing found", "status": "n/a", "note": "Apple-only enterprise service APIs"}
+  ],
+  "gaps": [
+    "No MDM or enterprise device-management service exists in BifrOSt; this is out of scope for a Linux desktop unless the product adds fleet management."
+  ]
+}

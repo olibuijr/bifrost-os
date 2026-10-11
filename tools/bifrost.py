@@ -5,6 +5,7 @@
   bifrost pc acceptance [--quick] [--midget] [--bless]                    cargo tests (incl. per-app compliance), SDK coverage, app compliance, tool tests, app smoke, bench
   bifrost pc names | browser-smoke                                 name guard; Browser smoke on Midget via the MCP
   bifrost pc smoke|adoption|gallery                              host app previews and Golden Gate SDK adoption (docs/golden-gate-sdk-adoption.md)
+  bifrost pc parity status|coverage|show|gaps|check|build|...     reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
   bifrost pc shot|tap|rtap|swipe|key|type|wait-change            computer use on the headed x86 VM
   bifrost site build|check|doctest|shot|ship                      bifrost.olibuijr.com (~/Projects/bifrost-site/tools/site.py)
   bifrost e2e [--list] [scenario ...]                            end-to-end scenarios on the x86 VM
@@ -131,6 +132,9 @@ def cmd_pc(a):
     if op == "smoke":
         # host preview of real app binaries: smoke APP... [--light] [--sizes WxH,...] [--scale PX_PER_PT] [--out DIR]
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "pc-app-smoke.py")] + rest).returncode)
+    if op == "parity":
+        # reference SDK vs BifrOSt parity matrix: status|coverage|show|gaps|check|build|import|db-export|refresh-index
+        sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "parity.py")] + rest).returncode)
     if op == "adoption":
         # how far each app has moved to the SDK kit: fixed dark colours left, widgets used, full-size window
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "sdk-adoption.py")] + rest).returncode)
@@ -172,7 +176,7 @@ def cmd_pc(a):
         sys.exit(subprocess.run([os.path.join(here, "vm-install.sh"), op] + rest).returncode)
     if op in ("shot", "tap", "rtap", "swipe", "key", "type", "wait-change"):
         sys.exit(subprocess.run(qmp + [op] + rest).returncode)
-    sys.exit("usage: bifrost pc log show|stream|config|subsystems [ARGS] | control list|info APP|methods APP|call APP METHOD [JSON]  (running PC apps over their control sockets) | app build|publish|info APP [--skip-build] | browser-engine VERSION | acceptance [--quick] [--midget] [--bless] | smoke APP... [--light] [--sizes WxH,...] [--scale N] | adoption [--json] | gallery [OUT_DIR] | publish [--skip-build] | upstream [--dry-run] [--app NAME] | cycle [--loop N] [--headless] | midget status|state|ota|bios|wake|reboot [--netboot|--disk]|poweroff|bootnext|efi|hw|screen|logs|amt|ssh|appearance light|dark|auto|wallpaper ID|open-app ID|lock|tap-window APP X Y | install | boot | ssh CMD | shot OUT.png | tap X Y | rtap X Y | swipe X0 Y0 X1 Y1 [MS] | key K | type TEXT | wait-change [MS]  (guest pixels, 1280x720)")
+    sys.exit("usage: bifrost pc log show|stream|config|subsystems [ARGS] | control list|info APP|methods APP|call APP METHOD [JSON]  (running PC apps over their control sockets) | app build|publish|info APP [--skip-build] | browser-engine VERSION | acceptance [--quick] [--midget] [--bless] | smoke APP... [--light] [--sizes WxH,...] [--scale N] | adoption [--json] | gallery [OUT_DIR] | parity status|coverage|show|gaps|check|build | publish [--skip-build] | upstream [--dry-run] [--app NAME] | cycle [--loop N] [--headless] | midget status|state|ota|bios|wake|reboot [--netboot|--disk]|poweroff|bootnext|efi|hw|screen|logs|amt|ssh|appearance light|dark|auto|wallpaper ID|open-app ID|lock|tap-window APP X Y | install | boot | ssh CMD | shot OUT.png | tap X Y | rtap X Y | swipe X0 Y0 X1 Y1 [MS] | key K | type TEXT | wait-change [MS]  (guest pixels, 1280x720)")
 
 
 def main():

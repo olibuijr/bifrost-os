@@ -1,0 +1,25 @@
+{
+  "framework": "MailKit",
+  "doc": "https://developer.apple.com/documentation/mailkit",
+  "macos_since": "12.0",
+  "status": "n/a",
+  "bifrost": "springboard/src/shell/share/mod.rs (share sheet, closest hand-off counterpart); springboard/sdk/src/share.rs (SDK share); no mail app or mail extension point",
+  "summary": "MailKit is an extension point for Apple's Mail app: content blockers, message actions, compose-window handlers and S/MIME or PGP security handlers all plug into Mail. BifrOSt has no Mail app and no mail extension host, so the framework has no counterpart. The only nearby piece is the share sheet, which hands text and files to registered apps; it does not reach a mail compose window.",
+  "rea_evidence": "ev_cd15853dcc4dd994da1561d7440cd5d9095bc5ac658163ae1984e11ec8eabf97",
+  "features": [
+    {"feature": "Extension entry point (MEExtension)", "apple": "MEExtension, handlerForContentBlocker(), handlerForMessageActions(), handler(for:), handlerForMessageSecurity()", "bifrost": "none", "status": "n/a", "note": "There is no host Mail app to load an extension into. Nothing in springboard/apps or springboard/sdk/src implements mail extension points."},
+    {"feature": "Content blocking in messages", "apple": "MEContentBlocker, contentRulesJSON()", "bifrost": "springboard/apps/browser (no content rules found)", "status": "n/a", "note": "No mail message viewer exists. The browser has no content-rule or tracker blocking either, which is a separate gap for web content."},
+    {"feature": "Message actions on download", "apple": "MEMessageActionHandler, decideAction(for:completionHandler:), MEMessageAction (flag, colour, archive)", "bifrost": "none", "status": "n/a", "note": "No mail download pipeline or message store exists in BifrOSt."},
+    {"feature": "Compose window handling and recipient annotation", "apple": "MEComposeSessionHandler, MEComposeSession, annotateAddressesForSession(_:completion:), viewController(for:)", "bifrost": "none", "status": "n/a", "note": "No compose window for mail. Notes has a compose screen (springboard/apps/notes-desktop/src/notes/mod.rs) for notes, not mail."},
+    {"feature": "Message encryption, signing and decryption", "apple": "MEMessageSecurityHandler, MEMessageEncoder, MEMessageDecoder, MEMessageSigner", "bifrost": "none", "status": "n/a", "note": "No S/MIME or PGP support. The keychain (springboard/src/keychain.rs) stores secrets but does no message signing or encryption."},
+    {"feature": "Message model (sender, recipients, subject, state)", "apple": "MEMessage, MEMessageState, MEEmailAddress", "bifrost": "none", "status": "n/a", "note": "No mail message type exists. Contacts (springboard/apps/contacts-desktop) hold people, not messages."},
+    {"feature": "Compose context and banners", "apple": "MEComposeContext, MEDecodedMessageBanner, MEExtensionViewController", "bifrost": "none", "status": "n/a", "note": "Depends on the Mail extension host, which BifrOSt does not have."},
+    {"feature": "Hand text and files to a mail compose window", "apple": "Mail as a system share service (outside MailKit)", "bifrost": "springboard/src/shell/share/mod.rs, springboard/sdk/src/share.rs", "status": "gap", "note": "The share sheet lists only apps that declare handles or schemes, so no mail app can appear in it. docs/bifrost-ui.md:502 records that Mail is not offered as a share service."}
+  ],
+  "gaps": [
+    "No mail app and no mail data layer (accounts, IMAP/SMTP, mailboxes), so there is nothing for a mail extension to extend.",
+    "No message-level content blocking (rules applied when a message is displayed); the browser has no equivalent either.",
+    "No S/MIME or PGP signing and decryption API in the SDK.",
+    "The share sheet has no mail target, so a text or file cannot be handed to a compose window."
+  ]
+}

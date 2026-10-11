@@ -1,0 +1,30 @@
+{
+  "framework": "Core Foundation",
+  "doc": "https://developer.apple.com/documentation/corefoundation",
+  "macos_since": "10.0",
+  "status": "n/a",
+  "bifrost": "No C-ABI Core Foundation layer. Foundation-level counterparts: springboard/sdk/src/defaults.rs, springboard/sdk/src/notification.rs, springboard/sdk/src/dispatch.rs, springboard/sdk/src/url.rs, springboard/sdk/src/locale.rs, springboard/sdk/src/coding.rs, springboard/sdk/src/log.rs, springboard/ui/src/format.rs, springboard/sdk/src/control.rs",
+  "summary": "Core Foundation is the C ABI layer (CFTypeRef, opaque CF* types, CFAllocator, run loops, sockets, plug-ins) that Apple bridges to Foundation. BifrOSt is Rust and has no C ABI requirement, so the CF types themselves are n/a. The Foundation-level behaviour they back (preferences, notifications, main queue, URLs, locale, formatting, plists) has partial counterparts in the Foundation batches.",
+  "rea_evidence": "ev_20f07fbb6a8d75acd01162d9b322abeab9e8d8032ed51aa75f429dd312523baa",
+  "features": [
+    {"feature": "Opaque CF types and CFAllocator (CFTypeRef, CFArray, CFDictionary, CFString, CFNumber, CFData)", "apple": "CFAllocator, CFArray, CFDictionary, CFString, CFNumber, CFData, CFBoolean, CFNull", "bifrost": "Rust std collections and types (no C ABI)", "status": "n/a", "note": "Ownership and bridging are Rust's job; no app-facing C ABI is needed"},
+    {"feature": "Preferences (CFPreferences)", "apple": "Preferences Utilities, CFPreferences keys and domains", "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults, typed values, atomic per-app file)", "status": "partial", "note": "Per-app typed defaults exist; no shared cross-app domains or CFPreferences-style host-wide keys"},
+    {"feature": "Notification center (CFNotificationCenter)", "apple": "CFNotificationCenter, CFNotificationCenterGetLocalCenter", "bifrost": "springboard/sdk/src/notification.rs (NotificationCenter add_observer, post, remove_observer; DistributedNotificationCenter)", "status": "partial", "note": "Observer add, post and remove exist; the object argument is a u64 handle, not an arbitrary object reference"},
+    {"feature": "Run loop and timers (CFRunLoop, CFRunLoopTimer, CFRunLoopSource, CFRunLoopObserver)", "apple": "CFRunLoop, CFRunLoopTimer, CFRunLoopSource, CFRunLoopObserver", "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue main, async_after, drain_main, wake fd)", "status": "partial", "note": "Main-queue dispatch and delayed work exist; no run-loop modes, observers or custom input sources"},
+    {"feature": "URL access utilities (CFURL)", "apple": "CFURL, Core Foundation URL Access Utilities, CFURLEnumerator", "bifrost": "springboard/sdk/src/url.rs (URLRequest, HTTPURLResponse, URLCache)", "status": "partial", "note": "Network requests and cache exist; no CFURL path, resource-value or enumerator API"},
+    {"feature": "Locale and time zone (CFLocale, CFTimeZone, CFCalendar)", "apple": "CFLocale, CFTimeZone, CFCalendar, CFDate", "bifrost": "springboard/sdk/src/locale.rs (Locale identifier, separators, language)", "status": "partial", "note": "Locale identifier and number separators exist; no time zone or calendar API in the SDK"},
+    {"feature": "Number and date formatters (CFNumberFormatter, CFDateFormatter)", "apple": "CFNumberFormatter, CFDateFormatter", "bifrost": "springboard/ui/src/format.rs (byte_count, duration, relative, grouped)", "status": "partial", "note": "Fixed helper formats only; no general formatter objects with locale-aware patterns"},
+    {"feature": "Property lists and Codable-style encoding (CFPropertyList, CFXMLParser)", "apple": "CFPropertyList, CFXMLParser, CFXMLTree, CFXMLNode", "bifrost": "springboard/sdk/src/coding.rs (encode/decode, field, ISO 8601 format and parse)", "status": "partial", "note": "Two encoders and a decoder exist; no XML property-list parser API for apps"},
+    {"feature": "Attributed strings (CFAttributedString)", "apple": "CFAttributedString, CFMutableAttributedString", "bifrost": "springboard/sdk/src/attributed.rs", "status": "partial", "note": "Rich text container exists; CF statistical writing-direction call has no counterpart"},
+    {"feature": "Sockets, ports and streams (CFSocket, CFMachPort, CFMessagePort, CFStream)", "apple": "CFSocket, CFMachPort, CFMessagePort, CFReadStream, CFWriteStream", "bifrost": "springboard/sdk/src/control.rs (JSON-RPC control socket for apps)", "status": "n/a", "note": "Mach ports and CF streams are Apple-specific; the control socket covers app-to-shell RPC only"},
+    {"feature": "Plug-ins and bundles (CFPlugIn, CFBundle)", "apple": "CFPlugIn, CFPlugInInstance, CFBundle", "bifrost": "none found", "status": "gap", "note": "No plug-in loader API for apps; app bundle resources are not exposed as a CFBundle-style lookup"},
+    {"feature": "Byte-order utilities", "apple": "Byte-Order Utilities (CFSwapInt32, CFSwapInt64 and similar)", "bifrost": "Rust std (to_le_bytes, to_be_bytes, swap_bytes)", "status": "n/a", "note": "Rust primitives cover this"}
+  ],
+  "gaps": [
+    "No CFPreferences-style host-wide or cross-app preference domains (springboard/sdk/src/defaults.rs is per app).",
+    "No CFURL path, resource-value or enumerator API (springboard/sdk/src/url.rs covers network requests only).",
+    "No time zone or calendar API in the SDK (springboard/sdk/src/locale.rs has identifier and separators only).",
+    "No general locale-aware number or date formatter objects (springboard/ui/src/format.rs has fixed helpers).",
+    "No app-facing plug-in or bundle resource lookup (CFPlugIn, CFBundle)."
+  ]
+}

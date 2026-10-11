@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+"""bifrost pc parity: the reference SDK vs BifrOSt parity matrix (docs/parity-matrix/).
+
+Data: docs/parity-matrix/index.json lists every framework the reference vendor documents for its desktop OS 27
+(official developer documentation index); docs/parity-matrix/data/<slug>.json holds one framework's (or one part's)
+feature rows, filled by agents from the official docs and this repo. This CLI reads them.
+
+  status                         created vs remaining, overall and per group, with coverage
+  coverage [--group G] [--sort coverage|name|group] [--min N] [--max N] [--json]
+                                 coverage percentage per SDK/API
+  show NAME                      one framework's rows (slug or name, case-insensitive substring)
+  gaps [--group G] [--status gap,partial]
+                                 what remains, most important gaps first
+  check                          JSON validity, statuses, cited repo paths exist, every framework assessed
+  build [OUT.md]                 regenerate docs/apple-parity-matrix.md
+  import DIR                     copy agent output files DIR/*.json into data/ (validated)
+  db-export DIR                  one JSON file per database document for the published artifact
+                                 (frameworks/<slug>.json, meta/summary.json) plus batches.json (50 per batch)
+  refresh-index                  re-read the official documentation index and rewrite index.json
+
+Coverage of a framework: rows that apply (status not n/a) score parity 1, partial 0.5, os 0.5, gap 0;
+coverage = score / applicable rows. A framework with no applicable rows has no coverage (n/a).
+"""
+import argparse
+import collections
+import json
+import os
+import re
+import shutil
+import sys
+import urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE = os.path.join(ROOT, "docs", "parity-matrix")
+DATA = os.path.join(BASE, "data")
+INDEX = os.path.join(BASE, "index.json")
+MATRIX_MD = os.path.join(ROOT, "docs", "apple-parity-matrix.md")
+STATUSES = ["parity", "partial", "os", "gap", "n/a"]
+LABEL = {"parity": "Parity", "partial": "Partial", "os": "OS only", "gap": "Gap", "n/a": "n/a"}
+WEIGHT = {"parity": 1.0, "partial": 0.5, "os": 0.5, "gap": 0.0}
+PARTS = {  # large frameworks split by official topic sections; slug prefix -> framework title
+    "appkit-": "AppKit", "foundation-": "Foundation", "swiftui-": "SwiftUI", "avfoundation-": "AVFoundation",
+}
+DOCS_URL = "https://developer.apple.com/tutorials/data/documentation/"
+PATH_RE = re.compile(r"((?:springboard|docs|tools|packaging)/[A-Za-z0-9_./-]+)")
+
+
+def norm(s):
+    s = (s or "").strip().lower()
+    return {"na": "n/a", "none": "gap", "os only": "os", "missing": "gap"}.get(s, s if s in STATUSES else "gap")
+
+
+def key(s):
+    """Loose match for names and slugs: lower case, letters and digits only."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def load_index():
+    return json.load(open(INDEX))
+
+
+def load_entries():
+    idx = {r["slug"]: r for r in load_index()}
+    by_title = {r["title"]: r for r in idx.values()}
+    by_key = {key(r["slug"]): r for r in idx.values()} | {key(r["title"]): r for r in idx.values()}
+    out, bad = [], []
+    for f in sorted(os.listdir(DATA)) if os.path.isdir(DATA) else []:
+        if not f.endswith(".json"):
+            continue
+        slug = f[:-5]
+        try:
+            d = json.load(open(os.path.join(DATA, f)))
+        except Exception as e:  # noqa: BLE001 - report and continue
+            bad.append(f"{slug}: {e}")
+            continue
+        meta = idx.get(slug) or by_key.get(key(slug)) or by_key.get(key(d.get("framework", "")))
+        if not meta:
+            parent = next((t for p, t in PARTS.items() if slug.startswith(p)), None)
+            meta = by_title.get(parent, {})
+        rows = [dict(r, status=norm(r.get("status"))) for r in d.get("features") or []]
+        c = collections.Counter(r["status"] for r in rows)
+        applicable = sum(c[s] for s in WEIGHT)
+        score = sum(WEIGHT[s] * c[s] for s in WEIGHT)
+        out.append(dict(
+            slug=slug, index_slug=meta.get("slug"), name=d.get("framework") or meta.get("title", slug), group=meta.get("group", "Other"),
+            parent=meta.get("title", d.get("framework", slug)), since=meta.get("macos_since", ""),
+            deprecated=bool(meta.get("deprecated")), status=norm(d.get("status")), doc=d.get("doc") or meta.get("doc", ""),
+            bifrost=d.get("bifrost", ""), summary=d.get("summary", ""), rea=d.get("rea_evidence", ""),
+            gaps=[g for g in d.get("gaps") or [] if g], rows=rows, counts=c, applicable=applicable, score=score,
+            coverage=round(100 * score / applicable, 1) if applicable else None,
+        ))
+    out.sort(key=lambda e: (e["group"], e["name"].lower()))
+    return out, bad
+
+
+def pct(score, n):
+    return f"{100 * score / n:.1f}%" if n else "n/a"
+
+
+def totals(entries):
+    fw = collections.Counter(e["status"] for e in entries)
+    rows = collections.Counter()
+    for e in entries:
+        rows.update(e["counts"])
+    applicable = sum(rows[s] for s in WEIGHT)
+    score = sum(WEIGHT[s] * rows[s] for s in WEIGHT)
+    return fw, rows, applicable, score
+
+
+def by_group(entries):
+    g = collections.defaultdict(list)
+    for e in entries:
+        g[e["group"]].append(e)
+    return dict(sorted(g.items()))
+
+
+def missing_slugs(entries):
+    have = {e["slug"] for e in entries} | {s for e in entries for s in (e.get("index_slug"),) if s}
+    parts = {p for p in PARTS if any(s.startswith(p) for s in have)}
+    out = []
+    for r in load_index():
+        if r["slug"] in have:
+            continue
+        if any(r["title"] == PARTS[p] for p in parts):
+            continue
+        out.append(r["slug"])
+    return out
+
+
+def cmd_status(a):
+    entries, bad = load_entries()
+    fw, rows, n, score = totals(entries)
+    built = fw["parity"] + fw["partial"] + fw["os"]
+    print(f"Assessed: {len(entries)} frameworks/parts; not yet assessed: {len(missing_slugs(entries))}; unreadable: {len(bad)}")
+    print(f"Created (parity/partial/os): {built}  [parity {fw['parity']}, partial {fw['partial']}, os {fw['os']}]")
+    print(f"Remaining: gap {fw['gap']} frameworks, plus missing features in {fw['partial']} partial ones; n/a {fw['n/a']}")
+    print(f"Feature rows: {sum(rows.values())}; applicable {n}; coverage {pct(score, n)}")
+    print()
+    print(f"{'Group':<22} {'Cov':>7} {'Parity':>6} {'Part':>5} {'OS':>4} {'Gap':>4} {'n/a':>4}")
+    for g, es in by_group(entries).items():
+        f2, _, n2, s2 = totals(es)
+        print(f"{g:<22} {pct(s2, n2):>7} {f2['parity']:>6} {f2['partial']:>5} {f2['os']:>4} {f2['gap']:>4} {f2['n/a']:>4}")
+
+
+def cmd_coverage(a):
+    entries, _ = load_entries()
+    if a.group:
+        entries = [e for e in entries if a.group.lower() in e["group"].lower()]
+    if a.min is not None:
+        entries = [e for e in entries if e["coverage"] is not None and e["coverage"] >= a.min]
+    if a.max is not None:
+        entries = [e for e in entries if e["coverage"] is not None and e["coverage"] <= a.max]
+    key = {"coverage": lambda e: (-1 if e["coverage"] is None else e["coverage"]), "name": lambda e: e["name"].lower(),
+           "group": lambda e: (e["group"], e["name"].lower())}[a.sort]
+    entries.sort(key=key, reverse=a.sort == "coverage")
+    if a.json:
+        print(json.dumps([{k: e[k] for k in ("slug", "name", "group", "status", "coverage", "applicable")} |
+                          {"counts": dict(e["counts"])} for e in entries], indent=1))
+        return
+    for e in entries:
+        c = e["counts"]
+        cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.1f}%"
+        print(f"{cov:>7}  {LABEL[e['status']]:<8} {e['name'][:52]:<52} {e['group']:<20} "
+              f"P{c['parity']} p{c['partial']} o{c['os']} g{c['gap']} n{c['n/a']}")
+
+
+def find(entries, name):
+    q = name.lower()
+    hits = [e for e in entries if e["slug"] == q or e["name"].lower() == q]
+    return hits or [e for e in entries if q in e["slug"] or q in e["name"].lower()]
+
+
+def cmd_show(a):
+    entries, _ = load_entries()
+    hits = find(entries, a.name)
+    if not hits:
+        sys.exit(f"no framework matches {a.name!r}")
+    for e in hits:
+        cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.1f}%"
+        print(f"# {e['name']}  [{LABEL[e['status']]}, coverage {cov}, since {e['since']}]  {e['doc']}")
+        print(f"  BifrOSt: {e['bifrost']}")
+        print(f"  {e['summary']}")
+        print(f"  REA evidence: {e['rea'] or 'none'}")
+        for r in e["rows"]:
+            print(f"  - [{LABEL[r['status']]}] {r.get('feature')}: {r.get('apple')} -> {r.get('bifrost') or '-'}"
+                  + (f"  ({r['note']})" if r.get("note") else ""))
+        if e["gaps"]:
+            print("  Gaps: " + "; ".join(e["gaps"]))
+        print()
+
+
+def cmd_gaps(a):
+    entries, _ = load_entries()
+    want = set((a.status or "gap,partial").split(","))
+    for g, es in by_group(entries).items():
+        if a.group and a.group.lower() not in g.lower():
+            continue
+        es = [e for e in es if e["status"] in want]
+        if not es:
+            continue
+        print(f"## {g}")
+        for e in sorted(es, key=lambda e: (e["coverage"] or 0)):
+            cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
+            print(f"- {e['name']} ({LABEL[e['status']]}, {cov}): " + ("; ".join(e["gaps"][:5]) or "see matrix"))
+        print()
+
+
+def cited_paths(entries):
+    ok, missing = 0, []
+    for e in entries:
+        for text in [e["bifrost"]] + [r.get("bifrost") or "" for r in e["rows"]]:
+            for m in PATH_RE.finditer(str(text)):
+                p = m.group(1).rstrip(".,;:)").split(":")[0]
+                if os.path.exists(os.path.join(ROOT, p)):
+                    ok += 1
+                else:
+                    missing.append((e["slug"], p))
+    return ok, missing
+
+
+def cmd_check(a):
+    entries, bad = load_entries()
+    problems = list(bad)
+    for e in entries:
+        if not e["rows"]:
+            problems.append(f"{e['slug']}: no feature rows")
+        if not e["doc"].startswith("https://developer.apple.com/"):
+            problems.append(f"{e['slug']}: doc link is not the official documentation")
+    ok, missing = cited_paths(entries)
+    problems += [f"{s}: cited path not found: {p}" for s, p in missing]
+    miss = missing_slugs(entries)
+    print(f"{len(entries)} entries, cited paths ok {ok}, not found {len(missing)}, not assessed {len(miss)}")
+    if miss:
+        print("not assessed: " + ", ".join(miss))
+    for p in problems:
+        print("FAIL " + p)
+    sys.exit(1 if problems or miss else 0)
+
+
+def esc(s):
+    return str(s if s is not None else "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+def mark_paths(s):
+    def fix(m):
+        p = m.group(1).rstrip(".,;:)").split(":")[0]
+        return m.group(1) if os.path.exists(os.path.join(ROOT, p)) else m.group(1) + " (not found)"
+    return PATH_RE.sub(fix, s or "")
+
+
+def cmd_build(a):
+    entries, bad = load_entries()
+    fw, rows, n, score = totals(entries)
+    miss = missing_slugs(entries)
+    o = []
+    w = o.append
+    w("# Apple macOS 27 SDK vs BifrOSt: index and parity matrix")
+    w("")
+    w("Generated by `bifrost pc parity build` from `docs/parity-matrix/` (do not edit by hand; edit the data files).")
+    w("What BifrOSt has built against each framework Apple documents for macOS 27 (Golden Gate), and what remains.")
+    w("Apple side: the official developer documentation only (developer.apple.com DocC data, read with")
+    w("`tools/parity/docc.py`; each framework page was also rendered in Chromium and recorded with REA, whose")
+    w("`evidence_id` is listed per framework). BifrOSt side: code and docs in this repo, cited by path; a cited path that")
+    w("does not exist is marked \"(not found)\". Rows were filled by agents; treat a row as a pointer to check.")
+    w("")
+    w("Status: **Parity** app-facing API covers the main features; **Partial** some features; **OS only** the system")
+    w("layer has it but apps get no SDK API; **Gap** relevant to a macOS-style desktop and missing; **n/a** tied to")
+    w("Apple-only hardware, stores, services or other platforms. Coverage: rows that apply score Parity 1, Partial and")
+    w("OS only 0.5, Gap 0, divided by the rows that apply (n/a rows excluded). AppKit, Foundation, SwiftUI and AVFoundation")
+    w("are split into parts by their official topic sections.")
+    w("")
+    w("## Summary: created vs remaining")
+    w("")
+    w(f"- Coverage over all applicable feature rows: **{pct(score, n)}** ({n} applicable of {sum(rows.values())} rows).")
+    w(f"- Frameworks and parts assessed: **{len(entries)}**.")
+    w(f"- Created: **{fw['parity'] + fw['partial'] + fw['os']}** (Parity {fw['parity']}, Partial {fw['partial']}, OS only {fw['os']}).")
+    w(f"- Remaining: **{fw['gap']}** Gap, plus the missing features inside the {fw['partial']} Partial ones.")
+    w(f"- Not applicable: **{fw['n/a']}**.")
+    if miss:
+        w(f"- Not yet assessed ({len(miss)}): {', '.join(miss)}.")
+    w("")
+    w("| Group | Coverage | Parity | Partial | OS only | Gap | n/a |")
+    w("|---|---|---|---|---|---|---|")
+    for g, es in by_group(entries).items():
+        f2, _, n2, s2 = totals(es)
+        w(f"| {g} | {pct(s2, n2)} | " + " | ".join(str(f2[s]) for s in STATUSES) + " |")
+    w("")
+    w("## Index")
+    w("")
+    w("| Framework | Group | macOS since | Status | Coverage | BifrOSt counterpart | Summary |")
+    w("|---|---|---|---|---|---|---|")
+    for e in entries:
+        cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
+        dep = " (deprecated)" if e["deprecated"] else ""
+        w(f"| [{esc(e['name'])}](#{e['slug']}){dep} | {e['group']} | {esc(e['since'])} | {LABEL[e['status']]} | {cov} | "
+          f"{esc(mark_paths(e['bifrost']))} | {esc(e['summary'])} |")
+    w("")
+    w("## Remaining work (Gap and Partial, lowest coverage first)")
+    w("")
+    for g, es in by_group(entries).items():
+        es = [e for e in es if e["status"] in ("gap", "partial")]
+        if not es:
+            continue
+        w(f"### {g}")
+        w("")
+        for e in sorted(es, key=lambda e: (e["coverage"] or 0)):
+            cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
+            w(f"- **{esc(e['name'])}** ({LABEL[e['status']]}, {cov}): " + ("; ".join(esc(x) for x in e["gaps"][:4]) or "see matrix"))
+        w("")
+    w("## Matrix")
+    for e in entries:
+        cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
+        w("")
+        w(f'<a id="{e["slug"]}"></a>')
+        w(f"### {esc(e['name'])}")
+        w("")
+        w(f"{LABEL[e['status']]} · coverage {cov} · macOS {esc(e['since'])} · [official docs]({e['doc']}) · REA `{esc(e['rea']) or 'none'}`")
+        w("")
+        if e["summary"]:
+            w(esc(e["summary"]))
+            w("")
+        if e["rows"]:
+            w("| Feature | Apple API | BifrOSt | Status | Note |")
+            w("|---|---|---|---|---|")
+            for r in e["rows"]:
+                w(f"| {esc(r.get('feature'))} | {esc(r.get('apple'))} | {esc(mark_paths(r.get('bifrost')))} | "
+                  f"{LABEL[r['status']]} | {esc(r.get('note'))} |")
+            w("")
+        if e["gaps"]:
+            w("Gaps: " + "; ".join(esc(x) for x in e["gaps"]) + ".")
+    w("")
+    out = a.out or MATRIX_MD
+    open(out, "w").write("\n".join(o))
+    print(f"wrote {os.path.relpath(out, ROOT)}: {len(entries)} entries, {sum(rows.values())} rows, coverage {pct(score, n)}"
+          + (f", {len(bad)} unreadable" if bad else ""))
+
+
+def cmd_import(a):
+    os.makedirs(DATA, exist_ok=True)
+    n = 0
+    for f in sorted(os.listdir(a.dir)):
+        if not f.endswith(".json"):
+            continue
+        src = os.path.join(a.dir, f)
+        try:
+            d = json.load(open(src))
+            assert isinstance(d.get("features"), list) and d.get("framework")
+        except Exception as e:  # noqa: BLE001
+            print(f"skip {f}: {e}")
+            continue
+        shutil.copyfile(src, os.path.join(DATA, f))
+        n += 1
+    print(f"imported {n} files into {os.path.relpath(DATA, ROOT)}")
+
+
+def cmd_db_export(a):
+    entries, _ = load_entries()
+    fw, rows, n, score = totals(entries)
+    os.makedirs(os.path.join(a.dir, "frameworks"), exist_ok=True)
+    os.makedirs(os.path.join(a.dir, "meta"), exist_ok=True)
+    writes = []
+    for e in entries:
+        doc = {
+            "slug": e["slug"], "name": e["name"], "parent": e["parent"], "group": e["group"], "since": e["since"],
+            "deprecated": e["deprecated"], "status": e["status"], "coverage": e["coverage"], "applicable": e["applicable"],
+            "counts": {s: e["counts"][s] for s in STATUSES}, "doc": e["doc"], "bifrost": e["bifrost"],
+            "summary": e["summary"], "rea": e["rea"], "gaps": e["gaps"][:12],
+            "features": [{k: r.get(k, "") for k in ("feature", "apple", "bifrost", "status", "note")} for r in e["rows"]],
+        }
+        p = os.path.join(a.dir, "frameworks", e["slug"] + ".json")
+        json.dump(doc, open(p, "w"))
+        writes.append({"op": "set", "collection": "frameworks", "doc_id": e["slug"], "file_path": os.path.abspath(p)})
+    groups = {}
+    for g, es in by_group(entries).items():
+        f2, r2, n2, s2 = totals(es)
+        groups[g] = {"frameworks": {s: f2[s] for s in STATUSES}, "applicable": n2,
+                     "coverage": round(100 * s2 / n2, 1) if n2 else None}
+    summary = {"frameworks": len(entries), "status": {s: fw[s] for s in STATUSES}, "rows": {s: rows[s] for s in STATUSES},
+               "applicable": n, "coverage": round(100 * score / n, 1) if n else None, "groups": groups,
+               "not_assessed": missing_slugs(entries), "generated_by": "bifrost pc parity db-export",
+               "source": "developer.apple.com official documentation + bifrost-os repo"}
+    p = os.path.join(a.dir, "meta", "summary.json")
+    json.dump(summary, open(p, "w"))
+    writes.append({"op": "set", "collection": "meta", "doc_id": "summary", "file_path": os.path.abspath(p)})
+    batches = [writes[i:i + 50] for i in range(0, len(writes), 50)]
+    json.dump(batches, open(os.path.join(a.dir, "batches.json"), "w"), indent=1)
+    print(f"{len(writes)} documents in {len(batches)} batches: {os.path.join(a.dir, 'batches.json')}")
+
+
+def cmd_refresh_index(a):
+    def get(p):
+        with urllib.request.urlopen(DOCS_URL + p + ".json", timeout=30) as r:
+            return json.load(r)
+    tech = get("technologies")
+    old = {r["slug"]: r for r in load_index()} if os.path.exists(INDEX) else {}
+    rows = []
+    for s in tech["sections"]:
+        if s.get("kind") != "technologies":
+            continue
+        for g in s["groups"]:
+            for t in g["technologies"]:
+                ident = t["destination"]["identifier"]
+                if "/documentation/" not in ident:
+                    continue
+                path = ident.split("/documentation/", 1)[1].lower()
+                try:
+                    m = get(path).get("metadata", {})
+                except Exception:  # noqa: BLE001 - pages without data are tool or overview pages
+                    continue
+                mac = [p for p in m.get("platforms", []) if p.get("name") == "macOS"]
+                if not mac:
+                    continue
+                slug = re.sub(r"[^a-z0-9]+", "-", t["title"].lower()).strip("-")
+                rows.append({"title": t["title"], "slug": slug, "path": path, "group": g["name"],
+                             "doc": "https://developer.apple.com/documentation/" + path,
+                             "macos_since": mac[0].get("introducedAt", ""),
+                             "deprecated": mac[0].get("deprecatedAt") if mac[0].get("deprecated") else None,
+                             "abstract": old.get(slug, {}).get("abstract", "")})
+    rows.sort(key=lambda r: (r["group"], r["title"].lower()))
+    json.dump(rows, open(INDEX, "w"), indent=1)
+    print(f"{len(rows)} frameworks with macOS availability written to {os.path.relpath(INDEX, ROOT)}")
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("status")
+    c = sub.add_parser("coverage")
+    c.add_argument("--group")
+    c.add_argument("--sort", choices=["coverage", "name", "group"], default="group")
+    c.add_argument("--min", type=float)
+    c.add_argument("--max", type=float)
+    c.add_argument("--json", action="store_true")
+    s = sub.add_parser("show")
+    s.add_argument("name")
+    g = sub.add_parser("gaps")
+    g.add_argument("--group")
+    g.add_argument("--status")
+    sub.add_parser("check")
+    b = sub.add_parser("build")
+    b.add_argument("out", nargs="?")
+    i = sub.add_parser("import")
+    i.add_argument("dir")
+    d = sub.add_parser("db-export")
+    d.add_argument("dir")
+    sub.add_parser("refresh-index")
+    a = p.parse_args(argv)
+    {"status": cmd_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
+     "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    main()

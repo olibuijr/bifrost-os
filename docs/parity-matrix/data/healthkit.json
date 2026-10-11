@@ -1,0 +1,20 @@
+{
+  "framework": "HealthKit",
+  "doc": "https://developer.apple.com/documentation/healthkit",
+  "macos_since": "14.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "HealthKit is a shared store for health and fitness samples on iPhone and Apple Watch, with per-sample user permission. BifrOSt has no health data store and no app-facing API for it; the only health-like code is battery health in springboard/src/shell/battery.rs, which reads sysfs and is not related.",
+  "rea_evidence": "ev_6f3479e4eca25f609047a53eb88b4783fe34181996b04ab8a002c1cd20edc7bd",
+  "features": [
+    {"feature": "Health data store (HKHealthStore)", "apple": "HKHealthStore", "bifrost": "none", "status": "n/a", "note": "Apple health store tied to iPhone and Apple Watch sensors"},
+    {"feature": "Authorizing access to health data", "apple": "Authorizing access to health data", "bifrost": "none", "status": "n/a", "note": "Per-type read and share permission for health samples"},
+    {"feature": "Saving and reading samples", "apple": "Saving data to HealthKit, Reading data from HealthKit", "bifrost": "none", "status": "n/a", "note": "No sample types or queries in the SDK"},
+    {"feature": "Workouts and activity rings", "apple": "Workouts and activity rings", "bifrost": "none", "status": "n/a", "note": "Needs wearable input BifrOSt does not have"},
+    {"feature": "HealthKitUI", "apple": "HealthKitUI", "bifrost": "none", "status": "n/a", "note": "System health views with no BifrOSt counterpart"},
+    {"feature": "Health app data merge and user control", "apple": "Protecting user privacy, HealthKit updates", "bifrost": "none", "status": "n/a", "note": "Depends on the Apple Health app, which BifrOSt does not ship"}
+  ],
+  "gaps": [
+    "No health data store, sample types or query API (n/a: tied to Apple health hardware and the Health app)"
+  ]
+}

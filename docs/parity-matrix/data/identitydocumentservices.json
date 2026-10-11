@@ -1,0 +1,20 @@
+{
+  "framework": "IdentityDocumentServices",
+  "doc": "https://developer.apple.com/documentation/identitydocumentservices",
+  "macos_since": "26.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "IdentityDocumentServices lets apps present mobile identity documents (driver licence, ID card, passport-derived documents) through the system wallet and the Digital Credentials API in browsers. It depends on Apple's document provider registration and iCloud, and BifrOSt has no identity document or Digital Credentials support.",
+  "rea_evidence": "ev_94ce804914da2aa56b97f1f9c97d2cd555871fafc2b14618645bcbfc3c301540",
+  "features": [
+    {"feature": "Provider registration", "apple": "IdentityDocumentProviderRegistrationStore, MobileDocumentRegistration", "bifrost": "none", "status": "n/a", "note": "System wallet registration for government-issued documents"},
+    {"feature": "Web presentment request handling", "apple": "ISO18013MobileDocumentRequest, IdentityDocumentWebPresentmentRawRequest", "bifrost": "none", "status": "n/a", "note": "Digital Credentials API flow for browsers"},
+    {"feature": "Web presentment response", "apple": "ISO18013MobileDocumentResponse, IdentityDocumentWebPresentmentResponse", "bifrost": "none", "status": "n/a", "note": "Needs issued mobile documents"},
+    {"feature": "Request validation", "apple": "IdentityDocumentWebPresentmentRawRequestValidator", "bifrost": "none", "status": "n/a", "note": "No counterpart"},
+    {"feature": "Passport verification", "apple": "Verifying a mobile document from a passport", "bifrost": "none", "status": "n/a", "note": "Depends on Apple-issued documents"},
+    {"feature": "Error types", "apple": "IdentityDocumentPresentmentError", "bifrost": "none", "status": "n/a", "note": "Only meaningful with the flow above"}
+  ],
+  "gaps": [
+    "No identity document registration or Digital Credentials web presentment (n/a: depends on Apple wallet documents and iCloud)"
+  ]
+}

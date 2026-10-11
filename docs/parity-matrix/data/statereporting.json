@@ -1,0 +1,25 @@
+{
+  "framework": "StateReporting",
+  "doc": "https://developer.apple.com/documentation/statereporting",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs, springboard/sdk/src/log.rs, springboard/core/src/log.rs",
+  "summary": "StateReporting lets an app define named domains, report one active state per domain and attach reportable metadata, so that MetricKit and Instruments can attribute crashes and metrics to app state. BifrOSt has no app-facing state-transition or metadata API. Its system layer captures crash.log entries, offers a Share with Developer action and unified logging; these cover the diagnostics side but not the state attribution.",
+  "rea_evidence": "ev_4cfeac83cd2c0731855ab3128406c1847326babab9f3f5b2823e289fbcb188b3",
+  "features": [
+    {"feature": "StateReporter (domains and state transitions)", "apple": "StateReporter", "bifrost": "springboard/sdk/src/log.rs (Logger only)", "status": "gap", "note": "no SDK type records a named domain or a single active state per domain; the log module only writes messages"},
+    {"feature": "Reportable metadata (protocol, values, macros)", "apple": "ReportableMetadata, ReportableMetadataValue, ReportableMetadata(), ReportableMetadataKey(_:), ReportableMetadataIgnored()", "bifrost": "none", "status": "gap", "note": "no metadata dictionary type and no derive or macro equivalent"},
+    {"feature": "Crash capture and crash log entries", "apple": "crash diagnostics surfaced through MetricKit (framework landing page cross-reference)", "bifrost": "springboard/src/shell/diag.rs (CrashEntry, crash.log and crash.log.old parsing)", "status": "os", "note": "system layer lists and deletes crash logs; apps get no API to attach state to a crash"},
+    {"feature": "Analytics and Diagnostics page (user-facing)", "apple": "Settings > Privacy > Analytics & Diagnostics (system UI)", "bifrost": "springboard/src/shell/diagnostics_page.rs", "status": "os", "note": "lists crash logs, Share with Developer, Delete All Crash Logs; the share uploads build, crash logs and heartbeat to the update server"},
+    {"feature": "Unified logging as diagnostic context", "apple": "os.Logger and OSLogStore (the logging side that complements state reports)", "bifrost": "springboard/sdk/src/log.rs, springboard/core/src/log.rs, docs/milestone-unified-logging.md", "status": "partial", "note": "Logger and LogStore exist; no info-in-memory tier, no per-value privacy masks (docs/bifrost-ui.md, Unified Logging)"},
+    {"feature": "Points of Interest and signposts for Instruments", "apple": "OSSignposter (interval and event marks shown beside state transitions)", "bifrost": "none (planned in docs/milestone-unified-logging.md, phase 3)", "status": "gap", "note": "docs/bifrost-ui.md states no OSSignposter exists yet"},
+    {"feature": "MetricKit delivery of state-aggregated metrics", "apple": "MetricKit metric entries that carry state context", "bifrost": "none", "status": "n/a", "note": "MetricKit is Apple's delivery service for the metrics; BifrOSt has no equivalent metric payload for apps, and the performance HUD sensor readings in diag.rs are not app-facing"}
+  ],
+  "gaps": [
+    "No app-facing StateReporter: apps cannot declare domains or report state transitions.",
+    "No reportable-metadata type or derive macro for attaching structured values to reports.",
+    "No signposter (OSSignposter equivalent) for marking intervals and events in traces.",
+    "Crash logs are not linked to app state; a crash carries only a signature and file path (springboard/src/shell/diag.rs).",
+    "No app-facing metric payload delivered to the developer comparable to MetricKit."
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "framework": "DeviceDiscoveryExtension",
+  "doc": "https://developer.apple.com/documentation/devicediscoveryextension",
+  "macos_since": "15.0",
+  "status": "n/a",
+  "bifrost": "no counterpart; closest is the AirPlay & Handoff settings page (springboard/src/shell/pages.rs:598) and the LAN TV server note (springboard/src/deildu/mod.rs:141)",
+  "summary": "Apple's framework lets an app extension feed third-party media receivers into the system AirPlay-style device picker, running inside Apple's system sandbox. BifrOSt has no system device picker, no route picker view and no sandboxed discovery extension point, so nothing here has a sensible counterpart on the Linux desktop.",
+  "rea_evidence": "ev_d3db7044bdca6ed4c4a3d608329dc8e8425df7fe4af7e8b882284d784f2bf342",
+  "features": [
+    {"feature": "Discovery extension lifecycle", "apple": "DDDiscoveryExtension, DDDiscoverySession, DDDiscoveryExtensionConfigurationProtocol", "bifrost": "none", "status": "n/a", "note": "Apple's extension runs in a system sandbox that the picker loads when it displays. BifrOSt has no picker to load an extension into."},
+    {"feature": "Device events", "apple": "DDDeviceEvent, DDDeviceEvent.EventType, DDEventHandler", "bifrost": "none", "status": "n/a", "note": "Device add, change and remove events are delivered to the system picker only."},
+    {"feature": "Device information", "apple": "DDDevice, DDDevice.Category, DDDeviceState, DDDevice.Protocol, media playback state", "bifrost": "none", "status": "n/a", "note": "Describes a receiver for the system picker icon and protocol. No shell UI consumes such a description."},
+    {"feature": "Errors", "apple": "DDError, DDError.Code, DDErrorDomain", "bifrost": "none", "status": "n/a", "note": "Errors are reported by the Apple framework only."},
+    {"feature": "Media device discovery entitlement", "apple": "Media Device Discovery Extension entitlement", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap app sandbox)", "status": "n/a", "note": "The app sandbox exists, but it has no entitlement that lets an app add a receiver to a system picker."}
+  ],
+  "gaps": [
+    "No system device picker or route picker view that lists third-party media receivers.",
+    "No discovery extension point for receivers that an app ships with its own SDK.",
+    "AirPlay & Handoff exists only as a settings page (springboard/src/shell/pages.rs:598) with no receiver discovery behind it."
+  ]
+}

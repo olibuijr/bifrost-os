@@ -1,0 +1,22 @@
+{
+  "framework": "Create ML Components",
+  "doc": "https://developer.apple.com/documentation/createmlcomponents",
+  "macos_since": "13.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Create ML Components is a pipeline toolkit for building custom machine learning models out of transformers and estimators, on top of Create ML and Core ML. BifrOSt has no transformer or estimator framework and no counterpart for these Apple-only training pipelines.",
+  "rea_evidence": "ev_3ecb9bef21fe1294d931b197dae0a04536be15eb4d6c14605fa3b94c160e5db2",
+  "features": [
+    {"feature": "Image components", "apple": "ImageReader, ImageFeaturePrint, ImageCropper, ImageScaler, ImageBlur", "bifrost": "none", "status": "n/a", "note": "image decoding exists (springboard/render/src/imgdec.rs) but there are no ML image transformers"},
+    {"feature": "Pose components", "apple": "Pose, JointPoint, HumanBodyPoseExtractor, HumanBodyActionCounter", "bifrost": "none", "status": "n/a", "note": "no body pose estimation in BifrOSt"},
+    {"feature": "Audio components", "apple": "AudioReader, AudioFeaturePrint, AudioConvertingTransformer", "bifrost": "none", "status": "n/a", "note": "audio playback and capture exist in springboard/audiod, but no feature extraction"},
+    {"feature": "Time-based components", "apple": "SlidingWindows, Downsampler, LinearTimeSeriesForecaster, TemporalSequence", "bifrost": "none", "status": "n/a", "note": "no time-series pipeline"},
+    {"feature": "Object detection components", "apple": "DetectedObject, ObjectDetectionAnnotation, ObjectDetectionMetrics", "bifrost": "none", "status": "n/a", "note": "no object detection"},
+    {"feature": "Tabular components", "apple": "TabularTransformer, TabularEstimator, ColumnSelector, ColumnConcatenator", "bifrost": "none", "status": "n/a", "note": "no tabular pipeline API"},
+    {"feature": "Transformer and estimator protocols", "apple": "Transformer, Estimator, SupervisedEstimator, UpdatableEstimator", "bifrost": "none", "status": "n/a", "note": "no shared pipeline protocols"}
+  ],
+  "gaps": [
+    "No transformer or estimator pipeline framework in the SDK or UI kits.",
+    "No model training or inference runtime that these components would feed."
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "framework": "Create ML",
+  "doc": "https://developer.apple.com/documentation/createml",
+  "macos_since": "10.14",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Create ML trains Core ML models (image, video, text, sound, motion and tabular) on the Mac, using Apple's ML toolchain and playgrounds. BifrOSt has no model training tool and no Core ML equivalent, and a desktop shell has no sensible counterpart for an Apple-only training pipeline.",
+  "rea_evidence": "ev_e24c7a246edccec4f18e0e3f9b175402ce98c59ba69e1102ef9becd24554ef64",
+  "features": [
+    {"feature": "Image models", "apple": "MLImageClassifier, MLObjectDetector, MLHandPoseClassifier", "bifrost": "none", "status": "n/a", "note": "image classifier training is tied to the Core ML toolchain"},
+    {"feature": "Video models", "apple": "MLActionClassifier, MLHandActionClassifier, MLStyleTransfer", "bifrost": "none", "status": "n/a", "note": "no video model training"},
+    {"feature": "Text models", "apple": "MLTextClassifier, MLWordTagger, MLGazetteer, MLWordEmbedding", "bifrost": "none", "status": "n/a", "note": "the keyboard word predictor (springboard/apps/keyboard/src/predict.rs) is a word list, not a trained model"},
+    {"feature": "Sound and motion models", "apple": "MLSoundClassifier, MLActivityClassifier", "bifrost": "none", "status": "n/a", "note": "no audio or motion model training"},
+    {"feature": "Tabular models and data", "apple": "MLClassifier, MLRegressor, MLRecommender, MLDataTable", "bifrost": "none", "status": "n/a", "note": "no tabular training API; the SDK has no data-table model"},
+    {"feature": "Model accuracy and metrics", "apple": "MLClassifierMetrics, MLRegressorMetrics, MLObjectDetectorMetrics", "bifrost": "none", "status": "n/a", "note": "no evaluation metrics for trained models"},
+    {"feature": "Training control", "apple": "MLJob, MLTrainingSession, MLTrainingSessionParameters, MLCheckpoint", "bifrost": "none", "status": "n/a", "note": "no asynchronous training sessions"}
+  ],
+  "gaps": [
+    "No model training tool or training session API of any kind (none in springboard/sdk/src/ or springboard/ui/src/).",
+    "No Core ML model runtime for apps to load trained models; a desktop app that needs ML would ship its own runtime."
+  ]
+}

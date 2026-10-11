@@ -1,0 +1,18 @@
+{
+  "framework": "USDKit (App Frameworks)",
+  "doc": "https://developer.apple.com/documentation/usdkit",
+  "macos_since": "27.0",
+  "status": "n/a",
+  "bifrost": "nothing found; no USD, scene-graph or RealityKit-style 3D layer in springboard/sdk/src/ or springboard/ui/src/",
+  "summary": "USDKit authors and renders 3D Universal Scene Description stages through RealityKit. BifrOSt has no USD reader or writer, no 3D scene graph and no 3D rendering API for apps, and the framework depends on Apple's RealityKit stack, so there is no sensible BifrOSt counterpart.",
+  "rea_evidence": "ev_d51a6d19c6b73d95ec87738a62923a1efff6ea4ab3642e71fabb161b525697e8",
+  "features": [
+    {"feature": "Stages, prims and layers (USD composition)", "apple": "USDStage, USDPrim, USDLayer", "bifrost": "nothing found", "status": "n/a", "note": "Apple doc: https://developer.apple.com/documentation/usdkit (Essentials). BifrOSt has no USD document model."},
+    {"feature": "Values and tokens", "apple": "USDValue, USDValueProtocol, USDToken", "bifrost": "nothing found", "status": "n/a", "note": "Apple doc: https://developer.apple.com/documentation/usdkit (Values and tokens)."},
+    {"feature": "Transforms", "apple": "USDTransformOperation", "bifrost": "nothing found", "status": "n/a", "note": "Apple doc: https://developer.apple.com/documentation/usdkit (Transforms). Transforms in the SDK are 2D view transforms only."},
+    {"feature": "RealityKit rendering of a stage", "apple": "USDStageComponent", "bifrost": "nothing found", "status": "n/a", "note": "Depends on RealityKit, an Apple-only rendering stack. Apple doc: https://developer.apple.com/documentation/usdkit (RealityKit rendering and playback)."},
+    {"feature": "Timeline playback of a stage", "apple": "USDPlayer", "bifrost": "nothing found", "status": "n/a", "note": "Apple doc: https://developer.apple.com/documentation/usdkit (RealityKit rendering and playback)."},
+    {"feature": "Render diagnostics", "apple": "USDRenderError", "bifrost": "nothing found", "status": "n/a", "note": "Apple doc: https://developer.apple.com/documentation/usdkit (Render diagnostics)."}
+  ],
+  "gaps": []
+}

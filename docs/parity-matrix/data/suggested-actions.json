@@ -1,0 +1,16 @@
+{
+  "framework": "Suggested Actions",
+  "doc": "https://developer.apple.com/documentation/suggestedactions",
+  "macos_since": "27.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Suggested Actions is a SuggestedActionsView that shows on-device action suggestions (events, reminders, locations) under messages in a messaging app. BifrOSt has no messaging app with a message thread view, so there is no counterpart to attach it to.",
+  "rea_evidence": "ev_8efffcb98a9ff221ea2f2591eb1693ec03001fdb0f871fa68d2dd88c647413f4",
+  "features": [
+    {"feature": "Suggested actions view under a message", "apple": "SuggestedActionsView, init(message:previousMessages:)", "bifrost": "nothing found", "status": "n/a", "note": "needs a messaging app with message threads; BifrOSt has none"},
+    {"feature": "Fetch and cache suggestions for a message", "apple": "SuggestedActionsView.generate(message:previousMessages:)", "bifrost": "nothing found", "status": "n/a", "note": "depends on the Apple on-device suggestion model"},
+    {"feature": "Per-message suggested actions flag", "apple": "Suggested Actions (Boolean property)", "bifrost": "nothing found", "status": "n/a", "note": "property of the messaging app's message view"},
+    {"feature": "Create event from proposed meeting time", "apple": "Essentials example: Calendar event from a proposed time", "bifrost": "springboard/apps/calendar-desktop (Calendar app)", "status": "partial", "note": "Calendar app exists, but no suggestion hook from messages"}
+  ],
+  "gaps": ["No messaging app or message view that could host the suggestions view", "No on-device suggestion model or API for message content"]
+}

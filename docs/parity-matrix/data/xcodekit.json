@@ -1,0 +1,18 @@
+{
+  "framework": "XcodeKit",
+  "doc": "https://developer.apple.com/documentation/xcodekit",
+  "macos_since": "10.12",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "XcodeKit extends the Xcode source editor with commands and text buffer access. It exists only inside Xcode, a macOS developer tool that BifrOSt does not run or host. BifrOSt has no equivalent source editor extension point.",
+  "rea_evidence": "ev_78fe20eb7957c148b47bd187c76aca3d11664f987eac2bd93b5434dacf678808",
+  "features": [
+    {"feature": "Source editor extension (essentials)", "apple": "XCSourceEditorExtension, Creating a Source Editor Extension", "bifrost": "none", "status": "n/a", "note": "Extension point lives in Xcode. BifrOSt apps are not hosted by an IDE."},
+    {"feature": "Editor commands", "apple": "XCSourceEditorCommand, XCSourceEditorCommandInvocation", "bifrost": "none", "status": "n/a", "note": "Commands appear in Xcode's Editor menu. No BifrOSt text editor exposes a command extension point."},
+    {"feature": "Source text buffer and selection", "apple": "XCSourceTextBuffer, XCSourceTextPosition, XCSourceTextRange", "bifrost": "none", "status": "n/a", "note": "Buffer access targets Xcode's editor. Text editing APIs for BifrOSt apps are covered by other frameworks (AppKit text, attributed strings)."},
+    {"feature": "XcodeKit version constants", "apple": "XcodeKit Version Constants", "bifrost": "none", "status": "n/a", "note": "Reports the Xcode version. Nothing to report on BifrOSt."}
+  ],
+  "gaps": [
+    "No IDE host: a source editor extension point would need an Xcode-like developer tool on BifrOSt, which does not exist. Not a gap to fill for a desktop."
+  ]
+}

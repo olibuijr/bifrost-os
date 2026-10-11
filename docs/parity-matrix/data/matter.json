@@ -1,0 +1,24 @@
+{
+  "framework": "Matter",
+  "doc": "https://developer.apple.com/documentation/matter",
+  "macos_since": "13.0",
+  "status": "gap",
+  "bifrost": "none for Matter or Thread; nearby: springboard/src/net/wifi.rs and springboard/src/net/wifi_config.rs (Wi-Fi credentials), springboard/src/bare/bluetooth.rs (BlueZ mgmt pairing), springboard/src/net/share.rs (LAN beacon)",
+  "summary": "Apple's Matter framework is a controller API for Matter smart-home accessories: commissioning, cluster reads and writes, and subscriptions. BifrOSt has no Matter, Thread or smart-home code and no SDK API for it. The network, Bluetooth pairing and LAN discovery pieces it would build on exist, but none of them speak Matter.",
+  "rea_evidence": "ev_4fba8af2b79b1f68820857e35d218726fe5948025c83cf73ddc4ee1a9725412c",
+  "features": [
+    {"feature": "Onboarding a Matter device (setup code, QR payload parsing)", "apple": "MTROnboardingPayloadParser, MTRQRCodeSetupPayloadParser, MTROptionalQRCodeInfo", "bifrost": "none", "status": "gap", "note": "No Matter onboarding payload parser. Bluetooth pairing exists for classic devices only (springboard/src/bare/bluetooth.rs, mgmt API pairing and link keys), not for Matter's BLE commissioning flow."},
+    {"feature": "Controller initialization (fabric, certificates, storage)", "apple": "MTRDeviceController, MTRDeviceControllerFactory, MTRFabricInfo, MTRStorage, MTRKeypair", "bifrost": "none", "status": "gap", "note": "No fabric or operational certificate issuer. Link keys are stored in bluetooth.ini (springboard/src/bare/bluetooth.rs), which is not a Matter credential store."},
+    {"feature": "Accessory commissioning (network credentials, Thread dataset)", "apple": "MTRCommissioningParameters, MTRThreadOperationalDataset, MTRDeviceAttestationInfo", "bifrost": "springboard/src/net/wifi.rs, springboard/src/net/wifi_config.rs (Wi-Fi only)", "status": "partial", "note": "Wi-Fi join and saved network configuration exist. There is no Thread network, no Thread border router and no device attestation."},
+    {"feature": "Accessory control (attribute read/write, command invoke, subscriptions)", "apple": "MTRDevice, MTRReadParams, MTRWriteParams, MTRSubscribeParams, MTRAttributePath, MTRCommandPath", "bifrost": "none", "status": "gap", "note": "No client for the Matter interaction model and no SDK API for accessories."},
+    {"feature": "Clusters (typed On/Off, Level Control, Switch and others)", "apple": "MTRBaseClusterLevelControl, MTRBaseClusterApplicationLauncher and about 200 more cluster classes", "bifrost": "none", "status": "gap", "note": "No cluster model of any kind. The control centre toggles in springboard/src/shell/control_center.rs are local system settings, not accessories."},
+    {"feature": "Local network discovery of accessories (DNS-SD and mDNS)", "apple": "Commissioned accessories are found over the local network by the controller (framework-internal)", "bifrost": "springboard/src/net/share.rs (UDP multicast beacon on 224.0.0.251:5354)", "status": "partial", "note": "A custom UDP multicast beacon exists for BifrOSt peers. It is not mDNS or DNS-SD and no service browsing is exposed to apps."}
+  ],
+  "gaps": [
+    "No Matter controller: no fabric, certificates, commissioning or interaction model, in the shell or the SDK.",
+    "No Thread support: no border router, no Thread network credentials and no OpenThread stack.",
+    "No mDNS or DNS-SD service discovery for apps. Only a custom LAN beacon exists (springboard/src/net/share.rs).",
+    "No BLE commissioning path. The Bluetooth module handles classic pairing only (springboard/src/bare/bluetooth.rs).",
+    "No SDK API or app-facing surface for smart-home accessories, and no Home-style app. Whether BifrOSt should add one is a product decision, not a technical gap."
+  ]
+}

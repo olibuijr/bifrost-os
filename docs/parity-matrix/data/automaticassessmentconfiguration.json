@@ -1,0 +1,17 @@
+{
+  "framework": "Automatic Assessment Configuration",
+  "doc": "https://developer.apple.com/documentation/automaticassessmentconfiguration",
+  "macos_since": "10.15.4",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Automatic Assessment Configuration starts a locked exam session, limiting desktop features. It needs an Apple-issued entitlement granted to educational apps on Apple's platforms. BifrOSt has no assessment or exam lockdown mode, and the feature is tied to Apple's entitlement process.",
+  "rea_evidence": "ev_eaa0e9e64b37e4052ad5e89b7bafd5395050072da18dfff1788cb8c593dc676d",
+  "features": [
+    {"feature": "Assessment session", "apple": "AEAssessmentSession, AEAssessmentConfiguration", "bifrost": "nothing found", "status": "n/a", "note": "Needs the Apple com.apple.developer.automatic-assessment-configuration entitlement, granted through Apple's request form"},
+    {"feature": "Assessment errors", "apple": "AEAssessmentError, AEAssessmentErrorDomain", "bifrost": "nothing found", "status": "n/a", "note": "Errors from the session above"},
+    {"feature": "Allowed binaries", "apple": "AEAssessmentBinaryExecutable, AEAssessmentBinaryExecutableConfiguration", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox)", "status": "n/a", "note": "The sandbox isolates apps but is not an exam lockdown; no exam allow-list API"},
+    {"feature": "Menu bar items kept during assessment", "apple": "AEMenuBarItem, AEAppleMenuItem", "bifrost": "springboard/src/shell/desktop_bar.rs (menu bar)", "status": "n/a", "note": "The menu bar has no assessment mode; the framework's structures have no counterpart"},
+    {"feature": "Account type for session", "apple": "AEUserAccountType", "bifrost": "nothing found", "status": "n/a", "note": "Apple account types; no exam account role"}
+  ],
+  "gaps": []
+}

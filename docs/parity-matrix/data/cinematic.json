@@ -1,0 +1,21 @@
+{
+  "framework": "Cinematic",
+  "doc": "https://developer.apple.com/documentation/cinematic",
+  "macos_since": "14.0",
+  "status": "n/a",
+  "bifrost": "nothing found; the shell camera (springboard/src/shell/camera/) captures from a webcam but has no Cinematic-mode asset support",
+  "summary": "Cinematic reads and edits depth-of-field video recorded by Apple's Cinematic mode, which needs Apple camera hardware and the Camera app's asset format. BifrOSt has no counterpart for that capture format, so the framework does not apply.",
+  "rea_evidence": "ev_ca58482c8d233d9365b7e6056afb479c6920ad6471e804a0d469070488353595",
+  "features": [
+    {"feature": "Playing and editing Cinematic mode video", "apple": "CNScript, CNDecision, CNDetectionTrack", "bifrost": "nothing found", "status": "n/a", "note": "depends on Cinematic-mode asset files with focus metadata"},
+    {"feature": "Reading and rendering Cinematic assets", "apple": "CNAssetInfo, CNCompositionInfo, CNRenderingSession", "bifrost": "nothing found", "status": "n/a", "note": "Apple asset format only"},
+    {"feature": "Editing Spatial Audio with an audio mix", "apple": "CNAssetSpatialAudioInfo, CNSpatialAudioRenderingStyle", "bifrost": "springboard/audiod (plain speaker and microphone service)", "status": "n/a", "note": "no spatial audio mix for Cinematic assets"},
+    {"feature": "Detection and focus decisions", "apple": "CNDetection, CNDecision, CNDetectionType", "bifrost": "nothing found", "status": "n/a", "note": "face, torso and pet detections come from Cinematic metadata"},
+    {"feature": "Custom object tracking", "apple": "CNObjectTracker, CNBoundsPrediction", "bifrost": "nothing found", "status": "n/a", "note": "no tracker in the shell or SDK"},
+    {"feature": "Still-image shallow depth of field", "apple": "CNImageRenderingSession, CNImageRenderingSessionConfiguration", "bifrost": "springboard/apps/photocraft-desktop (photo app, no depth-of-field rendering found)", "status": "n/a", "note": "Metal-based SDoF rendering with no BifrOSt counterpart"}
+  ],
+  "gaps": [
+    "Cinematic-mode asset reading and editing: no Apple Cinematic metadata or asset format on BifrOSt",
+    "Depth-of-field and focus-point rendering on video or stills"
+  ]
+}

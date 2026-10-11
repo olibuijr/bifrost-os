@@ -1,0 +1,20 @@
+{
+  "framework": "DriverKit",
+  "doc": "https://developer.apple.com/documentation/driverkit",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "nothing found: BifrOSt drives hardware through Linux kernel drivers (springboard/src/bare/kms.rs reads the DRM driver name from /sys; springboard/src/media/v4l2.rs and springboard/src/bare/bluetooth.rs talk to kernel interfaces). No app-facing driver SDK exists.",
+  "summary": "DriverKit is Apple's framework for user-space device drivers that ship as app extensions and are installed through System Extensions. BifrOSt has no equivalent: hardware support lives in the Linux kernel and the trusted shell, and apps get no driver API.",
+  "rea_evidence": "ev_57689a3919c1389288125837a8eef944bfe74120786ba818ab48a1be63ef187e",
+  "features": [
+    {"feature": "User-space driver extensions", "apple": "DriverKit, IOService, System Extensions (macOS)", "bifrost": "Linux kernel drivers (springboard/src/bare/kms.rs)", "status": "n/a", "note": "Apple-only driver model; BifrOSt has no user-space driver packaging or install path"},
+    {"feature": "Driver event management", "apple": "IODispatchQueue, IOInterruptDispatchSource, IOTimerDispatchSource, IODataQueueDispatchSource, OSAction", "bifrost": "none", "status": "n/a", "note": "kernel-side dispatch for drivers; no app-facing equivalent"},
+    {"feature": "Driver memory management", "apple": "IOBufferMemoryDescriptor, IOMemoryDescriptor, IOMemoryMap", "bifrost": "none", "status": "n/a", "note": "in-driver memory descriptors; not applicable to the Linux kernel model BifrOSt uses"},
+    {"feature": "Driver registry data types", "apple": "OSArray, OSDictionary, OSData, OSNumber, OSString, OSSerialization", "bifrost": "none", "status": "n/a", "note": "IORegistry object model; BifrOSt reads sysfs directly"},
+    {"feature": "Driver entitlements and user-client access", "apple": "com.apple.developer.driverkit entitlements, IOUserClient", "bifrost": "app sandbox (springboard/src/bare/app_policy.rs)", "status": "n/a", "note": "entitlements gate Apple driver extensions; BifrOSt's sandbox does not expose device access to apps"}
+  ],
+  "gaps": [
+    "No user-space driver framework; hardware support is only in the kernel and the trusted shell",
+    "No app-facing device access API beyond the existing sandbox grants (app_policy.rs)"
+  ]
+}

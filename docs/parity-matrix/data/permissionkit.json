@@ -1,0 +1,25 @@
+{
+  "framework": "PermissionKit",
+  "doc": "https://developer.apple.com/documentation/permissionkit",
+  "macos_since": "26.0",
+  "status": "os",
+  "bifrost": "springboard/src/shell/screentime/ (per-app limits, Downtime, allowed apps, Time Limit shield); springboard/src/shell/settings.rs (Screen Time pages). No app-facing SDK module.",
+  "summary": "PermissionKit lets an app ask a child's parent or guardian for a communication or app-update exception through a system UI. BifrOSt has no app-facing equivalent: the system layer enforces Screen Time limits and Downtime, and no SDK module lets an app send a permission question to a parent or receive the answer.",
+  "rea_evidence": "ev_cd9fa96eaa8c651fdce9299018cdf03ab50f910d59b0e3e092d23a839bec79fe",
+  "features": [
+    {"feature": "Creating a communication experience (AskCenter, PermissionQuestion, AskPermissionAction, AskError)", "apple": "AskCenter, PermissionQuestion, AskPermissionAction, AskError", "bifrost": "none in springboard/sdk/src/ (no module for parent requests)", "status": "gap", "note": "An app cannot send a permission question to a guardian. The request-and-answer flow does not exist in the SDK or the shell."},
+    {"feature": "Permission responses stream (responses(for:), PermissionResponse, PermissionChoice)", "apple": "responses(for:), PermissionResponse, PermissionChoice", "bifrost": "none", "status": "gap", "note": "No asynchronous result channel for a parent's answer. The control socket in springboard/sdk/src/control.rs is fire-and-forget for these purposes."},
+    {"feature": "Significant app update topic", "apple": "SignificantAppUpdateTopic", "bifrost": "springboard/src/shell/screentime/config.rs (set_allowed, grant)", "status": "os", "note": "The shell can allow or block an app and grant a time-limit ignore for 15 minutes or the rest of the day. Parent approval of app updates is not implemented, and apps cannot request it."},
+    {"feature": "Communication topic and handle (CommunicationTopic, CommunicationHandle)", "apple": "CommunicationTopic, CommunicationHandle", "bifrost": "none", "status": "n/a", "note": "Apple documents communication experiences as available only through iMessage. BifrOSt has no iMessage counterpart."},
+    {"feature": "Communication limits (CommunicationLimits, deprecated CommunicationLimitsButton)", "apple": "CommunicationLimits, CommunicationLimitsButton", "bifrost": "springboard/src/shell/screentime/config.rs (set_limit, limit_mins)", "status": "partial", "note": "Per-app daily time limits exist. They limit app use, not who a child may message, and there is no app-facing API for communication limits."},
+    {"feature": "Permission button UI (PermissionButton)", "apple": "PermissionButton", "bifrost": "springboard/src/shell/screentime/shield.rs (Time Limit shield with OK and Ignore Limit)", "status": "gap", "note": "The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."},
+    {"feature": "Question topic protocol (QuestionTopic)", "apple": "QuestionTopic", "bifrost": "none", "status": "gap", "note": "No protocol lets an app describe what it is asking a parent for."}
+  ],
+  "gaps": [
+    "No SDK API lets an app ask a parent or guardian for permission (AskCenter, PermissionQuestion, AskPermissionAction).",
+    "No asynchronous stream of parent responses (responses(for:), PermissionResponse) for apps.",
+    "No app-facing button or sheet that presents a parent-approval flow (PermissionButton).",
+    "Screen Time limits and Downtime are enforced by the shell but cannot be queried or requested by apps.",
+    "Parent approval of significant app updates (SignificantAppUpdateTopic) is not implemented."
+  ]
+}

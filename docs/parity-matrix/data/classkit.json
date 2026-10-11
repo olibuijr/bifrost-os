@@ -1,0 +1,18 @@
+{
+  "framework": "ClassKit",
+  "doc": "https://developer.apple.com/documentation/classkit",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "ClassKit reports assignable app content and student progress to Apple's Schoolwork app, which runs only inside Apple's education service. BifrOSt has no Schoolwork counterpart and no education progress service, so there is nothing to match.",
+  "rea_evidence": "ev_7650995ad9a5ea362b4c4d06acd5fc87926aea40e4ff453e51af1e73252d66c3",
+  "features": [
+    {"feature": "Enabling ClassKit in your app", "apple": "ClassKit Environment Entitlement, Enabling ClassKit in your app", "bifrost": "nothing found", "status": "n/a", "note": "entitlement tied to the Schoolwork service"},
+    {"feature": "Contexts (assignable content)", "apple": "CLSContext, CLSContextProvider", "bifrost": "nothing found", "status": "n/a", "note": "describes app content to Schoolwork, not a general API"},
+    {"feature": "Activities and progress", "apple": "CLSActivity", "bifrost": "nothing found", "status": "n/a", "note": "records student progress for teacher dashboards"},
+    {"feature": "Activity items (score, binary, quantity)", "apple": "CLSScoreItem, CLSBinaryItem, CLSQuantityItem", "bifrost": "nothing found", "status": "n/a", "note": "metrics for Schoolwork reports"},
+    {"feature": "ClassKit UI (assignment submit and withdraw)", "apple": "ClassKit UI collection", "bifrost": "nothing found", "status": "n/a", "note": "views depend on the Schoolwork assignment flow"},
+    {"feature": "Data store and errors", "apple": "CLSDataStore, CLSError", "bifrost": "nothing found", "status": "n/a", "note": "store is ClassKit-owned, no local equivalent"}
+  ],
+  "gaps": []
+}

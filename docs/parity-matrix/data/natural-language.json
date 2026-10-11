@@ -1,0 +1,29 @@
+{
+  "framework": "Natural Language",
+  "doc": "https://developer.apple.com/documentation/naturallanguage",
+  "macos_since": "10.14",
+  "status": "partial",
+  "bifrost": "bifrost_app::spellcheck (words tokenizer), bifrost_ui::text (word boundaries), bifrost_ui::detect (data detectors), bifrost_app::locale",
+  "summary": "BifrOSt has a word tokenizer (alphanumeric runs for spelling) and pattern-based data detection for links, dates, addresses and phone numbers. It has no language recognizer, no linguistic tagger (parts of speech, named entities, lemmas), no embeddings and no custom text model runtime; Locale only knows English and Icelandic.",
+  "rea_evidence": "ev_9e68febdd223107558efdf4b30d4323aefbf32ccac1dce92a912c41429217f7b",
+  "features": [
+    {"feature": "Tokenizing text (NLTokenizer)", "apple": "NLTokenizer, NLTokenUnit word, sentence, paragraph, document", "bifrost": "springboard/sdk/src/spellcheck.rs:99 (words), springboard/ui/src/text.rs:145 (next_word_end), springboard/ui/src/text.rs:163 (prev_word_start)", "status": "partial", "note": "word units only: words() splits on alphanumeric runs and keeps inner apostrophes; no sentence or paragraph units and no locale-aware segmentation (docs/bifrost-ui.md:672 says no UAX #29 and no CJK dictionary segmentation)"},
+    {"feature": "Language identification (NLLanguageRecognizer, NLLanguage)", "apple": "NLLanguageRecognizer (dominantLanguage, languageHypotheses, languageHints), NLLanguage", "bifrost": "springboard/sdk/src/locale.rs:11 (Lang: En, Is); springboard/apps/keyboard/src/main.rs:77 (input language chosen by the globe key)", "status": "gap", "note": "no text-to-language detection anywhere in the SDK or shell; the only language values are the two user-selected Locale languages"},
+    {"feature": "Script detection (NLScript)", "apple": "NLScript", "bifrost": "none found", "status": "gap", "note": "no script classifier; text rendering uses the font engine (springboard/render/src/font.rs) without a script API for apps"},
+    {"feature": "Parts of speech and lexical tagging (NLTagger, NLTag lexical class)", "apple": "NLTagger with NLTagScheme.lexicalClass, tags(in:unit:scheme:options:), enumerateTags", "bifrost": "none found", "status": "gap", "note": "no part-of-speech or lemma data; the spellcheck dictionary is a plain word list (springboard/apps/keyboard/src/words/en.txt) with no tags"},
+    {"feature": "Named entity recognition (NLTagger nameType)", "apple": "NLTagger with NLTagScheme.nameType, NLTag personalName, placeName, organizationName", "bifrost": "springboard/ui/src/detect.rs:9 (Kind: Link, Date, Address, Phone)", "status": "partial", "note": "pattern-based data detection only; people, places and organizations are not recognised, and the detector result is not merged with the spell checker (docs/bifrost-ui.md:1429)"},
+    {"feature": "Spelling-aware word lookup (companion, not Apple NL)", "apple": "NSSpellChecker is in AppKit, not Natural Language; listed here because Apple's NL word units feed it", "bifrost": "springboard/sdk/src/spellcheck.rs:46 (Dictionary trait), :54 (WordList), :166 (check_spelling)", "status": "partial", "note": "edit-distance-1 suggestions over a word list; no grammar, no bundled dictionary, no app adopts it yet (docs/bifrost-ui.md:1426-1429)"},
+    {"feature": "Text embedding and similarity (NLEmbedding)", "apple": "NLEmbedding: wordEmbedding(for:), sentenceEmbedding(for:), neighbors(for:maximumCount:distanceType:)", "bifrost": "none found in springboard/sdk/src or springboard/ui/src", "status": "gap", "note": "no vector model and no distance API for apps; quicksearch matches keywords and titles only (springboard/sdk/src/quicksearch.rs:18, :33)"},
+    {"feature": "Contextual embedding (NLContextualEmbedding)", "apple": "NLContextualEmbedding, NLContextualEmbeddingKey", "bifrost": "none found", "status": "gap", "note": "no on-device contextual model and no asset loader; Apple downloads per-script assets, which has no BifrOSt counterpart yet"},
+    {"feature": "Custom text models (NLModel, Create ML text classifier and word tagger)", "apple": "NLModel, Create ML text classifier and word tagger", "bifrost": "none found in the SDK", "status": "gap", "note": "no API to load or run a trained text model in apps; the shell has no ML text runtime"},
+    {"feature": "Locale-aware text formatting (related to language data)", "apple": "Not in Natural Language; listed as the closest locale service", "bifrost": "springboard/sdk/src/locale.rs (Locale), springboard/ui/src/format.rs (number, date, byte, measurement formatters)", "status": "partial", "note": "built-in data covers en and is only (docs/bifrost-ui.md:1343); no plural rules and no other languages"}
+  ],
+  "gaps": [
+    "Language recognizer: no text language detection and no hypotheses API",
+    "Linguistic tagger: no lexical class, lemma, name type or script tags for apps",
+    "Embeddings: no word or sentence vectors and no nearest-neighbour search for apps",
+    "Custom NLModel runtime for classifiers and word taggers",
+    "Sentence and paragraph tokenization; word segmentation is alphanumeric runs, not UAX #29",
+    "Named entity recognition: data detectors cover only link, date, address and phone"
+  ]
+}

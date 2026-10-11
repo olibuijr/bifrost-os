@@ -1,0 +1,17 @@
+{
+  "framework": "PushKit",
+  "doc": "https://developer.apple.com/documentation/pushkit",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "springboard/sdk/src/usernotif.rs (local notifications only; no device token or push service)",
+  "summary": "PushKit delivers wake-up pushes for watchOS complications, file providers and VoIP calls through Apple Push Notification service. BifrOSt has local notifications only and no APNs-style push delivery, so the framework has no counterpart on the PC desktop.",
+  "rea_evidence": "ev_3160c513b74b66b7a5394c1384772f021f9b31db8c6038f47151c498c203c669",
+  "features": [
+    {"feature": "Push registration and device token", "apple": "PKPushRegistry, PKPushRegistryDelegate, PKPushCredentials", "bifrost": "springboard/sdk/src/usernotif.rs (local notifications only)", "status": "n/a", "note": "The token is issued by Apple Push Notification service; BifrOSt has no such service"},
+    {"feature": "VoIP push types", "apple": "PKPushType, Responding to VoIP Notifications from PushKit", "bifrost": "none", "status": "n/a", "note": "Needs APNs VoIP delivery; calls are not routed through push on the PC"},
+    {"feature": "Push payload", "apple": "PKPushPayload", "bifrost": "none", "status": "n/a", "note": "Payload comes from APNs"},
+    {"feature": "Push metrics export", "apple": "Exporting delivery metrics logs, Exporting broadcast push notification metrics", "bifrost": "none", "status": "n/a", "note": "Apple-hosted delivery service metrics"},
+    {"feature": "VoIP push metadata", "apple": "PKVoIPPushMetadata", "bifrost": "none", "status": "n/a", "note": "Metadata for APNs VoIP pushes only"}
+  ],
+  "gaps": []
+}

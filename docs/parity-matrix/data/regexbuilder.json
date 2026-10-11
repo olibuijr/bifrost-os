@@ -1,0 +1,17 @@
+{
+  "framework": "RegexBuilder",
+  "doc": "https://developer.apple.com/documentation/regexbuilder",
+  "macos_since": "13.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "RegexBuilder is a Swift result-builder DSL that compiles to Swift regex values. It is a Swift language library, and BifrOSt apps are Rust; no regex DSL exists in springboard/sdk or springboard/ui.",
+  "rea_evidence": "ev_9d60107d3926ade223a339ac90ed19c453c4cb6cb44defcdedb29a709d2fbc93",
+  "features": [
+    {"feature": "Regex components", "apple": "CharacterClass, Anchor, Lookahead, NegativeLookahead, ChoiceOf", "bifrost": "none", "status": "n/a", "note": "Swift-only DSL; Rust apps write patterns as strings"},
+    {"feature": "Quantifiers", "apple": "One, Optionally, ZeroOrMore, OneOrMore, Repeat, Local", "bifrost": "none", "status": "n/a", "note": "Swift-only result builder"},
+    {"feature": "Captures", "apple": "Capture, TryCapture, Reference", "bifrost": "none", "status": "n/a", "note": "Swift-only result builder"},
+    {"feature": "Result builders", "apple": "RegexComponentBuilder, AlternationBuilder", "bifrost": "none", "status": "n/a", "note": "Swift language feature"},
+    {"feature": "Character range operators", "apple": "...(Character, Character), ...(Unicode.Scalar, Unicode.Scalar)", "bifrost": "none", "status": "n/a", "note": "Swift operator overloads"}
+  ],
+  "gaps": ["Not applicable as a framework: the DSL is Swift-only. The Rust equivalent would be a crate choice, not a BifrOSt API."]
+}

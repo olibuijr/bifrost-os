@@ -1,0 +1,18 @@
+{
+  "framework": "Sensitive Content Analysis",
+  "doc": "https://developer.apple.com/documentation/sensitivecontentanalysis",
+  "macos_since": "14.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Sensitive Content Analysis checks images and video for nudity with Apple's on-device model, behind a code-signing entitlement, and ties the result to the system Sensitive Content Warning and Communication Safety settings. BifrOSt has no such model, no entitlement and no matching system setting.",
+  "rea_evidence": "ev_4473835901efeca8de1ba785de6d5b779cd8bc7301b48aacb81e83a05116e754",
+  "features": [
+    {"feature": "Setup and intervention flow", "apple": "Detecting sensitive content in media and providing intervention options (article)", "bifrost": "none", "status": "n/a", "note": "no classifier and no intervention UI"},
+    {"feature": "Authorization", "apple": "com.apple.developer.sensitivecontentanalysis.client entitlement", "bifrost": "none", "status": "n/a", "note": "Apple code-signing entitlement with no BifrOSt equivalent"},
+    {"feature": "Image and video file analysis", "apple": "SCSensitivityAnalyzer, SCSensitivityAnalysisPolicy", "bifrost": "none", "status": "n/a", "note": "decoders exist (springboard/render/src/imgdec.rs) but nothing classifies content"},
+    {"feature": "Video stream analysis", "apple": "SCVideoStreamAnalyzer", "bifrost": "none", "status": "n/a", "note": "no frame classifier"},
+    {"feature": "Analysis results", "apple": "SCSensitivityAnalysis", "bifrost": "none", "status": "n/a", "note": ""},
+    {"feature": "Testing", "apple": "Apple-issued QR code and test profile", "bifrost": "none", "status": "n/a", "note": "tied to Apple's Communication Safety"}
+  ],
+  "gaps": []
+}

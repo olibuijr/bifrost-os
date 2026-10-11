@@ -1422,13 +1422,11 @@ Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types 
 - **Panel.** `PreviewPanel`: `set_items` (`dataSource`, at most 16 items per message, URL cut to 256 bytes, title to 96), `current_preview_item_index` (always clamped), `step` (arrows, no wrap), `reload_data`, `make_key_and_order_front`, `close`, `toggle` (Space). `PreviewItem` is `previewItemURL` + `previewItemTitle`.
 - **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
 - **Gaps.** The shell does not draw the floating panel yet (the message is decoded and ignored), and no app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
-||||||| 4f167d99
 
 ## Spell checking (`NSSpellChecker`, `NSTextCheckingResult`)
 
 `bifrost_app::spellcheck`: `words(text)` tokenizer (byte ranges, keeps inner apostrophes), `Dictionary` trait (hunspell or other backends plug in), `WordList` (in-memory, edit-distance-1 suggestions), `SpellChecker` with `check_spelling`, `correction`, `guesses`, `learn_word`/`unlearn_word` (persisted in `UserDefaults` key `NSSpellChecker.learnedWords`), `ignore_word` (checker lifetime), `available_languages`, `automatically_corrects_spelling` (flag only), and `CheckingType`/`CheckingTypes` (OptionSet) with `CheckingResult`.
 Gaps: no grammar checking (no data); `check` yields spelling only, link/date/address/phone stay in `controls::detect` and are not merged; ignore is not scoped by document tag; no bundled dictionary; no app adopts it yet (Notes and Wordcraft are next).
-||||||| 4f167d99
 
 ## Observable values (Combine / Observation parity, `bifrost_app::observable`)
 
@@ -1460,7 +1458,6 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
 ## Login window (`shell/login.rs`)
 
 Login window parity with the reference (`goldengate_refimages/27-Golden-Gate-Login-Window.png`): the date over a large semibold clock at the top, the avatar disc (initials; the account picture via `account::avatar_path` is not drawn yet), full name and a capsule password field with a dot mask and a return arrow low in the middle (62 % of the height), a message line, and a power button at the right of the status icons whose menu holds Sleep, Restart… and Shut Down… (the last two confirm in a sheet). The wallpaper stays clear behind it (a light veil only). Host preview: `PREVIEW_DIR=DIR cargo test preview_login -- --ignored`. Colours are `Pair`s resolved with `.now()`; sizes use `ui.pt()`. Authentication is `privd` `login.authenticate` on a worker thread (`Backend` trait, stubbed in tests); lockout countdown and the 450 ms shake follow the privd reply; a dead helper shows "Login service unavailable" while the power buttons keep working. Gaps: Caps Lock indicator needs a key-state source (`Login.caps` is wired but nothing sets it); no biometric or paired-device unlock; no user switching (single account); no keyboard-layout status item. Stage 1 (0.5.29): the shell still runs as root and asks privd over its socket; stage 2 moves the shell to the user (docs/privd-protocol.md).
-||||||| 935837f4
 
 
 ## Undo (NSUndoManager parity)
@@ -1497,7 +1494,6 @@ undo handler is not supported; `remove_all_actions(target)` drops a whole group 
 `groupsByEvent` is off by default and needs the app to call `end_event`; `actionIsUndoable` and `undoNestedGroup` are
 not provided; Files has no Redo (its stack is a plain list of reversible operations); the control-socket undo
 (`undo` RPC) is separate from the menu titles.
-||||||| 935837f4
 
 
 
@@ -1529,7 +1525,6 @@ Gaps (not matched yet):
 - Minimize from Show Desktop and Overview, and foreign (native Wayland) windows, do not animate.
 - Hot corners and the title-bar double-click prefs are unchanged (not adjacent).
 - Nothing here was built or run when written; the unit tests in `window_fx.rs` and `apphost.rs` cover the math.
-||||||| 935837f4
 
 
 ## Workspace (NSWorkspace parity, `bifrost_app::workspace`)
@@ -1566,7 +1561,6 @@ Gaps (explicit):
   but delivers no file. `icon_for_*` return glyph names, not images. No `open(_:configuration:)` options (activates, hides, new instance), no
   `runningApplications` details beyond ids, no `urlForApplication` path (apps have no URL an app may use), no `selectFile(_:inFileViewerRootedAtPath:)`.
 - Not verified on a device or built; the lead runs the tests.
-||||||| 935837f4
 
 
 ## State restoration (NSWindowRestoration parity)

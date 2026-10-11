@@ -1,0 +1,15 @@
+{
+  "framework": "PassKit (Apple Pay and Wallet)",
+  "doc": "https://developer.apple.com/documentation/passkit",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "PassKit covers Apple Pay payments and Wallet passes, both of which depend on Apple's payment networks and the Wallet service. BifrOSt has no payment or pass counterpart, and the framework is not planned for the PC desktop.",
+  "rea_evidence": "ev_a5ea0a42f4932f899ae505f8f9aef7c193c43d275d5e0f5ba5b1e78c71e6d3b0",
+  "features": [
+    {"feature": "Apple Pay payments", "apple": "Apple Pay topic (https://developer.apple.com/documentation/passkit/apple-pay)", "bifrost": "none", "status": "n/a", "note": "Needs Apple Pay merchant accounts and Apple's payment network"},
+    {"feature": "Wallet passes", "apple": "Wallet topic (https://developer.apple.com/documentation/passkit/wallet)", "bifrost": "none", "status": "n/a", "note": "Passes are issued and updated through the Wallet app and Apple push service"},
+    {"feature": "Apple Pay merchandising views", "apple": "ApplePayMerchandisingView, ApplePayMerchandisingStyle, ApplePayMerchandisingAction, ApplePayMerchandisingPartnerConfiguration", "bifrost": "none", "status": "n/a", "note": "Apple Pay brand UI for merchants; no BifrOSt equivalent"}
+  ],
+  "gaps": []
+}

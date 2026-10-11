@@ -1,0 +1,30 @@
+{
+  "framework": "PaperKit",
+  "doc": "https://developer.apple.com/documentation/paperkit",
+  "macos_since": "26.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor), springboard/apps/freeform-desktop/src/freeform.rs (canvas app), springboard/sdk/src/print.rs and springboard/sdk/src/share.rs (no markup API)",
+  "summary": "PaperKit is an app-facing markup framework: view controllers, a vector-style markup data model with shapes, text, images, links and a loupe, and a feature set. BifrOSt has freehand drawing only (pen, marker, pencil, eraser, colours, undo) in the shell's screenshot editor and in the Freeform app, both flattened to PNG; neither exposes an SDK markup API, and no shape, text, image, link, loupe or editable data model exists.",
+  "rea_evidence": "ev_a61684a00e10c784cc74a052a0be74a0d8fbc2e196f4f9b28c6df2b203c298c4",
+  "features": [
+    {"feature": "Markup view controller (interactive canvas)", "apple": "PaperMarkupViewController, MarkupEditViewController, MarkupToolbarViewController", "bifrost": "springboard/src/shell/markup.rs (Markup struct, touch, draw); opened from springboard/src/shell/mod.rs:3782 and :3801", "status": "os", "note": "Shell-only editor for screenshot captures. Apps get no view controller or SDK type for it."},
+    {"feature": "Freehand drawing tools", "apple": "PaperKit drawings on PencilKit (PKDrawing content)", "bifrost": "springboard/src/shell/markup.rs:20 (Tool: Pen, Marker, Pencil, Eraser), :29 (brush widths and opacity); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser)", "status": "partial", "note": "Stroke widths and opacity are fixed per tool. No stylus pressure, tilt or stroke editing."},
+    {"feature": "Undo for markup edits", "apple": "Undo of markup changes through the view controller and its undo manager", "bifrost": "springboard/src/shell/markup.rs:215 (undo), test at :331; springboard/apps/freeform-desktop/src/freeform.rs:207 (push_undo)", "status": "partial", "note": "Undo only. No redo found."},
+    {"feature": "Insertion menu for markup elements", "apple": "MarkupEditViewController (iOS, iPadOS, visionOS), MarkupToolbarViewController (macOS)", "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:140 (bar: tool buttons, colour well, Undo, Clear, Save)", "status": "gap", "note": "The Freeform toolbar offers drawing tools only. No menu inserts shapes, text, images or links into a canvas."},
+    {"feature": "Shapes and text boxes", "apple": "ShapeMarkup, ShapeConfiguration", "bifrost": "springboard/src/shell/markup.rs:252 (disc, raster stamp); springboard/apps/freeform-desktop/src/freeform.rs:215 (stamp, raster)", "status": "gap", "note": "Marks are rasterised stamps. Nothing is stored as a shape or text object that can be selected or restyled."},
+    {"feature": "Images placed on the canvas", "apple": "ImageMarkup", "bifrost": "springboard/src/shell/markup.rs:55 (Markup holds the captured base image; drawn under the strokes)", "status": "gap", "note": "The captured screenshot is the only image; no app can place its own image element."},
+    {"feature": "Links and loupe magnifier", "apple": "LinkMarkup, LoupeMarkup, MarkupInteractions", "bifrost": "none found", "status": "gap", "note": "No tappable link element and no magnifier element in the markup canvas."},
+    {"feature": "Markup data model and persistence", "apple": "PaperMarkup, MarkupOrderedSet, MarkupID", "bifrost": "springboard/src/shell/markup.rs (Stroke list in memory, flattened on Done); springboard/apps/freeform-desktop/src/freeform.rs:336 (save writes a flattened PNG to the Photos folder)", "status": "gap", "note": "Strokes are discarded after save. No editable, reloadable data model and no element IDs."},
+    {"feature": "Feature set and rendering options", "apple": "FeatureSet, RenderingOptions, background views, HDR", "bifrost": "none found; the shell colour row is fixed in springboard/src/shell/markup.rs", "status": "gap", "note": "No app-facing switch for tools, colours or rendering."},
+    {"feature": "Adornments over markup", "apple": "MarkupAdornment", "bifrost": "springboard/src/shell/markup.rs:99 (bar), :104 (tray), :124 (button): shell chrome only", "status": "gap", "note": "Shell chrome is drawn by the shell and is not an app-facing adornment type."},
+    {"feature": "Auto-resizing of markup", "apple": "MarkupAutoresizing", "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:122 (set_size); the shell editor sizes to the capture", "status": "gap", "note": "Canvas size follows the window or capture. No resize policy for markup content."},
+    {"feature": "Markup errors", "apple": "MarkupError (encode and decode failures)", "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:336 (save returns Result<String, String>)", "status": "partial", "note": "Save failures are reported as strings. No typed error for markup data."}
+  ],
+  "gaps": [
+    "No app-facing SDK markup API: no view controller, no markup data model, no shared type. Apps cannot embed a markup canvas.",
+    "No vector elements: shapes, text boxes, images, links and loupes are all missing; every mark is a raster stamp.",
+    "No editable, reloadable markup document; the shell and Freeform save a flattened PNG and discard the strokes.",
+    "No redo, no stroke selection or editing, no stylus pressure or tilt.",
+    "No feature set or rendering options exposed to apps."
+  ]
+}

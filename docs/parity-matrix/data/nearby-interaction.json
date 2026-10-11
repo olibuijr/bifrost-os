@@ -1,0 +1,19 @@
+{
+  "framework": "Nearby Interaction",
+  "doc": "https://developer.apple.com/documentation/nearbyinteraction",
+  "macos_since": "11.0",
+  "status": "n/a",
+  "bifrost": "none. No Ultra Wideband ranging exists. Nearest counterpart is the Bluetooth stack in springboard/src/bare/bluetooth.rs, which does not measure distance or direction.",
+  "summary": "Nearby Interaction measures the distance and direction of peers with the Ultra Wideband chip in iPhone, Apple Watch and partnered accessories. BifrOSt has no UWB hardware support and no ranging API, and the desktop targets PC hardware that has no UWB chip, so the framework has no counterpart.",
+  "rea_evidence": "ev_1828ebad5c74125853aabafac5b4e0392f187f5e74db9d6803dc95c97170a409",
+  "features": [
+    {"feature": "Session and peer discovery", "apple": "NISession, NISessionDelegate, discovery tokens", "bifrost": "none", "status": "n/a", "note": "Needs a UWB chip on both peers; PC hardware has none."},
+    {"feature": "Peer configuration (iPhone and Watch)", "apple": "NINearbyPeerConfiguration", "bifrost": "none", "status": "n/a", "note": "Distance and direction from UWB; Apple-only hardware."},
+    {"feature": "Third-party accessory configuration", "apple": "NINearbyAccessoryConfiguration, Nearby Interaction Accessory Protocol", "bifrost": "none", "status": "n/a", "note": "Accessory ranging needs a UWB radio on the host."},
+    {"feature": "Nearby object measurements", "apple": "NINearbyObject (distance, direction)", "bifrost": "none", "status": "n/a", "note": "No ranging data source on this platform."},
+    {"feature": "Session convergence and user coaching", "apple": "NIAlgorithmConvergence, camera assistance", "bifrost": "none", "status": "n/a", "note": "Depends on the UWB and ARKit session pipeline."},
+    {"feature": "Downlink time difference of arrival ranging", "apple": "DL-TDOA anchor ranging (articles)", "bifrost": "none", "status": "n/a", "note": "Anchor-based indoor positioning needs UWB anchors."},
+    {"feature": "Errors", "apple": "NIError, NIErrorDomain", "bifrost": "none", "status": "n/a", "note": "Error domain only exists with the framework."}
+  ],
+  "gaps": []
+}

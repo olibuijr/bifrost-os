@@ -1,0 +1,21 @@
+{
+  "framework": "RealityKit",
+  "doc": "https://developer.apple.com/documentation/realitykit",
+  "macos_since": "10.15",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "RealityKit is an AR-first 3D simulation and rendering framework for Apple platforms, built around ARKit anchors, visionOS immersive spaces and Reality Composer Pro assets. BifrOSt is a 2D macOS-style desktop with no AR, spatial or 3D scene layer, so there is no counterpart to map.",
+  "rea_evidence": "ev_da4714383b65295af780ed17ca7c0e90a7bd6d018accc7f8a114c44e41452e32",
+  "features": [
+    {"feature": "Entities and components", "apple": "Entity, Component (Essentials)", "bifrost": "none", "status": "n/a", "note": "The shell and apps are 2D retained views (springboard/sdk/src/view/); no scene graph."},
+    {"feature": "Scenes and systems", "apple": "Scenes, Systems, Events (Scene management and logic)", "bifrost": "none", "status": "n/a", "note": "No per-frame entity simulation API exists."},
+    {"feature": "AR anchors and presentation", "apple": "Anchors, Views and attachments, Presentation UI", "bifrost": "none", "status": "n/a", "note": "No AR tracking or camera-anchored content on BifrOSt."},
+    {"feature": "Physics and collision", "apple": "Collision detection, Simulations and motion, Physics joints and pins", "bifrost": "none", "status": "n/a", "note": "No physics engine in the desktop stack."},
+    {"feature": "Navigation meshes", "apple": "NavigationMeshComponent, NavigationController", "bifrost": "none", "status": "n/a", "note": "Not applicable to a 2D desktop."},
+    {"feature": "Gaussian splats and compute graphs", "apple": "GaussianSplatComponent, ComputeGraphComponent", "bifrost": "springboard/render (GPU presenter only)", "status": "n/a", "note": "The GPU presenter in springboard/src/gpu/wl.rs draws only 2D surfaces and glass; no 3D splat or compute-graph path."}
+  ],
+  "gaps": [
+    "No 3D scene or entity layer in the SDK",
+    "No AR or spatial anchoring; the platform does not target visionOS or ARKit-class hardware"
+  ]
+}

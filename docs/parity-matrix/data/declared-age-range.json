@@ -1,0 +1,16 @@
+{
+  "framework": "Declared Age Range",
+  "doc": "https://developer.apple.com/documentation/declaredagerange",
+  "macos_since": "26.0",
+  "status": "n/a",
+  "bifrost": "nothing found",
+  "summary": "Apple's age-range API returns an age declaration that is set by the Apple Account holder or a Family Sharing parent and confirmed through Apple's own account and payment checks. It needs Apple account and Family Sharing services and an Apple-issued entitlement, and BifrOSt has none of these, so there is no counterpart to build.",
+  "rea_evidence": "ev_86d44e873b2713b763da47682e3a3625c60ae11e9aba2025cf0e6b7020714d9f",
+  "features": [
+    {"feature": "Age range request (AgeRangeService)", "apple": "AgeRangeService, DeclaredAgeRangeAction", "bifrost": "nothing found", "status": "n/a", "note": "Depends on Apple account and Family Sharing data; BifrOSt Account (bifrost-cloud) has no age declaration"},
+    {"feature": "Entitlement gate (com.apple.developer.declared-age-range)", "apple": "com.apple.developer.declared-age-range entitlement", "bifrost": "springboard/src/bare/app_policy.rs (entitlements, first-party only)", "status": "n/a", "note": "The entitlement is an Apple-issued capability; BifrOSt's own entitlement mechanism is unrelated and has no age data behind it"},
+    {"feature": "Significant change acknowledgment (SignificantUpdateAction)", "apple": "SignificantUpdateAction", "bifrost": "nothing found", "status": "n/a", "note": "System sheet for age-related update consent; no BifrOSt counterpart"},
+    {"feature": "Age-appropriate tailoring and parental controls", "apple": "Declared Age Range overview (adults, teens, children)", "bifrost": "nothing found", "status": "n/a", "note": "Family-level parental controls are not part of BifrOSt; no age data source exists"}
+  ],
+  "gaps": []
+}
