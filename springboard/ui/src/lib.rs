@@ -584,6 +584,8 @@ pub mod launch;
 pub mod detect;
 pub mod prefs_layout;
 pub mod search;
+pub mod textfind;
+pub mod textlist;
 pub mod pathbar;
 pub mod constraint;
 pub mod table;
