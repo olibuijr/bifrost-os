@@ -649,6 +649,8 @@ pub mod extension;
 pub mod extensions;
 pub mod clip_buffer;
 pub mod recording;
+pub mod script;
+pub mod writing_assist;
 pub mod vcard;
 pub mod contact_groups;
 pub mod contact_changes;
