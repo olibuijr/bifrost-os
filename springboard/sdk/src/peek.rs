@@ -1,6 +1,7 @@
 //! Preview (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`).
 //!
-//! [`PreviewPanel`] is the data source: an ordered list of [`PreviewItem`]s and a current index that is always clamped.
+//! [`PreviewPanel`] holds an ordered list of [`PreviewItem`]s and a current index that is always clamped. An app either
+//! hands it a list or pulls one from a [`PreviewDataSource`] (at most [`MAX_ITEMS`]). Each item carries an [`ItemState`].
 //! [`PreviewPanel::make_key_and_order_front`] sends `ToShell::Preview` (the shell draws the floating panel) and
 //! [`PreviewPanel::toggle`] is the Space-bar behaviour. Thumbnails: [`thumbnail_path`] names the cached PNG for a file and
 //! size, and [`ThumbnailCache`] remembers which were generated (an `NativeCache`, see `crate::cache`).
@@ -12,9 +13,41 @@ pub use bifrost_ui::preview::{Attachment, Content, ModelError, Registry, Reply, 
 use crate::proto::ToShell;
 use crate::Ctx;
 
+/// `previewItemDisplayState`: how far an item's preview has got. The app sets it. The wire message carries only the URL
+/// and title, so the shell does not draw this state yet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ItemState {
+    /// The preview content is still being produced.
+    Loading,
+    #[default]
+    Ready,
+    /// The item cannot be previewed.
+    Failed,
+}
+
+/// `QLPreviewPanelDataSource`: the panel pulls its items from here instead of being handed a list.
+pub trait PreviewDataSource {
+    /// `numberOfPreviewItems(in:)`
+    fn number_of_items(&self) -> usize;
+    /// `previewPanel(_:previewItemAt:)`: None past the end.
+    fn item_at(&self, index: usize) -> Option<PreviewItem>;
+}
+
+impl PreviewDataSource for Vec<PreviewItem> {
+    fn number_of_items(&self) -> usize {
+        self.len()
+    }
+
+    fn item_at(&self, index: usize) -> Option<PreviewItem> {
+        self.get(index).cloned()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct PreviewPanel {
     items: Vec<PreviewItem>,
+    /// One display state per item, kept in step with `items`.
+    states: Vec<ItemState>,
     index: usize,
     visible: bool,
 }
@@ -24,10 +57,46 @@ impl PreviewPanel {
         Self::default()
     }
 
-    /// `dataSource` items, in order; the current index is clamped into the new list.
+    /// `dataSource` items, in order; the current index is clamped into the new list. Every item starts `Ready`.
     pub fn set_items(&mut self, items: Vec<PreviewItem>) {
+        self.states = vec![ItemState::Ready; items.len()];
         self.items = items;
         self.index = self.index.min(self.items.len().saturating_sub(1));
+    }
+
+    /// Pulls the items from `source`, at most [`MAX_ITEMS`], and clamps the index as [`PreviewPanel::set_items`] does.
+    /// Does not send anything.
+    pub fn load_from(&mut self, source: &dyn PreviewDataSource) {
+        let n = source.number_of_items().min(MAX_ITEMS);
+        let items = (0..n).filter_map(|i| source.item_at(i)).collect();
+        self.set_items(items);
+    }
+
+    /// `reloadData` with a data source: pulls the items, then re-sends the list while visible.
+    pub fn reload_data_from(&mut self, source: &dyn PreviewDataSource, ctx: &Ctx) {
+        self.load_from(source);
+        self.reload_data(ctx);
+    }
+
+    /// `previewItemDisplayState` of item `i`; None past the end.
+    pub fn display_state(&self, i: usize) -> Option<ItemState> {
+        self.states.get(i).copied()
+    }
+
+    /// Sets the display state of item `i`. Returns false, and changes nothing, past the end.
+    pub fn set_display_state(&mut self, i: usize, state: ItemState) -> bool {
+        match self.states.get_mut(i) {
+            Some(s) => {
+                *s = state;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `refreshCurrentPreviewItem`: the wire has no per-item message, so this re-sends the whole list while visible.
+    pub fn refresh_current_item(&self, ctx: &Ctx) {
+        self.reload_data(ctx);
     }
 
     pub fn items(&self) -> &[PreviewItem] {
@@ -203,5 +272,71 @@ mod tests {
         assert_eq!(req.best_of(&[Representation::Icon]), Some(Representation::Icon));
         assert_eq!(req.best_of(&[Representation::Thumbnail, Representation::Icon]), Some(Representation::Thumbnail));
         assert_eq!(req.best_of(&[Representation::LowQuality]), None);
+    }
+
+    /// A data source that makes its items on demand, like an app with a large folder.
+    struct Generated(usize);
+
+    impl PreviewDataSource for Generated {
+        fn number_of_items(&self) -> usize {
+            self.0
+        }
+
+        fn item_at(&self, index: usize) -> Option<PreviewItem> {
+            (index < self.0).then(|| item(&format!("g{index}")))
+        }
+    }
+
+    #[test]
+    fn data_source_pull_keeps_order_and_caps_at_max_items() {
+        let mut p = PreviewPanel::new();
+        p.load_from(&Generated(3));
+        let titles: Vec<&str> = p.items().iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["g0", "g1", "g2"]);
+        p.load_from(&Generated(MAX_ITEMS + 9));
+        assert_eq!(p.items().len(), MAX_ITEMS);
+        assert_eq!(p.items().last().unwrap().title, format!("g{}", MAX_ITEMS - 1));
+    }
+
+    #[test]
+    fn data_source_pull_clamps_the_current_index() {
+        let mut p = PreviewPanel::new();
+        p.load_from(&Generated(5));
+        p.set_current_preview_item_index(4);
+        p.load_from(&Generated(2));
+        assert_eq!(p.current_preview_item_index(), 1);
+        assert_eq!(p.current_item().unwrap().title, "g1");
+        p.load_from(&Generated(0));
+        assert!(p.current_item().is_none());
+    }
+
+    #[test]
+    fn vec_is_a_data_source() {
+        let v = vec![item("a"), item("b")];
+        assert_eq!(v.number_of_items(), 2);
+        assert_eq!(v.item_at(1).unwrap().title, "b");
+        assert!(v.item_at(2).is_none());
+    }
+
+    #[test]
+    fn display_state_starts_ready_and_resets_with_the_list() {
+        let mut p = PreviewPanel::new();
+        p.set_items(vec![item("a"), item("b")]);
+        assert_eq!(p.display_state(0), Some(ItemState::Ready));
+        assert!(p.set_display_state(1, ItemState::Failed));
+        assert_eq!(p.display_state(1), Some(ItemState::Failed));
+        assert_eq!(p.display_state(0), Some(ItemState::Ready));
+        p.set_items(vec![item("a"), item("b")]);
+        assert_eq!(p.display_state(1), Some(ItemState::Ready));
+    }
+
+    #[test]
+    fn display_state_past_the_end_is_refused() {
+        let mut p = PreviewPanel::new();
+        p.set_items(vec![item("a")]);
+        assert!(!p.set_display_state(3, ItemState::Loading));
+        assert_eq!(p.display_state(3), None);
+        p.load_from(&Generated(0));
+        assert_eq!(p.display_state(0), None);
     }
 }
