@@ -6,6 +6,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 LAB_NIC=${LAB_NIC:-eno2}; LAB_IP=10.99.0.1; LAN_NIC=${LAN_NIC:-enp6s0}
 IV=out/iventoy/iventoy-1.0.44
+# the panel's native mode: iVentoy's boot menu sets the firmware display to this, and the kernel and installer inherit it.
+# Its default 1024x768 showed a 4:3 picture and then a blink to black when i915 switched to the panel's own mode.
+LAB_RESOLUTION=${LAB_RESOLUTION:-2560x1440}
+# an iVentoy still running from another directory (the repo was renamed) keeps the ports and saves its settings into a
+# deleted tree: stop it first
+for pid in $(pgrep -x iventoy || true); do
+  exe=$(sudo readlink -f "/proc/$pid/exe" 2>/dev/null || true)
+  case "$exe" in "$(realpath "$IV")"/*) ;; *) echo "stopping iVentoy from $exe"; sudo kill "$pid" || true; sleep 2 ;; esac
+done
 if [ "${1:-up}" = down ]; then
   sudo "$IV/iventoy.sh" stop || true
   sudo nft delete table ip bifrost_nat 2>/dev/null || true
@@ -44,6 +53,7 @@ if [[ -n $NEWEST ]]; then
   ID=$(J '{"method":"get_img_tree"}' | python3 -c "import sys,json; print(next((i['imgid'] for i in json.load(sys.stdin) if i['name']=='$NEWEST'),''))")
   [[ -n $ID ]] && J "{\"method\":\"set_default_image\",\"id\":$ID}" >/dev/null
   J '{"method":"set_default_timeout","deftimeout":5}' >/dev/null
+  J "{\"method\":\"set_boot_resolution\",\"resolution\":\"$LAB_RESOLUTION\"}" >/dev/null
   J "{\"method\":\"start_server\",\"ip\":\"$LAB_IP\",\"mask\":\"255.255.255.0\",\"gw\":\"$LAB_IP\",\"pool_begin\":\"10.99.0.200\",\"pool_end\":\"10.99.0.219\",\"dns_server\":\"1.1.1.1\",\"nic\":\"$LAB_NIC\"}"; echo
 fi
-echo "lab up: iVentoy on $LAB_NIC ($LAB_IP), default image ${NEWEST:-none} after 5 s"
+echo "lab up: iVentoy on $LAB_NIC ($LAB_IP), default image ${NEWEST:-none} after 5 s, boot display $(J '{"method":"get_config_all"}' | python3 -c 'import sys,json; print(json.load(sys.stdin).get("boot_resolution","?"))')"
