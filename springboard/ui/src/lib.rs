@@ -722,3 +722,6 @@ pub mod geofence;
 pub mod switch_scan;
 pub mod ax_audit;
 pub mod state_report;
+pub mod precipitation;
+pub mod weather_alert;
+pub mod weather_attribution;
