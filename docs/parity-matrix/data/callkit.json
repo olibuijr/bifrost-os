@@ -1,0 +1,16 @@
+{
+"framework":"CallKit","doc":"https://developer.apple.com/documentation/callkit","macos_since":"13.0","status":"partial",
+"bifrost":"springboard/ui/src/call.rs (CallCenter, CallAction, Handle, CallEvent). No shell call UI, no audio routing, no SDK binding, no call directory. Adjacent: springboard/sdk/src/usernotif.rs, springboard/audiod/src/",
+"summary":"BifrOSt has a pure call-state model: outgoing and incoming calls, answer, end, hold, mute, DTMF validation, transactions and an event list for observers. Nothing shows the call on screen, routes audio, reaches apps through the SDK, or handles caller ID and blocking.",
+"rea_evidence":"ev_e21f40d7e241ade388ee21096b91e0407c0892f83fc4d5473f2448be88498c3c",
+"features":[
+{"feature":"Provider and configuration","apple":"CXProvider, CXProviderDelegate, CXProviderConfiguration","bifrost":"springboard/ui/src/call.rs (CallCenter)","status":"partial","note":"state and requests exist; no provider registration, no configuration object, no delegate callbacks into an app"},
+{"feature":"Incoming call UI","apple":"CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes","bifrost":"springboard/ui/src/call.rs (CallCenter::report_incoming, CallAction::Answer)","status":"partial","note":"an incoming call can be reported and answered in the model; no full-screen or banner call interface, no push delivery"},
+{"feature":"Outgoing calls","apple":"CXCallController, CXTransaction, CXStartCallAction","bifrost":"springboard/ui/src/call.rs (CallCenter::start_outgoing, report_connected, perform_transaction)","status":"partial","note":"a dialing call connects on report; transactions apply all-or-nothing; no start-call request path from apps"},
+{"feature":"Call actions","apple":"End, DTMF, group, hold, mute, translate actions","bifrost":"springboard/ui/src/call.rs (CallAction)","status":"partial","note":"end, hold, mute and DTMF are modelled; group and translate are missing; DTMF tones are not played"},
+{"feature":"Call observation","apple":"CXCall, CXCallObserver, CXHandle","bifrost":"springboard/ui/src/call.rs (Call, Handle, CallCenter::calls, take_events)","status":"partial","note":"active calls and Added, Changed, Ended events are readable in-process; no SDK observer for apps and no cross-process delivery"},
+{"feature":"Caller ID and blocking","apple":"CXCallDirectoryProvider, Manager, ExtensionContext","bifrost":"none","status":"gap","note":"no call directory extension"},
+{"feature":"Default calling app","apple":"Preparing your app to be the default calling app","bifrost":"none","status":"gap","note":"no default-app setting for calling"}
+],
+"gaps":["Call provider registration and configuration in the SDK","Incoming call screen and banner in the shell","Audio routing and DTMF tone output for calls","Group and translate call actions","Active-call observation for apps over the SDK","Caller ID/blocking directory","Default calling app setting"]
+}
