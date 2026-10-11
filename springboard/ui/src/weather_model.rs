@@ -213,7 +213,7 @@ impl WeatherError {
 
 impl fmt::Display for WeatherError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.description())
+        f.write_str(WeatherError::description(*self))
     }
 }
 

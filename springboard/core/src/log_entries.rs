@@ -320,7 +320,10 @@ mod tests {
     #[test]
     fn format_string_splits_into_components_and_escapes_percent() {
         let c = parse_format("100%% of %{public}@ has %d items").unwrap();
-        assert_eq!(c.len(), 2);
+        // the text after the last placeholder is a component of its own, without a placeholder
+        assert_eq!(c.len(), 3);
+        assert_eq!(c[2].format_substring, " items");
+        assert!(c[2].placeholder.is_none());
         assert_eq!(c[0].format_substring, "100% of ");
         let p = c[0].placeholder.clone().unwrap();
         assert_eq!((p.category, p.privacy, p.spec), (ArgumentCategory::Text, Privacy::Public, '@'));

@@ -242,7 +242,7 @@ mod tests {
         s.push(Transcription::new(0.0..1.2, true, vec![Alternative::new("hello world", 0.9)]));
         s.push(Transcription::new(1.2..1.5, false, vec![Alternative::new("again", 0.5)]));
         s.push(Transcription::new(1.2..1.8, false, vec![Alternative::new("again now", 0.6)]));
-        assert_eq!(s.results().len(), 3);
+        assert_eq!(s.results().len(), 2, "the newer partial \"again now\" replaced \"again\"");
         assert_eq!(s.final_text(), "hello world");
         assert_eq!(s.text(), "hello world again now");
     }

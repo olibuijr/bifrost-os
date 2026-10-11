@@ -4,7 +4,8 @@
 //! translated ahead of time.
 
 use crate::error::ErrorCode;
-use bifrost_ui::translation::{language_code, LanguageAvailability, TranslationError};
+use bifrost_ui::translation::{language_code, LanguageAvailability};
+pub use bifrost_ui::translation::TranslationError;
 use std::cell::Cell;
 use std::collections::HashMap;
 

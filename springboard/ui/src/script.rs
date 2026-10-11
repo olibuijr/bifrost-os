@@ -267,8 +267,11 @@ mod tests {
 
     #[test]
     fn dominant_counts_characters_and_breaks_ties_by_first_seen() {
-        assert_eq!(dominant("abc Привет"), Some(Script::Latin));
-        assert_eq!(dominant("Привет abc"), Some(Script::Cyrillic));
+        // the larger count wins whatever comes first
+        assert_eq!(dominant("abc Привет"), Some(Script::Cyrillic));
+        // a tie goes to the script seen first
+        assert_eq!(dominant("abc жзи"), Some(Script::Latin));
+        assert_eq!(dominant("жзи abc"), Some(Script::Cyrillic));
         assert_eq!(dominant("ab ЖЖ"), Some(Script::Latin));
         assert_eq!(dominant("123 !?"), None);
     }
