@@ -18,6 +18,9 @@ pub mod fontprefs;
 pub mod filter;
 pub mod mesh;
 pub mod texture;
+pub mod colorfx;
+pub mod colorcube;
+pub mod gradient;
 
 #[cfg(test)]
 mod tests {
