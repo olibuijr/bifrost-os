@@ -17,9 +17,9 @@
     {
       "feature": "Action extension view controller",
       "apple": "FPUIActionExtensionViewController (prepare(forAction:itemIdentifiers:), prepare(forError:), extensionContext)",
-      "bifrost": "springboard/src/shell/docpanel.rs (open and save panel, shell-drawn); springboard/sdk/src/runtime.rs (document grant handoff)",
-      "status": "gap",
-      "note": "there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"
+      "bifrost": "springboard/ui/src/actionrequest.rs, springboard/sdk/src/extension.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-16, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"
     },
     {
       "feature": "Action extension context: complete or cancel",

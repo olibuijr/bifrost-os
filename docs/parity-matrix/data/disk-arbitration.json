@@ -2,19 +2,67 @@
   "framework": "Disk Arbitration",
   "doc": "https://developer.apple.com/documentation/diskarbitration",
   "macos_since": "10.4",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "No SDK or shell API for disk mount or unmount events. Partial system-layer disk enumeration in springboard/src/installer/disks.rs (lsblk, findmnt) and unmount in springboard/src/installer/plan.rs (installer only). Files shows no volumes (docs/bifrost-ui.md:571).",
   "summary": "BifrOSt has no mount, unmount, eject or disk-appearance API for apps, and no register-and-block (approval) mechanism. Disk handling exists only in the installer, which enumerates and erases disks with lsblk and findmnt, and the Files sidebar has no Volumes section.",
   "rea_evidence": "ev_44fd2af40872dc88326eef0af60b3d1056f2504e7bdd988a6a08e05e2138d1d1",
   "features": [
-    {"feature": "Disk description and lookup (DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskGetBSDName, DADiskCopyDescription)", "apple": "DADisk.h: DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskCopyDescription, DADiskGetBSDName", "bifrost": "springboard/src/installer/disks.rs (lsblk PATH,TYPE,RM,RO; SIZE; MODEL)", "status": "gap", "note": "Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."},
-    {"feature": "Session and run loop or dispatch queue scheduling (DASession)", "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue", "bifrost": "springboard/sdk/src/workspace.rs (NotificationCenter-based workspace events, no disk events)", "status": "gap", "note": "No disk session. Workspace events cover apps, sleep and wake only."},
-    {"feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)", "apple": "DADiskMount, DADiskMountWithArguments, DADiskUnmount, DADiskEject, DADiskRename", "bifrost": "springboard/src/installer/plan.rs:395 (umount in installer teardown only)", "status": "gap", "note": "Installer unmounts its own target; no app or shell API to mount, eject or rename a volume."},
-    {"feature": "Disk appeared, disappeared and description-changed callbacks (DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback)", "apple": "DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback, DARegisterDiskPeekCallback", "bifrost": "springboard/src/shell/apphost.rs:226 (disk_stamp watches only the apps directory, not block devices)", "status": "gap", "note": "No event when a USB stick or disk appears or leaves. disk_changed is an app-install stamp and is unrelated to hardware."},
-    {"feature": "Mount and unmount approval (DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback)", "apple": "DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback, DADissenter", "bifrost": "none", "status": "gap", "note": "No hook that lets an app or policy block a mount, unmount or eject. DADissenter has no counterpart."},
-    {"feature": "Disk claims (DADiskClaim, DADiskUnclaim, DADiskIsClaimed)", "apple": "DADiskClaim, DADiskUnclaim, DADiskIsClaimed, DADiskSetOptions, DADiskGetOptions", "bifrost": "none", "status": "gap", "note": "No exclusive-use claim on a disk. The installer uses shell commands, not a claim."},
-    {"feature": "Volumes in the Files sidebar", "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)", "bifrost": "springboard/apps/files (no volume code); springboard/src/bare/docbroker.rs (grants confined to the account home)", "status": "gap", "note": "docs/bifrost-ui.md:571 states mounted volumes and the Volumes section are not matched. Document grants cannot reach a mounted volume."},
-    {"feature": "Sandbox access to udev data for apps", "apple": "Not part of the framework (system-level device data)", "bifrost": "springboard/src/bare/app_policy.rs:245 (bubblewrap binds /sys and /run/udev read-only, try-bind)", "status": "os", "note": "The sandbox exposes device data to apps read-only, but no SDK API wraps it."}
+    {
+      "feature": "Disk description and lookup (DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskGetBSDName, DADiskCopyDescription)",
+      "apple": "DADisk.h: DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskCopyDescription, DADiskGetBSDName",
+      "bifrost": "springboard/src/installer/disks.rs (lsblk PATH,TYPE,RM,RO; SIZE; MODEL)",
+      "status": "gap",
+      "note": "Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."
+    },
+    {
+      "feature": "Session and run loop or dispatch queue scheduling (DASession)",
+      "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue",
+      "bifrost": "springboard/sdk/src/workspace.rs (NotificationCenter-based workspace events, no disk events)",
+      "status": "gap",
+      "note": "No disk session. Workspace events cover apps, sleep and wake only."
+    },
+    {
+      "feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)",
+      "apple": "DADiskMount, DADiskMountWithArguments, DADiskUnmount, DADiskEject, DADiskRename",
+      "bifrost": "springboard/src/installer/plan.rs:395 (umount in installer teardown only)",
+      "status": "gap",
+      "note": "Installer unmounts its own target; no app or shell API to mount, eject or rename a volume."
+    },
+    {
+      "feature": "Disk appeared, disappeared and description-changed callbacks (DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback)",
+      "apple": "DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback, DARegisterDiskPeekCallback",
+      "bifrost": "springboard/core/src/disk_events.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No event when a USB stick or disk appears or leaves. disk_changed is an app-install stamp and is unrelated to hardware."
+    },
+    {
+      "feature": "Mount and unmount approval (DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback)",
+      "apple": "DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback, DADissenter",
+      "bifrost": "springboard/core/src/disk_events.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook that lets an app or policy block a mount, unmount or eject. DADissenter has no counterpart."
+    },
+    {
+      "feature": "Disk claims (DADiskClaim, DADiskUnclaim, DADiskIsClaimed)",
+      "apple": "DADiskClaim, DADiskUnclaim, DADiskIsClaimed, DADiskSetOptions, DADiskGetOptions",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No exclusive-use claim on a disk. The installer uses shell commands, not a claim."
+    },
+    {
+      "feature": "Volumes in the Files sidebar",
+      "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)",
+      "bifrost": "springboard/apps/files (no volume code); springboard/src/bare/docbroker.rs (grants confined to the account home)",
+      "status": "gap",
+      "note": "docs/bifrost-ui.md:571 states mounted volumes and the Volumes section are not matched. Document grants cannot reach a mounted volume."
+    },
+    {
+      "feature": "Sandbox access to udev data for apps",
+      "apple": "Not part of the framework (system-level device data)",
+      "bifrost": "springboard/src/bare/app_policy.rs:245 (bubblewrap binds /sys and /run/udev read-only, try-bind)",
+      "status": "os",
+      "note": "The sandbox exposes device data to apps read-only, but no SDK API wraps it."
+    }
   ],
   "gaps": [
     "No disk mount, unmount, eject or appearance events for apps or shell (DARegister*Callback family).",

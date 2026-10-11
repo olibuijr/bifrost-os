@@ -2,18 +2,60 @@
   "framework": "Accessory Access",
   "doc": "https://developer.apple.com/documentation/accessoryaccess",
   "macos_since": "27.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none for USB accessory management; related: springboard/src/bare/input.rs (evdev device discovery), springboard/src/bare/docbroker.rs (file grants), springboard/src/bare/app_policy.rs (permission manifest)",
   "summary": "Accessory Access is a USB-only framework: an app registers listeners that match connected USB accessories through IOUSBHost and receives attach and detach events. BifrOSt has no SDK API for USB accessories, no matching criteria, no listener events and no USB permission grant. Input devices are handled inside the shell, not exposed to apps as accessories.",
   "rea_evidence": "ev_3028a6377a32f0776badf1386fc123695c24512c7074905b013c4690380d79f4",
   "features": [
-    {"feature": "Accessory manager", "apple": "AAUSBAccessoryManager (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymanager)", "bifrost": "none", "status": "gap", "note": "No SDK type manages USB accessories or the listeners attached to them. The SDK has no USB module under springboard/sdk/src/."},
-    {"feature": "Accessory object", "apple": "AAUSBAccessory (https://developer.apple.com/documentation/accessoryaccess/aausbaccessory)", "bifrost": "springboard/src/bare/input.rs (Device, device discovery by name hint)", "status": "gap", "note": "input.rs finds evdev input devices for the shell only. Apps get no accessory object for any USB device."},
-    {"feature": "Matching criteria", "apple": "AAUSBAccessoryMatchingCriteria (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymatchingcriteria)", "bifrost": "none", "status": "gap", "note": "Nothing matches USB devices by vendor, product or class for an app."},
-    {"feature": "Listener events (attach and detach)", "apple": "AAUSBAccessoryListener protocol (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorylistener)", "bifrost": "springboard/src/bare/sleep.rs (mains plug polling only)", "status": "gap", "note": "sleep.rs polls mains power by hand because sysfs gives no event. No app-facing hotplug event exists for USB accessories."},
-    {"feature": "Kernel USB enumeration and system visibility", "apple": "IOUSBHost (underlies the framework, per the landing page)", "bifrost": "springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)", "status": "os", "note": "Linux udev and sysfs run on the system and the sandbox can read them. Apps get no SDK API for this, and the sandbox binding is read-only."},
-    {"feature": "Permission and access grant for USB devices", "apple": "Accessory Access authorization (accessory matching and listener registration)", "bifrost": "springboard/src/bare/docbroker.rs (file grants); springboard/src/bare/app_policy.rs (permission manifest, no USB entitlement)", "status": "gap", "note": "docbroker grants file access only. The permission manifest has no USB device permission, so an app cannot request one."},
-    {"feature": "Errors", "apple": "AAError, AAErrorDomain (https://developer.apple.com/documentation/accessoryaccess/aaerror)", "bifrost": "none", "status": "gap", "note": "No error type for accessory operations. This row depends on the accessory API, which does not exist yet."}
+    {
+      "feature": "Accessory manager",
+      "apple": "AAUSBAccessoryManager (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymanager)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No SDK type manages USB accessories or the listeners attached to them. The SDK has no USB module under springboard/sdk/src/."
+    },
+    {
+      "feature": "Accessory object",
+      "apple": "AAUSBAccessory (https://developer.apple.com/documentation/accessoryaccess/aausbaccessory)",
+      "bifrost": "springboard/src/bare/input.rs (Device, device discovery by name hint)",
+      "status": "gap",
+      "note": "input.rs finds evdev input devices for the shell only. Apps get no accessory object for any USB device."
+    },
+    {
+      "feature": "Matching criteria",
+      "apple": "AAUSBAccessoryMatchingCriteria (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymatchingcriteria)",
+      "bifrost": "springboard/core/src/usb_descriptors.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing matches USB devices by vendor, product or class for an app."
+    },
+    {
+      "feature": "Listener events (attach and detach)",
+      "apple": "AAUSBAccessoryListener protocol (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorylistener)",
+      "bifrost": "springboard/src/bare/sleep.rs (mains plug polling only)",
+      "status": "gap",
+      "note": "sleep.rs polls mains power by hand because sysfs gives no event. No app-facing hotplug event exists for USB accessories."
+    },
+    {
+      "feature": "Kernel USB enumeration and system visibility",
+      "apple": "IOUSBHost (underlies the framework, per the landing page)",
+      "bifrost": "springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)",
+      "status": "os",
+      "note": "Linux udev and sysfs run on the system and the sandbox can read them. Apps get no SDK API for this, and the sandbox binding is read-only."
+    },
+    {
+      "feature": "Permission and access grant for USB devices",
+      "apple": "Accessory Access authorization (accessory matching and listener registration)",
+      "bifrost": "springboard/src/bare/docbroker.rs (file grants); springboard/src/bare/app_policy.rs (permission manifest, no USB entitlement)",
+      "status": "gap",
+      "note": "docbroker grants file access only. The permission manifest has no USB device permission, so an app cannot request one."
+    },
+    {
+      "feature": "Errors",
+      "apple": "AAError, AAErrorDomain (https://developer.apple.com/documentation/accessoryaccess/aaerror)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No error type for accessory operations. This row depends on the accessory API, which does not exist yet."
+    }
   ],
   "gaps": [
     "No USB accessory manager, so an app cannot register to watch USB devices.",

@@ -2,19 +2,67 @@
   "framework": "Link Presentation",
   "doc": "https://developer.apple.com/documentation/linkpresentation",
   "macos_since": "10.15",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/share.rs (URL sharing), springboard/ui/src/detect.rs (link detection), springboard/apps/news-desktop/src/pictures.rs (og:image scrape, app-local)",
   "summary": "Apple's framework fetches a URL's title, icon, image and video and draws a rich link view. BifrOSt has no SDK API for URL metadata or a rich link view. It can detect URLs in text and share them through the share sheet, and the News app scrapes og:image for its own pictures, but none of that is exposed to apps as link presentation.",
   "rea_evidence": "ev_d4d44f0872bf6ed35150fdc128d56f6b2030eb3e616629776c5349e32ba57754",
   "features": [
-    {"feature": "Fetching link metadata (LPMetadataProvider, LinkMetadata.init(fetching:))", "apple": "LPMetadataProvider, LinkMetadata, LPLinkMetadata", "bifrost": "none in springboard/sdk/src/ (no metadata fetch API); page fetch exists only for the browser in springboard/src/shell/browser/fetch.rs", "status": "gap", "note": "no SDK call returns a title, icon or image for an arbitrary URL; timeout and subresource options have no counterpart"},
-    {"feature": "Rich link view (LPLinkView)", "apple": "LPLinkView, init(metadata:), init(url:)", "bifrost": "none in springboard/sdk/src/ or springboard/ui/src/", "status": "gap", "note": "no placeholder or metadata-driven link card in the shared kit"},
-    {"feature": "Representative title, icon and image of a URL", "apple": "LPLinkMetadata.title, iconProvider, imageProvider", "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)", "status": "partial", "note": "News scrapes the og:image meta tag for its own article pictures; the logic is app-local and not an SDK API, and there is no icon lookup"},
-    {"feature": "Video of a link", "apple": "LPLinkMetadata.remoteVideoURL, LinkMetadata.remoteVideo", "bifrost": "none", "status": "gap", "note": "no video URL extraction"},
-    {"feature": "Sharing a URL with metadata to the share sheet", "apple": "LPLinkMetadata used as an activity item (share sheet rich preview)", "bifrost": "springboard/sdk/src/share.rs (show_picker), springboard/proto/src/rich.rs (Payload::Url)", "status": "partial", "note": "a URL is shared as plain text or URL; the picker shows no rich preview of the link"},
-    {"feature": "Receiving a shared URL", "apple": "share sheet and open-URL handoff (LPLinkMetadata for display)", "bifrost": "springboard/sdk/src/share.rs (receiving: Input::Open with https scheme)", "status": "partial", "note": "a shared URL arrives as Input::Open(url); the app gets no metadata with it"},
-    {"feature": "Recognising links in text", "apple": "not part of LinkPresentation; the link presentation starts from a URL", "bifrost": "springboard/ui/src/detect.rs (DetectKind::Link, links())", "status": "partial", "note": "a data detector finds http, https and www links in plain text; it does not feed a link view"},
-    {"feature": "Errors and macros (LPError, LPErrorDomain, LPError.Code)", "apple": "LPError, LPErrorDomain, LPError.Code", "bifrost": "none", "status": "gap", "note": "depends on the fetch API, which does not exist; the browser error page in springboard/src/shell/browser/fetch.rs is HTML, not a typed error"}
+    {
+      "feature": "Fetching link metadata (LPMetadataProvider, LinkMetadata.init(fetching:))",
+      "apple": "LPMetadataProvider, LinkMetadata, LPLinkMetadata",
+      "bifrost": "springboard/ui/src/linkmeta.rs (MetadataProvider",
+      "status": "partial",
+      "note": "Wave 2 (theme-24, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK call returns a title, icon or image for an arbitrary URL; timeout and subresource options have no counterpart"
+    },
+    {
+      "feature": "Rich link view (LPLinkView)",
+      "apple": "LPLinkView, init(metadata:), init(url:)",
+      "bifrost": "springboard/ui/src/linkmeta.rs (LinkView",
+      "status": "partial",
+      "note": "Wave 2 (theme-24, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no placeholder or metadata-driven link card in the shared kit"
+    },
+    {
+      "feature": "Representative title, icon and image of a URL",
+      "apple": "LPLinkMetadata.title, iconProvider, imageProvider",
+      "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)",
+      "status": "partial",
+      "note": "News scrapes the og:image meta tag for its own article pictures; the logic is app-local and not an SDK API, and there is no icon lookup"
+    },
+    {
+      "feature": "Video of a link",
+      "apple": "LPLinkMetadata.remoteVideoURL, LinkMetadata.remoteVideo",
+      "bifrost": "springboard/ui/src/linkmeta.rs (LinkMetadata.video)",
+      "status": "partial",
+      "note": "Wave 2 (theme-24, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no video URL extraction"
+    },
+    {
+      "feature": "Sharing a URL with metadata to the share sheet",
+      "apple": "LPLinkMetadata used as an activity item (share sheet rich preview)",
+      "bifrost": "springboard/sdk/src/share.rs (show_picker), springboard/proto/src/rich.rs (Payload::Url)",
+      "status": "partial",
+      "note": "a URL is shared as plain text or URL; the picker shows no rich preview of the link"
+    },
+    {
+      "feature": "Receiving a shared URL",
+      "apple": "share sheet and open-URL handoff (LPLinkMetadata for display)",
+      "bifrost": "springboard/sdk/src/share.rs (receiving: Input::Open with https scheme)",
+      "status": "partial",
+      "note": "a shared URL arrives as Input::Open(url); the app gets no metadata with it"
+    },
+    {
+      "feature": "Recognising links in text",
+      "apple": "not part of LinkPresentation; the link presentation starts from a URL",
+      "bifrost": "springboard/ui/src/detect.rs (DetectKind::Link, links())",
+      "status": "partial",
+      "note": "a data detector finds http, https and www links in plain text; it does not feed a link view"
+    },
+    {
+      "feature": "Errors and macros (LPError, LPErrorDomain, LPError.Code)",
+      "apple": "LPError, LPErrorDomain, LPError.Code",
+      "bifrost": "springboard/ui/src/linkmeta.rs (LinkError)",
+      "status": "partial",
+      "note": "Wave 2 (theme-24, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the fetch API, which does not exist; the browser error page in springboard/src/shell/browser/fetch.rs is HTML, not a typed error"
+    }
   ],
   "gaps": [
     "No SDK API that fetches a URL's title, icon, image and video (LPMetadataProvider equivalent), with a timeout and cancel",

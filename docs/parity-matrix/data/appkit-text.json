@@ -87,9 +87,9 @@
     {
       "feature": "Writing Tools",
       "apple": "NSWritingToolsCoordinator, writingToolsBehavior",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Assistant app exists but gives text views no rewrite or proofread hook"
+      "bifrost": "springboard/ui/src/writing_assist.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-14, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Assistant app exists but gives text views no rewrite or proofread hook"
     }
   ],
   "gaps": [

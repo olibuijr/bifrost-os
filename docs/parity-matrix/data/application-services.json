@@ -66,9 +66,9 @@
     {
       "feature": "Speech Synthesis Manager",
       "apple": "NewSpeechChannel, CountVoices, SetSpeechRate, SpeechBusy",
-      "bifrost": "none found in code search",
-      "status": "gap",
-      "note": "No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."
+      "bifrost": "springboard/ui/src/speech.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."
     },
     {
       "feature": "Apple Event Manager (AEDesc, Apple Event dispatch)",

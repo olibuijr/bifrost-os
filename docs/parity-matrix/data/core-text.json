@@ -7,21 +7,111 @@
   "summary": "BifrOSt has a TrueType and CFF font engine with metrics, cmap glyph lookup, variable-font axes and an attributed string model with line wrapping and truncation. It has no app-facing font objects, font manager, OpenType shaping (kerning, ligatures outside colour emoji), paragraph styles, tabs, ruby, bidi or vertical text.",
   "rea_evidence": "ev_8a0f6117f795b88ecbe61729def8f85adde1891b72468685784e9c7cb5d9b831",
   "features": [
-    {"feature": "Font objects and descriptors", "apple": "CTFont, CTFontDescriptor", "bifrost": "springboard/render/src/font.rs (Font::parse), springboard/render/src/fontprefs.rs (installed, map_font)", "status": "partial", "note": "The renderer parses a font file into a Font; apps get no font object or descriptor type. Faces are chosen by settings (font_system, font_mono), not by app request."},
-    {"feature": "Font collections and font manager (registration, enumeration, activation)", "apple": "CTFontCollection, CTFontManager*, CTFontManagerRegisterFontsForURL, CTFontManagerCopyAvailableFontFamilyNames", "bifrost": "springboard/render/src/fontprefs.rs (library, installed)", "status": "gap", "note": "fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."},
-    {"feature": "Character to glyph mapping", "apple": "CTFont glyph lookup, CTGlyphInfo", "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup)", "status": "partial", "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names. Misses return .notdef (glyph 0). No CTGlyphInfo-style mapping override and no font fallback cascade."},
-    {"feature": "Font metrics", "apple": "CTFontGetAscent, CTFontGetDescent, CTFontGetLeading, CTFontGetCapHeight, CTFontGetXHeight, CTFontGetUnderlinePosition", "bifrost": "springboard/render/src/font.rs (ascent, descent from hhea; advance from hmtx; measure)", "status": "partial", "note": "Ascent, descent and advance widths only. Leading, cap height, x-height and underline metrics are not read."},
-    {"feature": "Glyph outlines and rasterising", "apple": "CTFontCreatePathForGlyph, CTFontDrawGlyphs", "bifrost": "springboard/render/src/font.rs (render, render_glyph), springboard/render/src/cff.rs (Sink trait)", "status": "partial", "note": "TrueType glyf and CFF Type 2 outlines are rasterised into images. No path object is exposed to apps and no direct glyph drawing API."},
-    {"feature": "Variable fonts", "apple": "CTFontCreateCopyWithAttributes with variation axes, kCTFontVariationAxesAttribute", "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, render_var)", "status": "partial", "note": "fvar, avar and gvar are applied in the renderer. The SDK does not expose axis values to apps; weights come from the Weight enum."},
-    {"feature": "OpenType layout (kerning, ligatures, contextual forms)", "apple": "CTTypesetter shaping via GSUB and GPOS, kCTFontOpenTypeFeatureTag", "bifrost": "springboard/render/src/emoji.rs (GSUB type 4 ligatures for colour emoji only)", "status": "gap", "note": "No GPOS and no kern table reader. Plain text is laid out by summing advances, so pairs are not kerned. No OpenType feature selection."},
-    {"feature": "Attributed string styling", "apple": "Styling Attributed Strings: kCTFontAttributeName, kCTForegroundColorAttributeName, kCTUnderlineStyleAttributeName, kCTBackgroundColorAttributeName", "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString)", "status": "partial", "note": "Bold, italic (stored, drawn upright), size class, colour token, underline, strikethrough and link. No arbitrary font, colour, background colour or baseline attributes. Ranges count characters, not UTF-16 units."},
-    {"feature": "Paragraph styles and tab stops", "apple": "CTParagraphStyle, CTTextTab, kCTParagraphStyleAttributeName", "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate, Truncate)", "status": "partial", "note": "Only line wrapping and head, middle and tail truncation. No alignment, indents, spacing, tab stops or line-height settings on attributed strings."},
-    {"feature": "Line breaking and truncation", "apple": "CTTypesetterSuggestLineBreak, CTLineCreateTruncatedLine", "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate)", "status": "partial", "note": "Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."},
-    {"feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)", "apple": "CTTypesetter, CTFramesetter, CTFrame, CTLine, CTRun", "bifrost": "springboard/sdk/src/attributed.rs (RichTextView::draw), springboard/ui/src/text.rs (text buffer)", "status": "gap", "note": "No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."},
-    {"feature": "Writing direction and bidirectional text", "apple": "kCTWritingDirectionAttributeName, CTRun writing direction", "bifrost": "none found in springboard/render/src/font.rs, springboard/sdk/src/attributed.rs, springboard/ui/src/textfit.rs", "status": "gap", "note": "No bidi algorithm and no right-to-left layout in the text path."},
-    {"feature": "Vertical text and horizontal-in-vertical", "apple": "kCTVerticalFormsAttributeName, kCTHorizontalInVerticalFormsAttributeName", "bifrost": "none found in the text modules", "status": "gap", "note": "No vertical layout."},
-    {"feature": "Ruby annotations", "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName", "bifrost": "none found in the text modules", "status": "gap", "note": "No ruby text. Low priority outside CJK locales."},
-    {"feature": "Run delegates and embedded attachments", "apple": "CTRunDelegate, CTAdaptiveImageProviding", "bifrost": "none in the SDK text model (springboard/sdk/src/attributed.rs has no attachment attribute)", "status": "gap", "note": "No way to place an image or view inside styled text."}
+    {
+      "feature": "Font objects and descriptors",
+      "apple": "CTFont, CTFontDescriptor",
+      "bifrost": "springboard/render/src/font.rs (Font::parse), springboard/render/src/fontprefs.rs (installed, map_font)",
+      "status": "partial",
+      "note": "The renderer parses a font file into a Font; apps get no font object or descriptor type. Faces are chosen by settings (font_system, font_mono), not by app request."
+    },
+    {
+      "feature": "Font collections and font manager (registration, enumeration, activation)",
+      "apple": "CTFontCollection, CTFontManager*, CTFontManagerRegisterFontsForURL, CTFontManagerCopyAvailableFontFamilyNames",
+      "bifrost": "springboard/render/src/fontprefs.rs (library, installed)",
+      "status": "gap",
+      "note": "fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."
+    },
+    {
+      "feature": "Character to glyph mapping",
+      "apple": "CTFont glyph lookup, CTGlyphInfo",
+      "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup)",
+      "status": "partial",
+      "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names. Misses return .notdef (glyph 0). No CTGlyphInfo-style mapping override and no font fallback cascade."
+    },
+    {
+      "feature": "Font metrics",
+      "apple": "CTFontGetAscent, CTFontGetDescent, CTFontGetLeading, CTFontGetCapHeight, CTFontGetXHeight, CTFontGetUnderlinePosition",
+      "bifrost": "springboard/render/src/font.rs (ascent, descent from hhea; advance from hmtx; measure)",
+      "status": "partial",
+      "note": "Ascent, descent and advance widths only. Leading, cap height, x-height and underline metrics are not read."
+    },
+    {
+      "feature": "Glyph outlines and rasterising",
+      "apple": "CTFontCreatePathForGlyph, CTFontDrawGlyphs",
+      "bifrost": "springboard/render/src/font.rs (render, render_glyph), springboard/render/src/cff.rs (Sink trait)",
+      "status": "partial",
+      "note": "TrueType glyf and CFF Type 2 outlines are rasterised into images. No path object is exposed to apps and no direct glyph drawing API."
+    },
+    {
+      "feature": "Variable fonts",
+      "apple": "CTFontCreateCopyWithAttributes with variation axes, kCTFontVariationAxesAttribute",
+      "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, render_var)",
+      "status": "partial",
+      "note": "fvar, avar and gvar are applied in the renderer. The SDK does not expose axis values to apps; weights come from the Weight enum."
+    },
+    {
+      "feature": "OpenType layout (kerning, ligatures, contextual forms)",
+      "apple": "CTTypesetter shaping via GSUB and GPOS, kCTFontOpenTypeFeatureTag",
+      "bifrost": "springboard/render/src/emoji.rs (GSUB type 4 ligatures for colour emoji only)",
+      "status": "gap",
+      "note": "No GPOS and no kern table reader. Plain text is laid out by summing advances, so pairs are not kerned. No OpenType feature selection."
+    },
+    {
+      "feature": "Attributed string styling",
+      "apple": "Styling Attributed Strings: kCTFontAttributeName, kCTForegroundColorAttributeName, kCTUnderlineStyleAttributeName, kCTBackgroundColorAttributeName",
+      "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString)",
+      "status": "partial",
+      "note": "Bold, italic (stored, drawn upright), size class, colour token, underline, strikethrough and link. No arbitrary font, colour, background colour or baseline attributes. Ranges count characters, not UTF-16 units."
+    },
+    {
+      "feature": "Paragraph styles and tab stops",
+      "apple": "CTParagraphStyle, CTTextTab, kCTParagraphStyleAttributeName",
+      "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate, Truncate)",
+      "status": "partial",
+      "note": "Only line wrapping and head, middle and tail truncation. No alignment, indents, spacing, tab stops or line-height settings on attributed strings."
+    },
+    {
+      "feature": "Line breaking and truncation",
+      "apple": "CTTypesetterSuggestLineBreak, CTLineCreateTruncatedLine",
+      "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate)",
+      "status": "partial",
+      "note": "Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."
+    },
+    {
+      "feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)",
+      "apple": "CTTypesetter, CTFramesetter, CTFrame, CTLine, CTRun",
+      "bifrost": "springboard/sdk/src/attributed.rs (RichTextView::draw), springboard/ui/src/text.rs (text buffer)",
+      "status": "gap",
+      "note": "No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."
+    },
+    {
+      "feature": "Writing direction and bidirectional text",
+      "apple": "kCTWritingDirectionAttributeName, CTRun writing direction",
+      "bifrost": "springboard/ui/src/bidi.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-32, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No bidi algorithm and no right-to-left layout in the text path."
+    },
+    {
+      "feature": "Vertical text and horizontal-in-vertical",
+      "apple": "kCTVerticalFormsAttributeName, kCTHorizontalInVerticalFormsAttributeName",
+      "bifrost": "none found in the text modules",
+      "status": "gap",
+      "note": "No vertical layout."
+    },
+    {
+      "feature": "Ruby annotations",
+      "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName",
+      "bifrost": "none found in the text modules",
+      "status": "gap",
+      "note": "No ruby text. Low priority outside CJK locales."
+    },
+    {
+      "feature": "Run delegates and embedded attachments",
+      "apple": "CTRunDelegate, CTAdaptiveImageProviding",
+      "bifrost": "none in the SDK text model (springboard/sdk/src/attributed.rs has no attachment attribute)",
+      "status": "gap",
+      "note": "No way to place an image or view inside styled text."
+    }
   ],
   "gaps": [
     "No app-facing font object or font manager: apps cannot choose a font by family, weight or size from a font descriptor.",

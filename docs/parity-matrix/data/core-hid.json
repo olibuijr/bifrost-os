@@ -7,14 +7,62 @@
   "summary": "Core HID is a user-space API for discovering HID devices, reading their element values, sending reports and emulating virtual devices. BifrOSt has the kernel-side equivalent for its own shell: evdev discovery, classification of keyboards, pointers, touchscreens, power and lid devices, and a uinput keyboard for agent control. No SDK module exposes any of this to apps, and the framework's report-descriptor model is not implemented.",
   "rea_evidence": "ev_753a243aa65ad9ea11fcc201fb9df0b957d176eca3aa12ae9d00fedf5d59ec59",
   "features": [
-    {"feature": "Device discovery (HIDDeviceManager, DeviceMatchingCriteria)", "apple": "HIDDeviceManager, HIDDeviceManager.DeviceMatchingCriteria", "bifrost": "springboard/src/bare/input.rs (Device::by_name, InputSet with inotify watch on /dev/input at ~line 499)", "status": "os", "note": "Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."},
-    {"feature": "Device classification by capability", "apple": "HIDDeviceTransport, HIDDeviceLocalizationCode, usage pages (HIDUsage)", "bifrost": "springboard/src/bare/input.rs (Caps::roles at ~line 331, Roles struct above it)", "status": "os", "note": "Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."},
-    {"feature": "Report descriptor elements and collections", "apple": "HIDElement, HIDElementCollection, HIDReportID, HIDReportType", "bifrost": "none; springboard/src/bare/input.rs reads evdev records (Caps holds raw key, rel, abs and sw bitmasks)", "status": "gap", "note": "BifrOSt never parses a HID report descriptor. It consumes the kernel's evdev translation."},
-    {"feature": "Reading element values and input reports", "apple": "HIDElement.Value, HIDElementUpdate, HIDDeviceClient input callbacks", "bifrost": "springboard/src/bare/input.rs (Decoder at line 63 turns evdev records into touch and key events)", "status": "os", "note": "The values stay inside the shell. Apps get key and touch events through the window system, not HID values."},
-    {"feature": "Sending output reports to a device", "apple": "HIDDeviceClient (set report, for example an LED)", "bifrost": "none; Device::open in springboard/src/bare/input.rs opens the device O_RDONLY", "status": "gap", "note": "Devices are read-only. Nothing sets LEDs, force feedback or feature reports."},
-    {"feature": "Exclusive device ownership", "apple": "No direct counterpart; the framework's client model mediates access", "bifrost": "springboard/src/bare/input.rs (Device::open, EVIOCGRAB ioctl at ~line 143; InputSet.exclusive)", "status": "os", "note": "The shell grabs its own input devices, never power buttons or lids. Apps have no way to grab a device."},
-    {"feature": "Virtual HID devices (HIDVirtualDevice, delegate, properties)", "apple": "HIDVirtualDevice, HIDVirtualDeviceDelegate, HIDVirtualDevice.Properties", "bifrost": "springboard/mcp/src/keys.rs (Keyboard::open, uinput keyboard for agent control); springboard/src/bare/input.rs (Device::virtual_device at line 152, a placeholder with fd -1)", "status": "os", "note": "The uinput keyboard is agent tooling, not an SDK API. It emulates a keyboard only, with no custom report descriptor and no delegate. The virtual_device constructor is a no-hardware stub for tests and headless runs."},
-    {"feature": "Discovery from the command line", "apple": "Discovering HID devices from Terminal (article)", "bifrost": "none; the shell's control port (springboard/src/bare/control.rs) exposes state, not device lists", "status": "partial", "note": "A diagnostic dump of input devices exists only through the system layer and the observe tool. No documented command lists devices and their roles for a user."}
+    {
+      "feature": "Device discovery (HIDDeviceManager, DeviceMatchingCriteria)",
+      "apple": "HIDDeviceManager, HIDDeviceManager.DeviceMatchingCriteria",
+      "bifrost": "springboard/src/bare/input.rs (Device::by_name, InputSet with inotify watch on /dev/input at ~line 499)",
+      "status": "os",
+      "note": "Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."
+    },
+    {
+      "feature": "Device classification by capability",
+      "apple": "HIDDeviceTransport, HIDDeviceLocalizationCode, usage pages (HIDUsage)",
+      "bifrost": "springboard/src/bare/input.rs (Caps::roles at ~line 331, Roles struct above it)",
+      "status": "os",
+      "note": "Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."
+    },
+    {
+      "feature": "Report descriptor elements and collections",
+      "apple": "HIDElement, HIDElementCollection, HIDReportID, HIDReportType",
+      "bifrost": "springboard/ui/src/hid_report.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt never parses a HID report descriptor. It consumes the kernel's evdev translation."
+    },
+    {
+      "feature": "Reading element values and input reports",
+      "apple": "HIDElement.Value, HIDElementUpdate, HIDDeviceClient input callbacks",
+      "bifrost": "springboard/src/bare/input.rs (Decoder at line 63 turns evdev records into touch and key events)",
+      "status": "os",
+      "note": "The values stay inside the shell. Apps get key and touch events through the window system, not HID values."
+    },
+    {
+      "feature": "Sending output reports to a device",
+      "apple": "HIDDeviceClient (set report, for example an LED)",
+      "bifrost": "springboard/ui/src/hid_report.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Devices are read-only. Nothing sets LEDs, force feedback or feature reports."
+    },
+    {
+      "feature": "Exclusive device ownership",
+      "apple": "No direct counterpart; the framework's client model mediates access",
+      "bifrost": "springboard/src/bare/input.rs (Device::open, EVIOCGRAB ioctl at ~line 143; InputSet.exclusive)",
+      "status": "os",
+      "note": "The shell grabs its own input devices, never power buttons or lids. Apps have no way to grab a device."
+    },
+    {
+      "feature": "Virtual HID devices (HIDVirtualDevice, delegate, properties)",
+      "apple": "HIDVirtualDevice, HIDVirtualDeviceDelegate, HIDVirtualDevice.Properties",
+      "bifrost": "springboard/mcp/src/keys.rs (Keyboard::open, uinput keyboard for agent control); springboard/src/bare/input.rs (Device::virtual_device at line 152, a placeholder with fd -1)",
+      "status": "os",
+      "note": "The uinput keyboard is agent tooling, not an SDK API. It emulates a keyboard only, with no custom report descriptor and no delegate. The virtual_device constructor is a no-hardware stub for tests and headless runs."
+    },
+    {
+      "feature": "Discovery from the command line",
+      "apple": "Discovering HID devices from Terminal (article)",
+      "bifrost": "none; the shell's control port (springboard/src/bare/control.rs) exposes state, not device lists",
+      "status": "partial",
+      "note": "A diagnostic dump of input devices exists only through the system layer and the observe tool. No documented command lists devices and their roles for a user."
+    }
   ],
   "gaps": [
     "No app-facing device manager: no SDK API lists HID devices, filters them by usage page or vendor, or reports hotplug to an app.",

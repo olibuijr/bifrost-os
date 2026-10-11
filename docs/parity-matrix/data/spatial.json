@@ -2,18 +2,60 @@
   "framework": "Spatial",
   "doc": "https://developer.apple.com/documentation/spatial",
   "macos_since": "13.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "No 3D math API. 2D transforms only: springboard/ui/src/geometry.rs, springboard/src/shell/browser/style/values.rs (Transform2D), springboard/src/shell/window_fx.rs (2D scale and slide)",
   "summary": "Spatial is a 3D math library (vectors, points, rotations, poses, affine and projective transforms, rays, coordinate spaces). BifrOSt has no 3D primitives in the SDK, the UI kit or the renderer; its transforms are 2D (affine matrices for the browser engine and scale/slide window effects). A desktop app has little use for 3D math, so this is low priority.",
   "rea_evidence": "ev_82053d7b24d28367191a307ad6c114ee9109bb9be4498ae12e093968a9439d81",
   "features": [
-    {"feature": "3D vectors and points", "apple": "Vector3D, Vector3DFloat, Point3D, Point3DFloat, Size3D, Rect3D, Axis3D", "bifrost": "none found; grep for Vector3, Point3D, Vec3 and Mat4 in springboard/ returns no SDK or ui types (only shader vec3 literals in springboard/src/gpu/wl.rs and springboard/wm/src/glass.rs)", "status": "gap", "note": "no 3D value types exposed to apps"},
-    {"feature": "Rotations and poses", "apple": "Rotation3D, Rotation3DFloat, RotationAxis3D, Pose3D, ScaledPose3D, EulerAnglesFloat", "bifrost": "springboard/render/src/gfx/rotate.rs (quarter-turn image rotation only)", "status": "gap", "note": "no quaternion, Euler or 3D pose type"},
-    {"feature": "Affine and projective transforms", "apple": "AffineTransform3D, ProjectiveTransform3D (and Float variants)", "bifrost": "springboard/src/shell/browser/style/values.rs (Transform2D, 2D matrix); springboard/src/shell/browser/layout2/positioned.rs (page_matrix, 2D)", "status": "gap", "note": "2D only; no 4x4 matrix"},
-    {"feature": "Rays and spherical coordinates", "apple": "Ray3D, Ray3DFloat, SphericalCoordinates3D", "bifrost": "none found", "status": "gap", "note": "no ray casting or picking math in the SDK or UI kit"},
-    {"feature": "Coordinate spaces", "apple": "CoordinateSpace3D, CoordinateSpaceValue3D, WorldReferenceCoordinateSpace, ProjectiveTransformable3D", "bifrost": "springboard/sdk/src/view/mod.rs (views use window points, with no per-view transform)", "status": "gap", "note": "views have no transform or coordinate space conversion"},
-    {"feature": "Angles and trigonometry", "apple": "Angle2D, Angle2DFloat, sin/cos/tan and hyperbolic functions over Angle2D", "bifrost": "springboard/src/shell/window_fx.rs (uses plain f32 radians and degrees, no Angle type)", "status": "partial", "note": "trigonometry exists in the Rust std lib; no typed Angle value for apps"},
-    {"feature": "Protocols for translate, rotate, scale, shear", "apple": "Translatable3D, Rotatable3D, Scalable3D, Shearable3D, Transform3DProtocol, Volumetric", "bifrost": "springboard/src/shell/browser/style/values.rs (TransformFn enum: Translate, Scale, Rotate, Skew, Matrix, 2D only)", "status": "gap", "note": "no shared 3D transform protocol"}
+    {
+      "feature": "3D vectors and points",
+      "apple": "Vector3D, Vector3DFloat, Point3D, Point3DFloat, Size3D, Rect3D, Axis3D",
+      "bifrost": "none found; grep for Vector3, Point3D, Vec3 and Mat4 in springboard/ returns no SDK or ui types (only shader vec3 literals in springboard/src/gpu/wl.rs and springboard/wm/src/glass.rs)",
+      "status": "gap",
+      "note": "no 3D value types exposed to apps"
+    },
+    {
+      "feature": "Rotations and poses",
+      "apple": "Rotation3D, Rotation3DFloat, RotationAxis3D, Pose3D, ScaledPose3D, EulerAnglesFloat",
+      "bifrost": "springboard/render/src/gfx/rotate.rs (quarter-turn image rotation only)",
+      "status": "gap",
+      "note": "no quaternion, Euler or 3D pose type"
+    },
+    {
+      "feature": "Affine and projective transforms",
+      "apple": "AffineTransform3D, ProjectiveTransform3D (and Float variants)",
+      "bifrost": "springboard/ui/src/transform3d.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. 2D only; no 4x4 matrix"
+    },
+    {
+      "feature": "Rays and spherical coordinates",
+      "apple": "Ray3D, Ray3DFloat, SphericalCoordinates3D",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no ray casting or picking math in the SDK or UI kit"
+    },
+    {
+      "feature": "Coordinate spaces",
+      "apple": "CoordinateSpace3D, CoordinateSpaceValue3D, WorldReferenceCoordinateSpace, ProjectiveTransformable3D",
+      "bifrost": "springboard/sdk/src/view/mod.rs (views use window points, with no per-view transform)",
+      "status": "gap",
+      "note": "views have no transform or coordinate space conversion"
+    },
+    {
+      "feature": "Angles and trigonometry",
+      "apple": "Angle2D, Angle2DFloat, sin/cos/tan and hyperbolic functions over Angle2D",
+      "bifrost": "springboard/src/shell/window_fx.rs (uses plain f32 radians and degrees, no Angle type)",
+      "status": "partial",
+      "note": "trigonometry exists in the Rust std lib; no typed Angle value for apps"
+    },
+    {
+      "feature": "Protocols for translate, rotate, scale, shear",
+      "apple": "Translatable3D, Rotatable3D, Scalable3D, Shearable3D, Transform3DProtocol, Volumetric",
+      "bifrost": "springboard/ui/src/transform3d.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no shared 3D transform protocol"
+    }
   ],
   "gaps": [
     "No 3D vector, point or size types in the SDK (bifrost_app) or the UI kit (bifrost_ui).",

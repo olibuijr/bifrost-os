@@ -38,16 +38,16 @@
     {
       "feature": "Magnetometer",
       "apple": "CMMagnetometerData",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No magnetometer reader or SDK API found."
+      "bifrost": "springboard/core/src/magnetometer.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No magnetometer reader or SDK API found."
     },
     {
       "feature": "Altitude and ambient pressure",
       "apple": "CMAltimeter, CMAltitudeData, CMAbsoluteAltitudeData, CMAmbientPressureData, CMRecordedPressureData",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No barometer or altitude API. Desktop hardware rarely has these sensors."
+      "bifrost": "springboard/core/src/altitude.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No barometer or altitude API. Desktop hardware rarely has these sensors."
     },
     {
       "feature": "Recorded sensor data and batched history",
@@ -59,16 +59,16 @@
     {
       "feature": "Motion activity (walking, running, stationary, automotive)",
       "apple": "CMMotionActivityManager, CMMotionActivity, CMHeadphoneActivityManager",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No activity recognition API."
+      "bifrost": "springboard/core/src/motion_activity.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No activity recognition API."
     },
     {
       "feature": "Pedometer, step counter and odometer",
       "apple": "CMPedometer, CMPedometerData, CMPedometerEvent, CMStepCounter, CMOdometerData",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No step or pedometer data. Desktop PCs are not carried by users, so this is low priority."
+      "bifrost": "springboard/core/src/pedometer.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No step or pedometer data. Desktop PCs are not carried by users, so this is low priority."
     },
     {
       "feature": "Heart rate data (1 Hz)",

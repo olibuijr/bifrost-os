@@ -2,24 +2,102 @@
   "framework": "ImageCaptureCore",
   "doc": "https://developer.apple.com/documentation/imagecapturecore",
   "macos_since": "10.4",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/shell/camera/mod.rs (webcam viewfinder, V4L2), springboard/src/media/capture.rs, springboard/src/media/v4l2.rs, springboard/apps/photocraft-desktop",
   "summary": "ImageCaptureCore finds and controls PTP cameras and scanners over USB and imports their files. BifrOSt has no PTP, MTP, camera-device or scanner stack and no SDK API for these devices. Its only camera path is a V4L2 webcam viewfinder that saves JPEGs into the Photos folder.",
   "rea_evidence": "ev_e334d417c0111dc6b968454d6649e3fc262f23bad1c2d925ca2fdae7bfb56fbb",
   "features": [
-    {"feature": "Device browser (discovery and hotplug)", "apple": "ICDeviceBrowser, ICDeviceBrowserDelegate, ICDevice", "bifrost": "springboard/src/media/capture.rs (lists V4L2 nodes from /proc only), springboard/src/bare/input.rs (evdev input devices)", "status": "gap", "note": "No API to browse cameras or scanners and get add/remove callbacks. capture.rs only lists video nodes and opens nothing."},
-    {"feature": "Camera device control (PTP tethering, capture, clock, battery)", "apple": "ICCameraDevice, ICCameraDeviceDelegate, requestTakePicture, requestEnableTethering, requestSendPTPCommand, requestSyncClock", "bifrost": "none", "status": "gap", "note": "No PTP or USB camera transport. Tethered capture and remote shutter are not implemented."},
-    {"feature": "Camera file browsing and download (contents, files, folders)", "apple": "ICCameraItem, ICCameraFile, ICCameraFolder, requestDownloadFile, requestReadData", "bifrost": "springboard/apps/photocraft-desktop (app manifest and assets only, no import code in this checkout)", "status": "gap", "note": "No way to list or copy files from a camera's storage. Photos import from a device is not implemented."},
-    {"feature": "File metadata and thumbnails (EXIF, GPS, burst, video)", "apple": "ICCameraFile metadata, requestMetadataDictionary, requestThumbnailData, ICEXIFOrientationType", "bifrost": "springboard/src/shell/camera/mod.rs (writes EXIF orientation and date into saved JPEGs), springboard/src/shell/camera/jpeg.rs", "status": "partial", "note": "Only the write side exists for our own captures. No reader for device metadata, GPS, burst or thumbnails."},
-    {"feature": "Camera deletion and locked-device state", "apple": "requestDeleteFiles, isLocked, ICDeleteResult, ICDeleteError", "bifrost": "none", "status": "gap", "note": "No delete path to a device."},
-    {"feature": "Scanner discovery and functional units", "apple": "ICScannerDevice, ICScannerDeviceDelegate, availableFunctionalUnitTypes, requestSelect", "bifrost": "none", "status": "gap", "note": "No SANE or scanner transport and no scanner SDK API. springboard/sdk/src/print.rs covers printing only."},
-    {"feature": "Scanning (overview, scan, transfer mode, document type)", "apple": "requestOverviewScan, requestScan, cancelScan, transferMode, documentUTI, downloadsDirectory", "bifrost": "none", "status": "gap", "note": "No scan job API. The closest pieces are springboard/sdk/src/share.rs and springboard/sdk/src/file_coordination.rs, which handle outputs but not scan jobs."},
-    {"feature": "Protected devices (session login, default username)", "apple": "ICScannerDevice.requestOpenSession(withCredentials:password:), defaultUsername", "bifrost": "none", "status": "gap", "note": "No credential flow for scanners."},
-    {"feature": "Sandbox access to USB devices", "apple": "com.apple.security.device.usb entitlement (Important note in the framework overview)", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox, binds /sys and /run/udev read-only), springboard/src/bare/docbroker.rs (file grants)", "status": "partial", "note": "The sandbox binds udev read-only but has no per-app USB device grant, so an app cannot be given a device node the way the entitlement allows."},
-    {"feature": "Camera permission prompt (NSCameraUsageDescription, Photos library entitlement)", "apple": "NSCameraUsageDescription, Photos Library Entitlement", "bifrost": "springboard/src/shell/camera/mod.rs (camera opens only when the app starts; shows Camera not available on failure)", "status": "partial", "note": "The camera starts and stops with the app, but there is no usage-description string or permission prompt to match Apple's model."},
-    {"feature": "Localized errors and return codes", "apple": "ICReturn, ICLegacyReturn, ICReturnConnectionError, ICReturnDownloadError, ICReturnPTPDeviceError and the other ICReturn* error structs", "bifrost": "none", "status": "n/a", "note": "These describe the PTP and scanner transports, which BifrOSt does not have. The error model is tied to those transports."},
-    {"feature": "Legacy run-loop mode", "apple": "ICRunLoopMode (deprecated)", "bifrost": "none", "status": "n/a", "note": "Deprecated Apple symbol. BifrOSt uses no run-loop modes."},
-    {"feature": "Device-specific constants and enumerations", "apple": "ImageCaptureCore Constants, Data Types, Enumerations, Macros", "bifrost": "none", "status": "gap", "note": "Device types, transfer modes and functional-unit types need their own SDK types once device support exists."}
+    {
+      "feature": "Device browser (discovery and hotplug)",
+      "apple": "ICDeviceBrowser, ICDeviceBrowserDelegate, ICDevice",
+      "bifrost": "springboard/ui/src/device_browser.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to browse cameras or scanners and get add/remove callbacks. capture.rs only lists video nodes and opens nothing."
+    },
+    {
+      "feature": "Camera device control (PTP tethering, capture, clock, battery)",
+      "apple": "ICCameraDevice, ICCameraDeviceDelegate, requestTakePicture, requestEnableTethering, requestSendPTPCommand, requestSyncClock",
+      "bifrost": "springboard/ui/src/camera_device.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PTP or USB camera transport. Tethered capture and remote shutter are not implemented."
+    },
+    {
+      "feature": "Camera file browsing and download (contents, files, folders)",
+      "apple": "ICCameraItem, ICCameraFile, ICCameraFolder, requestDownloadFile, requestReadData",
+      "bifrost": "springboard/ui/src/camera_device.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to list or copy files from a camera's storage. Photos import from a device is not implemented."
+    },
+    {
+      "feature": "File metadata and thumbnails (EXIF, GPS, burst, video)",
+      "apple": "ICCameraFile metadata, requestMetadataDictionary, requestThumbnailData, ICEXIFOrientationType",
+      "bifrost": "springboard/src/shell/camera/mod.rs (writes EXIF orientation and date into saved JPEGs), springboard/src/shell/camera/jpeg.rs",
+      "status": "partial",
+      "note": "Only the write side exists for our own captures. No reader for device metadata, GPS, burst or thumbnails."
+    },
+    {
+      "feature": "Camera deletion and locked-device state",
+      "apple": "requestDeleteFiles, isLocked, ICDeleteResult, ICDeleteError",
+      "bifrost": "springboard/ui/src/camera_device.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No delete path to a device."
+    },
+    {
+      "feature": "Scanner discovery and functional units",
+      "apple": "ICScannerDevice, ICScannerDeviceDelegate, availableFunctionalUnitTypes, requestSelect",
+      "bifrost": "springboard/ui/src/scan_job.rs, springboard/ui/src/device_browser.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SANE or scanner transport and no scanner SDK API. springboard/sdk/src/print.rs covers printing only."
+    },
+    {
+      "feature": "Scanning (overview, scan, transfer mode, document type)",
+      "apple": "requestOverviewScan, requestScan, cancelScan, transferMode, documentUTI, downloadsDirectory",
+      "bifrost": "springboard/ui/src/scan_job.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scan job API. The closest pieces are springboard/sdk/src/share.rs and springboard/sdk/src/file_coordination.rs, which handle outputs but not scan jobs."
+    },
+    {
+      "feature": "Protected devices (session login, default username)",
+      "apple": "ICScannerDevice.requestOpenSession(withCredentials:password:), defaultUsername",
+      "bifrost": "springboard/ui/src/scan_job.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No credential flow for scanners."
+    },
+    {
+      "feature": "Sandbox access to USB devices",
+      "apple": "com.apple.security.device.usb entitlement (Important note in the framework overview)",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox, binds /sys and /run/udev read-only), springboard/src/bare/docbroker.rs (file grants)",
+      "status": "partial",
+      "note": "The sandbox binds udev read-only but has no per-app USB device grant, so an app cannot be given a device node the way the entitlement allows."
+    },
+    {
+      "feature": "Camera permission prompt (NSCameraUsageDescription, Photos library entitlement)",
+      "apple": "NSCameraUsageDescription, Photos Library Entitlement",
+      "bifrost": "springboard/src/shell/camera/mod.rs (camera opens only when the app starts; shows Camera not available on failure)",
+      "status": "partial",
+      "note": "The camera starts and stops with the app, but there is no usage-description string or permission prompt to match Apple's model."
+    },
+    {
+      "feature": "Localized errors and return codes",
+      "apple": "ICReturn, ICLegacyReturn, ICReturnConnectionError, ICReturnDownloadError, ICReturnPTPDeviceError and the other ICReturn* error structs",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "These describe the PTP and scanner transports, which BifrOSt does not have. The error model is tied to those transports."
+    },
+    {
+      "feature": "Legacy run-loop mode",
+      "apple": "ICRunLoopMode (deprecated)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Deprecated Apple symbol. BifrOSt uses no run-loop modes."
+    },
+    {
+      "feature": "Device-specific constants and enumerations",
+      "apple": "ImageCaptureCore Constants, Data Types, Enumerations, Macros",
+      "bifrost": "springboard/ui/src/device_browser.rs, springboard/ui/src/camera_device.rs, springboard/ui/src/scan_job.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Device types, transfer modes and functional-unit types need their own SDK types once device support exists."
+    }
   ],
   "gaps": [
     "No device browser: no API or system service that enumerates PTP cameras and scanners and reports hotplug events (ICDeviceBrowser).",

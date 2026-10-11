@@ -2,22 +2,88 @@
   "framework": "Core Location",
   "doc": "https://developer.apple.com/documentation/corelocation",
   "macos_since": "10.6",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none at SDK level. Partial pieces: springboard/src/shell/weather/data.rs (Location struct :116, GEOCODE_API :25, parse_places :253); springboard/src/shell/photos/exif.rs (format_gps :110, read_gps :324)",
   "summary": "Apple's framework gives apps device position, heading, geofences, beacons and geocoding behind a permission prompt. BifrOSt has no device position source, no location permission and no SDK location API; the only related code is forward place-name geocoding inside the Weather app and EXIF GPS reading in Photos.",
   "rea_evidence": "ev_1ccea372ac702a00d16770c01fd7339108b7e37352fa3f5028f3d03ed745f4e0",
   "features": [
-    {"feature": "Location manager and live updates", "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)", "bifrost": "none", "status": "gap", "note": "No code reads a device position. springboard/src/net/wifi.rs and springboard/src/net/wifi_event.rs only manage the Wi-Fi connection, with no positioning. Nothing reports location to apps."},
-    {"feature": "Authorization and usage descriptions", "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests", "bifrost": "springboard/src/bare/app_policy.rs:34 (from_permissions)", "status": "gap", "note": "The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead."},
-    {"feature": "Coordinates and location values", "apple": "CLLocation, CLLocationCoordinate2D, CLLocationSourceInformation, CLFloor, CLVisit", "bifrost": "springboard/src/shell/weather/data.rs:116 (Location struct)", "status": "partial", "note": "Weather keeps lat and lon for a saved place (typed by name). It is a private struct of the Weather app with no accuracy, timestamp, altitude, course or speed, and no floor or visit data."},
-    {"feature": "Forward geocoding (place name to coordinates)", "apple": "CLGeocoder (geocodeAddressString), CLPlacemark, Converting between coordinates and user-friendly place names", "bifrost": "springboard/src/shell/weather/data.rs:25 (GEOCODE_API), springboard/src/shell/weather/data.rs:253 (parse_places)", "status": "partial", "note": "Open-Meteo place search returns name, admin1, country and coordinates. It is used only by the Weather app, not exposed through springboard/sdk/src, and it does not return a placemark with address parts."},
-    {"feature": "Reverse geocoding (coordinates to placemark)", "apple": "CLGeocoder (reverseGeocodeLocation), CLPlacemark, Converting a user's location to a descriptive placemark", "bifrost": "none", "status": "gap", "note": "No reverse lookup exists. The Open-Meteo search in data.rs goes from text to coordinates only."},
-    {"feature": "Region monitoring and conditions", "apple": "CLMonitor, CLCondition, CLRegion, Monitoring the user's proximity to geographic regions", "bifrost": "none", "status": "gap", "note": "No geofence or condition monitor. docs/bifrost-ui.md (Notifications gaps paragraph) lists calendar and location triggers for notifications as not implemented."},
-    {"feature": "iBeacon ranging and broadcasting", "apple": "CLBeacon, CLBeaconRegion (deprecated), CLBeaconIdentityConstraint (deprecated), Ranging for Beacons, Turning an iOS device into an iBeacon device", "bifrost": "none for iBeacon. springboard/src/net/share.rs:52 (Beacon) is LAN device discovery over UDP", "status": "n/a", "note": "The BifrOSt beacon in net/share.rs (BEACON_PORT 5354, springboard/src/net/share.rs:34) announces a sharing peer on the local network. It is not BLE iBeacon. iBeacon needs Bluetooth LE advertising and ranging, which no SDK API exposes. Marked n/a only because the framework is Apple-specific and deprecated; the proximity use case is a gap."},
-    {"feature": "Compass headings and body identification", "apple": "CLHeading, CLBodyIdentifiable, Getting heading and course information", "bifrost": "springboard/src/shell/rotate.rs:191 (accelerometer orientation, screen rotation only)", "status": "gap", "note": "The shell reads the accelerometer for screen rotation only. There is no magnetometer heading, no true or magnetic north value and no course data for apps."},
-    {"feature": "Location push service extension", "apple": "CLLocationPushServiceExtension, CLLocationPushServiceError, Location Push Service Extension entitlement", "bifrost": "none", "status": "n/a", "note": "Depends on Apple push infrastructure and an Apple entitlement. No BifrOSt counterpart."},
-    {"feature": "Location metadata in photos (not Core Location)", "apple": "No direct equivalent in Core Location; photo GPS is read through ImageIO", "bifrost": "springboard/src/shell/photos/exif.rs:110 (format_gps), springboard/src/shell/photos/exif.rs:324 (read_gps)", "status": "partial", "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags."},
-    {"feature": "Errors and diagnostics", "apple": "CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain", "bifrost": "none", "status": "gap", "note": "No location error domain or diagnostics exist. They depend on the missing location manager."}
+    {
+      "feature": "Location manager and live updates",
+      "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No code reads a device position. springboard/src/net/wifi.rs and springboard/src/net/wifi_event.rs only manage the Wi-Fi connection, with no positioning. Nothing reports location to apps."
+    },
+    {
+      "feature": "Authorization and usage descriptions",
+      "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
+      "bifrost": "springboard/src/bare/app_policy.rs:34 (from_permissions)",
+      "status": "gap",
+      "note": "The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead."
+    },
+    {
+      "feature": "Coordinates and location values",
+      "apple": "CLLocation, CLLocationCoordinate2D, CLLocationSourceInformation, CLFloor, CLVisit",
+      "bifrost": "springboard/src/shell/weather/data.rs:116 (Location struct)",
+      "status": "partial",
+      "note": "Weather keeps lat and lon for a saved place (typed by name). It is a private struct of the Weather app with no accuracy, timestamp, altitude, course or speed, and no floor or visit data."
+    },
+    {
+      "feature": "Forward geocoding (place name to coordinates)",
+      "apple": "CLGeocoder (geocodeAddressString), CLPlacemark, Converting between coordinates and user-friendly place names",
+      "bifrost": "springboard/src/shell/weather/data.rs:25 (GEOCODE_API), springboard/src/shell/weather/data.rs:253 (parse_places)",
+      "status": "partial",
+      "note": "Open-Meteo place search returns name, admin1, country and coordinates. It is used only by the Weather app, not exposed through springboard/sdk/src, and it does not return a placemark with address parts."
+    },
+    {
+      "feature": "Reverse geocoding (coordinates to placemark)",
+      "apple": "CLGeocoder (reverseGeocodeLocation), CLPlacemark, Converting a user's location to a descriptive placemark",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No reverse lookup exists. The Open-Meteo search in data.rs goes from text to coordinates only."
+    },
+    {
+      "feature": "Region monitoring and conditions",
+      "apple": "CLMonitor, CLCondition, CLRegion, Monitoring the user's proximity to geographic regions",
+      "bifrost": "springboard/ui/src/geofence.rs (CircularRegion",
+      "status": "partial",
+      "note": "Wave 2 (core-location, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No geofence or condition monitor. docs/bifrost-ui.md (Notifications gaps paragraph) lists calendar and location triggers for notifications as not implemented."
+    },
+    {
+      "feature": "iBeacon ranging and broadcasting",
+      "apple": "CLBeacon, CLBeaconRegion (deprecated), CLBeaconIdentityConstraint (deprecated), Ranging for Beacons, Turning an iOS device into an iBeacon device",
+      "bifrost": "none for iBeacon. springboard/src/net/share.rs:52 (Beacon) is LAN device discovery over UDP",
+      "status": "n/a",
+      "note": "The BifrOSt beacon in net/share.rs (BEACON_PORT 5354, springboard/src/net/share.rs:34) announces a sharing peer on the local network. It is not BLE iBeacon. iBeacon needs Bluetooth LE advertising and ranging, which no SDK API exposes. Marked n/a only because the framework is Apple-specific and deprecated; the proximity use case is a gap."
+    },
+    {
+      "feature": "Compass headings and body identification",
+      "apple": "CLHeading, CLBodyIdentifiable, Getting heading and course information",
+      "bifrost": "springboard/core/src/magnetometer.rs (magnetic_heading",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell reads the accelerometer for screen rotation only. There is no magnetometer heading, no true or magnetic north value and no course data for apps."
+    },
+    {
+      "feature": "Location push service extension",
+      "apple": "CLLocationPushServiceExtension, CLLocationPushServiceError, Location Push Service Extension entitlement",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Depends on Apple push infrastructure and an Apple entitlement. No BifrOSt counterpart."
+    },
+    {
+      "feature": "Location metadata in photos (not Core Location)",
+      "apple": "No direct equivalent in Core Location; photo GPS is read through ImageIO",
+      "bifrost": "springboard/src/shell/photos/exif.rs:110 (format_gps), springboard/src/shell/photos/exif.rs:324 (read_gps)",
+      "status": "partial",
+      "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags."
+    },
+    {
+      "feature": "Errors and diagnostics",
+      "apple": "CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No location error domain or diagnostics exist. They depend on the missing location manager."
+    }
   ],
   "gaps": [
     "No device position source: no GPS, Wi-Fi positioning or geoclue client in springboard/src or netd. Nothing produces a CLLocation-like value.",

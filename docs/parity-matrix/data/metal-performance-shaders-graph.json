@@ -66,9 +66,9 @@
     {
       "feature": "Fast math and reduced precision (MPSGraphReducedPrecisionFastMath)",
       "apple": "MPSGraphReducedPrecisionFastMath",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no reduced precision compute path"
+      "bifrost": "springboard/ui/src/graph.rs (Options",
+      "status": "partial",
+      "note": "Wave 2 (theme-26, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no reduced precision compute path"
     }
   ],
   "gaps": [

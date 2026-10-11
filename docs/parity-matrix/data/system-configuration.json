@@ -7,22 +7,118 @@
   "summary": "The system layer has a network daemon that owns Wi-Fi, DHCP, routes and link state, and the shell shows it in a Network settings page. Apps get no SDK API for any part of it, and the Apple reachability, interface-configuration, preferences and proxy APIs have no counterpart.",
   "rea_evidence": "ev_3c473dc73369865634e53ae372d69276d20d90ddf9fc920cd2ad08b375c39189",
   "features": [
-    {"feature": "Reachability of hosts and addresses", "apple": "SCNetworkReachabilityCreateWithName, SCNetworkReachabilityCreateWithAddress, SCNetworkReachabilityGetFlags, SCNetworkReachabilitySetCallback", "bifrost": "springboard/src/net/wifi.rs (Status: state, ip, router); no host-reachability probe found", "status": "partial", "note": "The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either."},
-    {"feature": "Change notifications for network state", "apple": "SCDynamicStore, SCDynamicStoreSetNotificationKeys, SCDynamicStoreCreateRunLoopSource", "bifrost": "springboard/netd/src/main.rs (Subscribe; Status event on every change), springboard/proto/src/svc.rs", "status": "os", "note": "netd polls every 250 ms and pushes a Status event on change. Only the shell subscribes; no SDK wrapper exists."},
-    {"feature": "Network interface enumeration", "apple": "SCNetworkInterfaceCopyAll, SCNetworkInterfaceGetBSDName, SCNetworkInterfaceGetInterfaceType, SCNetworkInterfaceGetLocalizedDisplayName", "bifrost": "springboard/src/shell/desktop_network.rs (Interface, kind \"ethernet\"), springboard/src/net/netlink.rs", "status": "os", "note": "The shell lists interfaces and their kind and connection state. Apps get no list."},
-    {"feature": "Wi-Fi status, scan, join and saved networks", "apple": "SCNetworkConfiguration (SCNetworkService for Wi-Fi), CoreWLAN-style status through SCNetworkInterface", "bifrost": "springboard/src/net/wifi.rs (Status struct, saved networks, notes), springboard/src/net/wifi_config.rs, springboard/src/net/wpa.rs, springboard/netd/src/main.rs", "status": "os", "note": "netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."},
-    {"feature": "Wired link and address", "apple": "SCNetworkInterface, SCNetworkProtocol (IPv4, IPv6) configuration", "bifrost": "springboard/src/net/dhcp.rs, springboard/src/net/netlink.rs (link_up, add_addr, default_route), springboard/src/net/wifi.rs (Status.ethernet)", "status": "os", "note": "The system sets the link up, assigns the address and runs DHCP when no host client does. No app can read or set IPv4 or IPv6 settings."},
-    {"feature": "Network settings page", "apple": "System Settings network panes (SCNetworkService, SCNetworkSet)", "bifrost": "springboard/src/shell/pages.rs (desktop_network_page, Ethernet and Wi-Fi rows)", "status": "partial", "note": "The page shows Ethernet and Wi-Fi status and links to their pages. It has no service ordering, no network sets or locations, and it cannot edit IP settings."},
-    {"feature": "Network services, sets and locations", "apple": "SCNetworkServiceCreate, SCNetworkSetCreate, SCNetworkSetSetCurrent, SCNetworkSetSetServiceOrder, SCNetworkServiceCopyAll", "bifrost": "none found", "status": "gap", "note": "The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."},
-    {"feature": "Preferences session for system configuration", "apple": "SCPreferencesCreate, SCPreferencesGetValue, SCPreferencesSetValue, SCPreferencesCommitChanges, SCPreferencesApplyChanges, SCPreferencesSetCallback", "bifrost": "springboard/sdk/src/defaults.rs (app defaults only)", "status": "gap", "note": "app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."},
-    {"feature": "Computer name and local host name", "apple": "SCPreferencesSetComputerName, SCPreferencesSetLocalHostName, SCDynamicStoreCopyComputerName, SCDynamicStoreCopyLocalHostName", "bifrost": "none found", "status": "gap", "note": "Not searched beyond the index. No accessor for the host name was found."},
-    {"feature": "Network connections (start, stop, status) for VPN and PPP", "apple": "SCNetworkConnectionCreateWithServiceID, SCNetworkConnectionStart, SCNetworkConnectionStop, SCNetworkConnectionGetStatus", "bifrost": "none found", "status": "gap", "note": "No VPN or dial-up connection type exists in springboard/src/net/."},
-    {"feature": "Proxy settings", "apple": "SCDynamicStoreCopyProxies, SCDynamicStoreKeyCreateProxies", "bifrost": "none found", "status": "gap", "note": "No system proxy setting was found in springboard/src/net/ or the Network page."},
-    {"feature": "Ethernet bond and VLAN interfaces", "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions", "bifrost": "none found", "status": "gap", "note": "Not part of the desktop network model. Would matter only for a server-class target."},
-    {"feature": "Console user and session information", "apple": "SCDynamicStoreCopyConsoleUser", "bifrost": "none found", "status": "gap", "note": "The login shell exists but no session-user accessor is exposed to apps."},
-    {"feature": "Error reporting for calls", "apple": "SCCopyLastError, SCError, SCErrorString", "bifrost": "Rust Result values in springboard/src/net/ modules", "status": "n/a", "note": "The Apple last-error pattern is specific to the C API. Rust errors cover the same need and need no counterpart."},
-    {"feature": "Persistent configuration schema keys", "apple": "SCSchemaDefinitions (kSCComp*, kSCEnt* keys in the preferences store)", "bifrost": "none found", "status": "n/a", "note": "These keys describe Apple's preferences file layout. BifrOSt stores Wi-Fi settings in its own files (springboard/src/net/wifi_config.rs)."},
-    {"feature": "Wi-Fi information entitlement", "apple": "Access Wi-Fi Information Entitlement", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox; no network-entitlement type)", "status": "n/a", "note": "Entitlements are an Apple code-signing mechanism. BifrOSt's sandbox policy is file and process based, not entitlement based."}
+    {
+      "feature": "Reachability of hosts and addresses",
+      "apple": "SCNetworkReachabilityCreateWithName, SCNetworkReachabilityCreateWithAddress, SCNetworkReachabilityGetFlags, SCNetworkReachabilitySetCallback",
+      "bifrost": "springboard/src/net/wifi.rs (Status: state, ip, router); no host-reachability probe found",
+      "status": "partial",
+      "note": "The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either."
+    },
+    {
+      "feature": "Change notifications for network state",
+      "apple": "SCDynamicStore, SCDynamicStoreSetNotificationKeys, SCDynamicStoreCreateRunLoopSource",
+      "bifrost": "springboard/netd/src/main.rs (Subscribe; Status event on every change), springboard/proto/src/svc.rs",
+      "status": "os",
+      "note": "netd polls every 250 ms and pushes a Status event on change. Only the shell subscribes; no SDK wrapper exists."
+    },
+    {
+      "feature": "Network interface enumeration",
+      "apple": "SCNetworkInterfaceCopyAll, SCNetworkInterfaceGetBSDName, SCNetworkInterfaceGetInterfaceType, SCNetworkInterfaceGetLocalizedDisplayName",
+      "bifrost": "springboard/src/shell/desktop_network.rs (Interface, kind \"ethernet\"), springboard/src/net/netlink.rs",
+      "status": "os",
+      "note": "The shell lists interfaces and their kind and connection state. Apps get no list."
+    },
+    {
+      "feature": "Wi-Fi status, scan, join and saved networks",
+      "apple": "SCNetworkConfiguration (SCNetworkService for Wi-Fi), CoreWLAN-style status through SCNetworkInterface",
+      "bifrost": "springboard/src/net/wifi.rs (Status struct, saved networks, notes), springboard/src/net/wifi_config.rs, springboard/src/net/wpa.rs, springboard/netd/src/main.rs",
+      "status": "os",
+      "note": "netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."
+    },
+    {
+      "feature": "Wired link and address",
+      "apple": "SCNetworkInterface, SCNetworkProtocol (IPv4, IPv6) configuration",
+      "bifrost": "springboard/src/net/dhcp.rs, springboard/src/net/netlink.rs (link_up, add_addr, default_route), springboard/src/net/wifi.rs (Status.ethernet)",
+      "status": "os",
+      "note": "The system sets the link up, assigns the address and runs DHCP when no host client does. No app can read or set IPv4 or IPv6 settings."
+    },
+    {
+      "feature": "Network settings page",
+      "apple": "System Settings network panes (SCNetworkService, SCNetworkSet)",
+      "bifrost": "springboard/src/shell/pages.rs (desktop_network_page, Ethernet and Wi-Fi rows)",
+      "status": "partial",
+      "note": "The page shows Ethernet and Wi-Fi status and links to their pages. It has no service ordering, no network sets or locations, and it cannot edit IP settings."
+    },
+    {
+      "feature": "Network services, sets and locations",
+      "apple": "SCNetworkServiceCreate, SCNetworkSetCreate, SCNetworkSetSetCurrent, SCNetworkSetSetServiceOrder, SCNetworkServiceCopyAll",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."
+    },
+    {
+      "feature": "Preferences session for system configuration",
+      "apple": "SCPreferencesCreate, SCPreferencesGetValue, SCPreferencesSetValue, SCPreferencesCommitChanges, SCPreferencesApplyChanges, SCPreferencesSetCallback",
+      "bifrost": "springboard/sdk/src/defaults.rs (app defaults only)",
+      "status": "gap",
+      "note": "app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."
+    },
+    {
+      "feature": "Computer name and local host name",
+      "apple": "SCPreferencesSetComputerName, SCPreferencesSetLocalHostName, SCDynamicStoreCopyComputerName, SCDynamicStoreCopyLocalHostName",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "Not searched beyond the index. No accessor for the host name was found."
+    },
+    {
+      "feature": "Network connections (start, stop, status) for VPN and PPP",
+      "apple": "SCNetworkConnectionCreateWithServiceID, SCNetworkConnectionStart, SCNetworkConnectionStop, SCNetworkConnectionGetStatus",
+      "bifrost": "springboard/core/src/tunnel.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No VPN or dial-up connection type exists in springboard/src/net/."
+    },
+    {
+      "feature": "Proxy settings",
+      "apple": "SCDynamicStoreCopyProxies, SCDynamicStoreKeyCreateProxies",
+      "bifrost": "springboard/core/src/proxy.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system proxy setting was found in springboard/src/net/ or the Network page."
+    },
+    {
+      "feature": "Ethernet bond and VLAN interfaces",
+      "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "Not part of the desktop network model. Would matter only for a server-class target."
+    },
+    {
+      "feature": "Console user and session information",
+      "apple": "SCDynamicStoreCopyConsoleUser",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "The login shell exists but no session-user accessor is exposed to apps."
+    },
+    {
+      "feature": "Error reporting for calls",
+      "apple": "SCCopyLastError, SCError, SCErrorString",
+      "bifrost": "Rust Result values in springboard/src/net/ modules",
+      "status": "n/a",
+      "note": "The Apple last-error pattern is specific to the C API. Rust errors cover the same need and need no counterpart."
+    },
+    {
+      "feature": "Persistent configuration schema keys",
+      "apple": "SCSchemaDefinitions (kSCComp*, kSCEnt* keys in the preferences store)",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "These keys describe Apple's preferences file layout. BifrOSt stores Wi-Fi settings in its own files (springboard/src/net/wifi_config.rs)."
+    },
+    {
+      "feature": "Wi-Fi information entitlement",
+      "apple": "Access Wi-Fi Information Entitlement",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox; no network-entitlement type)",
+      "status": "n/a",
+      "note": "Entitlements are an Apple code-signing mechanism. BifrOSt's sandbox policy is file and process based, not entitlement based."
+    }
   ],
   "gaps": [
     "No SDK client for the network service (svc::net). Apps cannot read Wi-Fi or link state, which the Apple reachability and dynamic-store APIs would give them. springboard/docs/services.md lists the client as planned.",

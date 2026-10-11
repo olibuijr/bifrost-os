@@ -101,9 +101,9 @@
     {
       "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",
       "apple": "CATransform3D, CATransform3DMake*, CATransformLayer",
-      "bifrost": "springboard/src/shell/browser/style/values.rs:939 (TransformFn, CSS only)",
-      "status": "gap",
-      "note": "views have no transform and no 3D; the only transform code is the browser CSS transform parser"
+      "bifrost": "springboard/ui/src/transform3d.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. views have no transform and no 3D; the only transform code is the browser CSS transform parser"
     },
     {
       "feature": "Scroll and tiled layers (CAScrollLayer, CATiledLayer)",

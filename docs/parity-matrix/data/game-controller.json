@@ -38,9 +38,9 @@
     {
       "feature": "Haptics and rumble",
       "apple": "GCDeviceHaptics, GCDevice.haptics",
-      "bifrost": "springboard/src/bare/vibrator.rs (vibrator_available() checks for a device node, used for Keyboard Haptics)",
-      "status": "gap",
-      "note": "The vibrator check serves the keyboard feedback setting only. No rumble or haptic-locality API exists for controllers or apps."
+      "bifrost": "springboard/core/src/rumble.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The vibrator check serves the keyboard feedback setting only. No rumble or haptic-locality API exists for controllers or apps."
     },
     {
       "feature": "Battery and light on controllers",

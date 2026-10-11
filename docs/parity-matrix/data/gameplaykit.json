@@ -52,9 +52,9 @@
     {
       "feature": "Agents, goals and behaviors",
       "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
+      "bifrost": "springboard/ui/src/agents.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
     },
     {
       "feature": "Obstacles",

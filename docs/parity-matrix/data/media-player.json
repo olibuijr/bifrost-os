@@ -7,23 +7,125 @@
   "summary": "Apps can play a queue, transport, shuffle, repeat and volume through the audio service client, and the shell shows Now Playing on the lock screen and in Control Center. Apps have no library query API, no media picker, no app-facing remote command handlers and no playlist or rating API; the media library lives inside the Music app.",
   "rea_evidence": "ev_1546766457d8bd5255026935cabaef491d1c89baeafb20187fb19940392f1b34",
   "features": [
-    {"feature": "Built-in music playback", "apple": "MPMusicPlayerController, MPMediaPlayback, MPSystemMusicPlayerController", "bifrost": "springboard/sdk/src/lib.rs:88 (audio::Client), springboard/src/svc.rs (audio module, PlayQueue/Play/Pause/Toggle/Next/Prev/SeekMs commands), springboard/apps/music-desktop/src/music/engine.rs", "status": "partial", "note": "app-facing playback over the audio service; no controller object with playback state notifications for media items, and no system music app handoff"},
-    {"feature": "Player queues", "apple": "MPMusicPlayerControllerQueue, MPMusicPlayerControllerMutableQueue, MPMusicPlayerApplicationController, queue descriptors", "bifrost": "springboard/src/media/queue.rs, springboard/apps/music-desktop/src/music.rs (queue_add, play next/last)", "status": "partial", "note": "one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK"},
-    {"feature": "Media library synchronization", "apple": "MPMediaLibrary", "bifrost": "springboard/apps/music-desktop/src/music/library.rs (scan_all, scan_file)", "status": "gap", "note": "library scan lives in the Music app; no SDK API reports library state or change events"},
-    {"feature": "Media item queries and filters", "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate", "bifrost": "springboard/apps/music-desktop/src/music/browse.rs", "status": "gap", "note": "browse filters are private to the Music app; apps cannot query the media library"},
-    {"feature": "Media items, collections and playlists", "apple": "MPMediaItem, MPMediaItemCollection, MPMediaPlaylist, MPMediaPlaylistCreationMetadata, MPMediaEntity", "bifrost": "springboard/apps/music-desktop/src/music.rs (Page::Playlist, playlists)", "status": "gap", "note": "playlists exist only inside the Music app; no SDK item model"},
-    {"feature": "Item artwork and animated artwork", "apple": "MPMediaItemArtwork, MPMediaItemAnimatedArtwork", "bifrost": "springboard/sdk/src/widgets.rs:842 (Player artwork slot, app draws into it), springboard/src/shell/music/nowplaying.rs", "status": "partial", "note": "static artwork is drawn into the player slot by the app; no artwork object for the lock screen and no animated artwork"},
-    {"feature": "Media picker", "apple": "MPMediaPickerController", "bifrost": "none found", "status": "gap", "note": "no picker in the SDK; apps would need to build their own library browser"},
-    {"feature": "Volume control and route button", "apple": "MPVolumeView", "bifrost": "springboard/src/shell/control_center.rs (Now Playing tile, volume), springboard/src/svc.rs (SetVolume, SetMuted)", "status": "partial", "note": "the shell owns volume and the volume keys; apps have no volume slider widget and no output route picker"},
-    {"feature": "Now Playing information", "apple": "MPNowPlayingInfoCenter, MPNowPlayingSession", "bifrost": "springboard/sdk/src/widgets.rs:838-900 (PLAYER_PT, Player, player()), springboard/src/shell/audiosvc.rs, springboard/src/shell/music/system.rs", "status": "partial", "note": "title, artist and progress come from the audio service Track and Snapshot; apps cannot set arbitrary Now Playing fields; the lock screen and Control Center show the audio service track"},
-    {"feature": "Remote command center for apps", "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent", "bifrost": "springboard/src/shell/music/system.rs (transport buttons), springboard/src/bare/input.rs:826 (media-key remote noted, not mapped)", "status": "os", "note": "the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped"},
-    {"feature": "Track navigation and seeking", "apple": "MPChangePlaybackPositionCommand, MPSeekCommandEvent, MPSkipIntervalCommand", "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md", "status": "partial", "note": "seek and next or previous exist on the audio service; no skip-interval command object and no app-side command events"},
-    {"feature": "Playback mode: repeat and shuffle", "apple": "MPChangeRepeatModeCommand, MPChangeShuffleModeCommand, MPRepeatType, MPShuffleType", "bifrost": "springboard/src/svc.rs (SetShuffle, SetRepeat, Repeat, Live), springboard/src/media/queue.rs", "status": "partial", "note": "repeat and shuffle modes exist on the service; apps reach them through the audio client only"},
-    {"feature": "Playback rate and language options", "apple": "MPChangePlaybackRateCommand, MPNowPlayingInfoLanguageOption, MPNowPlayingInfoLanguageOptionGroup", "bifrost": "none found", "status": "gap", "note": "no playback rate control and no subtitle or audio language options for Now Playing"},
-    {"feature": "Feedback and rating", "apple": "MPFeedbackCommand, MPRatingCommand and their events", "bifrost": "springboard/apps/music-desktop/src/music.rs (favourite zone, Target::More)", "status": "gap", "note": "favourites exist only inside the Music app; no feedback or rating commands for the system"},
-    {"feature": "Now Playing sessions and focus", "apple": "MPNowPlayingSession, MPNowPlayingInfoCenter multi-player handling", "bifrost": "springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md", "status": "os", "note": "the audio service arbitrates which app plays; apps do not register as now-playing sessions"},
-    {"feature": "External player items", "apple": "MPContentItem, MPPlayableContentManager", "bifrost": "none found", "status": "gap", "note": "no API for apps to publish content items to the system; the playable content manager is deprecated by Apple"},
-    {"feature": "Deprecated movie player", "apple": "MPMoviePlayerController, MPMoviePlayerViewController, MPMovieAccessLog, MPMovieErrorLog", "bifrost": "none", "status": "n/a", "note": "deprecated by Apple; video playback is AVFoundation territory and not a Media Player counterpart"}
+    {
+      "feature": "Built-in music playback",
+      "apple": "MPMusicPlayerController, MPMediaPlayback, MPSystemMusicPlayerController",
+      "bifrost": "springboard/sdk/src/lib.rs:88 (audio::Client), springboard/src/svc.rs (audio module, PlayQueue/Play/Pause/Toggle/Next/Prev/SeekMs commands), springboard/apps/music-desktop/src/music/engine.rs",
+      "status": "partial",
+      "note": "app-facing playback over the audio service; no controller object with playback state notifications for media items, and no system music app handoff"
+    },
+    {
+      "feature": "Player queues",
+      "apple": "MPMusicPlayerControllerQueue, MPMusicPlayerControllerMutableQueue, MPMusicPlayerApplicationController, queue descriptors",
+      "bifrost": "springboard/src/media/queue.rs, springboard/apps/music-desktop/src/music.rs (queue_add, play next/last)",
+      "status": "partial",
+      "note": "one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK"
+    },
+    {
+      "feature": "Media library synchronization",
+      "apple": "MPMediaLibrary",
+      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (scan_all, scan_file)",
+      "status": "gap",
+      "note": "library scan lives in the Music app; no SDK API reports library state or change events"
+    },
+    {
+      "feature": "Media item queries and filters",
+      "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate",
+      "bifrost": "springboard/ui/src/media_query.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
+    },
+    {
+      "feature": "Media items, collections and playlists",
+      "apple": "MPMediaItem, MPMediaItemCollection, MPMediaPlaylist, MPMediaPlaylistCreationMetadata, MPMediaEntity",
+      "bifrost": "springboard/apps/music-desktop/src/music.rs (Page::Playlist, playlists)",
+      "status": "gap",
+      "note": "playlists exist only inside the Music app; no SDK item model"
+    },
+    {
+      "feature": "Item artwork and animated artwork",
+      "apple": "MPMediaItemArtwork, MPMediaItemAnimatedArtwork",
+      "bifrost": "springboard/sdk/src/widgets.rs:842 (Player artwork slot, app draws into it), springboard/src/shell/music/nowplaying.rs",
+      "status": "partial",
+      "note": "static artwork is drawn into the player slot by the app; no artwork object for the lock screen and no animated artwork"
+    },
+    {
+      "feature": "Media picker",
+      "apple": "MPMediaPickerController",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no picker in the SDK; apps would need to build their own library browser"
+    },
+    {
+      "feature": "Volume control and route button",
+      "apple": "MPVolumeView",
+      "bifrost": "springboard/src/shell/control_center.rs (Now Playing tile, volume), springboard/src/svc.rs (SetVolume, SetMuted)",
+      "status": "partial",
+      "note": "the shell owns volume and the volume keys; apps have no volume slider widget and no output route picker"
+    },
+    {
+      "feature": "Now Playing information",
+      "apple": "MPNowPlayingInfoCenter, MPNowPlayingSession",
+      "bifrost": "springboard/sdk/src/widgets.rs:838-900 (PLAYER_PT, Player, player()), springboard/src/shell/audiosvc.rs, springboard/src/shell/music/system.rs",
+      "status": "partial",
+      "note": "title, artist and progress come from the audio service Track and Snapshot; apps cannot set arbitrary Now Playing fields; the lock screen and Control Center show the audio service track"
+    },
+    {
+      "feature": "Remote command center for apps",
+      "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
+      "bifrost": "springboard/src/shell/music/system.rs (transport buttons), springboard/src/bare/input.rs:826 (media-key remote noted, not mapped)",
+      "status": "os",
+      "note": "the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped"
+    },
+    {
+      "feature": "Track navigation and seeking",
+      "apple": "MPChangePlaybackPositionCommand, MPSeekCommandEvent, MPSkipIntervalCommand",
+      "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md",
+      "status": "partial",
+      "note": "seek and next or previous exist on the audio service; no skip-interval command object and no app-side command events"
+    },
+    {
+      "feature": "Playback mode: repeat and shuffle",
+      "apple": "MPChangeRepeatModeCommand, MPChangeShuffleModeCommand, MPRepeatType, MPShuffleType",
+      "bifrost": "springboard/src/svc.rs (SetShuffle, SetRepeat, Repeat, Live), springboard/src/media/queue.rs",
+      "status": "partial",
+      "note": "repeat and shuffle modes exist on the service; apps reach them through the audio client only"
+    },
+    {
+      "feature": "Playback rate and language options",
+      "apple": "MPChangePlaybackRateCommand, MPNowPlayingInfoLanguageOption, MPNowPlayingInfoLanguageOptionGroup",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no playback rate control and no subtitle or audio language options for Now Playing"
+    },
+    {
+      "feature": "Feedback and rating",
+      "apple": "MPFeedbackCommand, MPRatingCommand and their events",
+      "bifrost": "springboard/apps/music-desktop/src/music.rs (favourite zone, Target::More)",
+      "status": "gap",
+      "note": "favourites exist only inside the Music app; no feedback or rating commands for the system"
+    },
+    {
+      "feature": "Now Playing sessions and focus",
+      "apple": "MPNowPlayingSession, MPNowPlayingInfoCenter multi-player handling",
+      "bifrost": "springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
+      "status": "os",
+      "note": "the audio service arbitrates which app plays; apps do not register as now-playing sessions"
+    },
+    {
+      "feature": "External player items",
+      "apple": "MPContentItem, MPPlayableContentManager",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no API for apps to publish content items to the system; the playable content manager is deprecated by Apple"
+    },
+    {
+      "feature": "Deprecated movie player",
+      "apple": "MPMoviePlayerController, MPMoviePlayerViewController, MPMovieAccessLog, MPMovieErrorLog",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "deprecated by Apple; video playback is AVFoundation territory and not a Media Player counterpart"
+    }
   ],
   "gaps": [
     "No app-facing media library: no query, filter, collection or library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",

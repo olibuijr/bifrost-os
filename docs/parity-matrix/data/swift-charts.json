@@ -24,16 +24,16 @@
     {
       "feature": "Line and area marks",
       "apple": "LineMark, AreaMark, LinePlot, AreaPlot, InterpolationMethod",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs)"
+      "bifrost": "springboard/ui/src/chart_marks.rs (line_path",
+      "status": "partial",
+      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs)"
     },
     {
       "feature": "Point, rectangle and rule marks",
       "apple": "PointMark, RectangleMark, RuleMark, PointPlot, RectanglePlot, RulePlot",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no scatter, range or reference-line drawing in the SDK"
+      "bifrost": "springboard/ui/src/chart_marks.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scatter, range or reference-line drawing in the SDK"
     },
     {
       "feature": "Sector marks (pie and donut)",
@@ -73,16 +73,16 @@
     {
       "feature": "Annotations",
       "apple": "AnnotationContext, AnnotationPosition, AnnotationOverflowResolution",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no value callouts or labels attached to marks"
+      "bifrost": "springboard/ui/src/chart_marks.rs (place_annotation)",
+      "status": "partial",
+      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no value callouts or labels attached to marks"
     },
     {
       "feature": "Chart proxy and plot area access",
       "apple": "ChartProxy, ChartPlotContent",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no way to map a pointer position to a data value, so no hover or selection on charts"
+      "bifrost": "springboard/ui/src/chart_marks.rs (Plot)",
+      "status": "partial",
+      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to map a pointer position to a data value, so no hover or selection on charts"
     },
     {
       "feature": "Scrolling charts",
@@ -101,9 +101,9 @@
     {
       "feature": "Accessibility and localization of charts",
       "apple": "Chart accessibility and localization (Swift Charts landing page)",
-      "bifrost": "springboard/ui/src/ax.rs (generic accessibility model), springboard/ui/src/format.rs (number and date formatting)",
-      "status": "gap",
-      "note": "no chart-level accessibility summary, audio graph or chart-specific labels; the shell bars have no accessible values"
+      "bifrost": "springboard/ui/src/chart_ax.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no chart-level accessibility summary, audio graph or chart-specific labels; the shell bars have no accessible values"
     }
   ],
   "gaps": [

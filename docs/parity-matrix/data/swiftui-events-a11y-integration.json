@@ -1,28 +1,131 @@
 {
-"framework":"SwiftUI (Event handling, Accessibility, Framework integration)",
-"doc":"https://developer.apple.com/documentation/swiftui",
-"macos_since":"10.15",
-"status":"partial",
-"bifrost":"springboard/ui/src/{gesture,keys,focus,responder,ax}.rs, springboard/sdk/src/{pasteboard,dnd,workspace}.rs, springboard/src/shell/atspi/",
-"summary":"Imperative equivalents exist for gestures, shortcuts, focus, clipboard, drag and drop, and an AT-SPI accessibility bridge. There is no declarative modifier API, rotors, or live-region announcements, and no Xcode tooling.",
-"rea_evidence":"ev_bbfb997837e04677c361c8a1baef569207c04cd765d58ab1f277e3f1865f456a",
-"features":[
-{"feature":"Gestures (tap, drag, magnify, rotate, long press)","apple":"Gesture, TapGesture, DragGesture, MagnifyGesture","bifrost":"springboard/ui/src/gesture.rs","status":"partial","note":"recognizer models, but no composable modifier API (simultaneous/sequenced)"},
-{"feature":"Input events (keyboard shortcuts, hover, key press)","apple":"keyboardShortcut, onKeyPress, onHover","bifrost":"springboard/ui/src/keys.rs, springboard/ui/src/responder.rs","status":"partial","note":"shortcuts and responder chain exist; no Touch Bar (n/a)"},
-{"feature":"Clipboard","apple":"copyable, cuttable, pasteDestination, Transferable","bifrost":"springboard/sdk/src/pasteboard.rs","status":"partial","note":"pasteboard API; no Transferable-style protocol or edit-command modifiers"},
-{"feature":"Drag and drop","apple":"draggable, dropDestination, onDrag, onDrop","bifrost":"springboard/sdk/src/dnd.rs","status":"parity","note":"drag sources and destinations with typed items"},
-{"feature":"Focus","apple":"FocusState, focusable, focusedValue, focusSection","bifrost":"springboard/ui/src/focus.rs","status":"partial","note":"focus ring model; no focused-value scene propagation"},
-{"feature":"System events (open URL, user activity)","apple":"onOpenURL, onContinueUserActivity, handlesExternalEvents","bifrost":"springboard/sdk/src/workspace.rs","status":"partial","note":"open and launch/activation events; no handoff or user activity"},
-{"feature":"Accessibility fundamentals","apple":"accessibilityElement, accessibilityChildren","bifrost":"springboard/src/shell/atspi/mod.rs, springboard/sdk/src/view/mod.rs","status":"partial","note":"AT-SPI2 bridge with hierarchy and state; shell chrome not in tree; untested on live Orca (docs/bifrost-ui.md)"},
-{"feature":"Accessible appearance","apple":"accessibilityReduceMotion, Increase contrast, differentiateWithoutColor","bifrost":"springboard/render/src/appearance.rs","status":"gap","note":"light/dark exist; no reduce-motion or contrast environment flags found"},
-{"feature":"Accessible controls","apple":"accessibilityAction, accessibilityAdjustableAction","bifrost":"springboard/ui/src/ax.rs","status":"partial","note":"press, set value, focus only; no custom actions"},
-{"feature":"Accessible descriptions","apple":"accessibilityLabel, accessibilityHint, accessibilityValue","bifrost":"springboard/ui/src/ax.rs","status":"partial","note":"label and value; no label/title/help split or announcements"},
-{"feature":"Accessible navigation (rotors)","apple":"accessibilityRotor, accessibilityLinkedGroup","bifrost":"docs/bifrost-ui.md","status":"gap","note":"documented as no rotor equivalent"},
-{"feature":"AppKit integration","apple":"NSViewRepresentable, NSHostingView","bifrost":"springboard/sdk/src/view/mod.rs","status":"n/a","note":"no AppKit in BifrOSt; one native view layer"},
-{"feature":"UIKit and WatchKit integration","apple":"UIViewRepresentable, WKInterfaceObjectRepresentable","bifrost":"docs/bifrost-ui.md","status":"n/a","note":"other platforms"},
-{"feature":"Technology-specific views (Map, Quick Look, web, share)","apple":"MapKit, QuickLook, WebKit, ShareLink views","bifrost":"springboard/sdk/src/share.rs, springboard/sdk/src/webview.rs, springboard/sdk/src/peek.rs","status":"partial","note":"share, web view and Quick Look exist; no map view"},
-{"feature":"Previews in Xcode","apple":"#Preview, PreviewProvider","bifrost":"docs/bifrost-pc-workflow.md","status":"partial","note":"host previews via bifrost pc smoke/gallery, not live in an IDE"},
-{"feature":"Xcode library customization and performance analysis","apple":"LibraryContentProvider, Instruments SwiftUI template","bifrost":"docs/bifrost-pc-workflow.md","status":"n/a","note":"Xcode-only; bench tools differ (tools/bench.py)"}
-],
-"gaps":["Accessibility rotors","Live-region announcements and custom actions","Reduce-motion and increase-contrast flags","Declarative gesture composition","Focused values across scenes","User activity/handoff"]
+  "framework": "SwiftUI (Event handling, Accessibility, Framework integration)",
+  "doc": "https://developer.apple.com/documentation/swiftui",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/{gesture,keys,focus,responder,ax}.rs, springboard/sdk/src/{pasteboard,dnd,workspace}.rs, springboard/src/shell/atspi/",
+  "summary": "Imperative equivalents exist for gestures, shortcuts, focus, clipboard, drag and drop, and an AT-SPI accessibility bridge. There is no declarative modifier API, rotors, or live-region announcements, and no Xcode tooling.",
+  "rea_evidence": "ev_bbfb997837e04677c361c8a1baef569207c04cd765d58ab1f277e3f1865f456a",
+  "features": [
+    {
+      "feature": "Gestures (tap, drag, magnify, rotate, long press)",
+      "apple": "Gesture, TapGesture, DragGesture, MagnifyGesture",
+      "bifrost": "springboard/ui/src/gesture.rs",
+      "status": "partial",
+      "note": "recognizer models, but no composable modifier API (simultaneous/sequenced)"
+    },
+    {
+      "feature": "Input events (keyboard shortcuts, hover, key press)",
+      "apple": "keyboardShortcut, onKeyPress, onHover",
+      "bifrost": "springboard/ui/src/keys.rs, springboard/ui/src/responder.rs",
+      "status": "partial",
+      "note": "shortcuts and responder chain exist; no Touch Bar (n/a)"
+    },
+    {
+      "feature": "Clipboard",
+      "apple": "copyable, cuttable, pasteDestination, Transferable",
+      "bifrost": "springboard/sdk/src/pasteboard.rs",
+      "status": "partial",
+      "note": "pasteboard API; no Transferable-style protocol or edit-command modifiers"
+    },
+    {
+      "feature": "Drag and drop",
+      "apple": "draggable, dropDestination, onDrag, onDrop",
+      "bifrost": "springboard/sdk/src/dnd.rs",
+      "status": "parity",
+      "note": "drag sources and destinations with typed items"
+    },
+    {
+      "feature": "Focus",
+      "apple": "FocusState, focusable, focusedValue, focusSection",
+      "bifrost": "springboard/ui/src/focus.rs",
+      "status": "partial",
+      "note": "focus ring model; no focused-value scene propagation"
+    },
+    {
+      "feature": "System events (open URL, user activity)",
+      "apple": "onOpenURL, onContinueUserActivity, handlesExternalEvents",
+      "bifrost": "springboard/sdk/src/workspace.rs",
+      "status": "partial",
+      "note": "open and launch/activation events; no handoff or user activity"
+    },
+    {
+      "feature": "Accessibility fundamentals",
+      "apple": "accessibilityElement, accessibilityChildren",
+      "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/sdk/src/view/mod.rs",
+      "status": "partial",
+      "note": "AT-SPI2 bridge with hierarchy and state; shell chrome not in tree; untested on live Orca (docs/bifrost-ui.md)"
+    },
+    {
+      "feature": "Accessible appearance",
+      "apple": "accessibilityReduceMotion, Increase contrast, differentiateWithoutColor",
+      "bifrost": "springboard/render/src/appearance.rs",
+      "status": "gap",
+      "note": "light/dark exist; no reduce-motion or contrast environment flags found"
+    },
+    {
+      "feature": "Accessible controls",
+      "apple": "accessibilityAction, accessibilityAdjustableAction",
+      "bifrost": "springboard/ui/src/ax.rs",
+      "status": "partial",
+      "note": "press, set value, focus only; no custom actions"
+    },
+    {
+      "feature": "Accessible descriptions",
+      "apple": "accessibilityLabel, accessibilityHint, accessibilityValue",
+      "bifrost": "springboard/ui/src/ax.rs",
+      "status": "partial",
+      "note": "label and value; no label/title/help split or announcements"
+    },
+    {
+      "feature": "Accessible navigation (rotors)",
+      "apple": "accessibilityRotor, accessibilityLinkedGroup",
+      "bifrost": "springboard/ui/src/chart_ax.rs (ChartDescriptor::step)",
+      "status": "partial",
+      "note": "Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. documented as no rotor equivalent"
+    },
+    {
+      "feature": "AppKit integration",
+      "apple": "NSViewRepresentable, NSHostingView",
+      "bifrost": "springboard/sdk/src/view/mod.rs",
+      "status": "n/a",
+      "note": "no AppKit in BifrOSt; one native view layer"
+    },
+    {
+      "feature": "UIKit and WatchKit integration",
+      "apple": "UIViewRepresentable, WKInterfaceObjectRepresentable",
+      "bifrost": "docs/bifrost-ui.md",
+      "status": "n/a",
+      "note": "other platforms"
+    },
+    {
+      "feature": "Technology-specific views (Map, Quick Look, web, share)",
+      "apple": "MapKit, QuickLook, WebKit, ShareLink views",
+      "bifrost": "springboard/sdk/src/share.rs, springboard/sdk/src/webview.rs, springboard/sdk/src/peek.rs",
+      "status": "partial",
+      "note": "share, web view and Quick Look exist; no map view"
+    },
+    {
+      "feature": "Previews in Xcode",
+      "apple": "#Preview, PreviewProvider",
+      "bifrost": "docs/bifrost-pc-workflow.md",
+      "status": "partial",
+      "note": "host previews via bifrost pc smoke/gallery, not live in an IDE"
+    },
+    {
+      "feature": "Xcode library customization and performance analysis",
+      "apple": "LibraryContentProvider, Instruments SwiftUI template",
+      "bifrost": "docs/bifrost-pc-workflow.md",
+      "status": "n/a",
+      "note": "Xcode-only; bench tools differ (tools/bench.py)"
+    }
+  ],
+  "gaps": [
+    "Accessibility rotors",
+    "Live-region announcements and custom actions",
+    "Reduce-motion and increase-contrast flags",
+    "Declarative gesture composition",
+    "Focused values across scenes",
+    "User activity/handoff"
+  ]
 }

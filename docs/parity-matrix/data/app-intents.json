@@ -7,24 +7,132 @@
   "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls, schema domains) is not covered, and Siri and Apple Intelligence have no counterpart.",
   "rea_evidence": "ev_d0e83cf707606d76adf0707300c745b42e7847dacf037c0925b97338090514ee",
   "features": [
-    {"feature": "AppIntent declaration and metadata (title, description)", "apple": "AppIntent, title, description, init()", "bifrost": "springboard/sdk/src/intents.rs (Intent::new, Intent::to_json)", "status": "partial", "note": "id, title and description are declared and listed by intent.list; no isDiscoverable flag"},
-    {"feature": "Intent parameters", "apple": "IntentParameter, primitive and framework types (Integers, Doubles, Booleans, Strings, URLs, Dates, Files, Currencies, People, Placemarks, Measurements)", "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113", "status": "partial", "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform"},
-    {"feature": "Perform and IntentResult (value and dialog)", "apple": "perform(), IntentResult, Dialog, result(dialog:), result(value:)", "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult::value, with_dialog)", "status": "partial", "note": "returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog"},
-    {"feature": "Snippets and result views", "apple": "IntentResult.Snippet, result(dialog:view:), SnippetIntent, EmptySnippetIntent", "bifrost": "none", "status": "gap", "note": "no interactive result view for an intent"},
-    {"feature": "Follow-on and opens-app results", "apple": "OpensAppIntent, result(opensIntent:), result(actionButtonIntent:)", "bifrost": "none", "status": "gap", "note": "an intent cannot hand off to another intent or open a screen in the app"},
-    {"feature": "Execution modes and authentication", "apple": "AppIntent.supportedModes, IntentModes, continueInForeground(), allowedExecutionTargets, authenticationPolicy", "bifrost": "springboard/sdk/src/intents.rs (no such fields)", "status": "gap", "note": "intents always run in the app process; no foreground or background choice and no authentication policy"},
-    {"feature": "Entities and entity queries", "apple": "AppEntity, EntityQuery (entities(for:), entities(matching:), suggestedEntities), defaultQuery, DisplayRepresentation", "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery), entity.query over the control socket", "status": "partial", "note": "suggested, by id and by string are served by App::entities; no defaultQuery, no URL representation, no ownership or sharing"},
-    {"feature": "App enums", "apple": "AppEnum, EnumURLRepresentation, defaultResolverSpecification", "bifrost": "none", "status": "gap", "note": "ParamType has no enum case; predefined value sets cannot be declared"},
-    {"feature": "App Shortcuts (AppShortcutsProvider)", "apple": "AppShortcutsProvider, AppShortcutsBuilder, shortcutTileColor, phrases", "bifrost": "springboard/sdk/src/intents.rs:127 (shortcut flag), manifest [[intent]] tables read by springboard/src/shell/intents.rs", "status": "partial", "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts"},
-    {"feature": "Spotlight shortcut search and launch", "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app", "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, Spotlight Shortcuts section)", "status": "partial", "note": "lists parameterless shortcuts without launching the app; choosing one launches the app and calls intent.<id> with up to 8 s retry; no parameter prompts or disambiguation"},
-    {"feature": "Indexing entities for Spotlight", "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex", "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem)", "status": "partial", "note": "a Core Search indexing API exists, but it is not tied to App Intents entities; no IndexedEntity protocol"},
-    {"feature": "Intent errors", "apple": "AppIntentError, CustomAppIntentErrorConvertible, needsValueError", "bifrost": "springboard/sdk/src/intents.rs:323 (failed), RpcError INVALID_PARAMS from validate", "status": "partial", "note": "failures return RPC errors with a message; no typed error set and no needs-value or confirmation errors"},
-    {"feature": "Common data types", "apple": "Common data types (Files, Dates, Currencies, Payments, People, Placemarks, Measurements)", "bifrost": "none", "status": "gap", "note": "only the parameter types listed under Intent parameters"},
-    {"feature": "Donations and discovery", "apple": "IntentDonationManager, RelevantIntentManager, RelevantIntent, AppEntityContext", "bifrost": "none", "status": "gap", "note": "apps cannot tell the system which intents were used; no relevance ranking"},
-    {"feature": "Focus filters", "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)", "bifrost": "springboard/src/shell/focus.rs (Do Not Disturb only)", "status": "gap", "note": "Focus is a notification switch; apps cannot declare filter intents"},
-    {"feature": "Widgets, controls and Live Activities", "apple": "Widgets, Live Activities, and Controls (intent-driven)", "bifrost": "none", "status": "gap", "note": "springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"},
-    {"feature": "Schema domains and visual presentation", "apple": "App schema domains, visual intelligence, Action button, side button", "bifrost": "none", "status": "gap", "note": "no system schema adoption; hardware-button and visual-search entry points are Apple-only"},
-    {"feature": "Siri and Apple Intelligence", "apple": "Siri AI, Apple Intelligence integration, voice", "bifrost": "none", "status": "n/a", "note": "Apple's assistant and voice stack; BifrOSt's dialog text is not spoken"}
+    {
+      "feature": "AppIntent declaration and metadata (title, description)",
+      "apple": "AppIntent, title, description, init()",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::new, Intent::to_json)",
+      "status": "partial",
+      "note": "id, title and description are declared and listed by intent.list; no isDiscoverable flag"
+    },
+    {
+      "feature": "Intent parameters",
+      "apple": "IntentParameter, primitive and framework types (Integers, Doubles, Booleans, Strings, URLs, Dates, Files, Currencies, People, Placemarks, Measurements)",
+      "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113",
+      "status": "partial",
+      "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform"
+    },
+    {
+      "feature": "Perform and IntentResult (value and dialog)",
+      "apple": "perform(), IntentResult, Dialog, result(dialog:), result(value:)",
+      "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult::value, with_dialog)",
+      "status": "partial",
+      "note": "returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog"
+    },
+    {
+      "feature": "Snippets and result views",
+      "apple": "IntentResult.Snippet, result(dialog:view:), SnippetIntent, EmptySnippetIntent",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no interactive result view for an intent"
+    },
+    {
+      "feature": "Follow-on and opens-app results",
+      "apple": "OpensAppIntent, result(opensIntent:), result(actionButtonIntent:)",
+      "bifrost": "springboard/sdk/src/intents.rs",
+      "status": "partial",
+      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an intent cannot hand off to another intent or open a screen in the app"
+    },
+    {
+      "feature": "Execution modes and authentication",
+      "apple": "AppIntent.supportedModes, IntentModes, continueInForeground(), allowedExecutionTargets, authenticationPolicy",
+      "bifrost": "springboard/ui/src/intent_resolve.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. intents always run in the app process; no foreground or background choice and no authentication policy"
+    },
+    {
+      "feature": "Entities and entity queries",
+      "apple": "AppEntity, EntityQuery (entities(for:), entities(matching:), suggestedEntities), defaultQuery, DisplayRepresentation",
+      "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery), entity.query over the control socket",
+      "status": "partial",
+      "note": "suggested, by id and by string are served by App::entities; no defaultQuery, no URL representation, no ownership or sharing"
+    },
+    {
+      "feature": "App enums",
+      "apple": "AppEnum, EnumURLRepresentation, defaultResolverSpecification",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "ParamType has no enum case; predefined value sets cannot be declared"
+    },
+    {
+      "feature": "App Shortcuts (AppShortcutsProvider)",
+      "apple": "AppShortcutsProvider, AppShortcutsBuilder, shortcutTileColor, phrases",
+      "bifrost": "springboard/sdk/src/intents.rs:127 (shortcut flag), manifest [[intent]] tables read by springboard/src/shell/intents.rs",
+      "status": "partial",
+      "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts"
+    },
+    {
+      "feature": "Spotlight shortcut search and launch",
+      "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, Spotlight Shortcuts section)",
+      "status": "partial",
+      "note": "lists parameterless shortcuts without launching the app; choosing one launches the app and calls intent.<id> with up to 8 s retry; no parameter prompts or disambiguation"
+    },
+    {
+      "feature": "Indexing entities for Spotlight",
+      "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex",
+      "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem)",
+      "status": "partial",
+      "note": "a Core Search indexing API exists, but it is not tied to App Intents entities; no IndexedEntity protocol"
+    },
+    {
+      "feature": "Intent errors",
+      "apple": "AppIntentError, CustomAppIntentErrorConvertible, needsValueError",
+      "bifrost": "springboard/sdk/src/intents.rs:323 (failed), RpcError INVALID_PARAMS from validate",
+      "status": "partial",
+      "note": "failures return RPC errors with a message; no typed error set and no needs-value or confirmation errors"
+    },
+    {
+      "feature": "Common data types",
+      "apple": "Common data types (Files, Dates, Currencies, Payments, People, Placemarks, Measurements)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "only the parameter types listed under Intent parameters"
+    },
+    {
+      "feature": "Donations and discovery",
+      "apple": "IntentDonationManager, RelevantIntentManager, RelevantIntent, AppEntityContext",
+      "bifrost": "springboard/sdk/src/donations.rs",
+      "status": "partial",
+      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot tell the system which intents were used; no relevance ranking"
+    },
+    {
+      "feature": "Focus filters",
+      "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
+      "bifrost": "springboard/src/shell/focus.rs (Do Not Disturb only)",
+      "status": "gap",
+      "note": "Focus is a notification switch; apps cannot declare filter intents"
+    },
+    {
+      "feature": "Widgets, controls and Live Activities",
+      "apple": "Widgets, Live Activities, and Controls (intent-driven)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"
+    },
+    {
+      "feature": "Schema domains and visual presentation",
+      "apple": "App schema domains, visual intelligence, Action button, side button",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no system schema adoption; hardware-button and visual-search entry points are Apple-only"
+    },
+    {
+      "feature": "Siri and Apple Intelligence",
+      "apple": "Siri AI, Apple Intelligence integration, voice",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple's assistant and voice stack; BifrOSt's dialog text is not spoken"
+    }
   ],
   "gaps": [
     "Foreground and background execution modes, and authentication policy on AppIntent",

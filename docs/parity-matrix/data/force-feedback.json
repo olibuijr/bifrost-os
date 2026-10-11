@@ -2,19 +2,67 @@
   "framework": "Force Feedback",
   "doc": "https://developer.apple.com/documentation/forcefeedback",
   "macos_since": "10.2",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none (no force-feedback device layer; evdev reader in springboard/src/bare/input.rs ignores EV_FF)",
   "summary": "Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDownload, FFEffectStart) for HID force-feedback devices such as wheels and joysticks. BifrOSt has no force-feedback code path: the evdev reader does not read EV_FF capabilities or upload effects, and the SDK's haptic() call is dropped by the shell. Nothing in the framework is covered.",
   "rea_evidence": "ev_cfcdde9a3970a00d568422cade4aaff07d84740a3b46f512a0a2d9db35042d16",
   "features": [
-    {"feature": "Device discovery and capabilities", "apple": "FFIsForceFeedback, FFCreateDevice, FFReleaseDevice, FFDeviceGetForceFeedbackCapabilities, FFCAPABILITIES", "bifrost": "springboard/src/bare/input.rs:299 (capability bitmaps via EVIOCGBIT; EV_FF not read)", "status": "gap", "note": "evdev bitmaps are parsed for keys, abs and switches only; no check for the FF capability bit, so a wheel or gamepad with force feedback is not identified as one"},
-    {"feature": "Effect creation, download and playback", "apple": "FFDeviceCreateEffect, FFEffectDownload, FFEffectStart, FFEffectStop, FFEffectUnload, FFEffectSetParameters, FFEffectGetParameters, FFEFFECT, FFPERIODIC, FFCONSTANTFORCE, FFRAMPFORCE, FFCONDITION, FFCUSTOMFORCE, FFENVELOPE", "bifrost": "springboard/src/bare/input.rs:26-30 (EV constants: EV_SYN, EV_KEY, EV_ABS, EV_SW, EV_REL only)", "status": "gap", "note": "no EVIOCSFF upload, no FF effect structures, no EV_FF play events"},
-    {"feature": "Device properties and force-feedback state", "apple": "FFDeviceGetForceFeedbackProperty, FFDeviceSetForceFeedbackProperty, FFDeviceGetForceFeedbackState, FFDeviceSendForceFeedbackCommand, FFState, FFProperty", "bifrost": "none", "status": "gap", "note": "no gain, autocenter or actuator-enable control"},
-    {"feature": "Hardware escape commands", "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag", "bifrost": "none", "status": "gap", "note": "no driver pass-through"},
-    {"feature": "Cooperative level and coordinate system", "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag", "bifrost": "none", "status": "gap", "note": "Apple's own API marks FFDeviceSetCooperativeLevel as unimplemented in version 1.0; nothing to match"},
-    {"feature": "Plug-in interface for drivers", "apple": "ForceFeedback.h public interfaces, kFFAPI version variables, FFDeviceObjectReference, FFEffectObjectReference", "bifrost": "none", "status": "n/a", "note": "Apple's plug-in model sits on IOKit/HID Manager, a macOS driver stack. On Linux the kernel evdev layer provides the equivalent, and BifrOSt does not expose it to apps, so the row is only a gap if app-facing FF is wanted"},
-    {"feature": "App-facing haptic request", "apple": "No direct Force Feedback counterpart; closest is a generic haptic call", "bifrost": "springboard/sdk/src/runtime.rs:258 (haptic() sends ToShell::Haptic); springboard/proto/src/lib.rs:599 (ToShell::Haptic); springboard/src/shell/apphost.rs:1184 (default arm drops it)", "status": "gap", "note": "the SDK call is a no-op: the shell's message match has no Haptic arm"},
-    {"feature": "Keyboard haptics setting (not force feedback)", "apple": "Not part of Force Feedback", "bifrost": "springboard/src/bare/vibrator.rs:6 (probes /sys/class/leds/vibrator and /sys/class/timed_output/vibrator); springboard/src/shell/options.rs:47 (keyboard_haptics); springboard/src/shell/pages.rs:858 (Sounds switch)", "status": "partial", "note": "a Settings switch only shown when a sysfs vibrator node exists; it does not drive any force-feedback device or effect"}
+    {
+      "feature": "Device discovery and capabilities",
+      "apple": "FFIsForceFeedback, FFCreateDevice, FFReleaseDevice, FFDeviceGetForceFeedbackCapabilities, FFCAPABILITIES",
+      "bifrost": "springboard/core/src/gamepad.rs (supports_rumble)",
+      "status": "partial",
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. evdev bitmaps are parsed for keys, abs and switches only; no check for the FF capability bit, so a wheel or gamepad with force feedback is not identified as one"
+    },
+    {
+      "feature": "Effect creation, download and playback",
+      "apple": "FFDeviceCreateEffect, FFEffectDownload, FFEffectStart, FFEffectStop, FFEffectUnload, FFEffectSetParameters, FFEffectGetParameters, FFEFFECT, FFPERIODIC, FFCONSTANTFORCE, FFRAMPFORCE, FFCONDITION, FFCUSTOMFORCE, FFENVELOPE",
+      "bifrost": "springboard/src/bare/input.rs:26-30 (EV constants: EV_SYN, EV_KEY, EV_ABS, EV_SW, EV_REL only)",
+      "status": "gap",
+      "note": "no EVIOCSFF upload, no FF effect structures, no EV_FF play events"
+    },
+    {
+      "feature": "Device properties and force-feedback state",
+      "apple": "FFDeviceGetForceFeedbackProperty, FFDeviceSetForceFeedbackProperty, FFDeviceGetForceFeedbackState, FFDeviceSendForceFeedbackCommand, FFState, FFProperty",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no gain, autocenter or actuator-enable control"
+    },
+    {
+      "feature": "Hardware escape commands",
+      "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no driver pass-through"
+    },
+    {
+      "feature": "Cooperative level and coordinate system",
+      "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "Apple's own API marks FFDeviceSetCooperativeLevel as unimplemented in version 1.0; nothing to match"
+    },
+    {
+      "feature": "Plug-in interface for drivers",
+      "apple": "ForceFeedback.h public interfaces, kFFAPI version variables, FFDeviceObjectReference, FFEffectObjectReference",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple's plug-in model sits on IOKit/HID Manager, a macOS driver stack. On Linux the kernel evdev layer provides the equivalent, and BifrOSt does not expose it to apps, so the row is only a gap if app-facing FF is wanted"
+    },
+    {
+      "feature": "App-facing haptic request",
+      "apple": "No direct Force Feedback counterpart; closest is a generic haptic call",
+      "bifrost": "springboard/sdk/src/runtime.rs:258 (haptic() sends ToShell::Haptic); springboard/proto/src/lib.rs:599 (ToShell::Haptic); springboard/src/shell/apphost.rs:1184 (default arm drops it)",
+      "status": "gap",
+      "note": "the SDK call is a no-op: the shell's message match has no Haptic arm"
+    },
+    {
+      "feature": "Keyboard haptics setting (not force feedback)",
+      "apple": "Not part of Force Feedback",
+      "bifrost": "springboard/src/bare/vibrator.rs:6 (probes /sys/class/leds/vibrator and /sys/class/timed_output/vibrator); springboard/src/shell/options.rs:47 (keyboard_haptics); springboard/src/shell/pages.rs:858 (Sounds switch)",
+      "status": "partial",
+      "note": "a Settings switch only shown when a sysfs vibrator node exists; it does not drive any force-feedback device or effect"
+    }
   ],
   "gaps": [
     "No evdev force-feedback path: EV_FF is not read, no EVIOCSFF effect upload, no play events (springboard/src/bare/input.rs has no EV_FF; grep count 0).",

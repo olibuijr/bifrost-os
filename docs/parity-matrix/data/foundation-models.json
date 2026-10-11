@@ -17,9 +17,9 @@
     {
       "feature": "Sessions and prompts",
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
-      "bifrost": "springboard/apps/assistant-desktop/src/api.rs (stream, request body builder)",
-      "status": "gap",
-      "note": "the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app"
+      "bifrost": "springboard/ui/src/model_session.rs (Session::prompt",
+      "status": "partial",
+      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app"
     },
     {
       "feature": "Streaming responses",
@@ -73,9 +73,9 @@
     {
       "feature": "Dynamic instructions and profiles",
       "apple": "LanguageModelSession.Profile, DynamicProfile, DynamicInstructions",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no equivalent"
+      "bifrost": "springboard/ui/src/model_session.rs (Profile",
+      "status": "partial",
+      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent"
     },
     {
       "feature": "Custom language model provider",
@@ -87,9 +87,9 @@
     {
       "feature": "Session properties",
       "apple": "SessionPropertyKey, SessionPropertyValues, LanguageModelSession.SessionProperty",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no equivalent"
+      "bifrost": "springboard/ui/src/model_session.rs (PropertyKey",
+      "status": "partial",
+      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent"
     },
     {
       "feature": "Safety guardrails for generated output",

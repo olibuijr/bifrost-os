@@ -31,9 +31,9 @@
     {
       "feature": "Additional data capture (depth, metadata, synchronizer)",
       "apple": "AVCaptureDepthDataOutput, AVCaptureMetadataOutput, AVCaptureDataOutputSynchronizer",
-      "bifrost": "springboard/src/shell/camera/qr.rs",
-      "status": "gap",
-      "note": "Only an in-app QR scanner; no depth, face or barcode metadata outputs, no synchronizer"
+      "bifrost": "springboard/ui/src/capture_sync.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an in-app QR scanner; no depth, face or barcode metadata outputs, no synchronizer"
     },
     {
       "feature": "Camera/microphone permission",

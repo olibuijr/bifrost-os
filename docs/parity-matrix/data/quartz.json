@@ -7,21 +7,111 @@
   "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, and PDF text extraction for Books. No app-facing SDK API exists for image views, slideshows, Core Image filters, PDF documents, PDF annotations or Quartz Composer.",
   "rea_evidence": "ev_785e790b371318807d1dd7aa7f8f22ed4ec659d31eb5ce193106fc12c14d19a5",
   "features": [
-    {"feature": "Image view and browser (IKImageView, IKImageBrowserView)", "apple": "IKImageView, IKImageBrowserView (deprecated), IKImageBrowserCell, IKImageBrowserDataSource, IKImageBrowserDelegate", "bifrost": "springboard/src/shell/photos/viewer.rs, springboard/src/shell/photos/grid.rs, springboard/src/shell/photos/zoom.rs", "status": "partial", "note": "Full-screen viewer with paging, pinch and double-tap zoom and pan, and a grid of thumbnails, all inside the Photos shell app. No SDK view for apps to embed an image view or browser."},
-    {"feature": "Image editing panel and save options (IKImageEditPanel, IKSaveOptions)", "apple": "IKImageEditPanel, IKImageEditPanelDataSource, IKSaveOptions", "bifrost": "springboard/src/shell/photos/edit.rs", "status": "partial", "note": "Edit mode does quarter-turn rotate, straighten, crop to aspect presets, brightness and contrast, and saves a copy (save_copy). No edit panel for apps and no save-options UI."},
-    {"feature": "Slideshow (IKSlideshow)", "apple": "IKSlideshow, IKSlideshowDataSource", "bifrost": "springboard/src/shell/photos/slideshow.rs", "status": "partial", "note": "Cross-fade and Ken Burns drift over an album or selection, with auto-hiding controls. Lives in Photos only; no SDK slideshow type and no screen saver hook."},
-    {"feature": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)", "apple": "CIFilter, IKFilterBrowserPanel, IKFilterBrowserView, IKFilterUIView, IKFilterCustomUIProvider", "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum)", "status": "gap", "note": "Five fixed per-pixel colour filters (Original, Vivid, Mono, Noir, Warm). No filter graph, no parameterised CIFilter-style objects, no filter browser and no kernel or GPU image processing API."},
-    {"feature": "Camera device browser and picture taker (IKDeviceBrowserView, IKCameraDeviceView, IKPictureTaker)", "apple": "IKDeviceBrowserView, IKCameraDeviceView, IKPictureTaker", "bifrost": "springboard/src/shell/camera/mod.rs", "status": "partial", "note": "Camera app has a live viewfinder, timer, QR scanner and last-photo thumbnail, opened by the shell only. No SDK device browser, picture-taker panel or camera download delegate. The camera stream is only touched while the app is open."},
-    {"feature": "Scanner view (IKScannerDeviceView)", "apple": "IKScannerDeviceView, IKScannerDeviceViewDelegate", "bifrost": "none found", "status": "gap", "note": "No scanner support: the only scanner hits in the tree are the camera QR decoder and unrelated text."},
-    {"feature": "Image decoding for apps", "apple": "IKImageView input (CGImage-backed image loading); no direct Quartz decode call in this framework", "bifrost": "springboard/render/src/imgdec.rs (decode, fit, cover, contain, is_image)", "status": "partial", "note": "JPEG and PNG decode into premultiplied RGBA with fit and cover scaling. Used by the shell apps; not exposed as an SDK image type."},
-    {"feature": "Quick Look preview panel (QLPreviewPanel, QLPreviewItem, QLPreviewPanelDataSource)", "apple": "QLPreviewPanel protocols, QLPreviewItem, QLPreviewPanelDelegate", "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354", "status": "partial", "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet."},
-    {"feature": "Quick Look thumbnails (QLThumbnailGenerator, QLThumbnailGenerator update)", "apple": "QLThumbnailGenerator-style generation for file URLs", "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache)", "status": "partial", "note": "Cache of thumbnail PNG paths keyed by URL, size and scale, with a caller-supplied generator. No built-in renderer for any file type and no update handlers, only a single result."},
-    {"feature": "QLPreviewView (embedded preview)", "apple": "QLPreviewView, QLPreviewViewStyle", "bifrost": "none found", "status": "gap", "note": "No embeddable preview view; the peek.rs gap list says the same."},
-    {"feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)", "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection", "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs, pdf/obj.rs, pdf/content.rs", "status": "os", "note": "The Books engine parses PDF objects and page trees and extracts text lines and images in reading order. It is internal to Books; apps get no document, page, outline or selection API."},
-    {"feature": "PDF display view (PDFView, PDFThumbnailView)", "apple": "PDFView, PDFThumbnailView", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the shared page model)", "status": "partial", "note": "PDF pages are reflowed into the Books page model rather than drawn at fixed layout. No fixed-layout page view, thumbnail view, zoom or selection for apps. PDFCraft is a third-party upstream binary (apps/pdfcraft-desktop/upstream.toml), not an SDK API."},
-    {"feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)", "apple": "PDFAnnotation, PDFAction, PDFDestination, PDFAppearanceCharacteristics, PDFBorder; widget how-to articles", "bifrost": "none in springboard/src/shell/books/engine/pdf/ (no Annots or AcroForm handling)", "status": "gap", "note": "The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."},
-    {"feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)", "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants", "bifrost": "springboard/sdk/src/print.rs (PrintOperation, Destination::Pdf)", "status": "partial", "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet."},
-    {"feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)", "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository", "bifrost": "none found", "status": "gap", "note": "No node-based composition runtime, no composition layer or view, and no custom patch API. The Quartz Composer status (deprecation and removal) was not checked against the official docs, so this row only records the absence of a counterpart."}
+    {
+      "feature": "Image view and browser (IKImageView, IKImageBrowserView)",
+      "apple": "IKImageView, IKImageBrowserView (deprecated), IKImageBrowserCell, IKImageBrowserDataSource, IKImageBrowserDelegate",
+      "bifrost": "springboard/src/shell/photos/viewer.rs, springboard/src/shell/photos/grid.rs, springboard/src/shell/photos/zoom.rs",
+      "status": "partial",
+      "note": "Full-screen viewer with paging, pinch and double-tap zoom and pan, and a grid of thumbnails, all inside the Photos shell app. No SDK view for apps to embed an image view or browser."
+    },
+    {
+      "feature": "Image editing panel and save options (IKImageEditPanel, IKSaveOptions)",
+      "apple": "IKImageEditPanel, IKImageEditPanelDataSource, IKSaveOptions",
+      "bifrost": "springboard/src/shell/photos/edit.rs",
+      "status": "partial",
+      "note": "Edit mode does quarter-turn rotate, straighten, crop to aspect presets, brightness and contrast, and saves a copy (save_copy). No edit panel for apps and no save-options UI."
+    },
+    {
+      "feature": "Slideshow (IKSlideshow)",
+      "apple": "IKSlideshow, IKSlideshowDataSource",
+      "bifrost": "springboard/src/shell/photos/slideshow.rs",
+      "status": "partial",
+      "note": "Cross-fade and Ken Burns drift over an album or selection, with auto-hiding controls. Lives in Photos only; no SDK slideshow type and no screen saver hook."
+    },
+    {
+      "feature": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)",
+      "apple": "CIFilter, IKFilterBrowserPanel, IKFilterBrowserView, IKFilterUIView, IKFilterCustomUIProvider",
+      "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum)",
+      "status": "gap",
+      "note": "Five fixed per-pixel colour filters (Original, Vivid, Mono, Noir, Warm). No filter graph, no parameterised CIFilter-style objects, no filter browser and no kernel or GPU image processing API."
+    },
+    {
+      "feature": "Camera device browser and picture taker (IKDeviceBrowserView, IKCameraDeviceView, IKPictureTaker)",
+      "apple": "IKDeviceBrowserView, IKCameraDeviceView, IKPictureTaker",
+      "bifrost": "springboard/src/shell/camera/mod.rs",
+      "status": "partial",
+      "note": "Camera app has a live viewfinder, timer, QR scanner and last-photo thumbnail, opened by the shell only. No SDK device browser, picture-taker panel or camera download delegate. The camera stream is only touched while the app is open."
+    },
+    {
+      "feature": "Scanner view (IKScannerDeviceView)",
+      "apple": "IKScannerDeviceView, IKScannerDeviceViewDelegate",
+      "bifrost": "springboard/ui/src/scan_job.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scanner support: the only scanner hits in the tree are the camera QR decoder and unrelated text."
+    },
+    {
+      "feature": "Image decoding for apps",
+      "apple": "IKImageView input (CGImage-backed image loading); no direct Quartz decode call in this framework",
+      "bifrost": "springboard/render/src/imgdec.rs (decode, fit, cover, contain, is_image)",
+      "status": "partial",
+      "note": "JPEG and PNG decode into premultiplied RGBA with fit and cover scaling. Used by the shell apps; not exposed as an SDK image type."
+    },
+    {
+      "feature": "Quick Look preview panel (QLPreviewPanel, QLPreviewItem, QLPreviewPanelDataSource)",
+      "apple": "QLPreviewPanel protocols, QLPreviewItem, QLPreviewPanelDelegate",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354",
+      "status": "partial",
+      "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet."
+    },
+    {
+      "feature": "Quick Look thumbnails (QLThumbnailGenerator, QLThumbnailGenerator update)",
+      "apple": "QLThumbnailGenerator-style generation for file URLs",
+      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache)",
+      "status": "partial",
+      "note": "Cache of thumbnail PNG paths keyed by URL, size and scale, with a caller-supplied generator. No built-in renderer for any file type and no update handlers, only a single result."
+    },
+    {
+      "feature": "QLPreviewView (embedded preview)",
+      "apple": "QLPreviewView, QLPreviewViewStyle",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No embeddable preview view; the peek.rs gap list says the same."
+    },
+    {
+      "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
+      "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection",
+      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs, pdf/obj.rs, pdf/content.rs",
+      "status": "os",
+      "note": "The Books engine parses PDF objects and page trees and extracts text lines and images in reading order. It is internal to Books; apps get no document, page, outline or selection API."
+    },
+    {
+      "feature": "PDF display view (PDFView, PDFThumbnailView)",
+      "apple": "PDFView, PDFThumbnailView",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the shared page model)",
+      "status": "partial",
+      "note": "PDF pages are reflowed into the Books page model rather than drawn at fixed layout. No fixed-layout page view, thumbnail view, zoom or selection for apps. PDFCraft is a third-party upstream binary (apps/pdfcraft-desktop/upstream.toml), not an SDK API."
+    },
+    {
+      "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
+      "apple": "PDFAnnotation, PDFAction, PDFDestination, PDFAppearanceCharacteristics, PDFBorder; widget how-to articles",
+      "bifrost": "none in springboard/src/shell/books/engine/pdf/ (no Annots or AcroForm handling)",
+      "status": "gap",
+      "note": "The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."
+    },
+    {
+      "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",
+      "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
+      "bifrost": "springboard/sdk/src/print.rs (PrintOperation, Destination::Pdf)",
+      "status": "partial",
+      "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet."
+    },
+    {
+      "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",
+      "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No node-based composition runtime, no composition layer or view, and no custom patch API. The Quartz Composer status (deprecation and removal) was not checked against the official docs, so this row only records the absence of a counterpart."
+    }
   ],
   "gaps": [
     "No SDK image view or image browser for apps (ImageKit IKImageView and IKImageBrowserView); image viewing exists only inside the Photos shell app.",

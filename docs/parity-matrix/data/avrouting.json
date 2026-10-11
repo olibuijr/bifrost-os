@@ -2,19 +2,67 @@
   "framework": "AVRouting",
   "doc": "https://developer.apple.com/documentation/avrouting",
   "macos_since": "13.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (single audio service), springboard/src/media/route.rs (Speaker/Headphones output route), springboard/apps/music-desktop/src/music.rs (route glyph only)",
   "summary": "AVRouting lets an app add third-party media receivers to the system route picker (AirPlay-style) through custom routing controllers, routing events and action items, and arbitrates playback between participants. BifrOSt has no route picker, no third-party receiver discovery and no playback arbitration API; the only routing is a local speaker/headphone switch in the audio layer.",
   "rea_evidence": "ev_14110f8179b556b56f5de61c07bede4c7dfac89ff255facccf244207b2b7d697",
   "features": [
-    {"feature": "System route picker with custom destinations", "apple": "AVRoutePickerView, AVCustomRoutingController, AVCustomRoutingDelegate", "bifrost": "none", "status": "gap", "note": "no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"},
-    {"feature": "Authorized routes and route activation", "apple": "AVCustomRoutingController.authorizedRoutes, setActive(_:for:), isRouteActive(_:), invalidateAuthorization(for:)", "bifrost": "none", "status": "gap", "note": "no per-app authorization of network receivers"},
-    {"feature": "Route addresses on the local network", "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP", "bifrost": "none", "status": "gap", "note": "no receiver address registry in the SDK; network state is in netd only"},
-    {"feature": "Custom action items in the picker", "apple": "AVCustomRoutingActionItem, customActionItems", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Route events", "apple": "AVCustomRoutingEvent, AVCustomDeviceRoute, AVCustomRoutingEventReason", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Device discovery extension", "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)", "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)", "status": "gap", "note": "no extension point that lets an app report a receiver to the shell; springboard/src/shell/extras.rs was not read in depth"},
-    {"feature": "Playback arbitration between participants", "apple": "AVRoutingPlaybackArbiter (shared, preferredParticipantForExternalPlayback, preferredParticipantForNonMixableAudioRoutes), AVRoutingPlaybackParticipant", "bifrost": "springboard/audiod/src/main.rs (one audio service for apps); springboard/apps/voicememos-desktop/src/voicememos.rs (stops playback when another app takes the speaker)", "status": "gap", "note": "audiod serves the speaker, but apps cannot declare a preferred participant; the voice memo app only yields by stopping. Apple's arbiter is Mac Catalyst 26.0 only"},
-    {"feature": "Output route switching (local)", "apple": "not part of AVRouting (AVAudioSession / AVRouteDetector in other frameworks)", "bifrost": "springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)", "status": "os", "note": "a system-layer capability for the built-in card only; no SDK API and no Bluetooth or network output in the same model"}
+    {
+      "feature": "System route picker with custom destinations",
+      "apple": "AVRoutePickerView, AVCustomRoutingController, AVCustomRoutingDelegate",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"
+    },
+    {
+      "feature": "Authorized routes and route activation",
+      "apple": "AVCustomRoutingController.authorizedRoutes, setActive(_:for:), isRouteActive(_:), invalidateAuthorization(for:)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no per-app authorization of network receivers"
+    },
+    {
+      "feature": "Route addresses on the local network",
+      "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no receiver address registry in the SDK; network state is in netd only"
+    },
+    {
+      "feature": "Custom action items in the picker",
+      "apple": "AVCustomRoutingActionItem, customActionItems",
+      "bifrost": "none",
+      "status": "gap",
+      "note": ""
+    },
+    {
+      "feature": "Route events",
+      "apple": "AVCustomRoutingEvent, AVCustomDeviceRoute, AVCustomRoutingEventReason",
+      "bifrost": "none",
+      "status": "gap",
+      "note": ""
+    },
+    {
+      "feature": "Device discovery extension",
+      "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
+      "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)",
+      "status": "gap",
+      "note": "no extension point that lets an app report a receiver to the shell; springboard/src/shell/extras.rs was not read in depth"
+    },
+    {
+      "feature": "Playback arbitration between participants",
+      "apple": "AVRoutingPlaybackArbiter (shared, preferredParticipantForExternalPlayback, preferredParticipantForNonMixableAudioRoutes), AVRoutingPlaybackParticipant",
+      "bifrost": "springboard/ui/src/playback_arbiter.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audiod serves the speaker, but apps cannot declare a preferred participant; the voice memo app only yields by stopping. Apple's arbiter is Mac Catalyst 26.0 only"
+    },
+    {
+      "feature": "Output route switching (local)",
+      "apple": "not part of AVRouting (AVAudioSession / AVRouteDetector in other frameworks)",
+      "bifrost": "springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)",
+      "status": "os",
+      "note": "a system-layer capability for the built-in card only; no SDK API and no Bluetooth or network output in the same model"
+    }
   ],
   "gaps": [
     "No system route picker or AirPlay-style destination list in the shell or SDK",

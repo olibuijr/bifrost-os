@@ -17,9 +17,9 @@
     {
       "feature": "Authorization and privacy",
       "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No permission prompt or per-app grant. Any code in the shell reads the whole file."
+      "bifrost": "springboard/ui/src/contact_access.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or per-app grant. Any code in the shell reads the whole file."
     },
     {
       "feature": "Contact data model (CNContact, CNMutableContact)",
@@ -38,9 +38,9 @@
     {
       "feature": "Fetch with key-based property selection",
       "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys",
-      "bifrost": "springboard/src/shell/contactstore.rs:parse, search",
-      "status": "gap",
-      "note": "Every fetch loads all fields. No key list and no partial contacts. Search covers name, phone, email, notes, company and address."
+      "bifrost": "springboard/ui/src/contact_fetch.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Every fetch loads all fields. No key list and no partial contacts. Search covers name, phone, email, notes, company and address."
     },
     {
       "feature": "Save requests (CNSaveRequest)",
@@ -94,9 +94,9 @@
     {
       "feature": "Contact picker and access UI (ContactsUI)",
       "apple": "Contact access button, Contact access picker (sample code)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No picker that lets an app receive one chosen contact without seeing the whole store."
+      "bifrost": "springboard/ui/src/contact_access.rs (model only",
+      "status": "partial",
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No picker that lets an app receive one chosen contact without seeing the whole store."
     },
     {
       "feature": "Errors and validation",

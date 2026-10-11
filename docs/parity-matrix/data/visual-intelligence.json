@@ -7,13 +7,55 @@
   "summary": "Apple's framework is an app-side search hook: the system passes a captured camera or screenshot scene to an app, which returns matching content through App Intents. BifrOSt has no visual search and no scene-to-app delivery. Its App Intents, entity query and Core Spotlight code cover the App Intents half, which is only partly the same contract; the Apple Intelligence classification and Siri schemas have no counterpart.",
   "rea_evidence": "ev_7363bdc6dc7795ace62ea12ce957cc5ae911ee04ad4b7676496c893b9e2726f7",
   "features": [
-    {"feature": "Visual search integration with the system camera and screenshots", "apple": "Visual Intelligence framework; Integrating your app with visual intelligence (article)", "bifrost": "none (springboard/src/shell/camera/qr.rs is QR decoding only)", "status": "gap", "note": "No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only."},
-    {"feature": "SemanticContentDescriptor (scene labels, pixel buffer for apps)", "apple": "SemanticContentDescriptor (labels, pixelBuffer)", "bifrost": "none", "status": "gap", "note": "Scene labels come from Apple Intelligence classification, which is n/a. A BifrOSt version would need a local classifier and an app-facing type; neither exists."},
-    {"feature": "Adopting App Intents to support system experiences", "apple": "App Intents framework: AppIntent, AppEntity, EntityQuery, Spotlight and Shortcuts exposure", "bifrost": "bifrost_app::intents (springboard/sdk/src/intents.rs); springboard/src/shell/intents.rs", "status": "partial", "note": "Typed intents, parameters, entity.query and [[intent]] manifest shortcuts that Spotlight lists are present. No Shortcuts app integration or Siri invocation; entity queries are served only over the control socket."},
-    {"feature": "Creating your first app intent (Spotlight and Shortcuts)", "apple": "Creating your first app intent (article)", "bifrost": "springboard/sdk/src/lib.rs (App::intents); springboard/src/shell/intents.rs", "status": "partial", "note": "Spotlight lists shortcuts without parameters and runs them by calling intent.<id> on the app control socket. A Shortcuts app does not exist in BifrOSt."},
-    {"feature": "Making actions and content discoverable by Apple Intelligence (schemas for Siri)", "apple": "App Intents schemas from relevant domains", "bifrost": "none", "status": "n/a", "note": "Siri and Apple Intelligence are Apple services. BifrOSt has no schema registry and no assistant that consumes one."},
-    {"feature": "Content in system search results (Core Spotlight index, adjacent to Visual Intelligence results)", "apple": "CSSearchableIndex (cross-referenced by search integration)", "bifrost": "springboard/sdk/src/quicksearch.rs; springboard/src/shell/spotindex.rs; docs/bifrost-ui.md 'Core Spotlight'", "status": "parity", "note": "Apps index items; the Spotlight panel lists them under Documents and continue_activity opens them. Notes adopts it (springboard/apps/notes-desktop/src/main.rs). This is not Visual Intelligence, so it does not count toward the framework's status."},
-    {"feature": "Camera or screenshot object selection feeding a search", "apple": "Visual Intelligence camera search button; screenshot object selection", "bifrost": "springboard/src/shell/camera/mod.rs (camera app, stills only)", "status": "gap", "note": "The camera takes photos and reads QR codes. No object selection in screenshots and no search action on a frame."}
+    {
+      "feature": "Visual search integration with the system camera and screenshots",
+      "apple": "Visual Intelligence framework; Integrating your app with visual intelligence (article)",
+      "bifrost": "springboard/sdk/src/visual_search.rs, springboard/ui/src/visual_search.rs",
+      "status": "partial",
+      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only."
+    },
+    {
+      "feature": "SemanticContentDescriptor (scene labels, pixel buffer for apps)",
+      "apple": "SemanticContentDescriptor (labels, pixelBuffer)",
+      "bifrost": "springboard/ui/src/visual_search.rs (Scene)",
+      "status": "partial",
+      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scene labels come from Apple Intelligence classification, which is n/a. A BifrOSt version would need a local classifier and an app-facing type; neither exists."
+    },
+    {
+      "feature": "Adopting App Intents to support system experiences",
+      "apple": "App Intents framework: AppIntent, AppEntity, EntityQuery, Spotlight and Shortcuts exposure",
+      "bifrost": "bifrost_app::intents (springboard/sdk/src/intents.rs); springboard/src/shell/intents.rs",
+      "status": "partial",
+      "note": "Typed intents, parameters, entity.query and [[intent]] manifest shortcuts that Spotlight lists are present. No Shortcuts app integration or Siri invocation; entity queries are served only over the control socket."
+    },
+    {
+      "feature": "Creating your first app intent (Spotlight and Shortcuts)",
+      "apple": "Creating your first app intent (article)",
+      "bifrost": "springboard/sdk/src/lib.rs (App::intents); springboard/src/shell/intents.rs",
+      "status": "partial",
+      "note": "Spotlight lists shortcuts without parameters and runs them by calling intent.<id> on the app control socket. A Shortcuts app does not exist in BifrOSt."
+    },
+    {
+      "feature": "Making actions and content discoverable by Apple Intelligence (schemas for Siri)",
+      "apple": "App Intents schemas from relevant domains",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Siri and Apple Intelligence are Apple services. BifrOSt has no schema registry and no assistant that consumes one."
+    },
+    {
+      "feature": "Content in system search results (Core Spotlight index, adjacent to Visual Intelligence results)",
+      "apple": "CSSearchableIndex (cross-referenced by search integration)",
+      "bifrost": "springboard/sdk/src/quicksearch.rs; springboard/src/shell/spotindex.rs; docs/bifrost-ui.md 'Core Spotlight'",
+      "status": "parity",
+      "note": "Apps index items; the Spotlight panel lists them under Documents and continue_activity opens them. Notes adopts it (springboard/apps/notes-desktop/src/main.rs). This is not Visual Intelligence, so it does not count toward the framework's status."
+    },
+    {
+      "feature": "Camera or screenshot object selection feeding a search",
+      "apple": "Visual Intelligence camera search button; screenshot object selection",
+      "bifrost": "springboard/ui/src/visual_search.rs (Scene::crop",
+      "status": "partial",
+      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The camera takes photos and reads QR codes. No object selection in screenshots and no search action on a frame."
+    }
   ],
   "gaps": [
     "No system delivery of camera or screenshot scenes to third-party apps (the core of the framework).",

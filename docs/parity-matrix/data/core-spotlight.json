@@ -59,9 +59,9 @@
     {
       "feature": "App-side search queries",
       "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app",
-      "bifrost": "springboard/src/shell/spotindex.rs:96 (Index::search) and :221 (search) are shell-internal; no SDK query type",
-      "status": "gap",
-      "note": "an app cannot query its own or other apps' indexed items through the SDK"
+      "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items)",
+      "status": "partial",
+      "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK"
     },
     {
       "feature": "User query interface and suggestions",

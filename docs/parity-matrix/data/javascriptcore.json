@@ -2,20 +2,74 @@
   "framework": "JavaScriptCore",
   "doc": "https://developer.apple.com/documentation/javascriptcore",
   "macos_since": "10.5",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::eval), springboard/sdk/src/webview_dev.rs (dev_eval, DevEvent::Eval); no standalone JS context in the SDK",
   "summary": "JavaScriptCore lets an app run JavaScript on its own, exchange values with it, and expose its objects to scripts. BifrOSt has no app-facing JavaScript engine: the SDK has no JSContext, JSValue or JSExport equivalent. Apps can only run a script inside a web view (evaluateJavaScript), and the browser's own JavaScript engine (Boa) is not reachable from apps.",
   "rea_evidence": "ev_fa2c7a0f3a85b1b57f903a371c17c1126d97616db84c50315f50f10e76b9ad58",
   "features": [
-    {"feature": "Execution environment (virtual machine and context)", "apple": "JSVirtualMachine, JSContext", "bifrost": "springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser)", "status": "os", "note": "Boa 0.22 (springboard/Cargo.toml:66) runs inside the browser shell only; no SDK type creates a context for an app"},
-    {"feature": "JavaScript values", "apple": "JSValue, JSManagedValue", "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json })", "status": "partial", "note": "results come back as text or typed JSON from a web view only; no value type for passing objects, numbers or functions between app and script"},
-    {"feature": "Native object export to JavaScript", "apple": "JSExport protocol", "bifrost": "none", "status": "gap", "note": "an app cannot register its own objects or functions with a script engine"},
-    {"feature": "Script evaluation in an app", "apple": "JSContext evaluateScript:, C JSEvaluateScript", "bifrost": "springboard/sdk/src/webview.rs:320 (WebView eval, one line of JS, answer as EvalResult); springboard/sdk/src/webview_dev.rs (dev_eval with token)", "status": "partial", "note": "only inside a web view page; no standalone evaluation without a view; Servo 0.7.0 evaluate_javascript does not await promises (docs/bifrost-ui.md)"},
-    {"feature": "Script dialogs from scripts", "apple": "JSContext exception handler, WKWebView alert and confirm panels (not JavaScriptCore)", "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::Dialog, dialog_reply)", "status": "partial", "note": "dialogs raised by page scripts are covered; JavaScriptCore exception handler for standalone scripts is missing"},
-    {"feature": "Syntax checking", "apple": "JSCheckScriptSyntax", "bifrost": "none", "status": "gap", "note": "no SDK call checks a script without running it"},
-    {"feature": "Garbage collection control", "apple": "JSGarbageCollect", "bifrost": "none", "status": "n/a", "note": "engine tuning knob for the embedding app; BifrOSt's Boa and Servo's engine are not exposed to apps"},
-    {"feature": "C API (engine interface, data types, constants)", "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions", "bifrost": "none", "status": "gap", "note": "no C-level JavaScript interface; the SDK is Rust (springboard/sdk/src/lib.rs)"},
-    {"feature": "Engine used for web content", "apple": "JavaScriptCore is WebKit's engine", "bifrost": "springboard/apps/browser/assets/ENGINE-SOURCE.md (Servo 0.7.0, SpiderMonkey)", "status": "n/a", "note": "web content runs on SpiderMonkey through Servo, not JavaScriptCore; this is an engine choice, not an app API"}
+    {
+      "feature": "Execution environment (virtual machine and context)",
+      "apple": "JSVirtualMachine, JSContext",
+      "bifrost": "springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser)",
+      "status": "os",
+      "note": "Boa 0.22 (springboard/Cargo.toml:66) runs inside the browser shell only; no SDK type creates a context for an app"
+    },
+    {
+      "feature": "JavaScript values",
+      "apple": "JSValue, JSManagedValue",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json })",
+      "status": "partial",
+      "note": "results come back as text or typed JSON from a web view only; no value type for passing objects, numbers or functions between app and script"
+    },
+    {
+      "feature": "Native object export to JavaScript",
+      "apple": "JSExport protocol",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "an app cannot register its own objects or functions with a script engine"
+    },
+    {
+      "feature": "Script evaluation in an app",
+      "apple": "JSContext evaluateScript:, C JSEvaluateScript",
+      "bifrost": "springboard/sdk/src/webview.rs:320 (WebView eval, one line of JS, answer as EvalResult); springboard/sdk/src/webview_dev.rs (dev_eval with token)",
+      "status": "partial",
+      "note": "only inside a web view page; no standalone evaluation without a view; Servo 0.7.0 evaluate_javascript does not await promises (docs/bifrost-ui.md)"
+    },
+    {
+      "feature": "Script dialogs from scripts",
+      "apple": "JSContext exception handler, WKWebView alert and confirm panels (not JavaScriptCore)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::Dialog, dialog_reply)",
+      "status": "partial",
+      "note": "dialogs raised by page scripts are covered; JavaScriptCore exception handler for standalone scripts is missing"
+    },
+    {
+      "feature": "Syntax checking",
+      "apple": "JSCheckScriptSyntax",
+      "bifrost": "springboard/sdk/src/script_syntax.rs",
+      "status": "partial",
+      "note": "Wave 2 (javascriptcore, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK call checks a script without running it"
+    },
+    {
+      "feature": "Garbage collection control",
+      "apple": "JSGarbageCollect",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "engine tuning knob for the embedding app; BifrOSt's Boa and Servo's engine are not exposed to apps"
+    },
+    {
+      "feature": "C API (engine interface, data types, constants)",
+      "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no C-level JavaScript interface; the SDK is Rust (springboard/sdk/src/lib.rs)"
+    },
+    {
+      "feature": "Engine used for web content",
+      "apple": "JavaScriptCore is WebKit's engine",
+      "bifrost": "springboard/apps/browser/assets/ENGINE-SOURCE.md (Servo 0.7.0, SpiderMonkey)",
+      "status": "n/a",
+      "note": "web content runs on SpiderMonkey through Servo, not JavaScriptCore; this is an engine choice, not an app API"
+    }
   ],
   "gaps": [
     "No SDK type for a standalone JavaScript context (JSContext equivalent), so apps cannot run scripts without a web view",

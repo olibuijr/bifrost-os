@@ -2,24 +2,102 @@
   "framework": "Model I/O",
   "doc": "https://developer.apple.com/documentation/modelio",
   "macos_since": "10.11",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none for 3D. Nearest code: springboard/src/gpu/batch.rs (2D quad vertex batch), springboard/render/src/imgdec.rs (PNG/JPEG decode), springboard/ui/src/anim.rs (2D property animation)",
   "summary": "Model I/O covers 3D asset import and export, meshes, materials, lights, cameras, skeletal animation and mesh processing. BifrOSt has no 3D model, mesh, material, light or camera layer in the shell, the SDK or the renderer, and no 3D asset format is registered, so every feature here is a gap. The GPU presenter draws only 2D quads.",
   "rea_evidence": "ev_e3befc4c1693ddb9fa8988d1c81bf915b36c487fe22bcec4b5eabef74c24fb61",
   "features": [
-    {"feature": "3D asset container and object hierarchy", "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed", "bifrost": "none; views are 2D frames (docs/bifrost-ui.md:835 'no per-view bounds, flipping or transform')", "status": "gap", "note": "no scene graph of 3D objects anywhere in springboard/"},
-    {"feature": "Transforms (local coordinate space)", "apple": "MDLTransform, MDLTransformStack, MDLTransformOp and its rotate/scale/translate/matrix subclasses", "bifrost": "none; springboard/sdk/src/view/ has no transforms", "status": "gap", "note": "docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"},
-    {"feature": "Mesh and vertex buffers", "apple": "MDLMesh, MDLSubmesh, MDLSubmeshTopology, MDLVertexDescriptor, MDLVertexAttribute, MDLVertexAttributeData, MDLVertexBufferLayout", "bifrost": "springboard/src/gpu/batch.rs (Vertex batch for 2D fills and images); springboard/src/gpu/layer.rs (VBO for layer quads)", "status": "gap", "note": "the GPU vertex code only draws 2D triangles, no mesh type, index buffer or attribute layout is exposed to apps"},
-    {"feature": "Mesh buffer allocation and mapping", "apple": "MDLMeshBuffer, MDLMeshBufferAllocator, MDLMeshBufferData, MDLMeshBufferMap, MDLMeshBufferZone", "bifrost": "none in the SDK; GL buffer objects are internal to springboard/src/gpu/egl.rs", "status": "gap", "note": "no app-facing buffer allocator"},
-    {"feature": "Materials and shading models", "apple": "MDLMaterial, MDLMaterialProperty, MDLScatteringFunction, MDLPhysicallyPlausibleScatteringFunction", "bifrost": "none; springboard/render/src/ui.rs holds 2D colours and type only", "status": "gap", "note": "window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"},
-    {"feature": "Textures as 3D material inputs", "apple": "MDLTexture, MDLURLTexture, MDLTextureSampler, MDLTextureFilter, procedural textures (checkerboard, noise, sky cube, normal map)", "bifrost": "springboard/render/src/imgdec.rs (image decode for 2D pictures) only", "status": "gap", "note": "images decode, but there are no samplers, mip filters or procedural generators"},
-    {"feature": "Lights", "apple": "MDLLight, MDLAreaLight, MDLPhotometricLight, MDLPhysicallyPlausibleLight, MDLLightProbe", "bifrost": "none; springboard/src/shell/desk.rs draw_light is the window traffic-light button", "status": "gap", "note": "name match only"},
-    {"feature": "Cameras", "apple": "MDLCamera, MDLStereoscopicCamera", "bifrost": "none; springboard/src/shell/camera/mod.rs is the webcam capture app", "status": "gap", "note": "webcam capture is not a 3D view camera"},
-    {"feature": "File format import and export", "apple": "MDLComponent, MDLObjectContainerComponent, MDLTransformComponent; formats OBJ, PLY, STL, USD, Alembic", "bifrost": "springboard/ui/src/uttype.rs (UTType registry, no 3D types); docs/bifrost-ui.md 'Uniform type identifiers' section", "status": "gap", "note": "grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"},
-    {"feature": "Skeletal animation and animated values", "apple": "MDLAnimatedScalar, MDLAnimatedVector3, MDLAnimatedQuaternion, MDLSkeleton, MDLJointAnimation, MDLPackedJointAnimation", "bifrost": "springboard/ui/src/anim.rs (scalar tweens and springs for 2D views only)", "status": "gap", "note": "no keyframes, joints or quaternions"},
-    {"feature": "Mesh processing and baking", "apple": "subdivision surfaces, ambient occlusion baking, light probe placement (MDLProbePlacement), normal map generation", "bifrost": "none; springboard/render/src/font.rs quad flattening is curve flattening, not mesh subdivision", "status": "gap", "note": "no offline or runtime mesh processing"},
-    {"feature": "Volumetric representation", "apple": "MDLVoxelArray, MDLVoxelIndex, MDLVoxelIndexExtent", "bifrost": "none", "status": "gap", "note": "no voxel type anywhere in the repo"},
-    {"feature": "Sharing buffers with the GPU framework", "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)", "bifrost": "springboard/src/gpu/egl.rs (OpenGL ES through EGL on Linux)", "status": "gap", "note": "MetalKit, GLKit and SceneKit are Apple-only; the Linux GL path has no 3D consumer"}
+    {
+      "feature": "3D asset container and object hierarchy",
+      "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed",
+      "bifrost": "none; views are 2D frames (docs/bifrost-ui.md:835 'no per-view bounds, flipping or transform')",
+      "status": "gap",
+      "note": "no scene graph of 3D objects anywhere in springboard/"
+    },
+    {
+      "feature": "Transforms (local coordinate space)",
+      "apple": "MDLTransform, MDLTransformStack, MDLTransformOp and its rotate/scale/translate/matrix subclasses",
+      "bifrost": "none; springboard/sdk/src/view/ has no transforms",
+      "status": "gap",
+      "note": "docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"
+    },
+    {
+      "feature": "Mesh and vertex buffers",
+      "apple": "MDLMesh, MDLSubmesh, MDLSubmeshTopology, MDLVertexDescriptor, MDLVertexAttribute, MDLVertexAttributeData, MDLVertexBufferLayout",
+      "bifrost": "springboard/ui/src/vertex_descriptor.rs (with springboard/ui/src/mesh.rs)",
+      "status": "partial",
+      "note": "Wave 2 (theme-09, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU vertex code only draws 2D triangles, no mesh type, index buffer or attribute layout is exposed to apps"
+    },
+    {
+      "feature": "Mesh buffer allocation and mapping",
+      "apple": "MDLMeshBuffer, MDLMeshBufferAllocator, MDLMeshBufferData, MDLMeshBufferMap, MDLMeshBufferZone",
+      "bifrost": "none in the SDK; GL buffer objects are internal to springboard/src/gpu/egl.rs",
+      "status": "gap",
+      "note": "no app-facing buffer allocator"
+    },
+    {
+      "feature": "Materials and shading models",
+      "apple": "MDLMaterial, MDLMaterialProperty, MDLScatteringFunction, MDLPhysicallyPlausibleScatteringFunction",
+      "bifrost": "none; springboard/render/src/ui.rs holds 2D colours and type only",
+      "status": "gap",
+      "note": "window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"
+    },
+    {
+      "feature": "Textures as 3D material inputs",
+      "apple": "MDLTexture, MDLURLTexture, MDLTextureSampler, MDLTextureFilter, procedural textures (checkerboard, noise, sky cube, normal map)",
+      "bifrost": "springboard/render/src/imgdec.rs (image decode for 2D pictures) only",
+      "status": "gap",
+      "note": "images decode, but there are no samplers, mip filters or procedural generators"
+    },
+    {
+      "feature": "Lights",
+      "apple": "MDLLight, MDLAreaLight, MDLPhotometricLight, MDLPhysicallyPlausibleLight, MDLLightProbe",
+      "bifrost": "none; springboard/src/shell/desk.rs draw_light is the window traffic-light button",
+      "status": "gap",
+      "note": "name match only"
+    },
+    {
+      "feature": "Cameras",
+      "apple": "MDLCamera, MDLStereoscopicCamera",
+      "bifrost": "none; springboard/src/shell/camera/mod.rs is the webcam capture app",
+      "status": "gap",
+      "note": "webcam capture is not a 3D view camera"
+    },
+    {
+      "feature": "File format import and export",
+      "apple": "MDLComponent, MDLObjectContainerComponent, MDLTransformComponent; formats OBJ, PLY, STL, USD, Alembic",
+      "bifrost": "springboard/ui/src/uttype.rs (UTType registry, no 3D types); docs/bifrost-ui.md 'Uniform type identifiers' section",
+      "status": "gap",
+      "note": "grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"
+    },
+    {
+      "feature": "Skeletal animation and animated values",
+      "apple": "MDLAnimatedScalar, MDLAnimatedVector3, MDLAnimatedQuaternion, MDLSkeleton, MDLJointAnimation, MDLPackedJointAnimation",
+      "bifrost": "springboard/ui/src/anim.rs (scalar tweens and springs for 2D views only)",
+      "status": "gap",
+      "note": "no keyframes, joints or quaternions"
+    },
+    {
+      "feature": "Mesh processing and baking",
+      "apple": "subdivision surfaces, ambient occlusion baking, light probe placement (MDLProbePlacement), normal map generation",
+      "bifrost": "none; springboard/render/src/font.rs quad flattening is curve flattening, not mesh subdivision",
+      "status": "gap",
+      "note": "no offline or runtime mesh processing"
+    },
+    {
+      "feature": "Volumetric representation",
+      "apple": "MDLVoxelArray, MDLVoxelIndex, MDLVoxelIndexExtent",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no voxel type anywhere in the repo"
+    },
+    {
+      "feature": "Sharing buffers with the GPU framework",
+      "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)",
+      "bifrost": "springboard/src/gpu/egl.rs (OpenGL ES through EGL on Linux)",
+      "status": "gap",
+      "note": "MetalKit, GLKit and SceneKit are Apple-only; the Linux GL path has no 3D consumer"
+    }
   ],
   "gaps": [
     "3D scene graph: no MDLAsset or MDLObject equivalent, and no 3D transform stack",

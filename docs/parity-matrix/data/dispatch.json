@@ -7,25 +7,139 @@
   "summary": "Queues (main, global per QoS, serial), groups, work items, QoS, delayed and leeway submission and a memory-pressure source are covered by bifrost_app::dispatch. DispatchSource (other than memory pressure), DispatchIO, DispatchData, semaphores, barriers, workloops, target queues, dispatchPrecondition and dispatch_once have no counterpart in the SDK.",
   "rea_evidence": "ev_f81e8d5290e3229337bc1c039711a8974b70d06631fc6ddd48b0f9b3e1836e9a",
   "features": [
-    {"feature": "Main queue", "apple": "DispatchQueue.main, dispatchMain()", "bifrost": "springboard/sdk/src/dispatch.rs:341 (DispatchQueue::main)", "status": "parity", "note": "closures run on the app loop thread via an eventfd; dispatchMain() has no counterpart because the app loop owns the thread"},
-    {"feature": "Global concurrent queues by QoS", "apple": "DispatchQueue.global(qos:), dispatch_queue_global_t", "bifrost": "springboard/sdk/src/dispatch.rs:345 (DispatchQueue::global), enum Qos at :36", "status": "parity", "note": "one shared pool with per-QoS lanes, width capped at available_parallelism"},
-    {"feature": "Serial queues", "apple": "DispatchQueue(label:), dispatch_queue_serial_t", "bifrost": "springboard/sdk/src/dispatch.rs:349 (serial), :353 (serial_qos)", "status": "parity", "note": "FIFO; label is kept for debugging"},
-    {"feature": "Async and sync submission", "apple": "async(execute:), sync(execute:)", "bifrost": "springboard/sdk/src/dispatch.rs:367 (async_), :407 (sync)", "status": "partial", "note": "sync returns T; sync from the main thread onto main panics instead of deadlocking silently"},
-    {"feature": "asyncAndWait", "apple": "asyncAndWait(execute:) on queues and workloops", "bifrost": "none", "status": "gap", "note": "use DispatchWorkItem::wait or DispatchGroup::wait"},
-    {"feature": "Delayed submission", "apple": "DispatchQueue.asyncAfter(deadline:qos:flags:execute:), DispatchTime", "bifrost": "springboard/sdk/src/dispatch.rs:393 (async_after), :400 (async_after_leeway)", "status": "partial", "note": "takes a Duration, not DispatchTime or DispatchWallTime; leeway is supported"},
-    {"feature": "Dispatch groups", "apple": "DispatchGroup: init, enter, leave, notify, wait", "bifrost": "springboard/sdk/src/dispatch.rs:468 (DispatchGroup), :471 new, :475 enter, :479 leave, :497 notify, :507 wait", "status": "parity", "note": "wait takes an optional timeout and returns bool"},
-    {"feature": "Work items", "apple": "DispatchWorkItem, dispatch_block_t cancel", "bifrost": "springboard/sdk/src/dispatch.rs:536 (DispatchWorkItem), :543 cancel, :554 perform, :566 wait, :436 async_item", "status": "parity", "note": "cancel stops an item that has not started; no flags such as assignCurrentExecutionContext or noQoS"},
-    {"feature": "Quality of service", "apple": "DispatchQoS: userInteractive, userInitiated, default, utility, background, unspecified", "bifrost": "springboard/sdk/src/dispatch.rs:36 (enum Qos)", "status": "partial", "note": "four levels: UserInteractive, UserInitiated, Utility, Background; no default or unspecified; no QoS inheritance"},
-    {"feature": "Barriers on concurrent queues", "apple": "DispatchQueue barrier flag, Dispatch Barrier", "bifrost": "none", "status": "gap", "note": "docs/bifrost-ui.md:1095 lists no barriers; use a serial queue or a Mutex"},
-    {"feature": "Target queues and concurrentPerform", "apple": "setTarget(queue:), DispatchQueue.concurrentPerform", "bifrost": "none", "status": "gap", "note": "docs/bifrost-ui.md:1095-1096 lists both as gaps"},
-    {"feature": "Memory pressure source", "apple": "DispatchSource.makeMemoryPressureSource", "bifrost": "springboard/sdk/src/dispatch.rs:748 (DispatchSource::memory_pressure), springboard/render/src/purgeable.rs:212 (on_memory_pressure)", "status": "partial", "note": "handler runs on the given queue; no cancel, so the handler lives for the process; it never fires without PSI"},
-    {"feature": "Other dispatch sources (timer, read, write, signal, process, file system)", "apple": "DispatchSource (activate, suspend, resume, cancel, setEventHandler, DispatchSourceProtocol)", "bifrost": "springboard/sdk/src/fswatch.rs (FSEvents-style stream, poll-based, not a DispatchSource)", "status": "gap", "note": "no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"},
-    {"feature": "Dispatch I/O channels", "apple": "DispatchIO, dispatch_io_t, barrier, setLimit", "bifrost": "none", "status": "gap", "note": "file and descriptor I/O uses std::io on the caller's thread or the pool; no channel with low and high water marks"},
-    {"feature": "DispatchData", "apple": "DispatchData, DispatchDataIterator, dispatch_data_t", "bifrost": "none", "status": "gap", "note": "buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"},
-    {"feature": "Semaphores", "apple": "DispatchSemaphore(value:), wait, signal", "bifrost": "none", "status": "gap", "note": "docs/bifrost-ui.md:1096 says use std::sync or a group instead; decided, not missing by accident"},
-    {"feature": "Workloops", "apple": "DispatchWorkloop, dispatch_workloop_t", "bifrost": "none", "status": "n/a", "note": "a Darwin scheduling object for kernel-priority workloops; no Linux counterpart is planned"},
-    {"feature": "dispatch_once and dispatchPrecondition", "apple": "dispatch_once, DispatchPredicate, dispatchPrecondition(condition:)", "bifrost": "std::sync::OnceLock is used directly in springboard/sdk/src/url.rs:168 and springboard/sdk/src/process_info.rs:189; no SDK wrapper", "status": "partial", "note": "one-time initialisation works through std, but there is no dispatch_once API and no precondition check on queues"},
-    {"feature": "Dispatch time types", "apple": "DispatchTime, DispatchWallTime, DispatchTimeInterval, DispatchTimeoutResult", "bifrost": "std::time::Duration and Instant (springboard/sdk/src/dispatch.rs:591 uses Duration)", "status": "partial", "note": "wait timeouts are Durations; no wall-clock time type and no timeout result enum"}
+    {
+      "feature": "Main queue",
+      "apple": "DispatchQueue.main, dispatchMain()",
+      "bifrost": "springboard/sdk/src/dispatch.rs:341 (DispatchQueue::main)",
+      "status": "parity",
+      "note": "closures run on the app loop thread via an eventfd; dispatchMain() has no counterpart because the app loop owns the thread"
+    },
+    {
+      "feature": "Global concurrent queues by QoS",
+      "apple": "DispatchQueue.global(qos:), dispatch_queue_global_t",
+      "bifrost": "springboard/sdk/src/dispatch.rs:345 (DispatchQueue::global), enum Qos at :36",
+      "status": "parity",
+      "note": "one shared pool with per-QoS lanes, width capped at available_parallelism"
+    },
+    {
+      "feature": "Serial queues",
+      "apple": "DispatchQueue(label:), dispatch_queue_serial_t",
+      "bifrost": "springboard/sdk/src/dispatch.rs:349 (serial), :353 (serial_qos)",
+      "status": "parity",
+      "note": "FIFO; label is kept for debugging"
+    },
+    {
+      "feature": "Async and sync submission",
+      "apple": "async(execute:), sync(execute:)",
+      "bifrost": "springboard/sdk/src/dispatch.rs:367 (async_), :407 (sync)",
+      "status": "partial",
+      "note": "sync returns T; sync from the main thread onto main panics instead of deadlocking silently"
+    },
+    {
+      "feature": "asyncAndWait",
+      "apple": "asyncAndWait(execute:) on queues and workloops",
+      "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue::async_and_wait)",
+      "status": "partial",
+      "note": "Wave 2 (theme-34, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. use DispatchWorkItem::wait or DispatchGroup::wait"
+    },
+    {
+      "feature": "Delayed submission",
+      "apple": "DispatchQueue.asyncAfter(deadline:qos:flags:execute:), DispatchTime",
+      "bifrost": "springboard/sdk/src/dispatch.rs:393 (async_after), :400 (async_after_leeway)",
+      "status": "partial",
+      "note": "takes a Duration, not DispatchTime or DispatchWallTime; leeway is supported"
+    },
+    {
+      "feature": "Dispatch groups",
+      "apple": "DispatchGroup: init, enter, leave, notify, wait",
+      "bifrost": "springboard/sdk/src/dispatch.rs:468 (DispatchGroup), :471 new, :475 enter, :479 leave, :497 notify, :507 wait",
+      "status": "parity",
+      "note": "wait takes an optional timeout and returns bool"
+    },
+    {
+      "feature": "Work items",
+      "apple": "DispatchWorkItem, dispatch_block_t cancel",
+      "bifrost": "springboard/sdk/src/dispatch.rs:536 (DispatchWorkItem), :543 cancel, :554 perform, :566 wait, :436 async_item",
+      "status": "parity",
+      "note": "cancel stops an item that has not started; no flags such as assignCurrentExecutionContext or noQoS"
+    },
+    {
+      "feature": "Quality of service",
+      "apple": "DispatchQoS: userInteractive, userInitiated, default, utility, background, unspecified",
+      "bifrost": "springboard/sdk/src/dispatch.rs:36 (enum Qos)",
+      "status": "partial",
+      "note": "four levels: UserInteractive, UserInitiated, Utility, Background; no default or unspecified; no QoS inheritance"
+    },
+    {
+      "feature": "Barriers on concurrent queues",
+      "apple": "DispatchQueue barrier flag, Dispatch Barrier",
+      "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue::concurrent",
+      "status": "partial",
+      "note": "Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1095 lists no barriers; use a serial queue or a Mutex"
+    },
+    {
+      "feature": "Target queues and concurrentPerform",
+      "apple": "setTarget(queue:), DispatchQueue.concurrentPerform",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "docs/bifrost-ui.md:1095-1096 lists both as gaps"
+    },
+    {
+      "feature": "Memory pressure source",
+      "apple": "DispatchSource.makeMemoryPressureSource",
+      "bifrost": "springboard/sdk/src/dispatch.rs:748 (DispatchSource::memory_pressure), springboard/render/src/purgeable.rs:212 (on_memory_pressure)",
+      "status": "partial",
+      "note": "handler runs on the given queue; no cancel, so the handler lives for the process; it never fires without PSI"
+    },
+    {
+      "feature": "Other dispatch sources (timer, read, write, signal, process, file system)",
+      "apple": "DispatchSource (activate, suspend, resume, cancel, setEventHandler, DispatchSourceProtocol)",
+      "bifrost": "springboard/sdk/src/fswatch.rs (FSEvents-style stream, poll-based, not a DispatchSource)",
+      "status": "gap",
+      "note": "no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"
+    },
+    {
+      "feature": "Dispatch I/O channels",
+      "apple": "DispatchIO, dispatch_io_t, barrier, setLimit",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "file and descriptor I/O uses std::io on the caller's thread or the pool; no channel with low and high water marks"
+    },
+    {
+      "feature": "DispatchData",
+      "apple": "DispatchData, DispatchDataIterator, dispatch_data_t",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"
+    },
+    {
+      "feature": "Semaphores",
+      "apple": "DispatchSemaphore(value:), wait, signal",
+      "bifrost": "springboard/sdk/src/dispatch.rs (DispatchSemaphore",
+      "status": "partial",
+      "note": "Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1096 says use std::sync or a group instead; decided, not missing by accident"
+    },
+    {
+      "feature": "Workloops",
+      "apple": "DispatchWorkloop, dispatch_workloop_t",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "a Darwin scheduling object for kernel-priority workloops; no Linux counterpart is planned"
+    },
+    {
+      "feature": "dispatch_once and dispatchPrecondition",
+      "apple": "dispatch_once, DispatchPredicate, dispatchPrecondition(condition:)",
+      "bifrost": "std::sync::OnceLock is used directly in springboard/sdk/src/url.rs:168 and springboard/sdk/src/process_info.rs:189; no SDK wrapper",
+      "status": "partial",
+      "note": "one-time initialisation works through std, but there is no dispatch_once API and no precondition check on queues"
+    },
+    {
+      "feature": "Dispatch time types",
+      "apple": "DispatchTime, DispatchWallTime, DispatchTimeInterval, DispatchTimeoutResult",
+      "bifrost": "std::time::Duration and Instant (springboard/sdk/src/dispatch.rs:591 uses Duration)",
+      "status": "partial",
+      "note": "wait timeouts are Durations; no wall-clock time type and no timeout result enum"
+    }
   ],
   "gaps": [
     "DispatchSource beyond memory pressure: no timer, read, write, signal or process sources, and no cancel, suspend or resume (docs/bifrost-ui.md:1095)",

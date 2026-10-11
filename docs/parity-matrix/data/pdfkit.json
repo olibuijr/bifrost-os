@@ -7,20 +7,104 @@
   "summary": "BifrOSt has an internal PDF reader inside the Books app that loads a file, walks the page tree, extracts text, images and the outline, and reflows the result into the Books page model. Printing a PDF goes through the SDK print API. There is no app-facing PDF document, page, view, annotation, form, selection or thumbnail API.",
   "rea_evidence": "ev_1e800ce4155bafe135d5af0c8f46309700cd1a9b225b9d6354b17be54c6f57a2",
   "features": [
-    {"feature": "PDFView (display and navigation)", "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the Books model, not a page view)", "status": "gap", "note": "No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's"},
-    {"feature": "PDFThumbnailView and page thumbnails", "apple": "PDFThumbnailView, PDFPage.thumbnail(of:for:)", "bifrost": "none found (springboard/sdk/src/peek.rs has no PDF thumbnail path)", "status": "gap", "note": "No PDF page thumbnail generator"},
-    {"feature": "PDFDocument loading (URL, data)", "apple": "PDFDocument init(url:), init(data:), init()", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:300 (load(data: Vec<u8>) -> Result<Book, String>)", "status": "partial", "note": "Loads from bytes inside Books only; no SDK call, and no PDFDocument-like object for apps"},
-    {"feature": "Document structure: xref repair, objects", "apple": "PDFDocument read operations, page count, attributes", "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs (xref, object scan when the xref is bad), springboard/src/shell/books/engine/pdf/obj.rs", "status": "partial", "note": "Reader only; no attribute or metadata API for apps"},
-    {"feature": "PDFPage: page tree and text extraction", "apple": "PDFPage string, attributedString, characterBounds(at:), characterIndex(at:), numberOfCharacters", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (walk, page tree), springboard/src/shell/books/engine/pdf/content.rs (Extractor, reading order text)", "status": "partial", "note": "Text is extracted in reading order. No per-character bounds or index lookup"},
-    {"feature": "PDFPage: rendering and drawing", "apple": "PDFPage draw(with:to:), transformContext(for:), thumbnail, display boxes, rotation", "bifrost": "springboard/src/shell/books/engine/pdf/image.rs (image decoding into the page model)", "status": "gap", "note": "No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown"},
-    {"feature": "PDFPage: page image and PDF creation", "apple": "PDFPage init(image:options:), dataRepresentation", "bifrost": "none found", "status": "gap", "note": "No API to create a PDF page from an image or to serialize a page"},
-    {"feature": "Annotations", "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types", "bifrost": "none found (no annotation code in springboard/src/shell/books, springboard/sdk/src or springboard/apps/pdfcraft-desktop source)", "status": "gap", "note": "pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked"},
-    {"feature": "Widgets and form fields", "apple": "PDFAnnotation widget properties (widgetFieldType, widgetStringValue, text, button and choice widgets), form filling", "bifrost": "none found", "status": "gap", "note": "The reader does not parse AcroForm fields"},
-    {"feature": "Outline (table of contents)", "apple": "PDFOutline: child(at:), label, destination, action, isOpen", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:139-179 (outline() reads /Outlines into (title, page, level)); used at mod.rs:320 for the Books table of contents", "status": "partial", "note": "Titles, page targets and levels are read for the Books TOC. No outline tree object, no actions, no editing"},
-    {"feature": "Selection and find", "apple": "PDFSelection, PDFDocument selection(from:at:to:at:with:), PDFPage selectionForWord(at:), selectionForLine(at:), PDFDocument find and FoundSelection", "bifrost": "none found in the Books reader (springboard/src/shell/books/engine/mod.rs and pdf/mod.rs have no search or selection code)", "status": "gap", "note": "The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object"},
-    {"feature": "Write operations (save, write options, permissions)", "apple": "PDFDocument write operations, PDFDocumentWriteOption, accessPermissions, password unlock (takePasswordFrom)", "bifrost": "springboard/sdk/src/print.rs (Destination::Pdf copies the source file; no rewrite)", "status": "gap", "note": "Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"},
-    {"feature": "Printing PDF documents", "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)", "bifrost": "springboard/sdk/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)", "status": "partial", "note": "The file is sent to CUPS as is. No page-level pagination, no print sheet, and no page range applied to PDF pages. Whether the Midget image ships CUPS is unchecked"},
-    {"feature": "Page overlay and markup mode", "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider", "bifrost": "none found", "status": "gap", "note": "No overlay or markup view"}
+    {
+      "feature": "PDFView (display and navigation)",
+      "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the Books model, not a page view)",
+      "status": "gap",
+      "note": "No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's"
+    },
+    {
+      "feature": "PDFThumbnailView and page thumbnails",
+      "apple": "PDFThumbnailView, PDFPage.thumbnail(of:for:)",
+      "bifrost": "springboard/ui/src/pdfpage.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PDF page thumbnail generator"
+    },
+    {
+      "feature": "PDFDocument loading (URL, data)",
+      "apple": "PDFDocument init(url:), init(data:), init()",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:300 (load(data: Vec<u8>) -> Result<Book, String>)",
+      "status": "partial",
+      "note": "Loads from bytes inside Books only; no SDK call, and no PDFDocument-like object for apps"
+    },
+    {
+      "feature": "Document structure: xref repair, objects",
+      "apple": "PDFDocument read operations, page count, attributes",
+      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs (xref, object scan when the xref is bad), springboard/src/shell/books/engine/pdf/obj.rs",
+      "status": "partial",
+      "note": "Reader only; no attribute or metadata API for apps"
+    },
+    {
+      "feature": "PDFPage: page tree and text extraction",
+      "apple": "PDFPage string, attributedString, characterBounds(at:), characterIndex(at:), numberOfCharacters",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (walk, page tree), springboard/src/shell/books/engine/pdf/content.rs (Extractor, reading order text)",
+      "status": "partial",
+      "note": "Text is extracted in reading order. No per-character bounds or index lookup"
+    },
+    {
+      "feature": "PDFPage: rendering and drawing",
+      "apple": "PDFPage draw(with:to:), transformContext(for:), thumbnail, display boxes, rotation",
+      "bifrost": "springboard/ui/src/pdfpage.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown"
+    },
+    {
+      "feature": "PDFPage: page image and PDF creation",
+      "apple": "PDFPage init(image:options:), dataRepresentation",
+      "bifrost": "springboard/ui/src/pdfpage.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to create a PDF page from an image or to serialize a page"
+    },
+    {
+      "feature": "Annotations",
+      "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
+      "bifrost": "none found (no annotation code in springboard/src/shell/books, springboard/sdk/src or springboard/apps/pdfcraft-desktop source)",
+      "status": "gap",
+      "note": "pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked"
+    },
+    {
+      "feature": "Widgets and form fields",
+      "apple": "PDFAnnotation widget properties (widgetFieldType, widgetStringValue, text, button and choice widgets), form filling",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "The reader does not parse AcroForm fields"
+    },
+    {
+      "feature": "Outline (table of contents)",
+      "apple": "PDFOutline: child(at:), label, destination, action, isOpen",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:139-179 (outline() reads /Outlines into (title, page, level)); used at mod.rs:320 for the Books table of contents",
+      "status": "partial",
+      "note": "Titles, page targets and levels are read for the Books TOC. No outline tree object, no actions, no editing"
+    },
+    {
+      "feature": "Selection and find",
+      "apple": "PDFSelection, PDFDocument selection(from:at:to:at:with:), PDFPage selectionForWord(at:), selectionForLine(at:), PDFDocument find and FoundSelection",
+      "bifrost": "none found in the Books reader (springboard/src/shell/books/engine/mod.rs and pdf/mod.rs have no search or selection code)",
+      "status": "gap",
+      "note": "The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object"
+    },
+    {
+      "feature": "Write operations (save, write options, permissions)",
+      "apple": "PDFDocument write operations, PDFDocumentWriteOption, accessPermissions, password unlock (takePasswordFrom)",
+      "bifrost": "springboard/sdk/src/print.rs (Destination::Pdf copies the source file; no rewrite)",
+      "status": "gap",
+      "note": "Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"
+    },
+    {
+      "feature": "Printing PDF documents",
+      "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)",
+      "bifrost": "springboard/sdk/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)",
+      "status": "partial",
+      "note": "The file is sent to CUPS as is. No page-level pagination, no print sheet, and no page range applied to PDF pages. Whether the Midget image ships CUPS is unchecked"
+    },
+    {
+      "feature": "Page overlay and markup mode",
+      "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No overlay or markup view"
+    }
   ],
   "gaps": [
     "No app-facing PDF document, page or view API in springboard/sdk/src (PDFDocument, PDFPage, PDFView have no counterpart); the PDF reader is private to the Books app",

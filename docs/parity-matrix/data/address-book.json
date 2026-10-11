@@ -7,19 +7,97 @@
   "summary": "Apple deprecated this framework in macOS 10.11 and points to the Contacts framework, which is not in this batch. BifrOSt has a shell-owned contact store with a single-value Contact record, substring search, vCard export and a Contacts app; apps get no SDK API for contacts, and there is no people picker, person view, groups, photos, or change notifications.",
   "rea_evidence": "ev_2214c952f7679e39b3dd06919efbbc5de65534a7803f0610c6f58211bc0e31bf",
   "features": [
-    {"feature": "Address book store and person records", "apple": "ABAddressBook, ABPerson, ABRecord, ABAddressBookSave", "bifrost": "springboard/src/shell/contactstore.rs (Contact struct, atomic save to Contacts/contacts.tsv)", "status": "os", "note": "The shell owns the store; no SDK type or call lets an app read or write contacts"},
-    {"feature": "Multi-value properties and labels", "apple": "ABMultiValue, ABMutableMultiValue, ABMultiValueAdd, ABMultiValueCopyLabelAtIndex, ABCopyLocalizedPropertyOrLabel", "bifrost": "springboard/src/shell/contactstore.rs (Contact.labels, LABELS)", "status": "partial", "note": "One phone, one email and one address per contact; no primary value and no arbitrary number of entries"},
-    {"feature": "Search", "apple": "ABSearchElement, ABCopyArrayOfMatchingRecords, ABSearchElementCreateWithConjunction, ABPersonCreateSearchElement", "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address)", "status": "partial", "note": "Only a single text query; no property-scoped or compound search elements"},
-    {"feature": "People picker and person view", "apple": "ABPeoplePickerView, ABPersonView", "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (app-private card and form)", "status": "gap", "note": "No SDK picker or embeddable person view; each app would have to rebuild one"},
-    {"feature": "Groups", "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups", "bifrost": "springboard/apps/contacts-desktop/CHANGELOG.md (Lists sidebar: All Contacts, Favorites)", "status": "gap", "note": "Favorites is a flag on the contact; there are no group records or membership"},
-    {"feature": "vCard import and export", "apple": "ABPersonCopyVCardRepresentation, ABPersonCreateWithVCardRepresentation", "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export)", "status": "partial", "note": "Export only, for sharing; no vCard import"},
-    {"feature": "Contact photos", "apple": "ABPersonSetImageData, ABPersonCopyImageData, ABImageClient, ABBeginLoadingImageDataForClient", "bifrost": "none found in springboard/src/shell/contactstore.rs", "status": "gap", "note": "Contact struct has no image field"},
-    {"feature": "Formatted postal addresses", "apple": "ABCreateFormattedAddressFromDictionary", "bifrost": "springboard/src/shell/contactstore.rs (Contact.address, one free-text string)", "status": "gap", "note": "No structured address fields and no locale-aware formatter"},
-    {"feature": "Sharing and copying contact values", "apple": "Overview: apps share contacts with other apps (Mail, Messages)", "bifrost": "springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs (NativeSharingServicePicker); springboard/sdk/src/pasteboard.rs; springboard/README.md (Contacts section, copy of phone and email)", "status": "partial", "note": "Contacts can be shared as a vCard and values copied; no SDK call for an app to receive a contact"},
-    {"feature": "Spotlight and search index", "apple": "Not an Address Book API (search goes through the Contacts framework on macOS)", "bifrost": "springboard/sdk/src/quicksearch.rs (apps index their own contacts for the Search panel)", "status": "partial", "note": "Indexing is per app; the Contacts app is the only contacts source found"},
-    {"feature": "Change notifications", "apple": "ABAddressBookRegisterExternalChangeCallback, ABAddressBookUnregisterExternalChangeCallback", "bifrost": "none found", "status": "gap", "note": "No callback when the contact store changes outside the app"},
-    {"feature": "Access authorization", "apple": "ABAddressBookRequestAccessWithCompletion, ABAddressBookGetAuthorizationStatus", "bifrost": "springboard/apps/contacts-desktop/manifest.toml (permissions = [\"storage\"])", "status": "gap", "note": "No contacts permission type; the manifest only has storage"},
-    {"feature": "Action plug-in delegate", "apple": "ABActionDelegate (rollover menu actions)", "bifrost": "none found", "status": "n/a", "note": "Specific to Apple's Address Book action plug-in model; the Contacts app has no plug-in host"}
+    {
+      "feature": "Address book store and person records",
+      "apple": "ABAddressBook, ABPerson, ABRecord, ABAddressBookSave",
+      "bifrost": "springboard/src/shell/contactstore.rs (Contact struct, atomic save to Contacts/contacts.tsv)",
+      "status": "os",
+      "note": "The shell owns the store; no SDK type or call lets an app read or write contacts"
+    },
+    {
+      "feature": "Multi-value properties and labels",
+      "apple": "ABMultiValue, ABMutableMultiValue, ABMultiValueAdd, ABMultiValueCopyLabelAtIndex, ABCopyLocalizedPropertyOrLabel",
+      "bifrost": "springboard/src/shell/contactstore.rs (Contact.labels, LABELS)",
+      "status": "partial",
+      "note": "One phone, one email and one address per contact; no primary value and no arbitrary number of entries"
+    },
+    {
+      "feature": "Search",
+      "apple": "ABSearchElement, ABCopyArrayOfMatchingRecords, ABSearchElementCreateWithConjunction, ABPersonCreateSearchElement",
+      "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address)",
+      "status": "partial",
+      "note": "Only a single text query; no property-scoped or compound search elements"
+    },
+    {
+      "feature": "People picker and person view",
+      "apple": "ABPeoplePickerView, ABPersonView",
+      "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (app-private card and form)",
+      "status": "gap",
+      "note": "No SDK picker or embeddable person view; each app would have to rebuild one"
+    },
+    {
+      "feature": "Groups",
+      "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups",
+      "bifrost": "springboard/apps/contacts-desktop/CHANGELOG.md (Lists sidebar: All Contacts, Favorites)",
+      "status": "gap",
+      "note": "Favorites is a flag on the contact; there are no group records or membership"
+    },
+    {
+      "feature": "vCard import and export",
+      "apple": "ABPersonCopyVCardRepresentation, ABPersonCreateWithVCardRepresentation",
+      "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export)",
+      "status": "partial",
+      "note": "Export only, for sharing; no vCard import"
+    },
+    {
+      "feature": "Contact photos",
+      "apple": "ABPersonSetImageData, ABPersonCopyImageData, ABImageClient, ABBeginLoadingImageDataForClient",
+      "bifrost": "none found in springboard/src/shell/contactstore.rs",
+      "status": "gap",
+      "note": "Contact struct has no image field"
+    },
+    {
+      "feature": "Formatted postal addresses",
+      "apple": "ABCreateFormattedAddressFromDictionary",
+      "bifrost": "springboard/ui/src/postal_address.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No structured address fields and no locale-aware formatter"
+    },
+    {
+      "feature": "Sharing and copying contact values",
+      "apple": "Overview: apps share contacts with other apps (Mail, Messages)",
+      "bifrost": "springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs (NativeSharingServicePicker); springboard/sdk/src/pasteboard.rs; springboard/README.md (Contacts section, copy of phone and email)",
+      "status": "partial",
+      "note": "Contacts can be shared as a vCard and values copied; no SDK call for an app to receive a contact"
+    },
+    {
+      "feature": "Spotlight and search index",
+      "apple": "Not an Address Book API (search goes through the Contacts framework on macOS)",
+      "bifrost": "springboard/sdk/src/quicksearch.rs (apps index their own contacts for the Search panel)",
+      "status": "partial",
+      "note": "Indexing is per app; the Contacts app is the only contacts source found"
+    },
+    {
+      "feature": "Change notifications",
+      "apple": "ABAddressBookRegisterExternalChangeCallback, ABAddressBookUnregisterExternalChangeCallback",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No callback when the contact store changes outside the app"
+    },
+    {
+      "feature": "Access authorization",
+      "apple": "ABAddressBookRequestAccessWithCompletion, ABAddressBookGetAuthorizationStatus",
+      "bifrost": "springboard/ui/src/contact_access.rs",
+      "status": "partial",
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage"
+    },
+    {
+      "feature": "Action plug-in delegate",
+      "apple": "ABActionDelegate (rollover menu actions)",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "Specific to Apple's Address Book action plug-in model; the Contacts app has no plug-in host"
+    }
   ],
   "gaps": [
     "No SDK API for apps to read, write, or search contacts (the store is shell-internal).",
