@@ -87,7 +87,8 @@ impl Registry {
         Added::Deliver { replaced }
     }
 
-    fn take_delivered(&mut self, app: &str, id: &str) -> Vec<u64> {
+    /// The store entries of the app's delivered requests with `id`, which a new delivery with that id replaces.
+    pub fn take_delivered(&mut self, app: &str, id: &str) -> Vec<u64> {
         let (gone, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.delivered).into_iter().partition(|d| d.app == app && d.req.id == id);
         self.delivered = keep;
         gone.into_iter().map(|d| d.store_id).collect()
@@ -96,14 +97,21 @@ impl Registry {
     /// Requests whose trigger has fired by `now`, oldest first; the caller delivers them (`record_delivery`).
     pub fn due(&mut self, now: f64) -> Vec<(String, NotifRequest)> {
         let mut fired: Vec<Pending> = Vec::new();
-        self.pending.retain(|p| {
-            if p.due <= now {
-                fired.push(p.clone());
-                false
-            } else {
-                true
+        let mut kept: Vec<Pending> = Vec::with_capacity(self.pending.len());
+        for mut p in std::mem::take(&mut self.pending) {
+            if p.due > now {
+                kept.push(p);
+                continue;
             }
-        });
+            fired.push(p.clone());
+            if p.req.repeats && p.req.delay_ms > 0 {
+                // a repeating trigger stays pending on its own grid: the first date after `now`
+                let step = f64::from(p.req.delay_ms);
+                p.due += ((now - p.due) / step).floor() * step + step;
+                kept.push(p);
+            }
+        }
+        self.pending = kept;
         fired.sort_by(|a, b| a.due.total_cmp(&b.due));
         fired.into_iter().map(|p| (p.app, p.req)).collect()
     }
@@ -275,7 +283,9 @@ impl super::Shell {
         if self.usernotif.next_due().is_some_and(|due| due <= t) {
             for (app, req) in self.usernotif.due(t) {
                 if let Some(slot) = super::apphost::slot_of(&app) {
-                    self.usernotif_deliver(slot as u8, &app, req, Vec::new(), t);
+                    // a repeat replaces the one before it with the same identifier, as a delivered request does
+                    let replaced = self.usernotif.take_delivered(&app, &req.id);
+                    self.usernotif_deliver(slot as u8, &app, req, replaced, t);
                 }
             }
         }
@@ -385,6 +395,33 @@ mod tests {
         assert_eq!(r.list(APP, false), vec!["b".to_string()]);
         // another app's identifier is a different notification
         assert_eq!(r.add("other", req("a"), 0.0), Added::Deliver { replaced: vec![] });
+    }
+
+    #[test]
+    fn repeating_trigger_fires_on_its_grid_until_removed() {
+        let mut r = Registry::default();
+        assert_eq!(r.add(APP, NotifRequest { delay_ms: 100, repeats: true, ..req("tick") }, 0.0), Added::Scheduled);
+        assert!(r.due(99.0).is_empty());
+        assert_eq!(r.due(100.0).len(), 1);
+        assert_eq!(r.next_due(), Some(200.0));
+        // the shell slept past two triggers: one delivery, and the next date is the first one after now
+        let fired = r.due(350.0);
+        assert_eq!(fired.iter().map(|(_, q)| q.id.as_str()).collect::<Vec<_>>(), ["tick"]);
+        assert_eq!(r.next_due(), Some(400.0));
+        assert_eq!(r.list(APP, false), vec!["tick".to_string()]);
+        r.remove(APP, false, &[]);
+        assert!(r.due(10_000.0).is_empty());
+        assert_eq!(r.next_due(), None);
+    }
+
+    #[test]
+    fn repeats_without_a_delay_deliver_once() {
+        let mut r = Registry::default();
+        assert_eq!(r.add(APP, NotifRequest { repeats: true, ..req("now") }, 0.0), Added::Deliver { replaced: vec![] });
+        assert_eq!(r.next_due(), None);
+        assert_eq!(r.add(APP, NotifRequest { delay_ms: 50, ..req("once") }, 0.0), Added::Scheduled);
+        assert_eq!(r.due(50.0).len(), 1);
+        assert_eq!(r.next_due(), None, "a one-off trigger is not re-armed");
     }
 
     #[test]
