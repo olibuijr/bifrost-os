@@ -27,6 +27,8 @@ pub mod wayland;
 #[cfg(feature="desktop-wayland")]
 pub mod desktop_input;
 
+pub mod account;
+
 #[cfg(feature="desktop-wayland")]
 pub mod app_policy;
 

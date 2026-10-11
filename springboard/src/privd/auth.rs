@@ -1,7 +1,7 @@
 //! Login authentication, lockout and the privd session state machine.
 //! `AuthGate` (gate.rs) wraps this in a Mutex and releases it around the blocking PAM check.
 use super::pam::{ct_eq, shadow_entry, Hash, Pam, Verifier, Verify};
-use crate::bare::app_policy::Account;
+use crate::bare::account::Account;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
