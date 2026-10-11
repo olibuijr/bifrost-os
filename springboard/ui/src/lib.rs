@@ -612,6 +612,7 @@ pub mod relevance;
 pub mod reading_list;
 pub mod content_rules;
 pub mod chart;
+pub mod compose;
 #[cfg(test)]
 mod bench;
 

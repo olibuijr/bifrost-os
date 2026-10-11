@@ -64,6 +64,8 @@ pub mod fswatch;
 pub mod file_coordination;
 pub mod save_sync;
 pub mod url;
+pub mod multipart;
+pub mod social;
 pub mod coding;
 pub mod restoration;
 pub use restoration::RestorableState;
