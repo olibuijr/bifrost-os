@@ -25,20 +25,22 @@ fn run() -> std::io::Result<()> {
     use springboard::installer::{app::App, disks, plan};
     use springboard::shell::ui::Ui;
 
-    // Unattended lab reinstall: a preset on the target's ESP (written by the MCP `lifecycle reinstall`), docs/installer.md.
+    use springboard::installer::unattended;
+    // at once, like the on-screen Restart: `--force` still killed processes and unmounted the live root, which released
+    // the lab address under iVentoy's iSCSI root (I/O errors on a black screen)
+    let reboot_now = || {
+        let _ = std::process::Command::new("sync").status();
+        let _ = std::process::Command::new("systemctl").args(["reboot", "-ff"]).status();
+    };
+    // Unattended lab reinstall: a preset on the target's ESP (written by `midget.py reinstall` or the MCP `lifecycle
+    // reinstall`), docs/installer.md. It runs on the progress page below (headless only when no display opens).
     // BIFROST_NO_UNATTENDED=1 skips the search. A refused preset falls through to the on-screen installer.
+    let mut preset = None;
     if std::env::var_os("BIFROST_NO_UNATTENDED").is_none() && std::env::var_os("BIFROST_AUTO").is_none() {
-        if let Some((text, disk)) = springboard::installer::unattended::find_stash() {
+        if let Some((text, disk)) = unattended::find_stash() {
             eprintln!("bifrost-installer: unattended preset found on {disk}");
-            match springboard::installer::unattended::run(&text, &disk) {
-                Ok(()) => {
-                    eprintln!("bifrost-installer: unattended install done; rebooting into the installed system");
-                    // at once, like the on-screen path: `--force` still killed processes and unmounted the live root,
-                    // which released the lab address under iVentoy's iSCSI root (I/O errors on a black screen)
-                    let _ = std::process::Command::new("sync").status();
-                    let _ = std::process::Command::new("systemctl").args(["reboot", "-ff"]).status();
-                    return Ok(());
-                }
+            match unattended::prepare(&text, &disk) {
+                Ok(cfg) => preset = Some((text, disk, cfg)),
                 Err(e) => eprintln!("bifrost-installer: unattended install refused or failed: {e}"),
             }
         }
@@ -75,9 +77,25 @@ fn run() -> std::io::Result<()> {
     let font = Font::parse(sys::map_file(&format!("{assets}/SFUI.ttf"))?).ok_or_else(|| std::io::Error::other("bad font"))?;
     let wayland = std::env::var_os("SPRINGBOARD_WAYLAND").is_some();
     #[cfg(feature = "desktop-wayland")]
-    let mut disp = if wayland { kms::Display::wayland()? } else { kms::Display::open_best(8000)? };
+    let opened = if wayland { kms::Display::wayland() } else { kms::Display::open_best(8000) };
     #[cfg(not(feature = "desktop-wayland"))]
-    let mut disp = kms::Display::open_best(8000)?;
+    let opened = kms::Display::open_best(8000);
+    let mut disp = match (opened, &preset) {
+        (Ok(d), _) => d,
+        // no display: the preset still installs, headless
+        (Err(e), Some((text, disk, _))) => {
+            eprintln!("bifrost-installer: no display ({e}); unattended install without one");
+            return match unattended::run(text, disk) {
+                Ok(()) => {
+                    eprintln!("bifrost-installer: unattended install done; rebooting into the installed system");
+                    reboot_now();
+                    Ok(())
+                }
+                Err(e) => Err(std::io::Error::other(format!("unattended install refused or failed: {e}"))),
+            };
+        }
+        (Err(e), None) => return Err(e),
+    };
     let (w, h) = disp.size();
     // the first KMS frame is the loader's boot frame, so taking the display over from simpledrm changes nothing visible
     use springboard::bootsplash;
@@ -99,6 +117,11 @@ fn run() -> std::io::Result<()> {
             app.set_layout(i);
         }
     }
+    let unattended_run = preset.is_some();
+    if let Some((_, _, cfg)) = preset {
+        app.begin(cfg);
+    }
+    let mut reported = false;
 
     // lab hooks (remote testing): `touch /run/bifrost-shot-on` makes the installer write /run/bifrost-screen.png about twice a
     // second; lines written to /run/bifrost-input become input events (down/move/up X Y, key CODE 1|0)
@@ -185,6 +208,19 @@ fn run() -> std::io::Result<()> {
         }
         if app.page == springboard::installer::app::Page::Failed {
             installing = false;
+        }
+        if unattended_run && !reported {
+            let (done, failed) = { let p = app.progress.lock().unwrap(); (p.done, p.failed.clone()) };
+            if let Some(e) = failed {
+                // the failure stays on screen (Back offers the on-screen installer); the lab follower reads this line
+                eprintln!("bifrost-installer: unattended install refused or failed: install failed: {e}");
+                reported = true;
+            } else if done {
+                eprintln!("bifrost-installer: unattended install done; rebooting into the installed system");
+                unattended::finish();
+                reported = true;
+                app.want_restart = true;
+            }
         }
         if app.want_restart {
             // Reboot at once without stopping services: a normal shutdown kills this process (the console appears) and can

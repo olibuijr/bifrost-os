@@ -5,7 +5,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SYNC=out/lab/sync; mkdir -p "$SYNC"
 [ "${1:-}" = --skip-cargo ] || (cd springboard && cargo build --profile fast --features desktop-wayland --bin installer --bin shell)
-rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-lab
+# the guard (guard.rs and its modules) only when a source is newer than the last build
+[ -f out/bifrost-update-guard-lab ] && [ -z "$(find packaging/arch/recovery -name '*.rs' -newer out/bifrost-update-guard-lab)" ] ||
+  rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-lab
 install -m755 out/bifrost-update-guard-lab "$SYNC/bifrost-update-guard"
 cp packaging/arch/recovery/splash.efi "$SYNC/splash.efi"
 cp packaging/arch/recovery/bifrost-update-guard.service "$SYNC/bifrost-update-guard.service"

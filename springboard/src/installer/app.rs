@@ -205,6 +205,13 @@ impl App {
         plan::account_error(&self.fields[0], &self.fields[1], &self.fields[2], &self.fields[3])
     }
 
+    /// Straight to the progress page with a ready config (the unattended lab install): no questions asked.
+    pub fn begin(&mut self, cfg: Config) {
+        *self.progress.lock().unwrap() = Progress::default();
+        self.want_install = Some(cfg);
+        self.go(Page::Progress);
+    }
+
     fn start(&mut self) {
         let Some(d) = self.disk.and_then(|i| self.disks.get(i)).cloned() else { return };
         let lay = keymaps::layouts().nth(self.layout).unwrap();
@@ -777,6 +784,23 @@ mod tests {
         let cfg = a.want_install.take().unwrap();
         assert_eq!((cfg.username.as_str(), cfg.locale.as_str(), cfg.layout.id), ("ada", "en_US.UTF-8", "us"));
         assert_eq!(cfg.mode, Mode::Erase);
+    }
+
+    #[test]
+    fn an_unattended_config_goes_straight_to_the_progress_page() {
+        let mut a = app();
+        a.progress.lock().unwrap().failed = Some("an earlier attempt".into());
+        let cfg = Config {
+            disk: a.disks[0].clone(), mode: Mode::Erase, locale: "en_US.UTF-8".into(), layout: keymaps::layouts().next().unwrap(),
+            full_name: "Tester".into(), username: "tester".into(), password: "secret-pw".into(), hostname: "bifrost".into(),
+            timezone: String::new(), mirror: "http://10.99.0.1:8078/mirror/".into(),
+        };
+        a.begin(cfg);
+        assert_eq!(a.page, Page::Progress, "the install shows its progress on screen, never a black display");
+        assert!(a.progress.lock().unwrap().failed.is_none(), "a fresh attempt starts from clean progress");
+        let cfg = a.want_install.take().unwrap();
+        assert_eq!((cfg.username.as_str(), cfg.mirror.as_str()), ("tester", "http://10.99.0.1:8078/mirror/"));
+        assert!(render(&mut a).iter().any(|&c| c == WHITE), "the progress page draws");
     }
 
     #[test]

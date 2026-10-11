@@ -1,6 +1,7 @@
 //! Unattended ("preset") install for the lab machine. The running system's MCP server (`lifecycle reinstall`) writes
 //! `EFI/BIFROST/unattended.toml` on its ESP and netboots the lab ISO; the live installer finds the file on the disk it
-//! is about to erase, checks it against the hardware, installs without a display and boots the new system.
+//! is about to erase, checks it against the hardware, installs on the progress page (headless when there is no display)
+//! and boots the new system.
 //! Format and rationale: docs/installer.md "Unattended install". The password is not in the file (see `password_url`).
 
 use super::{disks, keymaps, plan};
@@ -161,9 +162,22 @@ pub fn find_stash() -> Option<(String, String)> {
     None
 }
 
-/// Runs the whole unattended install for `text` found on `disk_path`. Ok(()) after the new system is installed and
-/// BootNext points at it (the caller reboots). Every refusal happens before the disk is touched.
+/// Runs the whole unattended install for `text` found on `disk_path` without a display. Ok(()) after the new system is
+/// installed and BootNext points at it (the caller reboots). Every refusal happens before the disk is touched.
 pub fn run(text: &str, disk_path: &str) -> Result<(), String> {
+    let cfg = prepare(text, disk_path)?;
+    let progress: plan::Shared = Default::default();
+    plan::install(&cfg, &progress);
+    if let Some(e) = progress.lock().unwrap().failed.clone() {
+        return Err(format!("install failed: {e}"));
+    }
+    finish();
+    Ok(())
+}
+
+/// The install configuration for a preset, after the guard (disk, NIC, age) and with the password fetched. Nothing is
+/// written to the disk; the on-screen installer runs the returned config on its progress page.
+pub fn prepare(text: &str, disk_path: &str) -> Result<plan::Config, String> {
     let p = parse(text)?;
     let disk = disks::probe().into_iter().find(|d| d.path == disk_path).ok_or(format!("no disk {disk_path}"))?;
     let id = out("lsblk", &["-dno", "WWN", &disk.path]);
@@ -179,7 +193,7 @@ pub fn run(text: &str, disk_path: &str) -> Result<(), String> {
         .and_then(|i| keymaps::layouts().nth(i))
         .or_else(|| keymaps::layouts().next())
         .ok_or("no keyboard layouts")?;
-    let cfg = plan::Config {
+    Ok(plan::Config {
         disk,
         mode: disks::Mode::Erase,
         locale: if p.locale.is_empty() { "en_US.UTF-8".into() } else { p.locale.clone() },
@@ -190,12 +204,11 @@ pub fn run(text: &str, disk_path: &str) -> Result<(), String> {
         hostname: p.hostname.clone(),
         timezone: p.timezone.clone(),
         mirror: p.mirror.clone(),
-    };
-    let progress: plan::Shared = Default::default();
-    plan::install(&cfg, &progress);
-    if let Some(e) = progress.lock().unwrap().failed.clone() {
-        return Err(format!("install failed: {e}"));
-    }
+    })
+}
+
+/// After a successful install: the preset is used up, and the next boot is the installed system.
+pub fn finish() {
     let _ = std::fs::remove_file(STASH_COPY);
     match bifrost_entry(&out("efibootmgr", &[])) {
         Some(n) => {
@@ -203,7 +216,6 @@ pub fn run(text: &str, disk_path: &str) -> Result<(), String> {
         }
         None => eprintln!("bifrost-installer: no BifrOSt boot entry found; leaving BootOrder to the firmware"),
     }
-    Ok(())
 }
 
 #[cfg(test)]

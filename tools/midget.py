@@ -931,19 +931,20 @@ def follow_install(t0, budget, live):
         r = subprocess.run(SSH + ["cat /run/bifrost-screen.png"], capture_output=True, timeout=20)
         if r.stdout[:4] == b"\x89PNG":
             (shots / time.strftime("%H%M%S.png")).write_bytes(r.stdout)
-    seen = False
+    seen, last_line = False, ""
     while left() > 0 and state() == "live":
         install_shot()
         j = ssh("journalctl -u bifrost-installer --no-pager -n 400 2>/dev/null | grep -E 'unattended|bifrost-installer: \\[' | tail -n 1", 15).strip()
         if j and not seen:
             seen = True
             _stamp("phase 3/7 installer running: " + j[-140:])
-        elif j:
+        elif j and j != last_line:
             print("    " + j[-150:], flush=True)
+        last_line = j
         if "refused or failed" in j:
             _stamp("FAILED: " + j)
             return 1
-        time.sleep(20)
+        time.sleep(5)
     if tail:
         tail.terminate()
     if state() != "installed" and not wait(lambda: state() == "installed", left(), 3):

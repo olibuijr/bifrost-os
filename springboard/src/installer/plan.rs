@@ -243,9 +243,8 @@ struct Run<'a> {
 
 impl Run<'_> {
     fn set(&self, stage: usize, percent: u8, msg: &str) {
-        if std::env::var_os("BIFROST_TRACE").is_some() {
-            eprintln!("bifrost-installer: [{percent}%] stage {stage}: {msg}");
-        }
+        // always in the journal: a dozen lines per install, and the only trace a lab run has of where it is
+        eprintln!("bifrost-installer: [{percent}%] stage {stage}: {msg}");
         let mut p = self.p.lock().unwrap();
         p.stage = stage;
         p.percent = percent.max(p.percent);

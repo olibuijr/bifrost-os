@@ -4,7 +4,7 @@
 # springboard/src/installer/plan.rs) with its whole dependency closure, downloaded once with an empty private pacman
 # database and indexed as the repo "offline". The lab server serves it at http://10.99.0.1:8078/mirror/, and a live
 # lab system pacstraps from it instead of the internet (tools/vm-cycle.py). Re-running fetches only what changed.
-# usage: tools/lab-mirror.sh [--list]
+# usage: tools/lab-mirror.sh [--list | --refresh]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MIRROR=out/lab/sync/mirror
@@ -32,6 +32,14 @@ PY
 if [ "${1:-}" = --list ]; then packages | tr ' ' '\n'; exit 0; fi
 
 mkdir -p "$MIRROR" "$DB"
+# pacman -Syw re-verifies the signature of every cached package (~35 s for the whole set) even when nothing changed, so
+# the same package list within LAB_MIRROR_MAX_AGE (default 24 h) keeps the mirror as is; --refresh forces a sync
+want=$(packages | sha256sum | cut -d' ' -f1)
+if [ "${1:-}" != --refresh ] && [ -s "$MIRROR/offline.db.tar.gz" ] && [ "$(cat "$STATE/mirror.list" 2>/dev/null)" = "$want" ] \
+   && [ -n "$(find "$STATE/mirror.list" -mmin -$((${LAB_MIRROR_MAX_AGE:-1440})) 2>/dev/null)" ]; then
+  echo "lab mirror: fresh ($(ls "$MIRROR"/*.pkg.tar.zst | wc -l) packages, synced $(date -r "$STATE/mirror.list" +%H:%M)); --refresh to sync now"
+  exit 0
+fi
 # only the Arch repositories, from titan's mirror list (titan's own extra repos must not leak into installs)
 cat > "$CONF" <<EOF
 [options]
@@ -57,4 +65,5 @@ else
   repo-add -q "$MIRROR/offline.db.tar.gz" "$MIRROR"/*.pkg.tar.zst
   echo "$set_now" > "$MIRROR/.indexed"
 fi
+echo "$want" > "$STATE/mirror.list"
 echo "lab mirror: $(ls "$MIRROR"/*.pkg.tar.zst | wc -l) packages, $(du -sh "$MIRROR" | cut -f1), http://10.99.0.1:8078/mirror/"
