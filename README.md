@@ -38,7 +38,8 @@ a suite of desktop apps, and an SDK and UI kit for building more.
   Music, Photos, Notes, Calendar, Contacts, Reminders, Weather and a DAW.
 - **SDK and UI kit.** The `springboard/sdk` and `springboard/ui` crates give apps the same controls, text
   and testing support as the shell.
-- **Royalty-free wallpapers.** Six photographs with credits in [CREDITS.md](CREDITS.md).
+- **Royalty-free wallpapers.** Six photographs of Iceland, credited in [CREDITS.md](CREDITS.md). A fresh install
+  starts on one of them at random.
 
 ## Requirements
 

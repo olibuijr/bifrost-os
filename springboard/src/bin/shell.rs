@@ -124,6 +124,13 @@ fn run() -> std::io::Result<()> {
     let mut vol = router.volume();
     apply_volume(vol, mixer.as_ref());
     let mut jack_events = Vec::new();
+    // a fresh install (no wallpaper chosen yet) starts on a random Icelandic still, kept from then on
+    if prefs.get("wallpaper").is_none() {
+        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
+        if let Some(id) = springboard::shell::wallpaper_page::first_wallpaper(&dir, seed) {
+            let _ = prefs.set("wallpaper", id);
+        }
+    }
     let mut current_wallpaper = prefs.get("wallpaper").unwrap_or("").to_string();
     let mut mapped = match map_wallpaper(&dir, &current_wallpaper) {
         Some(m) => m,

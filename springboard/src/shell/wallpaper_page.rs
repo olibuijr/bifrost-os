@@ -17,6 +17,16 @@ pub struct Wallpaper {
     pub thumb: Image,
 }
 
+/// The bundled stills photographed in Iceland (CREDITS.md); a fresh install starts on one of them.
+pub const ICELAND: [&str; 6] = ["waterfall_idyllic", "svartifoss_basalt", "kirkjufell_dusk", "gullfoss_canyon", "arnarstapi_coast", "iceland_falls"];
+
+/// The wallpaper a fresh install starts on: one of the `ICELAND` stills packed in `dir/wallpapers`,
+/// `seed` picking which. None when none is packed (the shell then keeps `wallpaper.raw`).
+pub fn first_wallpaper(dir: &str, seed: u64) -> Option<&'static str> {
+    let packed: Vec<&'static str> = ICELAND.into_iter().filter(|id| std::path::Path::new(&format!("{dir}/wallpapers/{id}.raw")).exists()).collect();
+    (!packed.is_empty()).then(|| packed[(seed % packed.len() as u64) as usize])
+}
+
 /// The shell's lock screen wallpaper and the dimmed copies (Dark Appearance
 /// Dims Wallpaper) of the home and lock stills.
 #[derive(Default)]
@@ -279,6 +289,20 @@ mod tests {
 
     fn ui() -> Ui {
         super::super::tests::ui()
+    }
+
+    #[test]
+    fn a_fresh_install_starts_on_a_packed_icelandic_still() {
+        let dir = std::env::temp_dir().join(format!("wp-first-{}", std::process::id()));
+        let d = dir.to_str().unwrap();
+        assert_eq!(first_wallpaper(d, 0), None, "nothing packed: keep wallpaper.raw");
+        std::fs::create_dir_all(dir.join("wallpapers")).unwrap();
+        for id in ["kirkjufell_dusk", "gullfoss_canyon", "desert_day"] {
+            std::fs::write(dir.join(format!("wallpapers/{id}.raw")), b"").unwrap();
+        }
+        let picks: std::collections::BTreeSet<_> = (0..8).filter_map(|seed| first_wallpaper(d, seed)).collect();
+        assert_eq!(picks.into_iter().collect::<Vec<_>>(), ["gullfoss_canyon", "kirkjufell_dusk"], "only Icelandic stills, and the seed varies the pick");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn wallpapers(n: usize) -> Vec<Wallpaper> {
