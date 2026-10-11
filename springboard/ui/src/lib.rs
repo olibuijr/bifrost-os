@@ -636,6 +636,8 @@ pub mod extensions;
 pub mod vcard;
 pub mod contact_groups;
 pub mod contact_changes;
+pub mod contact_card;
+pub mod contact_picker;
 pub mod fetch;
 pub mod history;
 pub mod model_history;
