@@ -1,0 +1,31 @@
+{
+  "framework": "Music Understanding",
+  "doc": "https://developer.apple.com/documentation/musicunderstanding",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/music.rs (session, rhythm analysis, result types); springboard/sdk/src/music_understanding.rs (bifrost_app::music_understanding); springboard/apps/daw/src/lab.rs (loudness only, app-private); springboard/src/media/symfile.rs and mp3.rs (file decode); springboard/audiod/src/main.rs (playback and capture service)",
+  "summary": "The framework is audio analysis: a session that runs rhythm, key, loudness, pace, structure and instrument-activity analyses over a file or a buffer stream. BifrOSt now has a session API with a rhythm analysis (beats, bars, BPM) over samples the app supplies. Key, pace, structure and instrument activity are missing, loudness is only private DAW code, and the session takes no file asset.",
+  "rea_evidence": "ev_b43f3bf67b5f530fe587b02d014b2ed883f1d278dadef09ee1794d9a27614a5f",
+  "rea_evidence_previous": "ev_5ca98fba11b7d0d8290a0ab5f2bb01719eeda945e38cfc42f1cb97e6eccf7777",
+  "features": [
+    {"feature": "Analysis session (create, analyze, cancel)", "apple": "MusicUnderstandingSession: init(asset:), init(audioProvider:), analyze(), analyze(for:), cancel()", "bifrost": "springboard/ui/src/music.rs (MusicUnderstandingSession::new, analyze, analyze_for, cancel); springboard/sdk/src/music_understanding.rs", "status": "partial", "note": "session object with analyze(), analyze(for:) and cancel(), synchronous; no init(asset:) for an AVAsset-like file input; analysis runs on the calling thread"},
+    {"feature": "Audio input (file asset and buffer stream)", "apple": "MusicUnderstandingSession init(asset:) (AVAsset) and init(audioProvider:) (AVAudioPCMBuffer stream)", "bifrost": "springboard/ui/src/music.rs (new: mono samples, from_interleaved: channel mix-down); springboard/src/media/symfile.rs (FLAC, Ogg Vorbis, WAV); springboard/src/media/mp3.rs (MP3); springboard/audiod/src/main.rs (Recorder capture)", "status": "partial", "note": "the session takes a whole mono or interleaved buffer; decoders return whole files to the app, and no streaming buffer input exists, so the app must decode first"},
+    {"feature": "Rhythm (beats, bars, BPM)", "apple": "RhythmResult: beats, bars, beatsPerMinute", "bifrost": "springboard/ui/src/music.rs (analyze_rhythm, RhythmResult); springboard/apps/daw/src/model.rs (Section.bpm, a project tempo, not detected)", "status": "partial", "note": "beat, bar and BPM detection from an onset-energy envelope with a 120 BPM prior; one tempo for the whole buffer, no tempo changes or meter; accuracy checked only on synthetic click tracks"},
+    {"feature": "Key (musical key over time)", "apple": "KeyResult, AnalysisType.key", "bifrost": "springboard/apps/daw/src/compose.rs (best-fit chord from notes in the project, around line 508)", "status": "gap", "note": "compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio; AnalysisType::Key exists and returns Unsupported"},
+    {"feature": "Loudness (integrated, momentary, short-term, peak)", "apple": "LoudnessResult, loudnessResults async sequence, AnalysisType.loudness", "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs at line 81, measure at line 110, true peak, band energy); used by springboard/apps/daw/src/bin/daw-render.rs and daw-ai.rs", "status": "partial", "note": "integrated LUFS and true peak exist as ITU-R BS.1770 code for the DAW lab only; no momentary or short-term values, no streaming results, not reachable from the session; AnalysisType::Loudness returns Unsupported"},
+    {"feature": "Pace", "apple": "PaceResult, AnalysisType.pace", "bifrost": "none", "status": "gap", "note": "no pace or tempo-change analysis"},
+    {"feature": "Structure (sections, segments, phrases)", "apple": "StructureResult, AnalysisType.structure", "bifrost": "springboard/apps/daw/src/model.rs (Section, a user-authored scene, not detected)", "status": "gap", "note": "the name Section is a project scene, not detected song structure"},
+    {"feature": "Instrument activity", "apple": "InstrumentActivityResult, AnalysisType.instrumentActivity", "bifrost": "none", "status": "gap", "note": "no source separation or per-instrument level detection"},
+    {"feature": "Result and support types (TimedValue, RangedValue, errors)", "apple": "MusicUnderstandingSession.TimedValue, RangedValue, SessionResult, MusicUnderstandingError", "bifrost": "springboard/ui/src/music.rs (TimedValue, RangedValue, SessionResult with rhythm only, AnalysisType, MusicUnderstandingError)", "status": "partial", "note": "SessionResult carries only the rhythm field; error cases emptyAnalysisSet, invalidAsset, unsupported and cancelled exist; internalError and hasProtectedContent have no counterpart; TimedValue and RangedValue are not yet used by any result"},
+    {"feature": "Cancellation and partial delivery", "apple": "cancel(), loudnessResults async sequence", "bifrost": "springboard/ui/src/music.rs (cancel flag checked between analyses); springboard/sdk/src/dispatch.rs (generic dispatch, no analysis job)", "status": "partial", "note": "cancel() stops a running analyze call at its next check, from another thread through an Arc of the session; no async result sequence, so no partial delivery"}
+  ],
+  "gaps": [
+    "Key detection on audio (KeyResult), and AnalysisType::Key returns Unsupported.",
+    "Pace analysis (PaceResult) and structure segmentation (sections, segments, phrases).",
+    "Instrument activity detection and source separation.",
+    "Loudness exists only as private DAW lab code: no momentary or short-term values, not reachable from the session.",
+    "Streaming input: no buffer-stream session and no file-asset session; decoders return whole files to the app.",
+    "Rhythm is heuristic: one tempo for the whole buffer, no tempo changes or meter, and tested only on synthetic click tracks.",
+    "No async result sequence (loudnessResults) and no partial delivery of results."
+  ]
+}

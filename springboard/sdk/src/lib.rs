@@ -66,6 +66,7 @@ pub mod attributed;
 pub mod spellcheck;
 pub mod notification;
 pub mod observable;
+pub mod music_understanding;
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};
 /// `NativeCache` parity (see `docs/bifrost-ui.md`, "Cache").
