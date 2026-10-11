@@ -655,6 +655,9 @@ pub mod privacy;
 pub mod relations;
 pub mod history;
 pub mod model_store;
+pub mod ml_tensor;
+pub mod features;
+pub mod compute;
 #[cfg(test)]
 mod bench;
 
