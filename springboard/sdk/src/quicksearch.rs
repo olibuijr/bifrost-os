@@ -256,10 +256,58 @@ impl CSSearchableIndex {
     }
 }
 
+/// The query model (`bifrost_ui::searchquery`): a query string, the fields it searches and its context.
+pub use bifrost_ui::searchquery::{Context as SearchQueryContext, Error as SearchQueryError, Field as SearchQueryField, Hit as SearchQueryHit, Query as SearchQuery};
+
+/// Runs `query` over the items the app indexed (`CSSearchQuery` with the app's own content). The title is the one
+/// for the current locale and the keywords are the ones the shell indexes (custom values and persons included), so a
+/// query finds an item here exactly when the Search panel would. Returns the matching items, best match first.
+///
+/// This searches only the items passed in, which the app holds itself. The shell's on-device index is not queried.
+pub fn search_items<'a>(query: &SearchQuery, items: &'a [CSSearchableItem]) -> Result<Vec<&'a CSSearchableItem>, SearchQueryError> {
+    let locale = Locale::current();
+    let records: Vec<bifrost_ui::searchquery::Record> = items
+        .iter()
+        .map(|i| {
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            bifrost_ui::searchquery::Record { title, description: i.attribute_set.content_description.clone(), keywords }
+        })
+        .collect();
+    let hits = bifrost_ui::searchquery::run(query, &records)?;
+    Ok(hits.into_iter().map(|h| &items[h.index]).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::proto::Configure;
+
+    #[test]
+    fn search_items_finds_by_title_description_and_keywords() {
+        let items = [
+            CSSearchableItem::new("n1", "notes", CSSearchableItemAttributeSet::new("Milk").content_description("oat")),
+            CSSearchableItem::new("n2", "notes", CSSearchableItemAttributeSet::new("Bread").keywords(&["shop"])),
+            CSSearchableItem::new("n3", "notes", CSSearchableItemAttributeSet::new("Tea").custom_attribute("status", "shop")),
+        ];
+        let ids = |q: &str| -> Vec<String> { search_items(&SearchQuery::new(q), &items).unwrap().iter().map(|i| i.unique_identifier.clone()).collect() };
+        assert_eq!(ids("oat"), ["n1"]);
+        assert_eq!(ids("shop"), ["n2", "n3"]);
+        assert_eq!(ids("mil"), ["n1"]);
+    }
+
+    #[test]
+    fn search_items_applies_filter_queries_and_reports_refused_queries() {
+        let items = [
+            CSSearchableItem::new("a", "notes", CSSearchableItemAttributeSet::new("Milk").keywords(&["shop"])),
+            CSSearchableItem::new("b", "notes", CSSearchableItemAttributeSet::new("Milk").keywords(&["home"])),
+        ];
+        let ctx = SearchQueryContext { filter_queries: vec!["home".into()], ..SearchQueryContext::default() };
+        let found = search_items(&SearchQuery::with_context("milk", ctx), &items).unwrap();
+        assert_eq!(found.iter().map(|i| i.unique_identifier.as_str()).collect::<Vec<_>>(), ["b"]);
+        assert_eq!(search_items(&SearchQuery::new("  "), &items).unwrap_err(), SearchQueryError::EmptyQueryString);
+        assert_eq!(SearchQueryError::NoFields.code(), 2);
+    }
+
     use bifrost_render::font::Font;
     use bifrost_render::ui::Ui;
 
