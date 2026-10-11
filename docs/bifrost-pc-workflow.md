@@ -442,7 +442,10 @@ python3 tools/midget.py reinstall --confirm "REINSTALL midget"
 It calls MCP `lifecycle reinstall` over ssh (agents use the `lifecycle` tool with the same `confirm`), then prints
 timestamped phases: going down, netboot seen, installer running, installed system up, `phase=accepted`, tester session
 running (it presses Enter if the lock screen shows), MCP reachable on :7420. Bounded by `--timeout` (default 2400 s).
-The tester password is in `out/lab/tester.password`. Restart and plain netboot: `lifecycle` actions `restart` / `netboot`,
+The tester password is in `out/lab/tester.password`. The install runs on its own once the preset is written; if the
+follower dies (a wrapper's `timeout`, a closed terminal), Midget still netboots, installs in about 90 s and reboots into
+the new system, which looks as if it skipped the installer. Re-attach with `python3 tools/midget.py follow` (picks up at
+the current phase, 4-7 on an installed system). Restart and plain netboot: `lifecycle` actions `restart` / `netboot`,
 or `midget.py reboot [--netboot]`. Only Midget can be reinstalled; the MCP and the installer both check the lab hardware.
 
 ## System sleep policy (Snow Leopard round 6)

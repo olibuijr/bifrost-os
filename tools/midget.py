@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | mem | apps | recovery | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | mem | apps | recovery | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] | follow [--timeout S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -909,20 +909,23 @@ def follow_install(t0, budget, live):
             _stamp("FAILED: no netboot into the live lab ISO (check iVentoy and BootNext with `efi`)")
             return 1
         _stamp("phase 2/7 netboot seen: live lab ISO is up")
-    # the live system's journal dies with it (its root is iVentoy's iSCSI disk): keep a copy on titan as it happens
-    logs = Path(__file__).resolve().parent.parent / "out" / "lab" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    live_log = logs / time.strftime("%Y%m%d-%H%M%S-live-journal.log")
-    tail = subprocess.Popen(SSH + ["journalctl -f -b -o short-precise --no-pager"], stdout=open(live_log, "w"), stderr=subprocess.DEVNULL)
-    shots = logs / live_log.name.replace("-live-journal.log", "-install")
-    shots.mkdir(exist_ok=True)
-    ssh("touch /run/bifrost-shot-on", 10)
-    _stamp(f"live journal streaming to {live_log}; installer screens every 10 s in {shots}/")
+    if state() == "live":
+        # the live system's journal dies with it (its root is iVentoy's iSCSI disk): keep a copy on titan as it happens
+        logs = Path(__file__).resolve().parent.parent / "out" / "lab" / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        live_log = logs / time.strftime("%Y%m%d-%H%M%S-live-journal.log")
+        tail = subprocess.Popen(SSH + ["journalctl -f -b -o short-precise --no-pager"], stdout=open(live_log, "w"), stderr=subprocess.DEVNULL)
+        shots = logs / live_log.name.replace("-live-journal.log", "-install")
+        shots.mkdir(exist_ok=True)
+        ssh("touch /run/bifrost-shot-on", 10)
+        _stamp(f"live journal streaming to {live_log}; installer screens every 10 s in {shots}/")
+    else:
+        live_log, tail, shots = "(none: not live)", None, None
     last_shot = [0.0]
 
     def install_shot():
         """The live installer's own frame (lab hook /run/bifrost-screen.png), at most every 10 s."""
-        if time.time() - last_shot[0] < 10:
+        if shots is None or time.time() - last_shot[0] < 10:
             return
         last_shot[0] = time.time()
         r = subprocess.run(SSH + ["cat /run/bifrost-screen.png"], capture_output=True, timeout=20)
@@ -941,7 +944,8 @@ def follow_install(t0, budget, live):
             _stamp("FAILED: " + j)
             return 1
         time.sleep(20)
-    tail.terminate()
+    if tail:
+        tail.terminate()
     if state() != "installed" and not wait(lambda: state() == "installed", left(), 3):
         _stamp(f"FAILED: the installed system did not answer on ssh in time (live journal: {live_log})")
         return 1
@@ -984,6 +988,8 @@ def main():
         "recovery": lambda: cmd_recovery(),
         "idle": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-idle-measure.py")), *rest]),
         "reinstall": lambda: cmd_reinstall_loop(rest),
+        # re-attach to a reinstall whose follower died: the install runs on its own, this picks up at the current phase
+        "follow": lambda: follow_install(time.time(), int(rest[rest.index("--timeout") + 1]) if "--timeout" in rest else 900, live=True),
         "wipe": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-wipe.py")), *rest]),
         "state": lambda: cmd_control(["state"]),
         "lock": lambda: cmd_control(["lock"]),
