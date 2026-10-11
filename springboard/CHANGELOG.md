@@ -1,5 +1,22 @@
 # BifrOSt changelog
 
+## 0.5.34 — 2026-10-12
+
+Reference-SDK parity, waves 1 and 2 (the matrix: `docs/apple-parity-matrix.md`, `bifrost pc parity`):
+
+- A parity matrix of every framework the official documentation lists for macOS 27 (246 frameworks and parts, 2413
+  feature rows), with coverage per SDK, work themes and a published database view. Coverage rose from 26.0% to 33.8%.
+- 209 new std-only modules in `bifrost-ui`, `bifrost-core`, `bifrost-render` and the SDK answer 420 gap reports across
+  127 frameworks as pure models with host tests (2340 tests in those crates): controllers and bindings, find and
+  replace, list markers, Bezier paths and gradients, tracking areas and cursors, screens and Dock badges, vCard and
+  contact groups, fetch requests, persistent history and migrations, index sets and progress, signposts, tensors and
+  compute graphs, colour cubes and filters, sync-engine change tokens, recurrence, geofences and more. Each has a note in
+  `docs/parity/`. None is wired into the shell or the apps yet, so the matrix marks them Partial.
+- Fixes found while integrating: histogram equalization no longer underflows below the first occupied bin; screen
+  rotation ignores non-finite gravity; the weather error shows its own text instead of the deprecated trait default.
+- Tools: `bifrost pc parity` (status, coverage, show, gaps, search with Titan embeddings and rerank, related, themes,
+  apply, check, build, db-export), the official-docs reader `tools/parity/docc.py` and REA page evidence.
+
 ## 0.5.33 — 2026-10-11
 
 Five SDK and shell parity rounds (docs/bifrost-ui.md has a section for each, with the gaps that remain):
