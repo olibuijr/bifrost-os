@@ -576,6 +576,7 @@ pub mod format;
 pub mod gesture;
 pub mod identity;
 pub mod access_control;
+pub mod trust;
 pub mod focus;
 pub mod pane;
 pub mod uttype;
