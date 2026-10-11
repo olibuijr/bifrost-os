@@ -304,7 +304,7 @@ mod tests {
             .collect();
         let ui = ui();
         let (w, h) = (1280i32, 720i32);
-        let page = WallpaperPage::new(&ui, w, h as f32 / w as f32, &wps, "svartifoss-basalt", true);
+        let page = WallpaperPage::new(&ui, w, h as f32 / w as f32, &wps, "svartifoss_basalt", true);
         let mut img = Image::new(w as usize, h as usize);
         img.px.fill(u32::MAX);
         page.draw(&mut Surface { w: w as usize, h: h as usize, stride: w as usize, px: &mut img.px, y0: 0 }, &ui, w, h, None);

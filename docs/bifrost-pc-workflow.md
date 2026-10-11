@@ -189,7 +189,7 @@ bifrost pc midget trace on
 bifrost pc midget update             # full pacman upgrade; leaves current UI running
 bifrost pc midget update --restart   # explicitly applies the new shell
 bifrost pc midget appearance light  # Displays > Appearance: light|dark|auto (restarts the shell, unlocks)
-bifrost pc midget wallpaper svartifoss-basalt  # packed still id (restarts the shell, unlocks)
+bifrost pc midget wallpaper svartifoss_basalt  # packed still id (restarts the shell, unlocks)
 ```
 
 Appearance is read from `settings.ini` at shell start, so `appearance` stops the shell, writes `appearance_mode`,

@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 WALLPAPERS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "wallpapers")
-DEFAULT_WALLPAPER = "waterfall-idyllic.jpg"
+DEFAULT_WALLPAPER = "waterfall_idyllic.jpg"
 ICON_PT = 64
 bifrost_WIDTH_PT = 768
 THUMB = (320, 180)
@@ -71,7 +71,7 @@ def stills(out, w, h):
         path = os.path.join(WALLPAPERS, name)
         write_raw(f"{out}/wallpapers/{wp_id}.raw", w, h, rgba(path, w, h, fill=True))
         write_raw(f"{out}/wallpapers/{wp_id}.thumb.raw", *THUMB, rgba(path, *THUMB, fill=True))
-        index[wp_id] = wp_id.replace("-", " ").title()
+        index[wp_id] = wp_id.replace("_", " ").title()
     with open(f"{out}/wallpapers/index.ini", "w") as f:
         f.writelines(f"{k}={v}\n" for k, v in sorted(index.items()))
 

@@ -736,9 +736,9 @@ def cmd_appearance(args):
 
 def cmd_wallpaper(args):
     """wallpaper ID: sets the wallpaper on the Midget to a packed still (`/var/lib/springboard/wallpapers/ID.raw`),
-    e.g. svartifoss-basalt. Restarts the shell like `appearance`; the file must exist on the device."""
+    e.g. svartifoss_basalt. Restarts the shell like `appearance`; the file must exist on the device."""
     if len(args) != 1 or not re.fullmatch(r"[a-z0-9_]+", args[0]):
-        sys.exit("usage: midget wallpaper ID   (a packed still id, e.g. svartifoss-basalt)")
+        sys.exit("usage: midget wallpaper ID   (a packed still id, e.g. svartifoss_basalt)")
     have = run(SSH + ["test -f /var/lib/springboard/wallpapers/" + args[0] + ".raw && echo yes"], 20).stdout.strip()
     if have != "yes":
         sys.exit("no wallpaper " + args[0] + " on the device (see /var/lib/springboard/wallpapers/*.raw)")

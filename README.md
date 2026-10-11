@@ -7,7 +7,7 @@
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Language: Rust](https://img.shields.io/badge/language-Rust-orange.svg)](springboard/Cargo.toml)
 
-<img src="springboard/wallpapers/waterfall-idyllic.jpg" alt="The default BifrOSt wallpaper: a waterfall in Iceland" width="720">
+<img src="springboard/wallpapers/waterfall_idyllic.jpg" alt="The default BifrOSt wallpaper: a waterfall in Iceland" width="720">
 
 </div>
 
