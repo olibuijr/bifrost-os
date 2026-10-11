@@ -34,7 +34,6 @@ Five SDK and shell parity rounds (docs/bifrost-ui.md has a section for each, wit
 - Installer: a Look step after the account: Light, Dark or Auto, the accent colour and the wallpaper on one page; the page itself follows the pick, and the choice is written to the new system's `settings.ini` (`appearance_mode`, `accent_color`, `wallpaper`). Unattended presets take optional `appearance`, `accent` and `wallpaper` keys.
 - Lab: `midget.py unlock` types the lab password (never printed; only key codes cross ssh) and every Enter-unlock in the tools uses it; `midget.py login-bypass on|off`.
 
-||||||| Stash base
 ## 0.5.28 — 2026-10-11
 
 - WoW, the built-in game-streaming app, is removed from the shell together with its `wowstream-client` dependency and the landscape-forcing rotation path that only it used. First step of moving components out of the shell so they update without a restart (`docs/shell-decomposition.md`).
