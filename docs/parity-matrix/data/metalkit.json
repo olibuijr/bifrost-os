@@ -1,0 +1,26 @@
+{
+  "framework": "MetalKit",
+  "doc": "https://developer.apple.com/documentation/metalkit",
+  "macos_since": "10.11",
+  "status": "partial",
+  "bifrost": "springboard/render/src/texture.rs, springboard/render/src/mesh.rs, springboard/render/src/imgdec.rs, springboard/src/gpu/wl.rs (Presenter), springboard/src/gpu/batch.rs",
+  "summary": "MetalKit is Apple's Metal helper layer: a view that owns a drawable loop (MTKView), a texture loader, and Model I/O mesh wrappers. BifrOSt now has device-free models for the texture loader's options and mip chains and for mesh containers (layout, buffers, submeshes, bounds, buffer budget). It still has no app-facing GPU view, no GPU texture object and no device-backed mesh buffers.",
+  "rea_evidence": "ev_66624be43980f5d880343c0ef4b41cc7ae2599db80e78cbc1cf065b3850e9ae5",
+  "features": [
+    {"feature": "View management (MTKView, MTKViewDelegate)", "apple": "MTKView, MTKViewDelegate", "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/sdk/src/view/", "status": "gap", "note": "Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"},
+    {"feature": "Device and drawable setup", "apple": "MTKView.device, preferredDevice, colorPixelFormat", "bifrost": "springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs", "status": "os", "note": "GBM and EGL drawables exist in the system layer; apps get no device or drawable API"},
+    {"feature": "Texture loading from image files", "apple": "MTKTextureLoader (newTexture URL, data, cgImage; asset catalog), MTKTextureLoader.Option", "bifrost": "springboard/render/src/texture.rs (LoadOptions, TextureDescriptor, mip_layout, generate_mips, apply_origin, prepare, load_bytes); springboard/render/src/imgdec.rs (decode, PNG and JPEG)", "status": "partial", "note": "Load options (sRGB, allocate and generate mipmaps, origin, usage, cache and storage hints), descriptors, mip chains and box-filtered mip generation are pure and tested. Decoding stays on the CPU. Missing: a GPU texture object, asynchronous load, asset catalog lookup, cube layouts and the display gamut"},
+    {"feature": "Model I/O mesh handling (MTKMesh, MTKSubmesh, MTKMeshBuffer, allocator)", "apple": "MTKMesh, MTKSubmesh, MTKMeshBuffer, MTKMeshBufferAllocator, newMeshes(asset:device:)", "bifrost": "springboard/render/src/mesh.rs (VertexLayout, Buffer, BufferAllocator, Submesh, Mesh, Aabb)", "status": "partial", "note": "Mesh containers with validated vertex layout, one buffer per stride, submeshes with index buffers, index range checks, position bounds and a byte-budget allocator. Pure CPU data. Missing: device-backed buffers, asset loading from files, normal and tangent generation, subdivision, attribute add and replace, and format conversion"},
+    {"feature": "Vertex batching for 2D draws", "apple": "(no direct MetalKit class; Metal draw calls)", "bifrost": "springboard/src/gpu/batch.rs (Vertex, ATTRIBS)", "status": "os", "note": "Internal batching of shell primitives into one vertex list per frame. Not exposed to apps"},
+    {"feature": "Conversion functions and model errors", "apple": "Conversion Functions (Metal and Model I/O vertex layouts), Model Errors", "bifrost": "none found", "status": "n/a", "note": "Depends on Model I/O, which BifrOSt does not have"}
+  ],
+  "gaps": [
+    "No app-facing GPU view with a per-frame delegate (MTKView and MTKViewDelegate equivalent) in springboard/sdk/src/",
+    "No GPU texture object or asynchronous texture loading; springboard/render/src/texture.rs prepares pixels and descriptors but nothing uploads them to the device",
+    "No asset catalog lookup and no cube texture layouts for the texture loader",
+    "No device-backed mesh buffers; springboard/render/src/mesh.rs owns CPU bytes only",
+    "No mesh loading from asset files and no normal, tangent or subdivision generation",
+    "Presenter (springboard/src/gpu/wl.rs) is shell-internal; its Metal-shaped API has no SDK binding",
+    "The GPU stack is GLES on GBM and EGL, not Metal; a Metal-shaped API is only a design note in docs/gpu-first.md"
+  ]
+}

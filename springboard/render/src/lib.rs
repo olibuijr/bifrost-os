@@ -14,6 +14,8 @@ pub mod appearance;
 pub mod glass;
 pub mod motion;
 pub mod assets;
+pub mod mesh;
+pub mod texture;
 
 #[cfg(test)]
 mod tests {
