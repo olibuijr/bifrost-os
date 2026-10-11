@@ -466,6 +466,52 @@ are split into parts by their official topic sections.
 - **Link Presentation** (Gap, 25%): No SDK API that fetches a URL's title, icon, image and video (LPMetadataProvider equivalent), with a timeout and cancel; No rich link view widget (LPLinkView equivalent) in the shared kit, with placeholder and metadata modes; The News app's og:image scrape (springboard/apps/news-desktop/src/pictures.rs) is app-local and not reusable by other apps; The share sheet sends URLs as plain items and does not show a rich link preview
 - **Screen Time** (Partial, 36%): Web-usage reporting: no equivalent of STWebpageController to report visited URLs, playing video or picture-in-picture, or to ask whether a URL is blocked.; Web-history API: no equivalent of STWebHistory to fetch or delete browsing history by bundle identifier, profile or date range.; Configuration query: apps cannot observe the device Screen Time configuration or ask whether child restrictions are enforced.; Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.
 
+## Work themes (Gap rows clustered by meaning)
+
+Gap rows from all frameworks, embedded on Titan and clustered (`bifrost pc parity themes`); one theme is one
+piece of work that closes gaps in several frameworks at once.
+
+| Theme | Gap rows | Frameworks |
+|---|---|---|
+| Identity services (users and groups) | 75 | Core Services, Local Authentication, AppKit (App Structure), CryptoTokenKit, Apple CryptoKit, Core Data, Security, CloudKit and 24 more |
+| Session properties | 50 | Foundation Models, Local Authentication Embedded UI, LightweightCodeRequirements, CloudKit, Security Interface, Authentication Services, Local Authentication, Service Management and 21 more |
+| Dynamic instructions and profiles | 45 | Foundation Models, Core ML, Core AI, Foundation (Networking, Low-Level Utilities), Evaluations, Natural Language, Distributed, Core Transferable and 10 more |
+| Transforms (CATransform3D, CATransformLayer, transform matrices) | 43 | Core Animation, Spatial, Core Graphics, SceneKit, Model I/O, GLKit, Symbols, Core Image and 5 more |
+| Central role: GATT client (services, characteristics, descriptors) | 42 | Core Bluetooth, IOBluetooth, CoreAudioKit, IOBluetooth UI, AVRouting, Network, External Accessory, Network Extension and 10 more |
+| Packet tunnel provider and app proxy provider (custom VPN) | 38 | Network Extension, CFNetwork, Foundation (Networking, Low-Level Utilities), WebKit, Network, Safari Services, System Configuration, External Accessory and 8 more |
+| Shortcuts app integration | 37 | SiriKit, App Intents, Media Intents, SwiftUI (App structure, Data and storage), User Notifications, WidgetKit, ExtensionFoundation, Foundation Models and 8 more |
+| Audio Unit v2 render API (AudioUnit, render callbacks, I/O start and stop) | 37 | Audio Toolbox, Sound Analysis, Music Understanding, Core Audio, Audio Unit, CoreAudioKit, PHASE, Media Toolbox and 5 more |
+| Sharing buffers with the GPU framework | 37 | Model I/O, Metal, Core Image, MetalFX, MetalKit, Core AI, SpriteKit, SceneKit and 6 more |
+| Audio devices | 35 | Virtualization, AVFAudio, Core Audio, Application Services, AVFoundation (Capture, Audio), Speech, Audio Toolbox, AVRouting and 7 more |
+| Errors | 34 | CloudKit, EventKit, CryptoTokenKit, Core Location, CallKit, Service Management, Virtualization, Foundation (App Support) and 15 more |
+| Media item queries and filters | 32 | Media Player, AVFoundation (Playback, Editing, Common), PhotoKit, iTunes Library, Media Accessibility, Now Playing, User Notifications UI, Media Library and 4 more |
+| Colour lookup and conversion (colour cube, colour map, Lab, palettize) | 31 | Core Image, Image I/O, Application Services, MediaExtension, ColorSync, Core Video, IOSurface, Quartz and 8 more |
+| Writing Tools | 31 | AppKit (Text), AppKit (App Structure), PencilKit, PaperKit, Core Graphics, SwiftUI (Views, View layout), AppKit (Graphics, Drawing, Color, and Printing), InputMethodKit and 5 more |
+| Caption language selection and profiles | 29 | Media Accessibility, Core Text, AVFoundation (Playback, Editing, Common), Core Media I/O, Preference Panes, System Configuration, Background Assets, Media Toolbox and 13 more |
+| Action extension view controller | 28 | File Provider UI, Social, Core Services, ReplayKit, Finder Sync, Contacts UI, ScreenCaptureKit, Notification Center and 9 more |
+| Clip buffering and recording editor (SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput) | 25 | ScreenCaptureKit, ReplayKit, AVKit, Screen Saver, Video Toolbox, CrashReportExtension, Screen Time, Media Intelligence and 1 more |
+| Device driver access (claim, configure, descriptors, device requests) | 23 | IOUSBHost, Accessory Access, External Accessory, Core MIDI, HIDDriverKit, IOKit, Virtualization, Core HID and 1 more |
+| Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate) | 23 | dnssd, GSS, CFNetwork, IOSurface, Disk Arbitration |
+| Process signal, working directory and root directory events | 23 | Endpoint Security, SwiftData, Disk Arbitration, Core Services, Darwin Notify, File Provider |
+| PDFPage: rendering and drawing | 23 | PDFKit, PhotoKit, Quartz, Application Services, VisionKit, Quick Look, Media Intelligence |
+| Agents, goals and behaviors | 22 | GameplayKit, SpriteKit, SceneKit |
+| App-side search queries | 21 | Core Spotlight, Core Services, Notification Center, File Provider, Foundation (Files and Data Persistence), Open Directory, Quick Look Thumbnailing, Visual Intelligence and 4 more |
+| Extension-based UI in a host app (remote views) | 20 | ExtensionKit, QuickLook UI, Link Presentation, Local Authentication Embedded UI, VisionKit, TipKit, WidgetKit, WebKit and 2 more |
+| Point, rectangle and rule marks | 20 | Swift Charts, MetricKit, os, StateReporting, OSLog |
+| Graph construction (MPSGraph, MPSGraphTensor, MPSGraphOperation) | 19 | Metal Performance Shaders Graph, Metal Performance Shaders, Metal |
+| Motion sensing (gyro and accelerometer) | 18 | Game Controller, Core Motion, Force Feedback, HIDDriverKit, Core Location, InputMethodKit |
+| Map camera and region | 17 | MapKit, EventKit, Core Location, VisionKit |
+| Barriers on concurrent queues | 14 | Dispatch, Swift, Disk Arbitration, os, Observation, Music Understanding, Sound Analysis, Darwin Notify and 1 more |
+| Access authorization | 14 | Address Book, Contacts, Open Directory, Core Data |
+| Accessibility and localization of charts | 13 | Swift Charts, Application Services, Accessibility, SwiftUI (Event handling, Accessibility, Framework integration), WidgetKit, App Intents Testing, Translation |
+| Writing direction and bidirectional text | 12 | Core Text, PaperKit, Core Graphics, Application Services, Translation |
+| Scanner discovery and functional units | 11 | ImageCaptureCore, AVFoundation (Capture, Audio), Model I/O, Quartz |
+| ObservableObject | 10 | Combine, Observation, Dispatch, Exception Handling |
+| Custom file type thumbnail extension (QLThumbnailProvider) | 9 | Quick Look Thumbnailing, QuickLook UI, Quick Look, Quartz |
+| Vectors, matrices, quaternions and simd | 8 | Accelerate, Core ML, Evaluations |
+| Precipitation | 7 | WeatherKit, WidgetKit |
+| Boundary entries (OSLogEntryBoundary) | 4 | OSLog |
+
 ## Matrix
 
 <a id="accessibility"></a>
@@ -496,6 +542,8 @@ BifrOSt covers a Linux AT-SPI2 screen-reader bridge (roles, states, text attribu
 
 Gaps: No app emits controls_tree, so the parent and hierarchy API is unused and every app is a flat list to screen readers.; The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping.; Shell chrome (menu bar, dock, Spotlight, Settings pages) is missing from the AT-SPI tree.; ax_set ignores SetValue and Focus unless an app overrides it; the shared kit's sliders and text fields do not.; No Accessibility Inspector for developers to see an app's accessibility tree.; No Switch Control, Voice Control, Braille, or audio graph support.; Display Zoom is a 1.15 geometry factor, not a system-wide zoom, and the Magnifier is a camera loupe, not a screen magnifier.; Doc drift: docs/bifrost-ui.md lines 211-223 still list announcements, caret and secure fields as missing in the parity gaps, while the Closed-in-the-text-round section and ax.rs describe them as implemented. Reconcile the doc..
 
+Related: [Application Services](#application-services), [Media Accessibility](#media-accessibility), [AppKit (User Interface)](#appkit-user-interface), [Core Services](#core-services), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration).
+
 <a id="appkit-app-structure"></a>
 ### AppKit (App Structure)
 
@@ -521,6 +569,8 @@ App lifecycle, documents, pasteboard, state restoration, workspace and sandbox p
 | App extensions | Share, Quick Look, widget, Finder-sync and other extension points | springboard/sdk/src/share.rs; springboard/sdk/src/peek.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/status_item.rs | Partial | Individual extension-like APIs exist; no general extension host or packaging model |
 
 Gaps: Cocoa Bindings controllers and declarative bindings; nib/storyboard-style resource loading; General app extension host and packaging; iCloud-style document and key-value sync API; App memory-warning callbacks and occlusion suspension (task/008-lifecycle-recovery.md); Multi-type pasteboard publishing to the Wayland selection.
+
+Related: [AppKit (User Interface)](#appkit-user-interface), [AppKit (User Interactions)](#appkit-user-interactions), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [AppKit (Text)](#appkit-text), [Application Services](#application-services).
 
 <a id="appkit-graphics-printing"></a>
 ### AppKit (Graphics, Drawing, Color, and Printing)
@@ -549,6 +599,8 @@ Semantic colours, a colour panel, PNG/JPEG decoding, procedural symbol glyphs, a
 
 Gaps: Shell-drawn print sheet and page layout panel (print.rs has no run_modal); Public Bezier path, gradient and shadow drawing API; NSImage-style object model with representations, template images and more formats; SDK access to PDF rendering (currently inside the Books shell engine); Colour spaces, colour lists, colour well and picker modes; User accent colour feeding controlAccentColor; remaining NSColor names; Symbol catalogue beyond the 59 procedural glyphs.
 
+Related: [Core Graphics](#core-graphics), [AppKit (User Interface)](#appkit-user-interface), [AppKit (App Structure)](#appkit-app-structure), [Application Services](#application-services), [AppKit (Text)](#appkit-text).
+
 <a id="appkit-text"></a>
 ### AppKit (Text)
 
@@ -573,6 +625,8 @@ Attributed strings, a rich text editing model, spell checking, a text editing an
 
 Gaps: Multi-line text view widget (NSTextView); TextKit layout manager and text containers; Paragraph styles, text lists, tables and attachments in attributed text; Writing Tools integration for text views; Text finder (find bar); Font descriptors and font collections.
 
+Related: [AppKit (User Interface)](#appkit-user-interface), [Core Text](#core-text), [AppKit (App Structure)](#appkit-app-structure), [AppKit (User Interactions)](#appkit-user-interactions), [Application Services](#application-services).
+
 <a id="appkit-user-interactions"></a>
 ### AppKit (User Interactions)
 
@@ -590,6 +644,8 @@ Responder chain, key equivalents, menus, gesture recognizers, typed drag and dro
 | Accessibility for AppKit | NSAccessibility protocols, roles, labels, announcements | springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs | Partial | AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree() |
 
 Gaps: Scroll wheel, hover and tracking-area events for apps; NSCursor-style cursor API; Dock tile custom content and Dock menu; Trackpad magnify and rotate gestures to apps; Drag and drop inside the retained view kit; Nested accessibility tree nodes.
+
+Related: [AppKit (User Interface)](#appkit-user-interface), [AppKit (App Structure)](#appkit-app-structure), [AppKit (Text)](#appkit-text), [Application Services](#application-services), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration).
 
 <a id="appkit-user-interface"></a>
 ### AppKit (User Interface)
@@ -617,6 +673,8 @@ Layout, appearance, animation, gestures, drag and drop are covered. Controls, wi
 
 Gaps: App-facing sound, speech synthesis and haptics API; NSScreen-style multi-display API for apps; App dock tile badges/menus and custom cursors; Full accessibility roles and rotors; Missing control types and bezel styles.
 
+Related: [AppKit (User Interactions)](#appkit-user-interactions), [AppKit (App Structure)](#appkit-app-structure), [AppKit (Text)](#appkit-text), [Application Services](#application-services), [AppKit (Graphics, Drawing, Color, and Printing)](#appkit-graphics-printing).
+
 <a id="bundle-resources"></a>
 ### Bundle Resources
 
@@ -637,6 +695,8 @@ BifrOSt covers the app package manifest, permission and entitlement gating, a fi
 | Universal links service (applinks) | applinks: apple-app-site-association domain verification that routes https links to the app | none | Gap | No domain association file, no verification and no https link routing to a non-browser app. The browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin). |
 
 Gaps: No privacy manifest: an app cannot declare the data it collects or its required-reason API use (Privacy manifest files).; No universal links service: https links cannot be routed to an installed app by domain association.; No Info.plist equivalent with CFBundle-style keys; manifest.toml is the only identity file and it is not a plist.; URL-scheme routing by the shell is not wired for non-web schemes (docs/default-apps.md, Not done yet).; Entitlements are limited to log-store; there is no general entitlements file and no signing.; No documented placement rules for frameworks or plug-ins inside an app package..
+
+Related: [Core Services](#core-services), [Security](#security), [AppKit (App Structure)](#appkit-app-structure), [Application Services](#application-services), [Foundation (App Support)](#foundation-app-support).
 
 <a id="core-foundation"></a>
 ### Core Foundation
@@ -662,6 +722,8 @@ Core Foundation is the C ABI layer (CFTypeRef, opaque CF* types, CFAllocator, ru
 
 Gaps: No CFPreferences-style host-wide or cross-app preference domains (springboard/sdk/src/defaults.rs is per app).; No CFURL path, resource-value or enumerator API (springboard/sdk/src/url.rs covers network requests only).; No time zone or calendar API in the SDK (springboard/sdk/src/locale.rs has identifier and separators only).; No general locale-aware number or date formatter objects (springboard/ui/src/format.rs has fixed helpers).; No app-facing plug-in or bundle resource lookup (CFPlugIn, CFBundle)..
 
+Related: [Foundation (Fundamentals)](#foundation-fundamentals), [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel), [Foundation (App Support)](#foundation-app-support), [Core Services](#core-services), [Application Services](#application-services).
+
 <a id="declared-age-range"></a>
 ### Declared Age Range
 
@@ -676,6 +738,8 @@ Apple's age-range API returns an age declaration that is set by the Apple Accoun
 | Significant change acknowledgment (SignificantUpdateAction) | SignificantUpdateAction | nothing found | n/a | System sheet for age-related update consent; no BifrOSt counterpart |
 | Age-appropriate tailoring and parental controls | Declared Age Range overview (adults, teens, children) | nothing found | n/a | Family-level parental controls are not part of BifrOSt; no age data source exists |
 
+
+Related: [Device Management](#device-management), [Authentication Services](#authentication-services), [PermissionKit](#permissionkit), [Application Services](#application-services), [Core Services](#core-services).
 
 <a id="distributed"></a>
 ### Distributed
@@ -694,6 +758,8 @@ Apple's Distributed framework is the Swift distributed actor model (actor system
 | Agent and tool access to running apps | No direct Distributed counterpart (remote invocation across processes) | springboard/mcp/src/ (agent MCP server); tools/app-control.py; tools/pi-bifrost-control/client.ts | OS only | agents reach the desktop and apps through MCP and per-app control sockets, not through a shared invocation layer apps can call |
 
 Gaps: No location-transparent remote actor references or actor system; no SDK type for a remote handle to another app's object; No typed remote-call encoder or decoder: control methods pass untyped JSON params and results; No local test double for cross-process calls (LocalTestingDistributedActorSystem equivalent); Cross-app notifications are string-to-string only, capped at 32 entries and 1024 characters per value; Cross-app notifications have no suspensionBehavior: an app that is not running misses the post.
+
+Related: [XPC](#xpc), [Scripting Bridge](#scripting-bridge), [Foundation (App Support)](#foundation-app-support), [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel), [Swift](#swift).
 
 <a id="evaluations"></a>
 ### Evaluations
@@ -714,6 +780,8 @@ Apple's Evaluations framework measures the quality of intelligence-powered featu
 
 Gaps: No model-quality evaluation harness: no suite definition, sample runner or scoring for the Assistant or any on-device model feature.; No datasets, loaders or synthetic sample generation for model tests.; No metric, evaluator or aggregation types, and no model-judge scoring.; No tool-call trajectory checks for agentic features.; No evaluation trait for the test kit; springboard/sdk/src/testing.rs covers UI tests only..
 
+Related: [Core ML](#core-ml), [Core AI](#core-ai), [Foundation Models](#foundation-models), [Application Services](#application-services), [Core Services](#core-services).
+
 <a id="foundation-app-support"></a>
 ### Foundation (App Support)
 
@@ -731,6 +799,8 @@ Notifications, process activity tracking, localized bundles and App Intents have
 | Scripting Support | NSAppleScript, NSScriptCommand, NSUserScriptTask, scripting suites | springboard/sdk/src/control.rs; docs/agent-api.md | Partial | JSON-RPC control sockets let scripts and agents drive apps (bifrost pc control). No scripting dictionaries, AppleScript engine or user script tasks. |
 
 Gaps: Progress/ProgressManager hierarchy for task progress; NSError-style error type with domains and user info; NSUserActivity Handoff between devices; Generic app extension host and NSItemProvider; Scripting dictionaries / AppleScript-like automation; NotificationQueue coalescing and typed notification payloads.
+
+Related: [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel), [Foundation (Fundamentals)](#foundation-fundamentals), [Core Foundation](#core-foundation), [Core Services](#core-services), [Foundation (Files and Data Persistence)](#foundation-files-persistence).
 
 <a id="foundation-files-persistence"></a>
 ### Foundation (Files and Data Persistence)
@@ -756,6 +826,8 @@ Settings, JSON and plist coding, file coordination, change events and Spotlight-
 
 Gaps: FileManager-style SDK API (copy, move, attributes, enumerators); Keyed archiver and binary plist; Metadata query over files; iCloud / cloud-synced documents and key-value store; Backup exclusion and on-disk purgeable data; File versions.
 
+Related: [Core Data](#core-data), [SwiftData](#swiftdata), [Foundation (Fundamentals)](#foundation-fundamentals), [Foundation (App Support)](#foundation-app-support), [Core Services](#core-services).
+
 <a id="foundation-fundamentals"></a>
 ### Foundation (Fundamentals)
 
@@ -778,6 +850,8 @@ Locale-aware number, date, byte, measurement and list formatting, Gregorian cale
 | NSPredicateValidating | protocol listed on the landing page | none | Gap | depends on a predicate engine |
 
 Gaps: Predicate and expression engine (NSPredicate, Predicate); Regular expression and natural-language text analysis API; Time zones and non-Gregorian calendars; Progress tree (ProgressManager, Subprogress); IndexSet, ordered and counted sets, Decimal, UUID, NSNumber wrappers; More unit dimensions and formatter types (duration, person name, ISO8601); languages beyond en and is.
+
+Related: [Core Foundation](#core-foundation), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Foundation (App Support)](#foundation-app-support), [Foundation Models](#foundation-models), [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel).
 
 <a id="foundation-networking-lowlevel"></a>
 ### Foundation (Networking, Low-Level Utilities)
@@ -802,6 +876,8 @@ URLSession-style HTTP(S) with redirects, download and a memory cache exists, and
 | Streams, Sockets, Ports | InputStream, OutputStream, Port, SocketPort, FileHandle | springboard/sdk/src/fswatch.rs | Gap | std::net and std::io are usable directly; no stream or port abstractions with run-loop scheduling |
 
 Gaps: Bonjour/mDNS discovery and advertising; WebSocket and stream tasks; Cookie storage, credentials and auth challenges in URLSession; Upload tasks, background sessions, disk URLCache; General XPC-style service connections; OperationQueue, RunLoop and Timer-style scheduling; Stream and Port abstractions.
+
+Related: [Foundation (App Support)](#foundation-app-support), [Network](#network), [Core Foundation](#core-foundation), [Foundation (Fundamentals)](#foundation-fundamentals), [Foundation (Files and Data Persistence)](#foundation-files-persistence).
 
 <a id="foundation-models"></a>
 ### Foundation Models
@@ -831,6 +907,8 @@ Apple's framework runs an on-device language model (SystemLanguageModel) with se
 
 Gaps: No on-device language model and no SDK API for it: an app cannot ask the system for text generation without a network call.; No model session type with instructions, prompts, generation options and streamed partial output.; No guided generation: model output cannot be constrained to a typed schema.; No model-invoked tool calling; App Intents (springboard/sdk/src/intents.rs) exist but are not exposed to a model.; No context window or token budget API, and no transcript type shared across apps.; The Assistant (springboard/apps/assistant-desktop) is a cloud client for the Anthropic API, not an on-device or Apple-equivalent feature, so it does not count as parity..
 
+Related: [Core AI](#core-ai), [Foundation (Fundamentals)](#foundation-fundamentals), [Core ML](#core-ml), [Foundation (App Support)](#foundation-app-support), [Application Services](#application-services).
+
 <a id="geotoolbox"></a>
 ### GeoToolbox
 
@@ -846,6 +924,8 @@ GeoToolbox builds PlaceDescriptor values that Apple's map services use to look u
 | Physical place representations | PlaceDescriptor.PlaceRepresentation | nothing found | n/a |  |
 | Provider-specific place attributes | PlaceDescriptor.SupportingPlaceRepresentation | nothing found | n/a |  |
 
+
+Related: [MapKit](#mapkit), [Core Location](#core-location), [DeveloperToolsSupport](#developer-tools-support), [Image Playground](#image-playground), [Model I/O](#model-i-o).
 
 <a id="hvf"></a>
 ### hvf (Hierarchical Variable Font)
@@ -863,6 +943,8 @@ The hvf library renders HVGL hierarchical glyph parts for font editors and font 
 | Path geometry enums | AxisExtremum, PointCoordinate, SegmentPoint, SegmentBlendType, PartResult | nothing found | n/a |  |
 | Variable font outlines (related, not hvf) | Not part of hvf | springboard/render/src/gvar.rs | n/a | BifrOSt applies TrueType gvar variations; it does not read HVGL |
 
+
+Related: [Core Text](#core-text), [Model I/O](#model-i-o), [Core Graphics](#core-graphics), [Video Toolbox](#video-toolbox), [Application Services](#application-services).
 
 <a id="music-understanding"></a>
 ### Music Understanding
@@ -886,6 +968,8 @@ The framework is audio analysis: a session that runs rhythm, key, loudness, pace
 
 Gaps: No audio analysis API in the SDK: no session, no analyze call, no result types for any of the six analyses.; Beat, bar and BPM detection on audio (RhythmResult). Only the project's stored tempo exists.; Musical key detection on audio (KeyResult).; Structure segmentation (sections, segments, phrases) and pace analysis.; Instrument activity detection and source separation.; Loudness exists only as private DAW lab code: no momentary or short-term values, no streaming results, no SDK surface.; No buffer-stream input for analysis; decoders only return whole files to the DAW..
 
+Related: [Sound Analysis](#sound-analysis), [Audio Toolbox](#audio-toolbox), [Audio Unit](#audio-unit), [Core Audio Types](#core-audio-types), [PHASE](#phase).
+
 <a id="objective-c-runtime"></a>
 ### Objective-C Runtime
 
@@ -901,6 +985,8 @@ The Objective-C runtime and NSObject root types serve Objective-C and Swift clas
 | Runtime functions | objc_copyImageHeaders(_:) | nothing found | n/a | Mach-O image introspection; not applicable to the Rust shell |
 | Runtime constants, types, macros | Objective-C Structures, Constants, Functions, Data Types, Macros, Enumerations | nothing found | n/a | C reference of the Apple runtime |
 
+
+Related: [Swift](#swift), [AppKit (App Structure)](#appkit-app-structure), [Core Foundation](#core-foundation), [Foundation (App Support)](#foundation-app-support), [System](#system).
 
 <a id="observation"></a>
 ### Observation
@@ -920,6 +1006,8 @@ BifrOSt has manual value observation: an Observable<T> that notifies subscribers
 | Notifications from system state | Observation Registrar for model state (manual) | springboard/sdk/src/process_info.rs (observe_thermal_state, observe_low_power_mode); docs/bifrost-ui.md:1214 (NotificationCenter add_observer, post); docs/bifrost-ui.md:1542 (workspace observe) | Partial | Observer-style subscriptions exist for system events (NotificationCenter, workspace, thermal state, Low Power Mode). They are not Observation's property-level tracking. |
 
 Gaps: No automatic dependency capture (withObservationTracking) and no @Observable macro equivalent: each Observable must be wired by hand.; No async Observations sequence or withContinuousObservation.; A set from inside a subscriber of the same Observable notifies no one (docs/bifrost-ui.md:1435).; SwiftUI-style integration (view invalidation from observed model state) not verified in code; no binding found in this pass..
+
+Related: [Combine](#combine), [Darwin Notify](#darwin-notify), [Dispatch](#dispatch), [Swift](#swift), [User Notifications](#user-notifications).
 
 <a id="paperkit"></a>
 ### PaperKit
@@ -945,6 +1033,8 @@ PaperKit is an app-facing markup framework: view controllers, a vector-style mar
 
 Gaps: No app-facing SDK markup API: no view controller, no markup data model, no shared type. Apps cannot embed a markup canvas.; No vector elements: shapes, text boxes, images, links and loupes are all missing; every mark is a raster stamp.; No editable, reloadable markup document; the shell and Freeform save a flattened PNG and discard the strokes.; No redo, no stroke selection or editing, no stylus pressure or tilt.; No feature set or rendering options exposed to apps..
 
+Related: [PencilKit](#pencilkit), [Application Services](#application-services), [PDFKit](#pdfkit), [TipKit](#tipkit), [Core Text](#core-text).
+
 <a id="permissionkit"></a>
 ### PermissionKit
 
@@ -964,6 +1054,8 @@ PermissionKit lets an app ask a child's parent or guardian for a communication o
 
 Gaps: No SDK API lets an app ask a parent or guardian for permission (AskCenter, PermissionQuestion, AskPermissionAction).; No asynchronous stream of parent responses (responses(for:), PermissionResponse) for apps.; No app-facing button or sheet that presents a parent-approval flow (PermissionButton).; Screen Time limits and Downtime are enforced by the shell but cannot be queried or requested by apps.; Parent approval of significant app updates (SignificantAppUpdateTopic) is not implemented..
 
+Related: [Security](#security), [Core Services](#core-services), [Screen Time](#screen-time), [Application Services](#application-services), [App Intents](#app-intents).
+
 <a id="regexbuilder"></a>
 ### RegexBuilder
 
@@ -980,6 +1072,8 @@ RegexBuilder is a Swift result-builder DSL that compiles to Swift regex values. 
 | Character range operators | ...(Character, Character), ...(Unicode.Scalar, Unicode.Scalar) | none | n/a | Swift operator overloads |
 
 Gaps: Not applicable as a framework: the DSL is Swift-only. The Rust equivalent would be a crate choice, not a BifrOSt API..
+
+Related: [Swift](#swift), [DeveloperToolsSupport](#developer-tools-support), [DataDetection](#datadetection), [Foundation (Fundamentals)](#foundation-fundamentals), [SwiftUI (Views, View layout)](#swiftui-views-layout).
 
 <a id="relevancekit"></a>
 ### RelevanceKit
@@ -1000,6 +1094,8 @@ RelevanceKit is a watchOS-only API that gives watchOS Smart Stack contextual clu
 
 Gaps: No app-facing relevance hint API for desktop widgets or the Today view's Smart Stack (the shell's Smart Stack pages members in fixed order, springboard/src/shell/today.rs:574).; No donation API: apps cannot tell the shell which intents are likely useful at a given time (springboard/sdk/src/intents.rs has invocation only).; Time-based relevance is the only clue type that could map to a desktop (time or date windows); location, fitness, sleep and headphones depend on watch hardware or services BifrOSt does not expose.; Decision needed: whether a desktop relevance hint is worth building, since Apple scopes the API to watchOS..
 
+Related: [WidgetKit](#widgetkit), [App Intents](#app-intents), [SiriKit](#siri-kit), [Core Location](#core-location), [Visual Intelligence](#visual-intelligence).
+
 <a id="spatial-preview"></a>
 ### Spatial Preview
 
@@ -1016,6 +1112,8 @@ Spatial Preview streams a macOS app's documents and USD stages to a paired visio
 | Session state and errors | SpatialPreviewSessionState, SpatialPreviewSessionError, USDPreviewSession.Event | none | n/a | Connection health for a visionOS target only |
 
 Gaps: Not applicable: BifrOSt has no visionOS or spatial companion target..
+
+Related: [Spatial](#spatial), [VisionKit](#visionkit), [Application Services](#application-services), [DeveloperToolsSupport](#developer-tools-support), [Quick Look](#quick-look).
 
 <a id="statereporting"></a>
 ### StateReporting
@@ -1035,6 +1133,8 @@ StateReporting lets an app define named domains, report one active state per dom
 | MetricKit delivery of state-aggregated metrics | MetricKit metric entries that carry state context | none | n/a | MetricKit is Apple's delivery service for the metrics; BifrOSt has no equivalent metric payload for apps, and the performance HUD sensor readings in diag.rs are not app-facing |
 
 Gaps: No app-facing StateReporter: apps cannot declare domains or report state transitions.; No reportable-metadata type or derive macro for attaching structured values to reports.; No signposter (OSSignposter equivalent) for marking intervals and events in traces.; Crash logs are not linked to app state; a crash carries only a signature and file path (springboard/src/shell/diag.rs).; No app-facing metric payload delivered to the developer comparable to MetricKit..
+
+Related: [MetricKit](#metrickit), [os](#os), [OSLog](#oslog), [CrashReportExtension](#crashreportextension), [Core Services](#core-services).
 
 <a id="swift"></a>
 ### Swift
@@ -1060,6 +1160,8 @@ Swift is a programming language, so most of its docs (types, protocols, closures
 
 Gaps: Actor isolation and async/await for apps (no actor type in the SDK; springboard/sdk/src/dispatch.rs is callback-based); Regex builder or regex matching API for app text search; Distributed actors (remote calls between app processes); withObservationTracking-style automatic dependency capture in springboard/sdk/src/observable.rs; Codable CodingKeys renaming, binary plist and Data support in springboard/sdk/src/coding.rs; Synchronization module (Atomic, Mutex) as an SDK API.
 
+Related: [SwiftData](#swiftdata), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration), [Foundation (App Support)](#foundation-app-support), [Foundation (Fundamentals)](#foundation-fundamentals).
+
 <a id="swiftdata"></a>
 ### SwiftData
 
@@ -1084,6 +1186,8 @@ SwiftData is a declarative object-graph layer over a store: @Model classes, Mode
 | Errors (SwiftDataError, DataStoreError) | SwiftDataError, DataStoreError | springboard/sdk/src/defaults.rs and springboard/sdk/src/file_coordination.rs (Result-based errors such as CoordinationError::Timeout) | Partial | error types exist per subsystem; no store error taxonomy |
 
 Gaps: No model layer: no declarative model type, schema, or SDK-level container and context for persistent objects.; No queryable record store: no predicate or sort-descriptor fetch over persistent records, and no live results that update views.; No relationships, uniqueness or index constraints between stored records.; No pluggable data store interface and no store-level batching.; No change history or transaction tokens for records, so history-based sync cannot be built on SDK APIs.; No iCloud or cross-device sync API for app model data.; Undo records only what the app registers; there is no automatic capture of store changes as SwiftData's undo manager does..
+
+Related: [Swift](#swift), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [Core Data](#core-data), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [AppKit (App Structure)](#appkit-app-structure).
 
 <a id="swiftui-app-data"></a>
 ### SwiftUI (App structure, Data and storage)
@@ -1112,6 +1216,8 @@ Apps are written in an imperative Rust App trait with retained views, not a decl
 
 Gaps: No declarative App/Scene/View protocol tree; No multi-window openWindow API for one app; No environment values or preference keys propagated through a view hierarchy; No SwiftData/Core Data style model store; No desktop widgets or app extension points; No value-based NavigationPath destinations.
 
+Related: [SwiftUI (Views, View layout)](#swiftui-views-layout), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration), [SwiftData](#swiftdata), [Swift](#swift), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="swiftui-events-a11y-integration"></a>
 ### SwiftUI (Event handling, Accessibility, Framework integration)
 
@@ -1139,6 +1245,8 @@ Imperative equivalents exist for gestures, shortcuts, focus, clipboard, drag and
 | Xcode library customization and performance analysis | LibraryContentProvider, Instruments SwiftUI template | docs/bifrost-pc-workflow.md | n/a | Xcode-only; bench tools differ (tools/bench.py) |
 
 Gaps: Accessibility rotors; Live-region announcements and custom actions; Reduce-motion and increase-contrast flags; Declarative gesture composition; Focused values across scenes; User activity/handoff.
+
+Related: [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [SwiftUI (Views, View layout)](#swiftui-views-layout), [Swift](#swift), [AppKit (User Interface)](#appkit-user-interface), [AppKit (User Interactions)](#appkit-user-interactions).
 
 <a id="swiftui-views-layout"></a>
 ### SwiftUI (Views, View layout)
@@ -1169,6 +1277,8 @@ BifrOSt has an imperative, retained-view toolkit with stacks, grids, forms, scro
 
 Gaps: Declarative View protocol with body, modifiers and state/binding updates; Environment values and style protocols; Layout protocol and ZStack, lazy grids, ViewThatFits; Shape, Path and Canvas drawing API for apps; Generic List with swipe actions, TabView, GroupBox, ControlGroup; ScrollViewReader and scroll position APIs.
 
+Related: [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration), [Swift](#swift), [AppKit (User Interface)](#appkit-user-interface), [Swift Charts](#swift-charts).
+
 <a id="symbols"></a>
 ### Symbols
 
@@ -1190,6 +1300,8 @@ The Symbols framework is Apple's set of universal symbol effects (appear, bounce
 
 Gaps: No symbol-effect API: appear, bounce, disappear, pulse, scale, variableColor, replace and automatic cannot be applied to a glyph; No discrete or indefinite effect protocols and no SymbolEffectOptions (repeat, speed) for starting or stopping a looping effect; No content transition for swapping one symbol for another; a glyph change is a plain redraw; No draw-on and draw-off, breathe, rotate or wiggle effects; glyphs have no stroke-progress or per-layer state; The glyph set is 59 hand-drawn names, one weight, no variable or palette rendering, not the SF Symbols catalogue; The SF Symbols font path in springboard/render/src/symbols.rs has no symbol font on the device to resolve against.
 
+Related: [Core Graphics](#core-graphics), [Core Animation](#core-animation), [Core Text](#core-text), [GLKit](#glkit), [Application Services](#application-services).
+
 <a id="usdkit"></a>
 ### USDKit (App Frameworks)
 
@@ -1206,6 +1318,8 @@ USDKit authors and renders 3D Universal Scene Description stages through Reality
 | Timeline playback of a stage | USDPlayer | nothing found | n/a | Apple doc: https://developer.apple.com/documentation/usdkit (RealityKit rendering and playback). |
 | Render diagnostics | USDRenderError | nothing found | n/a | Apple doc: https://developer.apple.com/documentation/usdkit (Render diagnostics). |
 
+
+Related: [AppKit (App Structure)](#appkit-app-structure), [DeveloperToolsSupport](#developer-tools-support), [AppKit (User Interface)](#appkit-user-interface), [AVKit](#avkit), [StoreKit](#storekit).
 
 <a id="visual-intelligence"></a>
 ### Visual Intelligence
@@ -1225,6 +1339,8 @@ Apple's framework is an app-side search hook: the system passes a captured camer
 | Camera or screenshot object selection feeding a search | Visual Intelligence camera search button; screenshot object selection | springboard/src/shell/camera/mod.rs (camera app, stills only) | Gap | The camera takes photos and reads QR codes. No object selection in screenshots and no search action on a frame. |
 
 Gaps: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework).; No app return path for visual matches (an app cannot answer a scene query with results).; No scene classification labels (SemanticContentDescriptor.labels) and no pixel-buffer scene type for apps.; No object selection in screenshots feeding a search.; App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list..
+
+Related: [App Intents](#app-intents), [SiriKit](#siri-kit), [Application Services](#application-services), [VisionKit](#visionkit), [Core Services](#core-services).
 
 <a id="accounts"></a>
 ### Accounts
@@ -1246,6 +1362,8 @@ Apple's Accounts framework is deprecated (landing page: for new apps, use the se
 | Errors (ACErrorCode, ACErrorDomain) | ACErrorCode and ACErrorDomain | springboard/sdk/src/keychain.rs (keychain Error codes that mirror Security OSStatus values) | Gap | No Accounts error domain. Keychain errors are mirrored from Apple's Security codes, not from Accounts. |
 
 Gaps: No system account store (ACAccountStore): no list, save, remove or lookup of user accounts that apps share.; No account type registry and no access-grant prompt (requestAccessToAccounts, accessGranted).; No typed OAuth credential objects, token expiry or credential renewal.; No SDK API for the local OS account (bare/account.rs) or for the BifrOSt cloud account.; The framework itself is deprecated by Apple; new apps should use the service provider's SDK, so parity here is low priority..
+
+Related: [Authentication Services](#authentication-services), [Security](#security), [Local Authentication](#local-authentication), [CloudKit](#cloudkit), [Collaboration](#collaboration).
 
 <a id="address-book"></a>
 ### Address Book
@@ -1272,6 +1390,8 @@ Apple deprecated this framework in macOS 10.11 and points to the Contacts framew
 
 Gaps: No SDK API for apps to read, write, or search contacts (the store is shell-internal).; No people picker or person view for apps to embed.; Contacts have one phone, one email and one address; no multi-value properties or primary value.; No groups or group membership; Favorites is a flag only.; No contact photos.; No structured postal address fields or formatter.; No change notification when the store changes.; No contacts permission in the app manifest.; No vCard import.; Apple deprecated this framework; the modern Contacts framework is the reference and is not covered in this batch..
 
+Related: [Contacts](#contacts), [Contacts UI](#contacts-ui), [Core Services](#core-services), [Application Services](#application-services), [Core Data](#core-data).
+
 <a id="adservices"></a>
 ### AdServices
 
@@ -1287,6 +1407,8 @@ AdServices returns Apple Ads attribution tokens for App Store download campaigns
 | Framework changelog | Changelog article | nothing found | n/a | Documentation only |
 
 
+Related: [AdSupport](#adsupport), [App Tracking Transparency](#app-tracking-transparency), [Authentication Services](#authentication-services), [Device Management](#device-management), [Video Subscriber Account](#video-subscriber-account).
+
 <a id="adsupport"></a>
 ### AdSupport
 
@@ -1299,6 +1421,8 @@ AdSupport gives an app the per-device advertising identifier, which is gated by 
 | Advertising identifier | ASIdentifierManager (shared(), advertisingIdentifier) | nothing found | n/a | The Linux desktop has no per-device ad ID; the Bluetooth ID-like fields in springboard/src/bare/bluetooth.rs are unrelated |
 | Tracking authorization | AppTrackingTransparency prompt, NSUserTrackingUsageDescription | nothing found | n/a | Apple policy tied to advertising; BifrOSt apps request capabilities through manifest permissions (springboard/apps/contacts-desktop/manifest.toml) |
 
+
+Related: [App Tracking Transparency](#app-tracking-transparency), [AdServices](#adservices), [Device Management](#device-management), [Core Bluetooth](#core-bluetooth), [Authentication Services](#authentication-services).
 
 <a id="app-intents"></a>
 ### App Intents
@@ -1330,6 +1454,8 @@ BifrOSt has a typed intent layer over the app control socket: declared intents w
 
 Gaps: Foreground and background execution modes, and authentication policy on AppIntent; App enums (AppEnum) for predefined parameter values; Parameter types for Double, Files, Currencies, People, Placemarks and Measurements; Snippets and result views, and follow-on intents (OpensAppIntent); Parameter prompts and disambiguation in Spotlight (needsValueError, requestDisambiguation, requestConfirmation); IndexedEntity: indexing App Intents entities in Spotlight, and hideInSpotlight; Intent donations and relevance (IntentDonationManager, RelevantIntentManager); Focus filters (SetFocusFilterIntent); the shell only has Do Not Disturb; Widgets, controls and Live Activities driven by intents; Shortcuts app does not list or run intents yet (docs/bifrost-ui.md, App Intents gaps).
 
+Related: [App Intents Testing](#app-intents-testing), [SiriKit](#siri-kit), [Media Intents](#media-intents), [Visual Intelligence](#visual-intelligence), [Core Services](#core-services).
+
 <a id="application-services"></a>
 ### Application Services
 
@@ -1354,6 +1480,8 @@ Application Services is mostly legacy Carbon C API (Apple Event Manager, ColorSy
 
 Gaps: Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.; Accessibility announcements (live regions) and custom actions beyond press.; ColorSync: no profile, transform or CMM API for apps.; Speech synthesis: no SDK voice or speech channel API.; Core Printing: no shell-drawn print sheet, no view pagination, and no print panel plug-in mechanism.; HIShape: no shape or region type with boolean operations.; Universal Access: no app-facing zoom focus API..
 
+Related: [Core Services](#core-services), [Accessibility](#accessibility), [AppKit (User Interface)](#appkit-user-interface), [Core Graphics](#core-graphics), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="automaticassessmentconfiguration"></a>
 ### Automatic Assessment Configuration
 
@@ -1369,6 +1497,8 @@ Automatic Assessment Configuration starts a locked exam session, limiting deskto
 | Menu bar items kept during assessment | AEMenuBarItem, AEAppleMenuItem | springboard/src/shell/desktop_bar.rs (menu bar) | n/a | The menu bar has no assessment mode; the framework's structures have no counterpart |
 | Account type for session | AEUserAccountType | nothing found | n/a | Apple account types; no exam account role |
 
+
+Related: [Application Services](#application-services), [Authentication Services](#authentication-services), [Core Services](#core-services), [System Configuration](#system-configuration), [Device Management](#device-management).
 
 <a id="background-assets"></a>
 ### Background Assets
@@ -1394,6 +1524,8 @@ Apps can download a file to disk with progress and cancel through the URLSession
 
 Gaps: No app-facing asset-pack API (list, download on demand, status, remove, manifest); No download scheduling that continues or starts while the app is closed, including before first launch; No persistent download queue with essential and non-essential priorities; No localized pack selection; No local mock server for testing packs.
 
+Related: [Core Services](#core-services), [Bundle Resources](#bundle-resources), [Managed App Distribution](#managed-app-distribution), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Application Services](#application-services).
+
 <a id="callkit"></a>
 ### CallKit
 
@@ -1413,6 +1545,8 @@ BifrOSt has no VoIP, telephony or call-UI code. Only notifications and audio exi
 
 Gaps: Call provider and call-state model in the SDK; Incoming and outgoing call UI in the shell; Active-call observation for apps; Caller ID/blocking directory; Default calling app setting.
 
+Related: [PushKit](#pushkit), [ExtensionKit](#extensionkit), [SiriKit](#siri-kit), [PermissionKit](#permissionkit), [Core Services](#core-services).
+
 <a id="classkit"></a>
 ### ClassKit
 
@@ -1429,6 +1563,8 @@ ClassKit reports assignable app content and student progress to Apple's Schoolwo
 | ClassKit UI (assignment submit and withdraw) | ClassKit UI collection | nothing found | n/a | views depend on the Schoolwork assignment flow |
 | Data store and errors | CLSDataStore, CLSError | nothing found | n/a | store is ClassKit-owned, no local equivalent |
 
+
+Related: [CloudKit](#cloudkit), [StoreKit](#storekit), [Core Services](#core-services), [Device Management](#device-management), [EventKit](#eventkit).
 
 <a id="cloudkit"></a>
 ### CloudKit
@@ -1452,6 +1588,8 @@ BifrOSt has no generic record database, subscriptions or sync engine for apps. T
 | Local key-value storage (complementary) | app local persistence | springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs | OS only | local only, not a CloudKit counterpart |
 
 Gaps: App record database with zones and queries; CKSyncEngine-style sync with change tokens; Subscriptions and push; Record sharing between users; Assets; Per-app containers.
+
+Related: [Security](#security), [EventKit](#eventkit), [Core Services](#core-services), [Accounts](#accounts), [StoreKit](#storekit).
 
 <a id="combine"></a>
 ### Combine
@@ -1478,6 +1616,8 @@ A single-threaded Observable<T> with sink, map, remove_duplicates and cancel-on-
 | UI-side observable value | @Published / KVO old-new notification | springboard/ui/src/observe.rs | Parity | subscribe(old,new), set returns changed, unsubscribe token |
 
 Gaps: combineLatest, merge, filter, flatMap and other operators; Debounce, throttle and schedulers (receive(on:)); Completion and failure types, Demand/back pressure; PassthroughSubject and Future/Just/Empty publishers; ObservableObject objectWillChange aggregate; Thread-safe publishers (Send); Notification, Timer, URLSession publishers; AsyncPublisher bridge.
+
+Related: [Observation](#observation), [Dispatch](#dispatch), [Swift](#swift), [Core Foundation](#core-foundation), [Application Services](#application-services).
 
 <a id="contacts"></a>
 ### Contacts
@@ -1506,6 +1646,8 @@ BifrOSt has a shell-internal local contact store (one flat file, fixed fields, a
 
 Gaps: No SDK contacts module: apps cannot fetch, search, create or save contacts (springboard/sdk/src/ has no contacts file).; No permission model for contact access (NSContactsUsageDescription equivalent, per-app grant, contact access picker).; No groups, containers or subgroups.; No change history and no contacts-changed notification to apps.; Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.; No vCard import and no vCard-to-contact parse.; No key-based partial fetch; every read loads the whole store (cap 10,000 contacts, 8 MiB file)..
 
+Related: [Address Book](#address-book), [Contacts UI](#contacts-ui), [Core Services](#core-services), [CloudKit](#cloudkit), [Core Data](#core-data).
+
 <a id="contacts-ui"></a>
 ### Contacts UI
 
@@ -1523,6 +1665,8 @@ Apple's Contacts UI is three view controllers or controls: a contact viewer, a c
 | Contact access button (limited access) | ContactAccessButton (SwiftUI) | none found; no contacts permission gate in springboard/sdk/src or springboard/src/bare/app_policy.rs | n/a | Apple's button tied to the iOS and macOS limited-access permission model. BifrOSt apps have no contacts permission to request, so there is no button to match. The gap is that contact access is not gated at all. |
 
 Gaps: No SDK contact picker (CNContactPicker or CNContactPickerViewController equivalent) that returns the chosen contact to an app.; No SDK contact viewer or editor view that other apps can embed; the card and editor are private to contacts-desktop.; The contact store (springboard/src/shell/contactstore.rs) is not exposed to apps through the SDK, so no app can read or search contacts.; No contacts permission model. Apps cannot request access, and there is no limited-access state to match ContactAccessButton.; docs/bifrost-ui.md has no Contacts section. springboard/README.md (Contacts section) describes only the Contacts app itself..
+
+Related: [Contacts](#contacts), [Address Book](#address-book), [AppKit (User Interface)](#appkit-user-interface), [Application Services](#application-services), [SwiftUI (App structure, Data and storage)](#swiftui-app-data).
 
 <a id="core-ai"></a>
 ### Core AI
@@ -1547,6 +1691,8 @@ Core AI runs specialized models on Apple silicon (CPU, GPU, Neural Engine) with 
 | Inference errors | AssetError | none | n/a | The error type belongs to Core AI's asset pipeline, which BifrOSt does not have. |
 
 Gaps: No on-device model runtime (load, specialize, run) for apps in the SDK or the system layer.; No tensor type (NDArray) or inference function signature API.; No compute stream API for apps, so GPU or CPU inference cannot be offloaded from an app.; No model cache or ahead-of-time compile step.; No inference-level profiling or tracing in the debug tools.; The AI features (daw/ai.rs, assistant model.rs) depend on the cloud API, not local inference..
+
+Related: [Core ML](#core-ml), [Foundation Models](#foundation-models), [Core Image](#core-image), [Model I/O](#model-i-o), [Core Services](#core-services).
 
 <a id="core-data"></a>
 ### Core Data
@@ -1577,6 +1723,8 @@ BifrOSt has no object graph, managed object context, fetch request or persistent
 
 Gaps: No object graph: no entity model, relationships, inverse relationships or delete rules.; No fetch requests or predicates; apps filter in-memory vectors.; No managed object context with change tracking, dirty state or faulting.; No database-backed store, so stores are rewritten whole on each save and do not scale past the bounded lists (contacts MAX_ITEMS 10000, calendar MAX_EVENTS 2048).; No persistent history or transaction log of store changes.; No migration path between store versions (lightweight, staged or manual).; No fetched results controller that binds a query to a table or list.; No on-device CloudKit-style mirroring or sharing; sync exists only as server-side counters in bifrost-cloud..
 
+Related: [SwiftData](#swiftdata), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [AppKit (App Structure)](#appkit-app-structure), [Core Services](#core-services), [Swift](#swift).
+
 <a id="core-location"></a>
 ### Core Location
 
@@ -1599,6 +1747,8 @@ Apple's framework gives apps device position, heading, geofences, beacons and ge
 | Errors and diagnostics | CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain | none | Gap | No location error domain or diagnostics exist. They depend on the missing location manager. |
 
 Gaps: No device position source: no GPS, Wi-Fi positioning or geoclue client in springboard/src or netd. Nothing produces a CLLocation-like value.; No location permission in the app manifest and no authorization prompt or status (springboard/src/bare/app_policy.rs:34).; No SDK module for location in springboard/sdk/src/lib.rs (no location module among the pub mod list).; No reverse geocoding (coordinates to placemark). Forward search exists only inside the Weather app (springboard/src/shell/weather/data.rs:253).; No geofence or region monitoring and no location triggers for notifications (docs/bifrost-ui.md, Notifications gaps).; No magnetometer heading or course for apps (springboard/src/shell/rotate.rs reads the accelerometer only).; No background location session or live update stream for apps..
+
+Related: [Core Services](#core-services), [MapKit](#mapkit), [Application Services](#application-services), [Core Motion](#core-motion), [RelevanceKit](#relevancekit).
 
 <a id="core-ml"></a>
 ### Core ML
@@ -1625,6 +1775,8 @@ Core ML runs trained models on the device (MLModel, feature providers, tensors, 
 
 Gaps: No SDK API to load a model file and run a prediction (MLModel, MLFeatureProvider); No tensor or numeric array type for model inputs and outputs (MLTensor, MLFeatureValue); No compute-device policy exposed to apps (CPU, GPU, Neural Engine); the GPU is used only for rendering; No domain APIs on top of inference: image classification, speech, sound analysis, natural language; No model encryption, runtime model download and compile, or on-device update path; The on-device keyboard predictor is not a learned model; the Assistant app uses a remote API, which is not Core ML.
 
+Related: [Core AI](#core-ai), [Create ML](#create-ml), [ML Compute (System)](#ml-compute), [Foundation Models](#foundation-models), [Evaluations](#evaluations).
+
 <a id="core-motion"></a>
 ### Core Motion
 
@@ -1650,6 +1802,8 @@ Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude 
 | Fall detection | CMFallDetectionManager, CMFallDetectionDelegate, CMFallDetectionEvent | none | n/a | Apple Watch and iPhone only, tied to emergency services. |
 
 Gaps: No app-facing Core Motion equivalent in springboard/sdk/src: no CMMotionManager-style API for accelerometer, gyroscope, device motion or attitude.; The orientation feed is missing from this repo: springboard/src/shell/rotate.rs documents set_orientation as fed by the accelerometer every 200 ms, but no non-test caller exists here.; No magnetometer, barometer or altitude readers.; No motion-activity recognition, pedometer or sensor recording or history..
+
+Related: [Core Location](#core-location), [Core Media](#core-media), [ImageCaptureCore](#imagecapturecore), [Core Media I/O](#core-media-i-o), [Core Services](#core-services).
 
 <a id="core-spotlight"></a>
 ### Core Spotlight
@@ -1678,6 +1832,8 @@ BifrOSt covers the core indexing path: an app can add, replace and delete its ow
 
 Gaps: No app-facing query API (CSSearchQuery, CSUserQuery) and no suggestions, so apps cannot search their own index or build a search field on it.; No index client delegate and no index extensions for on-demand regeneration (CSSearchableIndexDelegate, CSIndexExtensionRequestHandler, CSImportExtension).; Indexing reports no completion or error results (CSIndexError equivalents are missing), so apps cannot tell when an update failed.; Item attributes are limited to title, description, keywords, thumbnail and URL; Apple's custom attribute keys, localized strings and person records are missing.; No Foundation models search tool (SpotlightSearchTool and its pipeline types), so indexed content cannot be given to the on-device assistant as context.; No index descriptions or protection classes; the shell index is a single JSON file per app with oldest-first eviction at 1000 items..
 
+Related: [Core Services](#core-services), [Visual Intelligence](#visual-intelligence), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Foundation (App Support)](#foundation-app-support), [Application Services](#application-services).
+
 <a id="core-text"></a>
 ### Core Text
 
@@ -1705,6 +1861,8 @@ BifrOSt has a TrueType and CFF font engine with metrics, cmap glyph lookup, vari
 
 Gaps: No app-facing font object or font manager: apps cannot choose a font by family, weight or size from a font descriptor.; No OpenType shaping: no GPOS or kern reader, no ligatures outside colour emoji, no feature selection.; No line or run layout objects for apps: CTLine and CTFramesetter equivalents are missing, so apps cannot measure or hit-test laid-out text.; No paragraph styles: alignment, indents, line spacing and tab stops are missing from the attributed model.; No bidirectional or vertical text layout.; Font metrics are limited to ascent, descent and advance: leading, cap height, x-height and underline position are not read.; No font fallback (cascade) for characters missing from the chosen face: missing glyphs render as .notdef.; No runtime font registration or font-changed notification; installed faces are listed only in Settings..
 
+Related: [AppKit (Text)](#appkit-text), [Core Graphics](#core-graphics), [Application Services](#application-services), [Core Foundation](#core-foundation), [Accessibility](#accessibility).
+
 <a id="core-transferable"></a>
 ### Core Transferable
 
@@ -1724,6 +1882,8 @@ BifrOSt has typed pasteboard, typed drag and drop, the share picker and UTType c
 | Proxy representation and transfer visibility | ProxyRepresentation, TransferRepresentationVisibility | none; per-app isolation is in springboard/src/bare/app_policy.rs (sandbox), not a per-item visibility level | Gap | no way to limit which apps or processes see a transferred item |
 
 Gaps: No Transferable protocol or TransferRepresentation for app model types, so there is no single declaration that drives copy, paste, drag, and share.; The Wayland clipboard publishes only one rich type at a time (springboard/src/shell/pasteboard.rs:33), so typed pasteboard data does not reach other apps in full.; No SentTransferredFile or ReceivedTransferredFile equivalent with sender and receiver roles for file transfers.; No ProxyRepresentation or TransferRepresentationVisibility equivalent..
+
+Related: [Application Services](#application-services), [Core Services](#core-services), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Core Data](#core-data), [Core Foundation](#core-foundation).
 
 <a id="crashreportextension"></a>
 ### CrashReportExtension
@@ -1745,6 +1905,8 @@ Apple's framework is an out-of-process app extension that lets a developer inspe
 
 Gaps: No app extension point for an app to run its own crash handler on another app's crash (the CrashReporterExtension role).; No SDK API to read a crashed process's reason, binary images or stack, or to symbolicate addresses in it.; No SDK API for an app to build and send a crash report to its own server; the only path is the manual diagnostics bundle.; Crash records for apps come from systemd-coredump; the SDK does not surface them to apps..
 
+Related: [MetricKit](#metrickit), [StateReporting](#statereporting), [Exception Handling](#exception-handling), [Core Services](#core-services), [Application Services](#application-services).
+
 <a id="create-ml"></a>
 ### Create ML
 
@@ -1764,6 +1926,8 @@ Create ML trains Core ML models (image, video, text, sound, motion and tabular) 
 
 Gaps: No model training tool or training session API of any kind (none in springboard/sdk/src/ or springboard/ui/src/).; No Core ML model runtime for apps to load trained models; a desktop app that needs ML would ship its own runtime..
 
+Related: [Core ML](#core-ml), [Create ML Components](#create-ml-components), [ML Compute (System)](#ml-compute), [Core AI](#core-ai), [Foundation Models](#foundation-models).
+
 <a id="create-ml-components"></a>
 ### Create ML Components
 
@@ -1782,6 +1946,8 @@ Create ML Components is a pipeline toolkit for building custom machine learning 
 | Transformer and estimator protocols | Transformer, Estimator, SupervisedEstimator, UpdatableEstimator | none | n/a | no shared pipeline protocols |
 
 Gaps: No transformer or estimator pipeline framework in the SDK or UI kits.; No model training or inference runtime that these components would feed..
+
+Related: [Create ML](#create-ml), [Core ML](#core-ml), [Core AI](#core-ai), [ML Compute (System)](#ml-compute), [Foundation Models](#foundation-models).
 
 <a id="datadetection"></a>
 ### DataDetection
@@ -1806,6 +1972,8 @@ A plain-text detector finds links, dates, street addresses and phone numbers as 
 
 Gaps: Email, flight, money and tracking-number detectors; Typed match values (parsed phone, address parts, date with time); Pasteboard detection API; Transit information (needs data).
 
+Related: [Natural Language](#natural-language), [Foundation (Fundamentals)](#foundation-fundamentals), [VisionKit](#visionkit), [Application Services](#application-services), [Core Services](#core-services).
+
 <a id="devicecheck"></a>
 ### DeviceCheck
 
@@ -1822,6 +1990,8 @@ DeviceCheck is Apple's server-backed per-device bits (DCDevice tokens) and App A
 | Error reporting | DCError, DCErrorDomain | none | n/a | Only meaningful with DeviceCheck itself |
 
 Gaps: Nothing to match: the service is Apple-hardware and Apple-server bound (App Attest needs Apple's attestation service and device keys).
+
+Related: [Device Management](#device-management), [Security](#security), [Authentication Services](#authentication-services), [Apple CryptoKit](#apple-cryptokit), [Core Services](#core-services).
 
 <a id="eventkit"></a>
 ### EventKit
@@ -1849,6 +2019,8 @@ Events, recurrence, alarms, ICS import/export and reminders exist inside the she
 
 Gaps: No SDK calendar/reminder API for apps; No permission model for calendar access; No attendees, invitations or account sources; No location-based alarms; No app-facing change notification; No virtual conference extensions.
 
+Related: [CloudKit](#cloudkit), [StoreKit](#storekit), [Core Services](#core-services), [AppKit (App Structure)](#appkit-app-structure), [Application Services](#application-services).
+
 <a id="extensionfoundation"></a>
 ### ExtensionFoundation
 
@@ -1865,6 +2037,8 @@ Apps run as sandboxed processes, but there is no API for an app to declare exten
 | Extension-point management (AppExtensionPoint, ExtensionPointDefining) | Declare host extension points and bind extensions to them | springboard/sdk/src/intents.rs, springboard/sdk/src/share.rs (fixed system integrations) | Gap | No third-party extension points; intents and share are fixed system channels |
 
 Gaps: Extension point declaration and extension package type; Discovery of installed extensions by host apps; Host-initiated launch of an extension process in its own sandbox with a connection; Share-sheet extensions installed by apps.
+
+Related: [ExtensionKit](#extensionkit), [Foundation (App Support)](#foundation-app-support), [Core Services](#core-services), [System Extensions](#system-extensions), [Application Services](#application-services).
 
 <a id="extensionkit"></a>
 ### ExtensionKit
@@ -1885,6 +2059,8 @@ ExtensionKit lets a third-party app extension supply a custom UI that the host a
 | Process isolation for third-party app code | Extension processes launched and sandboxed by the system (ExtensionFoundation runtime) | springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups) | OS only | The OS sandboxes apps, but no SDK API lets an app load another app's extension process. |
 
 Gaps: No app-extension model: apps cannot publish a UI or service that another app hosts (AppExtensionScene, EXHostViewController).; No extension enable and disable management UI (EXAppExtensionBrowserViewController) for the user to approve or turn off extensions per app.; No out-of-process remote view hosting; ControllerHost in springboard/sdk/src/view/app.rs runs in the owner's process only.; Share sheet targets are limited to apps with manifest handles or schemes; app-supplied share extensions are missing (docs/bifrost-ui.md, Share sheet)..
+
+Related: [ExtensionFoundation](#extensionfoundation), [WidgetKit](#widgetkit), [Application Services](#application-services), [AppKit (App Structure)](#appkit-app-structure), [Core Services](#core-services).
 
 <a id="file-provider"></a>
 ### File Provider
@@ -1909,6 +2085,8 @@ Apple's File Provider framework lets an app's extension expose remote or managed
 
 Gaps: No File Provider extension host: no replicated or nonreplicated extension, and no way for an app to register a provider.; No placeholder (dataless) files and no on-demand hydration in Files or the document panel.; No NSFileProviderManager equivalent: no domains, no signalEnumerator, no reimport of remote changes.; No provider search source (NSFileProviderSearching); quick search covers local content only.; Documented plan to open the file system to a provider is absent: docs/file-portal-design.md covers only local grants and the picker, and it says nothing about a cloud provider.; Coordination is advisory and has no save negotiation, no relinquish, and no versions, so a provider cannot hold a file safely while it syncs..
 
+Related: [File Provider UI](#file-provider-ui), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Core Services](#core-services), [Finder Sync](#finder-sync), [FSKit](#fskit).
+
 <a id="file-provider-ui"></a>
 ### File Provider UI
 
@@ -1929,6 +2107,8 @@ Apple's framework is one extension point: a File Provider extension adds actions
 
 Gaps: No extension point through which a third-party app adds actions to the Files browser's item context menu (the core of this framework).; No hosted extension process that shows a custom action UI over the Files browser and completes or cancels a selected action.; No provider domain model: the system browser cannot list an app's own files as a browsable location.; No typed system action identifiers that apps can register or receive for file actions.; No authentication-error hand-off for file actions against remote or cloud providers..
 
+Related: [File Provider](#file-provider), [Core Services](#core-services), [FSKit](#fskit), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Finder Sync](#finder-sync).
+
 <a id="healthkit"></a>
 ### HealthKit
 
@@ -1946,6 +2126,8 @@ HealthKit is a shared store for health and fitness samples on iPhone and Apple W
 | Health app data merge and user control | Protecting user privacy, HealthKit updates | none | n/a | Depends on the Apple Health app, which BifrOSt does not ship |
 
 Gaps: No health data store, sample types or query API (n/a: tied to Apple health hardware and the Health app).
+
+Related: [CloudKit](#cloudkit), [StoreKit](#storekit), [MetricKit](#metrickit), [RelevanceKit](#relevancekit), [IOKit](#iokit).
 
 <a id="identitydocumentservices"></a>
 ### IdentityDocumentServices
@@ -1965,6 +2147,8 @@ IdentityDocumentServices lets apps present mobile identity documents (driver lic
 
 Gaps: No identity document registration or Digital Credentials web presentment (n/a: depends on Apple wallet documents and iCloud).
 
+Related: [IdentityDocumentServicesUI](#identitydocumentservicesui), [Authentication Services](#authentication-services), [Core Services](#core-services), [Application Services](#application-services), [DeviceCheck](#devicecheck).
+
 <a id="identitydocumentservicesui"></a>
 ### IdentityDocumentServicesUI
 
@@ -1980,6 +2164,8 @@ IdentityDocumentServicesUI provides the authorization UI that an identity docume
 | Presentation context and anchor | IdentityDocumentPresentmentControllerPresentationContextProviding, IdentityDocumentPresentationAnchor | none | n/a | Presents the system authorization sheet over the app |
 
 Gaps: No identity document authorization sheet or web presentment controller (n/a: same dependency on Apple wallet documents as IdentityDocumentServices).
+
+Related: [IdentityDocumentServices](#identitydocumentservices), [Authentication Services](#authentication-services), [Application Services](#application-services), [Core Services](#core-services), [File Provider UI](#file-provider-ui).
 
 <a id="javascriptcore"></a>
 ### JavaScriptCore
@@ -2002,6 +2188,8 @@ JavaScriptCore lets an app run JavaScript on its own, exchange values with it, a
 
 Gaps: No SDK type for a standalone JavaScript context (JSContext equivalent), so apps cannot run scripts without a web view; No way to expose app objects or functions to scripts (JSExport equivalent); No value bridge between app code and script values beyond text and JSON strings from a web view; No syntax check and no standalone script error reporting outside a web view; Boa (springboard/src/shell/browser/js/mod.rs) is only wired into the Browser; it could back an SDK context but the SDK does not expose it; Servo 0.7.0 evaluate_javascript does not await promises, so async script results from a web view are incomplete.
 
+Related: [WebKit](#webkit), [Core Services](#core-services), [Application Services](#application-services), [Scripting Bridge](#scripting-bridge), [Foundation (App Support)](#foundation-app-support).
+
 <a id="mailkit"></a>
 ### MailKit
 
@@ -2022,6 +2210,8 @@ MailKit is an extension point for Apple's Mail app: content blockers, message ac
 
 Gaps: No mail app and no mail data layer (accounts, IMAP/SMTP, mailboxes), so there is nothing for a mail extension to extend.; No message-level content blocking (rules applied when a message is displayed); the browser has no equivalent either.; No S/MIME or PGP signing and decryption API in the SDK.; The share sheet has no mail target, so a text or file cannot be handed to a compose window..
 
+Related: [Application Services](#application-services), [ExtensionKit](#extensionkit), [Core Services](#core-services), [Security](#security), [User Notifications](#user-notifications).
+
 <a id="managed-app-distribution"></a>
 ### Managed App Distribution
 
@@ -2039,6 +2229,8 @@ Apple's framework lets device-management vendors list and install institution-as
 | Error codes | ManagedAppDistributionError | nothing found | n/a | Install errors are returned by the install code, not as a framework error set |
 
 Gaps: No device-management server or declarative management protocol, so no institution-assigned app lists; No SDK API for a management tool to start or observe an install; Install progress is not exposed to apps (only the shell's update path uses it).
+
+Related: [StoreKit](#storekit), [Core Services](#core-services), [Bundle Resources](#bundle-resources), [Background Assets](#background-assets), [Application Services](#application-services).
 
 <a id="mapkit"></a>
 ### MapKit
@@ -2068,6 +2260,8 @@ MapKit covers embedded map views, annotations and overlays, search, geocoding, d
 
 Gaps: No map view or map tile rendering in the SDK or renderer, so no app can show a map; No annotations, overlays or selectable map features; No reverse geocoding (coordinate to place or address); No points-of-interest search, nearby search or search completion beyond city and place text search; No directions or routing; No location service API for apps (user location on a map); No map snapshot or static map image export; No maps URL handling or default navigation app; GeoJSON and IMDF parsing missing.
 
+Related: [Core Location](#core-location), [VisionKit](#visionkit), [WeatherKit](#weatherkit), [SpriteKit](#spritekit), [AppKit (User Interface)](#appkit-user-interface).
+
 <a id="matter"></a>
 ### Matter
 
@@ -2086,6 +2280,8 @@ Apple's Matter framework is a controller API for Matter smart-home accessories: 
 
 Gaps: No Matter controller: no fabric, certificates, commissioning or interaction model, in the shell or the SDK.; No Thread support: no border router, no Thread network credentials and no OpenThread stack.; No mDNS or DNS-SD service discovery for apps. Only a custom LAN beacon exists (springboard/src/net/share.rs).; No BLE commissioning path. The Bluetooth module handles classic pairing only (springboard/src/bare/bluetooth.rs).; No SDK API or app-facing surface for smart-home accessories, and no Home-style app. Whether BifrOSt should add one is a product decision, not a technical gap..
 
+Related: [MatterSupport](#matter-support), [System Configuration](#system-configuration), [Core Bluetooth](#core-bluetooth), [IOBluetooth](#iobluetooth), [External Accessory](#external-accessory).
+
 <a id="matter-support"></a>
 ### MatterSupport
 
@@ -2100,6 +2296,8 @@ MatterSupport lets an ecosystem owner (a smart home platform such as Apple Home)
 | Matter standard itself | Matter (see the separate Matter framework) | nothing found | Gap | No Matter, Thread or smart-home code in springboard/ or the SDK; a desktop-relevant gap only if smart-home control is wanted |
 
 Gaps: No smart-home ecosystem or accessory setup flow; No Matter or Thread stack in the system layer.
+
+Related: [Matter](#matter), [DeviceDiscoveryExtension](#devicediscoveryextension), [Device Management](#device-management), [Network Extension](#network-extension), [Application Services](#application-services).
 
 <a id="media-intents"></a>
 ### Media Intents
@@ -2119,6 +2317,8 @@ Media Intents is the Siri audio search and playback type set (AudioSearch) that 
 | Voice and spoken dialog | Siri voice responses and dialogs for media requests | docs/bifrost-ui.md:973 (No Siri or voice) | Gap | IntentResult dialog is returned to the caller and logged on failure, never spoken or shown by Spotlight |
 
 Gaps: No AudioSearch request type and no Siri or voice request path for media (Apple delivers audio search through App Intents, BifrOSt has no equivalent system-delivered search type).; No parameter resolution, disambiguation or confirmation for media intents (requestDisambiguation, requestConfirmation are not modelled, docs/bifrost-ui.md:966-973).; No SDK call for an app to publish media metadata or a queue to the shell or to voice requests; Music and Podcasts keep their own state.; Intents are served only while the app runs (docs/bifrost-ui.md:980); Apple media requests can launch and play without an open window..
+
+Related: [App Intents](#app-intents), [SiriKit](#siri-kit), [Media Player](#media-player), [Now Playing](#now-playing), [App Intents Testing](#app-intents-testing).
 
 <a id="multipeer-connectivity"></a>
 ### Multipeer Connectivity
@@ -2143,6 +2343,8 @@ BifrOSt has nearby LAN discovery and one-shot file and byte transfer between dev
 
 Gaps: No SDK API for peers: an app cannot browse or advertise its own service type, and cannot list nearby peers (springboard/sdk/src/share.rs exposes only show_picker and is_inbound).; No session model: no invitation flow, no connected and disconnected state, no multi-peer session object.; No app-facing message or resource send, and no streaming, so apps cannot exchange data with nearby peers.; No encryption in transit (body plaintext, HMAC over the header only) and a constant default secret "nearby".; No stable peer identity (MCPeerID); peers are a name and an address that changes.; The SDK share picker lists apps that accept the items and Copy, not the Send Nearby device list (per docs/bifrost-ui.md, Share sheet section)..
 
+Related: [Network](#network), [Distributed](#distributed), [Application Services](#application-services), [Matter](#matter), [Core Services](#core-services).
+
 <a id="natural-language"></a>
 ### Natural Language
 
@@ -2165,6 +2367,8 @@ BifrOSt has a word tokenizer (alphanumeric runs for spelling) and pattern-based 
 
 Gaps: Language recognizer: no text language detection and no hypotheses API; Linguistic tagger: no lexical class, lemma, name type or script tags for apps; Embeddings: no word or sentence vectors and no nearest-neighbour search for apps; Custom NLModel runtime for classifiers and word taggers; Sentence and paragraph tokenization; word segmentation is alphanumeric runs, not UAX #29; Named entity recognition: data detectors cover only link, date, address and phone.
 
+Related: [Application Services](#application-services), [Foundation Models](#foundation-models), [Foundation (Fundamentals)](#foundation-fundamentals), [Translation](#translation), [Core Text](#core-text).
+
 <a id="notification-center"></a>
 ### Notification Center
 
@@ -2184,6 +2388,8 @@ The framework is a set of Today-widget extension classes (NCWidgetProviding, NCW
 
 Gaps: No app-facing Today widget extension point (NCWidgetProviding): apps cannot supply widget content to the Today View or the home-screen gallery.; No NCWidgetController equivalent: apps cannot report whether their widget has content.; No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController).; The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet.; WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives..
 
+Related: [WidgetKit](#widgetkit), [User Notifications](#user-notifications), [User Notifications UI](#user-notifications-ui), [AppKit (User Interface)](#appkit-user-interface), [Application Services](#application-services).
+
 <a id="passkit-apple-pay-and-wallet"></a>
 ### PassKit (Apple Pay and Wallet)
 
@@ -2197,6 +2403,8 @@ PassKit covers Apple Pay payments and Wallet passes, both of which depend on App
 | Wallet passes | Wallet topic (https://developer.apple.com/documentation/passkit/wallet) | none | n/a | Passes are issued and updated through the Wallet app and Apple push service |
 | Apple Pay merchandising views | ApplePayMerchandisingView, ApplePayMerchandisingStyle, ApplePayMerchandisingAction, ApplePayMerchandisingPartnerConfiguration | none | n/a | Apple Pay brand UI for merchants; no BifrOSt equivalent |
 
+
+Related: [StoreKit](#storekit), [Apple CryptoKit](#apple-cryptokit), [MusicKit](#musickit), [Authentication Services](#authentication-services), [USDKit (App Frameworks)](#usdkit).
 
 <a id="preference-panes"></a>
 ### Preference Panes
@@ -2219,6 +2427,8 @@ Apple's framework lets third-party bundles plug panes into System Settings, with
 
 Gaps: No plugin host that loads a third-party pane into the Settings app (NSPreferencePane equivalent), so apps cannot add a settings pane.; No pane lifecycle (select, deselect with veto) or pane notifications for a Settings page.; Apps cannot add items to the shell Help menu or use a help anchor; the Help menu rows are fixed in desktop_bar.rs.; No per-pane initial and last key view, and no text field autosave on pane change.; No pane bundle format or plist-declared pane and help keys..
 
+Related: [Application Services](#application-services), [Core Services](#core-services), [AppKit (User Interface)](#appkit-user-interface), [System Configuration](#system-configuration), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="pushkit"></a>
 ### PushKit
 
@@ -2234,6 +2444,8 @@ PushKit delivers wake-up pushes for watchOS complications, file providers and Vo
 | Push metrics export | Exporting delivery metrics logs, Exporting broadcast push notification metrics | none | n/a | Apple-hosted delivery service metrics |
 | VoIP push metadata | PKVoIPPushMetadata | none | n/a | Metadata for APNs VoIP pushes only |
 
+
+Related: [User Notifications](#user-notifications), [CallKit](#callkit), [StoreKit](#storekit), [CloudKit](#cloudkit), [PermissionKit](#permissionkit).
 
 <a id="quick-look"></a>
 ### Quick Look
@@ -2255,6 +2467,8 @@ The SDK has a Quick Look panel model (items, clamped index, Space toggle, arrow 
 
 Gaps: The shell does not draw the floating preview panel: ToShell::Preview and ToShell::PreviewClose are decoded in springboard/proto/src/peek.rs and no handler was found under springboard/src.; No app uses the SDK PreviewPanel or ThumbnailCache. Files keeps its own preview (springboard/apps/files/src/peek.rs).; No third-party preview extension API (QLPreviewProvider, QLPreviewingController, QLFilePreviewRequest, QLPreviewReply).; No QLThumbnailGenerator equivalent: no generator for a file type, no icon-mode badge, no async update, and no drawing of the thumbnail in the panel.; No QLPreviewView, previewItemDisplayState, transition source frames or full-screen mode.; Doc error in docs/bifrost-ui.md:1420: names springboard/sdk/src/quicklook.rs and springboard/proto/src/quicklook.rs, which do not exist. The files are springboard/sdk/src/peek.rs and springboard/proto/src/peek.rs.; Doc error in docs/bifrost-ui.md:1423: says the cache is under $XDG_CACHE_HOME/bifrost-quicklook, but springboard/sdk/src/peek.rs uses bifrost-peek..
 
+Related: [QuickLook UI](#quicklook-ui), [Quick Look Thumbnailing](#quick-look-thumbnailing), [Quartz](#quartz), [DeveloperToolsSupport](#developer-tools-support), [AppKit (User Interface)](#appkit-user-interface).
+
 <a id="quicklook-ui"></a>
 ### QuickLook UI
 
@@ -2275,6 +2489,8 @@ The SDK has a Quick Look panel data model (items, clamped index, step, toggle, c
 | Data-based preview extensions (QLPreviewProvider) | QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment) | none found | Gap | No out-of-process preview extension that returns data, PDF or HTML replies. |
 
 Gaps: The shell does not draw the Quick Look panel: ToShell::Preview and PreviewClose are decoded and ignored (springboard/proto/src/lib.rs:677-679).; No app-facing preview extension point: no equivalent of QLPreviewingController or QLPreviewProvider.; No embeddable preview view (QLPreviewView) in the SDK.; The SDK has no built-in file renderers for QLThumbnailGenerator; each app renders its own thumbnails.; No thumbnail update handlers or multi-representation requests.; No panel data source or delegate protocol, no lazy loading block, and no display state for items.; The Files Quick Look menu item is not in springboard/apps/files/src/main.rs: the index returned a MENU_QUICK_LOOK constant there, but a grep of the current file finds none..
+
+Related: [Quick Look](#quick-look), [Quick Look Thumbnailing](#quick-look-thumbnailing), [Quartz](#quartz), [DeveloperToolsSupport](#developer-tools-support), [Visual Intelligence](#visual-intelligence).
 
 <a id="safari-services"></a>
 ### Safari Services
@@ -2300,6 +2516,8 @@ BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo 
 
 Gaps: No standard in-app browser sheet (SFSafariViewController equivalent) for SDK apps; No content-blocking rules API and no ad or tracker blocking; No Safari Reading List (SSReadingList) or Reading List share target; No web extension host, Safari page or tab proxies, or extension messaging; No universal links or associated-domain lookup for apps; No shared authentication session between the browser and apps; Browser preferences (SFSafariSettings) are private to the Browser app, with no system-wide object; Safari bookmark and password import; Web view input and rendering gaps: no hover, drag selection, context menus, select or file panels, or load cancel (docs/bifrost-ui.md 'Web view').
 
+Related: [WebKit](#webkit), [Core Services](#core-services), [Application Services](#application-services), [Authentication Services](#authentication-services), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="safetykit"></a>
 ### SafetyKit
 
@@ -2313,6 +2531,8 @@ SafetyKit gives apps access to Crash Detection events from iPhone and Apple Watc
 | Responding to a crash | SAEmergencyResponseManager, SAEmergencyResponseDelegate, SACrashDetectionEvent.Response | none | n/a | depends on Apple's Emergency SOS service |
 | Handling errors | SAErrorDomain, SAError, SAError.Code | none | n/a | error types belong to SafetyKit only |
 
+
+Related: [Exception Handling](#exception-handling), [CrashReportExtension](#crashreportextension), [Endpoint Security](#endpoint-security), [StateReporting](#statereporting), [Service Management](#service-management).
 
 <a id="sensitive-content-analysis"></a>
 ### Sensitive Content Analysis
@@ -2331,6 +2551,8 @@ Sensitive Content Analysis checks images and video for nudity with Apple's on-de
 | Testing | Apple-issued QR code and test profile | none | n/a | tied to Apple's Communication Safety |
 
 
+Related: [Media Intelligence](#media-intelligence), [Security](#security), [Sound Analysis](#sound-analysis), [Application Services](#application-services), [DataDetection](#datadetection).
+
 <a id="shared-with-you"></a>
 ### Shared with You
 
@@ -2346,6 +2568,8 @@ Shared with You surfaces links and files that people received in Messages, Mail 
 | Collaboration | Messages and FaceTime collaboration, CloudKit and iCloud Drive | none | n/a | BifrOSt Cloud (~/Projects/bifrost-cloud) has accounts and sync, but no collaboration service |
 | Framework versions and variables | version number, version string, SWCopyRepresentationTypeIdentifier | none | n/a |  |
 
+
+Related: [Social](#social), [CloudKit](#cloudkit), [Core Services](#core-services), [Group Activities](#group-activities), [Application Services](#application-services).
 
 <a id="siri-kit"></a>
 ### SiriKit
@@ -2377,6 +2601,8 @@ SiriKit's legacy domain intents (messaging, lists and notes, media, payments, ri
 
 Gaps: No Siri voice input or spoken dialog; IntentResult.dialog is returned to the caller but not shown or spoken by Search (docs/bifrost-ui.md 'App Intents').; No parameter resolution, disambiguation or confirmation steps; Search runs only parameterless intents (springboard/sdk/src/intents.rs Intent::validate).; No intent donation (INInteraction and donated shortcuts), so Search cannot suggest what the user did.; No SiriKit domain intents for messaging, media, lists beyond Notes' own intents, or payments; media and messaging are the most relevant for a desktop.; The Shortcuts app does not list or run app intents (springboard/apps/shortcuts-desktop).; No vocabulary registration or synonyms for app names.; No authorization flow for intent access..
 
+Related: [App Intents](#app-intents), [Media Intents](#media-intents), [Visual Intelligence](#visual-intelligence), [App Intents Testing](#app-intents-testing), [Application Services](#application-services).
+
 <a id="sms-and-call-reporting"></a>
 ### SMS and Call Reporting (IdentityLookup)
 
@@ -2391,6 +2617,8 @@ IdentityLookup is app extensions for SMS/MMS filtering, spam reporting and Live 
 | Live Caller ID Lookup | LiveCallerIDLookupManager, LiveCallerIDLookupProtocol, CallLookupExtensionStatus | nothing found | n/a | requires the system call directory; no telephony on the PC |
 | Call blocking and identity data payloads (PIR) | Formatting data for blocking and identity information; HTTP endpoints for Live Caller ID Lookup | nothing found | n/a | server-side protocol tied to the Apple call directory |
 
+
+Related: [Core Telephony](#core-telephony), [dnssd](#dnssd), [Device Management](#device-management), [IdentityDocumentServices](#identitydocumentservices), [Network Extension](#network-extension).
 
 <a id="social"></a>
 ### Social
@@ -2413,6 +2641,8 @@ Apple's Social framework composes a post to a social network and signs HTTP requ
 
 Gaps: No compose sheet that posts to a social network (SLComposeViewController equivalent).; No social account store or request signing (SLRequest.account equivalent).; No service-typed HTTP request builder and no multipart body (SLRequest equivalent).; The share menu offers only installed apps, with no per-item NSSharingService objects or delegate callbacks (see docs/bifrost-ui.md, 'Share sheet' gaps)..
 
+Related: [Shared with You](#shared-with-you), [Core Services](#core-services), [Application Services](#application-services), [Foundation (App Support)](#foundation-app-support), [Security](#security).
+
 <a id="speech"></a>
 ### Speech
 
@@ -2433,6 +2663,8 @@ The Speech framework does speech-to-text on live or recorded audio. BifrOSt has 
 | Legacy Objective-C recognizer API | Speech Recognition in Objective-C (SFSpeechRecognizer and related classes) | none | Gap | The shell and apps are Rust. The concept is missing, not the Objective-C binding. Apple's current docs point to SpeechAnalyzer. |
 
 Gaps: No speech recognizer or transcription module (SpeechAnalyzer, SpeechTranscriber, DictationTranscriber) in the SDK, the UI kit or the shell.; No SDK API that streams time-coded microphone audio to an app, so a recognizer cannot be fed from an app.; No recognition result type with alternatives, confidence or time ranges.; No custom vocabulary or contextual strings for recognition.; No on-device speech model install or inventory path.; Keyboard Mic key is inert; system dictation is missing.; No app-facing microphone permission prompt. The audio service records only on an explicit user action (springboard/proto/src/svc.rs:218)..
+
+Related: [Sound Analysis](#sound-analysis), [Audio Toolbox](#audio-toolbox), [AVFAudio](#avfaudio), [AVFoundation (Capture, Audio)](#avfoundation-capture-audio), [Core Audio](#core-audio).
 
 <a id="storekit"></a>
 ### StoreKit
@@ -2464,6 +2696,8 @@ BifrOSt has a free app catalogue and installer (browse, install, update, changel
 
 Gaps: No purchase API: no product lookup with price, no purchase flow, no paid-app install path (springboard/src/shell/store/api.rs has no price or product type).; No transactions or entitlements API for apps to ask what the user has bought or is entitled to.; No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.; No subscriptions, renewal state, offers, offer codes or win-back offers.; No review prompt API (RequestReviewAction / SKStoreReviewController equivalent) in springboard/sdk/src.; No StoreKit-style test harness for purchase flows in springboard/sdk/src/testing.rs.; Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a)..
 
+Related: [StoreKit Test](#storekit-test), [CloudKit](#cloudkit), [AppKit (App Structure)](#appkit-app-structure), [Core Services](#core-services), [EventKit](#eventkit).
+
 <a id="suggested-actions"></a>
 ### Suggested Actions
 
@@ -2479,6 +2713,8 @@ Suggested Actions is a SuggestedActionsView that shows on-device action suggesti
 | Create event from proposed meeting time | Essentials example: Calendar event from a proposed time | springboard/apps/calendar-desktop (Calendar app) | Partial | Calendar app exists, but no suggestion hook from messages |
 
 Gaps: No messaging app or message view that could host the suggestions view; No on-device suggestion model or API for message content.
+
+Related: [App Intents](#app-intents), [MailKit](#mailkit), [PermissionKit](#permissionkit), [RelevanceKit](#relevancekit), [Automator](#automator).
 
 <a id="swift-charts"></a>
 ### Swift Charts
@@ -2506,6 +2742,8 @@ Swift Charts is a declarative SwiftUI API for marks, scales, axes and plots, wit
 
 Gaps: No app-facing chart API: no Chart container, no marks, no scales, no axes, no plots in springboard/sdk or springboard/ui; The Screen Time bar chart and the battery graph are private shell drawers, not reusable by apps; No line, area, point, rectangle, rule or sector marks; No automatic scale domain, no axis grid lines or configurable ticks, no annotations; No chart proxy, so charts cannot respond to pointer position or selection; No 3D charts or surface plots (Chart3D is macOS 26.0 in Apple's docs); No chart accessibility summaries or localized axis labels; docs/bifrost-ui.md has no dataviz or charts section, so the Apple parity record does not cover this framework.
 
+Related: [SwiftUI (Views, View layout)](#swiftui-views-layout), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [SwiftUI (Event handling, Accessibility, Framework integration)](#swiftui-events-a11y-integration), [Swift](#swift), [SwiftData](#swiftdata).
+
 <a id="tabular-data"></a>
 ### Tabular Data
 
@@ -2530,6 +2768,8 @@ Apple's TabularData is a typed data-frame library for preparing machine-learning
 
 Gaps: No DataFrame or typed column container in the SDK or ui crates; No statistical summaries (numeric or categorical); No general CSV reader or writer; only the weather widget parser at springboard/src/shell/weather/data.rs; No column-aware JSON import or export.
 
+Related: [Foundation (Fundamentals)](#foundation-fundamentals), [SwiftData](#swiftdata), [Application Services](#application-services), [Core Foundation](#core-foundation), [DataDetection](#datadetection).
+
 <a id="tipkit"></a>
 ### TipKit
 
@@ -2552,6 +2792,8 @@ TipKit is a contextual-tip framework: tip content, display rules, a persistent d
 
 Gaps: No tip type, no tip content and no display rules (Tip, Rule, Parameter, Event).; No persistent tip datastore with display frequency limits, and no configure call.; No inline tip view or tip view style.; No anchor modifier that presents a tip popover from an SDK view; the popover exists only as a low-level helper.; No tip groups.; No testing hooks to show, hide or reset tips.; No tooltips on hover in controls or menus (docs/bifrost-ui.md:362)..
 
+Related: [WidgetKit](#widgetkit), [Application Services](#application-services), [AppKit (User Interface)](#appkit-user-interface), [AppKit (User Interactions)](#appkit-user-interactions), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="translation"></a>
 ### Translation
 
@@ -2569,6 +2811,8 @@ Apple's Translation framework translates text between a language pair on device,
 | Localized UI strings and number and date formats (related, not translation) | Not part of Translation; related to Foundation Locale and localized strings | springboard/sdk/src/locale.rs (Locale, Bundle::load, NumberFormatter, DateFormatter); docs/bifrost-ui.md (Locale and localization section) | Partial | reads <app>/<lang>.lproj/Localizable.strings and formats numbers and dates for en and is only; it does not translate text between languages |
 
 Gaps: No on-device text translation between language pairs for apps (no TranslationSession equivalent).; No system translation popover or inline translate action for selected text.; No language-pair availability or download-status query (LanguageAvailability).; No translation error model (TranslationError).; Locale data covers only en and is, so even the related localization layer lacks the language pairs a translation feature would need (docs/bifrost-ui.md, Locale gaps)..
+
+Related: [Application Services](#application-services), [Natural Language](#natural-language), [Foundation (Fundamentals)](#foundation-fundamentals), [Foundation Models](#foundation-models), [Accessibility](#accessibility).
 
 <a id="user-notifications"></a>
 ### User Notifications
@@ -2598,6 +2842,8 @@ Local notifications are covered: categories with buttons, destructive and text-r
 
 Gaps: Remote push: no device token, no push registration, no background push wake-up (APNs or a BifrOSt equivalent).; Notification service extension: no hook to modify a notification before it is shown.; Calendar and location triggers: only a time-interval delay exists; no repeating or region-based notifications.; Attachments and per-request sounds: notification cards are text only and the sound is a per-app switch.; Runtime permission flow and settings query: permission is a manifest flag; there is no authorization status, no request options and no UNNotificationSettings equivalent.; Foreground presentation delegate (willPresent): an app cannot choose how a notification shows while it is in front.; Communication notifications and web push: no sender-based message notification and no Push API for the browser..
 
+Related: [User Notifications UI](#user-notifications-ui), [Notification Center](#notification-center), [Application Services](#application-services), [Darwin Notify](#darwin-notify), [Foundation (App Support)](#foundation-app-support).
+
 <a id="user-notifications-ui"></a>
 ### User Notifications UI
 
@@ -2613,6 +2859,8 @@ Apple's framework is one extension point: a notification content app extension (
 | Delivering notifications to the notification UI | UNNotificationContent delivery into the system banner, lock screen and Notification Center (framework context) | springboard/src/shell/notify/mod.rs (Shell post path), springboard/src/shell/notify/center.rs, springboard/src/shell/notify/banner.rs | Partial | banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo |
 
 Gaps: App-supplied notification view (UNNotificationContentExtension) with a view controller that renders delivered content; Media play and pause controls on a notification (mediaPlayPauseButton* and mediaPlay()/mediaPause()); Content-extension response options (UNNotificationContentExtensionResponseOption) and dismissal behaviour per action; Notification attachments and userInfo payloads for custom content (noted in docs/bifrost-ui.md, User notifications section).
+
+Related: [User Notifications](#user-notifications), [Notification Center](#notification-center), [Darwin Notify](#darwin-notify), [Foundation (App Support)](#foundation-app-support), [Application Services](#application-services).
 
 <a id="visionkit"></a>
 ### VisionKit
@@ -2635,6 +2883,8 @@ Covers the plain-text side of data detection (links, dates, addresses, phone num
 
 Gaps: No text recognition (OCR) for camera frames or images, so Live Text, DataScanner text and ImageAnalyzer have no counterpart.; No document scanning mode (VNDocumentCameraViewController equivalent) in the Camera app or in the SDK.; No subject lifting or background removal for images.; No Visual Look Up.; Camera scanning exists only inside the system Camera app for QR model 2 codes. It has no SDK API and no other barcode formats.; Plain-text data detection (controls::detect) has no image counterpart and does not cover transit information..
 
+Related: [Visual Intelligence](#visual-intelligence), [Quartz](#quartz), [PhotoKit](#photokit), [Core Image](#core-image), [Application Services](#application-services).
+
 <a id="wallet-orders"></a>
 ### Wallet Orders
 
@@ -2649,6 +2899,8 @@ Wallet Orders is a server-side web service that Apple Wallet calls to track orde
 | Update notifications | Register a device for update notifications, Unregister a device from update notifications, PushToken | nothing found | n/a | APNs push tokens; BifrOSt has no APNs |
 | Message logs | Receive log messages, LogEntries | nothing found | n/a | Log upload from Wallet to the merchant server |
 
+
+Related: [StoreKit](#storekit), [PassKit (Apple Pay and Wallet)](#passkit-apple-pay-and-wallet), [Device Management](#device-management), [StoreKit Test](#storekit-test), [Core Services](#core-services).
 
 <a id="weatherkit"></a>
 ### WeatherKit
@@ -2674,6 +2926,8 @@ BifrOSt has a working forecast pipeline for the Weather app: current conditions,
 | Data attribution | WeatherAttribution | none | Gap | No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI. |
 
 Gaps: No app-facing weather SDK API in springboard/sdk/src/. Other apps cannot request weather without copying the Open-Meteo code.; No weather alerts (WeatherAlert, severity, availability) from any data source.; No minute forecast.; No historical or statistical weather data (daily and monthly statistics, trends, historical comparisons, percentiles, weather changes).; No moon events or moon phase, and no dawn or dusk times.; No pressure trend, wind direction or gust, or precipitation amounts and probabilities.; No typed WeatherError enum, and no attribution text for the data provider.; Data is Open-Meteo, not WeatherKit. Apple's coverage of data sources and quality does not carry over..
+
+Related: [MapKit](#mapkit), [Core Location](#core-location), [WidgetKit](#widgetkit), [CloudKit](#cloudkit), [EventKit](#eventkit).
 
 <a id="webkit"></a>
 ### WebKit
@@ -2702,6 +2956,8 @@ BifrOSt embeds the Servo 0.7.0 engine out of process behind a WebProcessPool wit
 | Safari support for web authors (optimizing sites, video delivery, Smart App Banners) | Optimizing Your Website for Safari, Delivering Video Content for Safari, Promoting Apps with Smart App Banners | none; the BifrOSt website lives in ~/Projects/bifrost-site/site/ and is not an SDK feature | n/a | documentation for web authors targeting Safari; not a framework API |
 
 Gaps: No WebDriver implementation for web content (Apple's WebDriver commands for Safari); the testing kit is XCTest-style only.; No WKDOMNodeSnapshot equivalent: no DOM tree snapshot object.; No downloads API (WKDownload, WKDownloadDelegate).; No navigation policy callback (per-request allow or cancel), and stop_loading does nothing because Servo 0.7.0 cannot cancel a load.; No alert, confirm, prompt or file-chooser UI delegate, and no select element support.; No page-to-app message handler (WKScriptMessageHandler equivalent) and no content rule lists.; No cookie or website-data API (WKHTTPCookieStore, WKWebsiteDataStore) for apps.; custom user agent is not applied: Servo reads it at start-up only.; No PDF snapshot output and no context menu support.; docs/bifrost-ui.md heading still says Browser 0.3.0, but springboard/apps/browser/manifest.toml and Cargo.toml say 0.9.0; the heading is stale..
+
+Related: [JavaScriptCore](#javascriptcore), [Application Services](#application-services), [Safari Services](#safari-services), [Core Services](#core-services), [AppKit (App Structure)](#appkit-app-structure).
 
 <a id="widgetkit"></a>
 ### WidgetKit
@@ -2734,6 +2990,8 @@ BifrOSt has shell-owned home-screen and Today widgets (a fixed set of nine kinds
 
 Gaps: No app-facing widget extension: apps cannot register a widget kind, a size or a configuration (Widget, WidgetBundle, StaticConfiguration, AppIntentConfiguration).; No timeline or reload API for apps (TimelineProvider, TimelineEntry, WidgetCenter.reloadTimelines); shell tiles refresh themselves only.; No Live Activity API (ActivityKit, ActivityConfiguration, DynamicIsland); the lock screen shows shell now-playing only.; No app-provided Control Center controls (ControlWidgetButton, ControlWidgetToggle, ControlValueProvider).; No interactive widget actions that run app intents (Button or Toggle invoking AppIntent) and no widget deep links (widgetURL).; No large widget family; shell widgets stop at small (155 pt) and medium (329 pt).; No accented rendering mode or widget container background for the Liquid Glass look.; No widget accessibility descriptions; shell tiles are pixel images.; No relevance input for Smart Stacks; the shell stack is a manual swipe list..
 
+Related: [Notification Center](#notification-center), [ExtensionKit](#extensionkit), [Application Services](#application-services), [AppKit (User Interface)](#appkit-user-interface), [TipKit](#tipkit).
+
 <a id="app-intents-testing"></a>
 ### App Intents Testing
 
@@ -2757,6 +3015,8 @@ BifrOSt has an App Intents runtime served over the control socket (intent.list, 
 
 Gaps: No intent test helpers: no test session that runs an intent by type and returns a checked result (dispatch() is public but returns raw Json).; No value query results or intent value queries (ResolvedValueQueryResult, IntentValueQueryDefinition).; No entity annotation or onscreen context (ViewAnnotation), so Spotlight and Siri cannot be told what is on screen.; No enum parameter type and no transient entities (AnyAppEnum, AnyTransientAppEntity).; No key-path access to nested intent values (DynamicPropertyPath); tests use string keys.; Intents run in-process in unit tests and only out-of-process through the control socket; there is no separate test runner.; Siri and voice dialog verification is not modelled (see docs/bifrost-ui.md App Intents gaps)..
 
+Related: [App Intents](#app-intents), [SiriKit](#siri-kit), [Media Intents](#media-intents), [Visual Intelligence](#visual-intelligence), [Application Services](#application-services).
+
 <a id="automator"></a>
 ### Automator
 
@@ -2777,6 +3037,8 @@ Apple's Automator is a workflow engine that runs ordered action bundles and shel
 
 Gaps: No workflow engine: multi-step runs, variables and input/output passing between actions do not exist.; Shortcuts actions that need the shell (Wi-Fi, Low Power, Do Not Disturb, brightness, open app, screenshot, timer) are logged, not executed (springboard/apps/shortcuts-desktop/src/main.rs).; No action bundle format or install scan: no equivalent of /System/Library/Automator, /Library/Automator or ~/Library/Automator.; No workflow controller (run, pause, step, stop, reset) and no runWorkflow-by-path API.; Shortcuts does not list or run intents from other installed apps yet (docs/bifrost-ui.md, App Intents gaps).; No shell script action API for workflow steps..
 
+Related: [App Intents](#app-intents), [Core Services](#core-services), [Application Services](#application-services), [Scripting Bridge](#scripting-bridge), [SiriKit](#siri-kit).
+
 <a id="developer-tools-support"></a>
 ### DeveloperToolsSupport
 
@@ -2794,6 +3056,8 @@ Xcode-only support for customising the Xcode library and preview macros. It has 
 
 Gaps: No typed resource symbols generated for BifrOSt app assets (Apple-only tooling; not a parity target).
 
+Related: [Quick Look](#quick-look), [Image Playground](#image-playground), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [Application Services](#application-services), [QuickLook UI](#quicklook-ui).
+
 <a id="playground-support"></a>
 ### Playground Support
 
@@ -2809,6 +3073,8 @@ Apple's Swift Playgrounds runtime: live views, an always-on live view process an
 | Playground data persistence | PlaygroundKeyValueStore, PlaygroundValue, playgroundSharedDataDirectory | springboard/sdk/src/defaults.rs | n/a | The general key-value store exists for apps; no playground-specific store |
 
 Gaps: No playground runtime; BifrOSt apps are not run in a live-view playground.
+
+Related: [Image Playground](#image-playground), [DeveloperToolsSupport](#developer-tools-support), [Core Services](#core-services), [SwiftUI (App structure, Data and storage)](#swiftui-app-data), [ReplayKit](#replaykit).
 
 <a id="scripting-bridge"></a>
 ### Scripting Bridge
@@ -2830,6 +3096,8 @@ Scripting Bridge drives other apps by sending Apple events to their sdef-describ
 
 Gaps: No generic scripting dictionary (sdef equivalent) and no generated client proxies; callers depend on each app's method list at runtime.; No generic property and element model: apps cannot set properties through a shared API, and element lookup is limited to typed entity queries.; No per-object or per-application last-error state and no failure delegate for callers.; The control socket accepts only the owning user (SO_PEERCRED), so one app cannot script another app that runs under a different account.; No explicit activate or launch-flag options when a caller starts an app; open_with only starts an installed app by id..
 
+Related: [Core Services](#core-services), [Application Services](#application-services), [Foundation (App Support)](#foundation-app-support), [Distributed](#distributed), [XPC](#xpc).
+
 <a id="shadergraph"></a>
 ### ShaderGraph
 
@@ -2847,6 +3115,8 @@ A node-based material editor inside Reality Composer Pro that builds MaterialX m
 
 Gaps: No 3D rendering or material authoring path; BifrOSt's renderer is 2D desktop compositing (render/src/gfx/, render/src/glass.rs).
 
+Related: [Compute Graph](#compute-graph), [Model I/O](#model-i-o), [SceneKit](#scenekit), [Metal Performance Shaders Graph](#metal-performance-shaders-graph), [RealityKit](#realitykit).
+
 <a id="storekit-test"></a>
 ### StoreKit Test
 
@@ -2862,6 +3132,8 @@ Xcode-driven test harness for Apple In-App Purchase, subscriptions and SKAdNetwo
 | StoreKit API facades | StoreKitPurchaseAPI, StoreKitLoadProductsAPI, StoreKitSubscriptionStatusAPI, StoreKitVerificationAPI | springboard/src/shell/store/api.rs (app listing only) | n/a | Apple StoreKit calls; BifrOSt store has no purchase or subscription calls |
 
 Gaps: BifrOSt's PC App Store has no purchase or subscription flow to test (not an Apple-parity target; decide separately whether paid apps are planned).
+
+Related: [StoreKit](#storekit), [USDKit (App Frameworks)](#usdkit), [EventKit](#eventkit), [CloudKit](#cloudkit), [Core Services](#core-services).
 
 <a id="synchronization"></a>
 ### Synchronization
@@ -2882,6 +3154,8 @@ Apple's framework is a set of low-level Swift primitives: typed atomics, a lazy 
 
 Gaps: No SDK wrapper for Mutex with closure-scoped withLock and withLockIfAvailable; apps use std::sync::Mutex guards directly; No WordPair or double-word atomic in the SDK or the UI, render or core crates; No SDK-level atomic wrapper or documented memory-ordering API; apps reach std::sync::atomic directly; No atomic reference type equivalent to AtomicLazyReference beyond std OnceLock.
 
+Related: [Swift](#swift), [Core Data](#core-data), [Dispatch](#dispatch), [Core Foundation](#core-foundation), [System](#system).
+
 <a id="xcodekit"></a>
 ### XcodeKit
 
@@ -2898,6 +3172,8 @@ XcodeKit extends the Xcode source editor with commands and text buffer access. I
 
 Gaps: No IDE host: a source editor extension point would need an Xcode-like developer tool on BifrOSt, which does not exist. Not a gap to fill for a desktop..
 
+Related: [AppKit (App Structure)](#appkit-app-structure), [AppKit (Text)](#appkit-text), [DeveloperToolsSupport](#developer-tools-support), [ExtensionKit](#extensionkit), [AppKit (User Interface)](#appkit-user-interface).
+
 <a id="xcselect"></a>
 ### xcselect
 
@@ -2911,6 +3187,8 @@ xcselect returns the path to a macOS SDK on the host, for build tools that do no
 | Developer tools selection | Command Line Tools and Xcode selection (framework overview) | none | n/a | Selects the active Apple developer toolchain. Not applicable on Linux. |
 
 Gaps: None for BifrOSt. Apps that need a toolchain path use Cargo and the Linux SDK, so there is no counterpart to add..
+
+Related: [DeveloperToolsSupport](#developer-tools-support), [XcodeKit](#xcodekit), [Core Services](#core-services), [Security](#security), [AppKit (App Structure)](#appkit-app-structure).
 
 <a id="colorsync"></a>
 ### ColorSync
@@ -2933,6 +3211,8 @@ ColorSync is the ICC profile and colour-transform engine. BifrOSt has no ICC pro
 
 Gaps: No ICC profile parser and no profile-to-profile transform engine (ColorSyncTransformCreate and ColorSyncTransformConvert have no equivalent).; No named working spaces (sRGB, Display P3, Adobe RGB) and no conversion between them, so wide-gamut images and PDF ICCBased colour are drawn as plain RGB.; No display profile or gamma-ramp path: kms.rs reads gamma_size but loads no VCGT or custom profile.; No HDR pipeline (PQ, HLG, extended range, HAGC metadata).; No app-facing colour-management API. Apps have only the Light/Dark pairs in springboard/render/src/ui.rs and the Night Shift scalar..
 
+Related: [Core Image](#core-image), [Core Video](#core-video), [Core Graphics](#core-graphics), [Image I/O](#image-i-o), [Application Services](#application-services).
+
 <a id="compute-graph"></a>
 ### Compute Graph
 
@@ -2950,6 +3230,8 @@ Compute Graph is a node-based GPU framework for RealityKit particle simulations,
 | Geometry and simulation inputs | Topology, CoordinateSpace, StripOrientation, Viewpoint, MouseParams | none | n/a | 3D simulation inputs for RealityKit scenes. BifrOSt has no 3D scene graph. |
 
 Gaps: None that fits a macOS-style desktop. A node-based particle framework would be a 3D engine feature outside the desktop's scope..
+
+Related: [ShaderGraph](#shadergraph), [Metal](#metal), [Model I/O](#model-i-o), [Metal Performance Shaders Graph](#metal-performance-shaders-graph), [MetalKit](#metalkit).
 
 <a id="core-animation"></a>
 ### Core Animation
@@ -2983,6 +3265,8 @@ Typed-property animation exists for views: frame, opacity and background, with t
 
 Gaps: No layer tree: no CALayer, sublayers, delegate or layout managers for apps (views only).; No keyframe, group or additive animations, and no key-path animations (typed view properties only).; No transform, corner radius, shadow or mask on views; no 3D transforms.; No shape layer (Bezier paths, stroke and fill rule) and no gradient layer in the SDK.; No display-link object and no frame-rate preference (CAFrameRateRange).; No replicator or particle layers (CAReplicatorLayer, CAEmitterLayer).; No app-facing Metal layer or drawable (CAMetalLayer, CAMetalDrawable); the compositor is system-only.; Springs do not carry velocity into a retarget (springboard/ui/src/anim.rs).; Transitions (CATransition) are private to Settings, Files and the shell, not an SDK API..
 
+Related: [Core Graphics](#core-graphics), [Screen Saver](#screen-saver), [Core Video](#core-video), [Symbols](#symbols), [GLKit](#glkit).
+
 <a id="core-graphics"></a>
 ### Core Graphics
 
@@ -3014,6 +3298,8 @@ Apps get a software pixel Surface with rect, rounded-rect, stroke, blit, blur an
 
 Gaps: No app-facing path API (CGPath, CGMutablePath): arbitrary Bezier and polyline drawing, fill and stroke.; No clip rectangle or clip path on the Surface (docs/bifrost-ui.md:867).; No app-facing transform stack or CGAffineTransform; only compositor-side window transforms exist.; No gradient, shading, function or pattern fills for apps; linear and radial gradients live only in springboard/src/shell/browser/tiles.rs.; No line, ellipse or arc drawing calls on the Surface.; No colour space object, wide-gamut or ICC conversion, and no CGColor value type for apps.; PDF: no vector drawing from the reader, no page-drawing PDF context, and no app-facing PDF document type.; Image formats: JPEG and PNG decode only, no encoder or other container formats in the SDK, no HDR.; Display and window services: no SDK display list, mode or bounds API, and no window list for apps.; Event services: no event tap or synthetic event API for apps.; docs/bifrost-ui.md has no Core Graphics mapping table, so the names above are not mapped to our APIs in the docs..
 
+Related: [AppKit (Graphics, Drawing, Color, and Printing)](#appkit-graphics-printing), [Application Services](#application-services), [Core Image](#core-image), [GLKit](#glkit), [Core Video](#core-video).
+
 <a id="core-image"></a>
 ### Core Image
 
@@ -3039,6 +3325,8 @@ Core Image's filter graph (CIContext, CIImage, CIFilter chains, CIKernel) has no
 
 Gaps: No app-facing filter API: no CIFilter-style object, no chaining, and no SDK type for a lazily rendered image (CIImage/CIContext equivalent).; Colour adjustment limited to brightness and contrast (Photos only). Missing: exposure, hue, saturation for app content, temperature and tint, vibrance, tone curve.; Blur limited to one CPU box-blur path and the GPU material blur. Missing: motion, zoom, disc, bokeh, masked variable blur, and a radius or sigma API for apps.; No feature detection (faces, rectangles, text, barcodes) and no barcode or QR generation.; No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).; Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.; Photo effects (sepia, vignette, chrome, fade, false colour, posterize) and colour lookup (colour cube, colour map, palettize) are absent..
 
+Related: [Core Graphics](#core-graphics), [Image I/O](#image-i-o), [Core Video](#core-video), [Core AI](#core-ai), [Accelerate](#accelerate).
+
 <a id="game-controller"></a>
 ### Game Controller
 
@@ -3061,6 +3349,8 @@ BifrOSt has no game controller API. Its evdev layer decodes touch, pointer, keyb
 
 Gaps: No controller discovery or connection events for apps (GCController.controllers, controllerDidConnect).; No gamepad input model: no buttons, axes, triggers, hats or direction-pad elements in the evdev decoder (springboard/src/bare/input.rs).; No SDK input profile for apps (extended, micro or racing wheel profiles).; No haptics or rumble API for controllers (springboard/src/bare/vibrator.rs only checks for a vibrator node).; No controller battery, light or motion data.; No virtual controller for touch-only devices.; No Home button or controller settings manager (GCControllerHomeButtonSettingsManager) and no controller pages in Settings (springboard/src/shell/pages.rs has no controller page).; Web Gamepad API status unverified (springboard/apps/browser/engine/Cargo.toml enables Servo's gamepad feature)..
 
+Related: [HIDDriverKit](#hiddriverkit), [Core HID](#core-hid), [GameplayKit](#gameplaykit), [Force Feedback](#force-feedback), [Application Services](#application-services).
+
 <a id="gamekit"></a>
 ### GameKit (Game Center)
 
@@ -3079,6 +3369,8 @@ GameKit is the client API for Apple's Game Center service: player identity, lead
 | Turn-based matches | GKTurnBasedMatch and related classes | nothing found | n/a | Game Center stores and forwards match data. |
 
 Gaps: No online game service, so no leaderboards, achievements or friends. This is an Apple-service dependency, not a missing local API.; No multiplayer peer transport in the SDK..
+
+Related: [GameplayKit](#gameplaykit), [Game Controller](#game-controller), [GameSave](#gamesave), [CloudKit](#cloudkit), [StoreKit](#storekit).
 
 <a id="gameplaykit"></a>
 ### GameplayKit
@@ -3104,6 +3396,8 @@ GameplayKit is a game-logic framework: entities and components, state machines, 
 
 Gaps: No SDK pathfinding or navigation graph (GKGraph family): no grid, mesh or obstacle graph and no route search.; No SDK random source or distribution API: apps copy an xorshift generator, and only seed() is exposed, under the test kit.; No procedural noise (Perlin, Voronoi, billow, ridged) for apps.; No reusable state machine, entity-component system, or rule and decision system for game logic.; No spatial partitioning (quadtree, octree, R-tree) for apps.; No turn-based AI (minimax or Monte Carlo strategist) or agent steering (goals, behaviors, obstacles).; SpriteKit and SceneKit integration has no BifrOSt counterpart, so it is n/a..
 
+Related: [GameKit (Game Center)](#gamekit), [SpriteKit](#spritekit), [RealityKit](#realitykit), [SceneKit](#scenekit), [GLKit](#glkit).
+
 <a id="gamesave"></a>
 ### GameSave
 
@@ -3123,6 +3417,8 @@ GameSave syncs an app's save files through iCloud Drive with conflict resolution
 | Cloud account backup of user data | Not part of GameSave; nearest Apple counterpart is iCloud Drive | ~/Projects/bifrost-cloud/docs/schema.md (device_backups, encrypted backups of a BifrOSt PC); ~/Projects/bifrost-cloud/skill/SKILL.md (backups timer) | Partial | Account-level encrypted device backups exist in the cloud backend, but the PC client code that uploads them was not found in bifrost-os, and no app can reach its save directory through them. Counted as partial background only, not as GameSave parity. |
 
 Gaps: Synced save directory API for apps (open a container, read and write files, sync in the background); Version history and conflict resolution for synced files; Sync status UI and the upload trigger (progress alert, pending upload); Save error domain (only needed once a sync API exists); Mapping of per-app save directories into bifrost-cloud backups (no SDK or client path exists).
+
+Related: [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Core Data](#core-data), [File Provider](#file-provider), [Core Services](#core-services), [SwiftData](#swiftdata).
 
 <a id="glkit"></a>
 ### GLKit
@@ -3144,6 +3440,8 @@ GLKit is an OpenGL and OpenGL ES helper layer (GL view, view controller render l
 | Rendering on macOS requirements | OpenGL 3.2 Core Profile context on macOS, OpenGL ES 2.0 on iOS (per the landing page) | springboard/src/gpu/egl.rs (GLES 3.x via EGL/Mesa, Linux) | OS only | the GPU stack exists in the system layer, but apps have no context or API to use it |
 
 Gaps: No app-facing GL view or drawable: apps cannot create an OpenGL or GLES context on BifrOSt (springboard/src/gpu/mod.rs is internal).; No shader effect classes (GLKBaseEffect and related) and no way for apps to supply shaders.; No 3D math types (matrix, vector, quaternion) in the SDK; only the browser engine's 2D transform.; No mesh or 3D buffer API.; No background GPU texture loader for apps; image decode is CPU-only (springboard/render/src/imgdec.rs).; Apple deprecated most of GLKit on macOS from 10.14. Parity work here would target the Metal-equivalent path rather than GLKit, so this framework may stay a documented n/a for new apps..
+
+Related: [SpriteKit](#spritekit), [Core Graphics](#core-graphics), [MetalKit](#metalkit), [Model I/O](#model-i-o), [SceneKit](#scenekit).
 
 <a id="image-i-o"></a>
 ### Image I/O
@@ -3174,6 +3472,8 @@ Image decoding (PNG and JPEG), PNG and JPEG writing, EXIF reading and writing, a
 
 Gaps: No SDK module for images: apps cannot decode, encode or read metadata through bifrost_app.; Only PNG and JPEG are decodable and writable; GIF, WebP, HEIC, TIFF, TGA and RAW are not.; PNG writing is uncompressed (stored zlib blocks), so output files are large.; No animated GIF or APNG frame access.; No XMP or IPTC metadata; EXIF read and write is limited to what the Photos and camera code uses.; No colour profile (ICC) or HDR gain map handling; images are treated as sRGB.; No tiled or streaming image provider for very large pictures..
 
+Related: [Core Image](#core-image), [ImageCaptureCore](#imagecapturecore), [Model I/O](#model-i-o), [Quartz](#quartz), [Application Services](#application-services).
+
 <a id="image-playground"></a>
 ### Image Playground
 
@@ -3189,6 +3489,8 @@ Apple's framework presents a system sheet that generates images from text concep
 | Platform support | ImagePlaygroundConcept, ImagePlaygroundStyle | nothing found | n/a | input types for the Apple generation service only |
 | Structures | ImagePlaygroundOptions | nothing found | n/a | options for the Apple generation service only |
 
+
+Related: [Playground Support](#playground-support), [DeveloperToolsSupport](#developer-tools-support), [Image I/O](#image-i-o), [PhotoKit](#photokit), [Application Services](#application-services).
 
 <a id="metal"></a>
 ### Metal
@@ -3217,6 +3519,8 @@ BifrOSt has a GPU presenter in the system layer (GBM, EGL, GLES, dma-buf) that c
 | Simulator and alternative render paths | Metal in Simulator, render path fallback | springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0) | Partial | fallback to SHM exists for the compositor; no app-facing fallback |
 
 Gaps: No app-facing GPU device, command queue or command buffer in the SDK; No app shader library: apps cannot supply Metal or GLSL shaders; No app buffer or texture resource API; No compute, blit or indirect command encoding; No GPU ray tracing or ML inference path; No HDR presentation (presenter is 8-bit SDR); No GPU counters, timing or frame capture for developers; The Vulkan backend behind the presenter is not started (docs/gpu-first.md).
+
+Related: [MetalKit](#metalkit), [Metal Performance Shaders](#metal-performance-shaders), [MetalFX](#metalfx), [Core Video](#core-video), [Model I/O](#model-i-o).
 
 <a id="metal-performance-shaders"></a>
 ### Metal Performance Shaders
@@ -3247,6 +3551,8 @@ BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by 
 
 Gaps: No app-facing GPU compute or image-filter API. The GPU path (springboard/src/gpu/) serves the shell only.; No histogram, threshold, morphology, convolution or statistics filters for images.; No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.; No GPU matrix or linear algebra kernels.; Resampling is bilinear or area-average only. Lanczos is missing.; Blur is shell-internal, with no gaussian sigma parameter and no SDK entry point..
 
+Related: [Metal Performance Shaders Graph](#metal-performance-shaders-graph), [Metal](#metal), [MetalFX](#metalfx), [MetalKit](#metalkit), [Core Image](#core-image).
+
 <a id="metal-performance-shaders-graph"></a>
 ### Metal Performance Shaders Graph
 
@@ -3268,6 +3574,8 @@ MPSGraph is a symbolic tensor compute graph that compiles to GPU, CPU and Neural
 
 Gaps: No tensor or symbolic graph API for apps. A desktop SDK would need a graph type, a compiler and executables before any ML feature could land.; No app-facing GPU compute submission or completion callbacks. springboard/src/gpu/ serves only the compositor.; No neural-network operators (convolution, pooling, RNN) or FFT and random ops on the GPU.; No serialized executable format and no compilation cache.; Neural Engine has no counterpart. Only the device-capability query in springboard/src/gpu/plan.rs exists, and it is not exposed to apps..
 
+Related: [Metal Performance Shaders](#metal-performance-shaders), [Metal](#metal), [Compute Graph](#compute-graph), [ShaderGraph](#shadergraph), [MetalKit](#metalkit).
+
 <a id="metalfx"></a>
 ### MetalFX
 
@@ -3287,6 +3595,8 @@ MetalFX offers GPU temporal and spatial upscalers plus frame interpolation, all 
 
 Gaps: Motion vectors and depth input for temporal scaling: the presenter has no per-pixel motion or depth buffers.; Spatial upscaler on the GPU: only CPU bilinear resampling exists, in springboard/render/src/gfx.rs and springboard/render/src/gfx/rotate.rs.; Frame interpolation (macOS 26 API) and the temporal denoiser: no counterpart.; App-facing scaler API in bifrost_app: none, so apps cannot request GPU upscaling of their own render targets.; Colour-space-aware scaling (linear, perceptual, HDR modes): the bilinear helpers take no colour-space parameter..
 
+Related: [Metal](#metal), [Metal Performance Shaders](#metal-performance-shaders), [MetalKit](#metalkit), [Model I/O](#model-i-o), [Core Video](#core-video).
+
 <a id="metalkit"></a>
 ### MetalKit
 
@@ -3304,6 +3614,8 @@ MetalKit is Apple's Metal helper layer: a view that owns a drawable loop (MTKVie
 | Conversion functions and model errors | Conversion Functions (Metal and Model I/O vertex layouts), Model Errors | none found | n/a | Depends on Model I/O, which BifrOSt does not have |
 
 Gaps: No app-facing GPU view with a per-frame delegate (MTKView and MTKViewDelegate equivalent) in springboard/sdk/src/; No app-facing GPU texture loader (MTKTextureLoader equivalent); springboard/render/src/imgdec.rs decodes on the CPU only; No mesh container or mesh loading path (MTKMesh, MTKSubmesh equivalent); nothing under springboard/sdk/src/ or springboard/render/src/; Presenter (springboard/src/gpu/wl.rs) is shell-internal; its Metal-shaped API has no SDK binding; The GPU stack is GLES on GBM and EGL, not Metal; a Metal-shaped API is only a design note in docs/gpu-first.md.
+
+Related: [Metal](#metal), [Model I/O](#model-i-o), [GLKit](#glkit), [Core Video](#core-video), [SpriteKit](#spritekit).
 
 <a id="model-i-o"></a>
 ### Model I/O
@@ -3330,6 +3642,8 @@ Model I/O covers 3D asset import and export, meshes, materials, lights, cameras,
 
 Gaps: 3D scene graph: no MDLAsset or MDLObject equivalent, and no 3D transform stack; Mesh data: no vertex descriptor, index buffer, submesh or buffer allocator exposed to apps; Material and shading model: no material properties, scattering functions or physically based lights; Import and export of 3D formats (OBJ, USD, PLY, STL, Alembic) and no 3D UTTypes in springboard/ui/src/uttype.rs; 3D cameras and stereoscopic output; Skeletal animation (skeletons, joints, animated quaternions) and keyframe animation; Procedural texture generators, texture samplers and mip filters for 3D surfaces; Mesh processing: subdivision, ambient occlusion baking, light probe generation; Voxel arrays; Asset resolver protocols (MDLAssetResolver and its path, relative and bundle implementations).
 
+Related: [MetalKit](#metalkit), [Metal](#metal), [GLKit](#glkit), [Spatial](#spatial), [IOSurface](#iosurface).
+
 <a id="pdfkit"></a>
 ### PDFKit
 
@@ -3355,6 +3669,8 @@ BifrOSt has an internal PDF reader inside the Books app that loads a file, walks
 | Page overlay and markup mode | PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider | none found | Gap | No overlay or markup view |
 
 Gaps: No app-facing PDF document, page or view API in springboard/sdk/src (PDFDocument, PDFPage, PDFView have no counterpart); the PDF reader is private to the Books app; No annotation, widget or form-field support (PDFAnnotation, AcroForm); No page rendering into an app-provided context and no page thumbnails (PDFPage draw, PDFThumbnailView); No text selection or find in PDFs (PDFSelection, PDFDocument find); the reader extracts text only; No write path: Save as PDF copies the original file, so page edits, rotation and password handling cannot be written; Printing sends the file to CUPS unchanged; there is no page-range or pagination handling for PDF content and no print sheet (see docs/bifrost-ui.md:1322-1333); Outline is read into the Books table of contents only, with no outline tree object for apps.
+
+Related: [Quartz](#quartz), [Application Services](#application-services), [PaperKit](#paperkit), [AppKit (Graphics, Drawing, Color, and Printing)](#appkit-graphics-printing), [Quick Look](#quick-look).
 
 <a id="pencilkit"></a>
 ### PencilKit
@@ -3383,6 +3699,8 @@ BifrOSt has two working drawing surfaces: the shell's screenshot markup editor (
 
 Gaps: No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (springboard/sdk/src has no equivalent).; No serialised drawing format; both editors save flattened PNG only.; No handwriting recognition and no Scribble-style input.; No pressure, tilt or altitude data on touch input.; No lasso selection, stroke transform or Bezier path import.; No system tool picker that apps can attach to a canvas; the markup tools and palette are private to the shell.; The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so there is no shared drawing module..
 
+Related: [PaperKit](#paperkit), [Core Graphics](#core-graphics), [Application Services](#application-services), [InputMethodKit](#inputmethodkit), [AppKit (Graphics, Drawing, Color, and Printing)](#appkit-graphics-printing).
+
 <a id="quartz"></a>
 ### Quartz
 
@@ -3410,6 +3728,8 @@ BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (
 
 Gaps: No SDK image view or image browser for apps (ImageKit IKImageView and IKImageBrowserView); image viewing exists only inside the Photos shell app.; No parameterised image filter API (Core Image CIFilter) and no filter browser; Photos has five fixed colour filters.; No scanner support (IKScannerDeviceView) and no SDK camera device browser or picture taker.; The Quick Look panel model in springboard/sdk/src/peek.rs is not drawn by the shell (ToShell::Preview is decoded and ignored) and no app adopts it; no QLPreviewView.; No app-facing PDF document, page, outline or selection API (PDFKit PDFDocument, PDFPage, PDFSelection); the PDF engine is internal to Books and reflows pages.; No PDF annotation or form widget support (PDFAnnotation, widgets) in the engine or the SDK.; No PDF page writer and no print-to-PDF filter pipeline (QuartzFilter); Save as PDF is a file copy.; No Quartz Composer equivalent (QCComposition, QCView, custom patches)..
 
+Related: [Quick Look](#quick-look), [Application Services](#application-services), [QuickLook UI](#quicklook-ui), [Quick Look Thumbnailing](#quick-look-thumbnailing), [Core Graphics](#core-graphics).
+
 <a id="realitykit"></a>
 ### RealityKit
 
@@ -3427,6 +3747,8 @@ RealityKit is an AR-first 3D simulation and rendering framework for Apple platfo
 | Gaussian splats and compute graphs | GaussianSplatComponent, ComputeGraphComponent | springboard/render (GPU presenter only) | n/a | The GPU presenter in springboard/src/gpu/wl.rs draws only 2D surfaces and glass; no 3D splat or compute-graph path. |
 
 Gaps: No 3D scene or entity layer in the SDK; No AR or spatial anchoring; the platform does not target visionOS or ARKit-class hardware.
+
+Related: [SceneKit](#scenekit), [SpriteKit](#spritekit), [GameplayKit](#gameplaykit), [GLKit](#glkit), [Model I/O](#model-i-o).
 
 <a id="replaykit"></a>
 ### ReplayKit
@@ -3449,6 +3771,8 @@ ReplayKit records screen video, app audio and microphone, and feeds live broadca
 | Error domain | RPRecordingErrorCode, RPRecordingErrorDomain, SCStreamErrorDomain | none | n/a | errors belong to the ReplayKit and ScreenCaptureKit pipeline, which BifrOSt does not have |
 
 Gaps: No screen video recording for apps, the shell or the MCP tools (only still screenshots in springboard/src/shell/screenshot.rs).; No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/.; Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only.; No app or system audio capture; audiod does not loop back output.; No clip buffer, clip export, preview or trim UI.; No live broadcast extension point or broadcast picker..
+
+Related: [ScreenCaptureKit](#screencapturekit), [AVKit](#avkit), [AVFoundation (Capture, Audio)](#avfoundation-capture-audio), [AVFAudio](#avfaudio), [CoreAudioKit](#coreaudiokit).
 
 <a id="scenekit"></a>
 ### SceneKit
@@ -3476,6 +3800,8 @@ SceneKit is a 3D scene graph (nodes, cameras, lights, materials, geometry, physi
 
 Gaps: No 3D scene graph, camera, light, mesh or material type anywhere in the SDK or render crates; No 3D physics, rigid-body or contact simulation; list scroll physics is 2D only; No particle system, positional audio or 3D asset import; No app-facing custom shader or render-pass API; Apple deprecated SceneKit (macOS 26) in favour of RealityKit (doc header), so a parity target would be RealityKit, not SceneKit.
 
+Related: [SpriteKit](#spritekit), [GLKit](#glkit), [RealityKit](#realitykit), [Model I/O](#model-i-o), [Spatial](#spatial).
+
 <a id="spatial"></a>
 ### Spatial
 
@@ -3494,6 +3820,8 @@ Spatial is a 3D math library (vectors, points, rotations, poses, affine and proj
 | Protocols for translate, rotate, scale, shear | Translatable3D, Rotatable3D, Scalable3D, Shearable3D, Transform3DProtocol, Volumetric | springboard/src/shell/browser/style/values.rs (TransformFn enum: Translate, Scale, Rotate, Skew, Matrix, 2D only) | Gap | no shared 3D transform protocol |
 
 Gaps: No 3D vector, point or size types in the SDK (bifrost_app) or the UI kit (bifrost_ui).; No 4x4 affine or projective transform; the renderer and layout use 2D matrices only.; No pose, rotation (quaternion or Euler) or ray types for picking.; Views have no per-view transform or coordinate space conversion (springboard/sdk/src/view/mod.rs).; Window effects are 2D scale and slide (springboard/src/shell/window_fx.rs); no perspective or 3D flip..
+
+Related: [Model I/O](#model-i-o), [Core Graphics](#core-graphics), [SceneKit](#scenekit), [SpriteKit](#spritekit), [GLKit](#glkit).
 
 <a id="spritekit"></a>
 ### SpriteKit
@@ -3523,6 +3851,8 @@ SpriteKit is a 2D scene, node, action, physics, particle and tile-map framework 
 
 Gaps: No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).; No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.; No particle emitter system (SKEmitterNode).; No tile map system (SKTileMapNode and its tile set and rules).; No app-facing node actions (SKAction sequence, group, repeat) or keyframe sequences (SKKeyframeSequence).; No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.; No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).; No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).; The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer..
 
+Related: [SceneKit](#scenekit), [GLKit](#glkit), [GameplayKit](#gameplaykit), [RealityKit](#realitykit), [Core Animation](#core-animation).
+
 <a id="audio-toolbox"></a>
 ### Audio Toolbox
 
@@ -3548,6 +3878,8 @@ Playback and capture work through one audio service (audiod) that apps reach ove
 
 Gaps: No SDK API for raw audio buffers or render callbacks; apps can only use transport and record calls on the audio service; No audio unit or audio component host (AUv3 or AUv2), and no parameter tree; No system sound or alert API (AudioServices); No general format converter or encoder API for apps; No app-facing audio session category, interruption or route API (system layer only); No scheduled playback of file regions; No voice processing (echo cancellation) on capture.
 
+Related: [Audio Unit](#audio-unit), [Core Audio](#core-audio), [AVFAudio](#avfaudio), [CoreAudioKit](#coreaudiokit), [Core Audio Types](#core-audio-types).
+
 <a id="audio-unit"></a>
 ### Audio Unit
 
@@ -3567,6 +3899,8 @@ Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provide
 | MIDI input and note data | MIDI events delivered to instrument units | springboard/apps/daw/src/compose.rs (note names to MIDI pitch), springboard/apps/daw/src/dsp.rs (mtof) | Gap | note data is internal to the DAW; no MIDI device input or MIDI event API found |
 
 Gaps: No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.; No AUAudioUnit-style extension point for apps to ship audio processors.; No app-facing audio unit or render API; the DAW's rendering and devices are internal.; No MIDI input or MIDI event API.; The audio service (springboard/audiod) has no SDK module for apps..
+
+Related: [Audio Toolbox](#audio-toolbox), [CoreAudioKit](#coreaudiokit), [AVFAudio](#avfaudio), [Core Audio](#core-audio), [Music Understanding](#music-understanding).
 
 <a id="avfaudio"></a>
 ### AVFAudio
@@ -3593,6 +3927,8 @@ BifrOSt has a system audio service (audiod) that owns the speaker and microphone
 
 Gaps: No app-facing audio session category, mode or activation API (AVAudioSession); No interruption or route-change notifications for apps; No recording permission request or input mute state for apps (AVAudioApplication); No AVAudioEngine-style node graph for real-time processing; No MIDI playback (AVMIDIPlayer) or sound bank support; No speech synthesis API; AVAudioPlayer features missing: pan, playback rate, per-player volume fade.
 
+Related: [AVFoundation (Capture, Audio)](#avfoundation-capture-audio), [AVKit](#avkit), [Audio Toolbox](#audio-toolbox), [Core Audio](#core-audio), [CoreAudioKit](#coreaudiokit).
+
 <a id="avfoundation-capture-audio"></a>
 ### AVFoundation (Capture, Audio)
 
@@ -3615,6 +3951,8 @@ Audio playback and microphone recording work through an audio service with an SD
 | Audio settings keys | AVAudioSettings constants (format, sample rate, channels) | springboard/src/media/capture.rs | Gap | Recorder picks the first working PCM/format; no settings dictionary |
 
 Gaps: App-facing capture API (session, device discovery, inputs and outputs) for camera and microphone; Per-app camera and microphone permission prompts; Speech synthesis (voices, utterances, accessibility use); Audio engine graph with effects and buffers; Video recording to file and sample buffer outputs; Depth, metadata and synchronized multi-output capture; Recording settings, metering and compressed formats.
+
+Related: [AVFAudio](#avfaudio), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [AVKit](#avkit), [Audio Toolbox](#audio-toolbox), [Core Audio](#core-audio).
 
 <a id="avfoundation-playback-editing"></a>
 ### AVFoundation (Playback, Editing, Common)
@@ -3645,6 +3983,8 @@ BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, A
 
 Gaps: No SDK media player for apps (everything is in the shell crate); No asset/track model or sample reader for apps; No composition, video composition or audio mix editing; No writer or export session; no encoder; No HLS, offline download management, AirPlay or FairPlay; No sample buffer renderers or synchronizer; No captions or subtitle model.
 
+Related: [AVKit](#avkit), [AVFoundation (Capture, Audio)](#avfoundation-capture-audio), [Media Toolbox](#media-toolbox), [AVFAudio](#avfaudio), [Media Player](#media-player).
+
 <a id="avkit"></a>
 ### AVKit
 
@@ -3673,6 +4013,8 @@ AVKit's playback side has partial BifrOSt counterparts: a video decoder and full
 
 Gaps: Picture in Picture: no floating video window or PiP controller API; the Settings toggle pip_auto (springboard/src/shell/options.rs:72) is stored but never read by the shell.; App-facing video player view: the SDK player() widget (springboard/sdk/src/widgets.rs:900) draws audio only; the fullscreen video HUD lives in springboard/src/deildu/player_view.rs and is not reusable by other apps.; Route picker: no AVRoutePickerView equivalent for AirPlay or nearby receivers; the AirPlay & Handoff page (springboard/src/shell/pages.rs:598) is a settings screen only.; Capture: no SDK capture view or delegate (AVCaptureView); the camera is a single shell app (springboard/src/shell/camera/mod.rs).; Capture events: no hardware button interaction API.; Audio input picker: audiod records (springboard/audiod/src/main.rs) but apps cannot choose a microphone through a system picker.; Content proposals, trimming and display-mode switching have no counterpart..
 
+Related: [AVFAudio](#avfaudio), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [AVFoundation (Capture, Audio)](#avfoundation-capture-audio), [CoreAudioKit](#coreaudiokit), [Media Player](#media-player).
+
 <a id="avrouting"></a>
 ### AVRouting
 
@@ -3693,6 +4035,8 @@ AVRouting lets an app add third-party media receivers to the system route picker
 
 Gaps: No system route picker or AirPlay-style destination list in the shell or SDK; No API for an app to register a third-party media receiver, its authorization, or its route activation state; No playback arbiter: apps cannot declare a preferred participant for external or non-mixable output; No discovery extension point for media receivers on the local network.
 
+Related: [AVFAudio](#avfaudio), [CoreAudioKit](#coreaudiokit), [AVKit](#avkit), [Network Extension](#network-extension), [Audio Toolbox](#audio-toolbox).
+
 <a id="cinematic"></a>
 ### Cinematic
 
@@ -3710,6 +4054,8 @@ Cinematic reads and edits depth-of-field video recorded by Apple's Cinematic mod
 | Still-image shallow depth of field | CNImageRenderingSession, CNImageRenderingSessionConfiguration | springboard/apps/photocraft-desktop (photo app, no depth-of-field rendering found) | n/a | Metal-based SDoF rendering with no BifrOSt counterpart |
 
 Gaps: Cinematic-mode asset reading and editing: no Apple Cinematic metadata or asset format on BifrOSt; Depth-of-field and focus-point rendering on video or stills.
+
+Related: [Core Image](#core-image), [Video Toolbox](#video-toolbox), [Immersive Media Support](#immersive-media-support), [Media Intelligence](#media-intelligence), [Core AI](#core-ai).
 
 <a id="core-audio"></a>
 ### Core Audio
@@ -3738,6 +4084,8 @@ BifrOSt covers speaker playback, microphone capture and volume through an ALSA a
 
 Gaps: Per-process audio tap: capture the output of a process or a set of processes (AudioHardwareTap, CATapDescription).; Virtual audio device and driver plug-in (Audio Server Plug-in, AudioHardwarePlugin) or an app-facing loopback device.; Aggregate devices that combine several inputs and outputs with synchronized clocks (AudioHardwareAggregateDevice).; App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).; Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener).; Process object list with per-process audio state (AudioHardwareProcess)..
 
+Related: [Core Audio Types](#core-audio-types), [CoreAudioKit](#coreaudiokit), [Audio Toolbox](#audio-toolbox), [AVFAudio](#avfaudio), [Audio Unit](#audio-unit).
+
 <a id="core-audio-types"></a>
 ### Core Audio Types
 
@@ -3762,6 +4110,8 @@ Core Audio Types is a set of C data types (buffers, channel layouts, timestamps,
 | Audio service boundary | Not part of the framework (Core Audio HAL and AudioUnit) | springboard/audiod/src/main.rs (the audio service owns the speaker and microphone); springboard/src/media/capture.rs (ALSA capture to S16 WAV) | OS only | The service and its wire protocol exist, but the SDK exposes no Core Audio types or audio API to apps. Apps reach audio only through the service. |
 
 Gaps: No shared audio format description type (sample rate, channel count, bits per sample, format flags) for apps or services; formats are passed as two loose integers.; No channel layout model: channel labels and layout tags are not carried through the audio path.; No timestamp model beyond presentation and decode times in microseconds (no host time or sample time).; No buffer-list type shared between the decoders, the speaker and the capture path.; No public format or codec identifier enum; APAC is not supported.; SMPTE timecode is absent (n/a on a desktop with no timecode source)..
+
+Related: [Core Audio](#core-audio), [Audio Toolbox](#audio-toolbox), [Media Toolbox](#media-toolbox), [Core Media](#core-media), [CoreAudioKit](#coreaudiokit).
 
 <a id="core-media"></a>
 ### Core Media
@@ -3790,6 +4140,8 @@ Core Media's low-level types (sample and block buffers, CMTime, clocks and timeb
 
 Gaps: No app-facing SDK API for media samples, timing or clocks. Apps reach playback only through the audio service and the media modules.; No rational CMTime-style time type with timescale conversion, invalid and indefinite values, or time ranges.; No timebase with rate control and timers, so apps cannot drive a timeline with a rate or time jumps.; No general block buffer or memory pool for CPU-side sample data.; No text markup model for captions and subtitles.; No per-sample attachments or sample buffer notifications..
 
+Related: [Core Media I/O](#core-media-i-o), [Core Audio Types](#core-audio-types), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [Media Toolbox](#media-toolbox), [Core Video](#core-video).
+
 <a id="core-media-i-o"></a>
 ### Core Media I/O
 
@@ -3809,6 +4161,8 @@ Core Media I/O is the API for publishing custom camera devices as system extensi
 | Legacy DAL plug-ins | Device Abstraction Layer (DAL) Plug-Ins: structures, functions, enumerations, data types, errors. Apple recommends replacing them with Core Media I/O extensions. | none | n/a | DAL is an Apple-only legacy plug-in model. No counterpart on Linux. |
 
 Gaps: No SDK API for apps to enumerate cameras or open a capture stream; the V4L2 path in springboard/src/media/v4l2.rs is reachable only from the shell's Camera app.; No way for an app or service to publish a virtual camera device to other apps (no loopback or provider model).; The app sandbox (springboard/src/bare/app_policy.rs) does not grant /dev/video nodes to apps, so a sandboxed app cannot open a camera even with an SDK API.; No per-client access prompt or permission model for camera use by apps (Core Media I/O clients are system-enforced).; Camera property model (controls, attributes, state) is not exposed to apps..
+
+Related: [ImageCaptureCore](#imagecapturecore), [Core Media](#core-media), [IOKit](#iokit), [MediaExtension](#mediaextension), [AVKit](#avkit).
 
 <a id="core-midi"></a>
 ### Core MIDI
@@ -3831,6 +4185,8 @@ BifrOSt has no MIDI device I/O, no MIDI message encoding (1.0 or UMP), no MIDI d
 
 Gaps: No MIDI device I/O for apps: no client, input or output port, and no source or destination enumeration (MIDI Services).; No MIDI 1.0 or UMP message encoding and decoding; the DAW note model stores only pitch and velocity (model.rs:152).; No MIDI over Bluetooth LE (BLE MIDI service) on top of springboard/src/bare/bluetooth.rs.; No USB or hardware MIDI device hotplug, no system-level MIDI device registry, and no virtual endpoints.; No MIDI thru routing, value maps or transforms.; No MIDI network sessions.; No MIDI-CI discovery, profiles or property exchange.; No app-facing SDK API for MIDI. The SDK (springboard/sdk/src/) has no MIDI module..
 
+Related: [Core Media](#core-media), [CoreAudioKit](#coreaudiokit), [Audio Unit](#audio-unit), [Core Audio](#core-audio), [Core Media I/O](#core-media-i-o).
+
 <a id="core-video"></a>
 ### Core Video
 
@@ -3851,6 +4207,8 @@ Core Video's buffer, pool, display-timing and GPU texture layers have counterpar
 | Core Video result codes and error type | CVError, CVReturn result codes | springboard/src/gpu/error.rs | n/a | CVReturn is an Apple-specific code space; BifrOSt uses Rust Result and io::Error |
 
 Gaps: No SDK pixel buffer type (lock, base address, bytes per row, plane access) for apps; buffers exist only inside the presenter.; No display link API: apps get next_wake ticks, with no per-display output callback or refresh-period query.; No image buffer attachments: colour primaries, transfer function, YCbCr matrix and clean aperture are not carried on decoded pictures (springboard/src/media/mod.rs DmaPicture).; No app-facing pixel buffer pool with minimum count, maximum age and allocation threshold.; No texture cache API for apps to import pixel buffers as GPU textures..
+
+Related: [Metal](#metal), [Video Toolbox](#video-toolbox), [Core Graphics](#core-graphics), [Core Image](#core-image), [Core Media](#core-media).
 
 <a id="coreaudiokit"></a>
 ### CoreAudioKit
@@ -3873,6 +4231,8 @@ CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network 
 
 Gaps: No Audio Unit host: BifrOSt cannot load third-party AU plugins or show their custom views (AUViewController, AUAudioUnitViewConfiguration).; No generic audio unit view (AUGenericView) or panner view (AUPannerView) for plugins without a custom UI.; No BLE MIDI peripheral picker or local MIDI peripheral advertising (CABTMIDI* equivalents).; No network audio device browser (CANetworkBrowserWindowController equivalent) and no SDK route picker for apps.; Bluetooth audio streaming (A2DP/AVDTP) is not handled in springboard/src/bare/bluetooth.rs, so a device picker would list devices that cannot carry audio yet..
 
+Related: [Core Audio](#core-audio), [Audio Toolbox](#audio-toolbox), [AVKit](#avkit), [AVFAudio](#avfaudio), [Audio Unit](#audio-unit).
+
 <a id="devicediscoveryextension"></a>
 ### DeviceDiscoveryExtension
 
@@ -3889,6 +4249,8 @@ Apple's framework lets an app extension feed third-party media receivers into th
 | Media device discovery entitlement | Media Device Discovery Extension entitlement | springboard/src/bare/app_policy.rs (bubblewrap app sandbox) | n/a | The app sandbox exists, but it has no entitlement that lets an app add a receiver to a system picker. |
 
 Gaps: No system device picker or route picker view that lists third-party media receivers.; No discovery extension point for receivers that an app ships with its own SDK.; AirPlay & Handoff exists only as a settings page (springboard/src/shell/pages.rs:598) with no receiver discovery behind it..
+
+Related: [External Accessory](#external-accessory), [System Extensions](#system-extensions), [Accessory Access](#accessory-access), [Device Management](#device-management), [IOKit](#iokit).
 
 <a id="group-activities"></a>
 ### Group Activities
@@ -3908,6 +4270,8 @@ Group Activities (SharePlay) synchronizes app playback and state across devices 
 | System state of SharePlay | GroupStateObserver | nothing found | n/a | No system SharePlay availability to report |
 
 Gaps: No shared-session service for apps on more than one BifrOSt device; No app-facing API for starting a shared activity from the share sheet; Apple's transport depends on FaceTime, which BifrOSt does not provide.
+
+Related: [Shared with You](#shared-with-you), [Multipeer Connectivity](#multipeer-connectivity), [Core Services](#core-services), [Social](#social), [Collaboration](#collaboration).
 
 <a id="imagecapturecore"></a>
 ### ImageCaptureCore
@@ -3934,6 +4298,8 @@ ImageCaptureCore finds and controls PTP cameras and scanners over USB and import
 
 Gaps: No device browser: no API or system service that enumerates PTP cameras and scanners and reports hotplug events (ICDeviceBrowser).; No PTP or MTP transport, so no camera file listing, download, delete or tethered capture (ICCameraDevice, ICCameraFile).; No scanner transport (SANE or similar) and no scan job API (ICScannerDevice).; No per-app USB device grant to match com.apple.security.device.usb in springboard/src/bare/app_policy.rs.; Camera permission model: no usage-description string or prompt for camera access, unlike NSCameraUsageDescription.; Photos import from a device is absent; springboard/apps/photocraft-desktop has no import code in this checkout..
 
+Related: [Core Media I/O](#core-media-i-o), [Image I/O](#image-i-o), [Core Services](#core-services), [IOKit](#iokit), [AVFoundation (Capture, Audio)](#avfoundation-capture-audio).
+
 <a id="immersive-media-support"></a>
 ### Immersive Media Support
 
@@ -3952,6 +4318,8 @@ Immersive Media Support reads and writes Apple Immersive Video (AIV) metadata fo
 | AIV validation | AIVUValidator | nothing found | n/a | Validates Apple-specific AIVU files |
 
 Gaps: No Apple Immersive Video metadata reader or writer; No immersive projection or mesh rendering in springboard/src/media/.
+
+Related: [Core Media I/O](#core-media-i-o), [AVKit](#avkit), [Video Toolbox](#video-toolbox), [Core Media](#core-media), [Media Intelligence](#media-intelligence).
 
 <a id="itunes-library"></a>
 ### iTunes Library
@@ -3973,6 +4341,8 @@ Apple's framework is a read-only, legacy window onto the iTunes library (library
 
 Gaps: No SDK module exposes the Music library or playlists to other apps (no equivalent of ITLibrary).; Playlists are .m3u files readable only by the Music app; no read API, no distinguished playlists.; No library change notification; Music polls its folders instead of using fswatch.; Per-track play statistics (playCount, lastPlayedDate, rating) are not stored in the library model.; No artwork accessor for an arbitrary media file..
 
+Related: [Media Library](#media-library), [MusicKit](#musickit), [Media Player](#media-player), [Core Services](#core-services), [AppKit (App Structure)](#appkit-app-structure).
+
 <a id="media-accessibility"></a>
 ### Media Accessibility
 
@@ -3993,6 +4363,8 @@ The framework exposes system caption appearance, audible media preferences, flas
 
 Gaps: Caption appearance preferences: font, colours, opacity, edge style, window and display type, with a settings page and a change notification.; Caption and subtitle track support in the demuxers and the player (WebM drops subtitle tracks; MP4 has no text track), plus a caption renderer.; Audible media selection preferences (described video, music and sound descriptions) exposed to apps.; Flashing-light detection and dimming for video and UI, with a system setting and a change notification.; Image caption metadata API (set and read the accessibility caption of an image).; Music Haptics is n/a on PC hardware; the framework's Apple-only features are not expected to map here..
 
+Related: [Accessibility](#accessibility), [Application Services](#application-services), [Media Player](#media-player), [AVKit](#avkit), [Media Toolbox](#media-toolbox).
+
 <a id="media-intelligence"></a>
 ### Media Intelligence
 
@@ -4009,6 +4381,8 @@ Media Intelligence is an on-device analysis framework for face grouping in image
 | Errors (MediaIntelligenceError) | MediaIntelligenceError | none | Gap | No error type for media analysis, since no analysis operation exists. Non-applicable until the analysis APIs exist. |
 
 Gaps: Face detection and person grouping for images, with a query API by asset, entity or face ID; On-device ML inference runtime that the analysis requests would run on; Video highlight scoring (engaging segments) over decoded frames; Content-based keyframe selection (representative frame) beyond container sync samples; Media analysis error type.
+
+Related: [Core AI](#core-ai), [Sensitive Content Analysis](#sensitive-content-analysis), [Media Toolbox](#media-toolbox), [Core Media](#core-media), [Visual Intelligence](#visual-intelligence).
 
 <a id="media-library"></a>
 ### Media Library
@@ -4029,6 +4403,8 @@ Apple's Media Library is a read-only, deprecated Objective-C model of media sour
 | Source-specific identifiers and group types (iTunes, iPhoto, Aperture, Final Cut, GarageBand, Logic, Photos) | MLMediaSource*Identifier and *GroupTypeIdentifier constants | none | n/a | tied to Apple's apps and their libraries; these sources are deprecated in the docs, which point to PhotoKit and the iTunes Library framework |
 
 Gaps: No app-facing SDK module for read-only media collections (nothing under springboard/sdk/src covers sources, groups or objects).; No source abstraction: Music and Photos each scan their own folders with their own code (springboard/src/shell/photos/library.rs and springboard/apps/music-desktop/src/music/library.rs).; Photo scanning is in the shell (springboard/src/shell/photos/library.rs), not in the SDK, so other apps cannot reuse it.; No generic media-object attribute dictionary; metadata is fixed structs per app.; No change notification for other apps when the photo or music collection changes.; Apple's source-specific identifiers (iTunes, iPhoto, Aperture, Final Cut and similar) have no counterpart and are deprecated in the docs..
+
+Related: [iTunes Library](#itunes-library), [Media Player](#media-player), [Core Media](#core-media), [PhotoKit](#photokit), [Media Toolbox](#media-toolbox).
 
 <a id="media-player"></a>
 ### Media Player
@@ -4059,6 +4435,8 @@ Apps can play a queue, transport, shuffle, repeat and volume through the audio s
 
 Gaps: No app-facing media library: no query, filter, collection or library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.; No media picker for apps (MPMediaPickerController).; No remote command handlers for apps (MPRemoteCommandCenter); Control Center transport and hardware media keys are not exposed to apps (springboard/src/bare/input.rs:826 notes the media-key remote but does not map it).; No playlist, rating or feedback model in the SDK (MPMediaPlaylist, MPRatingCommand); favourites and playlists are private to the Music app.; No volume slider or output route picker widget for apps (MPVolumeView).; Now Playing fields cannot be set by apps beyond the audio service track; no animated artwork and no language options (MPNowPlayingInfoLanguageOption).; No playback rate control (MPChangePlaybackRateCommand)..
 
+Related: [Now Playing](#now-playing), [AVKit](#avkit), [Media Toolbox](#media-toolbox), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [Media Library](#media-library).
+
 <a id="media-toolbox"></a>
 ### Media Toolbox
 
@@ -4075,6 +4453,8 @@ Media Toolbox covers the audio processing tap API (MTAudioProcessingTap*), regis
 | Localized media type and subtype names | MTCopyLocalizedNameForMediaType, MTCopyLocalizedNameForMediaSubType | springboard/src/media/codec.rs (Kind enum, format detection only) | Gap | Codec kinds exist as an enum, but no localized display names are produced. |
 
 Gaps: Audio processing tap: no API to read or process audio from the playing mix (MTAudioProcessingTap family), and no tap point in springboard/audiod.; Format reader registration: demuxers are compiled in; no runtime registration for professional video workflow readers.; Localized media type and subtype names are not provided for apps.; Decoding and playback exist only inside the shell's media module; no SDK API lets apps drive decoding or playback directly..
+
+Related: [MediaExtension](#mediaextension), [Video Toolbox](#video-toolbox), [Audio Toolbox](#audio-toolbox), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [Core Audio Types](#core-audio-types).
 
 <a id="mediaextension"></a>
 ### MediaExtension
@@ -4095,6 +4475,8 @@ MediaExtension is an extension point that lets third-party code add format reade
 
 Gaps: No public extension point for third-party format readers, video decoders or RAW processors.; No public track reader or sample cursor API for apps; sample cursors are internal to springboard/src/media/demux/.; No RAW image processing (camera RAW decode, processing parameters) in springboard/render/src/imgdec.rs.; No property-list or manifest mechanism that registers a decoder for a four-character codec type.; No extension host or entitlement that loads a sandboxed plug-in to read a format or decode a codec.; VideoDecoder is an internal trait with one implementation; there is no second decoder or per-frame decode options..
 
+Related: [Media Toolbox](#media-toolbox), [Core Media I/O](#core-media-i-o), [Core Audio Types](#core-audio-types), [Core Media](#core-media), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing).
+
 <a id="musickit"></a>
 ### MusicKit
 
@@ -4113,6 +4495,8 @@ MusicKit is the client for Apple Music's catalog, subscriptions and tokens, whic
 | Apple Music API raw requests | MusicDataRequest, MusicDataResponse | nothing | n/a | Raw calls to the Apple Music API. Generic HTTP is in the URL session SDK (springboard/sdk/src/url.rs), but there is no Apple Music endpoint. |
 
 Gaps: No Apple Music catalog, subscription or token service; out of scope for a Linux desktop.; Apps that expect MusicKit can use the local Media Player and radio paths instead; the matrix does not treat that as parity..
+
+Related: [iTunes Library](#itunes-library), [StoreKit](#storekit), [Media Player](#media-player), [Media Library](#media-library), [ShazamKit (Media)](#shazamkit).
 
 <a id="now-playing"></a>
 ### Now Playing
@@ -4139,6 +4523,8 @@ The shell publishes whatever the audio service plays to the lock screen Now Play
 
 Gaps: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable).; No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music.; No artwork transport or animated artwork through the audio service.; No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name.; No interval skip commands and no press-and-hold fast forward or rewind through the system surface.; No playback-rate command or field in the audio service.; No feedback (like and dislike) command.; Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center..
 
+Related: [Media Player](#media-player), [Media Intents](#media-intents), [Audio Toolbox](#audio-toolbox), [AVFAudio](#avfaudio), [AVKit](#avkit).
+
 <a id="phase"></a>
 ### PHASE
 
@@ -4163,6 +4549,8 @@ PHASE is a spatial and game audio engine: 3D sources and listener, occlusion, re
 | Head tracking and personalized spatial audio | PHASEAutomaticHeadTrackingFlags, personalizing spatial audio article | none | n/a | depends on Apple headphone motion and personal HRTF data, which BifrOSt does not have |
 
 Gaps: No 3D sound: no source position, listener or orientation, and no spatialization or HRTF output; No occlusion, geometry or material acoustics; No reverb or environmental effects API; No sound event graph (switch, random, blend, container nodes) for apps; No runtime metaparameters or envelopes for changing audio over time; No groups or ducking across apps; SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable.
+
+Related: [Audio Toolbox](#audio-toolbox), [Music Understanding](#music-understanding), [Core Audio](#core-audio), [AVFAudio](#avfaudio), [Audio Unit](#audio-unit).
 
 <a id="photokit"></a>
 ### PhotoKit
@@ -4194,6 +4582,8 @@ BifrOSt has a built-in Photos app that browses a folder-based library (All Photo
 
 Gaps: No app-facing photo library API (PHPhotoLibrary): apps cannot fetch, load or create assets.; No system picker for apps: only Notes has a local camera-roll sheet that reads ~/Pictures directly.; No Live Photo support in the library or the viewer (PHLivePhoto).; No video assets in the Photos app (PHAsset video media type).; No photo editing extension point (PHContentEditingController) or project extension point.; No library change observation for apps (PHPhotoLibraryChangeObserver), and no per-asset permission grants.; Metadata is JPEG EXIF only; no extended asset metadata object for apps..
 
+Related: [VisionKit](#visionkit), [Quartz](#quartz), [AVKit](#avkit), [Media Library](#media-library), [ExtensionKit](#extensionkit).
+
 <a id="quick-look-thumbnailing"></a>
 ### Quick Look Thumbnailing
 
@@ -4214,6 +4604,8 @@ BifrOSt has a cached-thumbnail path and cache for apps (thumbnail_path, Thumbnai
 | Error reporting for thumbnail generation | QLThumbnailError, QLThumbnailError.Code, QLThumbnailErrorDomain | springboard/sdk/src/peek.rs:103 (best_representation returns Option) | Gap | A failed render returns None. No error domain or codes. |
 
 Gaps: No QLThumbnailProvider extension point for custom file types; No system-wide thumbnail display in Files, Spotlight or the search panel; No thumbnail generator for PDF, text, audio, video or Live Photo files; only the Photos app decodes images; No representation types (icon, low quality, thumbnail) and no update or completion handlers; No QLThumbnailError domain or codes.
+
+Related: [Quick Look](#quick-look), [QuickLook UI](#quicklook-ui), [Quartz](#quartz), [Image I/O](#image-i-o), [PhotoKit](#photokit).
 
 <a id="screen-saver"></a>
 ### Screen Saver
@@ -4236,6 +4628,8 @@ Apple's framework is a plug-in interface: a .saver bundle subclasses ScreenSaver
 
 Gaps: No screen saver plug-in host: no .saver bundle loading and no ScreenSaverView lifecycle (start, animate, stop).; No SDK class for ScreenSaverView, ScreenSaverDefaults or the SSRandom and SSCenteredRect helpers.; No preview or configuration sheet for screen savers in Settings.; Idle state is not exposed to apps: an app cannot learn that the system went idle or start its own idle animation.; Sleep inhibitors are read by the system but no app API lets an app hold one..
 
+Related: [Screen Time](#screen-time), [Core Animation](#core-animation), [Application Services](#application-services), [Core Services](#core-services), [Core Graphics](#core-graphics).
+
 <a id="screencapturekit"></a>
 ### ScreenCaptureKit
 
@@ -4257,6 +4651,8 @@ The system layer captures single frames: the Power plus Volume Up chord saves a 
 
 Gaps: No app-facing capture stream API (SCStream with an output delegate) in springboard/sdk/src/.; No content enumeration API for apps (SCShareableContent and its displays, applications and windows).; No content filter (SCContentFilter) for per-window or per-app capture.; No system content-sharing picker or xdg-desktop-portal screencast frontend.; No screen-recording permission flow for apps.; Screenshot API for apps is missing: the shell chord works, but apps cannot request a frame with size, scale or format options (SCScreenshotConfiguration).; No clip buffering or recording editor (SCClipBufferingOutput, SCRecordingEditor)..
 
+Related: [ReplayKit](#replaykit), [AVKit](#avkit), [ImageCaptureCore](#imagecapturecore), [Application Services](#application-services), [SceneKit](#scenekit).
+
 <a id="shazamkit"></a>
 ### ShazamKit (Media)
 
@@ -4273,6 +4669,8 @@ ShazamKit matches captured audio against Apple's Shazam music catalogue or a dev
 | Shazam library sync | SHLibrary, SHMediaLibrary | nothing found | n/a | Tied to an Apple account and the Shazam service |
 
 Gaps: No audio recognition or fingerprinting service on BifrOSt; if one were built it would need its own catalogue, which is not Apple's; No SDK API for matching captured audio against a catalogue.
+
+Related: [MusicKit](#musickit), [Media Intents](#media-intents), [Media Library](#media-library), [Audio Toolbox](#audio-toolbox), [AVKit](#avkit).
 
 <a id="sound-analysis"></a>
 ### Sound Analysis
@@ -4294,6 +4692,8 @@ Apple's framework classifies sounds (over 300 built-in labels, or a custom Core 
 
 Gaps: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path; No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream; No analysis of audio files: springboard/src/media/audiofile.rs decodes files only; No result types for time-ranged classifications with confidences, and no observer delivery to apps.
 
+Related: [Music Understanding](#music-understanding), [Speech](#speech), [Audio Toolbox](#audio-toolbox), [AVFAudio](#avfaudio), [Core Audio](#core-audio).
+
 <a id="video-subscriber-account"></a>
 ### Video Subscriber Account
 
@@ -4309,6 +4709,8 @@ The framework authenticates subscribers with TV providers and feeds subscription
 | Errors | VSError, VSErrorDomain, VSErrorInfoKey* | nothing found | n/a | Errors only exist for the provider flows above. |
 | Subscription record (deprecated) | VSSubscription | nothing found | n/a | Deprecated by Apple. |
 
+
+Related: [Authentication Services](#authentication-services), [Device Management](#device-management), [Accounts](#accounts), [AdServices](#adservices), [Media Intelligence](#media-intelligence).
 
 <a id="video-toolbox"></a>
 ### Video Toolbox
@@ -4338,6 +4740,8 @@ BifrOSt decodes H.264 and HEVC in hardware (VA-API through libavcodec, software 
 
 Gaps: Video encoding: no compression session, encoder list or encode path (only audio recording exists); An app-facing video decode API: the decoder is internal to the media stack and not in springboard/sdk; 10-bit and HDR decode, HDR metadata generation and log transfer functions; RAW and camera-native (Bayer) processing; Pixel transfer and rotation as SDK sessions for app pixel buffers; Frame processing: super resolution, frame interpolation, optical flow, motion blur, noise filter and motion estimation; Multi-pass encoding storage (frame silo, multipass storage).
 
+Related: [Media Toolbox](#media-toolbox), [Core Video](#core-video), [AVFoundation (Playback, Editing, Common)](#avfoundation-playback-editing), [Accelerate](#accelerate), [MediaExtension](#mediaextension).
+
 <a id="accelerate"></a>
 ### Accelerate
 
@@ -4364,6 +4768,8 @@ Accelerate's vector, signal, linear algebra, sparse solver, compression and ML A
 
 Gaps: No SDK module for vDSP, vImage, BNNS, compression, BLAS/LAPACK, sparse solvers or simd.; No app-facing FFT or DCT API. The only FFT is private to the DAW convolver (springboard/apps/daw/src/conv.rs).; No compressor. DEFLATE is decode-only and lives in the Books engine, and the PNG writer stores uncompressed blocks.; No general image convolution, morphology, histogram, or arbitrary-angle geometric transform API.; No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.; No neural network inference or training API for apps.; No small-vector, matrix or quaternion types exposed to the SDK..
 
+Related: [Core Image](#core-image), [Video Toolbox](#video-toolbox), [Core AI](#core-ai), [Application Services](#application-services), [Model I/O](#model-i-o).
+
 <a id="accessory-access"></a>
 ### Accessory Access
 
@@ -4383,6 +4789,8 @@ Accessory Access is a USB-only framework: an app registers listeners that match 
 
 Gaps: No USB accessory manager, so an app cannot register to watch USB devices.; No attach and detach events delivered to apps for USB devices.; No matching criteria (vendor, product or class) for selecting accessories.; No USB device permission in the app permission manifest (springboard/src/bare/app_policy.rs), and no grant flow comparable to docbroker.rs for USB.; No accessory object exposing a device's descriptors to an app..
 
+Related: [External Accessory](#external-accessory), [IOUSBHost](#iousbhost), [IOKit](#iokit), [DeviceDiscoveryExtension](#devicediscoveryextension), [Core HID](#core-hid).
+
 <a id="app-tracking-transparency"></a>
 ### App Tracking Transparency
 
@@ -4397,6 +4805,8 @@ The framework asks the person for permission before an app tracks them across ot
 | Usage description keys | NSUserTrackingUsageDescription, NSUserTrackingMarkdownUsageDescription | springboard/src/bare/app_policy.rs (permission manifest) | n/a | The manifest declares sandbox permissions such as keychain. It has no tracking key. |
 | Authorization status | ATTrackingManager.trackingAuthorizationStatus, AuthorizationStatus | nothing found | n/a | No status value to report. |
 
+
+Related: [AdSupport](#adsupport), [AdServices](#adservices), [PermissionKit](#permissionkit), [StoreKit](#storekit), [Managed App Distribution](#managed-app-distribution).
 
 <a id="apple-archive"></a>
 ### Apple Archive
@@ -4417,6 +4827,8 @@ BifrOSt has zip create and extract in the Files app and its system file layer, t
 | Encrypted archives | Apple Encrypted Archive; ArchiveEncryptionContext | none found | Gap | No encrypted archive format found in the code searched |
 
 Gaps: No SDK API for creating or extracting archives; apps cannot use the Files app zip code; No Apple Archive format (AAR) reader or writer, with its header and stream model; No multithreaded compression; the zip creator runs as a single background job; No preservation of file ownership, extended attributes or flags in archives, as far as the code shows; No encrypted archives or encryption context; No string or byte-buffer compression API.
+
+Related: [Compression](#compression), [AppKit (App Structure)](#appkit-app-structure), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Apple CryptoKit](#apple-cryptokit), [Bundle Resources](#bundle-resources).
 
 <a id="apple-cryptokit"></a>
 ### Apple CryptoKit
@@ -4443,6 +4855,8 @@ BifrOSt has SHA-256, HMAC-SHA256 and ChaCha20 inside the shell, used only to pro
 | Export compliance declaration | ITSAppUsesNonExemptEncryption, ITSEncryptionExportComplianceCode | none | n/a | App Store Connect metadata; BifrOSt's PC App Store has no equivalent key in its manifest format |
 
 Gaps: No app-facing SDK API for any hashing, cipher, MAC or signature primitive; apps can only store opaque secrets; SHA-2 is only SHA-256 and is not exposed; SHA-384, SHA-512 and SHA-3 are missing; No AES-GCM and no ChaCha20-Poly1305 with Poly1305; the shell's ChaCha20 is internal and paired with HMAC instead; No asymmetric crypto: Ed25519, X25519 and NIST curve signatures or key agreement; No HKDF, HPKE or post-quantum KEM and signatures; No typed key objects (SymmetricKey, key references) in the keychain API; No hardware-backed key source (Secure Enclave or TPM).
+
+Related: [Security](#security), [CryptoTokenKit](#cryptotokenkit), [Authentication Services](#authentication-services), [AppKit (App Structure)](#appkit-app-structure), [CloudKit](#cloudkit).
 
 <a id="authentication-services"></a>
 ### Authentication Services
@@ -4471,6 +4885,8 @@ Only secret storage has a counterpart: an app-facing keychain (generic passwords
 
 Gaps: Web authentication session: an API that opens a sign-in page in an isolated session and returns the callback URL to the app (ASWebAuthenticationSession), with a callback scheme that the shell routes to the requesting app.; Passkeys and FIDO2: a platform authenticator, public-key credential registration and assertion, and WebAuthn support in the browser (springboard/apps/browser/README.md lists WebAuthn as broken).; Shared credential store and AutoFill: keychain access groups (shared items between apps), a save-password prompt, and a credential provider for the browser and other apps.; One-time passcodes: capture and suggestion of verification codes delivered to the device.; Credential import and export in the CXF format.; Keychain access control: biometric or user-presence protection of items (already listed as a parity gap in docs/bifrost-ui.md, Keychain section)..
 
+Related: [Security](#security), [Accounts](#accounts), [Local Authentication](#local-authentication), [Core Services](#core-services), [Service Management](#service-management).
+
 <a id="cfnetwork"></a>
 ### CFNetwork
 
@@ -4496,6 +4912,8 @@ The client side of HTTP is covered by URLSession in the SDK, which streams and c
 
 Gaps: No cookie storage or URLCredential/HTTP authentication for URLSession apps (springboard/sdk/src/url.rs); No host name lookup API for apps (CFHost); the resolver stays inside springboard/src/deildu/http.rs; No proxy configuration read or applied (CFNetworkCopySystemProxySettings); No Bonjour or network service browse and register API (CFNetService); No app-facing reachability or connectivity API; springboard/src/net/ntp.rs and springboard/src/net/wifi.rs use it internally only; No network diagnostics window or API (CFNetDiagnostic); No FTP client (CFReadStreamCreateWithFTPURL); No raw HTTP message API (CFHTTPMessage) and no HTTP/2.
 
+Related: [Network](#network), [Core Foundation](#core-foundation), [System Configuration](#system-configuration), [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel), [Network Extension](#network-extension).
+
 <a id="collaboration"></a>
 ### Collaboration
 
@@ -4511,6 +4929,8 @@ Collaboration reads and edits identities in an identity authority (local or netw
 | Access control lists | Collaboration ACL use with identities | springboard/src/bare/docbroker.rs (file grants) | n/a | file grants are per-app portal grants, not identity-based ACLs |
 
 Gaps: No identity authority or directory lookup for users and groups (only the local account).; No identity picker sheet for choosing people to share with..
+
+Related: [Accounts](#accounts), [Core Services](#core-services), [Security](#security), [CloudKit](#cloudkit), [Authentication Services](#authentication-services).
 
 <a id="compression"></a>
 ### Compression
@@ -4536,6 +4956,8 @@ BifrOSt has DEFLATE and zlib decoding and a simple DEFLATE encoder, both interna
 | Scratch buffer sizing | compression_encode_scratch_buffer_size, compression_decode_scratch_buffer_size | none | n/a | tied to Apple's C buffer API; Rust Vec output needs no scratch size |
 
 Gaps: No SDK compression API for apps (no bifrost_app module for buffer, stream or filter compression); No LZFSE, LZ4, LZ4_RAW or LZMA codec in either direction; No incremental stream API (init, process, destroy) and no input or output filter types; DEFLATE encoder is fixed-Huffman only with no compression levels, so output is larger than zlib; PNG writer stores uncompressed zlib blocks (springboard/src/pngenc.rs:31), not deflate-compressed; ZLIB encoding is not provided; zlib exists only on the decode side.
+
+Related: [Apple Archive](#apple-archive), [Accelerate](#accelerate), [Image I/O](#image-i-o), [Video Toolbox](#video-toolbox), [Core Foundation](#core-foundation).
 
 <a id="core-bluetooth"></a>
 ### Core Bluetooth
@@ -4564,6 +4986,8 @@ Core Bluetooth is the app-facing API for BLE central and peripheral roles, GATT 
 
 Gaps: No app-facing SDK module for BLE central or peripheral roles (no CBCentralManager or CBPeripheralManager equivalent in springboard/sdk/src).; No GATT client: service and characteristic discovery, read, write and notify, plus descriptors.; No GATT server: advertising services and answering ATT requests.; No advertisement data beyond name, RSSI and the audio flag, and no service-UUID filter on scans.; No typed CBUUID, CBError or ATT error values reach apps; errors are only Settings text.; No Channel Sounding support.; No Bluetooth background policy for apps and no permission grant for Bluetooth access.; docs/bifrost-ui.md has no Bluetooth or Core Bluetooth section, and no services doc lists a Bluetooth service (docs/services.md does not exist)..
 
+Related: [IOBluetooth](#iobluetooth), [IOBluetooth UI](#iobluetooth-ui), [External Accessory](#external-accessory), [IOKit](#iokit), [CoreAudioKit](#coreaudiokit).
+
 <a id="core-hid"></a>
 ### Core HID
 
@@ -4583,6 +5007,8 @@ Core HID is a user-space API for discovering HID devices, reading their element 
 | Discovery from the command line | Discovering HID devices from Terminal (article) | none; the shell's control port (springboard/src/bare/control.rs) exposes state, not device lists | Partial | A diagnostic dump of input devices exists only through the system layer and the observe tool. No documented command lists devices and their roles for a user. |
 
 Gaps: No app-facing device manager: no SDK API lists HID devices, filters them by usage page or vendor, or reports hotplug to an app.; No report descriptor parsing (HIDElement, HIDElementCollection), so apps cannot read arbitrary HID devices such as custom controllers or instruments.; No output reports or feature reports (LED, force feedback, configuration) to devices.; No virtual HID device API for apps; the only virtual device is the agent uinput keyboard.; Transport and localization codes are not modelled..
+
+Related: [HIDDriverKit](#hiddriverkit), [IOKit](#iokit), [IOUSBHost](#iousbhost), [Game Controller](#game-controller), [IOBluetooth](#iobluetooth).
 
 <a id="core-services"></a>
 ### Core Services
@@ -4614,6 +5040,8 @@ Launch Services (default app lookup, opening items in another app, URL schemes) 
 
 Gaps: Apple Events: no typed inter-app messages with reply descriptors; the control socket and intents do not replace them.; File metadata: no attribute store or MDQuery-style query API for apps.; Dictionary Services: no definition lookup (spellcheck.rs covers spelling only).; Backup Core: no per-item backup exclusion.; Identity Services: no user or group API for apps.; File system events: no persistent event IDs, so a change stream cannot replay events after a restart.; Launch Services: no role handlers, shared file lists or quarantine properties.; Search Kit: the per-app content index has no term-level or summarization API.; Docs mismatch: docs/bifrost-ui.md names the FSEvents module fsevents; the code module is springboard/sdk/src/fswatch.rs..
 
+Related: [Application Services](#application-services), [Security](#security), [Foundation (App Support)](#foundation-app-support), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Bundle Resources](#bundle-resources).
+
 <a id="core-telephony"></a>
 ### Core Telephony
 
@@ -4631,6 +5059,8 @@ Core Telephony exposes the home cellular carrier, eSIM provisioning, subscriber 
 | Network slicing | CTSlicingManager | none | n/a | Carrier 5G feature, no counterpart |
 | Errors | CTError | none | n/a | Follows from the feature rows above |
 
+
+Related: [System Configuration](#system-configuration), [Network Extension](#network-extension), [Core Services](#core-services), [Core WLAN](#core-wlan), [Network](#network).
 
 <a id="core-wlan"></a>
 ### Core WLAN
@@ -4657,6 +5087,8 @@ The Wi-Fi system layer covers most of what CoreWLAN reads and changes (interface
 
 Gaps: No app-facing SDK API: springboard/sdk/src/ has no network module, so apps cannot list interfaces, scan, join or read status.; Typed event delegate: netd sends one Status snapshot, not per-event callbacks (ssid, bssid, link, power, scan cache, mode, country code, link quality).; Channel, band, width and PHY mode are not decoded (ScanResult keeps freq only).; Access-point and IBSS configuration and channel setting are absent.; Wi-Fi keychain domain and EAP identity list do not exist; passwords live in the config file.; WEP and WPA-only personal security types are not supported (Security enum).; Link quality beyond RSSI (noise, transmit rate) is not reported..
 
+Related: [System Configuration](#system-configuration), [Network](#network), [Network Extension](#network-extension), [Core Services](#core-services), [Core Bluetooth](#core-bluetooth).
+
 <a id="cryptotokenkit"></a>
 ### CryptoTokenKit
 
@@ -4677,6 +5109,8 @@ CryptoTokenKit covers smart cards, token drivers and token authentication, none 
 | Errors | TKError, TKErrorDomain, TKError.Code | springboard/sdk/src/keychain.rs (keychain Error enum only) | Gap | No CryptoTokenKit error domain. The keychain error type covers generic-password results only. |
 
 Gaps: No smart card reader or slot layer (PC/SC equivalent) in springboard/src/bare/ or anywhere else in the repo.; No token driver or app extension mechanism for hardware tokens.; No way to store, list or use keys or certificates held by a token (keychain is generic-password only, per docs/bifrost-ui.md 'Keychain' section).; No token-based login or two-factor factor for springboard/src/shell/login.rs.; No token registration or managed-device policy for token authentication.; No persistent or HSM token support..
+
+Related: [Apple CryptoKit](#apple-cryptokit), [Security](#security), [Authentication Services](#authentication-services), [CloudKit](#cloudkit), [Security Interface](#security-interface).
 
 <a id="darwin-notify"></a>
 ### Darwin Notify
@@ -4701,6 +5135,8 @@ Darwin Notify is a system-wide, name-keyed notification facility with integer to
 
 Gaps: No system-wide named notifications from the kernel or system services (time zone, clock, mount, network, disk space) to apps.; No notify_check, notify_register_signal, notify_set_state or notify_get_state equivalents.; No suspend or resume of observers, and no hold-for-later delivery to apps that are not running.; Observers always run on the main thread; no caller-chosen dispatch queue.; Broadcast payloads are string to string with a 32-entry and 1024-character cap per value..
 
+Related: [User Notifications](#user-notifications), [Dispatch](#dispatch), [Foundation (App Support)](#foundation-app-support), [User Notifications UI](#user-notifications-ui), [Endpoint Security](#endpoint-security).
+
 <a id="device-management"></a>
 ### Device Management
 
@@ -4718,6 +5154,8 @@ Apple's MDM framework is a server-side enterprise protocol for remotely managing
 | Deployment services | Device assignment, Roster management, App Book and Subscription Management, Apple School Manager and Apple Business APIs (Deployment services topic) | nothing found | n/a | Apple-only enterprise service APIs |
 
 Gaps: No MDM or enterprise device-management service exists in BifrOSt; this is out of scope for a Linux desktop unless the product adds fleet management..
+
+Related: [DeviceCheck](#devicecheck), [Authentication Services](#authentication-services), [Core Services](#core-services), [Service Management](#service-management), [DeviceDiscoveryExtension](#devicediscoveryextension).
 
 <a id="disk-arbitration"></a>
 ### Disk Arbitration
@@ -4739,6 +5177,8 @@ BifrOSt has no mount, unmount, eject or disk-appearance API for apps, and no reg
 
 Gaps: No disk mount, unmount, eject or appearance events for apps or shell (DARegister*Callback family).; No mount, unmount or eject approval hook, so nothing can block a volume change (DADissenter).; No app-facing disk or volume object with its description (DADisk, DADiskCopyDescription).; Files does not show mounted volumes or a Volumes sidebar section; document grants are confined to the account home.; No disk claim (DADiskClaim) for exclusive access.; The installer's lsblk and umount calls are not reusable by apps. Apple's framework runs on a daemon, which BifrOSt has no equivalent for..
 
+Related: [FSKit](#fskit), [Core Services](#core-services), [System](#system), [DiskImageKit](#diskimagekit), [Security](#security).
+
 <a id="diskimagekit"></a>
 ### DiskImageKit
 
@@ -4759,6 +5199,8 @@ DiskImageKit creates, opens and stacks disk images (ASIF, RAW, layered) for Virt
 | Error types | IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError | none | Gap | Depends on the create, open and stack APIs above. |
 
 Gaps: No SDK API to create, open or mount disk image files (RAW or ISO) for apps. Apps cannot do what DiskImageKit does for a user opening an ISO or disk image in Files.; Files has no ISO or image mount action, and no removable or mounted-volume eject path (springboard/apps/files/src).; No loop-device or userspace mount service in the system layer exposed to apps. The loop mount in tools/arch-vm.sh is developer tooling only.; No image metadata, resize or block-size API.; ASIF and stacked-layer formats are Apple-only. Their status is n/a, and a Linux format would need its own design..
+
+Related: [Image I/O](#image-i-o), [Disk Arbitration](#disk-arbitration), [Virtualization](#virtualization), [FSKit](#fskit), [Hypervisor](#hypervisor).
 
 <a id="dispatch"></a>
 ### Dispatch
@@ -4791,6 +5233,8 @@ Queues (main, global per QoS, serial), groups, work items, QoS, delayed and leew
 
 Gaps: DispatchSource beyond memory pressure: no timer, read, write, signal or process sources, and no cancel, suspend or resume (docs/bifrost-ui.md:1095); DispatchIO channels and DispatchData buffers; Barriers on concurrent queues and target queues (setTarget); concurrentPerform and asyncAndWait; dispatch_once and dispatchPrecondition wrappers (std::sync::OnceLock is used directly); DispatchSemaphore (docs decide on std::sync or a group instead); DispatchWorkloop is Darwin-only (n/a); DispatchQoS default and unspecified levels are not exposed; Doc inconsistency: docs/bifrost-ui.md:1095 says there is no DispatchSource, but springboard/sdk/src/dispatch.rs:744 provides one memory-pressure source; the doc should say so.
 
+Related: [Darwin Notify](#darwin-notify), [Combine](#combine), [Swift](#swift), [Synchronization](#synchronization), [os](#os).
+
 <a id="dnssd"></a>
 ### dnssd
 
@@ -4815,6 +5259,8 @@ The dnssd C API (DNS-SD over mDNS and unicast DNS) has no BifrOSt counterpart. T
 
 Gaps: No app-facing DNS-SD API: apps cannot browse, resolve or advertise arbitrary service types (for example _ipp._tcp or _airplay._tcp).; No mDNS on port 5353 and no DNS-SD PTR/SRV/TXT records, so ordinary LAN devices cannot find BifrOSt and BifrOSt cannot find them.; No TXT record encoding or parsing.; No DNSServiceRef-style connection to a discovery daemon, and no dispatch-queue integration for discovery callbacks.; No NAT port mapping (NAT-PMP, PCP or UPnP) and no domain enumeration.; The share beacon (springboard/src/net/share.rs) is a BifrOSt-only protocol with a fixed secret model. It could be the base for a DNS-SD-compatible layer, but that is a separate decision..
 
+Related: [Network](#network), [System Configuration](#system-configuration), [Network Extension](#network-extension), [Multipeer Connectivity](#multipeer-connectivity), [Core Services](#core-services).
+
 <a id="driverkit"></a>
 ### DriverKit
 
@@ -4831,6 +5277,8 @@ DriverKit is Apple's framework for user-space device drivers that ship as app ex
 | Driver entitlements and user-client access | com.apple.developer.driverkit entitlements, IOUserClient | app sandbox (springboard/src/bare/app_policy.rs) | n/a | entitlements gate Apple driver extensions; BifrOSt's sandbox does not expose device access to apps |
 
 Gaps: No user-space driver framework; hardware support is only in the kernel and the trusted shell; No app-facing device access API beyond the existing sandbox grants (app_policy.rs).
+
+Related: [IOKit](#iokit), [PCIDriverKit](#pcidriverkit), [Kernel](#kernel), [HIDDriverKit](#hiddriverkit), [FSKit](#fskit).
 
 <a id="endpoint-security"></a>
 ### Endpoint Security
@@ -4862,6 +5310,8 @@ BifrOSt has no system security event client. Its app lifecycle notifications and
 
 Gaps: No system-level security event client: nothing connects to the kernel or the shell to receive process, file and session events.; No authorization hook: nothing can allow or deny an exec, open or mount before it happens.; Process events are limited to app launch and terminate from the shell; no exec arguments, environment, file descriptors, parent chain or processes outside the shell.; File events are content changes only, with no process attribution and no metadata, xattr or ACL events.; No mount, memory-mapping, ptrace, remote-thread, credential-change or code-signing events.; Login, sudo, SSH and screen-sharing sessions are logged but not published as events.; docs/bifrost-ui.md names the file watcher FSEventStream in bifrost_app::fsevents, but the code is springboard/sdk/src/fswatch.rs (WatchStream). The docs need correcting..
 
+Related: [Core Services](#core-services), [Security](#security), [FSKit](#fskit), [System](#system), [Application Services](#application-services).
+
 <a id="exception-handling"></a>
 ### Exception Handling
 
@@ -4883,6 +5333,8 @@ Apple's framework is one Objective-C class, NSExceptionHandler, that installs an
 
 Gaps: No app-facing SDK API to install a panic or uncaught-failure handler, or to read crash.log entries from an app; No per-failure delegate decision (shouldHandle / shouldLogException) and no handling or logging mask; No debugger-halt policy for selected failures; a panic aborts the release build after the hook writes; Panic isolation exists only in SDK dispatch and shell job pools, not for arbitrary app code.
 
+Related: [CrashReportExtension](#crashreportextension), [os](#os), [SafetyKit](#safetykit), [Endpoint Security](#endpoint-security), [Dispatch](#dispatch).
+
 <a id="execution-policy"></a>
 ### Execution Policy
 
@@ -4898,6 +5350,8 @@ Apple's framework lets a developer tool ask the user for an exception so that lo
 | Error reporting (EPError, EPErrorDomain) | EPError, EPErrorDomain | springboard/src/bare/app_policy.rs | Partial | Launch failures return io errors inside the shell. No typed, app-facing error domain exists for policy failures. |
 
 Gaps: No app-facing API for developer-tool access requests (EPDeveloperTool); decide with the owner whether a sideload or local-build trust prompt is wanted at all, since the current design has no exception path; Policy launch failures are not exposed to apps as a typed error domain (EPError, EPErrorDomain equivalent).
+
+Related: [Security](#security), [Core Services](#core-services), [LightweightCodeRequirements](#lightweightcoderequirements), [Exception Handling](#exception-handling), [Endpoint Security](#endpoint-security).
 
 <a id="external-accessory"></a>
 ### External Accessory
@@ -4919,6 +5373,8 @@ Apple's framework connects apps to MFi hardware over Lightning, 30-pin or Blueto
 
 Gaps: No SDK accessory manager or connect/disconnect events for apps (EAAccessoryManager).; No app-facing accessory object with protocol strings, manufacturer, model and connection ID (EAAccessory).; No EASession byte stream for a declared accessory protocol, and no manifest key or sandbox grant for accessory protocols (app_policy.rs binds only /dev/snd and /dev/dri).; No Bluetooth accessory picker callable from an app; the picker exists only in Settings (shell/pages.rs bluetooth_spec).; No Wi-Fi unconfigured accessory browser or configuration flow.; Bluetooth device state (springboard/src/bare/bluetooth.rs Device) is not surfaced through any SDK type..
 
+Related: [Accessory Access](#accessory-access), [IOBluetooth](#iobluetooth), [Core Bluetooth](#core-bluetooth), [IOKit](#iokit), [IOBluetooth UI](#iobluetooth-ui).
+
 <a id="finder-sync"></a>
 ### Finder Sync
 
@@ -4939,6 +5395,8 @@ Finder Sync lets a third-party extension add badges, shortcut menus and toolbar 
 
 Gaps: No file-manager extension point: apps cannot add badges, context-menu items or toolbar buttons to Files.; No selection or targeted-folder API for other apps to query the file manager.; No per-item tag, last-used or attribute sharing with the file manager.; No extension host or enable UI for file-manager plugins.; fswatch gives change events but no per-folder observe begin or end signal tied to the file manager view..
 
+Related: [File Provider](#file-provider), [Foundation (Files and Data Persistence)](#foundation-files-persistence), [Core Services](#core-services), [File Provider UI](#file-provider-ui), [FSKit](#fskit).
+
 <a id="force-feedback"></a>
 ### Force Feedback
 
@@ -4958,6 +5416,8 @@ Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDown
 | Keyboard haptics setting (not force feedback) | Not part of Force Feedback | springboard/src/bare/vibrator.rs:6 (probes /sys/class/leds/vibrator and /sys/class/timed_output/vibrator); springboard/src/shell/options.rs:47 (keyboard_haptics); springboard/src/shell/pages.rs:858 (Sounds switch) | Partial | a Settings switch only shown when a sysfs vibrator node exists; it does not drive any force-feedback device or effect |
 
 Gaps: No evdev force-feedback path: EV_FF is not read, no EVIOCSFF effect upload, no play events (springboard/src/bare/input.rs has no EV_FF; grep count 0).; No device-level FF discovery or capability query for wheels and joysticks (springboard/src/bare/input.rs:299 parses bitmaps but not the FF bit).; No SDK API for effects (constant, periodic, ramp, spring and friction) or for gain and autocenter properties.; The SDK haptic() call is dropped by the shell (springboard/src/shell/apphost.rs:1184 default arm); there is no feedback path from an app to a device.; Web gamepad input is compiled into the browser engine (springboard/apps/browser/engine/Cargo.toml:13, feature gamepad). Whether vibration actuators reach a device was not verified, and this is not covered by this framework row.; The MCP uinput virtual keyboard (springboard/mcp/src/keys.rs:28) sets ff_effects_max in its setup struct for the agent keyboard only; it does not create or drive a force-feedback device..
+
+Related: [HIDDriverKit](#hiddriverkit), [Accessibility](#accessibility), [Game Controller](#game-controller), [Core HID](#core-hid), [Application Services](#application-services).
 
 <a id="fskit"></a>
 ### FSKit
@@ -4980,6 +5440,8 @@ Apple's FSKit lets an app extension run a file system module in user space and m
 | Entitlement and sandbox | com.apple.developer.fskit.fsmodule entitlement | springboard/src/bare/app_policy.rs (bubblewrap app sandbox) | n/a | The entitlement is an Apple distribution control with no counterpart. App isolation exists in app_policy.rs. |
 
 Gaps: No user-space file system module API: no way for an app to ship and mount a file system, the core of FSKit; No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps; No probe, mount or maintenance request path for apps or daemons (FSClient equivalent); No FSTask-style channel from a file system module to the shell for log and completion events; Mounted volumes are missing from the file panel sidebar (docs/bifrost-ui.md, file panel section).
+
+Related: [System](#system), [File Provider](#file-provider), [Disk Arbitration](#disk-arbitration), [Core Services](#core-services), [IOKit](#iokit).
 
 <a id="gss"></a>
 ### GSS
@@ -5004,6 +5466,8 @@ Apple's GSS framework is the GSS-API (RFC 2743/2744) for Kerberos-style authenti
 
 Gaps: No GSS-API (RFC 2743/2744) implementation: no security contexts, credentials, names, tokens or message protection.; No Kerberos (krb5) client or ticket cache, so enterprise Kerberos sign-in and SPNEGO/Negotiate HTTP auth are unavailable to apps.; No SDK API for app-level GSS credentials; the keychain (springboard/sdk/src/keychain.rs) stores generic passwords only.; No mechanism or name registry (gss_indicate_mechs, GSSCreateName), so apps cannot select or compare authentication mechanisms.; Wi-Fi Enterprise (EAP) credentials in springboard/src/net/wifi_config.rs are a separate 802.1X path and are not a GSS counterpart..
 
+Related: [Security](#security), [Core Services](#core-services), [Authentication Services](#authentication-services), [Endpoint Security](#endpoint-security), [Application Services](#application-services).
+
 <a id="hiddriverkit"></a>
 ### HIDDriverKit
 
@@ -5026,6 +5490,8 @@ BifrOSt reads human interface devices (keyboards, touch, pointers, lid and jack 
 
 Gaps: No app-facing API for raw HID reports, elements or usage tables; Stylus and pen data (pressure, tilt, eraser) is not decoded; Touch decoding tracks only the first contact (slot 0); No app-facing device matching or hotplug notification by HID usage; Synthetic input exists only for touch gestures, with no general virtual HID device API.
 
+Related: [Core HID](#core-hid), [IOKit](#iokit), [DriverKit](#driverkit), [IOBluetooth](#iobluetooth), [IOUSBHost](#iousbhost).
+
 <a id="hypervisor"></a>
 ### Hypervisor
 
@@ -5046,6 +5512,8 @@ Apple's Hypervisor framework is a C API that lets sandboxed user-space apps crea
 | Developer test rig: Arch Linux guest under QEMU/KVM | not applicable (Apple's framework is an app API) | tools/arch-vm.sh, tools/vm-install.sh, tools/vm-cycle.py, docs/arch-x86-vm.md | OS only | Developer tooling only. It runs the shell on tty1 in a KVM guest. It is not an SDK feature and no app can use it. |
 
 Gaps: No app-facing VM API. Decision: a desktop SDK does not expose hypervisors to apps, so the Hypervisor framework is marked n/a rather than gap. Revisit only if a VM-hosting app (for example a Linux VM app) is planned.; The shell cannot report whether KVM or a hypervisor is available. host.rs covers CPU and memory statistics only..
+
+Related: [Virtualization](#virtualization), [vmnet](#vmnet), [Paravirtualized Graphics](#paravirtualized-graphics), [Kernel](#kernel), [DriverKit](#driverkit).
 
 <a id="inputmethodkit"></a>
 ### InputMethodKit
@@ -5072,6 +5540,8 @@ BifrOSt covers the client side of composition: an app text field draws marked te
 | Enumerations, constants and data types | IMKCandidatePanelType, IMKStyleType, InputMethodKit Enumerations and Constants | springboard/proto/src/lib.rs (InputTraits, ReturnKeyType, TextContentKind) | Partial | Text input traits are covered. No candidate or style enumerations exist. |
 
 Gaps: No input method provider: no IMKServer, IMKInputController or input method registration (springboard/src/shell/textinput.rs header).; No candidates window (IMKCandidates); popup_origin in springboard/src/shell/textinput.rs only places a popup, and nothing draws it.; The keyboard app does not send Preedit yet (springboard/apps/keyboard), so composition is not produced by anything in practice.; No IMKServerInput event routing (inputText, didCommand, handle) through a provider; no composedString, originalString or candidates queries.; No IMKMouseHandling hook and no IMKStateSetting input-mode state..
+
+Related: [Application Services](#application-services), [AppKit (User Interactions)](#appkit-user-interactions), [HIDDriverKit](#hiddriverkit), [Accessibility](#accessibility), [IOKit](#iokit).
 
 <a id="iobluetooth"></a>
 ### IOBluetooth
@@ -5100,6 +5570,8 @@ The shell drives the radio (power, discovery, Just Works pairing, connect, disco
 
 Gaps: No app-facing Bluetooth SDK module: nothing under springboard/sdk/src/ covers Bluetooth.; No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).; No hands-free (call control) profile.; No app API to open L2CAP channels to arbitrary PSMs or receive device events.; Pairing has no user-entered PIN or passkey flow; only Just Works and a fixed "0000" legacy PIN are handled.; No HID device counts or ignore controls exposed to apps..
 
+Related: [Core Bluetooth](#core-bluetooth), [IOBluetooth UI](#iobluetooth-ui), [IOKit](#iokit), [External Accessory](#external-accessory), [IOUSBHost](#iousbhost).
+
 <a id="iobluetooth-ui"></a>
 ### IOBluetooth UI
 
@@ -5118,6 +5590,8 @@ BifrOSt pairs, connects and forgets Bluetooth devices from the Settings Bluetoot
 | Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType) | IOBluetoothUI Enumerations, Constants, Functions; struct BluetoothKeyboardReturnType; IOBluetoothUIUserLib.h | springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth) | Partial | Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart. |
 
 Gaps: No app-facing SDK API for Bluetooth pairing, device choice or status: the pairing and device list live only in the Settings Bluetooth page (springboard/src/shell/pages.rs).; No reusable device selector sheet or panel (IOBluetoothDeviceSelectorController).; No passkey or numeric comparison pairing: pairing is hardwired to NoInputNoOutput (springboard/src/bare/bluetooth.rs:68-69), so devices that need a PIN or passkey cannot pair.; No SDP service browser: no service list or UUID-filtered selection (IOBluetoothServiceBrowserController).; No Bluetooth object push or file transfer (IOBluetoothObjectPushUIController). springboard/src/net/share.rs covers LAN sharing only.; No UUID filter for pairing (addAllowedUUID and clearAllowedUUIDs).; The Apple reference types (BluetoothKeyboardReturnType, the IOBluetoothUI constants and functions) have no BifrOSt counterpart..
+
+Related: [IOBluetooth](#iobluetooth), [Core Bluetooth](#core-bluetooth), [IOKit](#iokit), [Application Services](#application-services), [External Accessory](#external-accessory).
 
 <a id="iokit"></a>
 ### IOKit
@@ -5147,6 +5621,8 @@ IOKit's device-access layer exists on BifrOSt only in the Linux system layer (sy
 
 Gaps: No SDK API for enumerating devices by class or matching criteria (IOServiceGetMatchingServices equivalent).; No device add or remove notification for apps; the shell polls /dev/input and sysfs.; No general registry property API for apps (IORegistryEntryGetProperty equivalent).; No app-facing driver-call or shared-memory interface (IOConnectCallMethod, IODataQueue equivalent).; Serial-port enumeration and modem open (IOSerialPort sample) do not exist.; Battery state is not exposed to apps (IOPowerSources equivalent); only the shell reads it.; Thermal state has no change notification (IOKit thermal notifications equivalent)..
 
+Related: [DriverKit](#driverkit), [HIDDriverKit](#hiddriverkit), [IOBluetooth](#iobluetooth), [IOUSBHost](#iousbhost), [Kernel](#kernel).
+
 <a id="iosurface"></a>
 ### IOSurface
 
@@ -5173,6 +5649,8 @@ The system layer shares buffers across processes with memfd and fd passing, and 
 
 Gaps: No app-facing SDK type for a shared buffer: apps cannot create, lock, or share an IOSurface-like object.; No global ID registry or lookup by ID between processes.; No per-buffer attributes (key-value store, colour space, ICC profile).; No use counts, in-use query, or buffer-level purgeability.; No CPU write lock API, and no selectable cache mode.; Zero-copy frames from the engine into the window pool (dma-buf from a GPU context) are not done..
 
+Related: [Core Video](#core-video), [Model I/O](#model-i-o), [IOKit](#iokit), [Metal](#metal), [Core Graphics](#core-graphics).
+
 <a id="iousbhost"></a>
 ### IOUSBHost
 
@@ -5195,6 +5673,8 @@ IOUSBHost is Apple's framework for user-space host-mode USB drivers that let app
 
 Gaps: No app-facing API to claim a USB device, read descriptors or send control, bulk, interrupt or isochronous requests (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).; The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.; No scanner API and no USB transport for printers (springboard/sdk/src/print.rs).; Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap..
 
+Related: [IOKit](#iokit), [Accessory Access](#accessory-access), [Core Media I/O](#core-media-i-o), [IOBluetooth](#iobluetooth), [HIDDriverKit](#hiddriverkit).
+
 <a id="kernel"></a>
 ### Kernel
 
@@ -5213,6 +5693,8 @@ Kernel covers kernel extensions (kexts), the IOKit base classes for in-kernel dr
 
 Gaps: No SDK API for app code to talk to a driver or read device state from the kernel; hardware access sits in the shell and daemons (springboard/src/bare/).; No kernel-level debugging workflow comparable to Apple's kext debugging (not needed for an app SDK, recorded for completeness)..
 
+Related: [IOKit](#iokit), [DriverKit](#driverkit), [Core Services](#core-services), [Core Media I/O](#core-media-i-o), [Application Services](#application-services).
+
 <a id="latent-semantic-mapping"></a>
 ### Latent Semantic Mapping (System)
 
@@ -5225,6 +5707,8 @@ Apple's legacy C API that classifies text into developer-defined categories by l
 | Text classification maps | LSMMap, LSMText, LSMResult | nothing found | n/a | category maps built from text; no BifrOSt API or service |
 | Error handling | Error Codes | nothing found | n/a | framework-specific error codes; nothing to map |
 
+
+Related: [Natural Language](#natural-language), [Foundation Models](#foundation-models), [ML Compute (System)](#ml-compute), [Core AI](#core-ai), [Sensitive Content Analysis](#sensitive-content-analysis).
 
 <a id="lightweightcoderequirements"></a>
 ### LightweightCodeRequirements
@@ -5245,6 +5729,8 @@ Apple's framework tests the signed identity of code on disk and of running or la
 | Requirement-building operators and errors | allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder | none | Gap | There is no requirement DSL or constraint builder. Apps have no way to express identity tests. |
 
 Gaps: No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8)..
+
+Related: [Security](#security), [Core Services](#core-services), [Bundle Resources](#bundle-resources), [Local Authentication](#local-authentication), [Application Services](#application-services).
 
 <a id="local-authentication"></a>
 ### Local Authentication
@@ -5268,6 +5754,8 @@ BifrOSt checks a device-owner password at login and unlock (PAM through the root
 
 Gaps: No biometric authentication (Touch ID, Face ID, fingerprint). Nothing in the shell or SDK; fprint, fprintd and howdy are absent.; No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).; Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).; No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).; No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants)..
 
+Related: [Local Authentication Embedded UI](#local-authentication-embedded-ui), [Security](#security), [Authentication Services](#authentication-services), [Accounts](#accounts), [Security Interface](#security-interface).
+
 <a id="local-authentication-embedded-ui"></a>
 ### Local Authentication Embedded UI
 
@@ -5284,6 +5772,8 @@ Apple's framework is one graphical view (LAAuthenticationView) that shows the st
 | Custom authentication UI around the system check | Building a custom auth interface around the view (framework default UI is system-managed) | springboard/src/shell/login.rs (capsule password field, Backend::authenticate); springboard/src/privd/auth.rs; docs/privd-protocol.md | Partial | custom login UI exists, but only password checks run through privd; no biometric or paired-device unlock |
 
 Gaps: No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: "no biometric or paired-device unlock").; No SDK API equivalent to an authentication context or to LAAuthenticationView, and no control size token for it.; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists..
+
+Related: [Local Authentication](#local-authentication), [Authentication Services](#authentication-services), [Security Interface](#security-interface), [Security](#security), [Accounts](#accounts).
 
 <a id="metrickit"></a>
 ### MetricKit
@@ -5313,6 +5803,8 @@ BifrOSt records crashes, UI stalls and slow frames at system level and shows the
 
 Gaps: No app-facing report API: no MXMetricManager equivalent delivers daily metric reports or diagnostic reports to an app.; No per-app metric collection beyond ProcessInfo counters: time-in-use, launch and resume timing, network, disk and GPU totals are not kept per app.; Crash and hang records are one-line log entries with no structured call-stack tree (CallStackTree, CallStackThread, CallStackFrame) available to apps.; No exception diagnostics for memory or CPU limit kills, and no termination counts by category.; No signposter (mxSignpost, SignpostIntervalMetric): signposts and spin reports remain planned in docs/milestone-unified-logging.md.; No per-process energy impact or pixel luminance metric..
 
+Related: [StateReporting](#statereporting), [CrashReportExtension](#crashreportextension), [os](#os), [IOKit](#iokit), [Application Services](#application-services).
+
 <a id="ml-compute"></a>
 ### ML Compute (System)
 
@@ -5327,6 +5819,8 @@ Apple's neural network training framework over BNNS and Metal Performance Shader
 | Layers | MLC layers (Layers collection) | nothing found | n/a | neural network layer graph; no counterpart in SDK or ui |
 | Training and validation | Training and Validation collection | nothing found | n/a | graph training on CPU and GPU; deprecated upstream and out of scope for a desktop shell |
 
+
+Related: [Core ML](#core-ml), [Core AI](#core-ai), [Create ML](#create-ml), [Compute Graph](#compute-graph), [Evaluations](#evaluations).
 
 <a id="nearby-interaction"></a>
 ### Nearby Interaction
@@ -5345,6 +5839,8 @@ Nearby Interaction measures the distance and direction of peers with the Ultra W
 | Downlink time difference of arrival ranging | DL-TDOA anchor ranging (articles) | none | n/a | Anchor-based indoor positioning needs UWB anchors. |
 | Errors | NIError, NIErrorDomain | none | n/a | Error domain only exists with the framework. |
 
+
+Related: [Core Location](#core-location), [Network](#network), [Multipeer Connectivity](#multipeer-connectivity), [Network Extension](#network-extension), [Matter](#matter).
 
 <a id="network"></a>
 ### Network
@@ -5372,6 +5868,8 @@ Apps get HTTP(S) requests through URLSession-style APIs, which cover the common 
 
 Gaps: No app-facing raw TCP or UDP connection API (NWConnection, NWParameters, NWEndpoint); No app-facing listener API (NWListener); No service discovery (NWBrowser, mDNS or DNS-SD); the shell's UDP beacon is private; No QUIC, WebSocket or custom protocol framer; No path monitor for app reachability or interface changes (NWPathMonitor); No TLS handshake options, client identities or TLS metadata for apps; No packet trace or network inspector for apps.
 
+Related: [Network Extension](#network-extension), [Foundation (Networking, Low-Level Utilities)](#foundation-networking-lowlevel), [System Configuration](#system-configuration), [Multipeer Connectivity](#multipeer-connectivity), [CFNetwork](#cfnetwork).
+
 <a id="network-extension"></a>
 ### Network Extension
 
@@ -5398,6 +5896,8 @@ BifrOSt has a system-level Wi-Fi client (wpa_supplicant control, saved networks,
 
 Gaps: No VPN client or tunnel: no IKEv2, IPsec, WireGuard or custom packet-tunnel provider, and the VPN settings page is a static placeholder.; No app-facing Wi-Fi configuration API (NEHotspotConfiguration equivalent): join and add-network are shell-only.; No content filter, URL filter or DNS proxy extension points for apps.; No system-wide encrypted DNS (DoH or DoT) settings; only DHCP-supplied resolvers are applied.; No network relay (HTTP/2 or HTTP/3 proxying) configuration.; No hotspot helper or tethering subsystem.; No local push connectivity when the internet is unavailable..
 
+Related: [Network](#network), [System Configuration](#system-configuration), [Core WLAN](#core-wlan), [CFNetwork](#cfnetwork), [System Extensions](#system-extensions).
+
 <a id="open-directory"></a>
 ### Open Directory
 
@@ -5416,6 +5916,8 @@ Open Directory authenticates users and searches records (people, groups) in dire
 | Contacts search in LDAP or Open Directory | ODQuery against an LDAP node for contact attributes (framework summary) | springboard/apps/contacts-desktop/manifest.toml (contacts app; contacts sync lives in ~/Projects/bifrost-cloud) | Gap | The contacts app stores local contacts. Searching a directory server for contacts has no counterpart. |
 
 Gaps: No client for LDAP or directory nodes: no session, node or record query API for apps.; No directory-backed user lookup or sign-in; the desktop has one local account.; No SDK call to verify or change the password of another account.; Contacts app cannot search a directory server for people..
+
+Related: [Core Services](#core-services), [Security](#security), [Accounts](#accounts), [Authentication Services](#authentication-services), [File Provider](#file-provider).
 
 <a id="os"></a>
 ### os
@@ -5437,6 +5939,8 @@ Unified logging covers Logger levels, per-subsystem levels and privacy, and a lo
 | OS_LOG_STRING_SECTION constant | OS_LOG_STRING_SECTION | none | n/a | Apple linker section for log strings. It has no meaning for the Rust build. |
 
 Gaps: Signposts: no OSSignposter or os_signpost equivalent (docs/bifrost-ui.md:1041 names it as Phase 3); OSAllocatedUnfairLock: no unfair-lock wrapper in the SDK; Per-value privacy and format specifiers: privacy is per subsystem only; Log reading: no persistent position tokens and the journal reader depends on journalctl; docs/bifrost-ui.md:1096 says no DispatchSource, but springboard/sdk/src/dispatch.rs:744 has a memory-pressure source; the doc needs a fix.
+
+Related: [OSLog](#oslog), [Core Services](#core-services), [System](#system), [StateReporting](#statereporting), [Application Services](#application-services).
 
 <a id="oslog"></a>
 ### OSLog
@@ -5466,6 +5970,8 @@ The read side (OSLogStore, OSLogEntryLog) and the write side (os.Logger levels, 
 
 Gaps: OSSignposter and signpost entries (phase 3 in docs/milestone-unified-logging.md); Activity, boundary and payload entry types and OSLogMessageComponent; Lazy OSLogEnumerator and persistent OSLogPosition tokens (LogStore::entries returns a Vec); Per-argument privacy (.public, .private(mask:)) and format specifiers; privacy is per subsystem only; Info-level entries kept in memory only (Apple keeps info transiently); Predicate language is a subset (==, >=, CONTAINS, AND only); Journal reader shells out to journalctl; app access to the journal needs the systemd-journal group (unverified on Midget).
 
+Related: [os](#os), [StateReporting](#statereporting), [Core Services](#core-services), [MetricKit](#metrickit), [Endpoint Security](#endpoint-security).
+
 <a id="paravirtualized-graphics"></a>
 ### Paravirtualized Graphics
 
@@ -5482,6 +5988,8 @@ Apple's framework for host-side GPU acceleration of a macOS guest in a virtual m
 | Coordinate and size types | PGDisplayCoord_t | nothing found | n/a | pixel coordinate type for the display API only |
 
 
+Related: [Virtualization](#virtualization), [Hypervisor](#hypervisor), [PCIDriverKit](#pcidriverkit), [Core Graphics](#core-graphics), [IOSurface](#iosurface).
+
 <a id="pcidriverkit"></a>
 ### PCIDriverKit
 
@@ -5497,6 +6005,8 @@ DriverKit framework for writing user-space drivers for custom PCI and PCI Expres
 | Thunderbolt PCIe driver extension | Creating Custom PCIe Drivers for Thunderbolt Devices | nothing found | n/a | System Extensions install path; no BifrOSt equivalent |
 | Driver samples | DriverKit sample code, Connecting a network driver | nothing found | n/a | reference material only |
 
+
+Related: [DriverKit](#driverkit), [IOKit](#iokit), [Kernel](#kernel), [HIDDriverKit](#hiddriverkit), [Paravirtualized Graphics](#paravirtualized-graphics).
 
 <a id="security"></a>
 ### Security
@@ -5527,6 +6037,8 @@ BifrOSt covers generic-password keychain items for apps (asynchronous, per-app s
 
 Gaps: Certificate and trust evaluation API (SecTrust, SecPolicy, SecIdentity) for apps; the SDK has no certificate types; Code signing and signature verification for apps and updates; the update manifest is not signed; Authorization Services: an app-facing authorization API for privileged operations; Randomization API (SecRandomCopyBytes equivalent) in the SDK; Key objects and crypto transforms (encrypt, sign, verify) in the SDK; Keychain item classes beyond generic passwords, access groups, and data protection classes; Keychain master key is on the same disk as the items (no TPM or login-password key source); One-time code text content type for autofill; Synchronous keychain calls (Apple's are synchronous; BifrOSt's are asynchronous by design).
 
+Related: [Authentication Services](#authentication-services), [Security Interface](#security-interface), [Core Services](#core-services), [Accounts](#accounts), [Local Authentication](#local-authentication).
+
 <a id="security-foundation"></a>
 ### Security Foundation
 
@@ -5543,6 +6055,8 @@ The framework has one class, SFAuthorization, which asks the system to authorize
 | Secret storage gated by an app permission | Closest related Apple surface is Keychain Services; SFAuthorization is not a keychain API | springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/src/keychain.rs (Error::NotPermitted) | Partial | gated by the manifest keychain permission only; no user authentication step and no per-right authorization |
 
 Gaps: No SDK call for an app to request or check an authorization right (obtain / obtain withRight) before a privileged operation.; No user-facing authorization prompt that grants a right at run time; the manifest permission is the only grant.; No invalidateCredentials equivalent for dropping preserved authorization.; No rights, flags or environment model in the app API..
+
+Related: [Security](#security), [Security Interface](#security-interface), [Authentication Services](#authentication-services), [PermissionKit](#permissionkit), [Accounts](#accounts).
 
 <a id="security-interface"></a>
 ### Security Interface
@@ -5563,6 +6077,8 @@ Apple's framework is a set of certificate, identity, keychain and authorization 
 | Framework constants and error | SecurityInterface Constants (Plug-in View Keys, SFDisplayViewException), SecurityInterface Enumerations | none | n/a | These serve Apple's authorization plug-in model and the authorization view. BifrOSt has no plug-in model of that kind. |
 
 Gaps: No certificate panel, certificate view or certificate trust editor. The shell has no certificate display or trust UI.; No choose-identity panel. Keychain items cannot hold identities, keys or certificates.; No keychain save or settings panel. The keychain SDK has no UI and no user-facing keychain settings.; No authorization lock view for apps. Apps cannot show a padlock or request an admin password through an SDK control; the privd password gate is not exposed to apps.; Apple's documentation notes the SFAuthorization classes now live in Security Foundation. This matrix does not cover them here..
+
+Related: [Security](#security), [Local Authentication](#local-authentication), [Authentication Services](#authentication-services), [Security Foundation](#security-foundation), [Core Services](#core-services).
 
 <a id="service-management"></a>
 ### Service Management
@@ -5589,6 +6105,8 @@ Login items for the app itself are covered: register, unregister, refresh and a 
 
 Gaps: Launch agents and launch daemons: SMAppService.agent(plistName:) and daemon(plistName:) (the SDK doc states none exist); Embedded helper executables registered from the app bundle, including loginItem(identifier:); Service Management error values (kSMError*, SMAppServiceErrorDomain): the SDK has no error type and the shell reply carries no error; unregister(completionHandler:) and the error value it returns; statusForLegacyPlist(at:) for earlier login-item plists; openSystemSettingsLoginItems(): the shell page exists but no SDK call opens it; Deprecated SMJobBless, SMLoginItemSetEnabled and the SMJob* launchd functions have no counterpart.
 
+Related: [Core Services](#core-services), [Authentication Services](#authentication-services), [Security](#security), [Application Services](#application-services), [Scripting Bridge](#scripting-bridge).
+
 <a id="system"></a>
 ### System
 
@@ -5613,6 +6131,8 @@ The System framework is a set of typed Swift wrappers over POSIX file calls (Fil
 | Mach ports and platform C types (CInterop, Mach, MachPortRight) | CInterop, Mach, MachPortRight (https://developer.apple.com/documentation/system) | Not applicable: Mach is Apple-only | n/a | Apple kernel IPC and platform type namespaces. No Linux counterpart is needed. |
 
 Gaps: No SDK file-descriptor type with typed open options, positional read and write, seek, duplicate and pipe creation.; No SDK path type with component views. Apps use Rust std::path only.; No SDK stat call or typed file mode, file type and permission set.; No SDK call for volume capacity. disk_space in springboard/src/bare/sys.rs:125 is shell-only.; No typed Errno enum for apps.; File coordination is advisory and has no relinquish or save-negotiation step (springboard/sdk/src/file_coordination.rs:1-20).; The file-change feed must be polled by the app (springboard/sdk/src/fswatch.rs:185); no callback API..
+
+Related: [FSKit](#fskit), [os](#os), [Core Services](#core-services), [AppKit (App Structure)](#appkit-app-structure), [File Provider](#file-provider).
 
 <a id="system-configuration"></a>
 ### System Configuration
@@ -5642,6 +6162,8 @@ The system layer has a network daemon that owns Wi-Fi, DHCP, routes and link sta
 
 Gaps: No SDK client for the network service (svc::net). Apps cannot read Wi-Fi or link state, which the Apple reachability and dynamic-store APIs would give them. springboard/docs/services.md lists the client as planned.; No reachability test for a named host or address (SCNetworkReachability).; No system-wide preferences store for apps (SCPreferences), and no way to read or set the computer or host name.; No proxy configuration, and no VPN or PPP connection control (SCNetworkConnection).; No network services, sets or locations, so service order and per-location settings do not exist.; The Network page cannot edit IPv4 or IPv6 settings (manual addressing, DNS servers)..
 
+Related: [Network Extension](#network-extension), [Network](#network), [Security](#security), [Core WLAN](#core-wlan), [Core Services](#core-services).
+
 <a id="system-extensions"></a>
 ### System Extensions
 
@@ -5658,6 +6180,8 @@ Apple's user-space driver and system extension install and activation flow (OSSy
 | Entitlements | System Extension Entitlement, System Extension Redistributable Entitlement | app_policy.rs sandbox profile (no extension entitlement) | n/a | app sandbox is bubblewrap, not Apple entitlements |
 
 
+Related: [ExtensionFoundation](#extensionfoundation), [Network Extension](#network-extension), [Kernel](#kernel), [DeviceDiscoveryExtension](#devicediscoveryextension), [Core Services](#core-services).
+
 <a id="thread-network"></a>
 ### ThreadNetwork
 
@@ -5671,6 +6195,8 @@ ThreadNetwork configures Thread Border Routers and shares Thread credentials bet
 | Thread network credentials | THCredentials, THClient, manage-thread-network-credentials entitlement | none | n/a | Wi-Fi credentials are in springboard/src/net/wifi.rs, not Thread |
 | Device roles | Thread Border Router, Thread Leader, End device, Sleepy End device | none | n/a |  |
 
+
+Related: [Network](#network), [Network Extension](#network-extension), [Matter](#matter), [Core WLAN](#core-wlan), [System Configuration](#system-configuration).
 
 <a id="uniform-type-identifiers"></a>
 ### Uniform Type Identifiers
@@ -5695,6 +6221,8 @@ BifrOSt has a 58-type table with identifiers, conformance tree, extensions, MIME
 | Conformance check for tag matching in file kind | UTType.conforms(to:) used for file kinds | springboard/src/files/fs.rs (kind_of, kind_description) | Parity | only PNG and JPEG count as Image in the viewer, as recorded in docs/bifrost-ui.md:335 |
 
 Gaps: App-declared exported and imported types with extension, MIME and conformance (UTExportedTypeDeclarations equivalent); Generic UTTagClass API beyond filenameExtension and mimeType; Most of the system-declared identifiers on the landing page, including 3D, Apple-only, Shazam and bundle types; Writable types and type conversion for documents.
+
+Related: [Core Transferable](#core-transferable), [Application Services](#application-services), [Core Services](#core-services), [Foundation (Fundamentals)](#foundation-fundamentals), [Core Foundation](#core-foundation).
 
 <a id="virtualization"></a>
 ### Virtualization
@@ -5728,6 +6256,8 @@ BifrOSt has no app-facing API to create or run virtual machines. Developer-only 
 
 Gaps: An SDK module that creates, starts, pauses and stops a Linux guest (VZVirtualMachine counterpart) with a sandboxed launcher; A guest display view that can be placed in a desktop window; Virtio device configuration for app-created guests: storage, network, entropy, memory balloon, serial console; Shared directories and clipboard bridging between host and guest; Guest audio and USB passthrough; Documentation note: tools/vm-click.py hardcodes an out/arch-vm path under /home/olibuijr/Projects/tab-a8 and is not portable; docs/arch-vm.md does not exist (the doc is docs/arch-x86-vm.md).
 
+Related: [Hypervisor](#hypervisor), [vmnet](#vmnet), [Paravirtualized Graphics](#paravirtualized-graphics), [Kernel](#kernel), [IOUSBHost](#iousbhost).
+
 <a id="vmnet"></a>
 ### vmnet
 
@@ -5745,6 +6275,8 @@ vmnet is Apple's virtual NIC API for guest operating systems on macOS, with host
 | Entitlement for virtual networking | com.apple.vm.networking | none | n/a | app isolation is springboard/src/bare/app_policy.rs (bubblewrap); no networking entitlement |
 
 Gaps: No virtual machine framework for apps (no guest NIC, host or NAT mode API).; No app-facing packet I/O or interface events; springboard/src/net/mod.rs is private to the shell..
+
+Related: [Virtualization](#virtualization), [Hypervisor](#hypervisor), [Network](#network), [System Configuration](#system-configuration), [Network Extension](#network-extension).
 
 <a id="xpc"></a>
 ### XPC
@@ -5766,6 +6298,8 @@ BifrOSt has no XPC API for apps: no XPCSession, XPCListener, XPC activities or X
 
 Gaps: No SDK API for XPC-style typed sessions between an app and a helper (XPCListener, XPCSession, XPCReceivedMessage).; No app-facing way to declare a helper service that the system launches on demand and shuts down when idle. bifrostd only restarts services.; No XPC activity scheduler (criteria, intervals, deferral, system-run callback) in the SDK.; No endpoint objects for passing a connection to another process, and no peer requirement beyond the owner UID.; No event wake-up for services from device or IOKit events..
 
+Related: [Distributed](#distributed), [Core Services](#core-services), [Application Services](#application-services), [Scripting Bridge](#scripting-bridge), [Security](#security).
+
 <a id="link-presentation"></a>
 ### Link Presentation
 
@@ -5786,6 +6320,8 @@ Apple's framework fetches a URL's title, icon, image and video and draws a rich 
 
 Gaps: No SDK API that fetches a URL's title, icon, image and video (LPMetadataProvider equivalent), with a timeout and cancel; No rich link view widget (LPLinkView equivalent) in the shared kit, with placeholder and metadata modes; The News app's og:image scrape (springboard/apps/news-desktop/src/pictures.rs) is app-local and not reusable by other apps; The share sheet sends URLs as plain items and does not show a rich link preview; No typed error model for link fetches (LPError equivalent).
 
+Related: [Core Services](#core-services), [Quick Look](#quick-look), [Application Services](#application-services), [Social](#social), [QuickLook UI](#quicklook-ui).
+
 <a id="screen-time"></a>
 ### Screen Time
 
@@ -5804,3 +6340,5 @@ Apple's framework is a parent-controls API for web-usage reporting, web-history 
 | Settings UI for Screen Time | Not in this framework (system Settings) | springboard/src/shell/screentime/page.rs, springboard/src/shell/screentime/chart.rs, springboard/src/shell/settings.rs (st_spec and the Screen Time handlers) | Partial | Settings has Screen Time, Downtime, App Limits and Always Allowed pages with a weekly chart. Web usage is not charted, and there is no Content Restrictions page. |
 
 Gaps: Web-usage reporting: no equivalent of STWebpageController to report visited URLs, playing video or picture-in-picture, or to ask whether a URL is blocked.; Web-history API: no equivalent of STWebHistory to fetch or delete browsing history by bundle identifier, profile or date range.; Configuration query: apps cannot observe the device Screen Time configuration or ask whether child restrictions are enforced.; Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.; No SDK module exposes the shell's Screen Time usage or limit state to apps; none is documented in docs/bifrost-ui.md..
+
+Related: [Screen Saver](#screen-saver), [PermissionKit](#permissionkit), [Application Services](#application-services), [Core Services](#core-services), [Security](#security).

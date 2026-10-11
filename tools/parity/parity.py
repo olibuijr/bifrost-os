@@ -17,6 +17,10 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
   db-export DIR                  one JSON file per database document for the published artifact
                                  (frameworks/<slug>.json, meta/summary.json) plus batches.json (50 per batch)
   refresh-index                  re-read the official documentation index and rewrite index.json
+  search QUERY [--top N] [--status gap,partial]
+                                 semantic search over feature rows (Titan embeddings, then rerank)
+  related                        nearest frameworks per framework by embedding -> related.json
+  themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
 
 Coverage of a framework: rows that apply (status not n/a) score parity 1, partial 0.5, os 0.5, gap 0;
 coverage = score / applicable rows. A framework with no applicable rows has no coverage (n/a).
@@ -35,6 +39,8 @@ BASE = os.path.join(ROOT, "docs", "parity-matrix")
 DATA = os.path.join(BASE, "data")
 INDEX = os.path.join(BASE, "index.json")
 MATRIX_MD = os.path.join(ROOT, "docs", "apple-parity-matrix.md")
+RELATED = os.path.join(BASE, "related.json")
+THEMES = os.path.join(BASE, "themes.json")
 STATUSES = ["parity", "partial", "os", "gap", "n/a"]
 LABEL = {"parity": "Parity", "partial": "Partial", "os": "OS only", "gap": "Gap", "n/a": "n/a"}
 WEIGHT = {"parity": 1.0, "partial": 0.5, "os": 0.5, "gap": 0.0}
@@ -307,6 +313,20 @@ def cmd_build(a):
             cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
             w(f"- **{esc(e['name'])}** ({LABEL[e['status']]}, {cov}): " + ("; ".join(esc(x) for x in e["gaps"][:4]) or "see matrix"))
         w("")
+    rel, themes = load_semantic_files()
+    if themes:
+        w("## Work themes (Gap rows clustered by meaning)")
+        w("")
+        w("Gap rows from all frameworks, embedded on Titan and clustered (`bifrost pc parity themes`); one theme is one")
+        w("piece of work that closes gaps in several frameworks at once.")
+        w("")
+        w("| Theme | Gap rows | Frameworks |")
+        w("|---|---|---|")
+        for t in themes:
+            w(f"| {esc(t['title'])} | {t['size']} | {esc(', '.join(f['name'] for f in t['frameworks'][:8]))}"
+              + (f" and {len(t['frameworks']) - 8} more" if len(t["frameworks"]) > 8 else "") + " |")
+        w("")
+    names = {e["slug"]: e["name"] for e in entries}
     w("## Matrix")
     for e in entries:
         cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.0f}%"
@@ -328,6 +348,10 @@ def cmd_build(a):
             w("")
         if e["gaps"]:
             w("Gaps: " + "; ".join(esc(x) for x in e["gaps"]) + ".")
+        near = [x for x in rel.get(e["slug"], []) if x["slug"] in names]
+        if near:
+            w("")
+            w("Related: " + ", ".join(f"[{esc(names[x['slug']])}](#{x['slug']})" for x in near) + ".")
     w("")
     out = a.out or MATRIX_MD
     open(out, "w").write("\n".join(o))
@@ -360,6 +384,9 @@ def cmd_db_export(a):
     fw, rows, n, score = totals(entries)
     os.makedirs(os.path.join(a.dir, "frameworks"), exist_ok=True)
     os.makedirs(os.path.join(a.dir, "meta"), exist_ok=True)
+    os.makedirs(os.path.join(a.dir, "themes"), exist_ok=True)
+    rel, themes = load_semantic_files()
+    names = {e["slug"]: e["name"] for e in entries}
     writes = []
     for e in entries:
         doc = {
@@ -372,6 +399,15 @@ def cmd_db_export(a):
         p = os.path.join(a.dir, "frameworks", e["slug"] + ".json")
         json.dump(doc, open(p, "w"))
         writes.append({"op": "set", "collection": "frameworks", "doc_id": e["slug"], "file_path": os.path.abspath(p)})
+    if rel:
+        p = os.path.join(a.dir, "meta", "related.json")
+        json.dump({s: [{"slug": x["slug"], "name": names.get(x["slug"], x["slug"]), "score": x["score"]}
+                       for x in v if x["slug"] in names] for s, v in rel.items() if s in names}, open(p, "w"))
+        writes.append({"op": "set", "collection": "meta", "doc_id": "related", "file_path": os.path.abspath(p)})
+    for t in themes:
+        p = os.path.join(a.dir, "themes", t["id"] + ".json")
+        json.dump(t, open(p, "w"))
+        writes.append({"op": "set", "collection": "themes", "doc_id": t["id"], "file_path": os.path.abspath(p)})
     groups = {}
     for g, es in by_group(entries).items():
         f2, r2, n2, s2 = totals(es)
@@ -423,6 +459,48 @@ def cmd_refresh_index(a):
     print(f"{len(rows)} frameworks with macOS availability written to {os.path.relpath(INDEX, ROOT)}")
 
 
+def _semantic():
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import semantic  # noqa: PLC0415 - needs numpy and the embedding service only for these commands
+    return semantic
+
+
+def cmd_search(a):
+    sem = _semantic()
+    entries, _ = load_entries()
+    status = set(a.status.split(",")) if a.status else None
+    hits, emodel, rmodel = sem.search(entries, a.query, top=a.top, status=status)
+    print(f"# {a.query!r}  (embed {emodel}, rerank {rmodel})")
+    for score, cos, e, r in hits:
+        print(f"{score:5.2f} {cos:4.2f}  [{LABEL[r['status']]}] {e['name']} :: {r.get('feature')}")
+        print(f"           ref: {r.get('apple')}")
+        print(f"           bifrost: {r.get('bifrost') or '-'}" + (f"  ({r['note']})" if r.get("note") else ""))
+
+
+def cmd_related(a):
+    sem = _semantic()
+    entries, _ = load_entries()
+    rel, model = sem.related(entries, k=a.k)
+    json.dump({"model": model, "related": rel}, open(RELATED, "w"), indent=1)
+    print(f"related frameworks for {len(rel)} entries ({model}) -> {os.path.relpath(RELATED, ROOT)}")
+
+
+def cmd_themes(a):
+    sem = _semantic()
+    entries, _ = load_entries()
+    th, model = sem.themes(entries, k=a.k)
+    json.dump({"model": model, "status": ["gap"], "themes": th}, open(THEMES, "w"), indent=1)
+    print(f"{len(th)} work themes over {sum(t['size'] for t in th)} gap rows ({model}) -> {os.path.relpath(THEMES, ROOT)}")
+    for t in th[:15]:
+        print(f"  {t['id']} ({t['size']:3} rows, {len(t['frameworks'])} frameworks): {t['title']}")
+
+
+def load_semantic_files():
+    rel = json.load(open(RELATED))["related"] if os.path.exists(RELATED) else {}
+    th = json.load(open(THEMES))["themes"] if os.path.exists(THEMES) else []
+    return rel, th
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -447,9 +525,18 @@ def main(argv=None):
     d = sub.add_parser("db-export")
     d.add_argument("dir")
     sub.add_parser("refresh-index")
+    q = sub.add_parser("search")
+    q.add_argument("query")
+    q.add_argument("--top", type=int, default=10)
+    q.add_argument("--status")
+    r = sub.add_parser("related")
+    r.add_argument("--k", type=int, default=5)
+    t = sub.add_parser("themes")
+    t.add_argument("--k", type=int)
     a = p.parse_args(argv)
     {"status": cmd_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
-     "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index}[a.cmd](a)
+     "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index,
+     "search": cmd_search, "related": cmd_related, "themes": cmd_themes}[a.cmd](a)
 
 
 if __name__ == "__main__":
