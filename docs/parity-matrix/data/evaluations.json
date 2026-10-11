@@ -1,0 +1,27 @@
+{
+  "framework": "Evaluations",
+  "doc": "https://developer.apple.com/documentation/evaluations",
+  "macos_since": "27.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/evaluation.rs (Evaluation, Sample, Evaluator, Metric, MetricsAggregator, EvaluationResult, TrajectoryExpectation); springboard/sdk/src/testing.rs (TestWindow, UI testing kit only); springboard/apps/assistant-desktop/src/model.rs (model runner, not yet wired to the evaluation harness)",
+  "summary": "BifrOSt now has a pure evaluation harness: a suite runs a responder over samples, scores each response with closure evaluators, summarizes metrics, and checks tool-call trajectories. Datasets, loaders, sample generation, model-judge scoring and the Swift Testing trait are still missing, and the Assistant does not run the harness yet.",
+  "rea_evidence": "ev_aed8a863ae3b41881c1d29174477654902d82c201ec038884b31cbf145e8840e",
+  "features": [
+    {"feature": "Evaluation definition and run", "apple": "Evaluation (protocol)", "bifrost": "springboard/ui/src/evaluation.rs (Evaluation::run)", "status": "partial", "note": "A suite of evaluators runs a responder over samples and collects rows and errors. The Assistant app does not define or run suites yet."},
+    {"feature": "Datasets and sample generation", "apple": "ModelSample, Loader, SampleGenerator", "bifrost": "springboard/ui/src/evaluation.rs (Sample)", "status": "partial", "note": "Sample holds an input and an optional expected value. There is no Loader protocol and no SampleGenerator, so synthetic datasets are not produced."},
+    {"feature": "Metrics, evaluators and aggregation", "apple": "Metric, Evaluator, MetricsAggregator", "bifrost": "springboard/ui/src/evaluation.rs (Metric, Evaluator::check, MetricsAggregator::summarize)", "status": "partial", "note": "Closure evaluators and pass or fail checks score each response. The aggregator gives count, mean, median, min, max, variance and standard deviation. No mode, custom aggregation or metric grouping."},
+    {"feature": "Result tables and columns", "apple": "EvaluationResult, ResultColumn, inputColumn, responseColumn, expectedColumn", "bifrost": "springboard/ui/src/evaluation.rs (EvaluationResult::column, Column)", "status": "partial", "note": "Rows hold input, response, expected and metrics, read by Column. There is no typed DataFrame and no column type that carries its value type."},
+    {"feature": "Model-judge evaluators", "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension", "bifrost": "none", "status": "gap", "note": "No LLM-as-judge scoring. An evaluator is a closure, so a judge would need a model call supplied by the caller."},
+    {"feature": "Tool-call trajectory evaluation", "apple": "ToolCallEvaluator, TrajectoryExpectation, ArgumentMatcher", "bifrost": "springboard/ui/src/evaluation.rs (ToolCall, ToolExpectation, ArgumentMatcher, TrajectoryExpectation::check)", "status": "partial", "note": "Ordered steps, unordered calls, disallowed calls and extra-call policy are checked, and argument rules cover exact, key-only, one-of, numeric range, contains, prefix and suffix. Regex and natural-language argument matching are not implemented."},
+    {"feature": "Swift Testing integration (evaluation traits)", "apple": "EvaluationTrait, EvaluationContext", "bifrost": "springboard/sdk/src/testing.rs", "status": "partial", "note": "The SDK testing kit (TestWindow, click and state assertions) covers UI tests. It has no evaluation trait and does not attach evaluation results."}
+  ],
+  "gaps": [
+    "The Assistant app does not define or run evaluation suites against its model yet.",
+    "No Loader protocol and no SampleGenerator for synthetic datasets; datasets are built in code only.",
+    "No model-judge scoring: ModelJudgeEvaluator, ModelJudgePrompt and ScoreDimension are missing.",
+    "Argument matching has no regex or natural-language rule (ArgumentMatcher.pattern and naturalLanguage).",
+    "Aggregation has no mode, custom aggregation or metric groups (MetricsAggregator.group).",
+    "The result table is not a typed DataFrame: no ResultColumn value types.",
+    "No evaluation trait for the test kit; springboard/sdk/src/testing.rs does not run or attach evaluations."
+  ]
+}
