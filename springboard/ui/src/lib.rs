@@ -584,6 +584,8 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod assetpack;
+pub mod downloadqueue;
 #[cfg(test)]
 mod bench;
 
