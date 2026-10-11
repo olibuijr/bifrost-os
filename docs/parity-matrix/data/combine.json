@@ -1,0 +1,119 @@
+{
+ "framework": "Combine",
+ "doc": "https://developer.apple.com/documentation/combine",
+ "macos_since": "10.15",
+ "status": "partial",
+ "bifrost": "bifrost_app::observable, bifrost_ui::observe",
+ "summary": "A single-threaded Observable<T> with sink, map, remove_duplicates, combine_latest for two observables and cancel-on-drop subscriptions covers the CurrentValueSubject and @Published cases. A PassthroughSubject with sink, map and filter covers the send-only subject. Other operators, convenience publishers, schedulers, back pressure and threading are missing.",
+ "rea_evidence": "ev_256d776afb2e462cdacf862416e7d3b883ecb9a3c2d98116a97e0404e85c7991",
+ "features": [
+  {
+   "feature": "Publisher protocol and operators",
+   "apple": "Publisher, Publishers (map, filter, merge, combineLatest, debounce...)",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "partial",
+   "note": "map, remove_duplicates, filter and combine_latest (two observables); no merge, debounce, flatMap or publisher-typed operator chains"
+  },
+  {
+   "feature": "Type-erased publishers",
+   "apple": "AnyPublisher, Published",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "partial",
+   "note": "Observable<T> plays @Published; no AnyPublisher erasure"
+  },
+  {
+   "feature": "Cancellation",
+   "apple": "Cancellable, AnyCancellable",
+   "bifrost": "springboard/sdk/src/observable.rs (Subscription, Cancellables)",
+   "status": "parity",
+   "note": "cancel on drop and store(in:) bag"
+  },
+  {
+   "feature": "Convenience publishers",
+   "apple": "Future, Just, Deferred, Empty, Fail, Record",
+   "bifrost": "",
+   "status": "gap",
+   "note": "none; Observable::new is the nearest to Just"
+  },
+  {
+   "feature": "Connectable publishers",
+   "apple": "ConnectablePublisher, share, multicast",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no connect/autoconnect"
+  },
+  {
+   "feature": "Subscribers and demand",
+   "apple": "Subscriber, Subscribers, AnySubscriber, Subscription, Subscriptions, back pressure",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "gap",
+   "note": "sink/subscribe closures only; no Demand, no completion, no failure type"
+  },
+  {
+   "feature": "Subjects",
+   "apple": "Subject, CurrentValueSubject, PassthroughSubject",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "partial",
+   "note": "CurrentValueSubject via Observable; PassthroughSubject with send, sink, map and filter; no send(completion:) and no failure type"
+  },
+  {
+   "feature": "Schedulers",
+   "apple": "Scheduler, ImmediateScheduler, RunLoop, DispatchQueue schedulers",
+   "bifrost": "springboard/sdk/src/dispatch.rs",
+   "status": "os",
+   "note": "GCD queues exist, but no receive(on:)/subscribe(on:) integration; Observable is Rc and single-threaded"
+  },
+  {
+   "feature": "Foundation publishers",
+   "apple": "NotificationCenter, Timer, URLSession, KVO publishers",
+   "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/url.rs",
+   "status": "partial",
+   "note": "sources exist with callbacks; none are exposed as publishers"
+  },
+  {
+   "feature": "ObservableObject",
+   "apple": "ObservableObject, ObservableObjectPublisher",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "gap",
+   "note": "no objectWillChange aggregate; one Observable per property"
+  },
+  {
+   "feature": "Async publishers",
+   "apple": "AsyncPublisher, AsyncThrowingPublisher",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no async sequence bridge"
+  },
+  {
+   "feature": "Encoders and decoders",
+   "apple": "TopLevelEncoder, TopLevelDecoder, decode operator",
+   "bifrost": "springboard/sdk/src/coding.rs",
+   "status": "partial",
+   "note": "Codable-style coding exists, no publisher decode operator"
+  },
+  {
+   "feature": "Debugging identifiers",
+   "apple": "CombineIdentifier, CustomCombineIdentifierConvertible, print/handleEvents",
+   "bifrost": "",
+   "status": "gap",
+   "note": "only subscriber_count"
+  },
+  {
+   "feature": "UI-side observable value",
+   "apple": "@Published / KVO old-new notification",
+   "bifrost": "springboard/ui/src/observe.rs",
+   "status": "parity",
+   "note": "subscribe(old,new), set returns changed, unsubscribe token"
+  }
+ ],
+ "gaps": [
+  "merge, flatMap and the other operators beyond map, filter and combineLatest (two observables)",
+  "Debounce, throttle and schedulers (receive(on:))",
+  "Completion and failure types, Demand/back pressure",
+  "Future, Just, Empty and Fail publishers; send(completion:) on subjects",
+  "ObservableObject objectWillChange aggregate",
+  "Thread-safe publishers (Send)",
+  "Notification, Timer, URLSession publishers",
+  "AsyncPublisher bridge"
+ ]
+}
