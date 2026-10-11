@@ -588,6 +588,7 @@ pub mod paragraph;
 pub mod bidi;
 pub mod observe;
 pub mod controller;
+pub mod controller_power;
 pub mod calendar;
 pub mod collection;
 pub mod dockdrag;

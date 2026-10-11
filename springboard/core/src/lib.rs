@@ -11,6 +11,7 @@ pub mod random;
 pub mod meter;
 pub mod gamepad;
 pub mod usb_descriptors;
+pub mod accessory_manager;
 pub mod script_io;
 pub mod app_links;
 pub mod matter;
