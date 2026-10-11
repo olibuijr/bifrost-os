@@ -1,5 +1,4 @@
-//! evdev key code to the character it types on a US keyboard, for the core's settings form
-//! (the game itself gets the raw evdev codes).
+//! evdev key code to the character it types on a US keyboard: app menu chords and type-to-select in menus.
 
 const ROWS: [(u16, &str, &str); 4] = [
     (2, "1234567890", "!@#$%^&*()"),

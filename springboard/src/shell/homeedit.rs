@@ -435,7 +435,7 @@ mod tests {
         sh.event(Event::Up(x, y), t + 800.0);
         sh.close_home_overlays();
         // a long press on an icon starts edit (jiggle) mode instead
-        let c = sh.layout.cells[7];
+        let c = sh.layout.cells[0];
         sh.event(Event::Down((c.x + 5) as f32, (c.y + 5) as f32), t + 900.0);
         sh.tick(t + 900.0 + HOLD_MS + 10.0);
         assert!(sh.jiggle.is_some() && sh.gallery.is_none());

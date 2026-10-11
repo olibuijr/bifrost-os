@@ -60,7 +60,7 @@ without a shell restart, like the Settings plan in `docs/settings-system-app.md`
   there with their tests (25 keyboard tests + emoji/predict). `main.rs` is the `App`: `keyboard_config` applies the field's configuration,
   touches go to the moved `Keyboard`, typed output goes to `ctx.keyboard_out`, the height is reported when it changes.
 - **Shell client** `springboard/src/shell/keyboard.rs`: same type name, same calls (`set_shown`, `h()`, `offset`, `down/moved/up`, `tick`,
-  `draw`) so Terminal, Browser, Wowstream, Settings search, Wi-Fi, Spotlight, Deildu and Files keep their code. One keyboard process is
+  `draw`) so Terminal, Browser, Settings search, Wi-Fi, Spotlight, Deildu and Files keep their code. One keyboard process is
   shared per thread (a service); the client shown last owns it. Typed output arrives from `tick`, not from `up`.
 - **App backend**: in an app process (the SDK runtime calls `use_app_backend`) the same type asks the shell for the keyboard
   (`WantsKeyboard`), reads its height from `safe_bottom` and draws nothing; the shell draws it over the app and sends text as input.

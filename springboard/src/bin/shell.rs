@@ -629,7 +629,7 @@ fn run() -> std::io::Result<()> {
                         effects.extend(fx);
                         continue;
                     }
-                    // WoW on screen: physical keys go to the game (power, volume and wake stay here)
+                    // Deildu or Files on screen: they take their own keys (power, volume and wake stay here)
                     if shell.hw_key(code, down, t) {
                         continue;
                     }

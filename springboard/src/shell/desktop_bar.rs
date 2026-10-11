@@ -337,7 +337,7 @@ impl Shell {
             105|106=>{if let Some(at)=bar.iter().position(|m|*m==menu){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;}},
             28|96=>{let action=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()));if let Some(action)=action{self.desktop_menu=None;self.desktop_menu_row=None;return Some(self.run_menu_action(action,t));}},
             1=>{self.desktop_menu=None;self.desktop_menu_row=None;},
-            _=>{if let Some(c)=super::wowstream::keys::char_for(code,false).filter(|c|c.is_alphanumeric()){self.menu_type_select(menu,c,t);}},
+            _=>{if let Some(c)=super::evkeys::char_for(code,false).filter(|c|c.is_alphanumeric()){self.menu_type_select(menu,c,t);}},
         }
         Some(vec![])
     }

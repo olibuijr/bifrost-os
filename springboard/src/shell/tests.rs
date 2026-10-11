@@ -1100,7 +1100,7 @@
         let term = apps().iter().find(|a| a.id == AppId::Terminal).unwrap();
         assert_eq!(term.icon, "is.olibuijr.term");
         let grid: Vec<_> = apps()[IN_DOCK..].iter().map(|a| (a.name, a.icon)).collect();
-        assert_eq!(grid, [("Deildu", "is.olibuijr.deildu"), ("Photos", "bifrost.photos"), ("Files", "bifrost.files"), ("Camera", "bifrost.camera"), ("Browser", "is.olibuijr.browser"), ("WoW", "is.olibuijr.wow"), ("Magnifier", "bifrost.magnifier"), ("App Store", "bifrost.appstore")], "the stock apps that moved to packages are no longer built in");
+        assert_eq!(grid, [("Deildu", "is.olibuijr.deildu"), ("Photos", "bifrost.photos"), ("Files", "bifrost.files"), ("Camera", "bifrost.camera"), ("Browser", "is.olibuijr.browser"), ("Magnifier", "bifrost.magnifier"), ("App Store", "bifrost.appstore")], "the stock apps that moved to packages are no longer built in");
     }
 
     #[test]

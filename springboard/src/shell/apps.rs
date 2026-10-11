@@ -1,5 +1,5 @@
 //! Built-in and installed app catalogue used by the home screen and desktop.
-use super::{apphost, browser, camera, magnifier, store, wowstream};
+use super::{apphost, browser, camera, magnifier, store};
 use crate::gfx::Image;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -11,7 +11,6 @@ pub enum AppId {
     Files,
     Camera,
     Browser,
-    WowStream,
     Magnifier,
     AppStore,
     /// an installed app (see `apphost`): the index into `apphost::installed()`
@@ -35,7 +34,6 @@ pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::Files, name: "Files", icon: "bifrost.files", icon_image: None },
     AppDef { id: AppId::Camera, name: "Camera", icon: "bifrost.camera", icon_image: Some(camera::icon) },
     AppDef { id: AppId::Browser, name: "Browser", icon: "is.olibuijr.browser", icon_image: Some(browser::icon) },
-    AppDef { id: AppId::WowStream, name: "WoW", icon: "is.olibuijr.wow", icon_image: Some(wowstream::icon) },
     AppDef { id: AppId::Magnifier, name: "Magnifier", icon: "bifrost.magnifier", icon_image: Some(magnifier::icon) },
     AppDef { id: AppId::AppStore, name: "App Store", icon: "bifrost.appstore", icon_image: Some(store::icon) },
 ];

@@ -19,10 +19,10 @@ use super::applib::AppLibrary;
 /// Duration of the turn animation.
 pub const TURN_MS: f64 = 300.0;
 
-/// The apps that lay out natively for the landscape frame (Settings, the Terminal, WoW); every
+/// The apps that lay out natively for the landscape frame (Settings, the Terminal); every
 /// other app is laid out for the portrait panel and letterboxed when the frame is landscape.
 pub fn landscape_native(app: AppId) -> bool {
-    matches!(app, AppId::Settings | AppId::Terminal | AppId::WowStream)
+    matches!(app, AppId::Settings | AppId::Terminal)
 }
 
 /// The apps that are letterboxed in landscape.
@@ -30,11 +30,6 @@ pub fn portrait_only(app: AppId) -> bool {
     !landscape_native(app)
 }
 
-/// The apps that want landscape while they are in front, whichever way the device is held and
-/// whatever Rotation Lock says; they turn between the two landscape sides with the sensor.
-pub fn prefers_landscape(app: AppId) -> bool {
-    matches!(app, AppId::WowStream)
-}
 
 /// The turn in progress: both frames and where the old one lies.
 struct Turn {
@@ -81,10 +76,8 @@ pub struct Rotate {
     current: Orientation,
     locked: bool,
     /// the orientation the rest of the shell holds: followed from the sensor while Rotation
-    /// Lock is off, kept while it is on, and what the shell returns to after a landscape app
+    /// Lock is off, kept while it is on
     base: Orientation,
-    /// the landscape side a landscape app keeps while the device is upright or flat
-    last_landscape: Orientation,
     turn: Option<Turn>,
     /// the portrait frame a letterboxed app draws into
     scratch: Option<Image>,
@@ -103,7 +96,7 @@ pub struct Rotate {
 
 impl Rotate {
     pub fn new() -> Self {
-        Rotate { sensed: Orientation::Portrait, current: Orientation::Portrait, locked: false, base: Orientation::Portrait, last_landscape: Orientation::LandscapeLeft, turn: None, scratch: None, wallpaper: None, labels: Vec::new(), other_library: None, library_key: (0, 0, 0), turn_fresh: false, turn_seq: 0 }
+        Rotate { sensed: Orientation::Portrait, current: Orientation::Portrait, locked: false, base: Orientation::Portrait, turn: None, scratch: None, wallpaper: None, labels: Vec::new(), other_library: None, library_key: (0, 0, 0), turn_fresh: false, turn_seq: 0 }
     }
 }
 
@@ -167,61 +160,38 @@ impl Shell {
         self.rot.turn.is_some()
     }
 
-    /// The app in front, or the one opening.
-    fn front_app(&self) -> Option<AppId> {
-        match (self.screen, self.anim) {
-            (Screen::App(app), _) => Some(app),
-            (_, Some((super::Anim::Open { app, .. }, _))) => Some(app),
-            _ => None,
-        }
-    }
-
-    /// An app that wants landscape is in front: the sensor chooses between the landscape sides
-    /// and Rotation Lock does not apply.
-    fn landscape_wanted(&self) -> bool {
-        self.screen_on && self.front_app().is_some_and(prefers_landscape)
-    }
-
     /// Whether the shell needs the accelerometer: unless Rotation Lock holds the orientation
-    /// (and no landscape app is in front) there is something to follow.
+    /// there is something to follow.
     pub fn wants_orientation(&self) -> bool {
         // a desktop panel keeps its own orientation: no sensor, no turning
-        !crate::layout::adaptive() && (!self.rot.locked || self.landscape_wanted())
+        !crate::layout::adaptive() && !self.rot.locked
     }
 
     /// The accelerometer's orientation; adopted unless Rotation Lock holds.
     pub fn set_orientation(&mut self, o: Orientation, t: f64) {
         self.rot.sensed = o;
-        if o.is_landscape() {
-            self.rot.last_landscape = o;
-        }
         self.update_orientation(t);
     }
 
     /// Holds the current orientation (on) or follows the sensor again (off).
     pub fn set_rotation_lock(&mut self, on: bool, t: f64) {
-        if on && !self.rot.locked && !self.landscape_wanted() {
+        if on && !self.rot.locked {
             self.rot.base = self.rot.current;
         }
         self.rot.locked = on;
         self.update_orientation(t);
     }
 
-    /// Lays the frame out for what the sensor, Rotation Lock and the app in front call for;
+    /// Lays the frame out for what the sensor and Rotation Lock call for;
     /// cheap when nothing changed, so the shell calls it every tick.
     pub(super) fn update_orientation(&mut self, t: f64) {
         if crate::layout::adaptive() {
             return;
         }
-        let want = if self.landscape_wanted() {
-            if self.rot.sensed.is_landscape() { self.rot.sensed } else { self.rot.last_landscape }
-        } else {
-            if !self.rot.locked {
-                self.rot.base = self.rot.sensed;
-            }
-            self.rot.base
-        };
-        self.apply_orientation(want, t);
+        if !self.rot.locked {
+            self.rot.base = self.rot.sensed;
+        }
+        self.apply_orientation(self.rot.base, t);
     }
 
     /// Flips Rotation Lock from Control Center; the effect persists it.

@@ -44,8 +44,6 @@ symphonia-codec-vorbis = { version = "0.6", default-features = false }
 symphonia-format-ogg = { version = "0.6", default-features = false }
 symphonia-format-riff = { version = "0.6", default-features = false, features = ["wav"] }
 symphonia-codec-pcm = { version = "0.6", default-features = false }
-# WoW game-streaming client core (pure Rust, std + log): protocol driver, touch UI, draw lists.
-wowstream-client = { path = "../../wow-private/wowstream/client" }
 # Everything below serves the Deildu app only; the shell core stays dependency-free.
 deildu-rust = { path = "../../bifrost-deildu" }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }

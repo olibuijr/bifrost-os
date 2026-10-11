@@ -16,7 +16,7 @@ sha256sums=(SKIP SKIP)
 
 # Inputs (override from the environment):
 #   SPRINGBOARD_REPO    tab-a8 checkout            (default: two levels above this PKGBUILD)
-#   SPRINGBOARD_DEPS    parent dir of the sibling repos iOSTerm, wow-private, ipad-deildu-rust
+#   SPRINGBOARD_DEPS    parent dir of the sibling repos iOSTerm, ipad-deildu-rust
 #                       (default: the checkout parent, where sibling repositories live)
 #   SPRINGBOARD_ASSETS  packed assets dir          (default: <repo>/springboard/assets, from tools/pack.py)
 _here=$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")
@@ -34,7 +34,7 @@ prepare() {
   rm -rf "$srcdir/tree"
   mkdir -p "$srcdir/tree/deps"
   tar -C "$_repo" --exclude=target --exclude=assets -cf - springboard packaging | tar -C "$srcdir/tree" -xf -
-  for d in iOSTerm wow-private ipad-deildu-rust; do
+  for d in iOSTerm ipad-deildu-rust; do
     [ -d "$_deps/$d" ] || { echo "missing sibling repo $_deps/$d (set SPRINGBOARD_DEPS)" >&2; return 1; }
     tar -C "$_deps" --exclude=target --exclude=.git -cf - "$d" | tar -C "$srcdir/tree/deps" -xf -
   done

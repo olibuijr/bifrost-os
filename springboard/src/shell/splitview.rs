@@ -28,9 +28,9 @@ const GRAB_STRIP_PT: f32 = 28.0;
 const STASH_PEEK_PT: f32 = 14.0;
 
 /// Apps that can be laid out at any width. The terminal and Files derive
-/// their layout from the full screen and stay single-window, as does WoW.
+/// their layout from the full screen and stay single-window.
 pub fn splittable(app: AppId) -> bool {
-    !matches!(app, AppId::Terminal | AppId::Files | AppId::WowStream | AppId::External(_))
+    !matches!(app, AppId::Terminal | AppId::Files | AppId::External(_))
 }
 
 /// The snap share (of the width left by the divider) nearest `ratio`.

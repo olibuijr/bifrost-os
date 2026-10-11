@@ -19,7 +19,7 @@ mod audiosvc;
 pub mod assistive_touch;
 pub mod store;
 pub mod weather;
-pub mod wowstream;
+pub mod evkeys;
 pub mod focus;
 pub mod fsutil;
 pub mod homeconf;
@@ -510,8 +510,6 @@ pub struct Shell {
     magnifier: Option<magnifier::Magnifier>,
     /// the Browser app, alive once opened
     browser: Option<browser::Browser>,
-    /// the WoW streaming client; connected only while the app is on screen
-    wowstream: Option<wowstream::WowStream>,
     /// the Photos library, alive in the background once opened
     photos: Option<Photos>,
     /// directories Photos scans; the first receives screenshots
@@ -743,7 +741,6 @@ impl Shell {
             camera: None,
             magnifier: None,
             browser: None,
-            wowstream: None,
             photos: None,
             photo_dirs: photos::library::dirs(),
             data_dir: deildu::data_dir().parent().map(Path::to_path_buf).unwrap_or_default(),
@@ -817,7 +814,6 @@ impl Shell {
         self.audio.snapshot().playing
             || self.files.as_ref().is_some_and(Files::is_playing)
             || self.deildu.as_ref().is_some_and(Deildu::active)
-            || self.wowstream.as_ref().is_some_and(wowstream::WowStream::streaming)
     }
 
     /// Asks for one frame with no change of its own (the presenter owes glass that must be presented).
@@ -1247,7 +1243,6 @@ impl Shell {
                 Screen::App(AppId::Camera) => self.camera.as_ref().and_then(|c| c.next_wake(t)),
                 Screen::App(AppId::Magnifier) => self.magnifier.as_ref().and_then(|c| c.next_wake(t)),
                 Screen::App(AppId::Browser) => self.browser.as_ref().and_then(|b| b.next_wake(t)),
-                Screen::App(AppId::WowStream) => self.wowstream.as_ref().and_then(|w| w.next_wake(t)),
                 _ => None,
             }
         } else {
@@ -1796,12 +1791,6 @@ impl Shell {
         if app == AppId::Browser && self.browser.is_none() {
             self.browser = Some(browser::Browser::new(&self.ui, self.portrait_size().0, self.portrait_size().1, self.data_dir.join("Browser"), self.deildu_transport.clone(), self.wall, t));
         }
-        if app == AppId::WowStream && self.wowstream.is_none() {
-            match wowstream::WowStream::new(&self.ui, self.portrait_size().1, self.portrait_size().0, self.data_dir.join("WoW")) {
-                Ok(w) => self.wowstream = Some(w),
-                Err(e) => eprintln!("springboard: wow: {e}"),
-            }
-        }
         if app == AppId::Camera && self.camera.is_none() {
             let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));
             self.camera = Some(camera::Camera::new(&self.ui, self.portrait_size().0, self.portrait_size().1, dir, self.wall));
@@ -2045,7 +2034,7 @@ impl Shell {
             return vec![];
         }
         // During a turn new touches are ignored, but a lifted finger must still reach the app:
-        // otherwise a held control (WoW's stick, a scrub) never sees its Up and stays held.
+        // otherwise a held control (a scrub) never sees its Up and stays held.
         if self.turning() && !matches!(ev, Event::Up(..)) {
             return vec![];
         }
@@ -2307,11 +2296,6 @@ impl Shell {
                     b.touch(&self.ui, ev, t);
                 }
             }
-            _ if app == AppId::WowStream => {
-                if let Some(w) = &mut self.wowstream {
-                    w.touch(&self.ui, ev, t);
-                }
-            }
             _ if app == AppId::Settings => {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
@@ -2555,7 +2539,6 @@ impl Shell {
         }
         self.tick_camera(t);
         self.tick_magnifier(t);
-        self.tick_wowstream(t);
         if self.screen == Screen::App(AppId::Browser) {
             if let Some(b) = &mut self.browser {
                 self.dirty |= b.tick(&self.ui, t);
@@ -3225,15 +3208,12 @@ impl Shell {
         // a letterboxed app (portrait column in landscape) is not drawn in the logical frame
         // the layer's coordinates refer to
         let ok = |app: AppId, letterboxed: bool| plain && front == Some(app) && !letterboxed;
-        let wow_ok = ok(AppId::WowStream, false);
         let deildu_ok = ok(AppId::Deildu, self.letterboxed(AppId::Deildu));
         let files_ok = ok(AppId::Files, self.letterboxed(AppId::Files));
         // every player app hears `gpu`; only the one in front may hand out a layer
-        let wow = self.wowstream.as_mut().and_then(|w| w.video_layer(gpu, wow_ok));
         let deildu = self.deildu.as_mut().and_then(|d| d.video_layer(gpu, deildu_ok));
         let files = self.files.as_mut().and_then(|f| f.video_layer(gpu, files_ok));
         match front {
-            Some(AppId::WowStream) => wow,
             Some(AppId::Deildu) => deildu,
             Some(AppId::Files) => files,
             _ => None,
@@ -3398,14 +3378,6 @@ impl Shell {
                 Some(b) => b.draw(s, &self.ui, t),
                 None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),
             },
-            AppId::WowStream => match &mut self.wowstream {
-                Some(w) => {
-                    // the stream owns the whole screen; the launcher and settings sit under the status bar
-                    self.fullscreen = w.fullscreen();
-                    w.draw(s, &self.ui, t);
-                }
-                None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),
-            },
         }
     }
 
@@ -3477,7 +3449,7 @@ fn draw_zoom(transition: Option<&Image>, s: &mut Surface, rect: Rect, r: f32, al
 impl Shell {
     /// Fds to poll (the pty, Deildu's and Files' job pipes); call `pump` when one is readable.
     pub fn poll_fds(&self) -> Vec<std::ffi::c_int> {
-        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.wowstream.iter().flat_map(|w| w.fds())).chain(self.ext_fds()).chain(keyboard::poll_fd()).collect()
+        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.ext_fds()).chain(keyboard::poll_fd()).collect()
     }
 
     /// `poll_fds` without the audio-service client's always-present fd.
@@ -3528,13 +3500,6 @@ impl Shell {
         }
         if self.store.as_mut().is_some_and(|s|s.take_registry_changed()) && apphost::refresh() {
             self.installed_changed();
-        }
-        if let Some(w) = &mut self.wowstream {
-            let c = w.pump(&self.ui, self.last_input);
-            if c && self.screen == Screen::App(AppId::WowStream) {
-                self.dirty = true;
-            }
-            changed |= c;
         }
         changed |= self.audio_pump();
         changed

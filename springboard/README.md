@@ -14,13 +14,6 @@ and process lists open in centered panels; dismissing a panel restores the
 keyboard’s previous visibility. SSH editing preserves unrelated configuration
 lines, and deleting connections or signaling processes requires a second tap.
 
-## WoW
-
-A game-streaming client (WoW server) built on the `wowstream-client` core: hardware H.264
-decode, touch and keyboard input, the core's menus and settings form. It connects only while
-the app is on screen. First run asks for the login. Audio is still silent (Opus decoder
-pending). See `src/shell/wowstream/README.md`.
-
 ## Notes
 
 Pin or unpin a note from its row or editor. Pinned notes appear in a separate

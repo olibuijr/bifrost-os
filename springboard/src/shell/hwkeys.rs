@@ -308,9 +308,27 @@ impl KeyRepeat {
 }
 
 impl Shell {
+    /// A key from a physical keyboard that the app on screen handles itself (Deildu, Files); true if taken.
+    /// Power, volume and wake stay with the shell.
+    pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
+        const KEEP: [u16; 4] = [114, 115, 116, 143];
+        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) {
+            return false;
+        }
+        let used = match self.screen {
+            Screen::App(AppId::Deildu) => self.deildu.as_mut().is_some_and(|d| d.hw_key(code, t)),
+            Screen::App(AppId::Files) => self.files.as_mut().is_some_and(|f| f.hw_key(code, t)),
+            _ => false,
+        };
+        if used {
+            self.last_input = t;
+            self.dirty = true;
+        }
+        used
+    }
+
     /// Types a physical-keyboard key into the terminal, a hosted app's text field or the focused
-    /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu, WoW
-    /// settings); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
+    /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
     /// A Ctrl or Cmd chord the shell did not take goes to the external app in front. False when
     /// the screen is not an external app, so the key falls through as before.
     pub fn hw_chord(&mut self, code: u16, mods: u32) -> bool {
@@ -377,11 +395,6 @@ impl Shell {
                     d.hw_text(&self.ui, out);
                 }
             }
-            AppId::WowStream => {
-                if let Some(w) = self.wowstream.as_mut() {
-                    w.hw_text(&self.ui, out, t);
-                }
-            }
             _ => {}
         }
         vec![]
@@ -410,9 +423,6 @@ impl Shell {
         match self.screen {
             Screen::Switcher => return self.assistive_action(super::assistive_touch::Action::Home, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => self.type_out(Out::Named("Escape"), t),
-            Screen::App(AppId::WowStream) => {
-                self.hw_key(KEY_ESC, true, t);
-            }
             Screen::App(app) => {
                 let stepped = match app {
                     AppId::Settings => self.settings.as_mut().is_some_and(|s| s.back_page(t)),

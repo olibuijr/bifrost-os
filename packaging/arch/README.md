@@ -18,11 +18,11 @@ cd packaging/arch
 makepkg -f            # or: makepkg --nobuild --nodeps   for a source/prepare check only
 ```
 
-`springboard/Cargo.toml` path-depends on three sibling repos by absolute path
-(`/home/olibuijr/Projects/{iOSTerm,wow-private,ipad-deildu-rust}`). `prepare()` copies the checkout and those
+`springboard/Cargo.toml` path-depends on two sibling repos by absolute path
+(`/home/olibuijr/Projects/{iOSTerm,ipad-deildu-rust}`). `prepare()` copies the checkout and those
 repos (without `target/` and `.git`) into `$srcdir/tree` and rewrites the paths there, so the build tree is
 self-contained and the checkout is untouched. Point it elsewhere with `SPRINGBOARD_DEPS=<parent dir of the
-three repos>`, `SPRINGBOARD_REPO=<tab-a8 checkout>`, `SPRINGBOARD_ASSETS=<assets dir>`.
+two repos>`, `SPRINGBOARD_REPO=<tab-a8 checkout>`, `SPRINGBOARD_ASSETS=<assets dir>`.
 Crates are not vendored: cargo runs `--offline` against the local registry cache (`CARGO_HOME`), so warm it
 first with `cargo fetch` in `springboard/` (or pass `SPRINGBOARD_CARGO_FLAGS=` to allow network).
 Use `BUILDDIR=` to keep `src/`/`pkg/` out of the checkout.

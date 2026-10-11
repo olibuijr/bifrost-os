@@ -271,8 +271,6 @@ impl Shell {
             AppId::Camera => self.camera = None,
             AppId::Magnifier => self.magnifier = None,
             AppId::Photos => self.photos = None,
-            // dropping the app closes its connection
-            AppId::WowStream => self.wowstream = None,
         }
         self.switcher.remove(app);
     }

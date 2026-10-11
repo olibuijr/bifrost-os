@@ -98,7 +98,6 @@ const CATEGORIES: &[(&str, Category)] = &[
     ("bifrost.camera", Category::Utilities),
     ("bifrost.magnifier", Category::Utilities),
     ("is.olibuijr.deildu", Category::Entertainment),
-    ("is.olibuijr.wow", Category::Entertainment),
     ("is.olibuijr.news", Category::Entertainment),
     ("is.olibuijr.podcasts", Category::Entertainment),
     ("is.olibuijr.voicememos", Category::Utilities),

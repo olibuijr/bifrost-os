@@ -20,9 +20,8 @@ APPS = {
     "files": (GRID_X[2], GRID_Y[0], "files"),
     "camera": (GRID_X[3], GRID_Y[0], "camera"),
     "browser": (GRID_X[4], GRID_Y[0], "browser"),
-    "wow": (GRID_X[0], GRID_Y[1], "wow"),
-    "magnifier": (GRID_X[1], GRID_Y[1], "magnifier"),
-    "appstore": (GRID_X[2], GRID_Y[1], "appstore"),
+    "magnifier": (GRID_X[0], GRID_Y[1], "magnifier"),
+    "appstore": (GRID_X[1], GRID_Y[1], "appstore"),
     "settings": (457, DOCK_Y, "settings"),
 }
 # apps the emulator opens in-process (the rest are hosted apps that are not installed there); the dock shifts with recents, so no dock apps

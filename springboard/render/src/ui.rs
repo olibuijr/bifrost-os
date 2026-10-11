@@ -652,7 +652,6 @@ mod appearance_guard {
         ("shell/camera/", "camera viewfinder is always black"),
         ("shell/photos/", "full-screen photo viewer and camera tile are black, as in Photos"),
         ("apps/clock-desktop/src/clock/", "translucent scrims (night shade, sheet dimming) over the clock faces"),
-        ("shell/wowstream/", "video playback surfaces"),
         ("shell/magnifier.rs", "magnifier viewfinder"),
         ("shell/jiggle.rs", "badge glyph ink"),
         ("shell/textarea.rs", "checkbox tick ink"),
