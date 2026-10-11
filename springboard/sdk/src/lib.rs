@@ -55,6 +55,7 @@ pub mod control;
 pub mod intents;
 pub mod extension;
 pub mod quicksearch;
+pub mod visual_search;
 pub mod peek;
 pub mod webview;
 pub mod webview_dev;
