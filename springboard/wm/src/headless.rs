@@ -157,7 +157,8 @@ impl Compositor {
                 ready_tx.send(Err(e.to_string())).ok();
             }
         });
-        let socket = ready_rx.recv_timeout(Duration::from_secs(20))??;
+        // the first EGL start on a machine compiles its shader cache: allow it a minute
+        let socket = ready_rx.recv_timeout(Duration::from_secs(60))??;
         Ok(Compositor { commands: tx, socket, thread: Some(thread) })
     }
 

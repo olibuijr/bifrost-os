@@ -382,14 +382,17 @@ def vm_unattended(a):
     if not wait_for(synced, 60, 3):
         notes.append("the live system runs a different installer than the one just published (lab-sync could not fetch it)")
         return finish(a, ok=False)
+    # an unattended run may already have started with the network below: stop it and undo a half-mounted target first
+    # (the preset stays in /run/bifrost-unattended.toml, so the restarted installer finds it even on a wiped disk)
+    ssh("systemctl stop bifrost-installer; umount -R /mnt 2>/dev/null; true", 30)
     # QEMU's user network: the ISO's resolver (Quad9 through the NAT) is slow and answers IPv6 the VM cannot route, so
     # pacstrap's downloads timed out. QEMU's own DNS proxy (10.0.2.3) uses titan's resolver.
     ssh("for i in /sys/class/net/*; do n=${i##*/}; [ $n = lo ] && continue; resolvectl dns $n 10.0.2.3; resolvectl domain $n '~.'; done;"
         " resolvectl flush-caches", 15)
     # 12 parallel package downloads stall on QEMU's user network ("Less than 1 bytes/sec"); one runs at ~18 MB/s
     ssh("sed -i 's/^ParallelDownloads.*/ParallelDownloads = 3/' /etc/pacman.conf", 10)
-    # the unattended run starts now the network is right; an earlier one may have died on DNS (the preset stays in /run)
-    ssh("systemctl restart bifrost-installer", 30)
+    # the unattended run starts now the network is right
+    ssh("systemctl start bifrost-installer", 30)
 
     # 3. the unattended install: follow the installer's own log until the machine reboots into the new system
     t = time.time()
