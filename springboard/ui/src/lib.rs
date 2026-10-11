@@ -639,6 +639,7 @@ pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
 pub mod music;
+pub mod indexset;
 #[cfg(test)]
 mod bench;
 
