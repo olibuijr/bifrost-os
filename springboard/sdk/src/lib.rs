@@ -65,6 +65,7 @@ pub mod coding;
 pub mod attributed;
 pub mod spellcheck;
 pub mod notification;
+pub mod distributed;
 pub mod observable;
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};

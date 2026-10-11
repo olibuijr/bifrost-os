@@ -1,0 +1,24 @@
+{
+  "framework": "Distributed",
+  "doc": "https://developer.apple.com/documentation/distributed",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/distributed.rs (RemoteCallTarget, InvocationEncoder, InvocationDecoder, LocalTestingSystem), springboard/sdk/src/control.rs (app control JSON-RPC), springboard/sdk/src/notification.rs (DistributedNotificationCenter), springboard/mcp/src/ (agent MCP server)",
+  "summary": "Apple's Distributed framework is the Swift distributed actor model (actor systems, typed remote calls, local test system). BifrOSt has no actor system and no transport for calls between processes. It now has the call side: typed, labelled invocations, a result handler, an in-process testing system and the error mapping to JSON-RPC codes. Its cross-app broadcast and control socket cover message passing, not location-transparent actor references.",
+  "rea_evidence": "ev_1837066359cf436d6652c89ee3ff05fbbcf959b09703bb335ac1355f5835dae8",
+  "features": [
+    {"feature": "Distributed actors and actor systems", "apple": "DistributedActor, DistributedActorSystem, @Resolvable", "bifrost": "none (no actor system in springboard/sdk/src/)", "status": "n/a", "note": "Swift language runtime feature; BifrOSt apps are Rust with no location-transparent actor references, so there is no counterpart to build on"},
+    {"feature": "Remote call targets and invocation encoding", "apple": "RemoteCallTarget, RemoteCallArgument, DistributedTargetInvocationEncoder, DistributedTargetInvocationDecoder, DistributedTargetInvocationResultHandler", "bifrost": "springboard/sdk/src/distributed.rs (RemoteCallTarget, RemoteCallArgument, InvocationEncoder, InvocationDecoder, InvocationResultHandler); springboard/sdk/src/control.rs (handle_line, encode)", "status": "partial", "note": "target identifiers are validated; arguments are labelled and encoded with coding::Encodable; the decoder reads them in order and checks label and type; the result handler receives return, void or throw. No generic substitutions or return-type record, and no transport: invocations run in process only"},
+    {"feature": "Cross-process broadcast messages", "apple": "Distributed notifications (NSDistributedNotificationCenter-style delivery; Distributed framework docs do not cover it directly)", "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter, post_with, add_observer); springboard/src/shell/apphost.rs:822 (ToShell::DistPost relay); docs/bifrost-ui.md:1219", "status": "partial", "note": "shell relays posts to every running app; user_info is string to string, max 32 entries and 1024 characters a value; no suspensionBehavior, no deliverImmediately; plain post stays process-local"},
+    {"feature": "Remote call errors", "apple": "DistributedActorCodingError, DistributedActorSystemError, ExecuteDistributedTargetError", "bifrost": "springboard/sdk/src/distributed.rs (DistributedError, DistributedActorCodingError, From<DistributedError> for RpcError); springboard/sdk/src/control.rs (RpcError, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR, TIMEOUT)", "status": "partial", "note": "one error enum covers unknown actor, unknown target, coding and handler failures; each maps to a JSON-RPC code. No separate protocol error type for conforming actor systems"},
+    {"feature": "Local testing actor system", "apple": "LocalTestingDistributedActorSystem and its ActorID, Address, invocation encoder/decoder types", "bifrost": "springboard/sdk/src/distributed.rs (LocalTestingSystem, ActorId, CollectingResultHandler); springboard/sdk/src/testing.rs (general SDK testing kit)", "status": "partial", "note": "in-process synchronous test double: make an actor id, register a handler per target, execute with a result handler. No actor address type and no recording of invocations"},
+    {"feature": "Agent and tool access to running apps", "apple": "No direct Distributed counterpart (remote invocation across processes)", "bifrost": "springboard/mcp/src/ (agent MCP server); tools/app-control.py; tools/pi-bifrost-control/client.ts", "status": "os", "note": "agents reach the desktop and apps through MCP and per-app control sockets, not through a shared invocation layer apps can call"}
+  ],
+  "gaps": [
+    "No location-transparent remote actor references or actor system; no SDK type for a remote handle to another app's object",
+    "Invocations are not sent over any transport: the control socket carries JSON-RPC methods, not encoded invocations",
+    "The invocation encoder has no generic substitution or return-type record",
+    "Cross-app notifications are string-to-string only, capped at 32 entries and 1024 characters per value",
+    "Cross-app notifications have no suspensionBehavior: an app that is not running misses the post"
+  ]
+}
