@@ -690,6 +690,7 @@ pub mod model_store;
 pub mod ml_tensor;
 pub mod features;
 pub mod compute;
+pub mod work_stream;
 pub mod postal;
 pub mod recordsearch;
 #[cfg(test)]
