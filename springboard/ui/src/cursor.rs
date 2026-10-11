@@ -1,7 +1,6 @@
 //! Cursor stack (`NativeCursor`): the shape the pointer shows is the top of a stack that code pushes and pops, plus a
 //! hide count and a hide-until-moved flag. Pure model: the compositor turns `Kind::shape` into its cursor-shape request.
 
-use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -142,6 +141,7 @@ impl Cursors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn an_empty_stack_shows_the_arrow_and_push_pop_is_last_in_first_out() {
