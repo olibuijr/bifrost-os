@@ -163,6 +163,60 @@ pub fn grid(bounds: Rect, columns: usize, spacing_x: f32, spacing_y: f32, row_h:
         .collect()
 }
 
+/// Where a layer sits inside an overlay (`ZStack` alignment). `Leading` and `Trailing` are the left and right edges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    TopLeading,
+    Top,
+    TopTrailing,
+    Leading,
+    Center,
+    Trailing,
+    BottomLeading,
+    Bottom,
+    BottomTrailing,
+}
+
+impl Anchor {
+    /// Position inside the free space as `(x, y)` fractions: 0 is the leading or top edge, 1 the trailing or bottom edge.
+    pub fn unit(self) -> (f32, f32) {
+        match self {
+            Anchor::TopLeading => (0.0, 0.0),
+            Anchor::Top => (0.5, 0.0),
+            Anchor::TopTrailing => (1.0, 0.0),
+            Anchor::Leading => (0.0, 0.5),
+            Anchor::Center => (0.5, 0.5),
+            Anchor::Trailing => (1.0, 0.5),
+            Anchor::BottomLeading => (0.0, 1.0),
+            Anchor::Bottom => (0.5, 1.0),
+            Anchor::BottomTrailing => (1.0, 1.0),
+        }
+    }
+}
+
+/// Lays `layers` (intrinsic `(w, h)` each) over one another inside `bounds` minus `insets`, all aligned to `anchor`
+/// (`ZStack`). A layer keeps its size; one larger than the area is clamped to it, so nothing leaves the bounds.
+/// Returns one rect per layer in the order given, which is back to front.
+pub fn overlay(bounds: Rect, insets: EdgeInsets, anchor: Anchor, layers: &[(f32, f32)]) -> Vec<Rect> {
+    let area = bounds.inset(insets);
+    let (fx, fy) = anchor.unit();
+    layers
+        .iter()
+        .map(|&(w, h)| {
+            let w = w.max(0.0).min(area.w);
+            let h = h.max(0.0).min(area.h);
+            Rect { x: area.x + (area.w - w) * fx, y: area.y + (area.h - h) * fy, w, h }
+        })
+        .collect()
+}
+
+/// `ViewThatFits`: the index of the first candidate, in preference order, whose size fits `available` on the
+/// constrained axes (`axes` is `(horizontal, vertical)`). `None` when no candidate fits, so the caller picks the fallback.
+pub fn first_fitting(available: (f32, f32), candidates: &[(f32, f32)], axes: (bool, bool)) -> Option<usize> {
+    const EPS: f32 = 1e-4;
+    candidates.iter().position(|&(w, h)| (!axes.0 || w <= available.0 + EPS) && (!axes.1 || h <= available.1 + EPS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +300,43 @@ mod tests {
         assert_eq!(cells[3].y, 26.0);
         assert_eq!(cells[2].right(), 300.0);
         assert_eq!(grid(B, 0, 0.0, 0.0, 10.0, 2).len(), 2, "zero columns is treated as one");
+    }
+
+    #[test]
+    fn overlay_aligns_every_layer_to_the_anchor() {
+        let r = overlay(B, EdgeInsets::ZERO, Anchor::Center, &[(100.0, 40.0), (300.0, 100.0)]);
+        assert_eq!(r[0], Rect { x: 100.0, y: 30.0, w: 100.0, h: 40.0 }, "centred");
+        assert_eq!(r[1], B, "a layer that fills the bounds covers them exactly");
+        let br = overlay(B, EdgeInsets::all(10.0), Anchor::BottomTrailing, &[(50.0, 20.0)]);
+        assert_eq!(br[0], Rect { x: 240.0, y: 70.0, w: 50.0, h: 20.0 }, "inset area, bottom trailing corner");
+        let tl = overlay(B, EdgeInsets::ZERO, Anchor::TopLeading, &[(20.0, 10.0)]);
+        assert_eq!((tl[0].x, tl[0].y), (0.0, 0.0));
+    }
+
+    #[test]
+    fn overlay_clamps_oversized_layers_inside_the_area() {
+        let r = overlay(B, EdgeInsets::ZERO, Anchor::Trailing, &[(500.0, 500.0), (-5.0, 10.0)]);
+        assert_eq!(r[0], B);
+        assert_eq!((r[1].w, r[1].x), (0.0, 300.0), "a negative size collapses to zero at the trailing edge");
+        assert!(r.iter().all(|x| x.right() <= 300.0 + 1e-3 && x.bottom() <= 100.0 + 1e-3));
+    }
+
+    #[test]
+    fn first_fitting_takes_the_first_candidate_in_preference_order() {
+        let wide_hstack = (320.0, 24.0);
+        let progress = (100.0, 24.0);
+        let label = (40.0, 14.0);
+        let cands = [wide_hstack, progress, label];
+        assert_eq!(first_fitting((300.0, 50.0), &cands, (true, true)), Some(1), "the 320-point row is too wide");
+        assert_eq!(first_fitting((30.0, 50.0), &cands, (true, true)), None, "nothing fits 30 points wide");
+        assert_eq!(first_fitting((300.0, 16.0), &cands, (true, true)), Some(2), "the 16-point height rejects the first two");
+    }
+
+    #[test]
+    fn first_fitting_ignores_axes_that_are_not_constrained() {
+        let cands = [(500.0, 20.0), (50.0, 900.0)];
+        assert_eq!(first_fitting((100.0, 40.0), &cands, (true, false)), Some(1), "height is free, so the tall candidate fits");
+        assert_eq!(first_fitting((100.0, 40.0), &cands, (false, true)), Some(0), "width is free, so the wide candidate fits");
+        assert_eq!(first_fitting((100.0, 40.0), &[], (true, true)), None);
     }
 }
