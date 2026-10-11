@@ -14,6 +14,8 @@ pub mod appearance;
 pub mod glass;
 pub mod motion;
 pub mod assets;
+pub mod colorspace;
+pub mod pixel_layout;
 
 #[cfg(test)]
 mod tests {
