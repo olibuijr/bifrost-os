@@ -80,6 +80,7 @@ pub mod spellcheck;
 pub mod translation;
 pub mod notification;
 pub mod workspace;
+pub mod distributed;
 pub mod observable;
 pub mod ndarray;
 pub mod inference;
