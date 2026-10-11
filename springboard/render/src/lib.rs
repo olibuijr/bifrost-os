@@ -16,6 +16,8 @@ pub mod motion;
 pub mod assets;
 pub mod fontprefs;
 pub mod filter;
+pub mod mesh;
+pub mod texture;
 
 #[cfg(test)]
 mod tests {
