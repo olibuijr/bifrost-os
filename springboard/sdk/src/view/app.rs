@@ -241,6 +241,14 @@ impl<S: Responder + 'static> ViewApp<S> {
     pub fn controls_tree(&self) -> Vec<NodeExt> {
         self.window.ax_ext()
     }
+    /// `App::ax_text`: caret, selection and visible range of the text elements.
+    pub fn ax_text(&self) -> Vec<bifrost_ui::ax::AxText> {
+        self.window.ax_texts()
+    }
+    /// `App::ax_meta`: `accessibilityTitle` and `accessibilityHelp` of the elements.
+    pub fn ax_meta(&self) -> Vec<bifrost_ui::ax::AxMeta> {
+        self.window.ax_metas()
+    }
     /// `App::ax_set`: Press activates the element, SetValue writes its value, Focus makes it first responder.
     /// True when a frame is needed.
     pub fn ax_set(&mut self, id: u64, action: AxAction) -> bool {

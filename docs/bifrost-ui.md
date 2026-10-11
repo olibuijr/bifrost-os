@@ -207,15 +207,39 @@ Screen readers (Orca) read BifrOSt apps through the AT-SPI2 bus. Three layers:
   helper thread; with no `org.a11y.Bus` the bridge turns itself off. Screen reader requests queue to the shell thread
   and leave as `ToApp::AxSet`. No hand-written D-Bus marshalling was needed because zbus is available offline.
 
+Closed in the text round (system 0.4.9x groundwork, AT-SPI side untested on a live Orca):
+
+- **Label, title, help.** `Node::label` stays `accessibilityLabel`; `ToShell::AxMeta` (0x211, `bifrost_ui::ax::AxMeta`) carries
+  `accessibilityTitle` and `accessibilityHelp`. The bridge's `Name` is the label (else the title), `Description` the help
+  (else the role name), and `GetAttributes` lists `title` and `help`. SDK: `App::ax_meta`, `View::ax_meta`.
+- **Text attributes.** `ToShell::AxText` (0x210, `bifrost_ui::ax::AxText`): insertion point, selected range (so
+  `AXSelectedText` is `AxText::selected_text`) and visible range, as char offsets. `Text` exports `GetText`, `GetCaretOffset`,
+  `CaretOffset`, `GetNSelections`, `GetSelection`; the visible range is the `visible-range` attribute. SDK: `App::ax_text`,
+  `View::ax_text`, implemented by `TextField`.
+- **Text events.** The bridge diffs each text field's value and attributes on publish and emits `TextChanged`
+  (`insert`/`delete` with offset, length and text), `TextCaretMoved` and `TextSelectionChanged`, so Orca follows typing.
+- **Announcements.** `Ctx::announce(text, priority)` sends `ToShell::Announce` (0x212). The closest AT-SPI equivalent is
+  `Object:Announcement` (AT-SPI 2.46, `atspi_accessible_announce`), emitted on the app's frame with the politeness in `detail1`
+  (low and medium polite, high assertive) and the text as `any_data`. The shell keeps at most 8 pending per app.
+- **Secure fields.** A secure field is `PASSWORD_TEXT`, its value is replaced by bullets in `atspi::model::build_ax`, and
+  `AXSelectedText` is always empty; only the length crosses the wire. Wired for the shell `TextField::ax_text` and the sign-in
+  sheet (`deildu::login::Login::ax_fields`).
+
 Parity gaps against `NSAccessibility` (recorded, not hidden):
 
 - No app emits `controls_tree` yet, so every app is a flat list under its frame until its `controls()` code adds parents.
 - Shell chrome (menu bar, dock, Spotlight, Settings pages) is not in the AT-SPI tree; it exists only in the agent
   element map (`bifrost_ui::ax::Map`).
 - Extents are window-local points for both coordinate types: the bridge is not told window positions or the scale.
-- No `accessibilityLabel` vs `accessibilityTitle` vs help split, no `AXSelectedText`/`AXVisibleCharacterRange`,
-  no text-range or caret events, no live-region announcements (`NSAccessibilityAnnouncementRequested`), no custom
-  actions beyond press, no `AXRelations` (title-for, labelled-by), no rotor equivalent.
+- No custom actions beyond press, no `AXRelations` (title-for, labelled-by), no rotor equivalent.
+- The text attributes cover single-line fields only: no multi-line `AXInsertionPointLineNumber`, no `AXStringForRange`
+  attributed runs, no `SetSelection` or `SetCaretOffset` from a screen reader (the bridge answers false; there is no
+  `ToApp` message for it yet).
+- The SDK `TextField` has no secure mode (no bullets drawn, no `AxText { secure }`); only the shell's own `TextField`
+  and the sign-in sheet report masked fields. The sheet's `Login::ax_fields` feeds `atspi::model::build_ax`, but the
+  shell does not yet publish its own chrome (sheets, menus) as an AT-SPI application, so Orca cannot reach it until it does.
+- `accessibilityTitle` and `accessibilityHelp` are set on the SDK `TextField` only (`with_ax_title`, `with_ax_help`); other
+  controls report no title or help yet.
 - `Value` is parsed from the node's value text ("0.4", "40%"); a typed min/max/step needs a node field.
 - `SetValue` and `Focus` only reach apps that override `ax_set`; sliders and text fields in the shared kit do not yet.
 - Rows are not selectable (`Selection` interface) and lists are not `Table`s.
@@ -231,8 +255,8 @@ Priority order based on existing app needs and current implementation seams:
    `NSSegmentedControl`, `NSSlider`, `NSStepper`, `NSProgressIndicator`) plus grouped form rows, and record the matching
    semantic nodes automatically.
 3. Accessibility (`NSAccessibility`): parent/child relations (`ToShell::ControlsTree`), `ax set` (`ToApp::AxSet`) and
-   the Linux AT-SPI2 bridge are in (feature `atspi`, see "Accessibility bridge (AT-SPI2)"). Still open: window actions,
-   shell chrome in the tree, text ranges, live regions and apps that emit the tree (none do yet).
+   the Linux AT-SPI2 bridge are in (feature `atspi`, see "Accessibility bridge (AT-SPI2)"). Text ranges, caret events and live announcements are in. Still open: window actions,
+   shell chrome in the tree and apps that emit the tree (none do yet).
 4. Add typed App Intents (`AppIntent`, `AppEntity`, `AppShortcut`) alongside app-control RPC methods.
 5. (5a-5c done, see "User notifications", "Share sheet" and "Typed drag and drop") Add the brokered share sheet (`NSSharingServicePicker`), actionable/reply notifications (`UNUserNotificationCenter`),
    and typed drag and drop (`NSDraggingDestination`/`NSDraggingSource`) using `uttype`.

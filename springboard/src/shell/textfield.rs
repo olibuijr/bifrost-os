@@ -117,6 +117,14 @@ impl TextField {
         self.caret
     }
 
+    /// The field as an accessibility text element: caret, selection and length in characters. A secure field is marked
+    /// `secure`, so the bridge exposes bullets and a length, never the text.
+    pub fn ax_text(&self, id: u64) -> bifrost_ui::ax::AxText {
+        let (a, b) = self.selection();
+        let n = self.len() as u32;
+        bifrost_ui::ax::AxText { id, caret: self.caret as u32, sel_start: a as u32, sel_end: b as u32, vis_start: 0, vis_end: n, secure: self.secure, len: n }
+    }
+
     pub fn len(&self) -> usize {
         self.text.chars().count()
     }
@@ -694,6 +702,28 @@ mod tests {
         let mut f = field(&ui, false);
         f.replace(&ui, (0, 0), "a\r\nb\nc\td");
         assert_eq!(f.text(), "a b c d");
+    }
+
+    #[test]
+    fn selected_text_follows_the_caret_in_the_shell_field() {
+        let ui = ui();
+        let mut f = field(&ui, false);
+        f.set_text(&ui, "hello");
+        f.select(&ui, (1, 4));
+        let a = f.ax_text(7);
+        assert_eq!((a.id, a.caret, a.selected_range(), a.len), (7, 4, (1, 4), 5));
+        assert_eq!(a.selected_text(f.text()), "ell");
+    }
+
+    #[test]
+    fn password_fields_never_expose_text() {
+        let ui = ui();
+        let mut f = field(&ui, true);
+        f.set_text(&ui, "abc");
+        f.select(&ui, (0, 3));
+        let a = f.ax_text(1);
+        assert!(a.secure);
+        assert_eq!((a.len, a.selected_text(f.text())), (3, String::new()));
     }
 
     #[test]

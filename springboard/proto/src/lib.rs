@@ -16,6 +16,8 @@ pub mod extras;
 pub use extras::{LoginOp, LoginStatus, StatusMenuItem};
 pub mod quicksearch;
 pub mod peek;
+pub mod axtext;
+pub use bifrost_ui::ax::{AxMeta, AxText, Priority as AnnouncePriority};
 pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 
 pub const MAX_PACKET: usize = 16 * 1024;
@@ -666,6 +668,13 @@ pub enum ToShell {
     Preview { items: Vec<peek::PreviewItem>, index: u32 },
     /// `QLPreviewPanel.close()`. 0x1e1.
     PreviewClose,
+    /// Selection, insertion point and visible range of text elements (`AXSelectedTextRange`, `AXVisibleCharacterRange`); a
+    /// secure field sends only its length. Sent when they change. 0x210.
+    AxText(Vec<AxText>),
+    /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). 0x211.
+    AxMeta(Vec<AxMeta>),
+    /// the announcement-requested accessibility notification: speak `text` now. Leaves as an AT-SPI `announcement` event. 0x212.
+    Announce { text: String, priority: AnnouncePriority },
     /// `UNUserNotificationCenter.add`: answered with `NotificationStatus`.
     NotifyRequest { request: u32, req: NotifRequest },
     /// `removeDeliveredNotifications` / `removePendingNotificationRequests`; no ids removes all.
@@ -1330,6 +1339,7 @@ impl ToShell {
             m @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => extras::encode_shell(m, &mut b),
             m @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => quicksearch::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
+            m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
@@ -1718,6 +1728,7 @@ impl ToShell {
             t @ 0x1b0..=0x1bf => extras::decode_shell(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
+            t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
             t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })

@@ -364,6 +364,9 @@ pub struct TextField {
     marks: Vec<(usize, f32)>,
     /// a drag selection is in progress
     dragging: bool,
+    /// `accessibilityTitle` and `accessibilityHelp`
+    ax_title: String,
+    ax_help: String,
 }
 
 impl TextField {
@@ -377,7 +380,19 @@ impl TextField {
             start: 0,
             marks: Vec::new(),
             dragging: false,
+            ax_title: String::new(),
+            ax_help: String::new(),
         }
+    }
+    /// `accessibilityTitle`: the visible title of the field (the placeholder stays the `accessibilityLabel`).
+    pub fn with_ax_title(mut self, title: &str) -> Self {
+        self.ax_title = title.into();
+        self
+    }
+    /// `accessibilityHelp`: what the field is for, spoken after its label.
+    pub fn with_ax_help(mut self, help: &str) -> Self {
+        self.ax_help = help.into();
+        self
     }
     /// The text model: selection, marked range, surrounding text.
     pub fn model(&self) -> &TextBuffer {
@@ -635,6 +650,16 @@ impl View for TextField {
     }
     fn ax_node(&self) -> Option<Node> {
         node(self, Role::TextField, &self.placeholder, self.text())
+    }
+    /// The insertion point, the selection and the part of the text scrolled into view.
+    fn ax_text(&self) -> Option<bifrost_ui::ax::AxText> {
+        let buf = &self.editor.buf;
+        let start = self.start.min(buf.len());
+        let end = self.marks.last().map_or(buf.len(), |(b, _)| *b).max(start);
+        Some(bifrost_ui::ax::text_ax(self.id(), buf.text(), buf.anchor(), buf.caret(), (start, end), false))
+    }
+    fn ax_meta(&self) -> Option<(String, String)> {
+        (!self.ax_title.is_empty() || !self.ax_help.is_empty()).then(|| (self.ax_title.clone(), self.ax_help.clone()))
     }
     fn ax_set_value(&mut self, value: &str) -> bool {
         let before = self.text().to_string();
