@@ -1,0 +1,39 @@
+{
+  "framework": "AVFoundation (Playback, Editing, Common)",
+  "doc": "https://developer.apple.com/documentation/avfoundation",
+  "macos_since": "10.7",
+  "status": "partial",
+  "bifrost": "springboard/src/media/ (shell-internal player, demux, decoders, mixer), springboard/audiod/src/main.rs, springboard/src/shell/audiosvc.rs, springboard/ui/src/composition.rs, springboard/ui/src/audio_mix.rs",
+  "summary": "BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, AAC/MP3 audio, ALSA output, A/V sync, ID3/ilst tags), but it is inside the shell and Music app, not an SDK API. Pure models now cover composite timelines (insert, gaps, removal, scaling) and per-track volume ramps; neither is applied to playback or export yet. Nothing exists for video effects, export or writing media.",
+  "rea_evidence": "ev_2039682c451f2f60bfa0bb335a4a618725a08d5d1d420efa070e2c5faf9d366f",
+  "features": [
+    {"feature": "Essentials: AVFoundation updates", "apple": "Release-notes article", "bifrost": "docs/bifrost-ui.md", "status": "n/a", "note": "Documentation article, no API"},
+    {"feature": "Media assets (AVAsset, tracks, metadata)", "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem", "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs", "status": "partial", "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps"},
+    {"feature": "Media reading and writing", "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator", "bifrost": "springboard/src/media/demux/mod.rs", "status": "gap", "note": "Reading samples is internal to the player; no writer, no export, no frame-grab API"},
+    {"feature": "Media types and utilities", "apple": "AVFileType, AVMediaType, AVCaption", "bifrost": "springboard/ui/src/uttype.rs", "status": "partial", "note": "File type identification exists; no captions or subtitle model"},
+    {"feature": "Video settings", "apple": "AVVideoSettings keys and constants", "bifrost": "springboard/src/media/hwdec/mod.rs", "status": "gap", "note": "Decode only, no encoder settings"},
+    {"feature": "Audio settings", "apple": "AVAudioSettings keys and constants", "bifrost": "springboard/src/media/convert.rs", "status": "partial", "note": "Sample format conversion exists internally; no settings dictionary"},
+    {"feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)", "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, interstitials", "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs", "status": "os", "note": "Play, pause, seek, buffering and A/V sync work, but only through the shell (Deildu, Files video); apps get no SDK player. No looper, interstitials or rate control"},
+    {"feature": "Video decoding", "apple": "AVPlayerItemVideoOutput, VideoToolbox-backed decode", "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs", "status": "os", "note": "VA-API hardware decode with libavcodec fallback; no frame-output API for apps"},
+    {"feature": "Audio output and routing", "apple": "AVPlayer audio, AVAudioSession-style routing", "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/src/media/mixer.rs", "status": "os", "note": "audiod and mixer own output and routing; no app-facing session API"},
+    {"feature": "Now Playing and remote commands", "apple": "Playback integration (MPNowPlayingInfoCenter)", "bifrost": "springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs", "status": "partial", "note": "Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"},
+    {"feature": "Offline playback and storage", "apple": "AVAssetDownloadTask, AVAssetDownloadStorageManager", "bifrost": "springboard/src/media/stream.rs", "status": "partial", "note": "Progressive streaming to a growing file for playback; no HLS download tasks or storage policy"},
+    {"feature": "Streaming and AirPlay", "apple": "HLS playback, AVRoutePickerView, FairPlay", "bifrost": "springboard/src/media/source.rs", "status": "partial", "note": "HTTP sources and MSE demux exist; no HLS, AirPlay or DRM"},
+    {"feature": "Sample buffer playback", "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer", "bifrost": "springboard/src/media/demux/mse.rs", "status": "gap", "note": "Only an internal MSE feed for the browser; no app renderer or synchronizer"},
+    {"feature": "Composite assets", "apple": "AVMutableComposition, AVMutableCompositionTrack", "bifrost": "springboard/ui/src/composition.rs", "status": "partial", "note": "Pure timeline model: tracks of source segments and gaps, insert, insert empty, remove (closes the gap), scale, and whole-composition edits across tracks. No asset loading, no URL asset initialisation, no track loading, no app-facing API, and no playback or export of a composition"},
+    {"feature": "QuickTime movies", "apple": "AVMovie, AVMutableMovie", "bifrost": "springboard/src/media/mp4.rs", "status": "gap", "note": "MP4 parsing only, no movie editing"},
+    {"feature": "Video effects and compositing", "apple": "AVVideoComposition, AVVideoCompositing, AVVideoCompositionCoreAnimationTool", "bifrost": "none", "status": "gap", "note": "No transitions, custom compositor or layer-animation tool"},
+    {"feature": "Audio mixing", "apple": "AVAudioMix, AVMutableAudioMixInputParameters", "bifrost": "springboard/ui/src/audio_mix.rs, springboard/src/media/mixer.rs", "status": "partial", "note": "Pure per-track volume model: levels set at a time, linear ramps over a span, a later change ends an earlier ramp, one parameter set per track. Not applied to output; the system mixer (springboard/src/media/mixer.rs) has no per-asset volume ramps. No audio tap processor and no time pitch algorithm"}
+  ],
+  "gaps": [
+    "No SDK media player for apps (everything is in the shell crate)",
+    "No asset/track model or sample reader for apps",
+    "Composition and audio mix are pure models: no playback, export or output uses them yet",
+    "No video composition: no transitions, custom compositor or layer-animation tool",
+    "No writer or export session; no encoder",
+    "No HLS, offline download management, AirPlay or FairPlay",
+    "No sample buffer renderers or synchronizer",
+    "No captions or subtitle model",
+    "No audio tap processor or time pitch algorithm for scaled audio"
+  ]
+}

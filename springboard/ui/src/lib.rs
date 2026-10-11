@@ -584,6 +584,8 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod composition;
+pub mod audio_mix;
 #[cfg(test)]
 mod bench;
 
