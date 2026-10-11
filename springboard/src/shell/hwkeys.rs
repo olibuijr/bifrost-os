@@ -354,6 +354,10 @@ impl Shell {
             }
             return vec![];
         }
+        // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
+        if self.screen == Screen::Lock {
+            self.login_ensure(t);
+        }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
             _ if self.quicksearch.is_shown() => self.quicksearch_key(out, t),

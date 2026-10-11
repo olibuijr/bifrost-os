@@ -2104,6 +2104,8 @@ impl Shell {
     /// slides the Today View in from the left; once that page is in, its
     /// touches go to the page.
     fn lock_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // as for keys: the first click after a lock reaches the login window even before a tick opened it
+        self.login_ensure(t);
         if self.login_open() {
             return self.login_touch(ev, t);
         }

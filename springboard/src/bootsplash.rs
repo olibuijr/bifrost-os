@@ -27,6 +27,73 @@ pub fn paint(px: &mut [u32], w: usize, h: usize) {
     }
 }
 
+/// How long the loader's bar takes to fill to the end once the first screen is ready, before the fade.
+pub const FILL_MS: f64 = 300.0;
+/// The bar's fill colour (the track is the loader's grey).
+const BAR_FILL: u32 = 0xffe5_e5ea;
+
+/// Fills the loader frame's bar to `fill` (0..1) from the left, over `px` as `paint` left it.
+pub fn paint_bar(px: &mut [u32], w: usize, h: usize, fill: f64) {
+    let (bw, bh) = (240 * h / 1440, (4 * h / 1440).max(2));
+    let (bx, by) = ((w.saturating_sub(bw)) / 2, h / 2 + 110 * h / 1440);
+    let n = (bw as f64 * fill.clamp(0.0, 1.0)).round() as usize;
+    for row in px[by * w..].chunks_mut(w).take(bh) {
+        row[bx..bx + n].fill(BAR_FILL);
+    }
+}
+
+/// How full the bar is when the first screen is ready: the share of the boot already behind (boot so far against
+/// the fill still to come), so a slow boot starts nearer the end. At most 95 %.
+pub fn first_fill(boot_ms: f64) -> f64 {
+    (boot_ms / (boot_ms + FILL_MS * 2.0)).clamp(0.0, 0.95)
+}
+
+/// The boot frame's hand-off to the first screen: the bar fills to the end over `FILL_MS`, then the frame
+/// cross-fades into the screen over `FADE_MS`, the reference desktop's boot-to-login order.
+pub struct Handoff {
+    splash: Vec<u32>,
+    w: usize,
+    h: usize,
+    /// (first-screen time, the bar's fill then)
+    start: Option<(f64, f64)>,
+}
+
+impl Handoff {
+    pub fn new(w: usize, h: usize) -> Self {
+        let mut splash = vec![0; w * h];
+        paint(&mut splash, w, h);
+        Handoff { splash, w, h, start: None }
+    }
+
+    /// True once the first screen arrived (the first `compose`).
+    pub fn started(&self) -> bool {
+        self.start.is_some()
+    }
+
+    /// Writes into `out` what to show at `now` (ms) over the screen `ui`, `boot_ms` the boot clock at the first call.
+    /// Returns false once the hand-off is over: show `ui` as it is.
+    pub fn compose(&mut self, ui: &[u32], out: &mut Vec<u32>, now: f64, boot_ms: f64) -> bool {
+        let (from, fill0) = *self.start.get_or_insert((now, first_fill(boot_ms)));
+        let t = now - from;
+        if t >= FILL_MS + FADE_MS {
+            return false;
+        }
+        out.clear();
+        if t < FILL_MS {
+            // ease-out: the bar arrives at the end gently
+            let e = 1.0 - (1.0 - t / FILL_MS).powi(3);
+            out.extend_from_slice(&self.splash);
+            paint_bar(out, self.w, self.h, fill0 + (1.0 - fill0) * e);
+        } else {
+            let mut full = self.splash.clone();
+            paint_bar(&mut full, self.w, self.h, 1.0);
+            out.extend_from_slice(ui);
+            fade(out, &full, (t - FILL_MS) / FADE_MS);
+        }
+        true
+    }
+}
+
 /// Blends the boot frame over `frame` with weight `1 - k` (k = fade progress 0..1, eased).
 pub fn fade(frame: &mut [u32], splash: &[u32], k: f64) {
     let e = k.clamp(0.0, 1.0);
@@ -76,6 +143,32 @@ pub fn mark(event: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bar_px(px: &[u32], w: usize, h: usize, fill: f64) -> u32 {
+        let (bw, by) = (240 * h / 1440, h / 2 + 110 * h / 1440);
+        let x = (w - bw) / 2 + ((bw as f64 * fill) as usize).min(bw - 1);
+        px[by * w + x]
+    }
+
+    #[test]
+    fn handoff_fills_the_bar_then_fades_into_the_screen() {
+        let (w, h) = (640, 360);
+        let ui = vec![0xff10_2030u32; w * h];
+        let mut hand = Handoff::new(w, h);
+        let mut out = Vec::new();
+        assert!(!hand.started());
+        assert!(hand.compose(&ui, &mut out, 1000.0, 1700.0));
+        let f0 = first_fill(1700.0);
+        assert!(f0 > 0.6 && f0 < 0.95, "{f0}");
+        assert_eq!(bar_px(&out, w, h, f0 - 0.05), BAR_FILL, "already filled up to the boot so far");
+        assert_eq!(bar_px(&out, w, h, 0.99), 0xff3c_3c3e, "the end still empty");
+        assert!(hand.compose(&ui, &mut out, 1000.0 + FILL_MS - 1.0, 0.0));
+        assert_eq!(bar_px(&out, w, h, 0.99), BAR_FILL, "full by the end of the fill");
+        assert_eq!(out[0], 0xff00_0000, "still the boot frame, no screen yet");
+        assert!(hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS - 1.0, 0.0));
+        assert_ne!(out[0], 0xff00_0000, "fading into the screen");
+        assert!(!hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS, 0.0), "done: show the screen");
+    }
     #[test]
     fn frame_matches_the_loader_layout_and_fades_out() {
         let (w, h) = (1280, 720);

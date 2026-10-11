@@ -1,5 +1,11 @@
 # BifrOSt changelog
 
+## 0.5.31 — 2026-10-11
+
+- Login: the first key typed after the screen locks goes into the password field. The login window opened on the next frame, and the shell may not draw after a lock, so the first key was dropped and every login after a lock failed once (`the_first_key_after_a_lock_reaches_the_password_field`). Clicks get the same fix.
+- Boot: the loader's progress bar fills to the end when the desktop is ready (from the share of the boot already done, 300 ms ease-out), then the boot frame fades into the login window, the reference boot order. Before, the bar was a static track.
+- Lab installs: the sync carries the whole packed asset set (fonts, font library, stills, icons, sounds), and the installer prunes fonts and stills the set no longer has; fresh lab installs had the live medium's old assets and blank dock icons.
+
 ## 0.5.30 — 2026-10-11
 
 - Fonts: BifrOSt ships only open-source fonts. The defaults are open lookalikes of the reference system fonts: Inter (system), JetBrains Mono (monospaced) and Noto Sans Symbols 2 (symbols). `tools/pack.py` fetches them from one pinned google/fonts commit and checks their SHA-256; the proprietary symbol stub is no longer packed.

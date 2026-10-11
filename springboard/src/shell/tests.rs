@@ -444,6 +444,27 @@
         }
     }
 
+    /// The first key after locking goes into the password field, even before a frame opened the login window
+    /// (the shell idles after a lock, so no tick may have run). It was dropped, so every login after a lock failed once.
+    #[test]
+    fn the_first_key_after_a_lock_reaches_the_password_field() {
+        struct Stub;
+        impl login::Backend for Stub {
+            fn authenticate(&self, _: &str) -> login::Reply { login::Reply::Unavailable }
+            fn account(&self) -> Option<login::AccountInfo> {
+                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0 })
+            }
+        }
+        let mut sh = shell();
+        sh.screen = Screen::Lock;
+        sh.anim = None;
+        sh.login_backend = Some(std::sync::Arc::new(Stub));
+        assert!(!sh.login_open(), "no tick yet: the window is not open");
+        sh.hw_type(crate::shell::keyboard::Out::Text("a".into()), 1.0);
+        sh.hw_type(crate::shell::keyboard::Out::Text("b".into()), 1.1);
+        assert_eq!(sh.login.as_ref().map(|l| l.len()), Some(2), "both keys typed, the first one too");
+    }
+
     #[test]
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;

@@ -508,7 +508,7 @@ pub struct Display {
     #[cfg(feature = "desktop-wayland")]
     wayland: Option<super::wayland::Display>,
     /// first boot only: the loader's frame, when the fade into the first screen started, and a blend buffer
-    boot_fade: Option<(Vec<u32>, Option<f64>, Vec<u32>)>,
+    boot_fade: Option<(crate::bootsplash::Handoff, Vec<u32>)>,
     /// no panel behind it (emulator, headless): frames are only read back through the control socket
     virt: bool,
     /// when the emulated panel last took a frame: the next present waits for the following vblank
@@ -713,9 +713,7 @@ impl Display {
         display.mode.vrefresh = backend.refresh();
         display.wayland = Some(backend);
         if std::env::var_os("BIFROST_BOOT_FADE").is_some() {
-            let mut splash = vec![0; w as usize * h as usize];
-            crate::bootsplash::paint(&mut splash, w as usize, h as usize);
-            display.boot_fade = Some((splash, None, vec![]));
+            display.boot_fade = Some((crate::bootsplash::Handoff::new(w as usize, h as usize), vec![]));
         }
         Ok(display)
     }
@@ -947,21 +945,20 @@ impl Display {
     }
 
     pub fn present(&mut self, frame: &[u32], damage: &Damage) {
-        if let Some((splash, start, mut mix)) = self.boot_fade.take() {
-            let now = super::sys::now_ms();
-            let from = start.unwrap_or_else(|| { crate::bootsplash::mark("desktop-first-ui"); now });
+        if let Some((mut hand, mut mix)) = self.boot_fade.take() {
+            if !hand.started() {
+                crate::bootsplash::mark("desktop-first-ui");
+            }
             let (w, h) = self.size();
             let mut all = Damage::new(w, h);
             all.all();
-            if now - from >= crate::bootsplash::FADE_MS {
+            // the loader's bar fills to the end, then the boot frame fades into the first screen
+            if !hand.compose(frame, &mut mix, super::sys::now_ms(), crate::bootsplash::boottime_ms()) {
                 crate::bootsplash::mark("desktop-faded");
                 return self.present(frame, &all);
             }
-            mix.clear();
-            mix.extend_from_slice(frame);
-            crate::bootsplash::fade(&mut mix, &splash, (now - from) / crate::bootsplash::FADE_MS);
             self.present(&mix, &all);
-            self.boot_fade = Some((splash, Some(from), mix));
+            self.boot_fade = Some((hand, mix));
             return;
         }
         #[cfg(feature = "desktop-wayland")]
