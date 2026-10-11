@@ -315,11 +315,82 @@ struct Serial {
     state: Mutex<(VecDeque<Job>, bool)>,
 }
 
+/// A private concurrent queue (`DispatchQueue(label:attributes: .concurrent)`). Ordinary items run side by side on the
+/// shared pool; a barrier item waits until everything submitted before it has finished, runs alone, and only then
+/// lets the items submitted after it start.
+struct Concurrent {
+    label: String,
+    qos: Qos,
+    state: Mutex<ConcurrentState>,
+}
+
+#[derive(Default)]
+struct ConcurrentState {
+    /// waiting items, in submission order, each with its barrier flag
+    pending: VecDeque<(Job, bool)>,
+    /// items started and not yet finished
+    running: usize,
+    barrier_running: bool,
+}
+
+impl Concurrent {
+    fn submit(self: &Arc<Self>, job: Job, barrier: bool) {
+        lock(&self.state).pending.push_back((job, barrier));
+        self.pump();
+    }
+
+    /// Starts every item the queue may run now: the head item waits while a barrier runs, and a barrier waits while
+    /// anything runs. Jobs are handed to the pool after the lock is released.
+    fn pump(self: &Arc<Self>) {
+        let mut ready: Vec<(Job, bool)> = Vec::new();
+        {
+            let mut st = lock(&self.state);
+            loop {
+                let barrier = match st.pending.front() {
+                    Some((_, b)) => *b,
+                    None => break,
+                };
+                if st.barrier_running || (barrier && st.running > 0) {
+                    break;
+                }
+                let (job, _) = st.pending.pop_front().unwrap();
+                st.running += 1;
+                if barrier {
+                    st.barrier_running = true;
+                }
+                ready.push((job, barrier));
+                if barrier {
+                    break;
+                }
+            }
+        }
+        for (job, barrier) in ready {
+            let me = self.clone();
+            pool().submit(self.qos, Box::new(move || {
+                run(job);
+                me.finished(barrier);
+            }));
+        }
+    }
+
+    fn finished(self: &Arc<Self>, barrier: bool) {
+        {
+            let mut st = lock(&self.state);
+            st.running -= 1;
+            if barrier {
+                st.barrier_running = false;
+            }
+        }
+        self.pump();
+    }
+}
+
 #[derive(Clone)]
 enum Kind {
     Main,
     Global(Qos),
     Serial(Arc<Serial>),
+    Concurrent(Arc<Concurrent>),
 }
 
 /// `DispatchQueue`: the main queue, a global concurrent queue per QoS, or a private serial queue.
@@ -332,6 +403,7 @@ impl std::fmt::Debug for DispatchQueue {
             Kind::Main => write!(f, "DispatchQueue(main)"),
             Kind::Global(q) => write!(f, "DispatchQueue(global {})", q.name()),
             Kind::Serial(s) => write!(f, "DispatchQueue(serial {:?})", s.label),
+            Kind::Concurrent(c) => write!(f, "DispatchQueue(concurrent {:?})", c.label),
         }
     }
 }
@@ -353,6 +425,10 @@ impl DispatchQueue {
     pub fn serial_qos(label: &str, qos: Qos) -> Self {
         DispatchQueue(Kind::Serial(Arc::new(Serial { label: label.to_string(), qos, state: Mutex::new((VecDeque::new(), false)) })))
     }
+    /// `DispatchQueue(label:attributes: .concurrent)`: items run side by side; use `async_barrier` to order them.
+    pub fn concurrent(label: &str, qos: Qos) -> Self {
+        DispatchQueue(Kind::Concurrent(Arc::new(Concurrent { label: label.to_string(), qos, state: Mutex::new(ConcurrentState::default()) })))
+    }
 
     /// The queue's label.
     pub fn label(&self) -> &str {
@@ -360,6 +436,7 @@ impl DispatchQueue {
             Kind::Main => "main",
             Kind::Global(q) => q.name(),
             Kind::Serial(s) => &s.label,
+            Kind::Concurrent(c) => &c.label,
         }
     }
 
@@ -368,8 +445,19 @@ impl DispatchQueue {
         self.enqueue(Box::new(f));
     }
 
+    /// `async(flags: .barrier)`: on a concurrent queue, runs once everything submitted before it has finished, alone,
+    /// and holds back what is submitted after it until it returns. On any other queue it is a plain `async`, as in
+    /// the system: a serial queue already runs one item at a time, and the global queues are not barrier queues.
+    pub fn async_barrier<F: FnOnce() + Send + 'static>(&self, f: F) {
+        match &self.0 {
+            Kind::Concurrent(c) => c.submit(Box::new(f), true),
+            _ => self.enqueue(Box::new(f)),
+        }
+    }
+
     fn enqueue(&self, job: Job) {
         match &self.0 {
+            Kind::Concurrent(c) => c.submit(job, false),
             Kind::Main => {
                 lock(&main_q::JOBS).push_back(job);
                 main_q::wake();
@@ -533,6 +621,71 @@ impl DispatchGroup {
             }
         }
         true
+    }
+}
+
+// ---- semaphore -------------------------------------------------------------------------------------------------
+
+/// `DispatchTimeoutResult`: whether a timed wait got the resource or ran out of time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DispatchTimeoutResult {
+    Success,
+    TimedOut,
+}
+
+/// `DispatchSemaphore`: a counting semaphore. The count may go negative while waiters are queued: each one owes the
+/// count it is waiting for. Clones share the same semaphore.
+#[derive(Clone)]
+pub struct DispatchSemaphore(Arc<(Mutex<isize>, Condvar)>);
+
+impl DispatchSemaphore {
+    /// `init(value:)`.
+    pub fn new(value: isize) -> Self {
+        DispatchSemaphore(Arc::new((Mutex::new(value), Condvar::new())))
+    }
+
+    /// `signal()`: increments the count. Returns true when a waiter was woken (the count did not stay positive).
+    pub fn signal(&self) -> bool {
+        let (m, cv) = &*self.0;
+        let mut v = lock(m);
+        *v += 1;
+        let woke = *v <= 0;
+        if woke {
+            cv.notify_all();
+        }
+        woke
+    }
+
+    /// `wait()`: decrements the count and blocks while it is negative.
+    pub fn wait(&self) {
+        let (m, cv) = &*self.0;
+        let mut v = lock(m);
+        *v -= 1;
+        while *v < 0 {
+            v = cv.wait(v).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
+    /// `wait(timeout:)`: as `wait`, but gives up after `timeout`. A timed-out wait gives its count back, so the
+    /// semaphore is left as if it had never waited. A signal that lands at the deadline still counts as success.
+    pub fn wait_timeout(&self, timeout: Duration) -> DispatchTimeoutResult {
+        let deadline = Instant::now().checked_add(timeout);
+        let (m, cv) = &*self.0;
+        let mut v = lock(m);
+        *v -= 1;
+        while *v < 0 {
+            let left = match deadline {
+                Some(d) if d > Instant::now() => d - Instant::now(),
+                _ => {
+                    *v += 1;
+                    // the count is back: other waiters may now be owed a wake-up
+                    cv.notify_all();
+                    return DispatchTimeoutResult::TimedOut;
+                }
+            };
+            v = cv.wait_timeout(v, left).unwrap_or_else(|e| e.into_inner()).0;
+        }
+        DispatchTimeoutResult::Success
     }
 }
 
@@ -808,6 +961,147 @@ mod tests {
         assert!(drain_main());
         assert!(ran.load(Ordering::SeqCst));
         assert!(!drain_main());
+    }
+
+    #[test]
+    fn concurrent_queue_runs_ordinary_items_side_by_side() {
+        if pool().cap < 2 {
+            return;
+        }
+        let q = DispatchQueue::concurrent("t.side-by-side", Qos::Utility);
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let g = DispatchGroup::new();
+        for _ in 0..2 {
+            let b = barrier.clone();
+            g.enter();
+            let g2 = g.clone();
+            q.async_(move || {
+                // both must be running at once to get past this
+                b.wait();
+                g2.leave();
+            });
+        }
+        assert!(g.wait(Some(Duration::from_secs(5))), "ordinary items on a concurrent queue did not overlap");
+    }
+
+    #[test]
+    fn barrier_waits_for_earlier_items_and_holds_back_later_ones() {
+        let q = DispatchQueue::concurrent("t.barrier-order", Qos::Utility);
+        let log = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let g = DispatchGroup::new();
+        for _ in 0..3 {
+            g.enter();
+            let (g2, log2) = (g.clone(), log.clone());
+            q.async_(move || {
+                std::thread::sleep(Duration::from_millis(30));
+                lock(&log2).push("before");
+                g2.leave();
+            });
+        }
+        g.enter();
+        let (g2, log2) = (g.clone(), log.clone());
+        q.async_barrier(move || {
+            lock(&log2).push("barrier");
+            g2.leave();
+        });
+        for _ in 0..2 {
+            g.enter();
+            let (g2, log2) = (g.clone(), log.clone());
+            q.async_(move || {
+                lock(&log2).push("after");
+                g2.leave();
+            });
+        }
+        assert!(g.wait(Some(Duration::from_secs(5))));
+        let seen = lock(&log).clone();
+        assert_eq!(seen.len(), 6, "{seen:?}");
+        let at = seen.iter().position(|t| *t == "barrier").unwrap();
+        assert_eq!(at, 3, "the barrier ran before every earlier item finished: {seen:?}");
+        assert!(seen[4..].iter().all(|t| *t == "after"), "{seen:?}");
+    }
+
+    #[test]
+    fn barrier_runs_alone_on_the_concurrent_queue() {
+        let q = DispatchQueue::concurrent("t.alone", Qos::Utility);
+        let active = Arc::new(AtomicUsize::new(0));
+        let barrier_on = Arc::new(AtomicBool::new(false));
+        let overlap = Arc::new(AtomicBool::new(false));
+        let g = DispatchGroup::new();
+        let item = |is_barrier: bool| {
+            let (active, barrier_on, overlap, g) = (active.clone(), barrier_on.clone(), overlap.clone(), g.clone());
+            move || {
+                if is_barrier {
+                    if active.load(Ordering::SeqCst) != 0 {
+                        overlap.store(true, Ordering::SeqCst);
+                    }
+                    barrier_on.store(true, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(15));
+                    barrier_on.store(false, Ordering::SeqCst);
+                } else {
+                    if barrier_on.load(Ordering::SeqCst) {
+                        overlap.store(true, Ordering::SeqCst);
+                    }
+                    active.fetch_add(1, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(5));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                }
+                g.leave();
+            }
+        };
+        for _ in 0..3 {
+            for _ in 0..4 {
+                g.enter();
+                q.async_(item(false));
+            }
+            g.enter();
+            q.async_barrier(item(true));
+        }
+        assert!(g.wait(Some(Duration::from_secs(10))));
+        assert!(!overlap.load(Ordering::SeqCst), "a barrier shared the queue with another item");
+    }
+
+    #[test]
+    fn barrier_on_a_serial_queue_is_a_plain_async() {
+        let q = DispatchQueue::serial("t.barrier-serial");
+        let (tx, rx) = mpsc::channel();
+        q.async_barrier(move || {
+            let _ = tx.send(7);
+        });
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)), Ok(7));
+    }
+
+    #[test]
+    fn semaphore_hands_a_signal_to_a_waiting_thread() {
+        let sem = DispatchSemaphore::new(0);
+        let s2 = sem.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            assert!(s2.signal(), "a waiter was queued, so the signal should wake it");
+        });
+        assert_eq!(sem.wait_timeout(Duration::from_secs(2)), DispatchTimeoutResult::Success);
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn semaphore_timed_wait_gives_its_count_back() {
+        let sem = DispatchSemaphore::new(0);
+        assert_eq!(sem.wait_timeout(Duration::from_millis(10)), DispatchTimeoutResult::TimedOut);
+        // nobody is waiting now, so a signal wakes nobody and the count is exactly one
+        assert!(!sem.signal());
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::Success);
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::TimedOut);
+    }
+
+    #[test]
+    fn semaphore_counts_available_resources() {
+        let sem = DispatchSemaphore::new(2);
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::Success);
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::Success);
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::TimedOut);
+        assert!(!sem.signal());
+        assert!(!sem.signal());
+        sem.wait();
+        sem.wait();
     }
 }
 
