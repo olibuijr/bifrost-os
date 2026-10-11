@@ -110,8 +110,9 @@ fn run() -> std::io::Result<()> {
     springboard::bare::heartbeat::watch(&dir);
     springboard::bare::chord_recovery::spawn(&dir);
     springboard::shell::apphost::register(std::path::Path::new(&dir));
-    let font_data = map_file(&format!("{dir}/SFUI.ttf"))?;
-    let mono = map_file(&format!("{dir}/SFUIMono.ttf"))?;
+    // Settings > Fonts overrides apply from the next start
+    let font_data = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::System)?;
+    let mono = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::Mono)?;
     let font = Font::parse(font_data).ok_or_else(|| std::io::Error::other("bad font"))?;
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));

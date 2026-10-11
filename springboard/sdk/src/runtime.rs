@@ -406,10 +406,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     // an app has no keyboard of its own: its `Keyboard` asks the shell for the system keyboard
     springboard::shell::keyboard::use_app_backend();
     // mapped, not read: every app shares the shell's page-cache copy of the 8 MB font
-    let font_data: &'static [u8] = match bifrost_render::assets::map_file(&format!("{shell_dir}/SFUI.ttf")) {
+    // the system font the shell uses, with the Settings > Fonts override
+    let font_data: &'static [u8] = match bifrost_render::fontprefs::map_font(shell_dir, bifrost_render::fontprefs::FontRole::System) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("bifrost-app: {shell_dir}/SFUI.ttf: {e}");
+            eprintln!("bifrost-app: system font in {shell_dir}: {e}");
             return;
         }
     };

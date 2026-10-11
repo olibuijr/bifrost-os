@@ -14,6 +14,7 @@ pub mod appearance;
 pub mod glass;
 pub mod motion;
 pub mod assets;
+pub mod fontprefs;
 
 #[cfg(test)]
 mod tests {

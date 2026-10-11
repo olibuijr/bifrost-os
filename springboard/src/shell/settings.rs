@@ -213,6 +213,8 @@ pub struct Settings {
     defaults_out: Vec<(usize, String)>,
     /// the Login Items page's rows as the shell holds them, and the ids removed there
     login_items: Vec<(String, String)>,
+    /// Settings > Fonts, loaded when the page opens
+    fonts: super::pages::FontsView,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
     notify_edge: Option<NotifyEdit>,
@@ -396,6 +398,7 @@ impl Settings {
             defaults_out: Vec::new(),
             login_items: Vec::new(),
             login_out: Vec::new(),
+            fonts: Default::default(),
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
@@ -470,7 +473,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, fonts: &self.fonts }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -617,6 +620,18 @@ impl Settings {
     /// The shell's dock state, copied before each event so the page shows what the bar menu left.
     pub(super) fn set_dock(&mut self, dock: super::desktop_dock::Preferences) {
         self.dock = dock;
+    }
+
+    /// Settings > Fonts: each role's default family and saved override (the data dir's settings.ini, as the
+    /// shell reads it at start), and the font library in the data dir.
+    fn load_fonts(&mut self) {
+        use bifrost_render::fontprefs::{family, font_override, installed, library, FontRole};
+        let dir = self.data_dir.to_string_lossy().into_owned();
+        self.fonts = super::pages::FontsView {
+            defaults: FontRole::ALL.map(|r| family(&format!("{dir}/{}", r.file())).unwrap_or_default()),
+            overrides: FontRole::ALL.map(|r| font_override(&dir, r)),
+            library: installed(&[library(&dir)]),
+        };
     }
 
     pub(super) fn set_defaults(&mut self, v: Vec<super::defaultapps::CategoryView>) {
@@ -844,6 +859,10 @@ impl Settings {
                 self.push(ui, PageId::General, t);
                 PageId::SoftwareUpdate
             }
+            "Fonts" => {
+                self.push(ui, PageId::General, t);
+                PageId::Fonts
+            }
             "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
             _ => {
                 if self.stack.is_empty() {
@@ -994,6 +1013,7 @@ impl Settings {
             PageId::Diagnostics => self.diag_note.clear(),
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
+            PageId::Fonts => self.load_fonts(),
             _ => {}
         }
         let back = self.stack.last().map(|e| e.title.clone());
@@ -1577,6 +1597,14 @@ impl Settings {
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::Font(role, path) => {
+                if let Err(e) = prefs.set(role.pref(), path.as_deref().unwrap_or("")) {
+                    eprintln!("springboard: settings.ini: {e}");
+                }
+                self.fonts.overrides[role.index()] = path;
                 self.rebuild_visible(ui);
                 vec![]
             }
@@ -2295,6 +2323,66 @@ mod tests {
         settle(st, ui);
     }
 
+    /// A data dir with the packed default fonts and one library font (a copy of the system font).
+    fn font_dir(tag: &str) -> (PathBuf, String) {
+        let dir = std::env::temp_dir().join(format!("settings-fonts-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("fonts")).unwrap();
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
+        for f in ["SFUI.ttf", "SFUIMono.ttf"] {
+            std::fs::copy(format!("{assets}/{f}"), dir.join(f)).unwrap();
+        }
+        let lib = dir.join("fonts/Other.ttf");
+        std::fs::copy(format!("{assets}/SFUI.ttf"), &lib).unwrap();
+        (dir, lib.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn picking_a_library_font_saves_the_override_the_shell_reads() {
+        use bifrost_render::fontprefs::{family, FontRole};
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &wifi_info());
+        let (dir, lib) = font_dir("pick");
+        st.set_data_dir(&dir);
+        let name = family(&lib).expect("the library font has a family name");
+        for label in ["General", "Fonts", "System Font"] {
+            tap_row(&mut st, &ui, &mut prefs, label);
+        }
+        assert_eq!(st.page(), PageId::FontPick(FontRole::System));
+        tap_row(&mut st, &ui, &mut prefs, &name);
+        assert_eq!(prefs.get(FontRole::System.pref()), Some(lib.as_str()), "saved under the key the shell reads at start");
+        assert_eq!(st.fonts.overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
+        let default = format!("{} (Default)", st.fonts.defaults[FontRole::System.index()]);
+        tap_row(&mut st, &ui, &mut prefs, &default);
+        assert_eq!(prefs.get(FontRole::System.pref()), Some(""), "Default clears the override");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Developer preview: `PREVIEW_DIR=/tmp FONTS_DIR=<packed assets> cargo test preview_fonts_pages -- --ignored`
+    /// writes fonts.png and fonts-system.png, the desktop Fonts pages drawn with the packed default font.
+    #[test]
+    #[ignore]
+    fn preview_fonts_pages() {
+        let (Some(out), Some(fonts)) = (std::env::var_os("PREVIEW_DIR"), std::env::var("FONTS_DIR").ok()) else { return };
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{fonts}/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(crate::font::Font::parse(data).unwrap(), 1.5);
+        let (w, h) = (1500usize, 1050usize);
+        let info = Info { display_mode: Some((2048, 1152, 60)), ..wifi_info() };
+        let mut prefs = Prefs::memory();
+        let mut st = Settings::new(&ui, &info, &prefs, w as i32, h as i32, Rc::new(vec![]));
+        st.set_data_dir(&fonts);
+        st.open_page(&ui, "Fonts", 0.0);
+        settle(&mut st, &ui);
+        let shot = |st: &mut Settings, name: &str| {
+            let mut img = crate::gfx::Image::new(w, h);
+            st.draw(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 }, &ui, 1e9);
+            std::fs::write(std::path::Path::new(&out).join(name), crate::shell::screenshot::encode(&img)).unwrap();
+        };
+        shot(&mut st, "fonts.png");
+        tap_row(&mut st, &ui, &mut prefs, "System Font");
+        shot(&mut st, "fonts-system.png");
+    }
+
     #[test]
     fn banded_page_draw_equals_the_single_thread_draw() {
         let ui = super::super::tests::ui();
@@ -2352,6 +2440,8 @@ mod tests {
             (vec!["General", "Date & Time"], PageId::DateTime),
             (vec!["General", "Default Apps"], PageId::DefaultApps),
             (vec!["General", "Login Items"], PageId::LoginItems),
+            (vec!["General", "Fonts"], PageId::Fonts),
+            (vec!["General", "Fonts", "System Font"], PageId::FontPick(bifrost_render::fontprefs::FontRole::System)),
             (vec!["General", "Keyboard"], PageId::Keyboard),
             (vec!["General", "Keyboard", "Keyboards"], PageId::Keyboards),
             (vec!["General", "Language & Region"], PageId::Language),

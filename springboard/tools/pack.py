@@ -11,16 +11,21 @@ Output layout:
   wallpapers/index.ini       id=Display Name, one per line
   icons/<bundle id>.raw      app icons, premultiplied
   sounds/<name>.pcm          UI sounds as raw 48 kHz stereo signed 16-bit LE PCM
-  SFUI.ttf, SFUIMono.ttf, SFUISymbols-Regular.otf, Symbols.ttf
+  SFUI.ttf, SFUIMono.ttf, Symbols.ttf   the default UI fonts: open-source lookalikes of the reference desktop fonts
+  fonts/<file>.ttf           the font library Settings > Fonts offers as overrides
 
-The wallpapers are the royalty-free photos in springboard/wallpapers (see CREDITS.md); the fonts and
-UI sounds still come from <ref>, which holds the licensed reference assets and is not in the repo.
+The wallpapers are the royalty-free photos in springboard/wallpapers (see CREDITS.md). The fonts are open
+source (SIL OFL 1.1), fetched from one pinned google/fonts commit, checked by SHA-256 and cached in
+~/.cache/bifrost/fonts. Icons and UI sounds still come from <ref>, which is not in the repo.
 """
 import os
 import shutil
+import hashlib
 import struct
 import subprocess
 import sys
+import urllib.parse
+import urllib.request
 
 WALLPAPERS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "wallpapers")
 DEFAULT_WALLPAPER = "waterfall_idyllic.jpg"
@@ -28,7 +33,23 @@ ICON_PT = 64
 bifrost_WIDTH_PT = 768
 THUMB = (320, 180)
 SOUNDS = {"lock": "lock.caf", "tock": "Tock.caf", "key_press_click": "key_press_click.caf", "key_press_delete": "key_press_delete.caf", "key_press_modifier": "key_press_modifier.caf"}
-FONTS = ("SFUI.ttf", "SFUIMono.ttf", "SFUISymbols-Regular.otf", "Symbols.ttf")
+GOOGLE_FONTS = "https://raw.githubusercontent.com/google/fonts/bd8f81ddb5c74d5c8897b36ad88b440266245103/ofl/"
+FONT_CACHE = os.path.expanduser("~/.cache/bifrost/fonts")
+# The defaults, under the asset names the code loads: the closest open lookalikes of the reference system fonts
+DEFAULT_FONTS = {
+    "SFUI.ttf": ("inter/Inter[opsz,wght].ttf", "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031"),
+    "SFUIMono.ttf": ("jetbrainsmono/JetBrainsMono[wght].ttf", "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"),
+    "Symbols.ttf": ("notosanssymbols2/NotoSansSymbols2-Regular.ttf", "7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21"),
+}
+# fonts/: other open-source fonts Settings > Fonts offers in place of the defaults (variable builds, every weight)
+LIBRARY_FONTS = {
+    "Geist[wght].ttf": ("geist/Geist[wght].ttf", "73894e0448cae90a92b6c2f8732b7bb9acb7b94c418bff559dad4a18e1de9659"),
+    "IBMPlexSans[wdth,wght].ttf": ("ibmplexsans/IBMPlexSans[wdth,wght].ttf", "3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3"),
+    "SourceSans3[wght].ttf": ("sourcesans3/SourceSans3[wght].ttf", "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"),
+    "GeistMono[wght].ttf": ("geistmono/GeistMono[wght].ttf", "d00e590b8eb3a59acc329b2d044fd143ae935090b7da33199ebee27cc7de8196"),
+    "FiraCode[wght].ttf": ("firacode/FiraCode[wght].ttf", "9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"),
+    "SourceCodePro[wght].ttf": ("sourcecodepro/SourceCodePro[wght].ttf", "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790"),
+}
 
 
 def rgba(path, w, h, fill=False):
@@ -58,6 +79,29 @@ def write_raw(path, w, h, px):
     os.replace(path + ".tmp", path)
 
 
+
+
+def fetch_font(rel, sha):
+    """The font at `rel` under GOOGLE_FONTS, from the cache or downloaded, checked against `sha`."""
+    path = os.path.join(FONT_CACHE, sha)
+    if not os.path.exists(path):
+        data = urllib.request.urlopen(GOOGLE_FONTS + urllib.parse.quote(rel)).read()
+        if hashlib.sha256(data).hexdigest() != sha:
+            sys.exit(f"pack.py: {rel}: checksum mismatch")
+        os.makedirs(FONT_CACHE, exist_ok=True)
+        with open(path + ".tmp", "wb") as f:
+            f.write(data)
+        os.replace(path + ".tmp", path)
+    return path
+
+
+def fonts(out):
+    """The default UI fonts under their asset names, and the override library in fonts/."""
+    for name, (rel, sha) in DEFAULT_FONTS.items():
+        shutil.copy(fetch_font(rel, sha), f"{out}/{name}")
+    os.makedirs(f"{out}/fonts", exist_ok=True)
+    for name, (rel, sha) in LIBRARY_FONTS.items():
+        shutil.copy(fetch_font(rel, sha), f"{out}/fonts/{name}")
 
 
 def stills(out, w, h):
@@ -95,9 +139,7 @@ def main(ref, out, w, h):
         if name.endswith(".png"):
             px = premultiply(rgba(f"{ref}/icons/{name}", icon, icon))
             write_raw(f"{out}/icons/{name[:-4]}.raw", icon, icon, px)
-    for font in FONTS:
-        if os.path.exists(f"{ref}/fonts/{font}"):
-            shutil.copy(f"{ref}/fonts/{font}", f"{out}/{font}")
+    fonts(out)
     stills(out, w, h)
     sounds(ref, out)
 

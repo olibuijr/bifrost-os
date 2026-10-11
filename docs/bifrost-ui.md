@@ -290,6 +290,22 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
   are not implemented; a `gsettings`/dconf `color-scheme` mirror for GTK apps that ignore the portal is not written.
   Not implemented in this change.
 
+## System fonts (`NSFont.systemFont`, `monospacedSystemFont`; Settings > Fonts)
+
+- **Defaults.** The packed `SFUI.ttf`, `SFUIMono.ttf` and `Symbols.ttf` are open-source lookalikes (Inter,
+  JetBrains Mono, Noto Sans Symbols 2), fetched and checksummed by `tools/pack.py`; see the README "Fonts".
+- **Override.** `bifrost_render::fontprefs`: `FontRole::{System, Mono}`, `map_font(dir, role)` maps the font
+  saved in `settings.ini` (`font_system`, `font_mono`) or the default when it is unset or does not parse. The shell
+  (`bin/shell.rs`) and the SDK runtime (`run_on`) both load through it, so every app draws with the user's choice.
+  It applies from the next start (Settings offers Restart BifrOSt).
+- **Font library.** `fontprefs::library(dir)` is `<data dir>/fonts`; `installed(&[dir])` lists one face per family
+  (variable upright first, then Regular), flags fixed-pitch faces (`post.isFixedPitch` or PANOSE) and reads only
+  the table directory and the `name`, `post` and `OS/2` headers. Host and distribution fonts are never offered.
+- **Apple parity, decided.** On the reference desktop the system font is fixed and Font Book manages installed fonts.
+  BifrOSt deliberately allows the override because its defaults are lookalikes. Not matched: Font Book (install,
+  validate, collections, disable) and live font switching without a restart. `FontPanel` families can come from
+  `fontprefs::installed`.
+
 ## One stylesheet for apps
 
 Apps take text sizes from the `MAC_*_PT` and `DISPLAY_*_PT` tokens, spacing from `SPACE_*` (4-pt grid), and the

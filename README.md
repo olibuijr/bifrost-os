@@ -17,7 +17,7 @@ a suite of desktop apps, and an SDK and UI kit for building more.
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
-- [Fonts and licensed assets](#fonts-and-licensed-assets)
+- [Fonts](#fonts)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
 - [Tooling](#tooling)
@@ -45,8 +45,7 @@ a suite of desktop apps, and an SDK and UI kit for building more.
 
 - Linux. The shell targets Wayland (with `wlr` protocols) and DRM/KMS.
 - A recent stable Rust toolchain (`rustup`).
-- UI fonts for a working desktop: the free open-source set below, or your own licensed copies. See
-  [Fonts and licensed assets](#fonts-and-licensed-assets).
+- Network access on the first `tools/pack.py` run, to fetch the open-source UI fonts. See [Fonts](#fonts).
 
 ## Quick start
 
@@ -61,50 +60,34 @@ cargo build --profile fast --bin shell --features desktop-wayland
 cargo test
 ```
 
-Several tests and previews load the UI fonts, so install the fonts first (see the next section).
+Several tests and previews load the UI fonts from `springboard/assets`, so pack the assets first (see [Fonts](#fonts)).
 
-## Fonts and licensed assets
+## Fonts
 
-The UI is designed around the macOS system fonts, which are proprietary and are not distributed here. Free,
-open-source lookalikes work in their place, and they are the recommended setup for a fresh clone:
+BifrOSt ships only open-source fonts (SIL Open Font Licence 1.1). The defaults are the closest open lookalikes
+of the macOS system fonts, and Settings > General > Fonts can replace the system and monospaced fonts with
+others from BifrOSt's font library.
 
-| Asset file | Proprietary original | Open-source lookalike | Licence |
+**Defaults** (packed under the asset names the code loads):
+
+| Asset file | Font | Stands in for | Why |
 |---|---|---|---|
-| `SFUI.ttf` | SF Pro (variable) | [Inter](https://rsms.me/inter/) 4.1, `InterVariable.ttf` | [OFL 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt) |
-| `SFUIMono.ttf` | SF Mono | [JetBrains Mono](https://www.jetbrains.com/lp/mono/) 2.304, `JetBrainsMono[wght].ttf` | [OFL 1.1](https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt) |
-| `Symbols.ttf` | Apple Symbols | [Noto Sans Symbols 2](https://fonts.google.com/noto/specimen/Noto+Sans+Symbols+2) | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/notosanssymbols2/OFL.txt) |
-| `SFUISymbols-Regular.otf` | SF Symbols | none (optional; see below) | |
+| `SFUI.ttf` | [Inter](https://rsms.me/inter/) | SF Pro | Variable, with both a weight (`wght`) and an optical size (`opsz`) axis, like SF Pro; the closest open match |
+| `SFUIMono.ttf` | [JetBrains Mono](https://www.jetbrains.com/lp/mono/) | SF Mono | Variable (`wght` 100 to 800), with a neutral, screen-first design like SF Mono |
+| `Symbols.ttf` | [Noto Sans Symbols 2](https://fonts.google.com/noto/specimen/Noto+Sans+Symbols+2) | Apple Symbols | Maps symbols by Unicode, as the shell looks them up; resolves 18 of the shell's 22 symbols |
 
-Why these:
+No open-source font of SF Symbols exists. The shell falls back to `Symbols.ttf` and its hand-drawn glyphs
+(Wi-Fi, battery and gear are hand-drawn).
 
-- **Inter** is the closest open match to SF Pro. Like SF Pro it is a variable font with both a weight (`wght`)
-  and an optical size (`opsz`) axis, so the renderer's weight and text/display instances work unchanged. Values
-  outside Inter's ranges (`opsz` 14 to 32) are clamped.
-- **JetBrains Mono** is a variable monospace font (`wght` 100 to 800) with a similar neutral, screen-first design
-  to SF Mono. Fira Mono and Source Code Pro are close alternatives.
-- **Noto Sans Symbols 2** maps symbols by Unicode, which is how the shell looks them up in `Symbols.ttf`. It
-  resolves 18 of the shell's 22 symbols, more than Apple Symbols does. Wi-Fi, battery and the gear fall back to
-  the hand-drawn glyphs.
-- There is no open-source font of SF Symbols. The shell looks those glyphs up by name, finds none, and uses
-  `Symbols.ttf` and the hand-drawn glyphs instead, so leave `SFUISymbols-Regular.otf` out.
+**Font library** (`fonts/`, offered in Settings > Fonts): Geist, IBM Plex Sans and Source Sans 3 for the system
+font; Geist Mono, Fira Code and Source Code Pro for the monospaced font. All are variable fonts, so every weight
+the desktop uses renders. Fonts that apps install go in the same folder (`/var/lib/springboard/fonts`). Settings
+lists only this library, never the host's or the distribution packages' fonts. A choice is saved in
+`settings.ini` (`font_system`, `font_mono`), takes effect when BifrOSt restarts, and applies to every app;
+a font that fails to load falls back to the default.
 
-Fetch them into a local `bifrost-ref/fonts/` folder at the repository root (git ignores it), under the asset
-file names the code expects:
-
-```sh
-mkdir -p bifrost-ref/fonts && cd bifrost-ref/fonts
-curl -LO https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
-unzip -j Inter-4.1.zip InterVariable.ttf && mv InterVariable.ttf SFUI.ttf
-curl -LO https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
-unzip -j JetBrainsMono-2.304.zip 'fonts/variable/JetBrainsMono[[]wght].ttf' && mv 'JetBrainsMono[wght].ttf' SFUIMono.ttf
-curl -L -o Symbols.ttf https://github.com/google/fonts/raw/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf
-rm *.zip
-```
-
-If you hold licences for the original fonts, put your copies in the same folder under the same names instead.
-The expected file names are listed in [`springboard/tools/pack.py`](springboard/tools/pack.py).
-
-The shell's assets are built from that folder:
+`springboard/tools/pack.py` fetches all of these from one pinned [google/fonts](https://github.com/google/fonts)
+commit, checks each file's SHA-256 and caches them in `~/.cache/bifrost/fonts`:
 
 ```sh
 python3 springboard/tools/pack.py ../bifrost-ref <assets-dir> <screen-width> <screen-height>
@@ -112,12 +95,10 @@ python3 springboard/tools/pack.py ../bifrost-ref <assets-dir> <screen-width> <sc
 
 Notes:
 
-- Inter and JetBrains Mono have different metrics from the originals, so text is set slightly wider. The pixel
-  snapshot goldens in `springboard/sdk/tests/snapshots/` were recorded with the original fonts, so expect those
-  comparisons to differ.
-- The renderer test `cff_font_renders_through_the_same_path` (`springboard/render/src/font.rs`) exercises the
-  CFF outlines of `SFUISymbols-Regular.otf` and needs the original file; the CFF parser test skips without it.
-- Without any fonts, the code still compiles, but text does not render and many tests fail.
+- The pixel snapshot goldens in `springboard/sdk/tests/snapshots/` are recorded with the default fonts.
+- The renderer test `cff_font_renders_through_the_same_path` needs a CFF symbol font
+  (`assets/SFUISymbols-Regular.otf`) and is skipped without one; no default font uses CFF outlines.
+- Icons and UI sounds still come from the local `bifrost-ref/` folder (git ignores it).
 
 ## Repository layout
 
@@ -167,7 +148,5 @@ and the review checklist. Before opening a pull request:
 
 The code is released under the [MIT licence](LICENSE).
 
-Photographs are royalty-free and credited in [CREDITS.md](CREDITS.md). The original UI fonts are proprietary
-and are not included; the recommended open-source replacements (Inter, JetBrains Mono, Noto Sans Symbols 2) are
-under the SIL Open Font Licence 1.1 and are fetched separately, as described in
-[Fonts and licensed assets](#fonts-and-licensed-assets).
+Photographs are royalty-free and credited in [CREDITS.md](CREDITS.md). The fonts are open source under the
+SIL Open Font Licence 1.1 and are credited in [CREDITS.md](CREDITS.md) and described in [Fonts](#fonts).

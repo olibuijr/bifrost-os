@@ -11,6 +11,7 @@ use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
 use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::{Info, WifiAction};
+use bifrost_render::fontprefs::{FontRole, Installed};
 use crate::bare::bluetooth::{Cmd, State as BtState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -38,6 +39,8 @@ pub enum PageId {
     BackgroundRefresh,
     Gestures,
     Fonts,
+    /// General > Fonts > one role: its default or a font from the library
+    FontPick(FontRole),
     Dictionary,
     Vpn,
     SoftwareUpdate,
@@ -251,6 +254,8 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// Fonts: draw `role` with this font file from now on (None is the default)
+    Font(FontRole, Option<String>),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -287,7 +292,23 @@ pub struct Model<'a> {
     pub defaults: &'a [super::defaultapps::CategoryView],
     /// the Login Items page: (app id, name) of each login item
     pub login_items: &'a [(String, String)],
+    /// the Fonts pages: each role's default and override, and the font library
+    pub fonts: &'a FontsView,
 }
+
+/// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FontsView {
+    /// the family of each role's packed default
+    pub defaults: [String; 2],
+    /// the font file saved for each role, when it is not the default
+    pub overrides: [Option<String>; 2],
+    /// BifrOSt's font library (`fontprefs::library`)
+    pub library: Vec<Installed>,
+}
+
+/// A `FontsView` with nothing in it, for models that never show the Fonts pages.
+pub static NO_FONTS: FontsView = FontsView { defaults: [String::new(), String::new()], overrides: [None, None], library: Vec::new() };
 
 /// "117.9 GB" style size.
 pub fn gb(bytes: u64) -> String {
@@ -629,11 +650,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("Actions when you swipe your finger from a bottom corner."),
             ],
         ),
-        PageId::Fonts => page(
-            "Fonts",
-            false,
-            vec![Group::new(vec![Item::new("No Fonts Installed").tint(Tint::Dim)]).footer("You can download apps that install fonts from the App Store.")],
-        ),
+        PageId::Fonts => fonts_page(m),
+        PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(
             "Dictionary",
             false,
@@ -970,6 +988,43 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     ] }
 }
 
+/// General > Fonts: the font each role draws with; a row opens that role's choices.
+pub fn fonts_page(m: &Model<'_>) -> Spec {
+    let f = m.fonts;
+    let rows = FontRole::ALL
+        .into_iter()
+        .map(|role| {
+            let current = match &f.overrides[role.index()] {
+                Some(path) => bifrost_render::fontprefs::family(path).unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path).to_string()),
+                None => f.defaults[role.index()].clone(),
+            };
+            Item::new(role.label()).value(current).link(PageId::FontPick(role))
+        })
+        .collect();
+    Spec { id: PageId::Fonts, title: "Fonts".into(), large: false, groups: vec![
+        Group::new(rows).footer("The system font sets labels, menus and window titles. The monospaced font sets terminals and code. Changes take effect when BifrOSt restarts."),
+        Group::new(vec![Item::new("Restart BifrOSt").tint(Tint::Blue).action(Action::Run(Command::Restart))]),
+    ] }
+}
+
+/// General > Fonts > a role: its default, then the library fonts that suit it (fixed pitch for Monospaced).
+pub fn font_pick_page(m: &Model<'_>, role: FontRole) -> Spec {
+    let f = m.fonts;
+    let current = f.overrides[role.index()].as_deref();
+    let default = if f.defaults[role.index()].is_empty() { "Default".to_string() } else { format!("{} (Default)", f.defaults[role.index()]) };
+    let library: Vec<Item> = f
+        .library
+        .iter()
+        .filter(|font| font.mono == (role == FontRole::Mono))
+        .map(|font| Item::new(font.family.as_str()).check(current == Some(font.path.as_str()), Action::Font(role, Some(font.path.clone()))))
+        .collect();
+    let library = if library.is_empty() { vec![Item::new("No Other Fonts").tint(Tint::Dim)] } else { library };
+    Spec { id: PageId::FontPick(role), title: role.label().into(), large: false, groups: vec![
+        Group::new(vec![Item::new(default).check(current.is_none(), Action::Font(role, None))]),
+        Group::new(library).header("FONT LIBRARY").footer("Open-source fonts that come with BifrOSt, and fonts that apps install."),
+    ] }
+}
+
 /// Desktop & Dock > Hot Corners: one group per corner.
 pub fn hot_corners_page(d: &DeskPrefs) -> Spec {
     let groups = CORNER_NAMES.iter().enumerate().map(|(c, name)| {
@@ -1073,8 +1128,37 @@ mod tests {
         }
     }
 
+    #[test]
+    fn fonts_pages_show_each_role_and_offer_the_library_by_kind() {
+        let (info, opts) = (info(), Options::default());
+        let lib = |family: &str, path: &str, mono: bool| Installed { family: family.into(), path: path.into(), mono, variable: true };
+        let fonts = FontsView {
+            defaults: ["Inter".into(), "JetBrains Mono".into()],
+            overrides: [None, Some("/lib/GeistMono.ttf".into())],
+            library: vec![lib("Geist", "/lib/Geist.ttf", false), lib("Geist Mono", "/lib/GeistMono.ttf", true)],
+        };
+        let m = Model { fonts: &fonts, ..model(&info, &opts) };
+        let root = spec(PageId::Fonts, &m);
+        let rows: Vec<_> = root.groups[0].items.iter().map(|i| (i.label.as_str(), i.action.clone())).collect();
+        assert_eq!(rows, [("System Font", Action::Push(PageId::FontPick(FontRole::System))), ("Monospaced Font", Action::Push(PageId::FontPick(FontRole::Mono)))]);
+        assert_eq!(root.groups[0].items[0].value, "Inter", "no override: the default's family");
+        assert_eq!(root.groups[1].items[0].action, Action::Run(Command::Restart), "overrides apply after a restart");
+
+        let system = spec(PageId::FontPick(FontRole::System), &m);
+        assert_eq!(system.groups[0].items[0].label, "Inter (Default)");
+        assert_eq!(system.groups[0].items[0].accessory, Accessory::Check(true));
+        let offered: Vec<_> = system.groups[1].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(offered, ["Geist"], "proportional fonts only");
+        assert_eq!(system.groups[1].items[0].action, Action::Font(FontRole::System, Some("/lib/Geist.ttf".into())));
+
+        let mono = spec(PageId::FontPick(FontRole::Mono), &m);
+        assert_eq!(mono.groups[0].items[0].accessory, Accessory::Check(false));
+        assert_eq!((mono.groups[1].items[0].label.as_str(), &mono.groups[1].items[0].accessory), ("Geist Mono", &Accessory::Check(true)));
+        assert_eq!(mono.groups[0].items[0].action, Action::Font(FontRole::Mono, None), "Default clears the override");
+    }
+
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[] }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], fonts: &NO_FONTS }
     }
 
     #[test]

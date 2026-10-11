@@ -21,9 +21,18 @@ if a name is wrong, the Commons page is the reference.
 
 ## Fonts
 
-The UI fonts (SF UI) are proprietary and are not distributed with this repository. The build reads them from the
-licensed reference folder `bifrost-ref/` on the build machine, so a fresh clone needs its own copy before the UI
-can render text.
+Every font BifrOSt ships is under the [SIL Open Font Licence 1.1](https://openfontlicense.org/). They are fetched
+by `springboard/tools/pack.py` from [google/fonts](https://github.com/google/fonts) at commit `bd8f81dd`.
+
+| Font | Use | Authors |
+|---|---|---|
+| Inter | default system font (`SFUI.ttf`) | The Inter Project Authors |
+| JetBrains Mono | default monospaced font (`SFUIMono.ttf`) | The JetBrains Mono Project Authors |
+| Noto Sans Symbols 2 | symbols (`Symbols.ttf`) | The Noto Project Authors |
+| Geist, Geist Mono | font library | The Geist Project Authors (Vercel) |
+| IBM Plex Sans | font library | IBM Corp. |
+| Source Sans 3, Source Code Pro | font library | Adobe |
+| Fira Code | font library | The Fira Code Project Authors |
 
 ## Code
 
