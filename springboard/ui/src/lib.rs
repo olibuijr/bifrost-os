@@ -634,6 +634,7 @@ pub mod reading_list;
 pub mod content_rules;
 pub mod tips;
 pub mod chart;
+pub mod chart_ax;
 pub mod compose;
 pub mod file_provider;
 pub mod widget;
