@@ -28,10 +28,12 @@ pub enum ParamType {
     Url,
     /// the id (string) of an entity of this type
     Entity(String),
+    /// one of a fixed set of case names, sent as text: `enum(open|closed)`. Case names cannot contain `|`, `)` or `"`.
+    Enum(Vec<String>),
 }
 
 impl ParamType {
-    /// `string`, `int`, `bool`, `date`, `url` or `entity(Type)`.
+    /// `string`, `int`, `bool`, `date`, `url`, `entity(Type)` or `enum(a|b)`.
     pub fn name(&self) -> String {
         match self {
             ParamType::String => "string".into(),
@@ -40,6 +42,7 @@ impl ParamType {
             ParamType::Date => "date".into(),
             ParamType::Url => "url".into(),
             ParamType::Entity(t) => format!("entity({t})"),
+            ParamType::Enum(cases) => format!("enum({})", cases.join("|")),
         }
     }
     pub fn parse(s: &str) -> Option<ParamType> {
@@ -49,6 +52,14 @@ impl ParamType {
             "bool" => ParamType::Bool,
             "date" => ParamType::Date,
             "url" => ParamType::Url,
+            t if t.starts_with("enum(") => {
+                let inner = t.strip_prefix("enum(")?.strip_suffix(')')?;
+                let cases: Vec<String> = inner.split('|').map(|c| c.trim().to_string()).collect();
+                if cases.iter().any(|c| c.is_empty() || c.contains([')', '"'])) {
+                    return None;
+                }
+                ParamType::Enum(cases)
+            }
             t => {
                 let inner = t.strip_prefix("entity(")?.strip_suffix(')')?.trim();
                 if inner.is_empty() {
@@ -69,6 +80,7 @@ impl ParamType {
                 .split_once(':')
                 .is_some_and(|(scheme, rest)| !scheme.is_empty() && !rest.is_empty() && scheme.chars().all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))),
             (ParamType::Entity(_), Json::Str(s)) => !s.is_empty(),
+            (ParamType::Enum(cases), Json::Str(s)) => cases.iter().any(|c| c == s),
             _ => false,
         }
     }
@@ -262,6 +274,84 @@ impl IntentResult {
     pub fn to_json(&self) -> Json {
         Json::Obj(vec![("value".into(), self.value.clone()), ("dialog".into(), self.dialog.clone().map_or(Json::Null, Json::Str))])
     }
+    /// Reads back a reply produced by `to_json` (`{"value": .., "dialog": text or null}`); `None` for any other shape.
+    pub fn from_json(j: &Json) -> Option<IntentResult> {
+        let value = j.get("value")?.clone();
+        let dialog = match j.get("dialog")? {
+            Json::Null => None,
+            Json::Str(s) => Some(s.clone()),
+            _ => return None,
+        };
+        Some(IntentResult { value, dialog })
+    }
+    /// The value at `path` (see [`PropertyPath`]), or `None` when the path does not exist in `value`.
+    pub fn at(&self, path: &str) -> Option<&Json> {
+        PropertyPath::parse(path)?.resolve(&self.value)
+    }
+}
+
+/// One step of a [`PropertyPath`]: an object member by name, or an array element by index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PathStep {
+    Key(String),
+    Index(usize),
+}
+
+/// A path into a nested intent value, such as `items[2].title`, `items.2.title` or `value.0`. Tests use it to read
+/// one field of a result, the way a key path reads a property of a typed result; the path is checked when parsed,
+/// not against a type, so a wrong name only shows as `None`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PropertyPath {
+    pub steps: Vec<PathStep>,
+}
+
+impl PropertyPath {
+    /// Parses `.`-separated segments. A segment is a name with zero or more `[n]` indexes after it, or a bare number
+    /// (an array index). Empty segments, a leading index and non-numeric indexes are rejected.
+    pub fn parse(path: &str) -> Option<PropertyPath> {
+        let mut steps = Vec::new();
+        for seg in path.split('.') {
+            if !seg.is_empty() && seg.bytes().all(|b| b.is_ascii_digit()) {
+                steps.push(PathStep::Index(seg.parse().ok()?));
+                continue;
+            }
+            let (name, mut rest) = seg.split_at(seg.find('[').unwrap_or(seg.len()));
+            if name.is_empty() {
+                return None;
+            }
+            steps.push(PathStep::Key(name.into()));
+            while let Some(inner) = rest.strip_prefix('[') {
+                let (digits, after) = inner.split_once(']')?;
+                steps.push(PathStep::Index(digits.parse().ok()?));
+                rest = after;
+            }
+            if !rest.is_empty() {
+                return None;
+            }
+        }
+        if steps.is_empty() {
+            None
+        } else {
+            Some(PropertyPath { steps })
+        }
+    }
+    /// The value this path reaches under `root`, or `None` if a name is missing, an index is out of range, or a step
+    /// meets a value of the wrong kind.
+    pub fn resolve<'a>(&self, root: &'a Json) -> Option<&'a Json> {
+        self.steps.iter().try_fold(root, |v, step| match step {
+            PathStep::Key(k) => v.get(k),
+            PathStep::Index(i) => v.as_array()?.get(*i),
+        })
+    }
+}
+
+/// Runs the intent `id` in-process, the way a test does: the parameters are checked against the declaration, then
+/// `perform_intent` returns the typed result. `dispatch` gives the JSON reply the control socket sends; this gives the
+/// `IntentResult` itself, so a test can read `value`, `dialog` or `at(path)` directly.
+pub fn run<A: App>(app: &mut A, ctx: Option<&Ctx>, data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+    let intent = app.intents().into_iter().find(|i| i.id == id).ok_or_else(|| RpcError::new(METHOD_NOT_FOUND, format!("no intent {id}")))?;
+    intent.validate(params)?;
+    app.perform_intent(ctx, data_dir, id, params)
 }
 
 /// The `entity.query` request in `params`.
@@ -521,5 +611,76 @@ mod tests {
         assert_eq!(ents.as_array().unwrap()[0].get("title").and_then(Json::as_str), Some("Home"));
         assert!(dispatch(&mut app, None, d, "notes.list", &Json::Null).is_none());
         assert_eq!(methods(&app), vec!["intent.list", "entity.query", "intent.add-note"]);
+    }
+
+    #[test]
+    fn enum_parameter_parses_names_and_accepts_only_its_cases() {
+        let t = ParamType::parse("enum(open|closed)").unwrap();
+        assert_eq!(t, ParamType::Enum(vec!["open".into(), "closed".into()]));
+        assert_eq!(t.name(), "enum(open|closed)");
+        assert_eq!(ParamType::parse(" enum( open | closed ) ").unwrap().name(), "enum(open|closed)");
+        assert!(t.accepts(&Json::Str("closed".into())));
+        assert!(!t.accepts(&Json::Str("maybe".into())), "a case that is not declared");
+        assert!(!t.accepts(&Json::Num(1.0)), "enum values are text");
+        assert!(ParamType::parse("enum()").is_none());
+        assert!(ParamType::parse("enum(a||b)").is_none(), "empty case");
+        assert!(ParamType::parse("enum(a)b)").is_none(), "a case cannot contain ')'");
+    }
+
+    #[test]
+    fn enum_parameter_validates_and_lands_in_manifest_text() {
+        let i = Intent::new("set-mode", "Set Mode", "").param(Param::new("mode", "Mode", ParamType::Enum(vec!["open".into(), "closed".into()])));
+        assert!(i.validate(&json::parse(r#"{"mode":"open"}"#).unwrap()).is_ok());
+        let bad = i.validate(&json::parse(r#"{"mode":"maybe"}"#).unwrap()).unwrap_err();
+        assert_eq!(bad.code, INVALID_PARAMS);
+        assert_eq!(bad.message, "parameter mode must be enum(open|closed)");
+        assert!(i.manifest_toml().contains("params = [\"mode:enum(open|closed)\"]"));
+    }
+
+    #[test]
+    fn property_path_parses_names_indexes_and_rejects_malformed() {
+        let p = PropertyPath::parse("items[2].title").unwrap();
+        assert_eq!(p.steps, vec![PathStep::Key("items".into()), PathStep::Index(2), PathStep::Key("title".into())]);
+        assert_eq!(PropertyPath::parse("value.0").unwrap().steps, vec![PathStep::Key("value".into()), PathStep::Index(0)]);
+        assert_eq!(PropertyPath::parse("grid[1][0]").unwrap().steps.len(), 3);
+        assert!(PropertyPath::parse("a..b").is_none(), "empty segment");
+        assert!(PropertyPath::parse("[0]").is_none(), "no name before the index");
+        assert!(PropertyPath::parse("a[x]").is_none(), "index is not a number");
+        assert!(PropertyPath::parse("a[1").is_none(), "unclosed index");
+        assert!(PropertyPath::parse("").is_none());
+    }
+
+    #[test]
+    fn property_path_resolves_into_nested_results() {
+        let v = json::parse(r#"{"items":[{"title":"milk"},{"title":"eggs"}],"count":2}"#).unwrap();
+        let at = |p: &str| PropertyPath::parse(p).unwrap().resolve(&v).cloned();
+        assert_eq!(at("items[1].title"), Some(Json::Str("eggs".into())));
+        assert_eq!(at("items.0.title"), Some(Json::Str("milk".into())), "numeric segment form");
+        assert_eq!(at("count"), Some(Json::Num(2.0)));
+        assert_eq!(at("items[5].title"), None, "index out of range");
+        assert_eq!(at("items.title"), None, "name on an array");
+        assert_eq!(at("count.x"), None, "member of a number");
+    }
+
+    #[test]
+    fn result_reads_back_from_its_json_and_reads_paths() {
+        let r = IntentResult::value(json::parse(r#"{"items":[{"title":"milk"}]}"#).unwrap()).with_dialog("Found 1");
+        assert_eq!(r.at("items[0].title"), Some(&Json::Str("milk".into())));
+        let back = IntentResult::from_json(&r.to_json()).unwrap();
+        assert_eq!(back, r);
+        assert_eq!(IntentResult::from_json(&json::parse(r#"{"value":1}"#).unwrap()), None, "dialog key is required");
+        assert_eq!(IntentResult::from_json(&json::parse(r#"{"value":1,"dialog":3}"#).unwrap()), None, "dialog is text or null");
+    }
+
+    #[test]
+    fn run_performs_by_id_and_checks_parameters_first() {
+        let d = std::path::Path::new("/tmp");
+        let mut app = Demo;
+        let ok = run(&mut app, None, d, "add-note", &json::parse(r#"{"text":"milk","due":"2026-10-11"}"#).unwrap()).unwrap();
+        assert_eq!(ok.value, Json::Str("milk".into()));
+        assert_eq!(ok.dialog.as_deref(), Some("Added"));
+        assert_eq!(run(&mut app, None, d, "add-note", &json::parse(r#"{"text":"a","due":"2026-13-01"}"#).unwrap()).unwrap_err().code, INVALID_PARAMS, "bad date is refused before perform");
+        assert_eq!(run(&mut app, None, d, "add-note", &Json::Null).unwrap_err().code, INVALID_PARAMS);
+        assert_eq!(run(&mut app, None, d, "missing", &Json::Null).unwrap_err().code, METHOD_NOT_FOUND);
     }
 }
