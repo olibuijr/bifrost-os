@@ -61,3 +61,26 @@ would make a root process the server for every untrusted app, so it stays out.
 
 `springboard/wm` (crate `bifrost-wm`). Window-management rules (placement, stacking, focus, move and resize
 grabs) live in plain Rust modules without Smithay types, so they are unit-tested on any host.
+
+## Presenter bugs the window server retires
+
+The shell-side GPU presenter (`springboard/src/gpu/wl.rs`) fakes glass inside its own buffers. Bugs of that design,
+found on Midget on 2026-10-11:
+
+- **Frozen glass while dragging.** labwc moves the window (`xdg_toplevel.move`); the presenter keeps blurring the old
+  spot. Only the compositor knows the geometry.
+- **Burn-in after the full-screen app switcher.** `bifrost_render::glass::merge` drops a stored shape only when it lies
+  wholly inside one damage rectangle, and keeps partly damaged shapes on purpose (the clock redraws a strip of the bar
+  without re-reporting the bar). A shape that disappears while only partly damaged, or damaged as several rectangles,
+  stays in the list, and the presenter keeps drawing its blur and tint on the desktop.
+- **Black desktop after unlock** (fixed in `cbd807d`): the lock unmapped the desktop layer surface and the unlock
+  attached a buffer before the new configure.
+
+## Open desktop issues (user notes, 2026-10-11)
+
+1. Dock icons vibrate under hover magnification; it must be smooth, and every dock setting belongs in Settings.
+2. Files: the empty-folder screen needs a proper Golden Gate design.
+3. Super+Space does not open Spotlight (labwc keybinding today; `bifrost-wm` phase 3 owns keys).
+4. Switching windows: the dimming of inactive windows should fade in and out, in both directions.
+5. The dock icon context menu is oversized; follow the HIG menu metrics.
+6. The burn-in above.
