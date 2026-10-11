@@ -100,6 +100,108 @@ impl Rect {
     }
 }
 
+/// A set of points kept as disjoint rectangles: the shape a hit area, a clip or a window outline is built from.
+/// Every operation returns a new region. Empty rectangles are dropped and neighbouring pieces with the same edge are joined.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Region {
+    rects: Vec<Rect>,
+}
+
+impl Region {
+    pub fn new() -> Self {
+        Region::default()
+    }
+    /// The region covering one rectangle; a rectangle with no area gives the empty region.
+    pub fn from_rect(r: Rect) -> Self {
+        if r.w > 0.0 && r.h > 0.0 {
+            Region { rects: vec![r] }
+        } else {
+            Region::default()
+        }
+    }
+    /// The disjoint rectangles that make up the region.
+    pub fn rects(&self) -> &[Rect] {
+        &self.rects
+    }
+    pub fn is_empty(&self) -> bool {
+        self.rects.is_empty()
+    }
+    pub fn contains(&self, x: f32, y: f32) -> bool {
+        self.rects.iter().any(|r| r.contains(x, y))
+    }
+    /// The smallest rectangle holding the whole region, or `None` when it is empty.
+    pub fn bounds(&self) -> Option<Rect> {
+        self.rects.iter().copied().reduce(|a, b| a.union(b))
+    }
+    pub fn area(&self) -> f32 {
+        self.rects.iter().map(|r| r.w * r.h).sum()
+    }
+    pub fn translated(&self, dx: f32, dy: f32) -> Region {
+        Region { rects: self.rects.iter().map(|r| Rect { x: r.x + dx, y: r.y + dy, ..*r }).collect() }
+    }
+    /// Everything covered by either region.
+    pub fn union(&self, o: &Region) -> Region {
+        combine(&self.rects, &o.rects, |a, b| a || b)
+    }
+    /// What both regions cover.
+    pub fn intersection(&self, o: &Region) -> Region {
+        combine(&self.rects, &o.rects, |a, b| a && b)
+    }
+    /// What `self` covers and `o` does not.
+    pub fn subtract(&self, o: &Region) -> Region {
+        combine(&self.rects, &o.rects, |a, b| a && !b)
+    }
+    /// What exactly one of the two regions covers.
+    pub fn xor(&self, o: &Region) -> Region {
+        combine(&self.rects, &o.rects, |a, b| a != b)
+    }
+}
+
+/// Boolean combination of two rectangle sets. Cuts the plane into vertical slabs at every edge, cuts each slab into runs at
+/// every horizontal edge, and keeps the runs where `keep(in_a, in_b)` holds.
+fn combine(a: &[Rect], b: &[Rect], keep: impl Fn(bool, bool) -> bool) -> Region {
+    let mut xs: Vec<f32> = a.iter().chain(b).flat_map(|r| [r.x, r.right()]).collect();
+    xs.sort_by(|p, q| p.total_cmp(q));
+    xs.dedup();
+    let mut out: Vec<Rect> = Vec::new();
+    for pair in xs.windows(2) {
+        let (x0, x1) = (pair[0], pair[1]);
+        let xm = (x0 + x1) / 2.0;
+        let (ya, yb) = (spans_at(a, xm), spans_at(b, xm));
+        let mut ys: Vec<f32> = ya.iter().chain(&yb).flat_map(|&(s, e)| [s, e]).collect();
+        ys.sort_by(|p, q| p.total_cmp(q));
+        ys.dedup();
+        for seg in ys.windows(2) {
+            let ym = (seg[0] + seg[1]) / 2.0;
+            let in_a = ya.iter().any(|&(s, e)| s <= ym && ym < e);
+            let in_b = yb.iter().any(|&(s, e)| s <= ym && ym < e);
+            if keep(in_a, in_b) {
+                push_joined(&mut out, Rect { x: x0, y: seg[0], w: x1 - x0, h: seg[1] - seg[0] });
+            }
+        }
+    }
+    Region { rects: out }
+}
+
+/// The vertical spans `(top, bottom)` of the rectangles that cross the vertical line `x`, sorted by top.
+fn spans_at(rects: &[Rect], x: f32) -> Vec<(f32, f32)> {
+    let mut spans: Vec<(f32, f32)> = rects.iter().filter(|r| r.x <= x && x < r.right()).map(|r| (r.y, r.bottom())).collect();
+    spans.sort_by(|p, q| p.0.total_cmp(&q.0));
+    spans
+}
+
+/// Adds `r`, widening an existing piece instead when it continues that piece's edge (same height and touching on the
+/// side, or same width and touching below). The covered set is unchanged; the piece count stays small.
+fn push_joined(out: &mut Vec<Rect>, r: Rect) {
+    if let Some(p) = out.iter_mut().rev().find(|p| p.y == r.y && p.h == r.h && p.right() == r.x) {
+        p.w += r.w;
+    } else if let Some(p) = out.iter_mut().rev().find(|p| p.x == r.x && p.w == r.w && p.bottom() == r.y) {
+        p.h += r.h;
+    } else {
+        out.push(r);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +243,63 @@ mod tests {
         assert_eq!(R.centered(20.0, 10.0), Rect { x: 50.0, y: 40.0, w: 20.0, h: 10.0 });
         assert_eq!(Edge::Top.opposite(), Edge::Bottom);
         assert_eq!(Edge::Left.opposite().opposite(), Edge::Left);
+    }
+
+    fn sq(x: f32, y: f32, w: f32, h: f32) -> Region {
+        Region::from_rect(Rect { x, y, w, h })
+    }
+
+    #[test]
+    fn a_region_from_a_rectangle_is_that_rectangle_and_empty_has_no_area() {
+        let r = sq(10.0, 20.0, 100.0, 50.0);
+        assert_eq!(r.bounds(), Some(R));
+        assert_eq!(r.area(), 5000.0);
+        assert!(r.contains(10.0, 20.0) && !r.contains(110.0, 20.0), "the right edge is outside");
+        assert!(sq(0.0, 0.0, 0.0, 5.0).is_empty(), "no width gives the empty region");
+        assert!(Region::new().bounds().is_none());
+    }
+
+    #[test]
+    fn union_covers_both_once_and_intersection_keeps_the_overlap() {
+        let a = sq(0.0, 0.0, 10.0, 10.0);
+        let b = sq(5.0, 5.0, 10.0, 10.0);
+        let u = a.union(&b);
+        assert_eq!(u.area(), 175.0, "100 + 100 - the 25 they share");
+        assert!(u.contains(12.0, 12.0) && u.contains(2.0, 2.0) && !u.contains(16.0, 2.0));
+        let i = a.intersection(&b);
+        assert_eq!(i.bounds(), Some(Rect { x: 5.0, y: 5.0, w: 5.0, h: 5.0 }));
+        assert_eq!(i.area(), 25.0);
+        assert!(a.intersection(&sq(50.0, 50.0, 1.0, 1.0)).is_empty(), "apart regions share nothing");
+    }
+
+    #[test]
+    fn subtract_leaves_the_part_not_covered_and_xor_the_part_covered_once() {
+        let a = sq(0.0, 0.0, 10.0, 10.0);
+        let left = sq(0.0, 0.0, 5.0, 10.0);
+        let rest = a.subtract(&left);
+        assert_eq!(rest.bounds(), Some(Rect { x: 5.0, y: 0.0, w: 5.0, h: 10.0 }));
+        assert_eq!(rest.area(), 50.0);
+        assert!(!rest.contains(2.0, 2.0) && rest.contains(7.0, 2.0));
+        assert!(a.subtract(&a).is_empty(), "a region minus itself is empty");
+        let x = a.xor(&sq(5.0, 5.0, 10.0, 10.0));
+        assert_eq!(x.area(), 150.0, "union 175 minus intersection 25");
+        assert!(!x.contains(7.0, 7.0), "the shared corner is not in the xor");
+    }
+
+    #[test]
+    fn neighbouring_pieces_with_the_same_edge_are_joined() {
+        let u = sq(0.0, 0.0, 5.0, 5.0).union(&sq(5.0, 0.0, 5.0, 5.0));
+        assert_eq!(u.rects().len(), 1);
+        assert_eq!(u.rects()[0], Rect { x: 0.0, y: 0.0, w: 10.0, h: 5.0 });
+        let stacked = sq(0.0, 0.0, 4.0, 4.0).union(&sq(0.0, 4.0, 4.0, 4.0));
+        assert_eq!(stacked.rects().len(), 1, "a vertical stack of equal width joins too");
+    }
+
+    #[test]
+    fn translation_moves_every_piece_and_keeps_the_area() {
+        let r = sq(1.0, 1.0, 2.0, 2.0).union(&sq(10.0, 10.0, 2.0, 2.0)).translated(10.0, 20.0);
+        assert_eq!(r.area(), 8.0);
+        assert!(r.contains(12.0, 22.0) && r.contains(20.0, 30.0));
+        assert_eq!(r.bounds(), Some(Rect { x: 11.0, y: 21.0, w: 11.0, h: 11.0 }));
     }
 }

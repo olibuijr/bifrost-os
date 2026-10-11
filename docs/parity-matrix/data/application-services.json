@@ -1,0 +1,33 @@
+{
+  "framework": "Application Services",
+  "doc": "https://developer.apple.com/documentation/applicationservices",
+  "macos_since": "10.0",
+  "status": "partial",
+  "bifrost": "bifrost_app::pasteboard, bifrost_app::print, bifrost_app::workspace, bifrost_ui::geometry::Region, bifrost_ui::ax (Announcements, custom actions), springboard/src/shell/atspi/, springboard/src/shell/magnifier.rs",
+  "summary": "Application Services is mostly legacy Carbon C API (Apple Event Manager, ColorSync, Speech Synthesis, PDEPlugIn, HIShape, Translation). BifrOSt covers the pasteboard, the accessibility tree (AT-SPI2 instead of AXUIElement), printing through CUPS, a rectangle-set region type for shapes, and an announcement queue with named custom actions in the element map; ColorSync, speech synthesis and the print-plug-in APIs have no counterpart, and the new accessibility models are not yet wired to the AT-SPI bridge.",
+  "rea_evidence": "ev_a6c69eba463253162e20cfff69c1bf598c5e97022d7ad862ba4cecf4f4f98f9b",
+  "features": [
+    {"feature": "Pasteboard (NSPasteboard)", "apple": "Pasteboard class, NSPasteboard.general, UTType items", "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs", "status": "partial", "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name."},
+    {"feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)", "apple": "Carbon Accessibility: AXUIElement.h, AXRoleConstants.h, AXAttributeConstants.h, AXNotificationConstants.h, AXActionConstants.h", "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/src/shell/atspi/model.rs, docs/bifrost-ui.md (Accessibility bridge)", "status": "partial", "note": "AT-SPI2 bridge maps app node trees to roles, states and actions (Press, SetValue, Focus). Apps that send no tree appear as a flat list; shell chrome is not in the tree; the bridge is untested with a live Orca."},
+    {"feature": "Accessibility text (AXText, attributed strings, text markers)", "apple": "AXTextAttributedString.h, AXTextMarker, AXTextMarkerRange, AXValue.h", "bifrost": "springboard/sdk/src/attributed.rs, docs/bifrost-ui.md (Accessibility bridge gaps)", "status": "gap", "note": "No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."},
+    {"feature": "Accessibility announcements and actions", "apple": "AXNotificationConstants.h (announcement requested notification, announcement key, priority key); NSAccessibilityCustomAction (name and handler)", "bifrost": "springboard/ui/src/ax.rs (Announcements, Map::add_custom_action, Map::custom_actions)", "status": "partial", "note": "The UI model queues announcements with polite and assertive priority, drops repeats and bounds the queue, and keeps named custom actions per element. The AT-SPI bridge does not read the queue or list the custom actions yet, so nothing is spoken and no custom action is invoked from assistive technology."},
+    {"feature": "Universal Access (zoom focus)", "apple": "UniversalAccess.h (zoom focus control)", "bifrost": "springboard/src/shell/magnifier.rs", "status": "partial", "note": "Shell magnifier with Original, Invert and Contrast filters. No app-facing API to read or set zoom focus."},
+    {"feature": "Core Printing (PMPageFormat, PMPrintSettings, PMSession)", "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect", "bifrost": "springboard/sdk/src/print.rs (PrintInfo, PrintOperation, printers, available)", "status": "partial", "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked."},
+    {"feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)", "apple": "PDEPlugIn, PDEPanel, PDEPlugInCallbackProtocol", "bifrost": "springboard/sdk/src/print.rs", "status": "gap", "note": "No print panel plug-in mechanism; the print sheet is not shell-drawn yet."},
+    {"feature": "ColorSync Manager (profiles, transforms, CMM)", "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM", "bifrost": "springboard/src/shell/books/engine/pdf/image.rs (ICCBased colour space decode only)", "status": "gap", "note": "PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."},
+    {"feature": "Speech Synthesis Manager", "apple": "NewSpeechChannel, CountVoices, SetSpeechRate, SpeechBusy", "bifrost": "none found in code search", "status": "gap", "note": "No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."},
+    {"feature": "Apple Event Manager (AEDesc, Apple Event dispatch)", "apple": "AECreateAppleEvent, AEPutParamDesc, AEGetParamDesc, object specifiers", "bifrost": "springboard/sdk/src/control.rs (control socket RPC), springboard/sdk/src/intents.rs (App Intents)", "status": "n/a", "note": "Carbon-era IPC with no BifrOSt counterpart. The control socket RPC and App Intents cover the same app-automation role, not the descriptor format."},
+    {"feature": "HIShape (region geometry)", "apple": "HIShape, HIMutableShape", "bifrost": "springboard/ui/src/geometry.rs (Region)", "status": "partial", "note": "Region is a set of disjoint rectangles with bounds, containment, area, translation and union, intersection, subtract and xor. Curved paths are not modelled, and no app-facing SDK wrapper exposes Region yet."},
+    {"feature": "Translation (Translation Services)", "apple": "Translation class", "bifrost": "none", "status": "n/a", "note": "Legacy Carbon translation service for document conversion. Not applicable to BifrOSt."}
+  ],
+  "gaps": [
+    "Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.",
+    "Accessibility announcements: the queue exists in the UI model but the AT-SPI bridge does not speak it yet.",
+    "Custom accessibility actions: listed by the element map but not exposed to the bridge or invoked from assistive technology.",
+    "ColorSync: no profile, transform or CMM API for apps.",
+    "Speech synthesis: no SDK voice or speech channel API.",
+    "Core Printing: no shell-drawn print sheet, no view pagination, and no print panel plug-in mechanism.",
+    "HIShape: no curved paths and no SDK wrapper for the region type.",
+    "Universal Access: no app-facing zoom focus API."
+  ]
+}

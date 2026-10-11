@@ -6,6 +6,7 @@
 //! addresses unique. Agents list the map, resolve a name to one address, and press it. parity: `AXUIElement` identifiers
 //! and the accessibility hierarchy (`NativeAccessibility`, `NativeAccessibility`), see docs/agent-api.md.
 use crate::{Node, Rect, Role};
+use std::collections::VecDeque;
 
 /// Lower-case ASCII words joined by `-`: "Software Update" is `software-update`, "Wi-Fi" is `wi-fi`, "Ólafur" is `lafur`.
 /// Icelandic letters fold to their ASCII base first so names stay readable.
@@ -75,6 +76,8 @@ pub enum Resolve<'a> {
 #[derive(Default, Debug)]
 pub struct Map {
     elements: Vec<Element>,
+    /// (element address, action name) pairs, in the order added: the actions beyond press that the bridge lists.
+    custom: Vec<(String, String)>,
 }
 
 impl Map {
@@ -158,6 +161,27 @@ impl Map {
         }
     }
 
+    /// Gives the element at `address` a named action beyond press (`Move up`, `Archive`). The producer runs it through its own
+    /// handle. Returns false when the element does not exist, the name is blank, or the element already has that action
+    /// (names compare without case).
+    pub fn add_custom_action(&mut self, address: &str, name: &str) -> bool {
+        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if name.is_empty() || self.get(address).is_none() || self.has_custom_action(address, &name) {
+            return false;
+        }
+        self.custom.push((address.into(), name));
+        true
+    }
+
+    /// The custom action names of the element at `address`, in the order added.
+    pub fn custom_actions<'a>(&'a self, address: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+        self.custom.iter().filter(move |(a, _)| a.as_str() == address).map(|(_, n)| n.as_str())
+    }
+
+    pub fn has_custom_action(&self, address: &str, name: &str) -> bool {
+        self.custom_actions(address).any(|n| n.eq_ignore_ascii_case(name.trim()))
+    }
+
     /// One line per element: `address<TAB>role<TAB>name<TAB>value<TAB>enabled`. The listing agents read.
     pub fn listing(&self, prefix: &str) -> String {
         let mut out = String::new();
@@ -165,6 +189,73 @@ impl Map {
             out.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", e.address, e.role, e.name, e.value, if e.enabled { "enabled" } else { "disabled" }));
         }
         out
+    }
+}
+
+// --- announcements: text the screen reader speaks without focus moving (a live region) -------------------------------------------
+
+/// How urgently an announcement is spoken. An assertive one is taken before any polite one waiting (the priority key).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Politeness {
+    Polite,
+    Assertive,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Announcement {
+    pub text: String,
+    pub politeness: Politeness,
+}
+
+/// The announcements waiting for the screen reader. Bounded: when full, the oldest polite one is dropped first, so an assertive
+/// announcement is never lost to make room for a polite one.
+#[derive(Debug)]
+pub struct Announcements {
+    queue: VecDeque<Announcement>,
+    capacity: usize,
+}
+
+impl Announcements {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Announcements { queue: VecDeque::new(), capacity: capacity.max(1) }
+    }
+
+    /// Queues `text` with its whitespace collapsed. Returns false for blank text, or when it repeats the announcement queued last.
+    pub fn post(&mut self, text: &str, politeness: Politeness) -> bool {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() || self.queue.back().is_some_and(|a| a.text == text) {
+            return false;
+        }
+        if self.queue.len() >= self.capacity {
+            let polite = self.queue.iter().position(|a| a.politeness == Politeness::Polite);
+            self.queue.remove(polite.unwrap_or(0));
+        }
+        self.queue.push_back(Announcement { text, politeness });
+        true
+    }
+
+    /// Takes the next announcement to speak: the oldest assertive one, else the oldest polite one.
+    pub fn take_next(&mut self) -> Option<Announcement> {
+        let i = self.queue.iter().position(|a| a.politeness == Politeness::Assertive).unwrap_or(0);
+        self.queue.remove(i)
+    }
+
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.queue.clear();
+    }
+}
+
+impl Default for Announcements {
+    fn default() -> Self {
+        Announcements::with_capacity(32)
     }
 }
 
@@ -284,5 +375,58 @@ mod tests {
         assert_eq!(all, ["os/settings/general"]);
         assert_eq!(m.under("").count(), 2, "an empty prefix lists everything");
         assert!(m.listing("os/settings").starts_with("os/settings/general\trow\tGeneral\t\tenabled\n"));
+    }
+
+    #[test]
+    fn custom_actions_belong_to_one_element_and_refuse_duplicates() {
+        let mut m = Map::new();
+        let row = m.add("os/files", "row", "Report.pdf", "", true, None, "");
+        let other = m.add("os/files", "row", "Notes.txt", "", true, None, "");
+        assert!(m.add_custom_action(&row, "Move  up"), "whitespace collapses");
+        assert!(m.add_custom_action(&row, "Archive"));
+        assert!(!m.add_custom_action(&row, "move up"), "names compare without case");
+        assert!(!m.add_custom_action(&row, "   "), "a blank name is refused");
+        assert!(!m.add_custom_action("os/files/missing", "Archive"), "an unknown element is refused");
+        assert_eq!(m.custom_actions(&row).collect::<Vec<_>>(), ["Move up", "Archive"], "in the order added");
+        assert!(m.custom_actions(&other).next().is_none(), "the other row has none");
+        assert!(m.has_custom_action(&row, " archive "));
+        assert!(!m.has_custom_action(&other, "Archive"));
+    }
+
+    #[test]
+    fn an_assertive_announcement_is_spoken_before_waiting_polite_ones() {
+        let mut q = Announcements::default();
+        assert!(q.post("Saved", Politeness::Polite));
+        assert!(q.post("Connection lost", Politeness::Assertive));
+        assert!(q.post("3 new mail", Politeness::Polite));
+        assert_eq!(q.take_next().map(|a| a.text), Some("Connection lost".into()));
+        assert_eq!(q.take_next().map(|a| a.text), Some("Saved".into()), "polite ones keep their order");
+        assert_eq!(q.take_next().map(|a| a.text), Some("3 new mail".into()));
+        assert!(q.take_next().is_none() && q.is_empty());
+    }
+
+    #[test]
+    fn blank_and_repeated_announcements_are_not_queued() {
+        let mut q = Announcements::default();
+        assert!(!q.post("  \t ", Politeness::Polite), "blank text is refused");
+        assert!(q.post("Copied   to\nthe clipboard", Politeness::Polite));
+        assert!(!q.post("Copied to the clipboard", Politeness::Polite), "the same text as the last one is dropped");
+        assert!(q.post("Pasted", Politeness::Polite));
+        assert!(q.post("Copied to the clipboard", Politeness::Polite), "a repeat after another text is allowed");
+        assert_eq!(q.len(), 3);
+        assert_eq!(q.take_next().unwrap().text, "Copied to the clipboard");
+    }
+
+    #[test]
+    fn a_full_queue_drops_the_oldest_polite_announcement_first() {
+        let mut q = Announcements::with_capacity(2);
+        assert!(q.post("one", Politeness::Polite));
+        assert!(q.post("urgent", Politeness::Assertive));
+        assert!(q.post("two", Politeness::Polite), "full: the polite 'one' makes room");
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.take_next().unwrap().politeness, Politeness::Assertive);
+        assert_eq!(q.take_next().unwrap().text, "two", "'one' was the dropped polite entry");
+        q.clear();
+        assert!(q.is_empty());
     }
 }
