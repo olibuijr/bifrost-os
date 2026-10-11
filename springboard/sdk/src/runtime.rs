@@ -631,6 +631,14 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     crate::notification::distributed_incoming(&name, user_info.into_iter().collect());
                     need_frame = true;
                 }
+                ToApp::WorkspaceReply { request, status, items } => {
+                    crate::workspace::reply_incoming(request, status, items);
+                    need_frame = true;
+                }
+                ToApp::WorkspaceEvent { kind, app_id, name } => {
+                    crate::workspace::event_incoming(kind, app_id, name);
+                    need_frame = true;
+                }
                 ToApp::ShareDone { request, target } => {
                     if let Some(c) = &ctx {
                         need_frame |= app.share_done(c, request, (!target.is_empty()).then_some(target));

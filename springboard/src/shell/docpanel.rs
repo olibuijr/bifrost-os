@@ -862,6 +862,15 @@ impl super::Shell {
         mapping
     }
 
+    /// The account's home and, for each of `grants`, its absolute path and whether it is a write grant. `app_id` must own
+    /// every grant (`Denied` otherwise). For the workspace: reveal and recycle act on the path; the app never sees it.
+    pub(super) fn grant_files(&mut self, app_id: &str, grants: &[GrantId]) -> Result<(PathBuf, Vec<(PathBuf, bool)>), DocErrorCode> {
+        let b = self.doc_broker().ok_or(DocErrorCode::Unsupported)?;
+        let home = b.opener.home().to_path_buf();
+        let files = grants.iter().map(|g| b.grants.get(app_id, g).map(|g| (home.join(&g.path), g.mode == DocMode::Write))).collect::<Result<Vec<_>, _>>()?;
+        Ok((home, files))
+    }
+
     fn doc_broker(&mut self) -> Option<&mut Broker> {
         self.doc_broker.get_or_insert_with(Broker::installed).as_mut()
     }

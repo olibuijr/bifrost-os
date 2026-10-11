@@ -16,6 +16,8 @@ pub mod extras;
 pub use extras::{LoginOp, LoginStatus, StatusMenuItem};
 pub mod quicksearch;
 pub mod peek;
+pub mod workspace;
+pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
 pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 
 pub const MAX_PACKET: usize = 16 * 1024;
@@ -403,6 +405,10 @@ pub enum ToApp {
     NotificationAction { id: String, action: String, text: String, thread: String, category: String },
     /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
     ContinueActivity { activity_type: String, unique_id: String, domain: String },
+    /// The answer to `ToShell::WorkspaceRequest`. Tag 100.
+    WorkspaceReply { request: u32, status: WorkspaceStatus, items: Vec<String> },
+    /// A workspace notification the app subscribed to (`ToShell::WorkspaceSubscribe`). `app_id` and `name` are empty for sleep and wake. Tag 101.
+    WorkspaceEvent { kind: WorkspaceEventKind, app_id: String, name: String },
     /// The answer to `ToShell::NotifyRequest`.
     NotificationStatus { request: u32, status: NotifStatus },
     /// The answer to `ToShell::NotifyQuery` (`getDeliveredNotifications`, `getPendingNotificationRequests`).
@@ -659,6 +665,10 @@ pub enum ToShell {
     /// `deleteSearchableItems(withIdentifiers:)`, `(withDomainIdentifiers:)` and `deleteAllSearchableItems`; `kind` is a
     /// `quicksearch::DELETE_*`. 0x1c1.
     QuickSearchDelete { kind: u8, values: Vec<String> },
+    /// Workspace: open, reveal, recycle and queries; files are named by the app's document grants. Tag 0x230.
+    WorkspaceRequest { request: u32, op: WorkspaceOp, grants: Vec<GrantId>, arg: String },
+    /// Which `WorkspaceEventKind`s (bit mask) the app wants to hear. Tag 0x231.
+    WorkspaceSubscribe { mask: u32 },
     /// `QLPreviewPanel` shown or updated: the ordered items and the current index (see `peek`). 0x1e0.
     Preview { items: Vec<peek::PreviewItem>, index: u32 },
     /// `QLPreviewPanel.close()`. 0x1e1.
@@ -1085,6 +1095,7 @@ impl ToApp {
             }
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
@@ -1205,6 +1216,7 @@ impl ToApp {
             t @ 50..=59 => rich::decode_app(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
+            t @ 100..=109 => workspace::decode_app(t, &mut r)?,
             t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })
@@ -1325,6 +1337,7 @@ impl ToShell {
             }
             m @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => extras::encode_shell(m, &mut b),
             m @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => quicksearch::encode_shell(m, &mut b),
+            m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
@@ -1711,6 +1724,7 @@ impl ToShell {
             t @ 0x140..=0x14f => rich::decode_shell(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_shell(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_shell(t, &mut r)?,
+            t @ 0x230..=0x23f => workspace::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
             t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),

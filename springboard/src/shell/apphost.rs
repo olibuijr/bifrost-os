@@ -794,6 +794,7 @@ impl Shell {
                     }
                 }
             }
+            m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => self.workspace_msg(slot, m, t),
             m @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => self.dnd_msg(slot, m),
             m @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => self.extras_msg(slot, m),
             other => self.usernotif_msg(slot, other, t),
@@ -827,6 +828,7 @@ impl Shell {
                 self.ext[slot] = Some(h);
                 self.usernotif_started(slot);
                 self.extras_started(slot);
+                self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidLaunchApplication, slot as u8);
             }
             Err(e) => {
                 bifrost_core::log::shell_logger("apphost").error(format!("cannot start {}: {e}", app.manifest.id));
@@ -848,6 +850,7 @@ impl Shell {
             self.ext_fg = None;
         }
         self.extras_app_gone(slot as u8);
+        self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot as u8);
     }
 
     /// Shutdown, logout, restart: terminable apps are killed at once, the rest get `Quit` together and one
@@ -1030,6 +1033,9 @@ impl Shell {
                 self.set_keyboard(false, t);
             }
             self.ext_fg = fg;
+            if let Some(n) = fg {
+                self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidActivateApplication, n);
+            }
             if let Some(t) = fg.and_then(|n| self.ext.get(n as usize)).and_then(Option::as_ref).map(|h| h.input_traits) {
                 self.ext_apply_traits(t);
             }
@@ -1136,6 +1142,7 @@ impl Shell {
                     r @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]
                     r @ (ToShell::DocOpen { .. } | ToShell::DocOpenEx { .. } | ToShell::DocSave { .. } | ToShell::DocCommit { .. } | ToShell::DocAbort { .. } | ToShell::DocReopen { .. } | ToShell::DocRelease { .. } | ToShell::DocSaveGrant { .. }) => docs.push((slot as u8, r)),
@@ -1149,7 +1156,7 @@ impl Shell {
             for (slot, r) in docs { self.doc_request(slot, r); }
             self.doc_keep_shown();
         }
-        for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); }
+        for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
         // a window whose app has exited must not keep its last frame on screen
         for slot in died { self.desk_close_app(super::AppId::External(slot)); }
         if badge_changed { self.dirty = true; }
