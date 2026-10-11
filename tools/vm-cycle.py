@@ -113,6 +113,7 @@ def main():
     ap.add_argument("--disk", default="/dev/nvme0n1", help="midget: the disk the installer must erase (checked against what the live system sees)")
     ap.add_argument("--no-desktop", action="store_true")
     ap.add_argument("--ui", action="store_true", help="drive the on-screen installer by keyboard instead of the unattended preset")
+    ap.add_argument("--reuse", action="store_true", help="no reinstall: boot the installed VM disk and run the checks after the install")
     ap.add_argument("--compositor", choices=["labwc", "bifrost-wm"], default="labwc",
                     help="bifrost-wm: after the stock checks, install the window server from this tree and check again under it")
     ap.add_argument("--label", default="")
@@ -125,6 +126,8 @@ def main():
 
     if a.target == "midget":
         return midget(a)
+    if a.reuse:
+        return vm_installed(a)
     if not a.ui:
         return vm_unattended(a)
     # 1. the installer binary (fast profile)
@@ -424,6 +427,23 @@ def vm_unattended(a):
     if not any("unattended" in k for k in seen):
         notes.append("never saw an 'unattended' installer line: was the preset found?")
 
+    return vm_installed(a, booted=True)
+
+
+def vm_installed(a, booted=False):
+    """The checks after an install: clean boot, shell ready, unlock, apps, then optionally the window server."""
+    live = lambda: ssh("test -d /run/archiso && echo live || echo installed", 8).strip()
+    if not booted:
+        t = time.time()
+        if live() != "installed":
+            sh(["pkill", "-f", "name BifrOSt Installer"])
+            time.sleep(2)
+            sh(["tools/arch-vm-iso.sh"], timeout=60, env={**os.environ, "ISO_NONE": "1", "KEEP_VARS": "1", "VM_WWN": VM_WWN, "VM_MAC": VM_MAC,
+                                                         **({"HEADLESS": "1"} if a.headless else {})})
+        if not wait_for(lambda: live() == "installed", 180, 3):
+            notes.append("the installed VM disk did not boot to ssh")
+            return finish(a, ok=False)
+        mark("installed_boot_to_ssh", t)
     # 4. the new system booted cleanly and the shell is ready
     t = time.time()
     def booted_ok():
