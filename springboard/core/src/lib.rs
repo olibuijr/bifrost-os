@@ -3,6 +3,8 @@ pub mod json;
 pub mod sha256;
 pub mod fsutil;
 pub mod log;
+pub mod log_entries;
+pub mod log_cursor;
 pub mod host;
 pub mod random;
 pub mod meter;
