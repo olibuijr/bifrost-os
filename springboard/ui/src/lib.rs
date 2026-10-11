@@ -623,6 +623,7 @@ pub mod relevance;
 pub mod reading_list;
 pub mod content_rules;
 pub mod chart;
+pub mod chart_marks;
 pub mod compose;
 pub mod file_provider;
 pub mod widget;
