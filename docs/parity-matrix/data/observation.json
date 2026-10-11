@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/observation",
   "macos_since": "14.0",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/observable.rs (bifrost_app::observable::Observable), springboard/ui/src/observe.rs (Observable<T>), springboard/sdk/src/process_info.rs (change observers)",
-  "summary": "BifrOSt has manual value observation: an Observable<T> that notifies subscribers only when the value changes, with Combine-style sink, map and remove_duplicates. It has none of Observation's automatic dependency tracking, the @Observable macro, or the async Observations sequence.",
+  "bifrost": "springboard/sdk/src/observable.rs (bifrost_app::observable::Observable), springboard/ui/src/observe.rs (Observable<T>), springboard/sdk/src/process_info.rs (change observers); springboard/sdk/src/observable.rs (with_observation_tracking, Observations)",
+  "summary": "BifrOSt has manual value observation: an Observable<T> that notifies subscribers only when the value changes, with Combine-style sink, map and remove_duplicates. A set made inside a subscriber is queued and delivered in order, and cancelling a subscriber during a change sticks. with_observation_tracking records the observables a closure reads and fires one on-change callback; Observable::observations pulls changes in order. It still has no @Observable macro, no tracking options or tokens, no continuous observation, and no async sequence.",
   "rea_evidence": "ev_59ddd532abf1677b1e3304c8d7443c1ffaef9a4e65513f0e7e8dd952321415d0",
   "features": [
     {
@@ -17,23 +17,23 @@
     {
       "feature": "Change notification on value change",
       "apple": "Observable protocol, ObservationRegistrar",
-      "bifrost": "springboard/sdk/src/observable.rs (Observable::set, subscribe, sink); springboard/ui/src/observe.rs (Observable<T>::set, subscribe(old, new))",
+      "bifrost": "springboard/sdk/src/observable.rs (Observable::set, update, subscribe, sink); springboard/ui/src/observe.rs (Observable<T>::set, subscribe(old, new))",
       "status": "partial",
-      "note": "Notifies only when the value differs (PartialEq). Two copies exist: the SDK one (Rc, Combine-style, sink delivers current value) and the UI-model one (old and new values passed to subscribers). A set from inside a subscriber of the same observable updates the value but notifies no one (docs/bifrost-ui.md:1435)."
+      "note": "Notifies only when the value differs (PartialEq) in the UI-model copy; the SDK copy notifies on every set. A set made from inside a subscriber is queued and delivered after the running change, in order (fixed in SDK, was dropped). Cancelling another subscriber during a change is now durable. UI-model copy (ui/src/observe.rs) is unchanged: its subscribers receive old and new values only."
     },
     {
       "feature": "Automatic dependency tracking",
       "apple": "withObservationTracking(_:onChange:), withObservationTracking(options:_:onChange:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Subscribers must be attached explicitly to each Observable. Nothing records which values a closure read. docs/bifrost-ui.md:1435 lists this gap."
+      "bifrost": "springboard/sdk/src/observable.rs (with_observation_tracking, Observable::get records reads)",
+      "status": "partial",
+      "note": "with_observation_tracking(apply, on_change) records each Observable read by get() inside apply and calls on_change once when one changes; the tracking then ends. Apple's withObservationTracking returns only the closure value and also covers options, and its onChange runs before the change; here on_change runs after the change, and reads inside on_change are not tracked. Only the SDK Observable is tracked; the UI-model copy is not."
     },
     {
       "feature": "Async change sequence",
       "apple": "Observations, withContinuousObservation(options:apply:)",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No async sequence of transactional changes. Subscribers are synchronous callbacks on the single UI thread (the SDK Observable is single-threaded, Rc)."
+      "bifrost": "springboard/sdk/src/observable.rs (Observable::observations, Observations::try_next, pending_len)",
+      "status": "partial",
+      "note": "Pull-based sequence of the changes after the call, oldest first; dropping it stops recording. It is the synchronous counterpart of Apple's Observations: it has no suspension, no AsyncSequence conformance and no withContinuousObservation(options:apply:)."
     },
     {
       "feature": "Observation tracking options and tokens",
@@ -58,9 +58,11 @@
     }
   ],
   "gaps": [
-    "No automatic dependency capture (withObservationTracking) and no @Observable macro equivalent: each Observable must be wired by hand.",
-    "No async Observations sequence or withContinuousObservation.",
-    "A set from inside a subscriber of the same Observable notifies no one (docs/bifrost-ui.md:1435).",
+    "No @Observable macro equivalent: each Observable must be wired by hand, and with_observation_tracking tracks only SDK Observable reads.",
+    "No withContinuousObservation(options:apply:), ObservationTracking.Options, Event or Token: with_observation_tracking is one-shot and returns only the closure value.",
+    "Observations is pull-based (try_next), not an AsyncSequence; there is no executor or suspension in the pure std model.",
+    "docs/bifrost-ui.md:1435 still describes the old re-entrant set limit; that shared doc is out of scope for this change and is listed for a later update.",
     "SwiftUI-style integration (view invalidation from observed model state) not verified in code; no binding found in this pass."
-  ]
+  ],
+  "rea_evidence_page": "ev_f12af59a5bcc35eb0cec29f7b3fa3568d11914f48efd308973b34ffe4851e8ef"
 }
