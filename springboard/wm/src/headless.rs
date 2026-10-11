@@ -19,7 +19,6 @@ use smithay::{
             Bind, ExportMem, Offscreen,
         },
     },
-    desktop::layer_map_for_output,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
@@ -79,14 +78,7 @@ impl Headless {
             let mut fb = self.renderer.bind(&mut self.target)?;
             self.damage.render_output(&mut self.renderer, &mut fb, 0, &elements, CLEAR)?;
         }
-        let elapsed = state.start.elapsed();
-        let output = self.output.clone();
-        for window in state.space.elements() {
-            window.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-        }
-        for layer in layer_map_for_output(&output).layers() {
-            layer.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-        }
+        state.send_frames(&self.output);
         state.space.refresh();
         state.popups.cleanup();
         let _ = state.dh.flush_clients();

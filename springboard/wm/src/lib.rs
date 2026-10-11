@@ -9,6 +9,7 @@ pub mod grabs;
 pub mod handlers;
 pub mod headless;
 pub mod input;
+pub mod lock;
 #[cfg(feature = "nested")]
 pub mod nested;
 pub mod scene;

@@ -1,6 +1,6 @@
 //! A nested backend: the compositor in a window on another Wayland or X11 desktop, for development.
 
-use std::{error::Error, time::Duration};
+use std::error::Error;
 
 use smithay::{
     backend::{
@@ -48,13 +48,7 @@ pub fn init(event_loop: &mut EventLoop<'static, WmState>, state: &mut WmState) -
                 }
             }
             let _ = backend.submit(Some(&[Rectangle::from_size(size)]));
-            let elapsed = state.start.elapsed();
-            for window in state.space.elements() {
-                window.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-            }
-            for layer in layer_map_for_output(&output).layers() {
-                layer.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-            }
+            state.send_frames(&output);
             state.space.refresh();
             state.popups.cleanup();
             let _ = state.dh.flush_clients();

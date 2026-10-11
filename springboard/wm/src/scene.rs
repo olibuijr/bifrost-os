@@ -91,6 +91,18 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
 pub fn build(renderer: &mut GlesRenderer, state: &WmState, output: &Output, glass: &mut Glass, top: Vec<SceneElement>) -> Vec<SceneElement> {
     let scale = Scale::from(output.current_scale().fractional_scale());
     let size = output.current_mode().map(|m| m.size).unwrap_or_default();
+    // locked: the lock surface and nothing else (black until it arrives)
+    if state.locked {
+        let mut all = top;
+        if let Some(l) = &state.lock_surface {
+            all.extend(
+                render_elements_from_surface_tree(renderer, l.wl_surface(), (0, 0), scale, 1.0, Kind::Unspecified)
+                    .into_iter()
+                    .map(SceneElement::Surface),
+            );
+        }
+        return all;
+    }
     let mut below: Vec<SceneElement> = Vec::new();
     let mut blurred = Vec::new();
     for item in items(renderer, state, output, scale) {

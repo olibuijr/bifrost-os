@@ -46,6 +46,10 @@ pub struct WmState {
 
     /// `ext-background-effect-v1` (live glass); the renderer reads each surface's blur region.
     pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
+    pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
+    /// A session lock is held: only `lock_surface` is drawn and takes input.
+    pub locked: bool,
+    pub lock_surface: Option<smithay::wayland::session_lock::LockSurface>,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub layer_shell_state: WlrLayerShellState,
@@ -97,6 +101,9 @@ impl WmState {
             pending: Vec::new(),
             on_vblank: None,
             background_effect: crate::background_effect::init(&dh),
+            lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
+            locked: false,
+            lock_surface: None,
             compositor_state: CompositorState::new::<WmState>(&dh),
             xdg_shell_state: XdgShellState::new::<WmState>(&dh),
             layer_shell_state: WlrLayerShellState::new::<WmState>(&dh),
@@ -161,6 +168,9 @@ impl WmState {
 
     /// Raises `id`, gives it keyboard focus and marks it active; every other window is marked inactive.
     pub fn focus(&mut self, id: Option<WindowId>, serial: smithay::utils::Serial) {
+        if self.locked {
+            return;
+        }
         if let Some(id) = id {
             self.wm.raise(id);
             if let Some(w) = self.window(id) {
@@ -182,8 +192,26 @@ impl WmState {
         }
     }
 
+    /// Frame callbacks after a composited frame: windows, layer surfaces and the lock surface draw their next frame.
+    pub fn send_frames(&self, output: &Output) {
+        let elapsed = self.start.elapsed();
+        let zero = Some(std::time::Duration::ZERO);
+        for window in self.space.elements() {
+            window.send_frame(output, elapsed, zero, |_, _| Some(output.clone()));
+        }
+        for layer in layer_map_for_output(output).layers() {
+            layer.send_frame(output, elapsed, zero, |_, _| Some(output.clone()));
+        }
+        if let Some(lock) = &self.lock_surface {
+            smithay::desktop::utils::send_frames_surface_tree(lock.wl_surface(), output, elapsed, zero, |_, _| Some(output.clone()));
+        }
+    }
+
     /// The client surface under a point, and that surface's origin.
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        if self.locked {
+            return self.lock_surface.as_ref().map(|l| (l.wl_surface().clone(), (0.0, 0.0).into()));
+        }
         let output = self.output()?;
         let layers = layer_map_for_output(&output);
         let layer_hit = |l: &smithay::wayland::shell::wlr_layer::Layer| {

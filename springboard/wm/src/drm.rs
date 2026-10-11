@@ -28,7 +28,6 @@ use smithay::{
         session::{libseat::LibSeatSession, Event as SessionEvent, Session},
         udev::{all_gpus, primary_gpu},
     },
-    desktop::layer_map_for_output,
     output::{Mode as WlMode, Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{timer::{TimeoutAction, Timer}, EventLoop, LoopHandle},
@@ -266,13 +265,7 @@ impl Drm {
             }
             Err(e) => eprintln!("bifrost-wm: render: {e}"),
         }
-        let elapsed = state.start.elapsed();
-        for window in state.space.elements() {
-            window.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-        }
-        for layer in layer_map_for_output(&output).layers() {
-            layer.send_frame(&output, elapsed, Some(Duration::ZERO), |_, _| Some(output.clone()));
-        }
+        state.send_frames(&output);
     }
 }
 
