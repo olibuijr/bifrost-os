@@ -46,8 +46,15 @@ EOF
 # shellcheck disable=SC2046
 sudo pacman --config "$CONF" --dbpath "$DB" --cachedir "$(realpath "$MIRROR")" --noconfirm -Syw $(packages)
 sudo chown -R "$(id -u):$(id -g)" "$MIRROR" "$DB"
-# the newest version of each package only, then the repo index
+# the newest version of each package only, then the repo index; repo-add hashes every package (about a minute for the
+# whole set), so an unchanged set keeps its index
 command -v paccache >/dev/null && paccache -q -r -k1 -c "$MIRROR" || true
-rm -f "$MIRROR"/offline.db* "$MIRROR"/offline.files*
-repo-add -q "$MIRROR/offline.db.tar.gz" "$MIRROR"/*.pkg.tar.zst
+set_now=$(cd "$MIRROR" && ls *.pkg.tar.zst | sha256sum | cut -d' ' -f1)
+if [ -s "$MIRROR/offline.db.tar.gz" ] && [ "$(cat "$MIRROR/.indexed" 2>/dev/null)" = "$set_now" ]; then
+  echo "lab mirror: index unchanged"
+else
+  rm -f "$MIRROR"/offline.db* "$MIRROR"/offline.files*
+  repo-add -q "$MIRROR/offline.db.tar.gz" "$MIRROR"/*.pkg.tar.zst
+  echo "$set_now" > "$MIRROR/.indexed"
+fi
 echo "lab mirror: $(ls "$MIRROR"/*.pkg.tar.zst | wc -l) packages, $(du -sh "$MIRROR" | cut -f1), http://10.99.0.1:8078/mirror/"
