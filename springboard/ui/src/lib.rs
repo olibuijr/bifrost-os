@@ -690,3 +690,6 @@ pub mod scan;
 pub mod analysis;
 pub mod docscan;
 pub mod geo;
+pub mod precipitation;
+pub mod weather_alert;
+pub mod weather_attribution;
