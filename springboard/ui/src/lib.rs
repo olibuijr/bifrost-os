@@ -570,6 +570,7 @@ pub mod format;
 pub mod gesture;
 pub mod focus;
 pub mod uttype;
+pub mod preview;
 pub mod textfit;
 pub mod observe;
 pub mod calendar;
