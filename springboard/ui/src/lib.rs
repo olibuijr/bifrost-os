@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod affine;
+pub mod path;
+pub mod gradient;
 #[cfg(test)]
 mod bench;
 

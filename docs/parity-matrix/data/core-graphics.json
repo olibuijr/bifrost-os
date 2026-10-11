@@ -1,0 +1,159 @@
+{
+  "framework": "Core Graphics",
+  "doc": "https://developer.apple.com/documentation/coregraphics",
+  "macos_since": "10.8",
+  "status": "partial",
+  "bifrost": "springboard/render/src/gfx.rs (Surface, Image), springboard/sdk/src/widgets.rs, springboard/render/src/imgdec.rs, springboard/render/src/font.rs, springboard/render/src/cff.rs, springboard/sdk/src/print.rs",
+  "summary": "Apps get a software pixel Surface with rect, rounded-rect, stroke, blit, blur and mask calls, plus PNG and JPEG decode and print-to-PDF through lp. bifrost-ui now has pure models for paths (move, line, cubic, close, flattening, bounds), affine transforms and gradient ramps, but no Surface call fills or strokes a path, applies a transform or fills with a gradient yet. There is no app-facing clip, pattern, shading, colour space or PDF drawing API.",
+  "rea_evidence": "ev_02cfd76ddb7b87442642d82d0a01dd8c3631f0e987cd5f40faef56bae6c62821",
+  "features": [
+    {
+      "feature": "Bitmap drawing context (CGContext, bitmap contexts)",
+      "apple": "CGContext, CGBitmapContextCreate (Creating Bitmap Graphics Contexts)",
+      "bifrost": "springboard/render/src/gfx.rs:636 (Surface), springboard/sdk/src/widgets.rs",
+      "status": "partial",
+      "note": "Apps draw into a Surface over a pixel buffer, which is an immediate-mode canvas. There is no context object with a graphics state stack (save and restore) and no PDF or page context."
+    },
+    {
+      "feature": "Path construction and stroking (CGPath, CGMutablePath)",
+      "apple": "CGPath, CGMutablePath, move/add/close, fill and stroke path",
+      "bifrost": "springboard/ui/src/path.rs (Path, Element, polylines, bounds, add_rect, add_ellipse_in, transformed); springboard/render/src/font.rs (glyph flattening, internal)",
+      "status": "partial",
+      "note": "Apps build paths in bifrost-ui from move, line, cubic and close elements, then read flattened polylines and bounds. The Surface does not fill or stroke a Path yet, and there is no dash, stroked outline or contains-point test."
+    },
+    {
+      "feature": "Primitive shapes (rects, rounded rects, lines, ellipses, arcs)",
+      "apple": "CGContextFillRect, CGContextStrokeRect, CGContextAddEllipseInRect, CGContextAddArc, lines",
+      "bifrost": "springboard/render/src/gfx.rs:772 fill_rect, :781 fill_rrect, :837 stroke_rrect, :614-622 rrect_coverage and rrect_mask, :590 squircle_mask",
+      "status": "partial",
+      "note": "Axis-aligned rectangles, rounded rectangles and squircles are covered, with anti-aliased edges for rounded shapes. Lines, ellipses and arcs have no call."
+    },
+    {
+      "feature": "Clipping",
+      "apple": "CGContextClip, clip rect and clip path, CGContextClipToRect",
+      "bifrost": "docs/bifrost-ui.md:867 (Surface has no clip rectangle); springboard/sdk/src/view/animation.rs:451 (full-window repaint when clipping is needed)",
+      "status": "gap",
+      "note": "The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
+    },
+    {
+      "feature": "Affine transforms and transform stack (CGAffineTransform, CTM)",
+      "apple": "CGAffineTransform, CGContextConcatCTM, CGContextTranslateCTM, CGContextScaleCTM, CGContextRotateCTM",
+      "bifrost": "springboard/ui/src/affine.rs (AffineTransform: identity, translate, scale, rotate, then, apply, apply_rect, invert); springboard/src/gpu/wl.rs:432 (compositor window transforms)",
+      "status": "partial",
+      "note": "The transform type covers construction, concatenation, point and rectangle mapping, and inversion. No Surface draw call takes a transform, so there is still no transform stack for apps."
+    },
+    {
+      "feature": "Colour and colour spaces (CGColor, CGColorSpace)",
+      "apple": "CGColor, CGColorSpace (sRGB, Display P3, generic gray and so on), CGColorConversionInfo",
+      "bifrost": "springboard/render/src/gfx.rs:57 rgba, :69 scale, :79 shade, :87 over (packed u32 pixels); springboard/render/src/ui.rs (named colour tokens and Pair values)",
+      "status": "partial",
+      "note": "Pixels are 8-bit packed sRGB with straight alpha blending. The named colour tokens cover the desktop palette. No colour space object, no wide-gamut or ICC conversion, and no CGColor value for apps."
+    },
+    {
+      "feature": "Gradients (linear and radial, CGGradient)",
+      "apple": "CGGradient, CGContextDrawLinearGradient, CGContextDrawRadialGradient",
+      "bifrost": "springboard/ui/src/gradient.rs (Gradient, Stop, color_at, linear_t, radial_t); springboard/src/shell/browser/tiles.rs:263 linear and :282 radial (browser painter, private)",
+      "status": "partial",
+      "note": "Colour ramps with straight RGBA stops and linear and radial ramp positions are modelled in bifrost-ui. Nothing fills a Surface with a Gradient yet, and the browser painter keeps its own private gradients."
+    },
+    {
+      "feature": "Shadings and gradient functions (CGShading, CGFunction)",
+      "apple": "CGShading, CGFunction, CGContextDrawShading",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No callback-based shading or function evaluation in the renderer or the SDK."
+    },
+    {
+      "feature": "Patterns (CGPattern)",
+      "apple": "CGPattern, CGContextSetFillPattern",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No repeating-pattern fill for paths or rectangles."
+    },
+    {
+      "feature": "Images and bitmaps (CGImage, image masks, cropping)",
+      "apple": "CGImage, CGImageCreateWithImageInRect, CGImageCreateWithMask, CGContextDrawImage",
+      "bifrost": "springboard/render/src/gfx.rs:8 Image, :331 impl Image (new, from_raw, apply_mask at :353, resized at :360, crop at :416), springboard/render/src/gfx.rs:707 blit, :731 blit_colored",
+      "status": "partial",
+      "note": "Apps can create, crop, resize, mask, tint and blit 8-bit images. No HDR, no 16-bit or CMYK pixel formats, and no CGImage object with its own colour space."
+    },
+    {
+      "feature": "Image file decoding and encoding (ImageIO-style, CGImageSource and CGImageDestination)",
+      "apple": "CGImageSource and CGImageDestination (ImageIO, CGImage creation from files and data)",
+      "bifrost": "springboard/render/src/imgdec.rs:12 decode (JPEG and PNG), :21 is_image_name, :133 is_image",
+      "status": "partial",
+      "note": "Decoding covers JPEG and PNG only, with a size cap. No encoder and no other formats in the SDK. The PNG encoder appears only in an example (springboard/examples/files_preview.rs)."
+    },
+    {
+      "feature": "Text and fonts (CGFont, glyph drawing)",
+      "apple": "CGFont, CGContextShowGlyphsAtPoints, CGFontCreateWithDataProvider",
+      "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs:137 Cff and :225 outline, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs (font selection)",
+      "status": "partial",
+      "note": "The font engine parses CFF and variable outlines and draws text through the UI text path. Apps get text drawing through the UI kit, not through a glyph-level CGFont API, and no font loading from data is exposed."
+    },
+    {
+      "feature": "PDF documents (CGPDFDocument, PDF reading)",
+      "apple": "CGPDFDocument, CGPDFPage, CGContextDrawPDFPage",
+      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs, springboard/src/shell/books/engine/pdf/content.rs (BT and Do operators only), springboard/src/shell/books/engine/pdf/image.rs",
+      "status": "partial",
+      "note": "The Books engine reads text and images from PDFs and reflows them. It does not draw vector paths, and the reader is private to the Books shell, not exposed to apps."
+    },
+    {
+      "feature": "PDF creation and printing (CGPDFContext, print to PDF)",
+      "apple": "CGPDFContextCreate, CGPDFContextBeginPage, print operations to PDF",
+      "bifrost": "springboard/sdk/src/print.rs:137 Destination (Printer or Pdf), :152 PrintOperation, :186 run (submits with lp)",
+      "status": "partial",
+      "note": "Apps print an existing file through lp, and Save as PDF copies the document. Apps cannot draw pages into a PDF context, and the NSView-style pagination is missing."
+    },
+    {
+      "feature": "Layers and offscreen reusable content (CGLayer)",
+      "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
+      "bifrost": "springboard/sdk/src/view/animation.rs:470 Backdrop save and :479 blend (internal, used for group opacity)",
+      "status": "gap",
+      "note": "Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object."
+    },
+    {
+      "feature": "Display services (Quartz Display Services)",
+      "apple": "CGGetActiveDisplayList, CGDisplayBounds, CGDisplayCopyDisplayMode, display configuration",
+      "bifrost": "springboard/src/gpu/wl.rs (presenter, outputs), springboard/src/bare/scanout.rs",
+      "status": "os",
+      "note": "The window server handles display modes and outputs. Apps get no display list, bounds or mode API in the SDK."
+    },
+    {
+      "feature": "Window services (Quartz Window Services, CGWindowList)",
+      "apple": "CGWindowListCopyWindowInfo, window levels, CGWindowLevelForKey",
+      "bifrost": "springboard/sdk/src/workspace.rs, springboard/sdk/src/control.rs (app control socket)",
+      "status": "gap",
+      "note": "Windows are managed by the Wayland window server and the shell. No app can list other windows or read window levels through the SDK."
+    },
+    {
+      "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",
+      "apple": "CGEvent, CGEventTapCreate, CGEventPost, mouse and keyboard event sources",
+      "bifrost": "springboard/ui/src/keys.rs (KeyCombo, shortcut parsing), springboard/mcp/src (agent input), springboard/sdk/src/control.rs",
+      "status": "gap",
+      "note": "Keyboard shortcuts are parsed inside the UI kit. Apps have no event tap or event posting API, and the agent input path is a separate tool, not an app API."
+    },
+    {
+      "feature": "Geometry data types (CGPoint, CGSize, CGRect, CGVector)",
+      "apple": "CGPoint, CGSize, CGRect, CGVector, CGFloat",
+      "bifrost": "springboard/ui/src/geometry.rs, springboard/render/src/gfx.rs:16 View (pixel bounds)",
+      "status": "parity",
+      "note": "The UI kit has point, size and rect types for layout and hit testing. There is no CGVector equivalent."
+    }
+  ],
+  "gaps": [
+    "No app-facing path fill or stroke: springboard/ui/src/path.rs builds and flattens paths, but no Surface call draws them.",
+    "No dash, stroked outline or contains-point test for paths (springboard/ui/src/path.rs).",
+    "No clip rectangle or clip path on the Surface (docs/bifrost-ui.md:867).",
+    "No transform argument on Surface draw calls: springboard/ui/src/affine.rs is a model only, and only compositor-side window transforms exist.",
+    "Gradients are models only (springboard/ui/src/gradient.rs); no Surface fill uses them, and the browser painter keeps private gradients.",
+    "No shading, function or pattern fills for apps.",
+    "No line, ellipse or arc drawing calls on the Surface; Path::add_ellipse_in only builds geometry.",
+    "No colour space object, wide-gamut or ICC conversion, and no CGColor value type for apps.",
+    "PDF: no vector drawing from the reader, no page-drawing PDF context, and no app-facing PDF document type.",
+    "Image formats: JPEG and PNG decode only, no encoder or other container formats in the SDK, no HDR.",
+    "Display and window services: no SDK display list, mode or bounds API, and no window list for apps.",
+    "Event services: no event tap or synthetic event API for apps.",
+    "docs/bifrost-ui.md has no Core Graphics mapping table, so the names above are not mapped to our APIs in the docs."
+  ]
+}
