@@ -749,6 +749,8 @@ pub mod state_report;
 pub mod precipitation;
 pub mod weather_alert;
 pub mod weather_attribution;
+pub mod pressure_trend;
+pub mod weather_stats;
 pub mod hid_report;
 pub mod linkmeta;
 pub mod captions;
