@@ -42,6 +42,15 @@ a live system that lacks it. Options that avoid an ISO are open: pacstrap `sprin
 
 ## Autonomous cycles and computer use (the headed VM)
 
+**Unattended VM reinstall in under 2 minutes (2026-10-11):** `python3 tools/vm-cycle.py --headless` follows the installer's
+unattended path like `midget reinstall`: it publishes the installer (`tools/lab-push.sh`), refreshes the offline package
+mirror (`tools/lab-mirror.sh`, Omarchy's approach: every package pacstrap installs, served by the lab server at
+`http://10.99.0.1:8078/mirror/`), wipes the VM disk and seeds an ESP with `EFI/BIFROST/unattended.toml`, boots the lab
+ISO and lets the installer run without input. Measured: publish 22 s, live boot 10 s, install to the installed
+system 64 s, 98 s in all (437 s for the install alone when packages came over QEMU's NAT). `--reuse` runs only the
+checks after an install; `--compositor bifrost-wm` repeats them under the window server; `--ui` keeps the keyboard
+walkthrough below.
+
 `bifrost pc cycle [--loop N]` (= `tools/vm-cycle.py`) reinstalls the x86 VM from scratch with no LLM in the loop: it builds the installer
 (fast profile), boots the newest lab ISO in the **headed** VM on Hyprland workspace 2 (`--headless` for no window), drives the real
 installer UI with the keyboard through its input FIFO, screenshots every page (the installer's own frame hook, exact pixels), times each phase,
