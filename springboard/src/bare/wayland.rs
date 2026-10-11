@@ -71,7 +71,7 @@ struct State {
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>,
-    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap,
+    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
     pending: bool, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
 }
@@ -532,8 +532,9 @@ impl Display {
                 }
             }
             let Some(slot) = free else {
-                // every drawable is still on screen: keep the damage for the next frame
+                // every drawable is still on screen: keep the damage, and redraw when one comes back
                 g.p.owe(GPU_BG, damage);
+                self.state.starved.dropped();
                 return Ok(());
             };
             let areas = g.p.draw(GPU_BG, slot, pixels, w, damage, Backdrop::Full{x:0,y:0}, &g.glass);
@@ -556,7 +557,8 @@ impl Display {
             return transient(self.conn.flush());
         }
         for slot in &mut self.state.slots { slot.damage.union(damage); }
-        let Some(slot) = self.state.slots.iter_mut().find(|s| !s.busy) else { return Ok(()); };
+        let Some(i) = self.state.slots.iter().position(|s| !s.busy) else { self.state.starved.dropped(); return Ok(()); };
+        let slot = &mut self.state.slots[i];
         if slot.damage.is_empty() { return Ok(()); }
         let w = self.state.size.0 as usize;
         copy_damage(pixels, &mut slot.map, w, &slot.damage);
@@ -626,10 +628,17 @@ impl Dispatch<surface::ZwlrLayerSurfaceV1,u32> for State {
 impl Dispatch<wl_buffer::WlBuffer, ()> for State {
     fn event(s: &mut Self, obj: &wl_buffer::WlBuffer, e: wl_buffer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         if matches!(e,wl_buffer::Event::Release) {
-            for slot in s.slots.iter_mut().chain(s.windows.values_mut().flat_map(|w| w.slots.iter_mut())).chain(s.chrome.values_mut().flat_map(|w|w.slots.iter_mut())) {
+            // a desktop buffer: the full-screen SHM slots or the GPU background drawables
+            let mut desktop = false;
+            for slot in &mut s.slots { if &slot.buffer == obj { slot.busy = false; desktop = true; } }
+            for slot in s.windows.values_mut().flat_map(|w| w.slots.iter_mut()).chain(s.chrome.values_mut().flat_map(|w|w.slots.iter_mut())) {
                 if &slot.buffer == obj { slot.busy = false; }
             }
-            for slot in s.gpu_slots.values_mut().flatten() { if &slot.buffer == obj { slot.busy = false; } }
+            for (id, v) in s.gpu_slots.iter_mut() {
+                for slot in v { if &slot.buffer == obj { slot.busy = false; desktop |= *id == GPU_BG; } }
+            }
+            // a desktop frame was dropped for want of a buffer: draw it now (the loop takes `redraw` every iteration)
+            if desktop && s.starved.released() { s.redraw = true; }
         }
     }
 }
@@ -821,6 +830,19 @@ impl MainMap {
     fn may_attach(&self) -> bool { !self.awaiting_configure }
 }
 
+/// A desktop frame dropped because the compositor still held every buffer. Right after an unlock it holds the lock
+/// surface's last frame and the one queued behind it (the pool had shrunk to one while the login window idled), and
+/// nothing else redraws an idle shell: the desktop surface stayed without a buffer, black behind the bar and dock,
+/// until the next minute's clock tick. The next release of a desktop buffer asks for a full redraw instead.
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+struct Starved(bool);
+impl Starved {
+    /// `present` found no free buffer and skipped the frame.
+    fn dropped(&mut self) { self.0 = true; }
+    /// A desktop buffer came back: true (once) when a skipped frame is owed.
+    fn released(&mut self) -> bool { std::mem::take(&mut self.0) }
+}
+
 const GPU_POOL_MIN: usize = 1;
 const GPU_POOL_MAX: usize = 2;
 const GPU_POOL_IDLE_SECS: f32 = 5.0;
@@ -848,6 +870,16 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_frame_dropped_for_want_of_a_buffer_is_redrawn_on_the_next_release() {
+        let mut s = super::Starved::default();
+        assert!(!s.released(), "a release with nothing owed asks for nothing");
+        s.dropped();
+        s.dropped();
+        assert!(s.released(), "the next release redraws the dropped frame");
+        assert!(!s.released(), "once");
+    }
+
     #[test]
     fn a_full_or_empty_socket_is_not_a_broken_connection() {
         use wayland_client::backend::WaylandError;

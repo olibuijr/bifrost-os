@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.5.32 — 2026-10-11
+
+- Login: the desktop no longer stays black behind the menu bar and dock after logging in. At unlock the compositor still held both desktop buffers (the lock surface's last frame and the one queued behind it), so the first desktop frame was skipped, and the idle shell drew nothing more until the next minute's clock tick. A frame skipped for want of a buffer is now redrawn when the next one is released; the wallpaper is on screen about 0.4 s after the password is accepted.
+
 ## 0.5.31 — 2026-10-11
 
 - Login: the first key typed after the screen locks goes into the password field. The login window opened on the next frame, and the shell may not draw after a lock, so the first key was dropped and every login after a lock failed once (`the_first_key_after_a_lock_reaches_the_password_field`). Clicks get the same fix.
