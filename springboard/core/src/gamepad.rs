@@ -22,6 +22,15 @@ pub fn has_bit(bitmap: &[u8], code: u16) -> bool {
     matches!(bitmap.get(usize::from(code / 8)), Some(byte) if (byte >> (code % 8)) & 1 == 1)
 }
 
+/// `FF_RUMBLE`, the force-feedback effect code of a two-motor rumble. Its bit is in the force-feedback bitmap.
+const FF_RUMBLE: u16 = 0x50;
+
+/// Whether a node's force-feedback bitmap (the `EVIOCGBIT` read for the force-feedback event type) reports the rumble
+/// effect. A node without it cannot take a [`crate::rumble::Rumble`], however many buttons it has.
+pub fn supports_rumble(force_feedback: &[u8]) -> bool {
+    has_bit(force_feedback, FF_RUMBLE)
+}
+
 /// The key and absolute-axis bitmaps of one input node.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Capabilities {
@@ -194,6 +203,15 @@ mod tests {
             Some(Event::Connected(c)) => assert_eq!(c.id, 2),
             other => panic!("expected a reconnect, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_rumble_bit_in_the_force_feedback_bitmap_marks_a_motor_pad() {
+        // the rumble effect is code 0x50; a pad with a periodic effect only (0x51) has no rumble
+        assert!(supports_rumble(&bitmap(&[FF_RUMBLE])));
+        assert!(!supports_rumble(&bitmap(&[0x51])));
+        // an empty or short bitmap reports no effects
+        assert!(!supports_rumble(&[]));
     }
 
     #[test]
