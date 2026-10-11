@@ -630,3 +630,6 @@ pub enum Event {
 }
 pub mod ax;
 pub mod speech;
+pub mod scan;
+pub mod analysis;
+pub mod docscan;
