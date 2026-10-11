@@ -128,6 +128,61 @@ impl Param {
     }
 }
 
+/// `IntentModes`: a mode an intent may run in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntentMode {
+    /// the action runs without bringing the app forward
+    Background,
+    /// the action needs the app on screen
+    Foreground,
+}
+
+impl IntentMode {
+    pub fn name(self) -> &'static str {
+        match self {
+            IntentMode::Background => "background",
+            IntentMode::Foreground => "foreground",
+        }
+    }
+}
+
+/// `IntentAuthenticationPolicy`: what the system checks before an intent runs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Authentication {
+    /// runs at any time, including while the device is locked
+    #[default]
+    AlwaysAllowed,
+    /// needs the person to authenticate first
+    RequiresAuthentication,
+    /// needs the person to unlock the device
+    RequiresLocalDeviceAuthentication,
+}
+
+impl Authentication {
+    pub fn name(self) -> &'static str {
+        match self {
+            Authentication::AlwaysAllowed => "always-allowed",
+            Authentication::RequiresAuthentication => "requires-authentication",
+            Authentication::RequiresLocalDeviceAuthentication => "requires-local-device-authentication",
+        }
+    }
+    /// True when `session` satisfies this policy.
+    pub fn allows(self, session: Session) -> bool {
+        match self {
+            Authentication::AlwaysAllowed => true,
+            Authentication::RequiresAuthentication => session.authenticated,
+            Authentication::RequiresLocalDeviceAuthentication => !session.locked,
+        }
+    }
+}
+
+/// The device state an authentication policy is checked against.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Session {
+    pub locked: bool,
+    pub authenticated: bool,
+}
+
 /// `AppIntent`: a typed action. `id` is a short token (`[a-z0-9_-]`): the RPC method is `intent.<id>`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Intent {
@@ -137,11 +192,57 @@ pub struct Intent {
     pub params: Vec<Param>,
     /// `AppShortcut`: Search lists it (only when it has no required parameter) without opening the app
     pub shortcut: bool,
+    /// `supportedModes`: where the intent may run. Background only unless `foreground()` is called.
+    pub modes: Vec<IntentMode>,
+    /// `authenticationPolicy`: what the system must check before the intent runs.
+    pub authentication: Authentication,
 }
 
 impl Intent {
     pub fn new(id: &str, title: &str, description: &str) -> Intent {
-        Intent { id: id.into(), title: title.into(), description: description.into(), params: Vec::new(), shortcut: false }
+        Intent {
+            id: id.into(),
+            title: title.into(),
+            description: description.into(),
+            params: Vec::new(),
+            shortcut: false,
+            modes: vec![IntentMode::Background],
+            authentication: Authentication::AlwaysAllowed,
+        }
+    }
+    /// Adds the foreground mode: the intent may bring the app forward (see [`IntentResult::continue_in_foreground`]).
+    pub fn foreground(mut self) -> Intent {
+        if !self.supports(IntentMode::Foreground) {
+            self.modes.push(IntentMode::Foreground);
+        }
+        self
+    }
+    pub fn authentication(mut self, policy: Authentication) -> Intent {
+        self.authentication = policy;
+        self
+    }
+    /// True when the intent declares `mode`.
+    pub fn supports(&self, mode: IntentMode) -> bool {
+        self.modes.contains(&mode)
+    }
+    /// Whether the intent may run in `session`, given its authentication policy. The shell or app supplies the state.
+    pub fn may_run(&self, session: Session) -> bool {
+        self.authentication.allows(session)
+    }
+    /// Checks a result against the declaration: a continue-in-foreground request needs the foreground mode, and an
+    /// `opens` follow-on must name a declared intent whose parameters are valid. `declared` is every intent of the app.
+    pub fn check_result(&self, result: &IntentResult, declared: &[Intent]) -> Result<(), RpcError> {
+        if result.continue_foreground && !self.supports(IntentMode::Foreground) {
+            return Err(failed(format!("intent {} cannot continue in the foreground", self.id)));
+        }
+        if let Some((target, params)) = &result.opens {
+            let next = declared
+                .iter()
+                .find(|i| &i.id == target)
+                .ok_or_else(|| failed(format!("intent {} opens an undeclared intent {target}", self.id)))?;
+            next.validate(params)?;
+        }
+        Ok(())
     }
     pub fn param(mut self, p: Param) -> Intent {
         self.params.push(p);
@@ -160,6 +261,8 @@ impl Intent {
             ("title".into(), Json::Str(self.title.clone())),
             ("description".into(), Json::Str(self.description.clone())),
             ("shortcut".into(), Json::Bool(self.shortcut)),
+            ("modes".into(), Json::Arr(self.modes.iter().map(|m| Json::Str(m.name().into())).collect())),
+            ("authentication".into(), Json::Str(self.authentication.name().into())),
             (
                 "parameters".into(),
                 Json::Arr(
@@ -258,21 +361,41 @@ pub enum EntityQuery {
 pub struct IntentResult {
     pub value: Json,
     pub dialog: Option<String>,
+    /// `continueInForeground`: ask the system to bring the app forward. The intent must declare the foreground mode.
+    pub continue_foreground: bool,
+    /// `result(opensIntent:)`: the next intent to run, with its parameters (checked by `Intent::check_result`).
+    pub opens: Option<(String, Json)>,
 }
 
 impl IntentResult {
     pub fn value(value: Json) -> IntentResult {
-        IntentResult { value, dialog: None }
+        IntentResult { value, dialog: None, continue_foreground: false, opens: None }
     }
     pub fn dialog(text: &str) -> IntentResult {
-        IntentResult { value: Json::Null, dialog: Some(text.into()) }
+        IntentResult { value: Json::Null, dialog: Some(text.into()), continue_foreground: false, opens: None }
     }
     pub fn with_dialog(mut self, text: &str) -> IntentResult {
         self.dialog = Some(text.into());
         self
     }
+    pub fn continue_in_foreground(mut self) -> IntentResult {
+        self.continue_foreground = true;
+        self
+    }
+    pub fn opens(mut self, intent_id: &str, params: Json) -> IntentResult {
+        self.opens = Some((intent_id.into(), params));
+        self
+    }
+    /// `{"value", "dialog"}`, plus `continueInForeground` and `opens` only when they are set.
     pub fn to_json(&self) -> Json {
-        Json::Obj(vec![("value".into(), self.value.clone()), ("dialog".into(), self.dialog.clone().map_or(Json::Null, Json::Str))])
+        let mut f = vec![("value".into(), self.value.clone()), ("dialog".into(), self.dialog.clone().map_or(Json::Null, Json::Str))];
+        if self.continue_foreground {
+            f.push(("continueInForeground".into(), Json::Bool(true)));
+        }
+        if let Some((id, params)) = &self.opens {
+            f.push(("opens".into(), Json::Obj(vec![("intent".into(), Json::Str(id.clone())), ("parameters".into(), params.clone())])));
+        }
+        Json::Obj(f)
     }
     /// Reads back a reply produced by `to_json` (`{"value": .., "dialog": text or null}`); `None` for any other shape.
     pub fn from_json(j: &Json) -> Option<IntentResult> {
@@ -282,7 +405,12 @@ impl IntentResult {
             Json::Str(s) => Some(s.clone()),
             _ => return None,
         };
-        Some(IntentResult { value, dialog })
+        let continue_foreground = matches!(j.get("continueInForeground"), Some(Json::Bool(true)));
+        let opens = match j.get("opens") {
+            None => None,
+            Some(o) => Some((o.get("intent")?.as_str()?.to_string(), o.get("parameters")?.clone())),
+        };
+        Some(IntentResult { value, dialog, continue_foreground, opens })
     }
     /// The value at `path` (see [`PropertyPath`]), or `None` when the path does not exist in `value`.
     pub fn at(&self, path: &str) -> Option<&Json> {
@@ -351,7 +479,9 @@ impl PropertyPath {
 pub fn run<A: App>(app: &mut A, ctx: Option<&Ctx>, data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
     let intent = app.intents().into_iter().find(|i| i.id == id).ok_or_else(|| RpcError::new(METHOD_NOT_FOUND, format!("no intent {id}")))?;
     intent.validate(params)?;
-    app.perform_intent(ctx, data_dir, id, params)
+    let result = app.perform_intent(ctx, data_dir, id, params)?;
+    intent.check_result(&result, &app.intents())?;
+    Ok(result)
 }
 
 /// The `entity.query` request in `params`.
@@ -398,7 +528,11 @@ pub fn dispatch<A: App>(app: &mut A, ctx: Option<&Ctx>, data_dir: &std::path::Pa
             let id = &m["intent.".len()..];
             match intents.iter().find(|i| i.id == id) {
                 None => Err(RpcError::new(METHOD_NOT_FOUND, format!("no intent {id}"))),
-                Some(intent) => intent.validate(params).and_then(|_| app.perform_intent(ctx, data_dir, id, params)).map(|r| r.to_json()),
+                Some(intent) => intent
+                    .validate(params)
+                    .and_then(|_| app.perform_intent(ctx, data_dir, id, params))
+                    .and_then(|r| intent.check_result(&r, &intents).map(|_| r))
+                    .map(|r| r.to_json()),
             }
         }
     })
@@ -682,5 +816,68 @@ mod tests {
         assert_eq!(run(&mut app, None, d, "add-note", &json::parse(r#"{"text":"a","due":"2026-13-01"}"#).unwrap()).unwrap_err().code, INVALID_PARAMS, "bad date is refused before perform");
         assert_eq!(run(&mut app, None, d, "add-note", &Json::Null).unwrap_err().code, INVALID_PARAMS);
         assert_eq!(run(&mut app, None, d, "missing", &Json::Null).unwrap_err().code, METHOD_NOT_FOUND);
+    }
+
+    #[test]
+    fn intents_run_in_background_unless_they_declare_foreground() {
+        let bg = Intent::new("ping", "Ping", "");
+        assert_eq!(bg.modes, vec![IntentMode::Background], "background is the default");
+        let fg = bg.clone().foreground().foreground();
+        assert_eq!(fg.modes, vec![IntentMode::Background, IntentMode::Foreground], "foreground is added once");
+        assert!(fg.supports(IntentMode::Foreground) && !bg.supports(IntentMode::Foreground));
+        let j = fg.to_json();
+        assert_eq!(j.get("modes").and_then(Json::as_array).map(|m| m.len()), Some(2));
+        assert_eq!(j.get("authentication").and_then(Json::as_str), Some("always-allowed"));
+    }
+
+    #[test]
+    fn continue_in_foreground_needs_the_foreground_mode() {
+        let declared = vec![Intent::new("open", "Open", ""), Intent::new("ping", "Ping", "")];
+        let result = IntentResult::value(Json::Null).continue_in_foreground();
+        let err = declared[0].check_result(&result, &declared).unwrap_err();
+        assert_eq!(err.code, INTERNAL_ERROR);
+        assert_eq!(err.message, "intent open cannot continue in the foreground");
+        let open = declared[0].clone().foreground();
+        assert!(open.check_result(&result, &declared).is_ok());
+        assert!(declared[0].check_result(&IntentResult::value(Json::Null), &declared).is_ok(), "a plain result needs no mode");
+    }
+
+    #[test]
+    fn opens_follow_on_names_a_declared_intent_with_valid_parameters() {
+        let declared = vec![Intent::new("start", "Start", "").shortcut(), add()];
+        let start = &declared[0];
+        let good = IntentResult::dialog("Next").opens("add-note", json::parse(r#"{"text":"milk"}"#).unwrap());
+        assert!(start.check_result(&good, &declared).is_ok());
+        let undeclared = IntentResult::value(Json::Null).opens("nope", Json::Null);
+        assert!(start.check_result(&undeclared, &declared).unwrap_err().message.contains("undeclared intent nope"));
+        let bad_params = IntentResult::value(Json::Null).opens("add-note", json::parse("{}").unwrap());
+        assert_eq!(start.check_result(&bad_params, &declared).unwrap_err().code, INVALID_PARAMS, "the follow-on's parameters are checked");
+    }
+
+    #[test]
+    fn result_json_carries_follow_ons_only_when_set() {
+        let plain = IntentResult::value(Json::Num(1.0)).with_dialog("Done");
+        assert_eq!(crate::control::encode(&plain.to_json()), r#"{"value":1,"dialog":"Done"}"#, "existing shape is unchanged");
+        let full = IntentResult::value(Json::Null).continue_in_foreground().opens("add-note", json::parse(r#"{"text":"a"}"#).unwrap());
+        let text = crate::control::encode(&full.to_json());
+        assert!(text.contains(r#""continueInForeground":true"#) && text.contains(r#""opens":{"intent":"add-note","parameters":{"text":"a"}}"#));
+        assert_eq!(IntentResult::from_json(&full.to_json()).unwrap(), full);
+        assert!(!IntentResult::from_json(&plain.to_json()).unwrap().continue_foreground);
+    }
+
+    #[test]
+    fn authentication_policies_check_the_session() {
+        let locked = Session { locked: true, authenticated: false };
+        let unlocked = Session { locked: false, authenticated: false };
+        let signed_in = Session { locked: false, authenticated: true };
+        assert!(Authentication::AlwaysAllowed.allows(locked));
+        assert!(!Authentication::RequiresLocalDeviceAuthentication.allows(locked));
+        assert!(Authentication::RequiresLocalDeviceAuthentication.allows(unlocked));
+        assert!(!Authentication::RequiresAuthentication.allows(unlocked));
+        assert!(Authentication::RequiresAuthentication.allows(signed_in));
+        let guarded = Intent::new("pay", "Pay", "").authentication(Authentication::RequiresAuthentication);
+        assert!(!guarded.may_run(unlocked) && guarded.may_run(signed_in));
+        assert_eq!(guarded.to_json().get("authentication").and_then(Json::as_str), Some("requires-authentication"));
+        assert_eq!(Authentication::default(), Authentication::AlwaysAllowed);
     }
 }
