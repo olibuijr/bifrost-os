@@ -591,6 +591,7 @@ pub mod search;
 pub mod textfind;
 pub mod textlist;
 pub mod metaquery;
+pub mod searchquery;
 pub mod pathbar;
 pub mod constraint;
 pub mod table;
