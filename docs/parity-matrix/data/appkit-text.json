@@ -1,0 +1,24 @@
+{
+"framework":"AppKit (Text)",
+"doc":"https://developer.apple.com/documentation/appkit",
+"macos_since":"10.0",
+"status":"partial",
+"bifrost":"bifrost_app::attributed, bifrost_app::spellcheck, bifrost_ui::text, bifrost_ui::textfit, bifrost_ui::textfind, bifrost_ui::textlist, bifrost_ui::panels, render font engine",
+"summary":"Attributed strings, a rich text editing model, spell checking, a text editing and IME model, line breaking, find and replace matching, text list markers, a font panel and a font renderer exist. There is no multi-line text view widget, no TextKit layout manager, no find bar widget and no Writing Tools.",
+"rea_evidence":"ev_7e5b3e279855ac0e30000128079ed17f7b6bd5dfc69bb0d5aed74e943849d0a0",
+"features":[
+{"feature":"Text Display: attributed strings and rich text","apple":"NSAttributedString, NSTextView rich mode","bifrost":"springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML)","status":"partial","note":"bold, italic, size class, colour token, underline, strikethrough, link only; no paragraph styles, text attachments, lists or tables"},
+{"feature":"Text Display: single-line text field and editing model","apple":"NSTextField, NSTextInputClient","bifrost":"springboard/ui/src/text.rs (TextBuffer, TextEditor, marked text, grapheme movement, undo); docs/bifrost-ui.md 'Text input client'","status":"parity","note":"editing commands, IME composition and key bindings covered"},
+{"feature":"Text Display: multi-line text view widget","apple":"NSTextView, NSScrollView text container","bifrost":"springboard/sdk/src/attributed.rs (RichTextView model only)","status":"gap","note":"docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK"},
+{"feature":"Text Display: spell checking","apple":"NSSpellChecker","bifrost":"springboard/sdk/src/spellcheck.rs (tokenizer, pluggable Dictionary, learned and ignored words)","status":"partial","note":"no system-wide spelling panel or autocorrect UI in text views"},
+{"feature":"Text Display: data detectors","apple":"NSDataDetector via text checking types","bifrost":"springboard/ui/src/detect.rs","status":"partial","note":"link, date and phone detection only as documented in bifrost-ui.md"},
+{"feature":"Text Display: line breaking and truncation","apple":"NSLineBreakMode, NSParagraphStyle","bifrost":"springboard/ui/src/textfit.rs","status":"partial","note":"head, middle, tail truncation and wrapping; no tab stops, indents or hyphenation"},
+{"feature":"TextKit: storage, layout manager, containers","apple":"NSTextStorage, NSLayoutManager, NSTextContainer, NSTextLayoutManager","bifrost":"none","status":"gap","note":"no glyph-level layout API for apps; layout is per widget"},
+{"feature":"TextKit: custom layout, text attachments, text lists, find bar","apple":"NSTextAttachment, NSTextList, NSTextFinder","bifrost":"springboard/ui/src/textlist.rs (Format, List), springboard/ui/src/textfind.rs (TextFinder, find_all, replace_all)","status":"partial","note":"list markers for bullet, letter, roman, decimal, hexadecimal and octal formats with nesting, and find, next, previous, replace and the n of m counter as pure models; no attachments, no list layout in attributed text, no find bar widget"},
+{"feature":"Fonts: font panel","apple":"NSFontManager, NSFontPanel","bifrost":"springboard/ui/src/panels.rs (FontPanel)","status":"partial","note":"family, style and size only; no collections, effects or typography panes"},
+{"feature":"Fonts: font rendering engine","apple":"NSFont, NSFontDescriptor","bifrost":"springboard/render/src/font.rs, cff.rs, gvar.rs","status":"partial","note":"TrueType, CFF and variable fonts render; no app-facing descriptor or trait matching API"},
+{"feature":"Fonts: user font choice","apple":"System font settings","bifrost":"springboard/render/src/fontprefs.rs","status":"os","note":"Settings > Fonts replaces UI fonts from BifrOSt's font library"},
+{"feature":"Writing Tools","apple":"NSWritingToolsCoordinator, writingToolsBehavior","bifrost":"none","status":"gap","note":"Assistant app exists but gives text views no rewrite or proofread hook"}
+],
+"gaps":["Multi-line text view widget (NSTextView)","TextKit layout manager and text containers","Paragraph styles, tables and attachments in attributed text; text lists are a model only and not stored in attributed text","Find bar widget that draws the bar and selects matches in a text view","Writing Tools integration for text views","Localized alphabetical list markers (only Latin letters)","Font descriptors and font collections"]
+}
