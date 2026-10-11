@@ -1,0 +1,37 @@
+{
+  "framework": "Swift Charts",
+  "doc": "https://developer.apple.com/documentation/charts",
+  "macos_since": "13.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/chart.rs (LinearScale, axis_ticks, number_bins, sectors, point). Private chart drawing in springboard/src/shell/screentime/chart.rs and springboard/src/shell/battery.rs (Body::Graph in springboard/src/shell/list.rs)",
+  "summary": "Swift Charts is a declarative SwiftUI API for marks, scales, axes and plots, with 2D, vectorized and 3D (macOS 26) charts. BifrOSt now has pure chart geometry in springboard/ui/src/chart.rs: a linear scale, automatic axis values, equal-width number bins and pie or donut sector spans. There is still no app-facing chart view or mark API in springboard/sdk/src, and the two shell charts keep their own drawing code.",
+  "rea_evidence": "ev_4b5d071ab2fd234fc97f2a909a12161f23133f73cdbd06844ee77f310a447687",
+  "features": [
+    {"feature": "Chart view and content builder", "apple": "Chart, ChartContent, ChartContentBuilder, Plot (https://developer.apple.com/documentation/charts)", "bifrost": "none. The sdk View trait (springboard/sdk/src/view/mod.rs:169) lets an app draw into a Surface by hand", "status": "gap", "note": "no declarative chart container; apps would hand-draw every bar and label"},
+    {"feature": "Bar marks", "apple": "BarMark, BarPlot", "bifrost": "springboard/src/shell/screentime/chart.rs (Chart::draw, hourly and daily bars)", "status": "os", "note": "bars are drawn only inside the Screen Time page; no app API"},
+    {"feature": "Line and area marks", "apple": "LineMark, AreaMark, LinePlot, AreaPlot, InterpolationMethod", "bifrost": "none found", "status": "gap", "note": "battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs)"},
+    {"feature": "Point, rectangle and rule marks", "apple": "PointMark, RectangleMark, RuleMark, PointPlot, RectanglePlot, RulePlot", "bifrost": "none found", "status": "gap", "note": "no scatter, range or reference-line drawing in the SDK"},
+    {"feature": "Sector marks (pie and donut)", "apple": "SectorMark, SectorPlot", "bifrost": "springboard/ui/src/chart.rs (sectors, point)", "status": "partial", "note": "angle spans and point placement only; no sector drawing, donut inner radius or SDK view"},
+    {"feature": "Vectorized plots for large data", "apple": "VectorizedChartContent, AreaPlot, LinePlot, PointPlot, RectanglePlot, RulePlot, BarPlot, SectorPlot", "bifrost": "none found", "status": "gap", "note": "no batched plot path; both shell charts take small fixed arrays"},
+    {"feature": "Scales, domains and ranges", "apple": "ScaleType, ScaleDomain, AutomaticScaleDomain, ScaleRange, PositionScaleRange, PlotDimensionScaleRange", "bifrost": "springboard/ui/src/chart.rs (LinearScale::new, map, invert)", "status": "partial", "note": "linear scales with an explicit domain and range; no automatic domain inference, no log or sqrt scale"},
+    {"feature": "Axes and axis marks", "apple": "AxisMarks, AxisMark, AxisTick, AxisGridLine, AxisValueLabel, AxisValue, AxisContentBuilder", "bifrost": "springboard/ui/src/chart.rs (axis_ticks); springboard/src/shell/screentime/chart.rs (fixed labels)", "status": "partial", "note": "axis_ticks gives 1, 2 or 5 times a power of ten values; no grid line, tick style or label API"},
+    {"feature": "Data bins", "apple": "NumberBins, DateBins, ChartBinRange", "bifrost": "springboard/ui/src/chart.rs (number_bins, Bin); springboard/src/shell/battery.rs:12 (24 hours in 15-minute bins)", "status": "partial", "note": "equal-width numeric bins; no date bins and the battery graph does not use the shared function yet"},
+    {"feature": "Annotations", "apple": "AnnotationContext, AnnotationPosition, AnnotationOverflowResolution", "bifrost": "none found", "status": "gap", "note": "no value callouts or labels attached to marks"},
+    {"feature": "Chart proxy and plot area access", "apple": "ChartProxy, ChartPlotContent", "bifrost": "none found", "status": "gap", "note": "no way to map a pointer position to a data value; LinearScale::invert is the building block but no proxy exists"},
+    {"feature": "Scrolling charts", "apple": "ChartScrollTargetBehavior, ChartScrollTargetBehaviorContext", "bifrost": "none found", "status": "gap", "note": "the scroll view (springboard/sdk/src/view/scroll.rs) has no chart snap behaviour"},
+    {"feature": "3D charts and surface plots", "apple": "Chart3D, Chart3DContent, Chart3DContentBuilder, SurfacePlot, Chart3DSurfaceStyle (macOS 26.0)", "bifrost": "none found", "status": "gap", "note": "no 3D chart or surface renderer in springboard/render/src"},
+    {"feature": "Accessibility and localization of charts", "apple": "Chart accessibility and localization (Swift Charts landing page)", "bifrost": "springboard/ui/src/ax.rs (generic accessibility model), springboard/ui/src/format.rs (number and date formatting)", "status": "gap", "note": "no chart-level accessibility summary, audio graph or chart-specific labels; the shell bars have no accessible values"}
+  ],
+  "gaps": [
+    "No app-facing chart API: no Chart container, no mark views and no plot views in springboard/sdk",
+    "The Screen Time bar chart and the battery graph are private shell drawers, not reusable by apps; neither uses springboard/ui/src/chart.rs yet",
+    "No line, area, point, rectangle, rule or sector drawing (sector geometry exists in springboard/ui/src/chart.rs)",
+    "No automatic scale domain and no log or sqrt scale; LinearScale needs an explicit domain",
+    "No date bins (DateBins); number_bins covers numeric data only",
+    "No axis grid lines, tick styling or axis label API; axis_ticks returns values only",
+    "No annotations and no chart proxy, so charts cannot respond to pointer position or selection",
+    "No 3D charts or surface plots (Chart3D is macOS 26.0 in Apple's docs)",
+    "No chart accessibility summaries or localized axis labels",
+    "docs/bifrost-ui.md has no dataviz or charts section, so the Apple parity record does not cover this framework"
+  ]
+}
