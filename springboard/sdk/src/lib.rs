@@ -58,6 +58,7 @@ pub mod donation;
 pub mod donations;
 pub mod extension;
 pub mod quicksearch;
+pub mod visual_search;
 pub mod peek;
 pub mod webview;
 pub mod webview_dev;
