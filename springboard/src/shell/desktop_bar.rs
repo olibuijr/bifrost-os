@@ -390,7 +390,7 @@ impl Shell {
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
     pub(super) fn desk_window_close_or_minimize(&mut self,minimize:bool)->Vec<Effect> {
         let mut effects=Vec::new();
-        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {if let Some(d)=self.desk.as_mut(){if let Some(i)=d.index_of(app){d.wins[i].minimized=true;}}self.desk_refocus();}else{self.desk_close_app(app);}}
+        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
         effects
     }
     #[cfg(feature="desktop-wayland")]

@@ -1192,7 +1192,7 @@ impl Shell {
         let mut due = self.clock.next_wake(t, self.screen_on);
         if bifrost_render::appearance::fading() { due = Some(t); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due=Some(due.map_or(when,|at|at.min(when)));}
-        if self.dock_animating(t) { due = Some(t); }
+        if self.dock_animating(t) || self.fx_animating(t) { due = Some(t); }
         if self.metrics_active() {
             // the CPU/RAM read joins a wake-up that is already planned inside its tolerance window
             let menu = self.metrics_menu_open();
@@ -2413,6 +2413,7 @@ impl Shell {
         self.terminal_follow_scheme();
         labwc_theme::follow_scheme();
         self.dock_tick(t);
+        self.fx_tick(t);
         self.metrics_tick(t);
         let mut fx = self.tick_inner(t);
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));

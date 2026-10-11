@@ -1416,3 +1416,33 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
 - A sheet slides from the title bar (`motion::Kind::SheetSlide`; progress is 1 at once under Reduce Motion), dims the parent (28% black) and swallows clicks on it (`Hit::Blocked`).
 - Metrics: segmented 24 pt, stepper 13 x 22 pt, pop-up button 22 pt, focus ring 3 pt, sheet radius 10 pt, alert width 260 pt.
 - Gaps: sheet buttons size by character count (no text measuring); the top corners of the panel are hidden by extending it upward inside the parent, not clipped.
+
+
+## Window animations (NSWindow.AnimationBehavior parity)
+
+Reference: `NSWindow.AnimationBehavior` (default, none, documentWindow, utilityWindow, alertPanel) and the Dock's
+minimize effects (Genie, Scale).
+
+Done:
+- `shell/window_fx.rs` is wired. `Shell::desk_fx_start` begins an effect; `Desk::fx` (`FxTracker`) holds the running
+  ones and is empty at rest. `draw_desk` stamps each `WindowFrame::fx`; `wayland.rs` hands it to `Presenter::set_fx`.
+- Open: scale 0.9 to 1 plus fade (220 ms). Minimize: scale and slide toward the app's Dock tile (420 ms); the window
+  stays mapped until the effect ends. Restore: the reverse. Zoom: a short settle pulse (light click, Window > Zoom, F11).
+- Reduce Motion: every effect becomes a 120 ms cross-fade in place (no scale, no slide); Zoom does not animate.
+- Behaviour: manifest key `animation_behavior = "default" | "document" | "utility" | "alert" | "none"`
+  (`apphost::Manifest::animation_behavior`). `none` never animates; `utility` and `alert` play open and close only.
+  Built-in windows use `default`.
+- No frames at idle: `fx_tick` drops finished effects (one last identity frame), `next_wake` asks for frames only
+  while `FxTracker::active`; the cached-frame fast path (`retain_wayland_windows`) is off while any effect runs.
+- The minimize effect pref (`dock_minimize_effect`) is read (`MinimizeEffect::from_index`).
+
+Gaps (not matched yet):
+- Funnel (Genie) needs a mesh warp. The presenter draws a window as one quad inside its fixed drawable, so Funnel
+  falls back to Scale. A true warp needs a screen-size overlay surface; follow-up.
+- The slide is clamped to the window's shadow margin (the drawable is fixed), so the window does not reach a far Dock
+  tile before it fades; zoom can only shrink for the same reason.
+- Close does not animate yet: `desk_close_app` removes the window at once (the close effect math exists). It needs a
+  closing ghost kept until the effect ends.
+- Minimize from Show Desktop and Overview, and foreign (native Wayland) windows, do not animate.
+- Hot corners and the title-bar double-click prefs are unchanged (not adjacent).
+- Nothing here was built or run when written; the unit tests in `window_fx.rs` and `apphost.rs` cover the math.

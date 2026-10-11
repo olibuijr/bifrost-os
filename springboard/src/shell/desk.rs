@@ -6,7 +6,7 @@
 //! while it draws or takes a touch), drawn into an offscreen buffer and copied in.
 
 use super::ui::{Weight, BLACK, SECONDARY, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW, TRAFFIC_INACTIVE_C, WHITE, TRAFFIC_GLYPH, MENU_TINT, MENU_RADIUS_PT, SEPARATOR_C, FIELD_BG, LABEL, MAC_BODY_PT};
-use super::{apphost, apps, AppId, Effect, Event, Screen, Shell};
+use super::{apphost, apps, window_fx, AppId, Effect, Event, Screen, Shell};
 #[cfg(test)]
 use crate::gfx::pack;
 use crate::gfx::{rgba, Image, Surface};
@@ -182,6 +182,8 @@ pub struct Desk {
     window_buf: Vec<u32>,
     /// how many windows have been opened, to cascade them
     opened: usize,
+    /// running open, minimize, restore and zoom effects (empty at rest: no frames, no timers)
+    pub(super) fx: super::window_fx::FxTracker,
     #[cfg(feature = "desktop-wayland")]
     frames: Vec<crate::bare::wayland::WindowFrame>,
     /// an open or focus asked for the front window to be raised over native clients
@@ -565,6 +567,15 @@ pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep
 
 // ---- the shell side -------------------------------------------------------------------
 
+/// Which window effect `Shell::desk_fx_start` begins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum FxCall { Open, Minimize, Restore, Zoom }
+
+/// The id the frames and the presenter use for the window of `app` (its index in `apps()` plus one).
+fn win_id(app: AppId) -> Option<u32> {
+    apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1)
+}
+
 impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn retain_wayland_windows(&mut self) -> bool {
@@ -572,11 +583,12 @@ impl Shell {
         let title_height=m.title;
         let ext=&self.ext;
         let Some(desk)=self.desk.as_mut() else{return false};
+        if !desk.fx.is_empty() {return false;}
         let mut frames=Vec::new();
         for w in desk.wins.iter().filter(|w|!w.minimized) {
             let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new()});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -761,7 +773,61 @@ impl Shell {
         if package.manifest.window!="native" {let slot=apphost::slot_of(&package.manifest.id).ok_or_else(||std::io::Error::other("Browser not installed"))?;self.desk_open(AppId::External(slot as u8),t);self.ext_send(slot,&bifrost_proto::ToApp::Open{url:url.into()});self.dirty=true;return Ok(());}let policy=crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)?;let mut cmd=crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)?;cmd.arg(url);let child=cmd.spawn()?;if let Some(mut old)=self.desk.as_mut().unwrap().native_children.insert(package.manifest.id.clone(),child){if matches!(old.try_wait(),Ok(None)){crate::bare::sys::spawn_named("reap-child", move||{let _=old.wait();});}}self.dirty=true;return Ok(());}
         #[cfg(not(feature="desktop-wayland"))]Err(std::io::Error::other("Desktop Wayland is unavailable"))
     }
-    pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);self.dirty=true;}
+    pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
+
+    /// Minimizes window `i` to its Dock tile, playing the minimize effect first when it is allowed.
+    pub(super) fn desk_minimize_window(&mut self, i: usize, t: f64) {
+        let Some(app) = self.desk.as_ref().and_then(|d| d.wins.get(i)).map(|w| w.app) else { return };
+        // the effect starts while the window is still mapped; the draw loop keeps it up until the effect ends
+        self.desk_fx_start(app, FxCall::Minimize, t);
+        if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; }
+        self.desk_refocus();
+    }
+
+    /// Dock tile (x, y, w, h) of `app`, or the dock's own rectangle when it has no tile.
+    fn fx_dock_target(&self, m: &Metrics, app: AppId) -> (i32, i32, i32, i32) {
+        let (list, bar, icons) = self.desk_dock(m);
+        let want = Self::dock_app(app);
+        let r = list.iter().position(|&e| apps().get(e).is_some_and(|a| Self::dock_app(a.id) == want))
+            .and_then(|k| icons.get(k)).copied().unwrap_or(bar);
+        (r.x, r.y, r.w, r.h)
+    }
+
+    /// Starts a window effect. Nothing starts without the Wayland presenter, for `AnimationBehavior::None`
+    /// (and the kinds a behaviour excludes), or without a desk; Reduce Motion turns it into a cross-fade.
+    pub(super) fn desk_fx_start(&mut self, app: AppId, call: FxCall, t: f64) {
+        if !cfg!(feature = "desktop-wayland") || std::env::var_os("SPRINGBOARD_WAYLAND").is_none() { return; }
+        let (Some(id), Some(i)) = (win_id(app), self.desk.as_ref().and_then(|d| d.index_of(app))) else { return };
+        let m = self.desk_metrics();
+        let win = self.desk.as_ref().unwrap().wins[i].r;
+        let (dx, dy) = window_fx::minimize_target((win.x, win.y, win.w, win.h), self.fx_dock_target(&m, app));
+        // Funnel needs a mesh warp the presenter cannot draw in the window's own drawable: both effects scale and slide
+        let _effect = window_fx::MinimizeEffect::from_index(super::pages::DeskPrefs::load(&self.prefs).minimize_effect);
+        let effect = match call {
+            FxCall::Open => window_fx::Effect::Open,
+            FxCall::Minimize => window_fx::Effect::Minimize { to_dx: dx, to_dy: dy },
+            FxCall::Restore => window_fx::Effect::Restore { from_dx: dx, from_dy: dy },
+            FxCall::Zoom => window_fx::Effect::Zoom,
+        };
+        let behavior = match app {
+            AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(Default::default, |a| a.manifest.animation_behavior()),
+            _ => window_fx::AnimationBehavior::Default,
+        };
+        let reduce = bifrost_render::appearance::reduce_motion();
+        if self.desk.as_mut().unwrap().fx.begin(id, effect, behavior, reduce, t / 1000.0) { self.dirty = true; }
+    }
+
+    /// Per tick: drops finished effects (one last frame is drawn) and keeps frames coming while any runs.
+    pub(super) fn fx_tick(&mut self, t: f64) {
+        let Some(d) = self.desk.as_mut() else { return };
+        let now = t / 1000.0;
+        if !d.fx.finish(now).is_empty() || d.fx.active(now) { self.dirty = true; }
+    }
+
+    /// True while a window effect needs frames; `next_wake` polls it.
+    pub fn fx_animating(&self, t: f64) -> bool {
+        self.desk.as_ref().is_some_and(|d| d.fx.active(t / 1000.0))
+    }
     pub(super) fn desk_metrics(&self) -> Metrics {
         let ui = &self.ui;
         let icon = ui.pt(self.dock_preferences().size).round() as i32;
@@ -879,6 +945,7 @@ impl Shell {
         // the manifest's window_size (content points) replaces the default size
         let (w, h) = size_limits(app).initial.map(|s| outer_px(app, &m, s)).unwrap_or((w, h));
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
+        let was_minimized = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].minimized)).unwrap_or(false);
         if !existed {
             let (bw, bh) = (w, h - title_of(app, &m));
             self.with_size(bw, bh, |sh| sh.init_app(app, t));
@@ -886,6 +953,9 @@ impl Shell {
         let i = self.desk.as_mut().unwrap().open(&m, app, (w, h));
         if !existed {
             self.desk_layout(i);
+            self.desk_fx_start(app, FxCall::Open, t);
+        } else if was_minimized {
+            self.desk_fx_start(app, FxCall::Restore, t);
         }
         self.quicksearch.note_launch(app);
         self.clear_notifications(app);
@@ -1100,12 +1170,12 @@ impl Shell {
                             match l {
                                 Light::Close => self.desk_close_app(w.app),
                                 Light::Minimize => {
-                                    self.desk.as_mut()?.wins[i].minimized = true;
-                                    self.desk_refocus();
+                                    self.desk_minimize_window(i, t);
                                 }
                                 Light::Zoom => {
                                     self.desk.as_mut()?.toggle_zoom(&m, i);
                                     self.desk_layout(i);
+                                    self.desk_fx_start(w.app, FxCall::Zoom, t);
                                 }
                             }
                         }
@@ -1243,15 +1313,19 @@ impl Shell {
         let m = self.desk_metrics();
         self.draw_wallpaper_layer(s);
         let wins: Vec<Win> = self.desk.as_ref().map(|d| d.wins.clone()).unwrap_or_default();
+        // a window that is minimizing stays drawn until its effect ends
+        let now_s = t / 1000.0;
+        let fading: Vec<bool> = wins.iter().map(|w| w.minimized && cfg!(feature = "desktop-wayland")
+            && self.desk.as_ref().is_some_and(|d| win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s)))).collect();
         #[cfg(feature = "desktop-wayland")]
         {
             let desk = self.desk.as_mut().unwrap();
-            desk.window_cache.retain(|id,_| wins.iter().any(|w| !w.minimized && apps()[(*id-1) as usize].id == w.app));
-            desk.body_cache.retain(|app,_| wins.iter().any(|w| !w.minimized && w.app == *app));
+            desk.window_cache.retain(|id,_| wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && apps()[(*id-1) as usize].id == w.app));
+            desk.body_cache.retain(|app,_| wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
         let front = wins.iter().rposition(|w| !w.minimized);
         for (i, w) in wins.iter().enumerate() {
-            if w.minimized {
+            if w.minimized && !fading[i] {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
@@ -1282,7 +1356,7 @@ impl Shell {
                         id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -1325,7 +1399,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY});
                         continue;
                     }
                 }
@@ -1348,11 +1422,20 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
-                    drag_height, no_drag,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY,
                 });
                 continue;
             }
             self.draw_window(s, w, Some(i) == front, &m, t);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        {
+            // stamp each window's effect transform; the presenter applies it inside the window's drawable
+            let shift = self.ui.pt(40.0) as f32;
+            if let Some(d) = self.desk.as_mut() {
+                let fx = &d.fx;
+                for f in &mut d.frames { f.fx = fx.fx(f.id, now_s, shift); }
+            }
         }
         self.draw_app_status(s);
         self.draw_desk_dock(s, &m, t);
