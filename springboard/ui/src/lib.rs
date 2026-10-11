@@ -620,6 +620,7 @@ pub mod file_provider;
 pub mod widget;
 pub mod widget_list;
 pub mod media_search;
+pub mod extension;
 #[cfg(test)]
 mod bench;
 
