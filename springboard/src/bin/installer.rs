@@ -33,7 +33,10 @@ fn run() -> std::io::Result<()> {
             match springboard::installer::unattended::run(&text, &disk) {
                 Ok(()) => {
                     eprintln!("bifrost-installer: unattended install done; rebooting into the installed system");
-                    let _ = std::process::Command::new("systemctl").args(["reboot", "--force"]).status();
+                    // at once, like the on-screen path: `--force` still killed processes and unmounted the live root,
+                    // which released the lab address under iVentoy's iSCSI root (I/O errors on a black screen)
+                    let _ = std::process::Command::new("sync").status();
+                    let _ = std::process::Command::new("systemctl").args(["reboot", "-ff"]).status();
                     return Ok(());
                 }
                 Err(e) => eprintln!("bifrost-installer: unattended install refused or failed: {e}"),

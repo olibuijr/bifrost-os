@@ -791,13 +791,16 @@ def ensure_lab_http():
 MIRROR_URL = "http://10.99.0.1:8078/mirror/"
 
 
-def write_preset(host):
+def write_preset(host, live_disk=None):
     """The unattended preset on Midget's ESP, as `bifrost-mcp lifecycle reinstall` writes it (mcp/src/lifecycle.rs), plus
     the lab's offline package mirror: written here so an installed system with an older MCP still gets the mirror."""
-    disk_id = ssh('src=$(findmnt -no SOURCE /boot); pk=$(lsblk -no PKNAME "$src" | head -1); lsblk -dno WWN "/dev/$pk"', 10).strip()
+    if live_disk:
+        disk_id = ssh(f"lsblk -dno WWN {shlex.quote(live_disk)}", 10).strip()
+    else:
+        disk_id = ssh('src=$(findmnt -no SOURCE /boot); pk=$(lsblk -no PKNAME "$src" | head -1); lsblk -dno WWN "/dev/$pk"', 10).strip()
     if not re.fullmatch(r"[A-Za-z0-9._:-]+", disk_id or ""):
         return None
-    tz = ssh("readlink -f /etc/localtime | sed 's|.*/zoneinfo/||'", 5).strip()
+    tz = "Atlantic/Reykjavik" if live_disk else ssh("readlink -f /etc/localtime | sed 's|.*/zoneinfo/||'", 5).strip()
     zone = tz if re.fullmatch(r"[A-Za-z0-9_+/-]+", tz or "") else "Atlantic/Reykjavik"
     now = int(time.time())
     toml = (f"# written by tools/midget.py reinstall; read by bifrost-installer on the netbooted lab ISO\nversion = 1\n"
@@ -805,8 +808,10 @@ def write_preset(host):
             f"timezone = \"{zone}\"\nusername = \"tester\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\n"
             f"password_url = \"http://10.99.0.1:8078/lab/tester.pw\"\nmirror = \"{MIRROR_URL}\"\ncreated_epoch = {now}\n"
             f"expires_s = 1800\njob = \"{now}-reinstall\"\n")
-    r = subprocess.run(SSH + ["mkdir -p /boot/EFI/BIFROST && cat > /boot/EFI/BIFROST/unattended.toml && sync"], input=toml, text=True,
-                       capture_output=True, timeout=20)
+    # a live system: the installer's own copy of the ESP stash in /run (it reads that first), for this disk
+    dest = (f"cat > /run/bifrost-unattended.toml && printf %s {shlex.quote(live_disk)} > /run/bifrost-unattended.toml.disk" if live_disk
+            else "mkdir -p /boot/EFI/BIFROST && cat > /boot/EFI/BIFROST/unattended.toml && sync")
+    r = subprocess.run(SSH + [dest], input=toml, text=True, capture_output=True, timeout=20)
     return disk_id if r.returncode == 0 else None
 
 
@@ -819,10 +824,12 @@ def cmd_reinstall(args):
     """`reinstall --confirm "REINSTALL midget" [--timeout S]`: MCP `lifecycle reinstall`, then follow the phases with timestamps."""
     confirm = args[args.index("--confirm") + 1] if "--confirm" in args and args.index("--confirm") + 1 < len(args) else ""
     budget = int(args[args.index("--timeout") + 1]) if "--timeout" in args else 2400
-    if state() != "installed":
-        print(f"midget is {state()}; reinstall starts from an installed system (use `reboot --netboot` for a live one)")
+    st = state()
+    if st not in ("installed", "live"):
+        print(f"midget is {st}; reinstall starts from an installed or a live lab system (power it on, or `wake`)")
         return 1
-    host = ssh("cat /proc/sys/kernel/hostname", 10).strip()
+    # a live lab ISO (a failed or interrupted install) installs as `bifrost`, the hostname the preset gives it
+    host = "bifrost" if st == "live" else ssh("cat /proc/sys/kernel/hostname", 10).strip()
     if confirm != f"REINSTALL {host}":
         print(f'refused: pass --confirm "REINSTALL {host}"')
         return 2
@@ -842,6 +849,20 @@ def cmd_reinstall(args):
         return 1
     _, pw_file = lab_password()
     _stamp(f"phase 0/7 published installer, shell and package mirror ({time.time() - t0:.0f}s); password in {pw_file}")
+    if st == "live":
+        # no reboot: the preset goes where the installer looks first (/run, its copy of the ESP stash), for the disk the
+        # live system sees, and the installer starts over
+        disk = ssh("lsblk -dnpo NAME,TYPE,RM,SIZE -b | awk '$2==\"disk\" && $3==0 && $4>8000000000 && $1 !~ /loop|nbd|sr|zram/ {print $1}'", 10).split()
+        if len(disk) != 1:
+            _stamp(f"FAILED: expected one internal disk on the live system, found {disk}")
+            return 1
+        disk_id = write_preset(host, live_disk=disk[0])
+        if not disk_id:
+            _stamp("FAILED: could not write the unattended preset on the live system")
+            return 1
+        ssh("systemctl restart bifrost-installer", 30)
+        _stamp(f"live system: preset for {disk[0]} ({disk_id}), packages from {MIRROR_URL}; installer restarted")
+        return follow_install(t0, budget, live=True)
     disk_id = write_preset(host)
     if not disk_id:
         _stamp("FAILED: could not write the unattended preset on Midget's ESP")
@@ -854,18 +875,62 @@ def cmd_reinstall(args):
         return 1
     ssh(f"efibootmgr -n {pxe[0][4:8]} >/dev/null; sync; nohup sh -c 'sleep 1; systemctl reboot' >/dev/null 2>&1 &", 15)
     _stamp(f"preset written (disk {disk_id}, packages from {MIRROR_URL}); BootNext={pxe[0][4:8]} (PXE), rebooting")
+    return follow_install(t0, budget, live=False)
+
+
+def cmd_reinstall_loop(args):
+    """`reinstall ... --loop N`: N reinstalls back to back (the build is published once), then their times."""
+    n = int(args[args.index("--loop") + 1]) if "--loop" in args else 1
+    rest = [a for i, a in enumerate(args) if a != "--loop" and (i == 0 or args[i - 1] != "--loop")]
+    results = []
+    for i in range(n):
+        t = time.time()
+        rc = cmd_reinstall(rest + (["--skip-build"] if i > 0 and "--skip-build" not in rest else []))
+        results.append((rc, time.time() - t))
+        _stamp(f"run {i + 1}/{n}: {'OK' if rc == 0 else 'FAILED'} in {results[-1][1]:.0f}s")
+        if rc:
+            break
+    if n > 1:
+        print("\n".join(f"  run {i + 1}: {'OK' if rc == 0 else 'FAILED'} {secs:.0f}s" for i, (rc, secs) in enumerate(results)))
+    return 0 if all(rc == 0 for rc, _ in results) else 1
+
+
+def follow_install(t0, budget, live):
+    """Phases 1-7 after the preset: netboot, the unattended install (the live journal streams to out/lab/logs), the new
+    system's clean boot, the tester session and MCP."""
     def left():
         return budget - (time.time() - t0)
-    if not wait(lambda: not ping(), 60, 1):
-        _stamp("FAILED: midget never went down")
-        return 1
-    _stamp("phase 1/7 going down: rebooting")
-    if not wait(lambda: state() == "live", min(600, left()), 3):
-        _stamp("FAILED: no netboot into the live lab ISO (check iVentoy and BootNext with `efi`)")
-        return 1
-    _stamp("phase 2/7 netboot seen: live lab ISO is up")
+    if not live:
+        if not wait(lambda: not ping(), 60, 1):
+            _stamp("FAILED: midget never went down")
+            return 1
+        _stamp("phase 1/7 going down: rebooting")
+        if not wait(lambda: state() == "live", min(600, left()), 3):
+            _stamp("FAILED: no netboot into the live lab ISO (check iVentoy and BootNext with `efi`)")
+            return 1
+        _stamp("phase 2/7 netboot seen: live lab ISO is up")
+    # the live system's journal dies with it (its root is iVentoy's iSCSI disk): keep a copy on titan as it happens
+    logs = Path(__file__).resolve().parent.parent / "out" / "lab" / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    live_log = logs / time.strftime("%Y%m%d-%H%M%S-live-journal.log")
+    tail = subprocess.Popen(SSH + ["journalctl -f -b -o short-precise --no-pager"], stdout=open(live_log, "w"), stderr=subprocess.DEVNULL)
+    shots = logs / live_log.name.replace("-live-journal.log", "-install")
+    shots.mkdir(exist_ok=True)
+    ssh("touch /run/bifrost-shot-on", 10)
+    _stamp(f"live journal streaming to {live_log}; installer screens every 10 s in {shots}/")
+    last_shot = [0.0]
+
+    def install_shot():
+        """The live installer's own frame (lab hook /run/bifrost-screen.png), at most every 10 s."""
+        if time.time() - last_shot[0] < 10:
+            return
+        last_shot[0] = time.time()
+        r = subprocess.run(SSH + ["cat /run/bifrost-screen.png"], capture_output=True, timeout=20)
+        if r.stdout[:4] == b"\x89PNG":
+            (shots / time.strftime("%H%M%S.png")).write_bytes(r.stdout)
     seen = False
     while left() > 0 and state() == "live":
+        install_shot()
         j = ssh("journalctl -u bifrost-installer --no-pager -n 400 2>/dev/null | grep -E 'unattended|bifrost-installer: \\[' | tail -n 1", 15).strip()
         if j and not seen:
             seen = True
@@ -876,8 +941,9 @@ def cmd_reinstall(args):
             _stamp("FAILED: " + j)
             return 1
         time.sleep(20)
+    tail.terminate()
     if state() != "installed" and not wait(lambda: state() == "installed", left(), 3):
-        _stamp("FAILED: the installed system did not answer on ssh in time")
+        _stamp(f"FAILED: the installed system did not answer on ssh in time (live journal: {live_log})")
         return 1
     if not seen:
         _stamp("note: never saw installer progress lines; the install may have run between polls")
@@ -917,7 +983,7 @@ def main():
         "apps": lambda: cmd_apps(),
         "recovery": lambda: cmd_recovery(),
         "idle": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-idle-measure.py")), *rest]),
-        "reinstall": lambda: cmd_reinstall(rest),
+        "reinstall": lambda: cmd_reinstall_loop(rest),
         "wipe": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-wipe.py")), *rest]),
         "state": lambda: cmd_control(["state"]),
         "lock": lambda: cmd_control(["lock"]),
