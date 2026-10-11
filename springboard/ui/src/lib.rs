@@ -561,6 +561,7 @@ pub mod undo;
 pub mod text;
 pub mod keys;
 pub mod anim;
+pub mod frame_rate;
 pub mod sidebar;
 pub mod diff;
 pub mod cache;
