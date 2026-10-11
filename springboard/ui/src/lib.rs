@@ -609,6 +609,7 @@ pub mod nn;
 pub mod save_sync;
 pub mod gamepad;
 pub mod affine;
+pub mod transform3d;
 pub mod path;
 pub mod gradient;
 pub mod workflow;
