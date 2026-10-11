@@ -565,6 +565,7 @@ pub mod sidebar;
 pub mod diff;
 pub mod cache;
 pub mod fuzzy;
+pub mod regex;
 pub mod format;
 pub mod gesture;
 pub mod focus;
