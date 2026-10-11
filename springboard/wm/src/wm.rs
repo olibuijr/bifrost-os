@@ -141,6 +141,13 @@ impl Wm {
         }
     }
 
+    pub fn is_maximized(&self, id: WindowId) -> bool { self.get(id).is_some_and(|w| w.restore.is_some()) }
+
+    /// The client settled on a frame of its own (it chose its size, or finished a resize).
+    pub fn set_frame(&mut self, id: WindowId, rect: Rect) {
+        if let Some(w) = self.get_mut(id) { w.rect = rect; }
+    }
+
     fn get(&self, id: WindowId) -> Option<&Window> { self.windows.iter().find(|w| w.id == id) }
     fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> { self.windows.iter_mut().find(|w| w.id == id) }
 }
@@ -273,6 +280,17 @@ mod tests {
         assert_eq!(wm.rect(1), Some(small));
         let r = wm.rect(2).unwrap();
         assert!(r.x <= small.x + small.w - KEEP_VISIBLE && r.y <= small.y + small.h - KEEP_VISIBLE, "{r:?}");
+    }
+
+    #[test]
+    fn the_client_may_settle_on_its_own_frame() {
+        let mut wm = Wm::new(AREA);
+        let r = wm.map(1, 800, 600);
+        wm.set_frame(1, Rect { w: 640, ..r });
+        assert_eq!(wm.rect(1), Some(Rect { w: 640, ..r }));
+        assert!(!wm.is_maximized(1));
+        wm.toggle_maximize(1);
+        assert!(wm.is_maximized(1));
     }
 
     #[test]
