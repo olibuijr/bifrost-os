@@ -1,0 +1,139 @@
+{
+  "framework": "SwiftUI (Views, View layout)",
+  "doc": "https://developer.apple.com/documentation/swiftui",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/view/ (retained views, Stack, Form, ScrollView), springboard/ui/src/ (stack, table, collection, sidebar, constraint), springboard/ui/src/shape.rs (Path, Shape), springboard/ui/src/stack.rs (overlay, first_fitting)",
+  "summary": "BifrOSt has an imperative, retained-view toolkit with stacks, grids, forms, scroll views, source lists, tables and animation, plus Auto Layout style constraints. Pure models now cover overlay alignment, first-fit selection and shape paths with trimming, but none of them is a declarative view API yet; there is still no View protocol, modifier chain, state-driven body or custom Layout protocol.",
+  "rea_evidence": "ev_1a882830e38c95f440f0bd336bd00c74fb8bc2a84fc97d1342e354040edb662e",
+  "features": [
+    {
+      "feature": "View fundamentals (View protocol, composition)",
+      "apple": "https://developer.apple.com/documentation/swiftui/view-fundamentals",
+      "bifrost": "springboard/sdk/src/view/mod.rs (View trait, ViewBase)",
+      "status": "partial",
+      "note": "retained imperative views, no declarative body or modifier chain"
+    },
+    {
+      "feature": "View configuration (environment, modifiers, state)",
+      "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
+      "bifrost": "springboard/sdk/src/view/app.rs",
+      "status": "gap",
+      "note": "no environment values or generic modifiers; properties are set on each view"
+    },
+    {
+      "feature": "View styles",
+      "apple": "https://developer.apple.com/documentation/swiftui/view-styles",
+      "bifrost": "springboard/sdk/src/view/forms.rs (ProgressStyle)",
+      "status": "partial",
+      "note": "a few fixed styles per control, no style protocols"
+    },
+    {
+      "feature": "Animations",
+      "apple": "https://developer.apple.com/documentation/swiftui/animations",
+      "bifrost": "springboard/sdk/src/view/animation.rs, springboard/ui/src/anim.rs",
+      "status": "partial",
+      "note": "springs and timing curves exist; no implicit animation tied to state changes, no matchedGeometry"
+    },
+    {
+      "feature": "Text input and output",
+      "apple": "https://developer.apple.com/documentation/swiftui/text-input-and-output",
+      "bifrost": "springboard/sdk/src/view/forms.rs (TextField), springboard/ui/src/text.rs",
+      "status": "partial",
+      "note": "text fields and text layout; no Text formatting views or TextEditor parity checked"
+    },
+    {
+      "feature": "Images and symbols",
+      "apple": "https://developer.apple.com/documentation/swiftui/images",
+      "bifrost": "springboard/sdk/src/glyphs.rs",
+      "status": "partial",
+      "note": "symbol glyphs; no AsyncImage or Image resizing modifiers"
+    },
+    {
+      "feature": "Controls and indicators",
+      "apple": "https://developer.apple.com/documentation/swiftui/controls-and-indicators",
+      "bifrost": "springboard/sdk/src/view/forms.rs (Checkbox, Stepper, ProgressIndicator, PopUpButton), springboard/sdk/src/view/controls.rs",
+      "status": "partial",
+      "note": "toggle, stepper, progress, picker; fewer than SwiftUI's set (no DatePicker/ColorPicker views checked)"
+    },
+    {
+      "feature": "Menus and commands",
+      "apple": "https://developer.apple.com/documentation/swiftui/menus-and-commands",
+      "bifrost": "springboard/ui/src/menu.rs",
+      "status": "partial",
+      "note": "menu model exists; no Commands builder"
+    },
+    {
+      "feature": "Shapes",
+      "apple": "https://developer.apple.com/documentation/swiftui/shapes",
+      "bifrost": "springboard/ui/src/shape.rs",
+      "status": "partial",
+      "note": "pure path model (Path subpaths, bounds, length, trimmed fractions) and built-in shapes; no Shape protocol, stroke or fill style, and no renderer or app API yet"
+    },
+    {
+      "feature": "Drawing and graphics (effects, Canvas)",
+      "apple": "https://developer.apple.com/documentation/swiftui/drawing-and-graphics",
+      "bifrost": "springboard/render/src/glass.rs",
+      "status": "partial",
+      "note": "glass/vibrancy materials in renderer; no blur, shadow, mask modifiers or Canvas for apps"
+    },
+    {
+      "feature": "Layout fundamentals (stacks, grids)",
+      "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
+      "bifrost": "springboard/ui/src/stack.rs (overlay, first_fitting), springboard/sdk/src/view/controls.rs (Stack)",
+      "status": "partial",
+      "note": "HStack/VStack, grid, adaptive columns; overlay layout model for ZStack alignment and a first-fitting choice model for ViewThatFits; no view API for either, no LazyVGrid"
+    },
+    {
+      "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
+      "apple": "https://developer.apple.com/documentation/swiftui/layout-adjustments",
+      "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs",
+      "status": "partial",
+      "note": "insets, alignment, distribution, constraints; no alignment guides or layout priority modifiers"
+    },
+    {
+      "feature": "Custom layout (Layout protocol)",
+      "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
+      "bifrost": "springboard/ui/src/constraint.rs",
+      "status": "gap",
+      "note": "constraint solver exists, no Layout protocol or AnyLayout transitions"
+    },
+    {
+      "feature": "Lists",
+      "apple": "https://developer.apple.com/documentation/swiftui/lists",
+      "bifrost": "springboard/ui/src/sidebar.rs, springboard/ui/src/collection.rs, springboard/ui/src/diff.rs",
+      "status": "partial",
+      "note": "source list, card grid, diffable snapshots; no generic List with swipe actions or edit mode"
+    },
+    {
+      "feature": "Tables",
+      "apple": "https://developer.apple.com/documentation/swiftui/tables",
+      "bifrost": "springboard/ui/src/table.rs",
+      "status": "partial",
+      "note": "columns, sort descriptors, header hits; no TableColumn builder"
+    },
+    {
+      "feature": "View groupings (Form, Group, ControlGroup, split)",
+      "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
+      "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
+      "status": "partial",
+      "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views"
+    },
+    {
+      "feature": "Scroll views",
+      "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
+      "bifrost": "springboard/sdk/src/view/scroll.rs, springboard/ui/src/scroll.rs",
+      "status": "partial",
+      "note": "scrolling with model; no ScrollViewReader, scroll targets or scroll position binding"
+    }
+  ],
+  "gaps": [
+    "Declarative View protocol with body, modifiers and state/binding updates",
+    "Environment values and style protocols",
+    "Layout protocol and lazy grids; the ZStack overlay and ViewThatFits first-fit models exist in ui/src/stack.rs but have no view API",
+    "Shape protocol, stroke and fill styles, and a renderer for shape paths; ui/src/shape.rs is the model only",
+    "Canvas drawing API for apps",
+    "Generic List with swipe actions, TabView, GroupBox, ControlGroup",
+    "ScrollViewReader and scroll position APIs"
+  ]
+}
