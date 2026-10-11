@@ -601,6 +601,7 @@ pub mod affine;
 pub mod path;
 pub mod gradient;
 pub mod workflow;
+pub mod scripting;
 #[cfg(test)]
 mod bench;
 
