@@ -604,6 +604,8 @@ pub mod workflow;
 pub mod scripting;
 pub mod subscription;
 pub mod entitlement;
+pub mod download;
+pub mod nav_policy;
 #[cfg(test)]
 mod bench;
 
