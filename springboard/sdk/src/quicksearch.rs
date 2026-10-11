@@ -6,9 +6,52 @@
 //! (`CSSearchableItemActionType`) whose `unique_identifier` is the item's. See docs/bifrost-ui.md "Core Search".
 
 pub use crate::proto::quicksearch::{ACTION_TYPE, MAX_ITEMS};
-use crate::proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DELETE_IDS, MAX_VALUES};
+use crate::locale::Locale;
+use crate::proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DELETE_IDS, MAX_DOMAIN, MAX_ID, MAX_VALUES};
 use crate::proto::ToShell;
 use crate::Ctx;
+
+/// A custom attribute: an app-defined key and value. Its value is folded into the item's keywords when indexed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CustomAttribute {
+    pub key: String,
+    pub value: String,
+}
+
+/// A person the item relates to (a sender, an author, an attendee). The display name and the handles are
+/// folded into the item's keywords when indexed, so a search for the name or the address finds the item.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Person {
+    pub display_name: String,
+    /// `handles`: addresses and numbers such as an e-mail address or a phone number
+    pub handles: Vec<String>,
+    /// `handleIdentifier`: the kind of contact property the handles are, such as "email"
+    pub handle_identifier: String,
+    /// `contactIdentifier`: the contact record the person came from; not searched
+    pub contact_identifier: String,
+}
+
+/// Display text per language. The text for the current locale is used when the item is indexed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LocalizedString {
+    /// (locale identifier, text), for example `("en_US", "Milk")` or `("is_IS", "Mjólk")`
+    pub strings: Vec<(String, String)>,
+}
+
+impl LocalizedString {
+    pub fn new(strings: &[(&str, &str)]) -> Self {
+        LocalizedString { strings: strings.iter().map(|(l, t)| (l.to_string(), t.to_string())).collect() }
+    }
+
+    /// The entry whose identifier equals the locale's, else the first entry in the same language,
+    /// else the first entry. `None` when the table is empty.
+    pub fn localized_string(&self, locale: &Locale) -> Option<&str> {
+        let id = locale.identifier();
+        let exact = self.strings.iter().find(|(l, _)| *l == id);
+        let same_language = || self.strings.iter().find(|(l, _)| Locale::new(l).language == locale.language);
+        exact.or_else(same_language).or(self.strings.first()).map(|(_, t)| t.as_str())
+    }
+}
 
 /// `CSSearchableItemAttributeSet`: the searchable attributes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -20,11 +63,30 @@ pub struct CSSearchableItemAttributeSet {
     pub thumbnail_path: String,
     /// `contentURL`
     pub content_url: String,
+    /// `customAttributes`: app-defined values, searched as keywords
+    pub custom: Vec<CustomAttribute>,
+    /// `persons`: people related to the item, searched by name and handle
+    pub persons: Vec<Person>,
+    /// Title per language. When it has a text for the current locale, that text is indexed instead of `title`.
+    pub title_localized: Option<LocalizedString>,
 }
 
 impl CSSearchableItemAttributeSet {
     pub fn new(title: &str) -> Self {
         CSSearchableItemAttributeSet { title: title.into(), ..Default::default() }
+    }
+
+    pub fn custom_attribute(mut self, key: &str, value: &str) -> Self {
+        self.custom.push(CustomAttribute { key: key.into(), value: value.into() });
+        self
+    }
+    pub fn person(mut self, person: Person) -> Self {
+        self.persons.push(person);
+        self
+    }
+    pub fn localized_title(mut self, title: LocalizedString) -> Self {
+        self.title_localized = Some(title);
+        self
     }
     pub fn content_description(mut self, v: &str) -> Self {
         self.content_description = v.into();
@@ -42,6 +104,25 @@ impl CSSearchableItemAttributeSet {
         self.content_url = v.into();
         self
     }
+
+    /// The title and keywords sent to the shell for `locale`. The localized title wins when it has a non-empty text
+    /// for the locale. Custom values, person names and handles are appended to the keywords, skipping empty and
+    /// repeated values; the wire codec keeps only the first `MAX_KEYWORDS`, so explicit keywords come first.
+    fn wire_text(&self, locale: &Locale) -> (String, Vec<String>) {
+        let title = self.title_localized.as_ref().and_then(|t| t.localized_string(locale)).filter(|t| !t.is_empty()).unwrap_or(self.title.as_str()).to_string();
+        let mut keywords = self.keywords.clone();
+        let extra = self
+            .custom
+            .iter()
+            .map(|c| c.value.as_str())
+            .chain(self.persons.iter().flat_map(|p| std::iter::once(p.display_name.as_str()).chain(p.handles.iter().map(|h| h.as_str()))));
+        for text in extra {
+            if !text.is_empty() && !keywords.iter().any(|k| k.as_str() == text) {
+                keywords.push(text.to_string());
+            }
+        }
+        (title, keywords)
+    }
 }
 
 /// `CSSearchableItem`. Indexing an item with an existing `unique_identifier` replaces it.
@@ -56,6 +137,46 @@ pub struct CSSearchableItem {
 impl CSSearchableItem {
     pub fn new(unique_identifier: &str, domain_identifier: &str, attribute_set: CSSearchableItemAttributeSet) -> Self {
         CSSearchableItem { unique_identifier: unique_identifier.into(), domain_identifier: domain_identifier.into(), attribute_set }
+    }
+}
+
+/// Why an item was refused before it was sent to the shell. Refused items are not indexed; the rest of
+/// the batch still is. The shell's own failures (full index, unavailable service) are not reported back yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IndexError {
+    /// The identifier is empty, so the item could never be replaced or deleted.
+    EmptyIdentifier,
+    /// The identifier is longer than [`MAX_ID`] bytes.
+    IdentifierTooLong,
+    /// The domain identifier is longer than [`MAX_DOMAIN`] bytes, so deleting by domain would not match the item.
+    DomainTooLong,
+}
+
+impl IndexError {
+    /// The error domain name, for logs.
+    pub const DOMAIN: &'static str = "bifrost.quicksearch.index";
+
+    /// The check run on every item by [`CSSearchableIndex::index_checked`].
+    pub fn check(item: &CSSearchableItem) -> Result<(), IndexError> {
+        if item.unique_identifier.is_empty() {
+            return Err(IndexError::EmptyIdentifier);
+        }
+        if item.unique_identifier.len() > MAX_ID {
+            return Err(IndexError::IdentifierTooLong);
+        }
+        if item.domain_identifier.len() > MAX_DOMAIN {
+            return Err(IndexError::DomainTooLong);
+        }
+        Ok(())
+    }
+
+    /// The error code within [`IndexError::DOMAIN`]. Stable: logs and tests may rely on it.
+    pub fn code(self) -> u32 {
+        match self {
+            IndexError::EmptyIdentifier => 1,
+            IndexError::IdentifierTooLong => 2,
+            IndexError::DomainTooLong => 3,
+        }
     }
 }
 
@@ -81,22 +202,36 @@ impl CSSearchableIndex {
     /// `indexSearchableItems(_:)`. Items without an identifier are skipped. The shell keeps at most 1000 items per app
     /// (the oldest are dropped first) and cuts long text, so index a title, a short description and a few keywords.
     pub fn index_searchable_items(&self, ctx: &Ctx, items: &[CSSearchableItem]) {
-        let wire: Vec<SearchableItem> = items
-            .iter()
-            .filter(|i| !i.unique_identifier.is_empty())
-            .map(|i| SearchableItem {
+        self.index_checked(ctx, items);
+    }
+
+    /// `indexSearchableItems(_:)` with the refusals reported. Returns the position of each refused item and why; the
+    /// other items are sent. An identifier or domain longer than the wire cap is refused rather than cut, because a
+    /// cut identifier would never match the one the app later deletes or continues by.
+    pub fn index_checked(&self, ctx: &Ctx, items: &[CSSearchableItem]) -> Vec<(usize, IndexError)> {
+        let locale = Locale::current();
+        let mut refused = Vec::new();
+        let mut wire: Vec<SearchableItem> = Vec::new();
+        for (pos, i) in items.iter().enumerate() {
+            if let Err(e) = IndexError::check(i) {
+                refused.push((pos, e));
+                continue;
+            }
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            wire.push(SearchableItem {
                 unique_id: i.unique_identifier.clone(),
                 domain: i.domain_identifier.clone(),
-                title: i.attribute_set.title.clone(),
+                title,
                 description: i.attribute_set.content_description.clone(),
-                keywords: i.attribute_set.keywords.clone(),
+                keywords,
                 thumbnail: i.attribute_set.thumbnail_path.clone(),
                 content_url: i.attribute_set.content_url.clone(),
-            })
-            .collect();
+            });
+        }
         for chunk in wire.chunks(MAX_ITEMS) {
             ctx.send_to_shell(ToShell::QuickSearchIndex(chunk.to_vec()));
         }
+        refused
     }
 
     /// `deleteSearchableItems(withIdentifiers:)`.
@@ -173,6 +308,66 @@ mod tests {
                 ToShell::QuickSearchDelete { kind: DELETE_ALL, values: vec![] },
             ]
         );
+    }
+
+    #[test]
+    fn refused_items_are_reported_by_position_and_the_rest_are_sent() {
+        let c = ctx();
+        let refused = CSSearchableIndex::default_index().index_checked(&c, &[item("a"), item(""), item("b")]);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        let ToShell::QuickSearchIndex(batch) = &sent[0] else { panic!() };
+        assert_eq!(batch.iter().map(|i| i.unique_id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
+    }
+
+    #[test]
+    fn identifier_and_domain_lengths_are_checked_against_the_wire_cap() {
+        let at_cap = "x".repeat(MAX_ID);
+        assert_eq!(IndexError::check(&item(&at_cap)), Ok(()));
+        assert_eq!(IndexError::check(&item(&"x".repeat(MAX_ID + 1))), Err(IndexError::IdentifierTooLong));
+        let long_domain = CSSearchableItem::new("n", &"d".repeat(MAX_DOMAIN + 1), CSSearchableItemAttributeSet::new("t"));
+        assert_eq!(IndexError::check(&long_domain), Err(IndexError::DomainTooLong));
+        let c = ctx();
+        let refused = CSSearchableIndex::default_index().index_checked(&c, &[long_domain]);
+        assert_eq!(refused, vec![(0, IndexError::DomainTooLong)]);
+        assert!(c.take_sent().is_empty());
+    }
+
+    #[test]
+    fn error_codes_and_domain_are_stable() {
+        assert_eq!(IndexError::EmptyIdentifier.code(), 1);
+        assert_eq!(IndexError::IdentifierTooLong.code(), 2);
+        assert_eq!(IndexError::DomainTooLong.code(), 3);
+        assert_eq!(IndexError::DOMAIN, "bifrost.quicksearch.index");
+    }
+
+    #[test]
+    fn localized_title_follows_the_locale_and_falls_back() {
+        let t = LocalizedString::new(&[("en_US", "Milk"), ("is_IS", "Mjólk")]);
+        assert_eq!(t.localized_string(&Locale::from_env("is_IS", None)), Some("Mjólk"));
+        assert_eq!(t.localized_string(&Locale::from_env("is", None)), Some("Mjólk"));
+        assert_eq!(t.localized_string(&Locale::from_env("de_DE", None)), Some("Milk"));
+        assert_eq!(LocalizedString::default().localized_string(&Locale::from_env("en_US", None)), None);
+        let set = CSSearchableItemAttributeSet::new("Plain").localized_title(LocalizedString::new(&[("is_IS", "")]));
+        let (title, _) = set.wire_text(&Locale::from_env("is_IS", None));
+        assert_eq!(title, "Plain");
+    }
+
+    #[test]
+    fn custom_values_persons_and_handles_are_folded_into_keywords() {
+        let set = CSSearchableItemAttributeSet::new("Invoice")
+            .keywords(&["money"])
+            .custom_attribute("status", "paid")
+            .custom_attribute("empty", "")
+            .person(Person {
+                display_name: "Ada Lovelace".into(),
+                handles: vec!["ada@example.test".into(), "money".into()],
+                handle_identifier: "email".into(),
+                contact_identifier: "contact-7".into(),
+            });
+        let (title, keywords) = set.wire_text(&Locale::from_env("en_US", None));
+        assert_eq!(title, "Invoice");
+        assert_eq!(keywords, ["money", "paid", "Ada Lovelace", "ada@example.test"]);
     }
 
     #[test]
