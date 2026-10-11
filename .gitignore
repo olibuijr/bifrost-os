@@ -12,7 +12,8 @@ __pycache__/
 packaging/archiso/airootfs/usr/share/bifrost/opencore/
 
 # build outputs, VM images, ISOs, secrets (out/lab holds the lab SSH key)
-out/
+# build outputs (a directory here; also matches a stray file or symlink named out)
+/out
 *.core
 packaging/archiso/airootfs/usr/bin/bifrost-installer
 springboard/apps/*/assets/licenses/
