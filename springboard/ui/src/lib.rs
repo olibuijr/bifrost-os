@@ -569,6 +569,8 @@ pub mod fuzzy;
 pub mod regex;
 pub mod format;
 pub mod gesture;
+pub mod identity;
+pub mod access_control;
 pub mod focus;
 pub mod uttype;
 pub mod preview;
