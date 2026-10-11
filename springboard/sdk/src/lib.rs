@@ -70,6 +70,8 @@ pub mod file_provider;
 pub mod url;
 pub mod multipart;
 pub mod social;
+pub mod url_components;
+pub mod stream;
 pub mod coding;
 pub mod restoration;
 pub use restoration::RestorableState;
