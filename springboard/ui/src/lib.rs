@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod linalg;
+pub mod mesh;
+pub mod shading;
 #[cfg(test)]
 mod bench;
 
