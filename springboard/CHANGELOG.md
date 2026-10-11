@@ -5,6 +5,7 @@
 - Login window (stage 1 of the login round, ported from branch `login-hardened`): boot and every later lock show the reference's login window instead of "Press Return to unlock". The date sits over a large clock at the top; the avatar, full name and a password field sit low in the middle; a power button at the right of the status icons opens Sleep, Restart… and Shut Down…. The password is checked by the new root helper `bifrost-privd` (PAM service `bifrost-login`: faillock, 5 tries then 5 minutes; an in-daemon delay; fail closed on PAM errors). `/etc/bifrost/no-login` is the explicit lab bypass.
 - privd: the privileged call sites (power, sleep, timezone, updates, store installs) go through `privd_client`, which runs the methods in-process while the shell is root and uses the socket only when `SPRINGBOARD_PRIVD` is set (stage 2, the shell as the user).
 - Lock clock: the short date ("Thu Sep 10") over a semibold clock.
+- Installer: a Look step after the account: Light, Dark or Auto, the accent colour and the wallpaper on one page; the page itself follows the pick, and the choice is written to the new system's `settings.ini` (`appearance_mode`, `accent_color`, `wallpaper`). Unattended presets take optional `appearance`, `accent` and `wallpaper` keys.
 - Lab: `midget.py unlock` types the lab password (never printed; only key codes cross ssh) and every Enter-unlock in the tools uses it; `midget.py login-bypass on|off`.
 
 ## 0.5.28 — 2026-10-11
