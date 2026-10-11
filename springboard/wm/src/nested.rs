@@ -4,10 +4,10 @@ use std::{error::Error, time::Duration};
 
 use smithay::{
     backend::{
-        renderer::{damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement, gles::GlesRenderer},
+        renderer::{damage::OutputDamageTracker, gles::GlesRenderer},
         winit::{self, WinitEvent},
     },
-    desktop::{layer_map_for_output, space::render_output},
+    desktop::layer_map_for_output,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
     utils::{Rectangle, Transform},
@@ -29,6 +29,7 @@ pub fn init(event_loop: &mut EventLoop<'static, WmState>, state: &mut WmState) -
     output.set_preferred(mode);
     state.add_output(&output);
     let mut damage = OutputDamageTracker::from_output(&output);
+    let mut glass = crate::glass::Glass::new(backend.renderer())?;
 
     event_loop.handle().insert_source(winit, move |event, _, state| match event {
         WinitEvent::Resized { size, .. } => {
@@ -40,10 +41,9 @@ pub fn init(event_loop: &mut EventLoop<'static, WmState>, state: &mut WmState) -
         WinitEvent::Redraw => {
             let size = backend.window_size();
             {
+                let elements = crate::scene::build(backend.renderer(), state, &output, &mut glass, Vec::new());
                 let Ok((renderer, mut fb)) = backend.bind() else { return };
-                if let Err(e) = render_output::<_, WaylandSurfaceRenderElement<GlesRenderer>, _, _>(
-                    &output, renderer, &mut fb, 1.0, 0, [&state.space], &[], &mut damage, CLEAR,
-                ) {
+                if let Err(e) = damage.render_output(renderer, &mut fb, 0, &elements, CLEAR) {
                     eprintln!("bifrost-wm: render: {e}");
                 }
             }

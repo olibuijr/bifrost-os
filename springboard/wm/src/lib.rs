@@ -4,12 +4,14 @@ pub mod background_effect;
 pub mod boot;
 #[cfg(feature = "drm")]
 pub mod drm;
+pub mod glass;
 pub mod grabs;
 pub mod handlers;
 pub mod headless;
 pub mod input;
 #[cfg(feature = "nested")]
 pub mod nested;
+pub mod scene;
 pub mod state;
 pub mod wm;
 

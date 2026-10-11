@@ -28,7 +28,7 @@ use smithay::{
         session::{libseat::LibSeatSession, Event as SessionEvent, Session},
         udev::{all_gpus, primary_gpu},
     },
-    desktop::{layer_map_for_output, space::SpaceRenderElements, Window},
+    desktop::layer_map_for_output,
     output::{Mode as WlMode, Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{timer::{TimeoutAction, Timer}, EventLoop, LoopHandle},
@@ -37,21 +37,14 @@ use smithay::{
         rustix::fs::OFlags,
         wayland_server::Display,
     },
-    render_elements,
     utils::{DeviceFd, Transform},
 };
 
-use crate::state::WmState;
+use crate::{scene::SceneElement, state::WmState};
 
 const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
 
-render_elements! {
-    pub OutputElements<R, E> where R: ImportAll + ImportMem;
-    Space = SpaceRenderElements<R, E>,
-    Pointer = MemoryRenderBufferRenderElement<R>,
-}
-use smithay::backend::renderer::{ImportAll, ImportMem};
 
 type Compositor = DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
@@ -64,6 +57,7 @@ struct Drm {
     pending: bool,
     /// The loader's frame while the first session of a boot fades in (`BIFROST_BOOT_FADE`).
     boot: Option<Boot>,
+    glass: crate::glass::Glass,
 }
 
 struct Boot {
@@ -236,13 +230,15 @@ fn open_gpu(session: &mut LibSeatSession, path: &Path, state: &mut WmState, hand
 
     let pointer = MemoryRenderBuffer::from_slice(&arrow(), Fourcc::Abgr8888, (ARROW, ARROW), 1, Transform::Normal, None);
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot })
+    let mut renderer = renderer;
+    let glass = crate::glass::Glass::new(&mut renderer)?;
+    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass })
 }
 
 impl Drm {
     fn render(&mut self, state: &mut WmState) {
         let output = self.output.clone();
-        let mut elements: Vec<OutputElements<GlesRenderer, smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<GlesRenderer>>> = Vec::new();
+        let mut top: Vec<SceneElement> = Vec::new();
         // front to back: the boot frame over everything while it fades, else the pointer on top
         let splash = self.boot.as_mut().and_then(|b| b.alpha().map(|a| (b.splash.clone(), a)));
         if splash.is_none() {
@@ -250,18 +246,15 @@ impl Drm {
         }
         if let Some((buffer, alpha)) = splash {
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), &buffer, Some(alpha), None, None, Kind::Unspecified) {
-                elements.push(OutputElements::Pointer(e));
+                top.push(SceneElement::Memory(e));
             }
         } else {
             let pos = state.pointer_location();
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (pos.x, pos.y), &self.pointer, None, None, None, Kind::Cursor) {
-                elements.push(OutputElements::Pointer(e));
+                top.push(SceneElement::Memory(e));
             }
         }
-        match smithay::desktop::space::space_render_elements::<_, Window, _>(&mut self.renderer, [&state.space], &output, 1.0) {
-            Ok(space) => elements.extend(space.into_iter().map(OutputElements::Space)),
-            Err(e) => eprintln!("bifrost-wm: elements: {e:?}"),
-        }
+        let elements = crate::scene::build(&mut self.renderer, state, &output, &mut self.glass, top);
         match self.compositor.render_frame(&mut self.renderer, &elements, CLEAR, FrameFlags::DEFAULT) {
             Ok(frame) => {
                 if !frame.is_empty {

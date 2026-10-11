@@ -15,12 +15,11 @@ use smithay::{
         egl::{EGLContext, EGLDevice, EGLDisplay},
         renderer::{
             damage::OutputDamageTracker,
-            element::surface::WaylandSurfaceRenderElement,
             gles::{GlesRenderer, GlesTexture},
             Bind, ExportMem, Offscreen,
         },
     },
-    desktop::{layer_map_for_output, space::render_output},
+    desktop::layer_map_for_output,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
@@ -41,6 +40,7 @@ const FRAME: Duration = Duration::from_millis(16);
 
 pub struct Headless {
     renderer: GlesRenderer,
+    glass: crate::glass::Glass,
     target: GlesTexture,
     output: Output,
     damage: OutputDamageTracker,
@@ -68,24 +68,16 @@ impl Headless {
         output.set_preferred(mode);
         state.add_output(&output);
         let damage = OutputDamageTracker::from_output(&output);
-        Ok(Headless { renderer, target, output, damage, size: (w, h) })
+        let glass = crate::glass::Glass::new(&mut renderer)?;
+        Ok(Headless { renderer, glass, target, output, damage, size: (w, h) })
     }
 
     /// Composites one frame and sends the clients their frame callbacks.
     pub fn render(&mut self, state: &mut WmState) -> Result<(), Box<dyn Error>> {
+        let elements = crate::scene::build(&mut self.renderer, state, &self.output, &mut self.glass, Vec::new());
         {
             let mut fb = self.renderer.bind(&mut self.target)?;
-            render_output::<_, WaylandSurfaceRenderElement<GlesRenderer>, _, _>(
-                &self.output,
-                &mut self.renderer,
-                &mut fb,
-                1.0,
-                0,
-                [&state.space],
-                &[],
-                &mut self.damage,
-                CLEAR,
-            )?;
+            self.damage.render_output(&mut self.renderer, &mut fb, 0, &elements, CLEAR)?;
         }
         let elapsed = state.start.elapsed();
         let output = self.output.clone();
