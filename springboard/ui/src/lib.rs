@@ -587,6 +587,8 @@ pub mod sheet;
 pub mod linalg;
 pub mod mesh;
 pub mod shading;
+pub mod composition;
+pub mod audio_mix;
 #[cfg(test)]
 mod bench;
 
