@@ -152,6 +152,90 @@ impl Pan {
     }
 }
 
+/// Two-finger pinch (`NativeMagnificationGestureRecognizer`). The magnification is the change in finger spacing
+/// against the spacing when the fingers first landed: 0.0 is no change, 1.0 is twice the spacing.
+#[derive(Default)]
+pub struct Magnify {
+    base: Option<f32>,
+    magnification: f32,
+    began: bool,
+}
+impl Magnify {
+    /// One frame with both finger positions. Spacing must change by more than `SLOP` points to begin.
+    pub fn touches(&mut self, a: (f32, f32), b: (f32, f32)) -> State {
+        let spacing = (b.0 - a.0).hypot(b.1 - a.1);
+        let base = *self.base.get_or_insert(spacing);
+        if base <= 0.0 {
+            // Fingers that started on one point have no spacing to scale from.
+            return State::Failed;
+        }
+        self.magnification = spacing / base - 1.0;
+        if !self.began {
+            if (spacing - base).abs() <= SLOP {
+                return State::Possible;
+            }
+            self.began = true;
+            return State::Began;
+        }
+        State::Changed
+    }
+    pub fn magnification(&self) -> f32 {
+        self.magnification
+    }
+    /// The fingers lifted: `Ended` if the pinch began, `Failed` if it never got past the slop.
+    pub fn up(&mut self) -> State {
+        let s = if self.began { State::Ended } else { State::Failed };
+        *self = Self::default();
+        s
+    }
+}
+
+/// Two-finger rotation (`NativeRotationGestureRecognizer`). The angle of the line between the fingers, unwrapped at
+/// half a turn so the total keeps counting. Angles follow screen coordinates (y down), so positive is clockwise.
+#[derive(Default)]
+pub struct Rotate {
+    last: Option<f32>,
+    turned: f32,
+    began: bool,
+}
+/// Turns smaller than this (radians, about 3 degrees) do not begin a rotation.
+pub const ROTATION_SLOP: f32 = 0.05;
+impl Rotate {
+    /// One frame with both finger positions.
+    pub fn touches(&mut self, a: (f32, f32), b: (f32, f32)) -> State {
+        let angle = (b.1 - a.1).atan2(b.0 - a.0);
+        let Some(prev) = self.last.replace(angle) else { return State::Possible };
+        let mut step = angle - prev;
+        let turn = std::f32::consts::PI;
+        if step > turn {
+            step -= 2.0 * turn;
+        } else if step < -turn {
+            step += 2.0 * turn;
+        }
+        self.turned += step;
+        if !self.began {
+            if self.turned.abs() <= ROTATION_SLOP {
+                return State::Possible;
+            }
+            self.began = true;
+            return State::Began;
+        }
+        State::Changed
+    }
+    /// Total turn in radians since the fingers landed.
+    pub fn rotation(&self) -> f32 {
+        self.turned
+    }
+    pub fn rotation_degrees(&self) -> f32 {
+        self.turned.to_degrees()
+    }
+    pub fn up(&mut self) -> State {
+        let s = if self.began { State::Ended } else { State::Failed };
+        *self = Self::default();
+        s
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,5 +280,55 @@ mod tests {
         let (vx, vy) = p.velocity();
         assert!(vx > 1400.0 && vy == 0.0, "{vx}");
         assert_eq!(p.up(), State::Ended);
+    }
+    #[test]
+    fn pinch_reports_spacing_change_and_ends_when_fingers_lift() {
+        let mut m = Magnify::default();
+        assert_eq!(m.touches((0., 0.), (100., 0.)), State::Possible);
+        assert_eq!(m.touches((0., 0.), (102., 0.)), State::Possible, "2 pt is inside the slop");
+        assert_eq!(m.touches((0., 0.), (120., 0.)), State::Began);
+        assert!((m.magnification() - 0.2).abs() < 1e-4, "{}", m.magnification());
+        assert_eq!(m.touches((0., 0.), (50., 0.)), State::Changed);
+        assert!((m.magnification() + 0.5).abs() < 1e-4, "{}", m.magnification());
+        assert_eq!(m.up(), State::Ended);
+        assert_eq!(m.magnification(), 0.0, "a finished pinch starts from nothing");
+    }
+    #[test]
+    fn pinch_that_never_leaves_the_slop_fails_on_lift() {
+        let mut m = Magnify::default();
+        m.touches((0., 0.), (100., 0.));
+        assert_eq!(m.touches((0., 0.), (103., 0.)), State::Possible);
+        assert_eq!(m.up(), State::Failed);
+    }
+    #[test]
+    fn pinch_from_one_point_has_nothing_to_scale() {
+        let mut m = Magnify::default();
+        assert_eq!(m.touches((5., 5.), (5., 5.)), State::Failed);
+        assert_eq!(m.up(), State::Failed);
+    }
+    #[test]
+    fn rotation_begins_past_slop_and_reports_degrees() {
+        let mut r = Rotate::default();
+        assert_eq!(r.touches((0., 0.), (100., 0.)), State::Possible);
+        assert_eq!(r.touches((0., 0.), (0., 100.)), State::Began, "a quarter turn clockwise on screen");
+        assert!((r.rotation_degrees() - 90.0).abs() < 1e-2, "{}", r.rotation_degrees());
+        assert_eq!(r.touches((0., 0.), (-100., 0.)), State::Changed);
+        assert!((r.rotation_degrees() - 180.0).abs() < 1e-2, "{}", r.rotation_degrees());
+        assert_eq!(r.up(), State::Ended);
+    }
+    #[test]
+    fn rotation_unwraps_across_the_half_turn() {
+        let mut r = Rotate::default();
+        r.touches((0., 0.), (-100., 1.));
+        // the fingers cross the horizontal: the raw angle jumps from about +pi to about -pi
+        assert_eq!(r.touches((0., 0.), (-100., -1.)), State::Possible);
+        assert!((r.rotation() - 0.02).abs() < 1e-4, "a 0.02 rad turn, not -2 pi: {}", r.rotation());
+    }
+    #[test]
+    fn rotation_below_the_slop_is_ignored_and_fails_on_lift() {
+        let mut r = Rotate::default();
+        r.touches((0., 0.), (100., 0.));
+        assert_eq!(r.touches((0., 0.), (100., 2.)), State::Possible, "about 0.02 rad");
+        assert_eq!(r.up(), State::Failed);
     }
 }

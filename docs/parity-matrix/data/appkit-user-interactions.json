@@ -1,0 +1,19 @@
+{
+"framework":"AppKit (User Interactions)",
+"doc":"https://developer.apple.com/documentation/appkit",
+"macos_since":"10.0",
+"status":"partial",
+"bifrost":"bifrost_ui::{responder,keys,menu,gesture,focus,ax,tracking,cursor}, bifrost_app::dnd, springboard/src/shell/atspi/",
+"summary":"Responder chain, key equivalents, menus, gesture recognizers (tap, pan, long press, pinch, rotation), typed drag and drop, dock badge and an AT-SPI accessibility bridge exist. Tracking-area enter, exit and move events and a cursor stack exist as pure models but are not yet delivered to apps. Scroll wheel, the Dock menu, custom Dock tiles and Touch Bar are missing.",
+"rea_evidence":"ev_c117807174d13fdfac5be6ad1bb26c6614adc9e640b17cb09120c645e24de789",
+"rea_evidence_recheck":"ev_89ff57d02f5e0c06fb16d7ed2cd82afa0cc42146fc5d9de9210aefc406081fb0",
+"features":[
+{"feature":"Mouse, Keyboard, and Trackpad","apple":"NSEvent, NSResponder, key events, tracking areas, trackpad touches","bifrost":"springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs, springboard/ui/src/tracking.rs","status":"partial","note":"responder chain, key combos and focus loop exist; tracking.rs models tracking-area enter, exit and move with overlapping areas, not yet fed by the app input path; no wheel or nextKeyView yet (docs/bifrost-ui.md ~line 870)"},
+{"feature":"Menus, Cursors, and the Dock","apple":"NSMenu, NSMenuItem, NSCursor, NSDockTile, NSStatusItem","bifrost":"springboard/ui/src/menu.rs, springboard/src/shell/desktop_bar.rs, springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_dock.rs, springboard/ui/src/cursor.rs","status":"partial","note":"menu bar, validation, key equivalents, status items and Dock badge (Ctx::set_badge) exist; cursor.rs models the cursor stack (push, pop, set, hide counting, shape names) but no SDK call or compositor cursor request uses it yet; no custom Dock tile content or Dock menu"},
+{"feature":"Gestures","apple":"NSGestureRecognizer and subclasses (click, pan, magnification, rotation, press)","bifrost":"springboard/ui/src/gesture.rs, springboard/src/shell/gestures.rs","status":"partial","note":"recognizer state machines exist as pure models: tap, pan, long press, Magnify (pinch) and Rotate (two-finger rotation); the compositor does not yet send two-finger trackpad touches to apps"},
+{"feature":"Touch Bar","apple":"NSTouchBar, NSTouchBarItem","bifrost":"none","status":"n/a","note":"Apple-only hardware"},
+{"feature":"Drag and Drop","apple":"NSDraggingSource, NSDraggingDestination, NSDraggingSession, NSPasteboard drag","bifrost":"springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs","status":"partial","note":"typed drag and drop between apps (docs/bifrost-ui.md section 508); the view kit itself has no drag and drop (line ~873), so views need app glue"},
+{"feature":"Accessibility for AppKit","apple":"NSAccessibility protocols, roles, labels, announcements","bifrost":"springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs","status":"partial","note":"AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree()"}
+],
+"gaps":["Scroll wheel events for apps","Tracking-area events delivered to views (model in springboard/ui/src/tracking.rs, no app path yet)","Cursor API for apps: the stack model exists (springboard/ui/src/cursor.rs), no SDK call or compositor cursor request yet","Dock tile custom content and Dock menu","Trackpad magnify and rotate from the compositor to apps (recognizers exist in springboard/ui/src/gesture.rs)","Drag and drop inside the retained view kit","Nested accessibility tree nodes"]
+}
