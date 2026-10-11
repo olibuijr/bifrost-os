@@ -609,6 +609,8 @@ pub mod nav_policy;
 pub mod translation;
 pub mod timeline;
 pub mod relevance;
+pub mod reading_list;
+pub mod content_rules;
 #[cfg(test)]
 mod bench;
 
