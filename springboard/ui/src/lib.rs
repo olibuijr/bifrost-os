@@ -575,6 +575,7 @@ pub mod preview;
 pub mod fileaction;
 pub mod actionrequest;
 pub mod textfit;
+pub mod bidi;
 pub mod observe;
 pub mod controller;
 pub mod calendar;
