@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod tensor;
+pub mod graph;
+pub mod nn;
 #[cfg(test)]
 mod bench;
 

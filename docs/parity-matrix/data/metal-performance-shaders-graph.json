@@ -1,0 +1,83 @@
+{
+  "framework": "Metal Performance Shaders Graph",
+  "doc": "https://developer.apple.com/documentation/metalperformanceshadersgraph",
+  "macos_since": "11.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/tensor.rs, springboard/ui/src/graph.rs, springboard/ui/src/nn.rs (pure models); springboard/src/gpu/ (GPU presenter for rendering and scanout only); springboard/render/src/glass.rs (glass blur hook); no app-facing compute API in the SDK",
+  "summary": "Pure models now cover tensor types and shapes, a symbolic node graph with shape inference and dependency scheduling, and convolution, pooling and FFT scaling rules. No operator computes values and no compute device, executable or serialized form exists, so apps still cannot run a graph.",
+  "rea_evidence": "ev_4b44e964d2efb4d1becd85318af6d3edd8dd657e78207622ea2d6798129380ee",
+  "features": [
+    {
+      "feature": "Graph construction (MPSGraph, MPSGraphTensor, MPSGraphOperation)",
+      "apple": "MPSGraph, MPSGraphTensor, MPSGraphOperation, MPSGraphObject",
+      "bifrost": "springboard/ui/src/graph.rs",
+      "status": "partial",
+      "note": "Symbolic graph of placeholders, constants, element-wise binary ops, relu and reshape with shape inference. Not the full operation set and nothing runs."
+    },
+    {
+      "feature": "Tensor types and data (MPSGraphType, MPSGraphShapedType, MPSGraphTensorData)",
+      "apple": "MPSGraphType, MPSGraphShapedType, MPSGraphTensorData",
+      "bifrost": "springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "DataType, Shape with broadcasting, TensorType and dense TensorData with byte-length checks. No device-backed tensor storage."
+    },
+    {
+      "feature": "Compilation and executables (MPSGraphCompilationDescriptor, MPSGraphExecutable, serialization)",
+      "apple": "MPSGraphCompilationDescriptor, MPSGraphExecutable, MPSGraphExecutableSerializationDescriptor, MPSGraphOptimization",
+      "bifrost": "springboard/ui/src/graph.rs (Graph::schedule)",
+      "status": "partial",
+      "note": "schedule() gives the dependency-ordered node list an output needs. No compiler options, executable object or serialization."
+    },
+    {
+      "feature": "Convolution, pooling and RNN operators (Convolution2D/3D, Pooling, LSTM, GRU)",
+      "apple": "MPSGraphConvolution2DOpDescriptor, MPSGraphConvolution3DOpDescriptor, MPSGraphPooling2DOpDescriptor, MPSGraphLSTMDescriptor, MPSGraphGRUDescriptor",
+      "bifrost": "springboard/ui/src/nn.rs",
+      "status": "partial",
+      "note": "Output-size and padding rules for convolution and pooling windows (Window, Padding, output_size). No operator computes values; no RNN."
+    },
+    {
+      "feature": "FFT and random operations (MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor)",
+      "apple": "MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor, MPSGraphFFTScalingMode, MPSGraphRandomDistribution",
+      "bifrost": "springboard/ui/src/nn.rs (FftScaling)",
+      "status": "partial",
+      "note": "FFT scale factors (none, size, unitary) only. No transform and no random operation."
+    },
+    {
+      "feature": "Execution and scheduling (MPSGraphExecutionDescriptor, completion and scheduled handlers, shared-event stages)",
+      "apple": "MPSGraphExecutionDescriptor, MPSGraphExecutableExecutionDescriptor, MPSGraphCompletionHandler, MPSGraphExecutionStage",
+      "bifrost": "springboard/src/gpu/wl.rs (presenter frame submission, not app compute)",
+      "status": "os",
+      "note": "frame timing and submission exist for the compositor; apps get no compute submission or completion callback"
+    },
+    {
+      "feature": "Devices (MPSGraphDevice, MPSGraphDeviceType)",
+      "apple": "MPSGraphDevice, MPSGraphDeviceType",
+      "bifrost": "springboard/src/gpu/plan.rs (what the GPU can do right now); springboard/src/gpu/egl.rs",
+      "status": "os",
+      "note": "the system knows the GPU capabilities, but no app-facing device object for compute"
+    },
+    {
+      "feature": "Neural Engine and Apple-silicon compute blocks",
+      "apple": "MPSGraphDeviceType (Neural Engine), MPSGraphDeployment",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple Neural Engine hardware has no Linux or BifrOSt counterpart"
+    },
+    {
+      "feature": "Fast math and reduced precision (MPSGraphReducedPrecisionFastMath)",
+      "apple": "MPSGraphReducedPrecisionFastMath",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no reduced precision compute path"
+    }
+  ],
+  "gaps": [
+    "No app-facing compute API: graphs cannot be built or run by apps, and no GPU compute submission or completion callbacks exist. springboard/src/gpu/ serves only the compositor.",
+    "No operator computes values: convolution, pooling, RNN, FFT transforms and random ops exist only as shape or scale rules (springboard/ui/src/nn.rs).",
+    "No compiled executable, optimization levels, compilation cache or serialized executable format.",
+    "Graph control flow (loops, conditionals), variables, sparse ops, stencil and attention descriptors are missing.",
+    "Reduced precision fast math has no compute path to select.",
+    "Neural Engine has no counterpart. Only the device-capability query in springboard/src/gpu/plan.rs exists, and it is not exposed to apps."
+  ],
+  "rea_evidence_previous": "ev_7f2f052886ef363942cce17fd7f1f69890b6852d3a7c6de79925c44969f4201f"
+}
