@@ -755,3 +755,8 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod ecs;
+pub mod noise;
+pub mod quadtree;
+pub mod rules;
+pub mod decision;
