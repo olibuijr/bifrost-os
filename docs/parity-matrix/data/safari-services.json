@@ -1,0 +1,34 @@
+{
+  "framework": "Safari Services",
+  "doc": "https://developer.apple.com/documentation/safariservices",
+  "macos_since": "10.12",
+  "status": "partial",
+  "bifrost": "bifrost_app::webview (springboard/sdk/src/webview.rs), bifrost_app::webview_dev (springboard/sdk/src/webview_dev.rs), springboard/apps/browser/ (Browser app), springboard/ui/src/reading_list.rs, springboard/ui/src/content_rules.rs, springboard/core/src/app_links.rs",
+  "summary": "BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo engine) and a full Browser app with tabs, history, bookmarks, reader mode and private windows. Pure models now exist for a reading list, content-blocking rules and web-site to app associations, but none is wired into the browser or an SDK API yet. It has no Safari extension, authentication session or standard in-app Safari sheet API.",
+  "rea_evidence": "ev_a78c80dd67e48d793cee4c4f5446d4aa9d0db04c06f40d51af20509bab326bb7",
+  "features": [
+    {"feature": "Web content view (WKWebView-style)", "apple": "Safari Services landing (web content in your app); SFSafariViewController is the Safari-owned variant", "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewEvent); docs/bifrost-ui.md 'Web view'", "status": "partial", "note": "Load, navigation, state and events exist. No hover, drag selection, context menus, select/file panels, or cancel of a load (Servo 0.7.0 limits)."},
+    {"feature": "Standard in-app Safari browser sheet", "apple": "SFSafariViewController, SFSafariSettings", "bifrost": "none; springboard/apps/browser/src/main.rs has its own Settings sheet, not an SDK component", "status": "gap", "note": "An SDK app has to build its own web view and chrome. No system-provided browser sheet with Safari's controls."},
+    {"feature": "Safari web extensions and Safari app extensions", "apple": "SFSafariExtension, SFSafariExtensionHandler, SFSafariExtensionManager, SFSafariPage, SFSafariTab, SFSafariWindow, SFExtensionMessageKey, Web Inspector extensions", "bifrost": "none", "status": "gap", "note": "No extension host, page or tab proxies, or extension messaging. The browser has no plug-in API."},
+    {"feature": "Content blockers", "apple": "SFContentBlockerManager, SFContentBlockerState, creating a content blocker", "bifrost": "springboard/ui/src/content_rules.rs (RuleList, Rule, ResourceType, Verdict)", "status": "partial", "note": "Pure matcher for url-filter-style block and allow rules, limited by resource type and page host. Not loaded into the web view, no reload or state API, no extension host and no SDK entry point yet. No CSS hiding rules."},
+    {"feature": "Safari Reading List", "apple": "SSReadingList, SSReadingListError, SSReadingListErrorDomain", "bifrost": "springboard/ui/src/reading_list.rs (ReadingList, Item, Error)", "status": "partial", "note": "Pure model: add, remove, contains, newest-first order, a limit, and a text form for the app's store. No SDK API, no Browser app wiring and no share target. Reader mode in springboard/src/shell/browser/reader.rs is separate."},
+    {"feature": "Authentication sessions (shared Safari login)", "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError", "bifrost": "none", "status": "gap", "note": "Nothing shares a one-time login between the browser and apps. The Apple successor (ASWebAuthenticationSession) is not in this framework."},
+    {"feature": "Universal links and associated domains", "apple": "SFUniversalLink, applinks service, Associated Domains Entitlement", "bifrost": "springboard/core/src/app_links.rs (AppLinks)", "status": "partial", "note": "Pure model: claims a host's path prefixes for an app, enable/disable per app, longest-prefix resolution with segment boundaries. No association data is fetched, no entitlement check, no SDK API and no workspace hook in springboard/sdk/src/workspace.rs yet."},
+    {"feature": "Safari settings access", "apple": "SFSafariSettings, SFSafariSettingsError", "bifrost": "springboard/apps/browser/src/prefs.rs (browser.homepage, browser.searchEngine, browser.restoreSession in the app's own UserDefaults)", "status": "gap", "note": "Preferences are private to the Browser app. Other apps cannot read them and there is no system-wide Safari settings object."},
+    {"feature": "Browser app features (history, bookmarks, tabs, private windows)", "apple": "Safari app (not in the framework; the framework exposes only the extension-side proxies)", "bifrost": "springboard/apps/browser/README.md (round 55: private window via --private); springboard/src/shell/browser/nav.rs; docs/bifrost-ui.md 'Browser history, bookmarks and address suggestions'", "status": "partial", "note": "A working Browser app with history capped at 5000 and frecency ranking, bookmarks, session restore and reader mode. Those are app-level, not SDK API, and there is no History or Bookmarks menu API."},
+    {"feature": "Web Inspector developer tools", "apple": "Adding a web development tool to Safari Web Inspector; Creating Safari Web Inspector extensions", "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_screenshot, dev_collector, synthesized input)", "status": "partial", "note": "Script evaluation, screenshots and input exist for the Browser's own inspector. There is no public extension point for adding a tool to it."},
+    {"feature": "Importing data exported from Safari", "apple": "Importing data exported from Safari (bookmarks, saved passwords)", "bifrost": "none", "status": "gap", "note": "No import path for Safari bookmarks or passwords. Browser bookmarks are stored as TSV under ~/.local/share/bifrost-browser/."},
+    {"feature": "Home Screen bookmarks and availability checks", "apple": "SFAddToHomeScreenActivityItem, SFSafariServicesAvailable, SFSafariServicesVersion", "bifrost": "none", "status": "n/a", "note": "Home Screen bookmarks are an iOS feature. The availability and version checks depend on Apple's Safari Services versions and have no BifrOSt counterpart."}
+  ],
+  "gaps": [
+    "No standard in-app browser sheet (SFSafariViewController equivalent) for SDK apps",
+    "Content-blocking models are not loaded into the web view and have no SDK API, reload or state reporting, and no CSS hiding rules",
+    "Reading List model has no SDK API, Browser app wiring or share target",
+    "No web extension host, Safari page or tab proxies, or extension messaging",
+    "Universal link model has no association fetch, entitlement check, SDK API or workspace hook",
+    "No shared authentication session between the browser and apps",
+    "Browser preferences (SFSafariSettings) are private to the Browser app, with no system-wide object",
+    "Safari bookmark and password import",
+    "Web view input and rendering gaps: no hover, drag selection, context menus, select or file panels, or load cancel (docs/bifrost-ui.md 'Web view')"
+  ]
+}
