@@ -12,6 +12,8 @@ use std::time::Duration;
 pub const LAB_PRODUCT: &str = "10FLS2WK00";
 pub const LAB_MAC: &str = "00:23:24:dc:c8:40";
 pub const DEFAULT_PASSWORD_URL: &str = "http://10.99.0.1:8078/lab/tester.pw";
+/// The lab's offline package mirror (tools/lab-mirror.sh): pacstrap installs from titan, not the internet.
+pub const DEFAULT_MIRROR: &str = "http://10.99.0.1:8078/mirror/";
 pub const STASH: &str = "/boot/EFI/BIFROST/unattended.toml";
 pub const JOBS: &str = "/var/lib/bifrost-mcp/jobs";
 
@@ -40,6 +42,7 @@ pub struct PresetArgs<'a> {
     pub keyboard: &'a str,
     pub timezone: &'a str,
     pub password_url: &'a str,
+    pub mirror: &'a str,
     pub now_epoch: u64,
     pub job: &'a str,
 }
@@ -48,9 +51,9 @@ pub fn preset_toml(p: &PresetArgs) -> String {
     format!(
         "# written by bifrost-mcp lifecycle reinstall; read by bifrost-installer on the netbooted lab ISO\n\
          version = 1\ndisk_id = \"{}\"\nmac = \"{}\"\nhostname = \"{}\"\nlocale = \"{}\"\nkeyboard = \"{}\"\ntimezone = \"{}\"\n\
-         username = \"tester\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\npassword_url = \"{}\"\n\
+         username = \"tester\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\npassword_url = \"{}\"\nmirror = \"{}\"\n\
          created_epoch = {}\nexpires_s = 1800\njob = \"{}\"\n",
-        p.disk_id, LAB_MAC, p.hostname, p.locale, p.keyboard, p.timezone, p.password_url, p.now_epoch, p.job
+        p.disk_id, LAB_MAC, p.hostname, p.locale, p.keyboard, p.timezone, p.password_url, p.mirror, p.now_epoch, p.job
     )
 }
 
@@ -133,12 +136,13 @@ pub fn lifecycle(a: &Value) -> Result<Value, String> {
                 let url = s(a, "password_url").unwrap_or(DEFAULT_PASSWORD_URL);
                 let locale = s(a, "locale").unwrap_or("en_US.UTF-8");
                 let keyboard = s(a, "keyboard").unwrap_or("us");
-                for (n, v) in [("disk_id", disk_id.as_str()), ("password_url", url), ("locale", locale), ("keyboard", keyboard), ("hostname", host.as_str())] {
+                let mirror = s(a, "mirror").unwrap_or(DEFAULT_MIRROR);
+                for (n, v) in [("disk_id", disk_id.as_str()), ("password_url", url), ("locale", locale), ("keyboard", keyboard), ("hostname", host.as_str()), ("mirror", mirror)] {
                     if !plain(v) {
                         return Err(format!("refused: {n} {v:?} has unexpected characters"));
                     }
                 }
-                let toml = preset_toml(&PresetArgs { disk_id: &disk_id, hostname: &host, locale, keyboard, timezone: &zone, password_url: url, now_epoch: now_epoch(), job: &job });
+                let toml = preset_toml(&PresetArgs { disk_id: &disk_id, hostname: &host, locale, keyboard, timezone: &zone, password_url: url, mirror, now_epoch: now_epoch(), job: &job });
                 std::fs::create_dir_all("/boot/EFI/BIFROST").map_err(|e| format!("/boot/EFI/BIFROST: {e}"))?;
                 std::fs::write(STASH, toml).map_err(|e| format!("{STASH}: {e}"))?;
                 note = format!(" preset written to {STASH} (disk {disk_id}, expires in 30 min);");
@@ -183,7 +187,7 @@ mod tests {
 
     #[test]
     fn preset_has_no_password_and_round_trips_fields() {
-        let t = preset_toml(&PresetArgs { disk_id: "eui.abc", hostname: "midget", locale: "en_US.UTF-8", keyboard: "us", timezone: "Atlantic/Reykjavik", password_url: DEFAULT_PASSWORD_URL, now_epoch: 42, job: "42-reinstall" });
+        let t = preset_toml(&PresetArgs { disk_id: "eui.abc", hostname: "midget", locale: "en_US.UTF-8", keyboard: "us", timezone: "Atlantic/Reykjavik", password_url: DEFAULT_PASSWORD_URL, mirror: DEFAULT_MIRROR, now_epoch: 42, job: "42-reinstall" });
         assert!(t.contains("disk_id = \"eui.abc\"") && t.contains("username = \"tester\"") && t.contains("created_epoch = 42"));
         assert!(!t.to_lowercase().contains("password =") && t.contains(LAB_MAC));
     }

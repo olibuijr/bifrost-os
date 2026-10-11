@@ -30,6 +30,8 @@ pub struct Preset {
     pub created_epoch: u64,
     pub expires_s: u64,
     pub job: String,
+    /// The lab's offline package mirror (tools/lab-mirror.sh); empty installs from the internet.
+    pub mirror: String,
 }
 
 /// Minimal TOML subset: `key = "string"`, `key = 123`, `key = true`, `#` comments, blank lines. Unknown keys are an error
@@ -69,6 +71,7 @@ pub fn parse(text: &str) -> Result<Preset, String> {
             "autologin" => p.autologin = bv()?,
             "mcp" => p.mcp = bv()?,
             "password_url" => p.password_url = sv()?,
+            "mirror" => p.mirror = sv()?,
             "created_epoch" => p.created_epoch = nv()?,
             "expires_s" => p.expires_s = nv()?,
             "job" => p.job = sv()?,
@@ -92,8 +95,12 @@ pub fn parse(text: &str) -> Result<Preset, String> {
     if !p.timezone.is_empty() && !plan::valid_timezone(&p.timezone) {
         return Err(format!("invalid timezone {:?}", p.timezone));
     }
-    if !p.password_url.starts_with("http://10.99.0.1:") && !p.password_url.starts_with("http://192.168.") {
+    let lab = |u: &str| u.starts_with("http://10.99.0.1:") || u.starts_with("http://192.168.");
+    if !lab(&p.password_url) {
         return Err("password_url must point at the lab host".into());
+    }
+    if !p.mirror.is_empty() && !lab(&p.mirror) {
+        return Err("mirror must point at the lab host".into());
     }
     Ok(p)
 }
@@ -182,6 +189,7 @@ pub fn run(text: &str, disk_path: &str) -> Result<(), String> {
         password: pw.to_string(),
         hostname: p.hostname.clone(),
         timezone: p.timezone.clone(),
+        mirror: p.mirror.clone(),
     };
     let progress: plan::Shared = Default::default();
     plan::install(&cfg, &progress);
@@ -210,6 +218,15 @@ mod tests {
         let p = parse(GOOD).unwrap();
         assert_eq!((p.username.as_str(), p.mac.as_str(), p.expires_s), ("tester", "00:23:24:dc:c8:40", 600));
         assert!(p.autologin && p.mcp);
+    }
+
+    #[test]
+    fn a_lab_mirror_is_optional_and_only_from_the_lab_host() {
+        assert_eq!(parse(GOOD).unwrap().mirror, "", "no mirror: pacstrap uses the internet");
+        let with = format!("{GOOD}mirror = \"http://10.99.0.1:8078/mirror/\"\n");
+        assert_eq!(parse(&with).unwrap().mirror, "http://10.99.0.1:8078/mirror/");
+        let elsewhere = format!("{GOOD}mirror = \"http://example.com/mirror/\"\n");
+        assert!(parse(&elsewhere).unwrap_err().contains("mirror"));
     }
 
     #[test]

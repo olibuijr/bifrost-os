@@ -53,6 +53,7 @@ fn run() -> std::io::Result<()> {
         let cfg = plan::Config {
             disk, mode: springboard::installer::disks::Mode::Erase, locale: "en_US.UTF-8".into(), layout, full_name: user.into(),
             username: user.into(), password: pass.into(), hostname: "bifrost".into(), timezone: String::new(),
+            mirror: std::env::var("BIFROST_MIRROR").unwrap_or_default(),
         };
         let progress: plan::Shared = Default::default();
         plan::install(&cfg, &progress);

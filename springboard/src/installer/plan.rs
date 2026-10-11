@@ -41,6 +41,17 @@ pub struct Config {
     pub hostname: String,
     /// IANA zone name ("Atlantic/Reykjavik"); empty keeps the image default (UTC).
     pub timezone: String,
+    /// The lab's offline package mirror; pacstrap installs from it alone. Empty uses the internet.
+    pub mirror: String,
+}
+
+/// The pacman configuration pacstrap uses with a lab mirror: that one repository and nothing else, the way the Omarchy
+/// ISO installs from its bundled mirror (`pacman-offline.conf`). The installed system keeps the stock configuration.
+pub fn offline_pacman_conf(mirror: &str) -> String {
+    format!(
+        "[options]\nHoldPkg = pacman glibc\nArchitecture = auto\nParallelDownloads = 4\nSigLevel = Required DatabaseOptional\n\
+         LocalFileSigLevel = Optional\n\n[offline]\nSigLevel = Never\nServer = {mirror}\n"
+    )
 }
 
 pub const STAGES: [&str; 4] = ["Preparing the disk", "Installing the system", "Setting up your account and apps", "Finishing"];
@@ -367,8 +378,15 @@ pub fn install(cfg: &Config, progress: &Shared) {
         let lspci = r.cmd(&["lspci", "-nn"]).unwrap_or_default();
         let gpu = gpu_packages(&lspci);
         r.log(format!("graphics stack: {}", gpu.join(" ")));
-        // more parallel downloads than the stock 5 (the link, not the CPU, is the limit)
-        if let Ok(conf) = std::fs::read_to_string("/etc/pacman.conf") {
+        if !cfg.mirror.is_empty() {
+            // every package from the lab's offline mirror (the live system's own configuration is kept aside)
+            if !std::path::Path::new("/etc/pacman.conf.online").exists() {
+                let _ = std::fs::copy("/etc/pacman.conf", "/etc/pacman.conf.online");
+            }
+            std::fs::write("/etc/pacman.conf", offline_pacman_conf(&cfg.mirror)).map_err(|e| format!("/etc/pacman.conf: {e}"))?;
+            r.log(format!("packages from the lab mirror {}", cfg.mirror));
+        } else if let Ok(conf) = std::fs::read_to_string("/etc/pacman.conf") {
+            // more parallel downloads than the stock 5 (the link, not the CPU, is the limit)
             let _ = std::fs::write("/etc/pacman.conf", conf.replace("ParallelDownloads = 5", "ParallelDownloads = 12"));
         }
         let mut args = vec!["pacstrap", "-K", "/mnt"];
@@ -621,6 +639,14 @@ mod tests {
         assert_eq!(p.eta_minutes(), Some(2));
         p.done = true;
         assert_eq!(p.eta_minutes(), None);
+    }
+
+    #[test]
+    fn an_offline_mirror_is_the_only_repository_pacstrap_sees() {
+        let c = offline_pacman_conf("http://10.99.0.1:8078/mirror/");
+        assert!(c.contains("[offline]") && c.contains("Server = http://10.99.0.1:8078/mirror/"));
+        assert!(!c.contains("[core]") && !c.contains("[extra]"), "nothing comes from the internet");
+        assert!(c.contains("SigLevel = Never"), "the lab mirror is unsigned (a local repo-add index)");
     }
 
     #[test]

@@ -26,6 +26,7 @@ VM_DISK = "/dev/sda"
 TARGET = "out/arch-vm/installer-target.raw"
 LAB_SYNC = "out/lab/sync"
 PASSWORD_URL = "http://10.99.0.1:8078/lab/tester.pw"  # the guest reaches titan's lab address through QEMU's user network
+MIRROR_URL = "http://10.99.0.1:8078/mirror/"  # tools/lab-mirror.sh: pacstrap installs every package from titan
 # evdev key codes for the characters the account form needs
 CODES = {**{c: 30 + i for i, c in enumerate("asdfghjkl")}, **{c: 16 + i for i, c in enumerate("qwertyuiop")}, **{c: 44 + i for i, c in enumerate("zxcvbnm")},
          **{str(d): 2 + (d - 1) % 10 for d in range(1, 10)}, "0": 11}
@@ -325,6 +326,7 @@ def preset_toml(user):
     return (f"# written by tools/vm-cycle.py; read by bifrost-installer on the lab ISO\nversion = 1\ndisk_id = \"{VM_WWN}\"\n"
             f"mac = \"{VM_MAC}\"\nhostname = \"bifrost\"\nlocale = \"en_US.UTF-8\"\nkeyboard = \"us\"\ntimezone = \"Atlantic/Reykjavik\"\n"
             f"username = \"{user}\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\npassword_url = \"{PASSWORD_URL}\"\n"
+            f"mirror = \"{MIRROR_URL}\"\n"
             f"created_epoch = {now}\nexpires_s = 1800\njob = \"{now}-vm-reinstall\"\n")
 
 
@@ -399,11 +401,6 @@ def vm_unattended(a):
     # pacstrap's downloads timed out. QEMU's own DNS proxy (10.0.2.3) uses titan's resolver.
     ssh("for i in /sys/class/net/*; do n=${i##*/}; [ $n = lo ] && continue; resolvectl dns $n 10.0.2.3; resolvectl domain $n '~.'; done;"
         " resolvectl flush-caches", 15)
-    # pacstrap from titan's offline mirror (Omarchy's pacman-offline.conf): no package comes from the internet through
-    # QEMU's NAT, where 12 parallel downloads stalled and the rest took most of the install
-    ssh("cp -n /etc/pacman.conf /etc/pacman.conf.online; printf '%s\\n' '[options]' 'HoldPkg = pacman glibc' 'Architecture = auto'"
-        " 'ParallelDownloads = 4' 'SigLevel = Required DatabaseOptional' 'LocalFileSigLevel = Optional' '[offline]' 'SigLevel = Never'"
-        " 'Server = http://10.99.0.1:8078/mirror/' > /etc/pacman.conf", 10)
     # the unattended run starts now the network is right
     ssh("systemctl start bifrost-installer", 30)
 

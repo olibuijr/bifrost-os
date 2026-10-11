@@ -770,14 +770,44 @@ def lab_password():
 
 
 def ensure_lab_http():
-    if run(["ss", "-ltn"], 5).stdout.find(":8078 ") >= 0:
+    """The lab server must serve out/lab/sync: a server left running from a replaced directory answers 404 for every
+    file, and bifrost-lab-sync then silently keeps the ISO's old installer. A stale one is restarted."""
+    def served():
+        try:
+            return urllib.request.urlopen("http://10.99.0.1:8078/manifest", timeout=3).status == 200
+        except Exception:
+            return False
+    if served():
         return True
     sync = os.path.join(os.path.dirname(KEY), "sync")
     if not os.path.exists(os.path.join(sync, "bifrost-installer")):
         return False
-    subprocess.Popen(["python3", "-m", "http.server", "8078", "--bind", "10.99.0.1"], cwd=sync, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    subprocess.run(["pkill", "-f", "http.server 8078 --bind 10.99.0.1"])
     time.sleep(1)
-    return True
+    subprocess.Popen(["python3", "-m", "http.server", "8078", "--bind", "10.99.0.1"], cwd=sync, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return wait(served, 10, 0.5)
+
+
+MIRROR_URL = "http://10.99.0.1:8078/mirror/"
+
+
+def write_preset(host):
+    """The unattended preset on Midget's ESP, as `bifrost-mcp lifecycle reinstall` writes it (mcp/src/lifecycle.rs), plus
+    the lab's offline package mirror: written here so an installed system with an older MCP still gets the mirror."""
+    disk_id = ssh('src=$(findmnt -no SOURCE /boot); pk=$(lsblk -no PKNAME "$src" | head -1); lsblk -dno WWN "/dev/$pk"', 10).strip()
+    if not re.fullmatch(r"[A-Za-z0-9._:-]+", disk_id or ""):
+        return None
+    tz = ssh("readlink -f /etc/localtime | sed 's|.*/zoneinfo/||'", 5).strip()
+    zone = tz if re.fullmatch(r"[A-Za-z0-9_+/-]+", tz or "") else "Atlantic/Reykjavik"
+    now = int(time.time())
+    toml = (f"# written by tools/midget.py reinstall; read by bifrost-installer on the netbooted lab ISO\nversion = 1\n"
+            f"disk_id = \"{disk_id}\"\nmac = \"00:23:24:dc:c8:40\"\nhostname = \"{host}\"\nlocale = \"en_US.UTF-8\"\nkeyboard = \"us\"\n"
+            f"timezone = \"{zone}\"\nusername = \"tester\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\n"
+            f"password_url = \"http://10.99.0.1:8078/lab/tester.pw\"\nmirror = \"{MIRROR_URL}\"\ncreated_epoch = {now}\n"
+            f"expires_s = 1800\njob = \"{now}-reinstall\"\n")
+    r = subprocess.run(SSH + ["mkdir -p /boot/EFI/BIFROST && cat > /boot/EFI/BIFROST/unattended.toml && sync"], input=toml, text=True,
+                       capture_output=True, timeout=20)
+    return disk_id if r.returncode == 0 else None
 
 
 def mcp_call(tool, args, timeout=30):
@@ -799,16 +829,31 @@ def cmd_reinstall(args):
     if not iventoy_unattended():
         print("iVentoy would stop at its boot menu (no default image or timeout 0): run tools/lab-up.sh first")
         return 1
+    t0 = time.time()
+    # what the live system pulls: the installer and shell under test, and every package pacstrap installs
+    repo = Path(__file__).resolve().parent.parent
+    for cmd in (["tools/lab-push.sh"] + (["--skip-cargo"] if "--skip-build" in args else []), ["tools/lab-mirror.sh"]):
+        r = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, timeout=1800)
+        if r.returncode:
+            print(f"{cmd[0]} failed: {(r.stderr or r.stdout)[-400:]}")
+            return 1
     if not ensure_lab_http():
-        print("lab HTTP server (10.99.0.1:8078) is not up and out/lab/sync has no installer; run tools/lab-push.sh first")
+        print("lab HTTP server (10.99.0.1:8078) cannot serve out/lab/sync")
         return 1
     _, pw_file = lab_password()
-    _stamp(f"tester password: {pw_file} (published to the lab server for the installer only)")
-    t0 = time.time()
-    out = mcp_call("lifecycle", {"action": "reinstall", "confirm": confirm})
-    _stamp("lifecycle reinstall: " + out.strip().replace("\n", " | ")[:300])
-    if "job=" not in out:
+    _stamp(f"phase 0/7 published installer, shell and package mirror ({time.time() - t0:.0f}s); password in {pw_file}")
+    disk_id = write_preset(host)
+    if not disk_id:
+        _stamp("FAILED: could not write the unattended preset on Midget's ESP")
         return 1
+    efi = ssh("efibootmgr", 10)
+    pxe = sorted([l for l in efi.splitlines() if l.startswith("Boot") and ("PXE" in l or "IPv4" in l or "IPV4" in l)],
+                 key=lambda l: ("IPv4" not in l and "IPV4" not in l, l))
+    if not pxe:
+        _stamp("FAILED: no PXE boot entry on Midget")
+        return 1
+    ssh(f"efibootmgr -n {pxe[0][4:8]} >/dev/null; sync; nohup sh -c 'sleep 1; systemctl reboot' >/dev/null 2>&1 &", 15)
+    _stamp(f"preset written (disk {disk_id}, packages from {MIRROR_URL}); BootNext={pxe[0][4:8]} (PXE), rebooting")
     def left():
         return budget - (time.time() - t0)
     if not wait(lambda: not ping(), 60, 1):

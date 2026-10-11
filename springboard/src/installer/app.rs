@@ -213,7 +213,7 @@ impl App {
         self.fields[3].clear();
         self.want_install = Some(Config {
             disk: d, mode: self.mode, locale: LANGUAGES[self.lang].1.to_string(), layout: lay, full_name: self.fields[0].trim().to_string(),
-            username: self.fields[1].clone(), password, hostname: "bifrost".into(), timezone: String::new(),
+            username: self.fields[1].clone(), password, hostname: "bifrost".into(), timezone: String::new(), mirror: String::new(),
         });
         self.go(Page::Progress);
     }
