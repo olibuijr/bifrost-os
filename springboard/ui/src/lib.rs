@@ -584,6 +584,8 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod download;
+pub mod nav_policy;
 #[cfg(test)]
 mod bench;
 
