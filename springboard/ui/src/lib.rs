@@ -611,6 +611,7 @@ pub mod shading;
 pub mod composition;
 pub mod audio_mix;
 pub mod state_machine;
+pub mod agents;
 pub mod grid_graph;
 pub mod tensor;
 pub mod graph;
