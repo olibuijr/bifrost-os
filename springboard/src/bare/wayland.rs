@@ -61,7 +61,7 @@ struct State {
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>,
-    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool,
+    slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap,
     pending: bool, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
 }
@@ -157,12 +157,15 @@ impl Display {
             let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
             let output = self.state.output.as_ref().ok_or_else(||err("Wayland output unavailable"))?;
             let role = obj.get_lock_surface(&surface,output,&qh,());
+            self.state.main.lock();
             self.state.surface.as_ref().unwrap().attach(None,0,0); self.state.surface.as_ref().unwrap().commit();
             self.state.lock = Some(Lock {obj,surface,role,configured:false,locked:false});
         } else if let Some(lock) = self.state.lock.take() {
             if !lock.locked { return Err(err("unlock attempted before compositor confirmed lock")); }
             lock.obj.unlock_and_destroy(); lock.role.destroy(); lock.surface.destroy();
             for slot in &mut self.state.slots { slot.damage.all(); }
+            // the lock unmapped the desktop surface: map it again through a fresh initial commit and configure
+            if self.state.main.unlock() { self.state.surface.as_ref().unwrap().commit(); }
         }
         if let Some(g) = &mut self.gpu { g.p.invalidate(GPU_BG); }
         self.state.pending=false; self.state.redraw=true;
@@ -494,6 +497,8 @@ impl Display {
     pub fn note_draw(&mut self, ms: f64) { if let Some(g) = &mut self.gpu { g.draw.0 += 1; g.draw.1 += ms; } }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }
+        // after an unlock the desktop surface takes no buffer until its new configure (the configure asks for a full redraw)
+        if !self.state.lock_wanted && !self.state.main.may_attach() { return Ok(()); }
         if let Some(g) = &mut self.gpu {
             let (w,h) = (self.state.size.0 as usize, self.state.size.1 as usize);
             let fresh = bifrost_render::glass::take();
@@ -536,6 +541,7 @@ impl Display {
             for r in &areas { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
             b.busy = true;
             s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
+            if !self.state.lock_wanted { self.state.main.attached(); }
             mark_first_frame();
             return self.conn.flush().map_err(err);
         }
@@ -549,6 +555,7 @@ impl Display {
         for r in slot.damage.areas() { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
         slot.damage.clear(); slot.busy = true;
         s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
+        if !self.state.lock_wanted { self.state.main.attached(); }
         mark_first_frame();
         self.conn.flush().map_err(err)
     }
@@ -590,6 +597,7 @@ impl Dispatch<surface::ZwlrLayerSurfaceV1, ()> for State {
                 obj.ack_configure(serial);
                 if s.configured && s.size != (width,height) { s.closed = true; }
                 s.size = (width,height); s.configured = true;
+                if !s.main.may_attach() { s.main.configured(); s.redraw = true; }
             },
             surface::Event::Closed => s.closed = true,
             _ => {}
@@ -777,6 +785,32 @@ fn copy_damage(src:&[u32],dst:&mut [u8],width:usize,damage:&Damage) {
         }
     }
 }
+/// The desktop layer surface's mapping across the session lock. Committing a null buffer unmaps a layer surface;
+/// before it may show a buffer again the client must make a fresh initial commit and wait for a new configure
+/// (wlr-layer-shell). Attaching earlier is a protocol error: the compositor disconnects the shell (0.5.27).
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+struct MainMap { mapped: bool, remap_due: bool, awaiting_configure: bool }
+impl MainMap {
+    /// A buffer was attached and committed.
+    fn attached(&mut self) { self.mapped = true; }
+    /// Locking: true when the surface is mapped and the null-buffer commit will unmap it.
+    fn lock(&mut self) -> bool {
+        let unmaps = self.mapped;
+        if unmaps { self.mapped = false; self.remap_due = true; }
+        unmaps
+    }
+    /// Unlocking: true when the client must make the initial commit again and wait for a configure.
+    fn unlock(&mut self) -> bool {
+        let remap = std::mem::take(&mut self.remap_due);
+        if remap { self.awaiting_configure = true; }
+        remap
+    }
+    /// A configure arrived for the desktop surface (one that comes while locked does not count for the remap).
+    fn configured(&mut self) { self.awaiting_configure = false; }
+    /// Whether a frame may attach a buffer to the desktop surface now.
+    fn may_attach(&self) -> bool { !self.awaiting_configure }
+}
+
 const GPU_POOL_MIN: usize = 1;
 const GPU_POOL_MAX: usize = 2;
 const GPU_POOL_IDLE_SECS: f32 = 5.0;
@@ -804,6 +838,39 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn relocking_a_shown_desktop_waits_for_a_new_configure_before_attaching() {
+        let mut m = MainMap::default();
+        assert!(m.may_attach(), "the first frames attach once the initial configure arrived");
+        m.attached();
+        assert!(m.lock(), "the null-buffer commit unmaps a mapped surface");
+        assert!(m.unlock(), "unlocking makes the initial commit again");
+        assert!(!m.may_attach(), "attaching before the new configure is a protocol error");
+        m.configured();
+        assert!(m.may_attach());
+        m.attached();
+        assert!(m.lock() && m.unlock(), "every lock of a shown desktop needs the remap");
+    }
+
+    #[test]
+    fn a_desktop_never_shown_before_the_lock_needs_no_remap() {
+        // boot opens on the lock screen: the surface only had its initial commit, the compositor keeps it configured
+        let mut m = MainMap::default();
+        assert!(!m.lock());
+        assert!(!m.unlock());
+        assert!(m.may_attach());
+    }
+
+    #[test]
+    fn a_configure_while_locked_does_not_skip_the_remap() {
+        let mut m = MainMap::default();
+        m.attached();
+        assert!(m.lock());
+        m.configured();
+        assert!(m.unlock());
+        assert!(!m.may_attach());
+    }
+
     use super::*;
     #[test]
     fn trim_deadline_is_one_shot() {
