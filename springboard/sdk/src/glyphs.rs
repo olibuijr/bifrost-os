@@ -3,6 +3,7 @@
 //! symbol name; `glyph` draws it.
 use crate::kit::ui::FIELD_BG;
 use crate::kit::{Surface, Ui};
+use bifrost_ui::symbol_effect::{Pose, SymbolEffect};
 use bifrost_ui::Rect;
 use springboard::shell::icons::{arc, disc, line, polygon, ring};
 use std::f32::consts::PI;
@@ -23,6 +24,29 @@ pub const NAMES: [&str; 59] = [
 /// True when `name` has a drawing.
 pub fn has(name: &str) -> bool {
     NAMES.contains(&name)
+}
+
+/// The bounds a glyph is drawn in under `pose`: scaled about its centre, then offset by the pose's fraction of its size.
+pub fn posed_bounds(bounds: Rect, pose: Pose) -> Rect {
+    let w = bounds.w * pose.scale;
+    let h = bounds.h * pose.scale;
+    let cx = bounds.x + bounds.w / 2.0 + pose.dx * bounds.w;
+    let cy = bounds.y + bounds.h / 2.0 + pose.dy * bounds.h;
+    Rect { x: cx - w / 2.0, y: cy - h / 2.0, w, h }
+}
+
+/// `color` with its alpha multiplied by the pose's opacity (colours are packed ARGB, alpha in the top byte).
+pub fn posed_color(color: u32, opacity: f32) -> u32 {
+    let a = ((color >> 24) as f32 * opacity.clamp(0.0, 1.0)).round() as u32;
+    (color & 0x00ff_ffff) | (a.min(255) << 24)
+}
+
+/// Draws symbol `name` with `effect` applied at `now` seconds (see `springboard::ui::symbol_effect`). Scale and offset
+/// move the bounds and opacity fades the colour. Rotation is not drawn yet: glyphs have no rotation transform, so a
+/// spinning or wiggling glyph draws upright. False when the name is unknown.
+pub fn glyph_effect(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32, effect: &SymbolEffect, now: f64) -> bool {
+    let pose = effect.pose(now);
+    glyph(s, ui, name, posed_bounds(bounds, pose), posed_color(color, pose.opacity))
 }
 
 /// Draws symbol `name` centred in `bounds` (points) in `color`; false when the name is unknown (nothing drawn).
@@ -395,5 +419,45 @@ mod tests {
         let mut px = vec![0u32; 48 * 48];
         assert!(!glyph(&mut Surface { w: 48, h: 48, stride: 48, px: &mut px, y0: 0 }, &ui, "no.such.symbol", Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, 0xffff_ffff));
         assert!(px.iter().all(|p| *p == 0));
+    }
+
+    #[test]
+    fn rest_pose_leaves_bounds_and_colour_unchanged() {
+        let b = Rect { x: 10.0, y: 20.0, w: 40.0, h: 30.0 };
+        let r = posed_bounds(b, Pose::REST);
+        assert_eq!((r.x, r.y, r.w, r.h), (10.0, 20.0, 40.0, 30.0));
+        assert_eq!(posed_color(0xff12_3456, 1.0), 0xff12_3456);
+    }
+
+    #[test]
+    fn scale_keeps_the_centre_fixed() {
+        let b = Rect { x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
+        let r = posed_bounds(b, Pose { scale: 0.5, ..Pose::REST });
+        assert_eq!((r.w, r.h), (20.0, 10.0));
+        assert_eq!((r.x + r.w / 2.0, r.y + r.h / 2.0), (20.0, 10.0));
+    }
+
+    #[test]
+    fn offset_moves_by_a_fraction_of_the_size() {
+        let b = Rect { x: 0.0, y: 0.0, w: 40.0, h: 40.0 };
+        let r = posed_bounds(b, Pose { dx: 0.25, dy: -0.5, ..Pose::REST });
+        assert_eq!((r.x + r.w / 2.0, r.y + r.h / 2.0), (30.0, 0.0));
+    }
+
+    #[test]
+    fn opacity_scales_only_the_alpha_byte() {
+        assert_eq!(posed_color(0xff00_ff00, 0.5), 0x8000_ff00);
+        assert_eq!(posed_color(0xff00_ff00, 0.0), 0x0000_ff00);
+        // Out-of-range opacity is clamped, never wrapped.
+        assert_eq!(posed_color(0xff00_ff00, 3.0), 0xff00_ff00);
+    }
+
+    #[test]
+    fn effect_pose_before_start_draws_the_glyph_as_usual() {
+        let e = SymbolEffect::new(bifrost_ui::symbol_effect::Effect::Disappear, Default::default(), 5.0);
+        let p = e.pose(1.0);
+        let r = posed_bounds(Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, p);
+        assert_eq!((r.w, r.h), (20.0, 20.0));
+        assert_eq!(posed_color(0xff00_0000, p.opacity), 0xff00_0000);
     }
 }
