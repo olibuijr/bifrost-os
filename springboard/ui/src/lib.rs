@@ -690,3 +690,6 @@ pub mod scan;
 pub mod analysis;
 pub mod docscan;
 pub mod geo;
+pub mod record_store;
+pub mod record_sync;
+pub mod record_asset;
