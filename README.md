@@ -108,12 +108,7 @@ python3 tools/bifrost.py pc acceptance --quick    # tests, SDK coverage and app 
 python3 tools/bifrost.py pc names                 # trademark name guard
 ```
 
-Two groups of scripts need hardware or a second project:
-
-- `tools/tablet/` drives a Samsung Tab A8 over adb. Those scripts take their device address from
-  `ANDROID_SERIAL`, and two of them also need the Tab A8 `tools/tab.py`, which lives outside this repository.
-  See [`tools/tablet/README.md`](tools/tablet/README.md).
-- `tools/midget*.py` and `tools/midget-*.sh` drive the Midget lab machine.
+`tools/midget*.py` and `tools/midget-*.sh` drive the Midget lab machine.
 
 ## Contributing
 

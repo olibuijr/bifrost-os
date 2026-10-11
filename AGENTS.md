@@ -1,8 +1,7 @@
 # BifrOSt PC: working instructions
 
 This repo is the BifrOSt desktop for PC (bifrost-os): the desktop shell, the native installer, the Midget lab
-machine, and the Linux desktop apps sold through the PC App Store. The Samsung tablet, its ROM, the Android
-and ARM emulators are out of scope; their docs were removed on 2026-10-08.
+machine, and the Linux desktop apps sold through the PC App Store.
 
 Read `HANDOFF.md` first for the current state and open problems.
 
