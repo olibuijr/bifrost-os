@@ -386,6 +386,8 @@ def vm_unattended(a):
     # pacstrap's downloads timed out. QEMU's own DNS proxy (10.0.2.3) uses titan's resolver.
     ssh("for i in /sys/class/net/*; do n=${i##*/}; [ $n = lo ] && continue; resolvectl dns $n 10.0.2.3; resolvectl domain $n '~.'; done;"
         " resolvectl flush-caches", 15)
+    # 12 parallel package downloads stall on QEMU's user network ("Less than 1 bytes/sec"); one runs at ~18 MB/s
+    ssh("sed -i 's/^ParallelDownloads.*/ParallelDownloads = 3/' /etc/pacman.conf", 10)
     # the unattended run starts now the network is right; an earlier one may have died on DNS (the preset stays in /run)
     ssh("systemctl restart bifrost-installer", 30)
 
