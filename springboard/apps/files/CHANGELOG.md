@@ -1,3 +1,7 @@
+## 1.17.0 — 2026-10-11
+
+- Undo: the Edit menu names the step ("Undo Move", "Undo Rename", "Undo Trash", "Undo New Folder") and Undo is enabled only when there is something to undo (system 0.5.33).
+
 ## 1.16.0 — 2026-10-11
 
 - Sidebar text is vibrant on the translucent sidebar (SDK `widgets::Vibrant`): labels, section headers and counts blend into the material (plus-lighter in Dark, plus-darker in Light), so the blurred windows and desktop behind tint them, as Finder's sidebar does. The sidebar is opaque while the window is inactive (system 0.5.25).

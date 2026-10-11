@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0 — 2026-10-11
+
+- Resume: the open note and the folder view (All, a folder, Recently Deleted) come back after a restart, a reboot or an update (system 0.5.33 state restoration).
+- Undo: the Edit menu says "Undo Typing" while a typing run is open, and Undo and Redo are disabled when there is nothing to undo or redo.
+
 ## 1.8.6 — 2026-10-11
 
 - Notes are indexed with Core Spotlight (`CSSearchableIndex`): the Spotlight panel lists them under Documents, and opening one starts Notes on that note (`App::continue_activity`). New and edited notes are indexed within a few seconds; deleted notes and those in Recently Deleted are removed from the index.
