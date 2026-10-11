@@ -602,6 +602,8 @@ pub mod path;
 pub mod gradient;
 pub mod workflow;
 pub mod scripting;
+pub mod subscription;
+pub mod entitlement;
 #[cfg(test)]
 mod bench;
 
