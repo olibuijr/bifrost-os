@@ -651,6 +651,9 @@ pub mod cursor;
 pub mod evaluation;
 pub mod progress;
 pub mod privacy;
+pub mod relations;
+pub mod history;
+pub mod model_store;
 #[cfg(test)]
 mod bench;
 
