@@ -699,3 +699,5 @@ pub mod record_store;
 pub mod record_sync;
 pub mod record_asset;
 pub mod weather_model;
+pub mod language;
+pub mod segment;
