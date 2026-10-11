@@ -628,6 +628,8 @@ pub mod contact_changes;
 pub mod fetch;
 pub mod history;
 pub mod shape;
+pub mod assetpack;
+pub mod downloadqueue;
 #[cfg(test)]
 mod bench;
 
