@@ -13,3 +13,4 @@ pub mod matter;
 pub mod extension_process;
 pub mod motion;
 pub mod sensor_log;
+pub mod migrate;
