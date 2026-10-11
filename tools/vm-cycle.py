@@ -11,7 +11,7 @@ usage: tools/vm-cycle.py [--ui] [--skip-build] [--iso PATH] [--user NAME] [--pas
 Output: out/vm-runs/<stamp>/{report.md,timings.json,*.png}. Every wait is bounded; a failed phase is recorded and the run goes on
 as far as it can. Stdlib only. Needs the lab ISO (it has the lab SSH key and the screenshot hook), Hyprland workspace 2 for the window.
 """
-import argparse, glob, json, os, subprocess, sys, time
+import argparse, glob, json, os, shlex, subprocess, sys, time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(REPO)
@@ -264,7 +264,7 @@ def control(line, timeout=15):
     """One line to the shell's control socket (127.0.0.1:7777) over ssh; the reply text."""
     script = ("import socket; s=socket.create_connection(('127.0.0.1',7777),5); s.settimeout(10); s.sendall(" + repr((line + "\n").encode()) + "); "
               "d=b''\nwhile True:\n c=s.recv(65536)\n if not c: break\n d+=c\nprint(d.decode(),end='')")
-    return ssh("python3 -c " + json.dumps(script), timeout)
+    return ssh("python3 -c " + shlex.quote(script), timeout)
 
 
 def screen():
