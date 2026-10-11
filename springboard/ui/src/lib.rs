@@ -634,6 +634,9 @@ pub mod environment;
 pub mod preferences;
 pub mod call;
 pub mod markup;
+pub mod transcript;
+pub mod context_window;
+pub mod generation_schema;
 #[cfg(test)]
 mod bench;
 
