@@ -491,8 +491,10 @@ version = "0.1.0"
 dependencies = [
  "png",
  "smithay",
+ "tempfile",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-wlr",
 ]
 
 [[package]]
