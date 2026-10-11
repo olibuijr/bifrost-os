@@ -513,6 +513,41 @@ pub fn draw_turn(s: &mut Surface, old: &Image, new: &Image, from: Rotation, k: f
     });
 }
 
+/// Gravity shorter than this many g (the sensor's own units) means the device lies flat: it calls for no orientation.
+const FLAT_G: f32 = 0.35;
+/// A held orientation survives gravity this far past the edge of its quarter-circle, so a device held near a
+/// boundary does not flip back and forth.
+const HYSTERESIS: f32 = 15.0 * std::f32::consts::PI / 180.0;
+
+/// The direction an orientation's top edge points, as the angle of gravity measured from the bottom of the screen.
+fn sector_centre(o: Orientation) -> f32 {
+    match o {
+        Orientation::Portrait => 0.0,
+        Orientation::LandscapeLeft => std::f32::consts::FRAC_PI_2,
+        Orientation::PortraitUpsideDown => std::f32::consts::PI,
+        Orientation::LandscapeRight => -std::f32::consts::FRAC_PI_2,
+    }
+}
+
+/// The orientation a gravity reading calls for, with hysteresis. `x` runs right and `y` runs down the screen, both in
+/// g, and the vector points toward the ground (so a device standing upright reads `(0, 1)`). Returns `None` when the
+/// device lies too flat to tell, and keeps `current` while gravity stays within the band around it.
+pub fn orientation_from_gravity(x: f32, y: f32, current: Orientation) -> Option<Orientation> {
+    // written so that a NaN reading also returns None
+    if !((x * x + y * y).sqrt() >= FLAT_G) {
+        return None;
+    }
+    let theta = x.atan2(y);
+    let turn = |o: Orientation| {
+        let d = (theta - sector_centre(o)).rem_euclid(std::f32::consts::TAU);
+        d.min(std::f32::consts::TAU - d)
+    };
+    if turn(current) <= std::f32::consts::FRAC_PI_4 + HYSTERESIS {
+        return Some(current);
+    }
+    Orientation::ALL.iter().copied().min_by(|a, b| turn(*a).total_cmp(&turn(*b)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,5 +769,49 @@ mod tests {
             draw_turn(&mut Surface { w: 100, h: 60, stride: 100, px: &mut banded, y0: 0 }.rows(t, b), &old, &new, from, 0.3);
         }
         assert_eq!(whole, banded);
+    }
+
+    #[test]
+    fn gravity_names_each_way_the_device_is_held() {
+        // upright in portrait: gravity runs down the screen
+        assert_eq!(orientation_from_gravity(0.0, 1.0, Orientation::LandscapeLeft), Some(Orientation::Portrait));
+        // the device turned counter-clockwise, top edge on the left: its bottom edge is on the right
+        assert_eq!(orientation_from_gravity(1.0, 0.0, Orientation::Portrait), Some(Orientation::LandscapeLeft));
+        assert_eq!(orientation_from_gravity(-1.0, 0.0, Orientation::Portrait), Some(Orientation::LandscapeRight));
+        assert_eq!(orientation_from_gravity(0.02, -0.98, Orientation::Portrait), Some(Orientation::PortraitUpsideDown));
+        // the same answer whichever side it was held before, when the reading is far from a boundary
+        assert_eq!(orientation_from_gravity(0.0, -1.0, Orientation::LandscapeRight), Some(Orientation::PortraitUpsideDown));
+    }
+
+    #[test]
+    fn gravity_that_is_too_weak_or_not_finite_calls_for_no_orientation() {
+        // lying flat: the reading is mostly along z, so the x and y parts are too small to tell
+        assert_eq!(orientation_from_gravity(0.2, 0.2, Orientation::Portrait), None);
+        assert_eq!(orientation_from_gravity(f32::NAN, 1.0, Orientation::Portrait), None);
+        assert_eq!(orientation_from_gravity(0.0, f32::INFINITY, Orientation::Portrait), None);
+    }
+
+    #[test]
+    fn hysteresis_keeps_the_held_orientation_near_a_boundary() {
+        // 40 degrees off the top: past the midpoint between portrait and landscape-left, but inside the band
+        let (x, y) = (40f32.to_radians().sin(), 40f32.to_radians().cos());
+        assert_eq!(orientation_from_gravity(x, y, Orientation::Portrait), Some(Orientation::Portrait));
+        assert_eq!(orientation_from_gravity(x, y, Orientation::LandscapeLeft), Some(Orientation::LandscapeLeft));
+    }
+
+    #[test]
+    fn gravity_switches_once_it_passes_the_band() {
+        // 70 degrees off the top is past 45 + 15 degrees: the device turns to landscape-left from either side
+        let (x, y) = (70f32.to_radians().sin(), 70f32.to_radians().cos());
+        assert_eq!(orientation_from_gravity(x, y, Orientation::Portrait), Some(Orientation::LandscapeLeft));
+        assert_eq!(orientation_from_gravity(x, y, Orientation::LandscapeRight), Some(Orientation::LandscapeLeft));
+    }
+
+    #[test]
+    fn gravity_near_the_seam_wraps_to_upside_down() {
+        // 173 degrees: right at the seam between upside-down and the landscape sides
+        let (x, y) = (7f32.to_radians().sin(), -(7f32.to_radians().cos()));
+        assert_eq!(orientation_from_gravity(x, y, Orientation::Portrait), Some(Orientation::PortraitUpsideDown));
+        assert_eq!(orientation_from_gravity(-x, y, Orientation::PortraitUpsideDown), Some(Orientation::PortraitUpsideDown));
     }
 }
