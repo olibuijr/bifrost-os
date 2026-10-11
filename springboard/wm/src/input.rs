@@ -16,6 +16,9 @@ use crate::state::WmState;
 
 impl WmState {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        // any input is activity for ext-idle-notify (the shell dims and locks on idle)
+        let seat = self.seat.clone();
+        self.idle_notifier_state.notify_activity(&seat);
         match event {
             InputEvent::Keyboard { event } => self.key(event.key_code(), event.state(), event.time_msec()),
             InputEvent::PointerMotion { event } => {

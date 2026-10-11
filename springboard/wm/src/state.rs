@@ -50,6 +50,10 @@ pub struct WmState {
     /// A session lock is held: only `lock_surface` is drawn and takes input.
     pub locked: bool,
     pub lock_surface: Option<smithay::wayland::session_lock::LockSurface>,
+    pub idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState<WmState>,
+    pub dmabuf_state: smithay::wayland::dmabuf::DmabufState,
+    /// The backend's dmabuf import check (the DRM backend's renderer); without one no dmabuf global exists.
+    pub dmabuf_import: Option<Box<dyn FnMut(&smithay::backend::allocator::dmabuf::Dmabuf) -> bool>>,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub layer_shell_state: WlrLayerShellState,
@@ -104,6 +108,9 @@ impl WmState {
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
             locked: false,
             lock_surface: None,
+            idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState::new(&dh, event_loop.handle()),
+            dmabuf_state: smithay::wayland::dmabuf::DmabufState::new(),
+            dmabuf_import: None,
             compositor_state: CompositorState::new::<WmState>(&dh),
             xdg_shell_state: XdgShellState::new::<WmState>(&dh),
             layer_shell_state: WlrLayerShellState::new::<WmState>(&dh),

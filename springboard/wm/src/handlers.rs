@@ -340,6 +340,26 @@ fn edges_of(e: xdg_toplevel::ResizeEdge) -> Edges {
     }
 }
 
+impl smithay::wayland::idle_notify::IdleNotifierHandler for WmState {
+    fn idle_notifier_state(&mut self) -> &mut smithay::wayland::idle_notify::IdleNotifierState<Self> { &mut self.idle_notifier_state }
+}
+
+impl smithay::wayland::dmabuf::DmabufHandler for WmState {
+    fn dmabuf_state(&mut self) -> &mut smithay::wayland::dmabuf::DmabufState { &mut self.dmabuf_state }
+
+    /// A client's dmabuf is accepted only if the renderer can import it (so a frame never fails on it later).
+    fn dmabuf_imported(&mut self, _global: &smithay::wayland::dmabuf::DmabufGlobal, dmabuf: smithay::backend::allocator::dmabuf::Dmabuf, notifier: smithay::wayland::dmabuf::ImportNotifier) {
+        let ok = self.dmabuf_import.as_mut().is_some_and(|f| f(&dmabuf));
+        if ok {
+            let _ = notifier.successful::<WmState>();
+        } else {
+            notifier.failed();
+        }
+    }
+}
+
+smithay::delegate_idle_notify!(WmState);
+smithay::delegate_dmabuf!(WmState);
 delegate_compositor!(WmState);
 delegate_shm!(WmState);
 delegate_seat!(WmState);

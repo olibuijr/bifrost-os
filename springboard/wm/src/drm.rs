@@ -135,6 +135,17 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         }
         TimeoutAction::ToDuration(Duration::from_millis(16))
     })?;
+    // clients' dmabufs (the shell's GPU presenter) are imported by this renderer
+    let formats = {
+        use smithay::backend::renderer::ImportDma;
+        backend.borrow().renderer.dmabuf_formats()
+    };
+    let _dmabuf_global = state.dmabuf_state.create_global::<WmState>(&state.dh, formats);
+    let b = backend.clone();
+    state.dmabuf_import = Some(Box::new(move |d| {
+        use smithay::backend::renderer::ImportDma;
+        b.borrow_mut().renderer.import_dmabuf(d, None).is_ok()
+    }));
     let b = backend.clone();
     state.on_vblank = Some(Box::new(move |state| {
         let mut d = b.borrow_mut();
