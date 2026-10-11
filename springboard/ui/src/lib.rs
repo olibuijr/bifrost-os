@@ -611,6 +611,7 @@ pub mod timeline;
 pub mod relevance;
 pub mod reading_list;
 pub mod content_rules;
+pub mod chart;
 #[cfg(test)]
 mod bench;
 
