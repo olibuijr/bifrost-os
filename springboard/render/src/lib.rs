@@ -21,6 +21,8 @@ pub mod texture;
 pub mod colorfx;
 pub mod colorcube;
 pub mod gradient;
+pub mod colorspace;
+pub mod pixel_layout;
 
 #[cfg(test)]
 mod tests {
