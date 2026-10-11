@@ -685,6 +685,9 @@ pub enum Event {
 }
 pub mod ax;
 pub mod speech;
+pub mod audio_session;
+pub mod playback_arbiter;
+pub mod audio_hardware;
 pub mod scan;
 pub mod analysis;
 pub mod docscan;

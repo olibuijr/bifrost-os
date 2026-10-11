@@ -25,6 +25,7 @@ pub struct Utterance {
     rate: f32,
     pitch: f32,
     volume: f32,
+    pre_delay: f32,
     post_delay: f32,
     /// BCP 47 tag of the wanted voice, such as `en-GB`. `None` lets the engine pick by the text's language.
     pub language: Option<String>,
@@ -37,6 +38,7 @@ impl Utterance {
             rate: RATE_DEFAULT,
             pitch: PITCH_DEFAULT,
             volume: VOLUME_DEFAULT,
+            pre_delay: 0.0,
             post_delay: 0.0,
             language: None,
         }
@@ -49,6 +51,10 @@ impl Utterance {
     }
     pub fn volume(&self) -> f32 {
         self.volume
+    }
+    /// Seconds of silence before the utterance starts.
+    pub fn pre_delay(&self) -> f32 {
+        self.pre_delay
     }
     /// Seconds of silence after the utterance.
     pub fn post_delay(&self) -> f32 {
@@ -64,6 +70,11 @@ impl Utterance {
     }
     pub fn with_volume(mut self, volume: f32) -> Self {
         self.volume = clamp_or(volume, VOLUME_MIN, VOLUME_MAX, VOLUME_DEFAULT);
+        self
+    }
+    /// Negative and non-numeric delays become zero.
+    pub fn with_pre_delay(mut self, seconds: f32) -> Self {
+        self.pre_delay = if seconds.is_finite() { seconds.max(0.0) } else { 0.0 };
         self
     }
     /// Negative and non-numeric delays become zero.
@@ -112,6 +123,28 @@ pub fn select_voice<'a>(voices: &'a [Voice], language: &str) -> Option<&'a Voice
     voices.iter().find(|v| normalize_tag(&v.language).split('-').next() == Some(primary))
 }
 
+/// Every voice whose language matches `language` by the same rule as `select_voice`, in the order given. An exact
+/// match and a primary-subtag match are both listed, exact matches first. Empty when the tag is empty.
+pub fn voices_for_language<'a>(voices: &'a [Voice], language: &str) -> Vec<&'a Voice> {
+    let wanted = normalize_tag(language);
+    if wanted.is_empty() {
+        return Vec::new();
+    }
+    let primary = wanted.split('-').next().unwrap_or("").to_string();
+    let mut exact = Vec::new();
+    let mut loose = Vec::new();
+    for v in voices {
+        let tag = normalize_tag(&v.language);
+        if tag == wanted {
+            exact.push(v);
+        } else if tag.split('-').next() == Some(primary.as_str()) {
+            loose.push(v);
+        }
+    }
+    exact.extend(loose);
+    exact
+}
+
 fn normalize_tag(tag: &str) -> String {
     tag.trim().replace('_', "-").to_ascii_lowercase()
 }
@@ -151,6 +184,14 @@ impl Synthesizer {
     /// Utterances not yet finished, the current one included.
     pub fn pending(&self) -> usize {
         self.queue.len()
+    }
+    /// True while speech is running or paused with utterances still queued. Idle is false.
+    pub fn is_speaking(&self) -> bool {
+        self.state != State::Idle
+    }
+    /// True only in the paused state.
+    pub fn is_paused(&self) -> bool {
+        self.state == State::Paused
     }
     /// Adds an utterance to the end of the queue and starts speaking when the synthesizer was idle.
     pub fn speak(&mut self, utterance: Utterance) {
@@ -272,5 +313,40 @@ mod tests {
         assert_eq!(s.pending(), 0);
         assert_eq!(s.state(), State::Idle);
         assert!(!s.stop());
+    }
+
+    #[test]
+    fn pre_delay_clamps_bad_values_like_post_delay() {
+        assert_eq!(Utterance::new("a").pre_delay(), 0.0);
+        assert_eq!(Utterance::new("a").with_pre_delay(0.75).pre_delay(), 0.75);
+        assert_eq!(Utterance::new("a").with_pre_delay(-2.0).pre_delay(), 0.0);
+        assert_eq!(Utterance::new("a").with_pre_delay(f32::NAN).pre_delay(), 0.0);
+        assert_eq!(Utterance::new("a").with_pre_delay(0.3).post_delay(), 0.0);
+    }
+
+    #[test]
+    fn speaking_and_paused_queries_follow_the_state() {
+        let mut s = Synthesizer::new();
+        assert!(!s.is_speaking() && !s.is_paused());
+        s.speak(Utterance::new("one"));
+        assert!(s.is_speaking() && !s.is_paused());
+        s.pause();
+        assert!(s.is_speaking() && s.is_paused());
+        s.finish_current();
+        assert!(!s.is_speaking() && !s.is_paused());
+    }
+
+    #[test]
+    fn voices_for_language_lists_exact_matches_before_primary_matches() {
+        let voices = vec![
+            Voice::new("a", "en-US"),
+            Voice::new("b", "is-IS"),
+            Voice::new("c", "en-GB"),
+            Voice::new("d", "en_US"),
+        ];
+        let ids: Vec<&str> = voices_for_language(&voices, "en-us").iter().map(|v| v.identifier.as_str()).collect();
+        assert_eq!(ids, vec!["a", "d", "c"]);
+        assert!(voices_for_language(&voices, "de").is_empty());
+        assert!(voices_for_language(&voices, "  ").is_empty());
     }
 }
