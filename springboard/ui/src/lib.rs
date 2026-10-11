@@ -646,6 +646,7 @@ pub mod indexset;
 pub mod tracking;
 pub mod cursor;
 pub mod evaluation;
+pub mod progress;
 #[cfg(test)]
 mod bench;
 

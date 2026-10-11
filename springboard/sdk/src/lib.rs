@@ -73,6 +73,7 @@ pub mod multipart;
 pub mod social;
 pub mod url_components;
 pub mod stream;
+pub mod error;
 pub mod coding;
 pub mod restoration;
 pub use restoration::RestorableState;
