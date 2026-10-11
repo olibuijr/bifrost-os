@@ -1,0 +1,36 @@
+{
+  "framework": "Foundation Models",
+  "doc": "https://developer.apple.com/documentation/foundationmodels",
+  "macos_since": "26.0",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/transcript.rs, springboard/ui/src/context_window.rs, springboard/ui/src/generation_schema.rs (pure models), springboard/apps/assistant-desktop (cloud Anthropic client), springboard/sdk/src/url.rs (streaming), springboard/sdk/src/intents.rs (App Intents)",
+  "summary": "Apple's framework runs an on-device language model (SystemLanguageModel) with sessions, guided generation, tool calling and an optional Private Cloud Compute model. BifrOSt has no on-device model, no SDK API for model sessions and no model-invoked tools. Pure models now cover transcripts, a context window budget and schema checks of structured output (springboard/ui/src), so those three rows are partial; the Assistant is still a cloud client.",
+  "rea_evidence": "ev_b0de7481b8a0f27d59f8ce64b30d38ee78d3faa1f280313898c55745d9217451",
+  "features": [
+    {"feature": "On-device system language model (SystemLanguageModel)", "apple": "SystemLanguageModel, LanguageModelError", "bifrost": "none", "status": "gap", "note": "no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id"},
+    {"feature": "Sessions and prompts", "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions", "bifrost": "springboard/apps/assistant-desktop/src/api.rs (stream, request body builder)", "status": "gap", "note": "the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app"},
+    {"feature": "Streaming responses", "apple": "LanguageModelSession streamed responses, GeneratedContent deltas", "bifrost": "springboard/sdk/src/url.rs (URLSession::bytes), springboard/apps/assistant-desktop/src/api.rs (SseParser)", "status": "partial", "note": "HTTP byte streaming exists for the Assistant's SSE; no model-level partial-generation API"},
+    {"feature": "Guided generation (Generable, Guide, GenerationSchema)", "apple": "Generable, Guide(description:), GenerationSchema, DynamicGenerationSchema, GeneratedContent", "bifrost": "springboard/ui/src/generation_schema.rs (Kind, Property, validate, describe)", "status": "partial", "note": "a schema of typed, described members with choices and numeric ranges, and a check of a returned value that reports every problem; nothing constrains the model while it writes, and there is no macro or typed decoding into generated values"},
+    {"feature": "Tool calling (Tool)", "apple": "Tool protocol, tool calling in sessions", "bifrost": "springboard/sdk/src/intents.rs (App Intents), springboard/mcp/src/tools.rs (agent tools)", "status": "gap", "note": "ToolCall and ToolOutput entries exist in the transcript model (springboard/ui/src/transcript.rs); no model invokes a tool yet, so the status stays gap"},
+    {"feature": "Intent-style actions for system use", "apple": "App Intents overlap (Apple exposes intents separately from Foundation Models)", "bifrost": "springboard/sdk/src/intents.rs", "status": "partial", "note": "typed intents with parameters and shortcuts exist; they could later serve as tool definitions"},
+    {"feature": "Context window and token budget", "apple": "ContextOptions, managing the context window", "bifrost": "springboard/ui/src/context_window.rs (estimate_tokens, fit)", "status": "partial", "note": "a character-based estimate of about four characters per token, not a model tokenizer; fit keeps the instructions and the newest turns that fit, starting at a prompt; no cached-state reuse across turns"},
+    {"feature": "Session transcripts", "apple": "Transcripts, transcript entries, segments and attachments", "bifrost": "springboard/ui/src/transcript.rs (Transcript, Entry, Segment, Structured), springboard/apps/assistant-desktop/src/model.rs (conversations as JSON files)", "status": "partial", "note": "a typed transcript with a leading instructions entry kept apart from the history, text, and typed lists of tool calls, tool outputs and responses; the Assistant still keeps its own store and no transcript is shared across apps"},
+    {"feature": "Multimodal prompt attachments", "apple": "Attachment, ImageAttachmentContent, ImageReference", "bifrost": "springboard/render/src/imgdec.rs (PNG/JPEG decoding)", "status": "gap", "note": "images can be decoded, but the Assistant has no image input path to a model"},
+    {"feature": "Dynamic instructions and profiles", "apple": "LanguageModelSession.Profile, DynamicProfile, DynamicInstructions", "bifrost": "none", "status": "gap", "note": "no equivalent"},
+    {"feature": "Custom language model provider", "apple": "LanguageModel, LanguageModelExecutor, LanguageModelCapabilities", "bifrost": "none", "status": "gap", "note": "the Assistant is hard-wired to the Anthropic Messages API"},
+    {"feature": "Session properties", "apple": "SessionPropertyKey, SessionPropertyValues, LanguageModelSession.SessionProperty", "bifrost": "none", "status": "gap", "note": "no equivalent"},
+    {"feature": "Safety guardrails for generated output", "apple": "Improving the safety of generative model output (guidance, guardrail errors)", "bifrost": "none", "status": "gap", "note": "no output filtering in the SDK"},
+    {"feature": "Content tagging and entity detection", "apple": "Content tagging (topics, actions, objects, emotions) in SystemLanguageModel", "bifrost": "springboard/ui/src/detect.rs (data detectors)", "status": "partial", "note": "pattern-based data detectors for links, dates and addresses; no model-based tagging of topics or emotions"},
+    {"feature": "Private Cloud Compute model", "apple": "PrivateCloudComputeLanguageModel, com.apple.developer.private-cloud-compute", "bifrost": "none", "status": "n/a", "note": "Apple-hosted service and entitlement with no BifrOSt counterpart"},
+    {"feature": "Evaluation and runtime profiling of prompts", "apple": "Evaluating prompts, evaluating responses, Instruments profiling", "bifrost": "tools/bench.py (host benches), springboard/core/src/log.rs (logging)", "status": "partial", "note": "benchmarks and logs exist for the shell; nothing measures prompts or model responses"}
+  ],
+  "gaps": [
+    "No on-device language model and no SDK API for it: an app cannot ask the system for text generation without a network call.",
+    "No model session type with instructions, prompts, generation options and streamed partial output.",
+    "Guided generation is validation only: no model output is constrained to a typed schema, and there is no typed decoding into generated values.",
+    "No model-invoked tool calling; App Intents (springboard/sdk/src/intents.rs) exist but are not exposed to a model.",
+    "The context budget is a character estimate: there is no model tokenizer, and no cached state is reused across turns.",
+    "Transcripts exist as a pure model (springboard/ui/src/transcript.rs) but are not shared across apps; the Assistant keeps its own store.",
+    "The Assistant (springboard/apps/assistant-desktop) is a cloud client for the Anthropic API, not an on-device or Apple-equivalent feature, so it does not count as parity."
+  ]
+}

@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod transcript;
+pub mod context_window;
+pub mod generation_schema;
 #[cfg(test)]
 mod bench;
 
