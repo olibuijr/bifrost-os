@@ -727,6 +727,7 @@ pub mod analyzer_input;
 pub mod audio_session;
 pub mod playback_arbiter;
 pub mod audio_hardware;
+pub mod process_tap;
 pub mod scan;
 pub mod analysis;
 pub mod docscan;
