@@ -77,6 +77,8 @@ pub mod translation;
 pub mod notification;
 pub mod workspace;
 pub mod observable;
+pub mod ndarray;
+pub mod inference;
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};
 /// `NativeCache` parity (see `docs/bifrost-ui.md`, "Cache").
