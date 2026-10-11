@@ -16,6 +16,10 @@ pub mod layout;
 pub mod media;
 pub mod pager;
 pub mod pngenc;
+#[cfg(target_os = "linux")]
+pub mod privd;
+#[cfg(target_os = "linux")]
+pub mod privd_client;
 pub mod scene;
 pub mod shell;
 pub mod status;

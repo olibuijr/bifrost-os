@@ -414,6 +414,36 @@
         }
     }
 
+    /// Developer preview: `PREVIEW_DIR=DIR cargo test preview_login -- --ignored` writes login-dark.png and login-light.png
+    /// (the boot login window over the lock screen, with a stub account).
+    #[test]
+    #[ignore]
+    fn preview_login() {
+        struct Stub;
+        impl login::Backend for Stub {
+            fn authenticate(&self, _: &str) -> login::Reply { login::Reply::Unavailable }
+            fn account(&self) -> Option<login::AccountInfo> {
+                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0 })
+            }
+        }
+        let Some(dir) = std::env::var_os("PREVIEW_DIR") else { return };
+        for (name, light) in [("dark", false), ("light", true)] {
+            bifrost_render::appearance::jump_to(light);
+            let mut sh = shell_sized(1800, 1100);
+            sh.desk = Some(desk::Desk::new());
+            sh.screen = Screen::Lock;
+            sh.anim = None;
+            sh.login_backend = Some(std::sync::Arc::new(Stub));
+            sh.login_ensure(0.0);
+            let (w, h) = (sh.w as usize, sh.h as usize);
+            let mut img = Image::new(w, h);
+            for k in 0..5 {
+                sh.draw(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 }, 1000.0 + k as f64 * 100.0);
+            }
+            std::fs::write(std::path::Path::new(&dir).join(format!("login-{name}.png")), crate::shell::screenshot::encode(&img)).unwrap();
+        }
+    }
+
     #[test]
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;

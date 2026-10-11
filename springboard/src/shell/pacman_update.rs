@@ -67,8 +67,20 @@ fn on_path(name: &str) -> bool {
     std::env::var("PATH").is_ok_and(|p| p.split(':').any(|d| std::path::Path::new(d).join(name).is_file()))
 }
 
-/// Asks pacman what is installed and whether the package has an update; blocking, read-only.
+/// Asks what is installed and whether the package has an update; blocking. A user session asks privd
+/// (which refreshes the sync databases as root); the root shell, the installer and host tests run it here.
 pub fn check() -> Result<Found, String> {
+    let c = crate::privd_client::connect();
+    if c.is_local() {
+        return check_local();
+    }
+    let i = c.update_check().map_err(|e| e.to_string())?;
+    let update = i.version.map(|v| Manifest { version: v, build: None, sha256: String::new(), size: i.size, url: String::new(), notes: i.notes, changelog: vec![] });
+    Ok(Found { installed: i.installed, update })
+}
+
+/// pacman's answer, run in this process (privd and root callers).
+pub fn check_local() -> Result<Found, String> {
     if !on_path("pacman") {
         return Err("pacman is not installed".into());
     }
@@ -133,12 +145,29 @@ fn run_guard(prog: &str, args: &[&str]) -> Result<(), String> {
 
 /// Upgrades the system including the shell package; blocking. The caller has asked the user.
 pub fn install() -> Result<(), String> {
+    let c = crate::privd_client::connect();
+    if c.is_local() {
+        return install_local();
+    }
+    c.update_apply("os").map_err(|e| e.to_string())
+}
+
+/// The guard run itself (privd, or the root shell). The caller exits 3 afterwards so the session script applies it.
+pub fn install_local() -> Result<(), String> {
     let (prog, args) = install_command(is_root());
     run_guard(prog, &args)
 }
 
 /// Starts the rollback to the previous system; the caller has asked the user.
 pub fn rollback() -> Result<(), String> {
+    let c = crate::privd_client::connect();
+    if c.is_local() {
+        return rollback_local();
+    }
+    c.update_rollback().map_err(|e| e.to_string())
+}
+
+pub fn rollback_local() -> Result<(), String> {
     let (prog, args) = rollback_command(is_root());
     run_guard(prog, &args)
 }

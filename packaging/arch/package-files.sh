@@ -23,6 +23,17 @@ package_bifrost_files() {
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
+  # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
+  # (PC_PRIVD overrides; otherwise bifrost-privd is looked up next to the shell binary)
+  privd=${PC_PRIVD:-$(dirname "$binary")/bifrost-privd}
+  if [[ -x $privd ]]; then
+    install -Dm755 "$privd" "$pkgdir/usr/bin/bifrost-privd"
+  fi
+  install -Dm644 "$here/bifrost-privd.service" "$pkgdir/usr/lib/systemd/system/bifrost-privd.service"
+  install -Dm644 "$here/pam-bifrost-login" "$pkgdir/etc/pam.d/bifrost-login"
+  install -Dm644 "$here/sysusers-bifrost.conf" "$pkgdir/usr/lib/sysusers.d/bifrost.conf"
+  # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
+  install -Dm644 "$here/sysctl-bifrost.conf" "$pkgdir/usr/lib/sysctl.d/60-bifrost.conf"
   install -Dm755 "$here/seed-data" "$pkgdir/usr/lib/springboard/seed-data"
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"

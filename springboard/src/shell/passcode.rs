@@ -242,7 +242,7 @@ pub enum Pad {
 const KEY_PT: f32 = 78.0;
 const GAP_PT: f32 = 22.0;
 const LETTERS: [&str; 10] = ["", "", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ"];
-const SHAKE_MS: f64 = 450.0;
+pub(super) const SHAKE_MS: f64 = 450.0;
 
 /// The bifrost numeric keypad with the title and the entry dots above it.
 pub struct Keypad {

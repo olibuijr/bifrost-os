@@ -1,6 +1,6 @@
 [package]
 name = "springboard"
-version = "0.5.28"
+version = "0.5.29"
 edition = "2021"
 description = "BifrOSt OS shell for Arch Linux"
 
@@ -8,6 +8,8 @@ description = "BifrOSt OS shell for Arch Linux"
 crate-type = ["rlib"]
 
 [features]
+# privd: verify against /etc/shadow with crypt_r instead of libpam (dlopen is the default backend)
+shadow-auth = []
 # test helpers for the app crates' tests (shell::tests::ui, clipboard and zip fixtures)
 testkit = ["bifrost-render/testkit"]
 # AT-SPI2 accessibility bridge (Orca): exports app semantic trees on the a11y bus; needs zbus, inert without org.a11y.Bus
@@ -99,6 +101,10 @@ bifrost-render = { path = "render", features = ["testkit"] }
 [[example]]
 name = "app_policy_probe"
 required-features = ["desktop-wayland"]
+
+[[bin]]
+name = "bifrost-privd"
+path = "src/bin/privd.rs"
 
 [[bin]]
 name = "bifrost-portal"

@@ -402,7 +402,7 @@ pub fn set(name: &str) -> bool {
     if PERSIST.load(std::sync::atomic::Ordering::Relaxed) && system_name().is_some_and(|s| s != name) {
         let name = name.to_string();
         crate::bare::sys::spawn_named("set-timezone", move || {
-            let _ = std::process::Command::new("timedatectl").args(["set-timezone", &name]).status();
+            let _ = crate::privd_client::connect().set_timezone(&name);
         });
     }
     true
@@ -454,7 +454,7 @@ pub fn timesyncd_enabled() -> Option<&'static str> {
 pub fn set_ntp(on: bool) {
     crate::bare::sys::spawn_named("set-ntp", move || {
         if timedatectl_show("NTP").is_some_and(|v| (v == "yes") != on) {
-            let _ = std::process::Command::new("timedatectl").args(["set-ntp", if on { "true" } else { "false" }]).status();
+            let _ = crate::privd_client::connect().set_ntp(on);
         }
     });
 }

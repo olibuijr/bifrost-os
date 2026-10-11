@@ -74,7 +74,13 @@ pub fn date_text(unix: i64, offset: i32) -> String {
 pub fn bundle(dir: &Path, build: &str, now: i64) -> String {
     let mut out = format!("springboard diagnostics\nbuild {build}\ntime {now}\n");
     for name in ["last_exit", "last_start", "heartbeat", "crash.log.old", "crash.log"] {
-        let body = std::fs::read_to_string(dir.join(name)).unwrap_or_default();
+        // a user shell writes the heartbeat to its volatile state directory, not the data directory
+        let state = std::env::var("SPRINGBOARD_STATE").ok().filter(|d| d.starts_with('/'));
+        let at = match (name, state) {
+            ("heartbeat", Some(st)) if Path::new(&st).join("heartbeat").exists() => Path::new(&st).join(name),
+            _ => dir.join(name),
+        };
+        let body = std::fs::read_to_string(at).unwrap_or_default();
         out.push_str(&format!("\n== {name} ==\n{}", body.trim_end()));
         out.push('\n');
     }

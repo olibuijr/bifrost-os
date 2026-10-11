@@ -1,0 +1,27 @@
+[Unit]
+Description=BifrOSt privileged helper (login, updates, store installs, power, time)
+Documentation=file:///usr/share/doc/bifrost/login-session.md
+# Early like springboard.service, but NOT ordered after the UI: if privd is dead the shell shows
+# "Login service unavailable" and the recovery chord and ssh still work.
+DefaultDependencies=no
+After=local-fs.target systemd-tmpfiles-setup.service systemd-sysusers.service
+Before=springboard.service shutdown.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/springboard
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bifrost-privd
+Restart=always
+RestartSec=1
+# /home stays readable but this daemon cannot write it.
+ProtectHome=read-only
+# NoNewPrivileges is deliberately not set: privd runs chpasswd and pacman as root.
+RuntimeDirectory=bifrost
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

@@ -45,13 +45,14 @@ def main():
     prof = "release" if a.release else "fast"
     t0 = time.time()
     if not a.skip_build:
-        run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
+        run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--bin", "bifrost-privd", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp"], cwd=os.path.join(REPO, "springboard"))
     run(["rustc", "--edition", "2021", "-O", "-C", "target-feature=+crt-static", "-C", "strip=symbols", os.path.join(REPO,"packaging/arch/recovery/guard.rs"), "-o", os.path.join(REPO,"out/bifrost-update-guard-publish")])
     built_at = time.time()
     binpath = os.path.join(REPO, f"springboard/target/{prof}/shell")
     bootweave = os.path.join(REPO, f"springboard/target/{prof}/bootweave")
     portal = os.path.join(REPO, f"springboard/target/{prof}/bifrost-portal")
+    privd = os.path.join(REPO, f"springboard/target/{prof}/bifrost-privd")
     mcp = os.path.join(REPO, f"springboard/target/{prof}/bifrost-mcp")
     base = re.search(r'^version\s*=\s*"([^"]+)"', open(os.path.join(REPO, "springboard/Cargo.toml")).read(), re.M).group(1)
     ver = f"{base}.{int(time.time())}"
@@ -62,7 +63,7 @@ def main():
     src = os.path.join(REPO, "packaging/arch")
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
-    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_MCP": mcp, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # keep the last 3 packages

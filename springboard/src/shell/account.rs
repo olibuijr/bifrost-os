@@ -34,9 +34,27 @@ pub fn load() -> Account {
         .unwrap_or_else(|| Account { full_name: "BifrOSt User".into(), username: std::env::var("USER").unwrap_or_else(|_| "owner".into()) })
 }
 
+/// The account picture, if the user has one: `~/.face` (the freedesktop convention) or `avatar.png` in the data dir.
+pub fn avatar_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    [home.join(".face"), home.join(".local/share/springboard/avatar.png")].into_iter().find(|p| p.is_file())
+}
+
+/// First-run state: an account whose password is unset or locked (`passwd -S` shows NP or L) asks for one.
+pub fn password_status_needs_set(passwd_s_line: &str) -> bool {
+    matches!(passwd_s_line.split_whitespace().nth(1), Some("NP" | "L" | "LK"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passwd_status_detects_missing_passwords() {
+        assert!(password_status_needs_set("ada NP 2026-10-01 0 99999 7 -1"));
+        assert!(password_status_needs_set("ada L 2026-10-01 0 99999 7 -1"));
+        assert!(!password_status_needs_set("ada P 2026-10-01 0 99999 7 -1"));
+    }
 
     #[test]
     fn parses_the_installer_file() {

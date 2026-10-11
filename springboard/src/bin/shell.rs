@@ -50,7 +50,7 @@ fn run() -> std::io::Result<()> {
         let app=catalogue.iter().find(|a|a.id==*id&&springboard::shell::kinds::Kind::parse(&a.kind).is_some_and(|k|k.on_home_grid())).ok_or_else(||std::io::Error::other("App not found in PC App Store"))?;
         let root=std::path::PathBuf::from(std::env::var("SPRINGBOARD_DATA").unwrap_or_else(|_|"/var/lib/springboard".into()));
         let done=std::sync::atomic::AtomicU64::new(0);
-        let installed=install::install_download(&root,&net::absolute(&app.package),app.size,&app.sha256,install::shell_version(),&done,&std::sync::atomic::AtomicBool::new(false)).map_err(std::io::Error::other)?;
+        let installed=install::install_download_local(&root,&net::absolute(&app.package),app.size,&app.sha256,install::shell_version(),&done,&std::sync::atomic::AtomicBool::new(false)).map_err(std::io::Error::other)?;
         if installed.id!=*id {return Err(std::io::Error::other("Package identity mismatch"));}
         println!("Installed {} {} through App Store",installed.id,installed.version);return Ok(());
     }

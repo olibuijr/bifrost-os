@@ -172,7 +172,7 @@ pub fn halt(how: Halt) {
         HaltPlan::Nothing => eprintln!("springboard: halt {how:?} ignored (emulated host)"),
         HaltPlan::Systemctl(verb) => {
             desktop_sync();
-            if let Err(e) = std::process::Command::new("systemctl").arg(verb).status() {
+            if let Err(e) = crate::privd_client::connect().power(verb) {
                 eprintln!("springboard: systemctl {verb}: {e}");
             }
         }

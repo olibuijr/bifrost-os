@@ -71,5 +71,21 @@ class RebootWaits(unittest.TestCase):
             wait.assert_called_once()
             recovery.assert_called_once()
 
+
+class UnlockTyping(unittest.TestCase):
+    def test_lab_passwords_type_on_a_us_keyboard_with_shift_where_needed(self):
+        # token_urlsafe passwords: letters, digits, '-' and '_'
+        self.assertEqual(midget.text_keys('aB-_9'), [(False, 30), (True, 48), (False, 12), (True, 12), (False, 10)])
+        self.assertIsNone(midget.text_keys('å'), 'a character with no key is refused, not mistyped')
+
+    def test_unlock_types_the_password_then_enter_and_never_prints_it(self):
+        with patch.object(midget, 'login_password', return_value='pw-1'), \
+             patch.object(midget, 'run', return_value=subprocess.CompletedProcess([], 0, '', 'oops pw-1')) as run:
+            self.assertEqual(midget.cmd_unlock(), 0)
+            script = run.call_args[0][0][-1]
+            self.assertNotIn('pw-1', script, 'only key codes cross ssh')
+            self.assertIn('28)]', script, 'Enter comes last')
+
+
 if __name__ == '__main__':
     unittest.main()

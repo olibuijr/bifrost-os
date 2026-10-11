@@ -84,12 +84,7 @@ fn sleep_blockers() -> Vec<String> {
 
 /// Suspends through logind; returns once the machine has resumed.
 fn logind_suspend() -> io::Result<()> {
-    let st = std::process::Command::new("systemctl").arg("suspend").status()?;
-    if st.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!("systemctl suspend: {st}")))
-    }
+    crate::privd_client::connect().power("suspend")
 }
 
 /// Keeps logind from acting on the lid switch for as long as it lives (`lid_close=ignore`):

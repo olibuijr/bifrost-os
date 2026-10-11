@@ -77,6 +77,7 @@ pub mod prefs;
 pub mod markup;
 pub mod screenshot;
 pub mod screentime;
+pub mod login;
 pub mod passcode;
 pub mod rotate;
 pub mod settings;
@@ -429,6 +430,10 @@ pub struct Shell {
     lock_axis: Option<bool>,
     /// the passcode keypad over the lock screen, after the unlock swipe
     lock_pad: Option<passcode::Lock>,
+    /// the login window over the lock screen, the root helper behind it and the unlocked session's token
+    login: Option<login::Login>,
+    login_backend: Option<std::sync::Arc<dyn login::Backend>>,
+    session_token: Option<String>,
     /// Screen Time: today's usage, the Time Limit cover, and per-second gates
     screentime: screentime::usage::Tracker,
     shield: Option<screentime::shield::Shield>,
@@ -685,6 +690,9 @@ impl Shell {
             lock_x0: 0.0,
             lock_axis: None,
             lock_pad: None,
+            login: None,
+            login_backend: login::Privd::from_env().map(|p| std::sync::Arc::new(p) as std::sync::Arc<dyn login::Backend>),
+            session_token: None,
             screentime: screentime::usage::Tracker::new(deildu::data_dir().parent().map(|p| p.join("screentime")).unwrap_or_default()),
             shield: None,
             st_checked: 0,
@@ -1208,6 +1216,9 @@ impl Shell {
         if let Some(w) = self.lock_pad_wake(t).filter(|_| self.screen_on) {
             due = Some(due.map_or(w, |d| d.min(w)));
         }
+        if let Some(w) = self.login_wake(t).filter(|_| self.screen_on) {
+            due = Some(due.map_or(w, |d| d.min(w)));
+        }
         if self.screen_on && !self.is_locked() {
             if let Some(w) = self.assistive_touch.next_wake(t) {
                 due = Some(due.map_or(w, |d| d.min(w)));
@@ -1406,8 +1417,8 @@ impl Shell {
         if minute_changed {
             self.chrome.time = Some(ui.chrome(&clock, 12.0, Weight::Semibold, WHITE));
             self.chrome.date = Some(ui.chrome(&short_date, 12.0, Weight::Semibold, WHITE));
-            self.lock_time = Some(ui.chrome(&clock, 116.0, Weight::Thin, WHITE));
-            self.lock_date = Some(ui.chrome(&long_date(&info), 22.0, Weight::Regular, WHITE));
+            self.lock_time = Some(ui.chrome(&clock, 110.0, Weight::Semibold, WHITE));
+            self.lock_date = Some(ui.chrome(&lock_date_text(&info), 22.0, Weight::Semibold, WHITE));
         }
         if info.battery != self.info.battery || self.chrome.percent.is_none() {
             self.chrome.percent = Some(ui.chrome(&format!("{}%", info.battery), 12.0, Weight::Medium, WHITE));
@@ -1963,6 +1974,7 @@ impl Shell {
         self.screen_on = false;
         self.screen = Screen::Lock;
         self.lock_pad = None;
+        self.login_reset();
         self.anim = None;
         self.home_gesture = None;
         self.transition = None;
@@ -2092,6 +2104,9 @@ impl Shell {
     /// slides the Today View in from the left; once that page is in, its
     /// touches go to the page.
     fn lock_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        if self.login_open() {
+            return self.login_touch(ev, t);
+        }
         if self.lock_pad.is_some() {
             return self.lock_pad_touch(ev, t);
         }
@@ -2434,6 +2449,7 @@ impl Shell {
             return self.sleep_screen();
         }
         self.lock_pad_tick(t);
+        self.login_tick(t);
         self.screentime_tick(t);
         self.size_current_player_app();
         self.home_tick(t);
@@ -2677,7 +2693,7 @@ impl Shell {
                 let lift = lift.round().max(0.0);
                 let today_off = self.lock_pager.offset().round();
                 let now = Drawn::Lock { lift: lift as i32, chrome: self.chrome_gen, notes: self.notify.lock_state(), today: (today_off as i32, self.today.gen()) };
-                if self.drawn != now || self.lock_pad.is_some() {
+                if self.drawn != now || self.lock_pad.is_some() || self.login.is_some() {
                     damage.all();
                 }
                 self.hud_damage(&mut damage, t);
@@ -2689,7 +2705,7 @@ impl Shell {
                     self.draw_desk(s, t);
                 }
                 let (scene, lock, today, layout) = (self.scene(), self.lock_view(), &self.today, &self.layout);
-                let (pad, pad_ui) = (self.lock_pad.as_ref(), &self.ui);
+                let (pad, pad_ui, signin) = (self.lock_pad.as_ref(), &self.ui, self.login.as_ref());
                 s.draw_rows(&rows, threads(), &|s| {
                     // only the strip the lock screen has uncovered shows home
                     if lift > 0.0 && !desktop {
@@ -2699,6 +2715,9 @@ impl Shell {
                     today.draw(s, layout, today_off);
                     if let Some(pad) = pad {
                         pad.draw(s, pad_ui, t);
+                    }
+                    if let Some(l) = signin {
+                        l.draw(s, pad_ui, t);
                     }
                 });
                 now
@@ -3090,7 +3109,7 @@ impl Shell {
     }
 
     fn lock_view(&self) -> LockView<'_> {
-        LockView { w: self.w, h: self.h, wallpaper: self.lock_wp(), ui: &self.ui, date: self.lock_date.as_ref(), time: self.lock_time.as_ref(), chrome: &self.chrome, music: self.svc_lock_card().filter(|_| self.svc_active()).map(|mut v| { v.route = self.route_label(); v }), notes: self.lock_draw() }
+        LockView { w: self.w, h: self.h, wallpaper: self.lock_wp(), ui: &self.ui, date: self.lock_date.as_ref(), time: self.lock_time.as_ref(), chrome: &self.chrome, music: self.svc_lock_card().filter(|_| self.svc_active()).map(|mut v| { v.route = self.route_label(); v }), notes: self.lock_draw(), status_inset: if self.login.is_some() { login::status_inset(&self.ui) } else { 0 } }
     }
 
     /// The open/close zoom card for the GPU compositor, when a plain one is
@@ -3837,6 +3856,8 @@ struct LockView<'a> {
     notes: notify::LockDraw<'a>,
     /// the Now Playing card while a song is loaded
     music: Option<music::LockCardView<'a>>,
+    /// room kept at the right of the status icons for the login window's power button (0 without it)
+    status_inset: i32,
 }
 
 impl LockView<'_> {
@@ -3846,30 +3867,37 @@ impl LockView<'_> {
         s.copy(wp, (self.w - wp.w as i32) / 2, dy);
         let cx = self.w / 2;
         let ui = self.ui;
-        if let Some(tm) = self.time {
-            centred(s, tm, cx, dy + (ui.pt(128.0) - tm.h as f32 / 2.0) as i32);
-        }
+        // the date above a large clock, as the reference's login window and lock screen draw them
+        let mut clock_top = dy + ui.pt(52.0) as i32;
         if let Some(d) = self.date {
-            centred(s, d, cx, dy + (ui.pt(199.0) - d.h as f32 / 2.0) as i32);
+            centred(s, d, cx, clock_top);
+            clock_top += d.h as i32;
+        }
+        if let Some(tm) = self.time {
+            centred(s, tm, cx, clock_top - ui.pt(6.0) as i32);
         }
         self.notes.draw(s, ui, self.w, dy);
         let dots_y = (dy + self.h) as f32 - ui.pt(26.0);
-        // a keyboard machine unlocks with Return, not a swipe
-        let hint = ui.text("Press Return to unlock", 15.0, Weight::Regular, rgba(255, 255, 255, 200));
-        centred(s, &hint, cx, dots_y as i32);
+        // a keyboard machine unlocks with Return, not a swipe; the login window asks for the password instead
+        if self.status_inset == 0 {
+            let hint = ui.text("Press Return to unlock", 15.0, Weight::Regular, rgba(255, 255, 255, 200));
+            centred(s, &hint, cx, dots_y as i32);
+        }
         if let Some(card) = &self.music {
             card.draw(s, ui, dy);
         }
         // the bifrost mini (Home button) shows no home indicator on the lock screen
-        scene::draw_status_right(s, self.w, dy + (ui.pt(scene::STATUS_PT) / 2.0) as i32, ui.s, self.chrome);
+        scene::draw_status_right(s, self.w - self.status_inset, dy + (ui.pt(scene::STATUS_PT) / 2.0) as i32, ui.s, self.chrome);
     }
 }
 
-fn long_date(i: &Info) -> String {
-    const DAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    format!("{}, {} {}", DAYS[i.wday.rem_euclid(7) as usize], i.mday, MONTHS[i.mon.rem_euclid(12) as usize])
+/// The date over the lock clock, short as the reference has it: "Thu Sep 10".
+fn lock_date_text(i: &Info) -> String {
+    const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    format!("{} {} {}", DAYS[i.wday.rem_euclid(7) as usize], MONTHS[i.mon.rem_euclid(12) as usize], i.mday)
 }
+
 
 #[cfg(any(test, feature = "testkit"))]
 pub mod tests;

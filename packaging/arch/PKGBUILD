@@ -11,8 +11,8 @@ mapfile -t depends < "${PC_PKGSRC:-$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$
 makedepends=(cargo)
 options=(!lto !strip)
 install=springboard.install
-source=(springboard.service seed-data)
-sha256sums=(SKIP SKIP)
+source=(springboard.service seed-data bifrost-privd.service pam-bifrost-login sysusers-bifrost.conf sysctl-bifrost.conf)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP)
 
 # Inputs (override from the environment):
 #   SPRINGBOARD_REPO    tab-a8 checkout            (default: two levels above this PKGBUILD)
@@ -46,7 +46,7 @@ build() {
   export CARGO_TARGET_DIR="$srcdir/target"
   # Crates come from the local cargo registry cache (CARGO_HOME); nothing is fetched when it is warm.
   rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols "$_repo/packaging/arch/recovery/guard.rs" -o "$srcdir/bifrost-update-guard"
-  cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal --bin bifrost-privd ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-mcp ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-app --bin bifrost-log ${SPRINGBOARD_CARGO_FLAGS:---offline}
 }
@@ -60,6 +60,7 @@ package() {
   package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
   install -Dm755 "$srcdir/target/release/bootweave" "$pkgdir/usr/bin/bifrost-bootweave"
   install -Dm755 "$srcdir/target/release/bifrost-portal" "$pkgdir/usr/bin/bifrost-portal"
+  install -Dm755 "$srcdir/target/release/bifrost-privd" "$pkgdir/usr/bin/bifrost-privd"
   install -Dm755 "$srcdir/target/release/bifrost-mcp" "$pkgdir/usr/bin/bifrost-mcp"
   install -Dm755 "$srcdir/target/release/bifrost-log" "$pkgdir/usr/bin/bifrost-log"
   install -d "$pkgdir/usr/share/springboard"

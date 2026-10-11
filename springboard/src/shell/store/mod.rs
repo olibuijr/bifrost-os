@@ -564,7 +564,7 @@ impl AppStore {
             p.spawn(move || {
                 crate::gfx::affinity::background_thread();
                 let result = (|| {
-                    let app = install::install_download(&root, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &done, &cancel)?;
+                    let app = install::install_download(&root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &done, &cancel)?;
                     if app.id != a.id || app.is_preinstalled() != a.is_preinstalled() {
                         let _ = install::uninstall(&root, &app.id);
                         return Err("package id does not match the store entry".to_string());

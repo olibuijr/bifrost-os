@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | mem | apps | recovery | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] | follow [--timeout S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] | follow [--timeout S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -274,6 +274,99 @@ KEY_CODES = {"enter": 28, "esc": 1, "tab": 15, "space": 57, "backspace": 14,
              **{c: n for c, n in zip("asdfghjkl", range(30, 39))},
              **{c: n for c, n in zip("zxcvbnm", range(44, 51))},
              **{c: n for c, n in zip("1234567890", range(2, 12))}}
+
+
+# US layout: unshifted characters and what Shift adds, as evdev codes
+_SHIFTED = {"!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0"}
+_PUNCT = {"-": 12, "=": 13, "[": 26, "]": 27, ";": 39, "'": 40, "`": 41, "\\": 43, ",": 51, ".": 52, "/": 53}
+_PUNCT_SHIFT = {"_": "-", "+": "=", "{": "[", "}": "]", ":": ";", '"': "'", "~": "`", "|": "\\", "<": ",", ">": ".", "?": "/"}
+
+
+def text_keys(text):
+    """Password text -> [(shift, evdev code)] for a US keyboard; None for a character without a key."""
+    seq = []
+    for ch in text:
+        low = ch.lower()
+        if ch == " ":
+            seq.append((False, 57))
+        elif low in KEY_CODES and len(low) == 1:
+            seq.append((ch.isupper(), KEY_CODES[low]))
+        elif ch in _SHIFTED:
+            seq.append((True, KEY_CODES[_SHIFTED[ch]]))
+        elif ch in _PUNCT:
+            seq.append((False, _PUNCT[ch]))
+        elif ch in _PUNCT_SHIFT:
+            seq.append((True, _PUNCT[_PUNCT_SHIFT[ch]]))
+        else:
+            return None
+    return seq
+
+
+def login_password():
+    """The password `unlock` types: ~/.config/bifrost/midget-login (yours, mode 600) when present, else the lab tester
+    password a `reinstall` created (out/lab/tester.password). Never printed or logged."""
+    path = Path.home() / ".config/bifrost/midget-login"
+    if path.exists():
+        st = path.stat()
+        if st.st_uid != os.getuid() or st.st_mode & 0o077:
+            raise SystemExit(f"{path} must be owned by you and mode 600 (chmod 600 {path}); refusing to read it")
+        return path.read_text().rstrip("\n")
+    pw_file = os.path.join(os.path.dirname(KEY), "tester.password")
+    return open(pw_file).read().strip() if os.path.exists(pw_file) else None
+
+
+def cmd_unlock():
+    """Type the login password on the login window and press Enter, through a temporary uinput keyboard (an older shell
+    without the login window unlocks on the Enter alone)."""
+    password = login_password()
+    if password is None:
+        print("no lab password: run a reinstall, write ~/.config/bifrost/midget-login (chmod 600), or `login-bypass on`")
+        return 2
+    seq = text_keys(password)
+    if seq is None:
+        print("the lab password has a character `unlock` cannot type; use a US-layout ASCII password")
+        return 2
+    seq.append((False, KEY_CODES["enter"]))
+    script = """import os,fcntl,struct,time
+seq=SEQ
+fd=os.open('/dev/uinput',os.O_WRONLY|os.O_NONBLOCK)
+def ev(code,value):
+ os.write(fd,struct.pack('qqHHi',0,0,1,code,value))
+ os.write(fd,struct.pack('qqHHi',0,0,0,0,0))
+ time.sleep(.03)
+try:
+ fcntl.ioctl(fd,0x40045564,1)
+ for c in set([x[1] for x in seq]+[42]):
+  fcntl.ioctl(fd,0x40045565,c)
+ os.write(fd,struct.pack('80sHHHHI',b'BifrOSt remote keyboard',3,1,1,1,0)+bytes(1024))
+ fcntl.ioctl(fd,0x5501)
+ time.sleep(.3)
+ for shift,c in seq:
+  if shift: ev(42,1)
+  ev(c,1); ev(c,0)
+  if shift: ev(42,0)
+ fcntl.ioctl(fd,0x5502)
+finally:
+ os.close(fd)
+""".replace("SEQ", repr(seq))
+    result = run(SSH + ["python3 -c " + shlex.quote(script)], 20)
+    if result.stderr:
+        print(result.stderr.replace(password, "***"), end="", file=sys.stderr)
+    return result.returncode
+
+
+def cmd_login_bypass(args):
+    """`login-bypass on|off`: root over ssh touches/removes /etc/bifrost/no-login. With it on, privd reports has_password:false
+    and the login window accepts an empty password. Use it only to recover a broken login; turn it off again."""
+    if args not in (["on"], ["off"]):
+        print("usage: login-bypass on|off")
+        return 2
+    cmd = "install -d /etc/bifrost && touch /etc/bifrost/no-login" if args[0] == "on" else "rm -f /etc/bifrost/no-login"
+    result = run(SSH + [cmd], 10)
+    print(result.stderr, end="", file=sys.stderr)
+    if result.returncode == 0:
+        print("login-bypass " + args[0])
+    return result.returncode
 
 
 def key_codes(spec):
@@ -562,7 +655,7 @@ def cmd_ota(args):
 
     if shell_screen() == "lock":
         step("unlocking")
-        cmd_key(["enter"])
+        cmd_unlock()
         wait(lambda: shell_screen() not in (None, "lock"), 20, 1)
     before = (control_text("state") or "").split("version=")[-1].split()[0:1]
     if not press("os/apps/settings") or not press("General > Software Update"):
@@ -640,7 +733,7 @@ def finish_ota(before, reboot_first=False):
         return 1
     wait(lambda: shell_screen() is not None, 120, 2)
     if shell_screen() == "lock":
-        cmd_key(["enter"])
+        cmd_unlock()
     ok = wait(lambda: "phase=accepted" in (run(SSH + ["bifrost-update-guard status"]).stdout or ""), 150, 3)
     out = control_text("state") or ""
     version = next((l.split("=", 1)[1] for l in out.splitlines() if l.startswith("version=")), "?")
@@ -714,7 +807,7 @@ def set_pref(key, value):
     ok = r.returncode == 0 and key + "=" + value in out and "active" in out
     if ok:
         # the restarted shell opens on the lock screen: unlock it and wait for the desktop
-        cmd_key(["enter"])
+        cmd_unlock()
         deadline = time.time() + 30
         while time.time() < deadline and shell_screen() not in ("home", "app:settings"):
             time.sleep(1)
@@ -967,7 +1060,7 @@ def follow_install(t0, budget, live):
         return "lock" in (control_text("state", 15) or "").lower().split("screen")[-1][:40]
     ok = wait(tester_up, min(180, left()), 5)
     if ok and locked():
-        cmd_key(["enter"])
+        cmd_unlock()
         time.sleep(3)
     _stamp("phase 6/7 tester session " + ("running" if ok else "NOT running"))
     mcp = wait(lambda: port_open(7420) and "host=" in mcp_call("system", {"what": "overview"}, 20), min(120, left()), 5)
@@ -989,6 +1082,8 @@ def main():
         "recovery": lambda: cmd_recovery(),
         "idle": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-idle-measure.py")), *rest]),
         "reinstall": lambda: cmd_reinstall_loop(rest),
+        "unlock": lambda: cmd_unlock(),
+        "login-bypass": lambda: cmd_login_bypass(rest),
         # re-attach to a reinstall whose follower died: the install runs on its own, this picks up at the current phase
         "follow": lambda: follow_install(time.time(), int(rest[rest.index("--timeout") + 1]) if "--timeout" in rest else 900, live=True),
         "wipe": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-wipe.py")), *rest]),

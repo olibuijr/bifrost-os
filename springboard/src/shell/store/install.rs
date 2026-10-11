@@ -507,7 +507,23 @@ fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Resul
 /// Error returned when a download is stopped by its cancel flag; the `.part` file is kept.
 pub const CANCELLED: &str = "download cancelled";
 
-pub fn install_download(root: &Path, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
+pub fn install_download(root: &Path, id: &str, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
+    let client = crate::privd_client::connect();
+    if client.is_local() {
+        return install_download_local(root, url, size, sha256, shell, progress, cancel);
+    }
+    // user session: privd fetches the catalogue and the package itself and checks the catalogue hash; the
+    // session passes only the app id, so there is no user-staged file for root to open
+    let got = client.store_install(id).map_err(|e| e.to_string())?;
+    if got != id {
+        return Err("Package identity mismatch".into());
+    }
+    let _ = (url, size, sha256, progress, cancel);
+    installed_in(root).into_iter().find(|a| a.id == id).ok_or_else(|| "installed app not found in the registry".to_string())
+}
+
+/// The root-side install: downloads under `root` and installs from there.
+pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
     let part = apps_dir(root).join(format!(".download-{}.part", sha256.to_ascii_lowercase().chars().filter(char::is_ascii_alphanumeric).take(16).collect::<String>()));
     let result = download_to(url, size, &part, progress, cancel).and_then(|got| {
         if got != sha256.to_ascii_lowercase() {
@@ -518,6 +534,21 @@ pub fn install_download(root: &Path, url: &str, size: u64, sha256: &str, shell: 
     });
     if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch")) {let _ = std::fs::remove_file(&part);}
     result
+}
+
+/// privd's `store.install` (the only form it takes: an app id): fetch the PC App Store
+/// catalogue, find the app and install the catalogued package (checksum from the catalogue).
+pub fn install_store_app(root: &Path, id: &str) -> Result<InstalledApp, String> {
+    use super::{api, net};
+    let bytes = net::get(&net::absolute("/api/v1/pc/apps.json"), 4 * 1024 * 1024).map_err(|e| e.to_string())?;
+    let catalogue = api::parse_catalog(std::str::from_utf8(&bytes).map_err(|e| e.to_string())?)?;
+    let app = catalogue.iter().find(|a| a.id == id && Kind::parse(&a.kind).is_some()).ok_or("App not found in PC App Store")?;
+    let done = std::sync::atomic::AtomicU64::new(0);
+    let installed = install_download_local(root, &net::absolute(&app.package), app.size, &app.sha256, shell_version(), &done, &std::sync::atomic::AtomicBool::new(false))?;
+    if installed.id != id {
+        return Err("Package identity mismatch".into());
+    }
+    Ok(installed)
 }
 
 /// Roll back to the previous version, when one is kept.
@@ -536,8 +567,17 @@ pub fn rollback(root: &Path, id: &str) -> Result<(), String> {
     write_registry(root, &reg)
 }
 
-/// Removes an app and its package files (not its data directory).
+/// Removes an app and its package files (not its data directory); a user session asks privd.
 pub fn uninstall(root: &Path, id: &str) -> Result<(), String> {
+    let client = crate::privd_client::connect();
+    if client.is_local() {
+        return uninstall_local(root, id);
+    }
+    client.store_uninstall(id).map_err(|e| e.to_string())
+}
+
+/// privd's side of `uninstall`, and the root shell's.
+pub fn uninstall_local(root: &Path, id: &str) -> Result<(), String> {
     if !valid_id(id) {
         return Err("invalid app id".into());
     }

@@ -109,7 +109,7 @@ fn install_system(root: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install
     plan.iter()
         .filter_map(|a| {
             let progress = std::sync::atomic::AtomicU64::new(0);
-            let app = install::install_download(root, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()?;
+            let app = install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()?;
             if app.id != a.id || !app.is_preinstalled() {
                 let _ = install::uninstall(root, &app.id);
                 return None;
@@ -144,7 +144,7 @@ fn install_apps(root: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install::
     plan.iter()
         .filter_map(|a| {
             let progress = std::sync::atomic::AtomicU64::new(0);
-            install::install_download(root, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()
+            install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()
         })
         .collect()
 }
