@@ -647,6 +647,7 @@ pub mod tracking;
 pub mod cursor;
 pub mod evaluation;
 pub mod progress;
+pub mod privacy;
 #[cfg(test)]
 mod bench;
 
