@@ -751,3 +751,4 @@ pub mod linkmeta;
 pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
+pub mod gatt;
