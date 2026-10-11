@@ -58,6 +58,7 @@ pub mod view;
 pub mod document;
 pub mod log;
 pub mod dispatch;
+pub mod synchronization;
 pub mod fswatch;
 pub mod file_coordination;
 pub mod save_sync;
