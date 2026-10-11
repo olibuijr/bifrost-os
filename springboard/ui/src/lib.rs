@@ -670,6 +670,7 @@ pub mod markup;
 pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
+pub mod model_session;
 pub mod music;
 pub mod indexset;
 pub mod tracking;
