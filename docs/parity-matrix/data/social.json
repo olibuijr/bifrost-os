@@ -1,0 +1,27 @@
+{
+  "framework": "Social",
+  "doc": "https://developer.apple.com/documentation/social",
+  "macos_since": "10.8",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/social.rs (service request assembly), springboard/sdk/src/multipart.rs (multipart body), springboard/ui/src/compose.rs (post draft model), springboard/sdk/src/share.rs (share sheet to installed apps), springboard/sdk/src/url.rs (URLRequest, URLSession); no social-network service",
+  "summary": "BifrOSt now has the post draft model, the request assembly with parameters and multipart uploads, and the multipart body builder. It has no compose sheet that shows or posts to a network, no service types, and no signed-in social account store.",
+  "rea_evidence": "ev_480f845a1c91c745b77162d082f5325cd9a09bcf497f3ef55b819f71e29e6435",
+  "features": [
+    {"feature": "Compose post sheet", "apple": "SLComposeViewController, SLComposeServiceViewController", "bifrost": "springboard/ui/src/compose.rs (ComposeDraft); springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs", "status": "partial", "note": "The draft model holds the post content and dismissal result. No shell sheet shows it, and the share menu does not post to a network."},
+    {"feature": "Service availability check", "apple": "SLComposeViewController.isAvailable(forServiceType:)", "bifrost": "none", "status": "gap", "note": "No service types exist to check."},
+    {"feature": "Post contents (initial text, images, URLs)", "apple": "setInitialText(_:), add(_:) for images and URLs, removeAllImages(), removeAllURLs()", "bifrost": "springboard/ui/src/compose.rs (ComposeDraft::set_initial_text, add_image, add_url, remove_all_images, remove_all_urls)", "status": "partial", "note": "The content API matches the framework. Nothing in the shell edits a draft yet, and the limit of 8 images and 8 links is BifrOSt's own (the framework states none)."},
+    {"feature": "Completion result", "apple": "completionHandler, SLComposeViewControllerResult", "bifrost": "springboard/ui/src/compose.rs (ComposeResult::Done, Cancelled, ComposeDraft::dismiss); springboard/sdk/src/share.rs (App::share_done via show_picker)", "status": "partial", "note": "The result values match the framework. The share menu still reports the chosen app id, not the compose result."},
+    {"feature": "HTTP request assembly for a service", "apple": "SLRequest(forServiceType:requestMethod:url:parameters:), preparedURLRequest(), perform(handler:)", "bifrost": "springboard/sdk/src/social.rs (ServiceRequest, RequestMethod, prepared_url_request); springboard/sdk/src/url.rs (URLRequest, URLSession::data_task)", "status": "partial", "note": "Methods GET, POST, DELETE and PUT, query strings, form bodies and multipart bodies are assembled. There is no service type, and perform goes through URLSession rather than a request object."},
+    {"feature": "Multipart upload body", "apple": "SLRequest.addMultipartData(_:withName:type:filename:), addMultipartData(_:withName:type:)", "bifrost": "springboard/sdk/src/multipart.rs (MultipartBody::add_data, add_field, to_bytes, content_type)", "status": "parity", "note": "Named file parts with optional file name and type, and text fields. The boundary is kept out of the part data. Covered by unit tests."},
+    {"feature": "Social account credentials", "apple": "SLRequest.account (signed-in account used to authenticate)", "bifrost": "springboard/sdk/src/keychain.rs (generic secrets only)", "status": "gap", "note": "No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo."},
+    {"feature": "Receiving shared content in an extension", "apple": "SLComposeServiceViewController (share extension)", "bifrost": "springboard/sdk/src/share.rs (manifest handles and schemes; Input::Open; App::document)", "status": "partial", "note": "An app can receive shared URLs, text and files. There is no separate extension process."},
+    {"feature": "Social service types", "apple": "SLServiceTypeFacebook, SLServiceTypeTwitter, SLServiceTypeSinaWeibo, SLServiceTypeLinkedIn, SLServiceTypeTencentWeibo", "bifrost": "none", "status": "n/a", "note": "Named third-party networks, several of them defunct. Tied to Apple's service list, not to a desktop capability."}
+  ],
+  "gaps": [
+    "No compose sheet that shows the draft and posts it to a network (the draft model in springboard/ui/src/compose.rs has no UI or transport).",
+    "No social account store or request signing (SLRequest.account equivalent).",
+    "No service types and no service availability check (isAvailable(forServiceType:) equivalent).",
+    "The share menu offers only installed apps, with no per-item NSSharingService objects or delegate callbacks (see docs/bifrost-ui.md, 'Share sheet' gaps).",
+    "The compose result is not wired to the share menu's completion (App::share_done reports an app id, not Done or Cancelled)."
+  ]
+}

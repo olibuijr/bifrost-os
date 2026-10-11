@@ -61,6 +61,8 @@ pub mod dispatch;
 pub mod fswatch;
 pub mod file_coordination;
 pub mod url;
+pub mod multipart;
+pub mod social;
 pub mod coding;
 pub mod attributed;
 pub mod spellcheck;
