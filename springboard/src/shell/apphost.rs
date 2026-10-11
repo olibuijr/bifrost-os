@@ -329,6 +329,11 @@ pub struct AppHost {
 impl AppHost {
     /// Starts `exec` with the app end of a fresh socketpair and sends `cfg`.
     pub fn spawn(id: &str, exec: &Path, data_dir: &Path, shell_dir: &Path, cfg: Configure) -> std::io::Result<AppHost> {
+        Self::spawn_with(id, exec, data_dir, shell_dir, cfg, false)
+    }
+
+    /// `spawn`, telling the app whether to restore its saved window state (`BIFROST_RESTORE`, see `bifrost_app::restoration`).
+    pub fn spawn_with(id: &str, exec: &Path, data_dir: &Path, shell_dir: &Path, cfg: Configure, restore: bool) -> std::io::Result<AppHost> {
         let (mine, theirs) = sys::socketpair_pair()?;
         let _ = std::fs::create_dir_all(data_dir);
         let fd = theirs.fd();
@@ -343,6 +348,7 @@ impl AppHost {
         let mut cmd = Command::new(exec);
         cmd.env("BIFROST_SOCK", fd.to_string())
             .env("BIFROST_DATA", data_dir)
+            .env("BIFROST_RESTORE", if restore { "1" } else { "0" })
             .stdin(Stdio::null())
             .current_dir(data_dir);
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_none() {cmd.env("BIFROST_SHELL_DIR",shell_dir);}
@@ -822,7 +828,7 @@ impl Shell {
         self.dying.retain(|h| h.running());
         let data = root().join("appdata").join(&app.manifest.id);
         migrate_legacy(&root(), &app.manifest.id, &data);
-        match AppHost::spawn(&app.manifest.id, &app.exec_path(), &data, &root(), self.ext_cfg()) {
+        match AppHost::spawn_with(&app.manifest.id, &app.exec_path(), &data, &root(), self.ext_cfg(), self.session_restore_flag()) {
             Ok(h) => {
                 self.ext[slot] = Some(h);
                 self.usernotif_started(slot);
@@ -1013,6 +1019,8 @@ impl Shell {
     /// and Configure when the screen size changed.
     pub(super) fn ext_tick(&mut self, t: f64) {
         self.login_items_launch();
+        self.session_restore(t);
+        self.session_tick(t);
         let now = bifrost_proto::sys::now_ms();
         self.dying.retain_mut(|h| !h.quit_poll(now));
         let fg = match self.screen {

@@ -1,0 +1,321 @@
+//! Session restoration (state restoration for the whole desktop): which app windows were open, in which order and
+//! where, so that after a restart, a log out, an update or a crash the desktop comes back as it was.
+//!
+//! The shell keeps `session.txt` in its data dir. It is rewritten (only when it changed, at most every
+//! [`SYNC_MS`]) while the desktop runs, so a crash leaves the last layout behind, and once more when the
+//! power menu or Settings restarts or shuts the machine down: with an empty list when the user unchecked "Reopen
+//! windows when logging back in". Frames are stored as parts of the screen ([`SCALE`] = the whole screen), so a layout
+//! saved at one resolution or scale comes back sensibly on another.
+//!
+//! What goes *inside* an app's window (the open note, the folder) is the app's own business: the SDK's
+//! `restoration` module. The shell only tells a launched app whether to restore it ([`restore_flag`], the
+//! `BIFROST_RESTORE` variable).
+use super::{apps, AppId, Shell};
+use std::path::Path;
+
+/// The file in the shell's data dir.
+pub const FILE: &str = "session.txt";
+/// Settings pref (`1`/`0`, default on): the "Reopen windows when logging back in" checkbox of the restart and shut down alerts.
+pub const REOPEN_PREF: &str = "reopen_windows_on_login";
+/// Settings pref (`1`/`0`, default off): General > "Close windows when quitting an application".
+pub const CLOSE_ON_QUIT_PREF: &str = "close_windows_on_quit";
+/// The most windows one session file restores.
+pub const MAX_WINDOWS: usize = 64;
+/// How often the layout is written at most (ms) while the desktop runs.
+pub const SYNC_MS: f64 = 2000.0;
+/// A frame coordinate of `SCALE` is the whole screen width or height.
+pub const SCALE: i64 = 10_000;
+const HEADER: &str = "bifrost-session 1";
+
+/// One window: the app's stable id and its frame in parts of the screen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WindowRec {
+    pub app: String,
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+    pub maximized: bool,
+    pub minimized: bool,
+}
+
+fn rel(v: i32, whole: i32) -> i32 {
+    (v as i64 * SCALE / whole.max(1) as i64) as i32
+}
+fn abs(v: i32, whole: i32) -> i32 {
+    (v as i64 * whole.max(1) as i64 / SCALE) as i32
+}
+
+impl WindowRec {
+    /// A record from a frame in px on a screen of `screen` px.
+    pub fn from_px(app: &str, (x, y, w, h): (i32, i32, i32, i32), screen: (i32, i32), maximized: bool, minimized: bool) -> Self {
+        WindowRec { app: app.to_string(), x: rel(x, screen.0), y: rel(y, screen.1), w: rel(w, screen.0), h: rel(h, screen.1), maximized, minimized }
+    }
+    /// The frame in px on a screen of `screen` px.
+    pub fn to_px(&self, screen: (i32, i32)) -> (i32, i32, i32, i32) {
+        (abs(self.x, screen.0), abs(self.y, screen.1), abs(self.w, screen.0), abs(self.h, screen.1))
+    }
+}
+
+/// Reverse-DNS ids and the built-in `bifrost.*` ids only: no separators or control characters can reach the file.
+fn valid_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+}
+
+/// The windows of the last desktop, back to front.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Session {
+    pub windows: Vec<WindowRec>,
+}
+
+impl Session {
+    pub fn to_text(&self) -> String {
+        let mut out = format!("{HEADER}\n");
+        for w in &self.windows {
+            let flags = u8::from(w.maximized) | u8::from(w.minimized) << 1;
+            out.push_str(&format!("window\t{}\t{}\t{}\t{}\t{}\t{}\n", w.app, w.x, w.y, w.w, w.h, flags));
+        }
+        out
+    }
+
+    /// Reads a file's text. Anything unknown (header, a bad line, an app id with odd characters, a size that is not
+    /// positive) is skipped; a repeated app keeps its first window; at most [`MAX_WINDOWS`].
+    pub fn parse(text: &str) -> Session {
+        let mut lines = text.lines();
+        if lines.next().map(str::trim) != Some(HEADER) {
+            return Session::default();
+        }
+        let mut windows: Vec<WindowRec> = Vec::new();
+        for line in lines {
+            let f: Vec<&str> = line.split('\t').collect();
+            if f.len() != 7 || f[0] != "window" || !valid_id(f[1]) {
+                continue;
+            }
+            let n = |i: usize| f[i].parse::<i32>().ok();
+            let (Some(x), Some(y), Some(w), Some(h), Some(flags)) = (n(2), n(3), n(4), n(5), n(6)) else { continue };
+            let sane = |v: i32| (-SCALE as i32..=2 * SCALE as i32).contains(&v);
+            if w <= 0 || h <= 0 || !sane(x) || !sane(y) || w > 2 * SCALE as i32 || h > 2 * SCALE as i32 {
+                continue;
+            }
+            if windows.iter().any(|r| r.app == f[1]) {
+                continue;
+            }
+            windows.push(WindowRec { app: f[1].to_string(), x, y, w, h, maximized: flags & 1 != 0, minimized: flags & 2 != 0 });
+            if windows.len() == MAX_WINDOWS {
+                break;
+            }
+        }
+        Session { windows }
+    }
+
+    /// The windows to reopen: only the apps `known` still has (an app uninstalled since is dropped). If every window
+    /// was minimized the last one is shown, so a restored desktop is never blank with windows hidden.
+    pub fn plan(&self, known: impl Fn(&str) -> bool) -> Vec<WindowRec> {
+        let mut out: Vec<WindowRec> = self.windows.iter().filter(|w| known(&w.app)).cloned().collect();
+        if !out.is_empty() && out.iter().all(|w| w.minimized) {
+            if let Some(last) = out.last_mut() {
+                last.minimized = false;
+            }
+        }
+        out
+    }
+}
+
+/// Reads the session; a missing or unreadable file is an empty session.
+pub fn load(dir: &Path) -> Session {
+    std::fs::read_to_string(dir.join(FILE)).map(|t| Session::parse(&t)).unwrap_or_default()
+}
+
+/// Writes the session with an atomic replace; `Ok(false)` when the file already holds exactly this.
+pub fn save(dir: &Path, session: &Session) -> std::io::Result<bool> {
+    let text = session.to_text();
+    if std::fs::read_to_string(dir.join(FILE)).is_ok_and(|old| old == text) {
+        return Ok(false);
+    }
+    let tmp = dir.join(format!("{FILE}.tmp"));
+    std::fs::write(&tmp, &text)?;
+    std::fs::rename(&tmp, dir.join(FILE))?;
+    Ok(true)
+}
+
+/// Whether a launched app is told to restore its own state (`BIFROST_RESTORE=1`): always for the windows the login
+/// restore brings back, and for any other launch unless "Close windows when quitting an application" is on.
+pub fn restore_flag(close_on_quit: bool, login_restore: bool) -> bool {
+    login_restore || !close_on_quit
+}
+
+/// What the shell remembers between ticks.
+#[derive(Debug, Default)]
+pub struct Runtime {
+    /// the saved session has been replayed (once per shell start, after the desktop is up and unlocked)
+    pub restored: bool,
+    /// true while the replay launches apps, so they restore their own state
+    pub restoring: bool,
+    /// the shell is going down: the final layout is written, later ticks leave it alone
+    pub frozen: bool,
+    /// the next time the layout may be written (ms)
+    pub next_at: f64,
+}
+
+/// The stable id of a built-in or installed app (what `apps()` calls its icon name), or `None` for an unknown app.
+fn key_of(app: AppId) -> Option<String> {
+    apps().iter().find(|a| a.id == app).map(|a| a.icon.to_string())
+}
+
+fn app_of(key: &str) -> Option<AppId> {
+    apps().iter().find(|a| a.icon == key).map(|a| a.id)
+}
+
+impl Shell {
+    /// The layout now, back to front; empty when `reopen` is false.
+    pub(super) fn session_snapshot(&self, reopen: bool) -> Session {
+        let Some(desk) = self.desk.as_ref().filter(|_| reopen) else { return Session::default() };
+        let m = self.desk_metrics();
+        let windows = desk
+            .wins
+            .iter()
+            .filter_map(|w| Some(WindowRec::from_px(&key_of(w.app)?, (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, w.minimized)))
+            .take(MAX_WINDOWS)
+            .collect();
+        Session { windows }
+    }
+
+    /// Replays the saved session once, as soon as the desktop is up and unlocked: each window opens in its old
+    /// place and its app is started with `BIFROST_RESTORE=1`.
+    pub(super) fn session_restore(&mut self, t: f64) {
+        if self.session.restored || self.desk.is_none() || self.is_locked() {
+            return;
+        }
+        self.session.restored = true;
+        let plan = load(&self.data_dir).plan(|key| app_of(key).is_some());
+        if plan.is_empty() {
+            return;
+        }
+        self.session.restoring = true;
+        let m = self.desk_metrics();
+        for rec in &plan {
+            let Some(app) = app_of(&rec.app) else { continue };
+            self.desk_open(app, t);
+            let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { continue };
+            let (x, y, w, h) = rec.to_px((m.w, m.h));
+            if let Some(d) = self.desk.as_mut() {
+                d.place(&m, i, super::desk::Rect { x, y, w, h });
+                if rec.maximized {
+                    d.toggle_zoom(&m, i);
+                }
+                d.wins[i].minimized = rec.minimized;
+            }
+            self.desk_layout(i);
+        }
+        self.session.restoring = false;
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// While the desktop runs: keeps the file in step with the windows (at most every [`SYNC_MS`]; nothing is written
+    /// when the layout did not change).
+    pub(super) fn session_tick(&mut self, t: f64) {
+        if !self.session.restored || self.session.frozen || t < self.session.next_at {
+            return;
+        }
+        self.session.next_at = t + SYNC_MS;
+        let snap = self.session_snapshot(true);
+        if let Err(e) = save(&self.data_dir, &snap) {
+            bifrost_core::log::shell_logger("session").error(format!("cannot save the session: {e}"));
+        }
+    }
+
+    /// Before a restart, shut down or update restart: writes the final layout, empty when the user unchecked
+    /// "Reopen windows when logging back in", and stops the periodic writes. Apps that allowed sudden termination are
+    /// then killed without a Quit round trip by `stop_apps`; their state is already on disk.
+    pub fn session_save_for_exit(&mut self) {
+        self.session.frozen = true;
+        if self.desk.is_none() {
+            return;
+        }
+        let reopen = self.prefs.get_bool(REOPEN_PREF, true);
+        let snap = self.session_snapshot(reopen);
+        if let Err(e) = save(&self.data_dir, &snap) {
+            bifrost_core::log::shell_logger("session").error(format!("cannot save the session: {e}"));
+        }
+    }
+
+    /// True when an app launched now should restore its own state.
+    pub(super) fn session_restore_flag(&self) -> bool {
+        restore_flag(self.prefs.get_bool(CLOSE_ON_QUIT_PREF, false), self.session.restoring)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rec(app: &str, x: i32) -> WindowRec {
+        WindowRec { app: app.into(), x, y: 500, w: 6000, h: 5000, maximized: false, minimized: false }
+    }
+
+    #[test]
+    fn a_session_round_trips_in_order() {
+        let mut s = Session { windows: vec![rec("is.olibuijr.notes.desktop", 100), rec("bifrost.settings", 2500)] };
+        s.windows[1].maximized = true;
+        s.windows[0].minimized = true;
+        assert_eq!(Session::parse(&s.to_text()), s);
+    }
+
+    #[test]
+    fn frames_are_parts_of_the_screen_and_survive_a_resolution_change() {
+        let r = WindowRec::from_px("a.b", (480, 270, 960, 540), (1920, 1080), false, false);
+        assert_eq!((r.x, r.y, r.w, r.h), (2500, 2500, 5000, 5000));
+        assert_eq!(r.to_px((1920, 1080)), (480, 270, 960, 540));
+        assert_eq!(r.to_px((3840, 2160)), (960, 540, 1920, 1080), "the same place on a bigger screen");
+    }
+
+    #[test]
+    fn junk_in_the_file_is_skipped() {
+        assert_eq!(Session::parse("not a session\nwindow\ta\t0\t0\t1\t1\t0\n"), Session::default(), "wrong header");
+        let text = format!(
+            "{HEADER}\nwindow\tgood.app\t0\t0\t5000\t5000\t0\nwindow\tbad id\t0\t0\t5000\t5000\t0\nwindow\tzero.size\t0\t0\t0\t5000\t0\nwindow\toff.screen\t999999\t0\t5000\t5000\t0\nwindow\tgood.app\t1\t1\t5000\t5000\t0\nwindow\tshort\t1\nwindow\tx.y\ta\t0\t5000\t5000\t0\n"
+        );
+        let s = Session::parse(&text);
+        assert_eq!(s.windows.len(), 1, "{s:?}");
+        assert_eq!(s.windows[0].app, "good.app");
+        assert_eq!(s.windows[0].x, 0, "a repeated app keeps its first window");
+    }
+
+    #[test]
+    fn at_most_max_windows_come_back() {
+        let s = Session { windows: (0..100).map(|i| rec(&format!("app.n{i}"), 0)).collect() };
+        assert_eq!(Session::parse(&s.to_text()).windows.len(), MAX_WINDOWS);
+    }
+
+    #[test]
+    fn the_plan_drops_uninstalled_apps_and_never_hides_every_window() {
+        let mut s = Session { windows: vec![rec("gone.app", 0), rec("a.one", 0), rec("a.two", 0)] };
+        s.windows[1].minimized = true;
+        s.windows[2].minimized = true;
+        let plan = s.plan(|id| id != "gone.app");
+        assert_eq!(plan.iter().map(|w| w.app.as_str()).collect::<Vec<_>>(), ["a.one", "a.two"]);
+        assert!(plan[0].minimized && !plan[1].minimized, "the last one is shown");
+        assert!(Session::default().plan(|_| true).is_empty());
+    }
+
+    #[test]
+    fn save_writes_once_and_load_reads_it_back() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()), Session::default(), "no file is an empty session");
+        let s = Session { windows: vec![rec("a.one", 10)] };
+        assert!(save(dir.path(), &s).unwrap());
+        assert!(!save(dir.path(), &s).unwrap(), "an unchanged layout is not rewritten");
+        assert_eq!(load(dir.path()), s);
+        assert!(save(dir.path(), &Session::default()).unwrap(), "unchecking Reopen windows empties it");
+        assert!(load(dir.path()).windows.is_empty());
+        assert!(!dir.path().join(format!("{FILE}.tmp")).exists());
+    }
+
+    #[test]
+    fn apps_restore_unless_windows_close_on_quit() {
+        assert!(restore_flag(false, false), "the default keeps windows across a quit");
+        assert!(!restore_flag(true, false), "Close windows when quitting starts the app fresh");
+        assert!(restore_flag(true, true), "windows reopened at login restore even then");
+    }
+}

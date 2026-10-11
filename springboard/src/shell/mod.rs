@@ -73,6 +73,7 @@ pub mod pageedit;
 pub mod pages;
 pub mod axmap;
 pub mod power_menu;
+pub mod session;
 pub mod prefs;
 pub mod markup;
 pub mod screenshot;
@@ -503,6 +504,8 @@ pub struct Shell {
     ext: Vec<Option<apphost::AppHost>>,
     /// Apps that were sent Quit and are not gone yet (reaped in `ext_tick`, killed at their deadline).
     dying: Vec<apphost::AppHost>,
+    /// desktop session restoration (`session`): the layout file and the replay state
+    session: session::Runtime,
     /// the installed app in the foreground, to send Suspend/Resume on change
     ext_fg: Option<u8>,
     store: Option<store::AppStore>,
@@ -736,6 +739,7 @@ impl Shell {
             deildu_transport: Arc::new(deildu::http::Tls::new()),
             ext: Vec::new(),
             dying: Vec::new(),
+            session: session::Runtime::default(),
             ext_fg: None,
             store: None,
             camera: None,

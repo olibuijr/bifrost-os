@@ -764,6 +764,7 @@ fn run() -> std::io::Result<()> {
                 // exit code 3 asks the service manager to start the shell again
                 Effect::Restart => {
                     eprintln!("springboard: restart requested");
+                    shell.session_save_for_exit();
                     shell.stop_apps();
                     springboard::bare::crashlog::write_last_exit(&dir, RESTART_EXIT, "restart requested");
                     power::set_brightness(panel_level(level, low_power, max));
@@ -775,6 +776,7 @@ fn run() -> std::io::Result<()> {
                     eprintln!("springboard: power {action:?}");
                     // app data and settings first; `halt` syncs the disks
                     shell.flush();
+                    shell.session_save_for_exit();
                     shell.stop_apps();
                     match action {
                         PowerAction::Off => {
