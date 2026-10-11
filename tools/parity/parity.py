@@ -13,7 +13,7 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
                                  what remains, most important gaps first
   check                          JSON validity, statuses, cited repo paths exist, every framework assessed
   build [OUT.md]                 regenerate docs/apple-parity-matrix.md
-  import DIR                     copy agent output files DIR/*.json into data/ (validated)
+  import DIR [--new-only]        copy agent output files DIR/*.json into data/ (validated; --new-only keeps existing files)
   db-export DIR                  one JSON file per database document for the published artifact
                                  (frameworks/<slug>.json, meta/summary.json) plus batches.json (50 per batch)
   refresh-index                  re-read the official documentation index and rewrite index.json
@@ -342,6 +342,8 @@ def cmd_import(a):
         if not f.endswith(".json"):
             continue
         src = os.path.join(a.dir, f)
+        if a.new_only and os.path.exists(os.path.join(DATA, f)):
+            continue
         try:
             d = json.load(open(src))
             assert isinstance(d.get("features"), list) and d.get("framework")
@@ -441,6 +443,7 @@ def main(argv=None):
     b.add_argument("out", nargs="?")
     i = sub.add_parser("import")
     i.add_argument("dir")
+    i.add_argument("--new-only", action="store_true", help="skip files that already exist in data/ (keep edited rows)")
     d = sub.add_parser("db-export")
     d.add_argument("dir")
     sub.add_parser("refresh-index")
