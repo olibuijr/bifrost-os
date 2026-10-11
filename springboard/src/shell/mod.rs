@@ -63,6 +63,7 @@ pub mod usernotif;
 pub mod extras;
 pub mod spotindex;
 pub mod sharing;
+pub mod workspace;
 pub mod dnd;
 pub mod photos;
 pub mod music;
@@ -476,6 +477,7 @@ pub struct Shell {
     extras: extras::Registry,
     /// the share sheet an app asked for (`sharing`)
     app_share: sharing::State,
+    app_workspace: workspace::State,
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
@@ -718,6 +720,7 @@ impl Shell {
             usernotif: usernotif::Registry::default(),
             extras: extras::Registry::default(),
             app_share: sharing::State::default(),
+            app_workspace: workspace::State::default(),
             dnd: dnd::State::default(),
             fullscreen: false,
             prefs: Prefs::memory(),
