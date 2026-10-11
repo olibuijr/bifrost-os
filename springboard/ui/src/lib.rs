@@ -640,6 +640,8 @@ pub mod context_window;
 pub mod generation_schema;
 pub mod music;
 pub mod indexset;
+pub mod tracking;
+pub mod cursor;
 #[cfg(test)]
 mod bench;
 
