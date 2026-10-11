@@ -584,6 +584,9 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod vcard;
+pub mod contact_groups;
+pub mod contact_changes;
 #[cfg(test)]
 mod bench;
 
