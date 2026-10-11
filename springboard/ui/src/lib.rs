@@ -584,6 +584,8 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod subscription;
+pub mod entitlement;
 #[cfg(test)]
 mod bench;
 

@@ -47,6 +47,7 @@ pub mod share;
 pub mod print;
 pub mod pasteboard;
 pub mod dnd;
+pub mod review;
 pub mod layout;
 pub mod control;
 pub mod intents;
