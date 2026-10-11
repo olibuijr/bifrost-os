@@ -1,5 +1,6 @@
-//! Navigation and presentation models: a push/pop stack (`NativeNavigationController`), a toolbar with validation and
-//! overflow (`NativeToolbar`), and an alert (`NativeAlert`, `NativeAlertController`).
+//! Navigation and presentation models: a push/pop stack (`NativeNavigationController`), a value path that drives it
+//! (`NavigationPath`), a toolbar with validation and overflow (`NativeToolbar`), and an alert (`NativeAlert`,
+//! `NativeAlertController`).
 use crate::Rect;
 
 /// A push/pop stack of screens. The back button is titled after the screen beneath the top one.
@@ -56,6 +57,60 @@ impl<T> NavigationStack<T> {
     /// Titles from the root to the top (a breadcrumb or the long-press back menu).
     pub fn path(&self) -> Vec<&str> {
         self.screens.iter().map(|(t, _)| t.as_str()).collect()
+    }
+    /// Shows the destinations of `path` above the root: pops to the root, then pushes one screen per destination, with
+    /// the title and screen `build` returns for it. Returns how many screens were pushed.
+    pub fn apply_path<D>(&mut self, path: &NavigationPath<D>, mut build: impl FnMut(&D) -> (String, T)) -> usize {
+        self.pop_to_root();
+        for destination in path.iter() {
+            let (title, screen) = build(destination);
+            self.push(title, screen);
+        }
+        path.count()
+    }
+}
+
+/// The destinations of a navigation stack as plain values (`NavigationPath`): an app pushes a value per screen, keeps
+/// the path, and rebuilds the stack from it with `NavigationStack::apply_path`. A path of one kind of value has no
+/// type erasure; the app chooses the enum that holds its destinations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NavigationPath<D> {
+    items: Vec<D>,
+}
+
+impl<D> Default for NavigationPath<D> {
+    fn default() -> Self {
+        NavigationPath { items: Vec::new() }
+    }
+}
+
+impl<D> NavigationPath<D> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+    pub fn count(&self) -> usize {
+        self.items.len()
+    }
+    /// Appends a destination to the end of the path.
+    pub fn append(&mut self, destination: D) {
+        self.items.push(destination);
+    }
+    /// Removes up to `n` destinations from the end and returns how many went.
+    pub fn remove_last(&mut self, n: usize) -> usize {
+        let n = n.min(self.items.len());
+        self.items.truncate(self.items.len() - n);
+        n
+    }
+    /// The last destination, the one on top of the stack.
+    pub fn last(&self) -> Option<&D> {
+        self.items.last()
+    }
+    /// The destinations from the root screen upwards.
+    pub fn iter(&self) -> std::slice::Iter<'_, D> {
+        self.items.iter()
     }
 }
 
@@ -503,5 +558,55 @@ mod tests {
         assert_eq!(a.default_action().map(|x| x.id), Some(3));
         assert_eq!(Alert::new("t", "m").default_action(), None);
         assert!(Alert::new("t", "m").button_order().is_empty());
+    }
+
+    #[test]
+    fn a_navigation_path_holds_destinations_in_order_and_removes_from_the_end() {
+        let mut p = NavigationPath::new();
+        assert!(p.is_empty() && p.last().is_none());
+        p.append("Groceries");
+        p.append("Milk");
+        assert_eq!((p.count(), p.last()), (2, Some(&"Milk")));
+        assert_eq!(p.iter().copied().collect::<Vec<_>>(), vec!["Groceries", "Milk"]);
+        assert_eq!(p.remove_last(1), 1);
+        assert_eq!(p.last(), Some(&"Groceries"));
+        assert_eq!(p.remove_last(9), 1, "removing more than the path holds stops at empty");
+        assert!(p.is_empty());
+    }
+
+    #[test]
+    fn apply_path_rebuilds_the_screens_above_the_root_from_values() {
+        let mut stack = NavigationStack::new("Lists", 0usize);
+        let mut path = NavigationPath::new();
+        path.append(7usize);
+        path.append(9usize);
+        let pushed = stack.apply_path(&path, |&id| (format!("List {id}"), id));
+        assert_eq!(pushed, 2);
+        assert_eq!(stack.path(), vec!["Lists", "List 7", "List 9"]);
+        assert_eq!((stack.back_title(), *stack.top()), (Some("List 7"), 9));
+        path.remove_last(1);
+        stack.apply_path(&path, |&id| (format!("List {id}"), id));
+        assert_eq!(stack.path(), vec!["Lists", "List 7"], "a shorter path pops the screens it no longer holds");
+    }
+
+    #[test]
+    fn apply_path_with_an_empty_path_returns_to_the_root_and_keeps_its_screen() {
+        let mut stack = NavigationStack::new("Root", "root");
+        stack.push("Detail", "detail");
+        let empty: NavigationPath<&str> = NavigationPath::new();
+        assert_eq!(stack.apply_path(&empty, |_| (String::new(), "")), 0);
+        assert_eq!((stack.depth(), stack.title(), *stack.top()), (1, "Root", "root"));
+    }
+
+    #[test]
+    fn navigation_paths_compare_by_their_destinations() {
+        let mut a = NavigationPath::new();
+        a.append(1u8);
+        let mut b = NavigationPath::new();
+        b.append(1u8);
+        assert_eq!(a, b, "the same destinations make equal paths");
+        b.append(2);
+        assert_ne!(a, b);
+        assert_eq!(NavigationPath::<u8>::default().count(), 0);
     }
 }

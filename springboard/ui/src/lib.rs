@@ -630,6 +630,8 @@ pub mod history;
 pub mod shape;
 pub mod assetpack;
 pub mod downloadqueue;
+pub mod environment;
+pub mod preferences;
 #[cfg(test)]
 mod bench;
 
