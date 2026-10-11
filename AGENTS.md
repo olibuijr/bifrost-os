@@ -23,6 +23,7 @@ Read `HANDOFF.md` first for the current state and open problems.
 | Benchmarks and history | `tools/bench.py` (host benches), `tools/bench.py --midget` (device), `docs/perf-history.jsonl` |
 | Logging (Logger, registry, `bifrost-log`, Console app) | `docs/milestone-unified-logging.md`, `docs/bifrost-ui.md` "Unified Logging"; code `springboard/core/src/log.rs`, `springboard/apps/console-desktop`; `bifrost pc log` |
 | Agent access to Midget (MCP tools, deploy-app) | `docs/bifrost-mcp.md`; code `springboard/mcp/src/` |
+| Reference SDK parity (index, coverage per SDK, gaps, semantic search) | `bifrost pc parity status\|coverage\|gaps\|show\|search`; data `docs/parity-matrix/`, page `docs/apple-parity-matrix.md`; skill `bifrost-parity-matrix` |
 | Trademark name guard | `bifrost pc names` (tools/check-names.py, allowlist tools/check-names-allow.txt); no platform or product names in code |
 | Motion, live glass, window effects | `springboard/render/src/motion.rs`, `src/gpu/wl.rs` (live backdrop, transforms), `src/shell/window_fx.rs`; review in `docs/gpu-first.md` |
 | Browser end-to-end on Midget | `bifrost pc browser-smoke`; MCP tools `browser`, `term`, `files` (`docs/bifrost-mcp.md`) |
@@ -64,6 +65,10 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
   screenshot against the design rules below. Report the commands and their results.
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
 - Do not push, merge or deploy unless asked.
+- **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
+  skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in
+  `docs/parity-matrix/data/` in the same round (`check`, `build`, then the published database). Test on the host,
+  then the x86 VM, then Midget, which is always the final testbed; a row is `parity` only once it works on Midget.
 - **Release every iteration** (owner rule, 2026-10-09): each finished round is released without asking: bump the
   version and `CHANGELOG.md`, `bifrost pc publish`, `bifrost pc midget ota` until `phase=accepted`, then a Midget
   screenshot. Update the docs in the same round: `HANDOFF.md` (new top section), the feature's doc in `docs/`, and
