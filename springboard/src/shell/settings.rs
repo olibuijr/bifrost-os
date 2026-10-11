@@ -106,6 +106,8 @@ pub struct Alert {
 pub enum AlertHit {
     Cancel,
     Confirm,
+    /// the "Reopen windows when logging back in" checkbox
+    Reopen,
 }
 
 impl Alert {
@@ -137,13 +139,37 @@ impl Alert {
         Alert { card: AlertCard::new(ui, title, &message, buttons), command, title: title.to_string(), message: message.clone(), confirm: confirm.to_string() }
     }
 
+    /// Adds the "Reopen windows when logging back in" checkbox to a restart, shut down or update restart alert.
+    pub fn with_reopen(mut self, ui: &Ui, checked: bool) -> Self {
+        if matches!(self.command, Command::Restart | Command::ShutDown | Command::Reboot | Command::InstallUpdate) {
+            self.card = self.card.with_checkbox(ui, "Reopen windows when logging back in", checked);
+        }
+        self
+    }
+
+    /// The checkbox state, `None` when the alert has none.
+    pub fn reopen(&self) -> Option<bool> {
+        self.card.checked()
+    }
+
     pub fn hit(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> Option<AlertHit> {
+        if self.card.hit_check(ui, w, h, x, y) {
+            return Some(AlertHit::Reopen);
+        }
         self.card.hit(ui, w, h, x, y).map(|i| if i == 0 { AlertHit::Cancel } else { AlertHit::Confirm })
+    }
+
+    /// Centre of the checkbox row, for tests.
+    pub fn reopen_centre(&self, ui: &Ui, w: i32, h: i32) -> Option<(f32, f32)> {
+        self.card.check_centre(ui, w, h)
     }
 
     /// Centre of a button, for tests.
     pub fn button(&self, ui: &Ui, w: i32, h: i32, which: AlertHit) -> (f32, f32) {
-        self.card.button_centre(ui, w, h, if which == AlertHit::Cancel { 0 } else { 1 })
+        match which {
+            AlertHit::Reopen => self.card.check_centre(ui, w, h).unwrap_or((0.0, 0.0)),
+            _ => self.card.button_centre(ui, w, h, if which == AlertHit::Cancel { 0 } else { 1 }),
+        }
     }
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, h: i32) {
@@ -489,6 +515,13 @@ impl Settings {
             PageId::Appearance => super::pages::appearance_page(&self.model(), &self.desk),
             PageId::HotCorners => super::pages::hot_corners_page(&self.desk),
             PageId::Overview => super::pages::overview_page(&self.desk),
+            PageId::General => {
+                let mut s = spec(id, &self.model());
+                // before the Restart / Shut Down group
+                let at = s.groups.len().saturating_sub(1);
+                s.groups.insert(at, super::pages::restoration_group(&self.desk));
+                s
+            }
             PageId::Notifications => notify_page::spec(&self.notify),
             PageId::NotificationApp => notify_page::app_spec(&self.notify, &self.detail),
             PageId::NightShift => self.night.spec(self.opts.clock_24h),
@@ -1150,6 +1183,13 @@ impl Settings {
                         return self.run(ui, prefs, cmd, t);
                     }
                     Some(AlertHit::Cancel) => self.alert = None,
+                    Some(AlertHit::Reopen) => {
+                        if let Some(a) = self.alert.as_mut() {
+                            let on = !a.reopen().unwrap_or(true);
+                            a.card.set_checked(on);
+                            let _ = prefs.set(super::session::REOPEN_PREF, if on { "1" } else { "0" });
+                        }
+                    }
                     None => {}
                 }
             }
@@ -1777,7 +1817,7 @@ impl Settings {
                 vec![]
             }
             Action::Run(cmd) => {
-                self.alert = Some(Alert::new(ui, cmd));
+                self.alert = Some(Alert::new(ui, cmd).with_reopen(ui, prefs.get_bool(super::session::REOPEN_PREF, true)));
                 vec![]
             }
             Action::JoinOther => {
@@ -1915,6 +1955,11 @@ impl Settings {
             Toggle::OverviewSwitch => {
                 let on = flip(&mut self.desk.overview_switch);
                 let _ = prefs.set(super::pages::OVERVIEW_SWITCH_PREF, if on { "1" } else { "0" });
+                on
+            }
+            Toggle::CloseOnQuit => {
+                let on = flip(&mut self.desk.close_on_quit);
+                let _ = prefs.set(super::session::CLOSE_ON_QUIT_PREF, if on { "1" } else { "0" });
                 on
             }
             Toggle::AutoUpdate => flip(&mut self.opts.auto_update),
@@ -2832,6 +2877,33 @@ mod tests {
         let fx = drag_slider(&mut st, &ui, &mut prefs, None, 0, 0, 0.5, 0.0);
         assert_eq!(fx.last(), Some(&Effect::Volume(0.0)));
         assert_eq!(prefs.get("volume"), Some("0.00"));
+    }
+
+    #[test]
+    fn the_restart_alert_offers_reopen_windows_and_remembers_the_choice() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &wifi_info());
+        tap_row(&mut st, &ui, &mut prefs, "General");
+        tap_row(&mut st, &ui, &mut prefs, "Restart");
+        assert_eq!(st.alert().unwrap().reopen(), Some(true), "on by default");
+        let (cx, cy) = st.alert().unwrap().reopen_centre(&ui, 1200, 1920).expect("a checkbox row");
+        assert!(tap(&mut st, &ui, &mut prefs, cx, cy).is_empty(), "the checkbox does not confirm");
+        assert_eq!(st.alert().unwrap().reopen(), Some(false));
+        assert_eq!(prefs.get(super::super::session::REOPEN_PREF), Some("0"));
+        let (cx, cy) = st.alert().unwrap().button(&ui, 1200, 1920, AlertHit::Confirm);
+        assert_eq!(tap(&mut st, &ui, &mut prefs, cx, cy), vec![Effect::Power(PowerAction::Restart)]);
+    }
+
+    #[test]
+    fn close_windows_when_quitting_is_a_general_setting() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &wifi_info());
+        tap_row(&mut st, &ui, &mut prefs, "General");
+        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), None);
+        tap_row(&mut st, &ui, &mut prefs, "Close windows when quitting an application");
+        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), Some("1"));
+        tap_row(&mut st, &ui, &mut prefs, "Close windows when quitting an application");
+        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), Some("0"));
     }
 
     #[test]

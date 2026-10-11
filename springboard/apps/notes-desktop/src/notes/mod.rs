@@ -814,6 +814,30 @@ impl Notes {
         }
     }
 
+    /// What a relaunch restores (state restoration): the list's view and the id of the open note.
+    pub fn restorable(&self) -> (View, Option<String>) {
+        (self.view.clone(), self.editing().map(|n| n.id.clone()))
+    }
+
+    /// Puts back what `restorable` returned. A folder that was deleted since falls back to All Notes; a note that is
+    /// gone leaves the list showing. True when a frame is needed.
+    pub fn restore(&mut self, ui: &Ui, view: View, open: Option<&str>, t: f64) -> bool {
+        let view = match view {
+            View::Folder(f) if !self.folders.iter().any(|x| *x == f) => View::All,
+            v => v,
+        };
+        if view != self.view {
+            self.view = view;
+            self.list_scroll.jump_top();
+            self.reload(ui, t);
+        }
+        if let Some(id) = open {
+            self.show_note(ui, id, t);
+        }
+        self.dirty = true;
+        true
+    }
+
     /// Opens a note by id (Search); false when it no longer exists.
     pub fn show_note(&mut self, ui: &Ui, id: &str, t: f64) -> bool {
         let Some(i) = self.notes.iter().position(|n| n.id == id) else { return false };
@@ -2346,6 +2370,28 @@ mod tests {
         let mut buf = vec![0u32; 2400 * 1500];
         n.draw(&mut Surface { w: 2400, h: 1500, stride: 2400, px: &mut buf, y0: 0 }, ui, t);
         buf
+    }
+
+    #[test]
+    fn the_open_note_and_the_folder_view_come_back_after_a_relaunch() {
+        let ui = ui();
+        let dir = scratch("restore");
+        let mut n = app(&ui, &dir);
+        let id = n.import_note(&ui, "Shopping\nmilk", 1000.0);
+        n.import_note(&ui, "Other", 1100.0);
+        n.show_note(&ui, &id, 1200.0);
+        let (view, open) = n.restorable();
+        assert_eq!((view.clone(), open.clone()), (View::All, Some(id.clone())));
+        n.flush();
+        // a relaunch: a new Notes over the same directory shows the list with nothing open
+        let mut again = app(&ui, &dir);
+        assert!(again.editing().is_none());
+        assert!(again.restore(&ui, view, open.as_deref(), 2000.0));
+        assert_eq!(again.editing().map(|x| x.id.as_str()), Some(id.as_str()), "the same note is open");
+        // a folder or note that no longer exists is not an error
+        assert!(again.restore(&ui, View::Folder("Gone".into()), Some("missing"), 3000.0));
+        assert_eq!(*again.view(), View::All, "an unknown folder falls back to All Notes");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

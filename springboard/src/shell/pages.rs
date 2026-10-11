@@ -127,6 +127,8 @@ pub enum Toggle {
     OverviewGroup,
     /// Overview > Switch to a Desktop with Open Windows
     OverviewSwitch,
+    /// General: Close windows when quitting an application
+    CloseOnQuit,
     /// Developer: root adbd at boot, adb over Wi-Fi
     RootedDebug,
     WifiAdb,
@@ -919,6 +921,8 @@ pub struct DeskPrefs {
     pub corners: [usize; 4],
     pub overview_group: bool,
     pub overview_switch: bool,
+    /// General: "Close windows when quitting an application" (`session::CLOSE_ON_QUIT_PREF`)
+    pub close_on_quit: bool,
     /// 0 follows the accent colour
     pub highlight: usize,
     pub sidebar_icons: usize,
@@ -927,7 +931,7 @@ pub struct DeskPrefs {
 
 impl Default for DeskPrefs {
     fn default() -> Self {
-        DeskPrefs { magnify: true, magnify_size: 0.4, minimize_effect: 0, corners: [0; 4], overview_group: true, overview_switch: true, highlight: 0, sidebar_icons: 1, scroll_bars: 0 }
+        DeskPrefs { magnify: true, magnify_size: 0.4, minimize_effect: 0, corners: [0; 4], overview_group: true, overview_switch: true, close_on_quit: false, highlight: 0, sidebar_icons: 1, scroll_bars: 0 }
     }
 }
 
@@ -947,6 +951,7 @@ impl DeskPrefs {
             corners,
             overview_group: flag(OVERVIEW_GROUP_PREF, d.overview_group),
             overview_switch: flag(OVERVIEW_SWITCH_PREF, d.overview_switch),
+            close_on_quit: flag(super::session::CLOSE_ON_QUIT_PREF, d.close_on_quit),
             highlight: index(HIGHLIGHT_PREF, 0, bifrost_render::appearance::Accent::ALL.len()),
             sidebar_icons: index(SIDEBAR_ICON_PREF, 1, SIDEBAR_ICON_SIZES.len()),
             scroll_bars: index(SCROLL_BARS_PREF, 0, SCROLL_BAR_MODES.len()),
@@ -1034,6 +1039,13 @@ pub fn hot_corners_page(d: &DeskPrefs) -> Spec {
 }
 
 /// Overview: grouping and desktop switching.
+/// General > "Close windows when quitting an application": off keeps an app's windows for its next launch, on starts
+/// it fresh.
+pub fn restoration_group(d: &DeskPrefs) -> Group {
+    Group::new(vec![Item::new("Close windows when quitting an application").switch(d.close_on_quit, Action::Toggle(Toggle::CloseOnQuit))])
+        .footer("When on, an application starts without its old windows when you open it again. Windows that were open when you restarted or logged out come back if you leave \u{201c}Reopen windows when logging back in\u{201d} checked.")
+}
+
 pub fn overview_page(d: &DeskPrefs) -> Spec {
     Spec { id: PageId::Overview, title: "Overview".into(), large: false, groups: vec![
         Group::new(vec![Item::new("Group Windows by Application").switch(d.overview_group, Action::Toggle(Toggle::OverviewGroup))])

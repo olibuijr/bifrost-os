@@ -1566,3 +1566,77 @@ Gaps (explicit):
   but delivers no file. `icon_for_*` return glyph names, not images. No `open(_:configuration:)` options (activates, hides, new instance), no
   `runningApplications` details beyond ids, no `urlForApplication` path (apps have no URL an app may use), no `selectFile(_:inFileViewerRootedAtPath:)`.
 - Not verified on a device or built; the lead runs the tests.
+||||||| 935837f4
+
+
+## State restoration (NSWindowRestoration parity)
+
+An app saves what it needs to put its window back, and the desktop puts the windows back, after a relaunch, a restart,
+a shut down, an update or a crash.
+
+**API** (`bifrost_app::restoration`, hooks on `App`, `Ctx`):
+
+| Apple | BifrOSt |
+|---|---|
+| `NSWindow.restorationIdentifier`, `isRestorable` | `App::restoration_identifier() -> Option<&str>` (`None`, the default, is not restorable), `App::is_restorable()` |
+| `encodeRestorableState(with:)` | `App::encode_restorable_state(ctx, &mut RestorableState)`; `state.encode_for(key, &value)` takes anything `Encodable` (see Codable) |
+| `restoreState(with:)` | `App::restore_state(ctx, &RestorableState) -> bool`; `state.decode_for::<T>(key) -> Option<T>`, `contains` |
+| `invalidateRestorableState()` | `ctx.invalidate_restorable_state()` |
+| automatic window frame | the window size is saved with the state (`restoration::load` returns it); the position and order are the shell's (below) |
+
+Decisions:
+- The state is one JSON file, `restorable-state.json`, in the app's own data dir, written with an atomic replace. It holds a
+  format version, the window identifier, the window size and the keyed state. A missing, corrupt, foreign (other
+  identifier) or newer-format file is ignored and removed, like a stale restoration archive.
+- `invalidate_restorable_state` is a debounce, not a write: the first call of a burst arms one write 750 ms later
+  (`DEBOUNCE_MS`), the rest join it. The runtime checks the deadline in its loop (it also sets the wait timeout), so
+  there is no write per frame. Suspend and quit write at once. A write whose encoded state equals the file is skipped.
+- Sudden termination (see above) is held between the first invalidation and the write: the call does a
+  `disable_sudden_termination` and the write the matching `enable`. An app that opted in is therefore killed silently on
+  logout, restart or shutdown only when its state is already on disk, which is the point of being restorable.
+- The shell starts every app with `BIFROST_RESTORE=1` (`restoration::restore_requested()`) when it should restore, else `0`.
+  The runtime calls `restore_state` once, after the first `configure`.
+- Reference adoption: Notes (`apps/notes-desktop`) saves the list view (All, a folder, Recently Deleted) and the open note,
+  and calls `invalidate_restorable_state` when either changes.
+
+**Shell** (`src/shell/session.rs`):
+- `session.txt` in the shell's data dir lists the open windows back to front: app id, frame, zoomed, minimized. Frames are
+  stored as parts of the screen (10000 = the whole width or height), so a layout saved at one resolution or scale reopens
+  sensibly on another; `Desk::place` keeps a restored frame inside the work area and the app's size limits. The file is
+  rewritten while the desktop runs (at most every 2 s, only when it changed), so a crash leaves the last layout, and a last
+  time before a restart, shut down or update restart (`Shell::session_save_for_exit`, called by the binary before
+  `stop_apps`).
+- On the next login, once the desktop is up and unlocked, the windows are reopened in their old order and places and their
+  apps start with `BIFROST_RESTORE=1`. Apps that are no longer installed are dropped; if every saved window was minimized,
+  the last one is shown.
+- The restart, shut down and update-restart confirmations (Settings > General, and the Restart row of the shell) carry the
+  checkbox "Reopen windows when logging back in" (pref `reopen_windows_on_login`, default on). Unchecking it saves an empty
+  session. The checkbox is `AlertCard::with_checkbox`, a reusable alert accessory (Apple: `showsSuppressionButton`).
+- Settings > General > "Close windows when quitting an application" (pref `close_windows_on_quit`, default off, the inverse of
+  `NSQuitAlwaysKeepsWindows`). Off: any launch of an app restores its saved state. On: only windows reopened at login do;
+  an app the user opens by hand starts fresh.
+
+**Gaps (stated, not hidden):**
+- No `NSWindowRestoration` class / completion-handler protocol and no `NSCoder` archive format: the keyed state is a typed
+  JSON dictionary, and each app has one restorable window (an app with several windows would need a per-window file and
+  identifier lookup).
+- The window position is the shell's, not the app's: the app only gets its size back through `restoration::load`; apps that
+  want to react to a different restored size use `configure`.
+- The Restart, Shut Down and Log Out items of the desktop menu bar still act at once (their ellipsis has no dialog behind it
+  yet), so they use the saved "Reopen windows" preference without asking; only the Settings confirmations show the
+  checkbox. There is no Log Out (single user session) yet.
+- A crash restores the layout and each app's last debounced state, but an unchecked "Reopen windows" is only honoured on
+  an orderly restart or shut down; Apple's rule that a crash after a user-initiated quit does not reopen is not modelled.
+- "Close windows when quitting" does not delete a saved file; it only stops the next launch reading it.
+- Native Linux windows (`window = "native"` apps) keep the older `open-native-windows.json` list (app ids only, no frame).
+- Only Notes has adopted the hooks; Files (folder and view) is the next candidate.
+- Not exercised on a device: the replay of `session.txt` at login and the alert checkbox drawing were written without a
+  build and need a Midget run.
+
+Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, `invalidate_coalesces_writes`,
+`an_unchanged_state_costs_no_write`, `a_corrupt_or_foreign_file_is_ignored_and_removed`,
+`invalidating_holds_sudden_termination_until_the_write`, `is_restorable_follows_the_identifier`,
+`the_window_size_is_kept_automatically`), `session::tests`, `desk::tests::a_restored_frame_is_kept_inside_the_work_area`,
+`settings::tests::the_restart_alert_offers_reopen_windows_and_remembers_the_choice`,
+`settings::tests::close_windows_when_quitting_is_a_general_setting`, and Notes'
+`the_open_note_and_the_folder_view_come_back_after_a_relaunch`.

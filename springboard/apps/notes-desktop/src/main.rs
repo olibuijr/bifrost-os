@@ -24,6 +24,24 @@ struct NotesApp {
     /// Core Search: the `modified` stamp of each note as last indexed, by note id
     indexed: std::collections::HashMap<String, i64>,
     next_index: f64,
+    /// what state restoration last saw (the list's view and the open note id), to notice a change
+    restorable: Option<(notes::View, Option<String>)>,
+}
+
+/// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
+fn view_key(view: &notes::View) -> String {
+    match view {
+        notes::View::All => "all".into(),
+        notes::View::Trash => "trash".into(),
+        notes::View::Folder(f) => format!("folder:{f}"),
+    }
+}
+
+fn view_from_key(key: &str) -> notes::View {
+    match key {
+        "trash" => notes::View::Trash,
+        k => k.strip_prefix("folder:").map_or(notes::View::All, |f| notes::View::Folder(f.to_string())),
+    }
 }
 
 /// Search domain of every note.
@@ -32,6 +50,16 @@ const SPOT_DOMAIN: &str = "notes";
 const INDEX_EVERY_MS: f64 = 3000.0;
 
 impl NotesApp {
+    /// `invalidateRestorableState()` when the view or the open note changed since the last look.
+    fn track_restorable(&mut self, ctx: &Ctx) {
+        let Some(n) = &self.notes else { return };
+        let now = n.restorable();
+        if self.restorable.as_ref() != Some(&now) {
+            self.restorable = Some(now);
+            ctx.invalidate_restorable_state();
+        }
+    }
+
     /// Keeps the Core Search index in step with the notes: new and edited ones are indexed (title, first lines as the
     /// description, the folder as a keyword), deleted and trashed ones are removed.
     fn sync_index(&mut self, ctx: &Ctx) {
@@ -119,6 +147,28 @@ impl App for NotesApp {
 
     fn rpc_methods(&self) -> Vec<&'static str> {
         notes::rpc::methods()
+    }
+
+    fn restoration_identifier(&self) -> Option<&str> {
+        Some("notes.main")
+    }
+
+    fn encode_restorable_state(&self, _ctx: &Ctx, state: &mut bifrost_app::RestorableState) {
+        let Some(n) = &self.notes else { return };
+        let (view, open) = n.restorable();
+        state.encode_for("view", &view_key(&view));
+        if let Some(id) = open {
+            state.encode_for("note", &id);
+        }
+    }
+
+    fn restore_state(&mut self, ctx: &Ctx, state: &bifrost_app::RestorableState) -> bool {
+        let Some(n) = &mut self.notes else { return false };
+        let view = state.decode_for::<String>("view").map_or(notes::View::All, |k| view_from_key(&k));
+        let open = state.decode_for::<String>("note");
+        let redraw = n.restore(&ctx.ui, view, open.as_deref(), bifrost_app::proto::sys::now_ms());
+        self.restorable = Some(n.restorable());
+        redraw
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
@@ -355,7 +405,9 @@ impl App for NotesApp {
             self.last_wall = t;
             n.set_wall(Wall::sample(t));
         }
-        n.tick(&ctx.ui, t)
+        let redraw = n.tick(&ctx.ui, t);
+        self.track_restorable(ctx);
+        redraw
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
@@ -374,5 +426,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0 });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None });
 }

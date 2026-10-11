@@ -438,6 +438,21 @@ impl Desk {
         self.wins.len() - 1
     }
 
+    /// Puts window `i` at `r` (a restored frame): the size is held inside the app's limits and the work area, the
+    /// position inside the work area. The window is no longer zoomed, and `r` is what un-zooming goes back to.
+    pub fn place(&mut self, m: &Metrics, i: usize, r: Rect) {
+        let a = Self::area(m);
+        let (min_w, min_h, max_w, max_h) = size_range(self.wins[i].app, m);
+        let w = r.w.clamp(min_w, max_w).min(a.w).max(1);
+        let h = r.h.clamp(min_h, max_h).min(a.h).max(1);
+        let x = r.x.clamp(a.x, (a.x + a.w - w).max(a.x));
+        let y = r.y.clamp(a.y, (a.y + a.h - h).max(a.y));
+        let win = &mut self.wins[i];
+        win.r = Rect { x, y, w, h };
+        win.restore = win.r;
+        win.maximized = false;
+    }
+
     pub fn toggle_zoom(&mut self, m: &Metrics, i: usize) {
         let a = Self::area(m);
         let w = &mut self.wins[i];
@@ -901,7 +916,7 @@ impl Shell {
     }
 
     /// The window's app gets the body size.
-    fn desk_layout(&mut self, i: usize) {
+    pub(super) fn desk_layout(&mut self, i: usize) {
         let m = self.desk_metrics();
         let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { return };
         let b = w.body(&m);
@@ -1855,6 +1870,20 @@ mod tests {
             assert!(w.r.x >= a.x && w.r.y >= a.y && w.r.x + w.r.w <= a.x + a.w && w.r.y + w.r.h <= a.y + a.h, "{:?}", w.r);
         }
         assert_ne!(d.wins[0].r, d.wins[1].r);
+    }
+
+    #[test]
+    fn a_restored_frame_is_kept_inside_the_work_area() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::Photos, (900, 600));
+        let a = Desk::area(&m);
+        d.place(&m, i, Rect { x: 200, y: 150, w: 800, h: 500 });
+        assert_eq!(d.wins[i].r, Rect { x: 200, y: 150, w: 800, h: 500 }, "a sane frame comes back as saved");
+        d.place(&m, i, Rect { x: 99_999, y: -500, w: 99_999, h: 99_999 });
+        let r = d.wins[i].r;
+        assert!(r.x >= a.x && r.y >= a.y && r.x + r.w <= a.x + a.w && r.y + r.h <= a.y + a.h, "{r:?}");
+        assert!(!d.wins[i].maximized);
     }
 
     #[test]

@@ -385,6 +385,8 @@ pub struct AlertCard {
     title: Image,
     message: Vec<Image>,
     buttons: Vec<Image>,
+    /// `showsSuppressionButton`-style checkbox above the buttons: its label and whether it is checked
+    check: Option<(Image, bool)>,
 }
 
 /// Inner margin, gap between buttons and button height of an alert, in pt (measured from the reference).
@@ -392,6 +394,10 @@ const ALERT_PAD_PT: f32 = 16.0;
 const ALERT_GAP_PT: f32 = 8.0;
 const ALERT_BTN_H_PT: f32 = 28.0;
 const ALERT_RADIUS_PT: f32 = 28.0;
+/// The checkbox row: its height, the gap above the buttons and the box size, in pt.
+const ALERT_CHECK_H_PT: f32 = 18.0;
+const ALERT_CHECK_GAP_PT: f32 = 10.0;
+const ALERT_CHECK_BOX_PT: f32 = 14.0;
 
 impl AlertCard {
     /// `buttons` are the rendered labels, left to right. Title and message are white images drawn in the label colour.
@@ -400,13 +406,50 @@ impl AlertCard {
             title: ui.text(title, MAC_TITLE3_PT, Weight::Semibold, WHITE),
             message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(ALERT_W_PT - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
             buttons,
+            check: None,
         }
+    }
+
+    /// Adds a checkbox row above the buttons (`NativeAlert.showsSuppressionButton`, "Reopen windows when logging back in").
+    pub fn with_checkbox(mut self, ui: &Ui, label: &str, checked: bool) -> Self {
+        self.check = Some((ui.text(label, MAC_BODY_PT, Weight::Regular, WHITE), checked));
+        self
+    }
+
+    /// The checkbox state, `None` for a card without one.
+    pub fn checked(&self) -> Option<bool> {
+        self.check.as_ref().map(|c| c.1)
+    }
+
+    pub fn set_checked(&mut self, on: bool) {
+        if let Some(c) = self.check.as_mut() {
+            c.1 = on;
+        }
+    }
+
+    /// The checkbox row (x, y, w, h) inside a card at (x, y, w, h).
+    fn check_rect(&self, ui: &Ui, (x, y, cw, ch): (f32, f32, f32, f32)) -> Option<(f32, f32, f32, f32)> {
+        self.check.as_ref()?;
+        let pad = ui.pt(ALERT_PAD_PT);
+        let row_h = ui.pt(ALERT_CHECK_H_PT);
+        Some((x + pad, y + ch - pad - ui.pt(ALERT_BTN_H_PT) - ui.pt(ALERT_CHECK_GAP_PT) - row_h, cw - 2.0 * pad, row_h))
+    }
+
+    /// True when (x, y) is on the checkbox row.
+    pub fn hit_check(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> bool {
+        self.check_rect(ui, self.card(ui, w, h)).is_some_and(|(rx, ry, rw, rh)| x >= rx && x < rx + rw && y >= ry && y < ry + rh)
+    }
+
+    /// Centre of the checkbox row, for tests.
+    pub fn check_centre(&self, ui: &Ui, w: i32, h: i32) -> Option<(f32, f32)> {
+        self.check_rect(ui, self.card(ui, w, h)).map(|(rx, ry, rw, rh)| (rx + rw / 2.0, ry + rh / 2.0))
     }
 
     /// The card (x, y, w, h), centred on screen.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
         let cw = ui.pt(ALERT_W_PT);
-        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title.h as f32 + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT);
+        let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title.h as f32 + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
+            + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 };
         (((w as f32 - cw) / 2.0).round(), ((h as f32 - ch) / 2.0).round(), cw, ch)
     }
 
@@ -444,6 +487,27 @@ impl AlertCard {
         for line in &self.message {
             s.blit_colored(line, lx as i32, ty as i32, LABEL.now(), 255);
             ty += ui.pt(17.0);
+        }
+        if let (Some((label, on)), Some((rx, ry, _, rh))) = (&self.check, self.check_rect(ui, card)) {
+            let b = ui.pt(ALERT_CHECK_BOX_PT);
+            let by = ry + (rh - b) / 2.0;
+            if *on {
+                s.fill_rrect(rx, by, b, b, ui.pt(3.0), TINT);
+                // the tick: a short stroke down to the right, then a long one up to the right, in white dots
+                let t = ui.pt(1.8).max(1.0);
+                let mut dot = |px: f32, py: f32| s.fill_rrect(rx + px * b - t / 2.0, by + py * b - t / 2.0, t, t, t / 2.0, rgba(255, 255, 255, 255));
+                for k in 0..=8 {
+                    let f = k as f32 / 8.0;
+                    dot(0.22 + 0.20 * f, 0.52 + 0.20 * f);
+                }
+                for k in 1..=14 {
+                    let f = k as f32 / 14.0;
+                    dot(0.42 + 0.36 * f, 0.72 - 0.42 * f);
+                }
+            } else {
+                s.stroke_rrect(rx, by, b, b, ui.pt(3.0), ui.pt(1.0).max(1.0), SECONDARY);
+            }
+            s.blit_colored(label, (rx + b + ui.pt(8.0)) as i32, (ry + (rh - label.h as f32) / 2.0) as i32, LABEL.now(), 255);
         }
         for (i, label) in self.buttons.iter().enumerate() {
             let (bx, by, bw, bh) = self.button_rect(ui, card, i);
