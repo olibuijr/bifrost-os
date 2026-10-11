@@ -690,3 +690,5 @@ pub mod scan;
 pub mod analysis;
 pub mod docscan;
 pub mod geo;
+pub mod location;
+pub mod geofence;
