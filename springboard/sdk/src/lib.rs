@@ -61,6 +61,7 @@ pub mod dispatch;
 pub mod fswatch;
 pub mod file_coordination;
 pub mod url;
+pub mod error;
 pub mod coding;
 pub mod restoration;
 pub use restoration::RestorableState;
