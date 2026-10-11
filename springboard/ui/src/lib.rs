@@ -572,6 +572,7 @@ pub mod gesture;
 pub mod focus;
 pub mod uttype;
 pub mod preview;
+pub mod thumbnail;
 pub mod fileaction;
 pub mod actionrequest;
 pub mod textfit;
