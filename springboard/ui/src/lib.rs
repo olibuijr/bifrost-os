@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod match_pattern;
+pub mod url_filter;
+pub mod call_directory;
