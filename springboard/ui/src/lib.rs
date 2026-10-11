@@ -589,6 +589,8 @@ pub mod mesh;
 pub mod shading;
 pub mod composition;
 pub mod audio_mix;
+pub mod state_machine;
+pub mod grid_graph;
 #[cfg(test)]
 mod bench;
 
