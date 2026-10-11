@@ -6,6 +6,9 @@
 //! size, and [`ThumbnailCache`] remembers which were generated (an `NativeCache`, see `crate::cache`).
 
 pub use crate::proto::peek::{PreviewItem, MAX_ITEMS};
+/// Data-based previews and thumbnail requests (`QLPreviewProvider`, `QLPreviewReply`, `QLThumbnailGenerator.Request`):
+/// the pure models in `bifrost_ui::preview`, re-exported for apps. See [`Registry`] and [`ThumbnailRequest`].
+pub use bifrost_ui::preview::{Attachment, Content, ModelError, Registry, Reply, Representation, ThumbnailRequest};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -169,5 +172,36 @@ mod tests {
         let b = c.best_representation(u, 64, 1, |_| panic!("cached")).unwrap();
         assert_eq!(a, b);
         let _ = std::fs::remove_file(a);
+    }
+
+    #[test]
+    fn provider_routing_is_reachable_from_the_sdk() {
+        let mut reg = Registry::new();
+        reg.register("text", &["public.plain-text"]).unwrap();
+        reg.register("md", &["net.daringfireball.markdown"]).unwrap();
+        assert_eq!(reg.provider_for("README.md"), Some("md"));
+        assert_eq!(reg.provider_for("todo.txt"), Some("text"));
+        assert_eq!(reg.provider_for("image.png"), None);
+    }
+
+    #[test]
+    fn html_reply_resolves_its_inline_attachments() {
+        let body = Content::Html {
+            body: "<img src=\"cid:chart\">".into(),
+            attachments: vec![Attachment { id: "chart".into(), data: vec![0x89, b'P'], content_type: "image/png".into() }],
+        };
+        let reply = Reply::new(body).unwrap().with_title("Q3 report");
+        assert_eq!(reply.display_title("q3.html"), "Q3 report");
+        assert_eq!(reply.resolve_cid("cid:chart").unwrap().data.len(), 2);
+        assert!(Reply::new(Content::Bitmap { width: 0, height: 1 }).is_err());
+    }
+
+    #[test]
+    fn thumbnail_request_picks_the_best_produced_size() {
+        let req = ThumbnailRequest::new("file:///a.png", (128.0, 128.0), 2.0, &[Representation::Thumbnail, Representation::Icon]).unwrap();
+        assert_eq!(req.pixel_size(), (256, 256));
+        assert_eq!(req.best_of(&[Representation::Icon]), Some(Representation::Icon));
+        assert_eq!(req.best_of(&[Representation::Thumbnail, Representation::Icon]), Some(Representation::Thumbnail));
+        assert_eq!(req.best_of(&[Representation::LowQuality]), None);
     }
 }
