@@ -47,6 +47,23 @@ pub fn next(items: &[Focusable], current: Option<u64>, forward: bool) -> Option<
     Some(order[i].id)
 }
 
+/// The view that takes focus when a pane is shown: `initial` when it is present and enabled, otherwise the first
+/// view in reading order.
+pub fn entry(items: &[Focusable], initial: Option<u64>) -> Option<u64> {
+    let order = reading_order(items);
+    initial
+        .filter(|id| order.iter().any(|f| f.id == *id))
+        .or_else(|| order.first().map(|f| f.id))
+}
+
+/// The view that ends a pane's focus loop: `last` when it is present and enabled, otherwise the last view in reading
+/// order. Tab order itself is unchanged: `next` still follows reading order.
+pub fn exit(items: &[Focusable], last: Option<u64>) -> Option<u64> {
+    let order = reading_order(items);
+    last.filter(|id| order.iter().any(|f| f.id == *id))
+        .or_else(|| order.last().map(|f| f.id))
+}
+
 /// The nearest enabled view in direction `dir` from `current` (no wrapping). Distance along the axis counts once,
 /// off-axis offset counts double, so a view straight ahead beats a nearer one far to the side.
 pub fn nearest(items: &[Focusable], current: u64, dir: Dir) -> Option<u64> {
@@ -98,5 +115,24 @@ mod tests {
         assert_eq!(nearest(&v, 1, Dir::Right), Some(4));
         assert_eq!(nearest(&v, 1, Dir::Up), None);
         assert_eq!(nearest(&v, 3, Dir::Up), Some(1));
+    }
+    #[test]
+    fn a_pane_opens_on_its_initial_view_or_the_first_one() {
+        let v = [f(3, 0.0, 40.0, true), f(2, 100.0, 1.0, true), f(1, 0.0, 0.0, true)];
+        assert_eq!(entry(&v, Some(2)), Some(2));
+        assert_eq!(entry(&v, None), Some(1));
+        // A missing or disabled initial view falls back to the first enabled view in reading order.
+        assert_eq!(entry(&v, Some(9)), Some(1));
+        let with_disabled = [f(1, 0.0, 0.0, false), f(2, 100.0, 0.0, true)];
+        assert_eq!(entry(&with_disabled, Some(1)), Some(2));
+        assert_eq!(entry(&[f(1, 0.0, 0.0, false)], None), None);
+    }
+    #[test]
+    fn a_pane_ends_on_its_last_view_or_the_last_one() {
+        let v = [f(3, 0.0, 40.0, true), f(2, 100.0, 1.0, true), f(1, 0.0, 0.0, true)];
+        assert_eq!(exit(&v, Some(1)), Some(1));
+        assert_eq!(exit(&v, None), Some(3));
+        assert_eq!(exit(&v, Some(9)), Some(3));
+        assert_eq!(exit(&[], Some(1)), None);
     }
 }

@@ -570,6 +570,7 @@ pub mod regex;
 pub mod format;
 pub mod gesture;
 pub mod focus;
+pub mod pane;
 pub mod uttype;
 pub mod preview;
 pub mod fileaction;
