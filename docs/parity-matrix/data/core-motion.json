@@ -1,0 +1,33 @@
+{
+  "framework": "Core Motion",
+  "doc": "https://developer.apple.com/documentation/coremotion",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/core/src/motion.rs (MotionEstimator), springboard/core/src/sensor_log.rs (SensorLog), springboard/render/src/gfx/rotate.rs (orientation_from_gravity), springboard/src/shell/rotate.rs (orientation consumer)",
+  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt now has the pure models for device motion (attitude, rotation rate, gravity and user acceleration from raw samples), a time-ordered sensor sample log, and a gravity-to-orientation classifier with hysteresis. None of them has an app-facing API or a sensor feed in this repo, so no sensor data reaches an app yet.",
+  "rea_evidence": "ev_8ab92618716263d274d95b15cad68b33b19435b75dd8401dfffea37ac23676da",
+  "features": [
+    {"feature": "Device motion (attitude, rotation rate, gravity-free acceleration)", "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame", "bifrost": "springboard/core/src/motion.rs", "status": "partial", "note": "MotionEstimator fuses accelerometer and gyroscope samples into roll, pitch, yaw, a unit quaternion, the gyroscope rate, gravity and user acceleration. Yaw is integrated only, in an arbitrary reference frame (no magnetometer). No rotation matrix and no reference-frame choice. No SDK API and no sensor reader feeds it."},
+    {"feature": "Device orientation (four-way)", "apple": "Derived from CMAccelerometerData or CMDeviceMotion by the app", "bifrost": "springboard/render/src/gfx/rotate.rs (orientation_from_gravity, Orientation), springboard/src/shell/rotate.rs (set_orientation, Rotation Lock)", "status": "partial", "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity classifies a gravity reading with a 15 degree hysteresis band and a flat cut-off. No in-repo code feeds set_orientation from a sensor yet (set_orientation has callers only in rotate.rs tests), so the sensor reader is missing or lives outside this repo."},
+    {"feature": "Raw accelerometer events", "apple": "CMAccelerometerData, CMAccelerometer updates via CMMotionManager", "bifrost": "none", "status": "gap", "note": "No accelerometer reader and no SDK API in springboard/sdk/src or springboard/src. The sample types are in springboard/core/src/motion.rs (Vec3) but nothing reads the hardware."},
+    {"feature": "Raw gyroscope events", "apple": "CMGyroData", "bifrost": "none", "status": "gap", "note": "No gyroscope reader or SDK API found. motion.rs takes gyroscope rates as input only."},
+    {"feature": "Magnetometer", "apple": "CMMagnetometerData", "bifrost": "none", "status": "gap", "note": "No magnetometer reader or SDK API found."},
+    {"feature": "Altitude and ambient pressure", "apple": "CMAltimeter, CMAltitudeData, CMAbsoluteAltitudeData, CMAmbientPressureData, CMRecordedPressureData", "bifrost": "none", "status": "gap", "note": "No barometer or altitude API. Desktop hardware rarely has these sensors."},
+    {"feature": "Recorded sensor data and batched history", "apple": "CMSensorRecorder, CMSensorDataList, CMRecordedAccelerometerData, CMBatchedSensorManager, CMLogItem", "bifrost": "springboard/core/src/sensor_log.rs (SensorLog)", "status": "partial", "note": "SensorLog keeps a bounded, time-ordered sample history and answers time-range queries with inclusive ends. Out-of-order samples are refused. Nothing records from hardware, there is no recording-duration request and no authorization model, and no SDK API."},
+    {"feature": "Motion activity (walking, running, stationary, automotive)", "apple": "CMMotionActivityManager, CMMotionActivity, CMHeadphoneActivityManager", "bifrost": "none", "status": "gap", "note": "No activity recognition API."},
+    {"feature": "Pedometer, step counter and odometer", "apple": "CMPedometer, CMPedometerData, CMPedometerEvent, CMStepCounter, CMOdometerData", "bifrost": "none", "status": "gap", "note": "No step or pedometer data. Desktop PCs are not carried by users, so this is low priority."},
+    {"feature": "Heart rate data (1 Hz)", "apple": "CMHighFrequencyHeartRateData", "bifrost": "none", "status": "n/a", "note": "Watch-only sensor data."},
+    {"feature": "Headphone motion", "apple": "CMHeadphoneMotionManager", "bifrost": "none", "status": "n/a", "note": "Requires Apple AirPods motion hardware."},
+    {"feature": "Water submersion", "apple": "CMWaterSubmersionManager, CMWaterSubmersionMeasurement, CMWaterTemperature", "bifrost": "none", "status": "n/a", "note": "Apple Watch Ultra only."},
+    {"feature": "Movement disorder symptoms", "apple": "CMMovementDisorderManager, CMTremorResult, CMDyskineticSymptomResult", "bifrost": "none", "status": "n/a", "note": "Apple Watch only, with a dedicated data-collection requirement."},
+    {"feature": "Fall detection", "apple": "CMFallDetectionManager, CMFallDetectionDelegate, CMFallDetectionEvent", "bifrost": "none", "status": "n/a", "note": "Apple Watch and iPhone only, tied to emergency services."}
+  ],
+  "gaps": [
+    "No app-facing Core Motion equivalent in springboard/sdk/src: the models in springboard/core/src (motion.rs, sensor_log.rs) have no CMMotionManager-style API and no update delivery to apps.",
+    "The sensor feed is missing from this repo: springboard/src/shell/rotate.rs documents set_orientation as fed by the accelerometer every 200 ms, but no non-test caller exists here. orientation_from_gravity is ready for that caller.",
+    "No gyroscope, accelerometer or magnetometer readers: the hardware samples the models consume do not come from anywhere in the repo.",
+    "Device motion has no rotation matrix, no reference frame other than an arbitrary yaw, and no magnetometer-corrected heading.",
+    "No magnetometer, barometer or altitude readers.",
+    "No motion-activity recognition or pedometer. Sensor history is a model only; nothing records from hardware and there is no recording authorization."
+  ]
+}

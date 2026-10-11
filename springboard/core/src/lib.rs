@@ -4,3 +4,5 @@ pub mod sha256;
 pub mod fsutil;
 pub mod log;
 pub mod host;
+pub mod motion;
+pub mod sensor_log;
