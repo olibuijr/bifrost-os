@@ -574,6 +574,8 @@ pub mod visual_search;
 pub mod regex;
 pub mod format;
 pub mod gesture;
+pub mod identity;
+pub mod access_control;
 pub mod focus;
 pub mod pane;
 pub mod uttype;
