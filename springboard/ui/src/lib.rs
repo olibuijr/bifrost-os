@@ -733,3 +733,4 @@ pub mod precipitation;
 pub mod weather_alert;
 pub mod weather_attribution;
 pub mod hid_report;
+pub mod linkmeta;
