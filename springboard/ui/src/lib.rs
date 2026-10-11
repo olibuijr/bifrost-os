@@ -571,6 +571,7 @@ pub mod focus;
 pub mod uttype;
 pub mod textfit;
 pub mod observe;
+pub mod controller;
 pub mod calendar;
 pub mod collection;
 pub mod dockdrag;
