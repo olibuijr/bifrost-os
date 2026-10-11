@@ -64,6 +64,7 @@ pub mod url;
 pub mod coding;
 pub mod attributed;
 pub mod spellcheck;
+pub mod translation;
 pub mod notification;
 pub mod observable;
 pub use observable::{Cancellables, Observable, Subscription};
