@@ -24,7 +24,9 @@ struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfa
 pub struct WindowFrame { pub id:u32, pub title:String, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub title_height:i32,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
-    pub drag_height:i32, pub no_drag:Vec<[i32;4]> }
+    pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
+    /// Open, close, minimize and zoom transform of the window (identity at rest), applied by the GPU presenter.
+    pub fx:bifrost_render::glass::Fx }
 pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool) }
 struct Window { surface:wl_surface::WlSurface, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
@@ -300,6 +302,7 @@ impl Display {
                 let w=self.state.windows.get_mut(&id).unwrap();
                 let margin=w.margin;
                 g.p.set_shadow(key,(margin>0).then_some(crate::gpu::wl::Shadow{radius:scale*bifrost_ui::prefs_layout::m::WINDOW_RADIUS,focused}));
+                g.p.set_fx(key,w.frame.fx);
                 let Some(slot)=self.state.gpu_slots.get(&key).and_then(|v|v.iter().position(|s|!s.busy)) else {continue;};
                 let pixels=w.frame.pixels.as_deref().unwrap();
                 // vibrancy: the window's material rects in screen space, the blurred wallpaper behind them

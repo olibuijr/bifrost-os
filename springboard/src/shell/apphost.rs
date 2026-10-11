@@ -41,6 +41,8 @@ pub struct Manifest {
     /// `min_size = "WxH"` / `max_size = "WxH"` in points (`NativeWindow.contentMinSize` / `contentMaxSize`).
     pub min_size: String,
     pub max_size: String,
+    /// `animation_behavior = "default" | "document" | "utility" | "alert" | "none"`: which window animations play.
+    pub animation_behavior: String,
     pub wayland_app_id: String,
     /// What the app opens, `type` or `type:rank` (rank owner, default, alternate, none; default is `default`): `handles = ["public.png:owner", "public.text"]`.
     pub handles: Vec<String>,
@@ -54,6 +56,9 @@ impl Manifest {
     /// The app draws to the top edge of its window (`NativeWindowStyleMaskFullSizeContentView`).
     pub fn full_size_content(&self) -> bool {
         self.window == "full-size"
+    }
+    pub fn animation_behavior(&self) -> super::window_fx::AnimationBehavior {
+        super::window_fx::AnimationBehavior::parse(self.animation_behavior.trim())
     }
     /// The window size rules from `window_size`, `min_size` and `max_size`, in points.
     pub fn size_limits(&self) -> SizeLimits {
@@ -121,6 +126,7 @@ impl Manifest {
                 "window_size" => m.window_size = unquote(v),
                 "min_size" => m.min_size = unquote(v),
                 "max_size" => m.max_size = unquote(v),
+                "animation_behavior" => m.animation_behavior = unquote(v),
                 "wayland_app_id" => m.wayland_app_id = unquote(v),
                 _ => {}
             }
@@ -1311,6 +1317,14 @@ mod tests {
         host.handle(ToShell::Buffers{w:8,h:6},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
+    }
+
+    #[test]
+    fn manifest_animation_behavior_parses_and_defaults() {
+        let base = "id = \"a.b\"\nname = \"A\"\nexec = \"a\"\n";
+        use super::super::window_fx::AnimationBehavior as B;
+        assert_eq!(Manifest::parse(base).unwrap().animation_behavior(), B::Default);
+        assert_eq!(Manifest::parse(&format!("{base}animation_behavior = \"none\"\n")).unwrap().animation_behavior(), B::None);
     }
 
     #[test]

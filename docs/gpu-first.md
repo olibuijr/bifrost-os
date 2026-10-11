@@ -49,7 +49,7 @@ close, minimize (scale to 0.12 and slide toward the dock icon, clamped to the sh
 (a settle pulse), timed by `motion::Kind` (`render/src/motion.rs`). Limits: the drawable is fixed, so scale
 stays at or below 1 and the slide is bounded by the shadow margin; a true dock-warp to the dock icon needs a
 temporary larger drawable or compositor-side transforms (a follow-up: render the effect into a screen-size
-overlay surface). The shell does not call `window_fx` yet; the minimize/close/open hooks are the integration
+overlay surface). The shell now starts open, minimize, restore and zoom effects (`Shell::desk_fx_start`); close is the integration
 point for the shell track. Inactive windows keep the half-depth shadow.
 
 Goal: every BifrOSt surface is drawn and composed on the GPU, Wayland-native, with Apple-level
