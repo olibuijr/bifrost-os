@@ -54,6 +54,9 @@ struct Obj {
 
 struct Info {
     name: String,
+    help: String,
+    attrs: HashMap<String, String>,
+    text: Option<bifrost_proto::AxText>,
     role: u32,
     role_name: &'static str,
     states: [u32; 2],
@@ -73,6 +76,9 @@ impl Obj {
         match self.key {
             Key::Root => Some(Info {
                 name: "BifrOSt".into(),
+                help: String::new(),
+                attrs: HashMap::new(),
+                text: None,
                 role: role::APPLICATION,
                 role_name: "application",
                 states: [0, 0],
@@ -89,6 +95,9 @@ impl Obj {
                 let (i, a) = apps.iter().enumerate().find(|(_, a)| a.slot == slot)?;
                 Some(Info {
                     name: a.name.clone(),
+                    help: String::new(),
+                    attrs: HashMap::new(),
+                    text: None,
                     role: role::FRAME,
                     role_name: "frame",
                     states: window_states(),
@@ -108,8 +117,11 @@ impl Obj {
                 let parent = n.parent.map_or(Key::App(slot), |p| Key::Node(slot, p));
                 let siblings = children(&a.nodes, n.parent);
                 Some(Info {
-                    name: n.name.clone(),
-                    role: atspi_role(n.role),
+                    name: n.accessible_name().to_string(),
+                    help: n.help.clone(),
+                    attrs: node_attrs(n),
+                    text: n.text,
+                    role: n.atspi_role(),
                     role_name: role_name(n.role),
                     states: states(n),
                     parent,
@@ -133,6 +145,21 @@ impl Obj {
     }
 }
 
+/// Extra `Accessible.GetAttributes` entries: the title/help split and the text ranges (`AXVisibleCharacterRange`).
+fn node_attrs(n: &SNode) -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    if !n.title.is_empty() {
+        m.insert("title".into(), n.title.clone());
+    }
+    if !n.help.is_empty() {
+        m.insert("help".into(), n.help.clone());
+    }
+    if let Some(t) = n.text {
+        m.insert("visible-range".into(), format!("{}-{}", t.vis_start, t.vis_end));
+    }
+    m
+}
+
 fn path_of(k: Key) -> ObjectPath<'static> {
     ObjectPath::try_from(key_path(k)).expect("valid path")
 }
@@ -147,7 +174,7 @@ impl Accessible {
     }
     #[zbus(property)]
     fn description(&self) -> String {
-        self.0.info().map(|i| i.role_name.to_string()).unwrap_or_default()
+        self.0.info().map(|i| if i.help.is_empty() { i.role_name.to_string() } else { i.help }).unwrap_or_default()
     }
     #[zbus(property)]
     fn parent(&self) -> Ref {
@@ -194,7 +221,7 @@ impl Accessible {
         self.0.info().map_or(vec![0, 0], |i| i.states.to_vec())
     }
     fn get_attributes(&self) -> HashMap<String, String> {
-        HashMap::new()
+        self.0.info().map(|i| i.attrs).unwrap_or_default()
     }
     fn get_application(&self) -> Ref {
         self.0.shared.r(Key::Root)
@@ -326,6 +353,20 @@ impl ValueI {
 
 struct Text(Obj);
 
+impl Text {
+    /// `(caret, selection start, selection end)`; a field that never reported text has its caret at the end.
+    fn ranges(&self) -> (i32, i32, i32) {
+        let Some(i) = self.0.info() else { return (0, 0, 0) };
+        match i.text {
+            Some(t) => (t.caret as i32, t.sel_start as i32, t.sel_end as i32),
+            None => {
+                let n = i.value.chars().count() as i32;
+                (n, n, n)
+            }
+        }
+    }
+}
+
 #[zbus::interface(name = "org.a11y.atspi.Text")]
 impl Text {
     #[zbus(property)]
@@ -334,7 +375,10 @@ impl Text {
     }
     #[zbus(property)]
     fn caret_offset(&self) -> i32 {
-        self.0.info().map_or(0, |i| i.value.chars().count() as i32)
+        self.ranges().0
+    }
+    fn get_caret_offset(&self) -> i32 {
+        self.ranges().0
     }
     fn get_text(&self, start: i32, end: i32) -> String {
         let v = self.0.info().map(|i| i.value).unwrap_or_default();
@@ -342,6 +386,19 @@ impl Text {
         let end = if end < 0 || end > n { n } else { end };
         let start = start.clamp(0, end);
         v.chars().skip(start as usize).take((end - start) as usize).collect()
+    }
+    /// One selection at most (`AXSelectedTextRange`).
+    fn get_n_selections(&self) -> i32 {
+        let (_, a, b) = self.ranges();
+        (a != b) as i32
+    }
+    fn get_selection(&self, selection_num: i32) -> zbus::fdo::Result<(i32, i32)> {
+        let (_, a, b) = self.ranges();
+        if selection_num == 0 && a != b {
+            Ok((a, b))
+        } else {
+            Err(zbus::fdo::Error::InvalidArgs("no such selection".into()))
+        }
     }
     fn set_caret_offset(&self, _offset: i32) -> bool {
         false
@@ -501,6 +558,23 @@ impl Bridge {
                     if p.checked != n.checked {
                         state(&path, "checked", n.checked == Some(true));
                     }
+                    if n.role == bifrost_proto::Role::TextField {
+                        let obj = "org.a11y.atspi.Event.Object";
+                        for e in text_edits(&p.value, &n.value) {
+                            let kind = if e.insert { "insert" } else { "delete" };
+                            let body = (kind, e.at, e.len, Value::from(e.text), HashMap::<String, Value>::new());
+                            let _ = self.conn.emit_signal(None::<&str>, path.as_str(), obj, "TextChanged", &body);
+                        }
+                        if p.text.map(|t| (t.sel_start, t.sel_end)) != n.text.map(|t| (t.sel_start, t.sel_end)) {
+                            let body = ("", 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                            let _ = self.conn.emit_signal(None::<&str>, path.as_str(), obj, "TextSelectionChanged", &body);
+                        }
+                        if p.text.map(|t| t.caret) != n.text.map(|t| t.caret) || p.value != n.value {
+                            let caret = n.text.map_or(n.value.chars().count() as i32, |t| t.caret as i32);
+                            let body = ("", caret, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                            let _ = self.conn.emit_signal(None::<&str>, path.as_str(), obj, "TextCaretMoved", &body);
+                        }
+                    }
                     if p.value != n.value && n.role == bifrost_proto::Role::Slider {
                         let body = ("accessible-value", 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
                         let _ = self.conn.emit_signal(None::<&str>, path.as_str(), "org.a11y.atspi.Event.Object", "PropertyChange", &body);
@@ -512,6 +586,14 @@ impl Bridge {
             let body = ("add", apps.len() as i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
             let _ = self.conn.emit_signal(None::<&str>, ROOT_PATH, "org.a11y.atspi.Event.Object", "ChildrenChanged", &body);
         }
+    }
+
+    /// the announcement-requested accessibility notification: the closest AT-SPI equivalent is the `Object:Announcement` event (AT-SPI 2.46,
+    /// `atspi_accessible_announce`), emitted on the app's frame with the politeness in `detail1` (1 polite, 2 assertive) and
+    /// the text in `any_data`.
+    pub fn announce(&self, slot: u8, text: &str, priority: bifrost_proto::AnnouncePriority) {
+        let body = ("", priority.politeness(), 0i32, Value::from(text.to_string()), HashMap::<String, Value>::new());
+        let _ = self.conn.emit_signal(None::<&str>, app_path(slot).as_str(), "org.a11y.atspi.Event.Object", "Announcement", &body);
     }
 
     /// Requests screen readers made since the last call (press, value write, focus).

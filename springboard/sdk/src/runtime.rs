@@ -246,6 +246,14 @@ impl Ctx {
     pub fn haptic(&self) {
         self.send(ToShell::Haptic);
     }
+    /// The announcement-requested accessibility notification: a screen reader speaks `text` now, without moving
+    /// focus. `Priority::High` interrupts (assertive); low and medium wait their turn (polite). The shell turns it into an
+    /// AT-SPI `Object:Announcement` event. Use it for results the user cannot see change, such as "3 files copied".
+    pub fn announce(&self, text: &str, priority: crate::proto::AnnouncePriority) {
+        if !text.is_empty() {
+            self.send(ToShell::Announce { text: text.into(), priority });
+        }
+    }
     /// Report the focused field's surrounding text, selection and marked range (`NativeTextInput`), for predictive text.
     pub fn text_state(&self, state: crate::proto::TextState) {
         self.send(ToShell::TextState(state));
@@ -429,6 +437,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut menus_seen: Vec<crate::proto::AppMenu> = Vec::new();
     let mut controls_seen = Vec::new();
     let mut tree_seen: Vec<crate::proto::NodeExt> = Vec::new();
+    let mut ax_text_seen: Vec<bifrost_ui::ax::AxText> = Vec::new();
+    let mut ax_meta_seen: Vec<bifrost_ui::ax::AxMeta> = Vec::new();
     // what the kit's draw helpers recorded in the last frame: the element map of an app that declares no controls itself
     let mut drawn_nodes: Vec<bifrost_ui::Node> = Vec::new();
     // the behind-window materials the shell last got (`ToShell::Materials`)
@@ -703,6 +713,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if controls!=controls_seen {let _=chan.send(&ToShell::Controls(controls.clone()).encode(),&[]);controls_seen=controls;}
         let tree=app.controls_tree(c);
         if tree!=tree_seen {let _=chan.send(&ToShell::ControlsTree(tree.clone()).encode(),&[]);tree_seen=tree;}
+        let ax_text=app.ax_text(c);
+        if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
+        let ax_meta=app.ax_meta(c);
+        if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
         if materials!=materials_seen {let _=chan.send(&ToShell::Materials(materials.clone()).encode(),&[]);materials_seen=materials.clone();}
         let commands=app.commands(c);
         let menus=app.main_menu(c);

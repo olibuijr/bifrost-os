@@ -71,6 +71,25 @@ impl Login {
         }
     }
 
+    /// The sheet's two fields as accessibility elements (ids 1 and 2) with their text attributes, for
+    /// `atspi::model::build_ax`. The caret is always at the end (the keyboard only appends and deletes backwards). The
+    /// password node carries no value at all and a secure `AxText`: only its length is ever exposed.
+    pub fn ax_fields(&self) -> (Vec<bifrost_proto::Node>, Vec<bifrost_ui::ax::AxText>) {
+        let node = |id: u64, label: &str, value: &str| bifrost_proto::Node {
+            id,
+            role: bifrost_proto::Role::TextField,
+            label: label.into(),
+            value: value.into(),
+            bounds: Default::default(),
+            enabled: !self.busy,
+        };
+        let at_end = |id: u64, text: &str, secure: bool| {
+            let n = text.chars().count() as u32;
+            bifrost_ui::ax::AxText { id, caret: n, sel_start: n, sel_end: n, vis_start: 0, vis_end: n, secure, len: n }
+        };
+        (vec![node(1, "Username", &self.user), node(2, "Password", "")], vec![at_end(1, &self.user, false), at_end(2, &self.pass, true)])
+    }
+
     pub fn can_submit(&self) -> bool {
         !self.user.is_empty() && !self.pass.is_empty() && !self.busy
     }
@@ -228,6 +247,24 @@ impl Login {
 mod tests {
     use super::*;
     use crate::shell::tests::ui;
+
+    #[test]
+    fn password_fields_never_expose_text() {
+        let ui = ui();
+        let mut l = Login::new(&ui);
+        l.edit(&ui, Out::Text("olafur".into()));
+        l.edit(&ui, Out::Enter);
+        l.edit(&ui, Out::Text("s3cret".into()));
+        let (nodes, texts) = l.ax_fields();
+        let snap = crate::shell::atspi::model::build_ax(&nodes, &[], &texts, &[]);
+        assert_eq!(snap[0].value, "olafur");
+        assert_eq!(snap[0].text.map(|t| t.caret), Some(6), "the username caret follows the typing");
+        assert_eq!(snap[1].atspi_role(), crate::shell::atspi::model::role::PASSWORD_TEXT);
+        assert_eq!(snap[1].value.chars().count(), 6, "only the masked length");
+        assert!(!format!("{snap:?}").contains("s3cret"));
+        l.edit(&ui, Out::Backspace);
+        assert_eq!(l.ax_fields().1[1].len, 5);
+    }
 
     #[test]
     fn typing_moves_between_fields_and_submits() {

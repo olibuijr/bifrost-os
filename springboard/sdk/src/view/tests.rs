@@ -327,6 +327,29 @@ fn ax_set_presses_writes_values_and_focuses() {
 }
 
 #[test]
+fn text_field_reports_caret_selection_and_title_help() {
+    let ui = ui();
+    let tf = TextField::new("Name", "name").with_ax_title("Full name").with_ax_help("Your name as on the card");
+    let id = tf.id();
+    let mut app = ViewApp::new(tf, Model::default());
+    app.window.layout(&ui, rect(0.0, 0.0, 200.0, ROW_PT));
+    app.ax_set(id, crate::proto::AxAction::SetValue("h\u{e9}llo world".into()));
+    let t = app.ax_text();
+    assert_eq!(t.len(), 1);
+    assert_eq!((t[0].id, t[0].caret, t[0].len, t[0].secure), (id, 11, 11, false), "the caret follows the typed text to the end");
+    assert_eq!(t[0].selected_range(), (11, 11));
+    // select "llo" from the back: the caret is the moving end
+    app.window.view_mut::<TextField>(id).unwrap().editor.buf.set_selection(5, 3);
+    let t = app.ax_text();
+    assert_eq!((t[0].caret, t[0].selected_range()), (2, (2, 4)));
+    assert_eq!(t[0].selected_text(app.window.view::<TextField>(id).unwrap().text()), "ll");
+    let m = app.ax_meta();
+    assert_eq!(m, vec![bifrost_ui::ax::AxMeta { id, title: "Full name".into(), help: "Your name as on the card".into() }]);
+    // the label is still the placeholder
+    assert_eq!(app.controls()[0].label, "Name");
+}
+
+#[test]
 fn main_menu_enabled_state_follows_the_responder_chain_and_actions_route_to_send() {
     let ui = ui();
     let tf = TextField::new("Name", "name");

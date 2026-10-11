@@ -1,6 +1,6 @@
 //! The AT-SPI2 view of the app-control tree: pure data and mappings, no D-Bus. `bridge.rs` exports what this builds.
 //! parity: the `NativeAccessibility` element hierarchy (`accessibilityChildren`, `accessibilityParent`, role, state).
-use bifrost_proto::{Node, NodeExt, Role, UiRect as Rect};
+use bifrost_proto::{AxMeta, AxText, Node, NodeExt, Role, UiRect as Rect};
 
 /// `AtspiRole` values (atspi-constants.h).
 pub mod role {
@@ -17,6 +17,7 @@ pub mod role {
     pub const TOGGLE_BUTTON: u32 = 62;
     pub const APPLICATION: u32 = 75;
     pub const ENTRY: u32 = 79;
+    pub const PASSWORD_TEXT: u32 = 40;
 }
 
 /// `AtspiStateType` bit positions.
@@ -81,6 +82,27 @@ pub struct SNode {
     pub enabled: bool,
     pub focused: bool,
     pub checked: Option<bool>,
+    /// `accessibilityTitle` (empty when the app sent none)
+    pub title: String,
+    /// `accessibilityHelp`
+    pub help: String,
+    /// caret, selection and visible range of a text element; `None` until the app reports them
+    pub text: Option<AxText>,
+}
+
+impl SNode {
+    /// The AT-SPI role: a secure text field is `PASSWORD_TEXT` so a screen reader says "password" and echoes no characters.
+    pub fn atspi_role(&self) -> u32 {
+        if self.role == Role::TextField && self.text.is_some_and(|t| t.secure) {
+            role::PASSWORD_TEXT
+        } else {
+            atspi_role(self.role)
+        }
+    }
+    /// `Accessible.Name`: `accessibilityLabel`, else `accessibilityTitle`.
+    pub fn accessible_name(&self) -> &str {
+        if self.name.is_empty() { &self.title } else { &self.name }
+    }
 }
 
 /// One running app: its window frame and elements.
@@ -96,6 +118,12 @@ pub struct AppSnap {
 /// or leads into a cycle is dropped, so the node becomes a window child (old flat packets all come out this way).
 /// `Toggle` and `Checkbox` nodes without a tree entry read their checked state from the value text ("on", "1", "checked").
 pub fn build(nodes: &[Node], ext: &[NodeExt]) -> Vec<SNode> {
+    build_ax(nodes, ext, &[], &[])
+}
+
+/// [`build`] plus the text attributes (`ToShell::AxText`) and the title/help split (`ToShell::AxMeta`). A secure text
+/// field's value is replaced by one bullet per character here, so nothing downstream can ever read its content.
+pub fn build_ax(nodes: &[Node], ext: &[NodeExt], texts: &[AxText], metas: &[AxMeta]) -> Vec<SNode> {
     let find = |id: u64| ext.iter().find(|e| e.id == id);
     let mut out: Vec<SNode> = nodes
         .iter()
@@ -113,9 +141,17 @@ pub fn build(nodes: &[Node], ext: &[NodeExt]) -> Vec<SNode> {
                 enabled: n.enabled,
                 focused: e.is_some_and(|e| e.focused),
                 checked: e.and_then(|e| e.checked).or(guess),
+                title: metas.iter().find(|m| m.id == n.id).map(|m| m.title.clone()).unwrap_or_default(),
+                help: metas.iter().find(|m| m.id == n.id).map(|m| m.help.clone()).unwrap_or_default(),
+                text: (n.role == Role::TextField).then(|| texts.iter().find(|t| t.id == n.id).copied()).flatten(),
             }
         })
         .collect();
+    for n in out.iter_mut() {
+        if let Some(t) = n.text.filter(|t| t.secure) {
+            n.value = bifrost_ui::ax::masked(t.len);
+        }
+    }
     for i in 0..out.len() {
         let mut at = out[i].parent;
         let mut steps = 0;
@@ -127,6 +163,33 @@ pub fn build(nodes: &[Node], ext: &[NodeExt]) -> Vec<SNode> {
             }
             at = out.iter().find(|n| n.id == p).and_then(|n| n.parent);
         }
+    }
+    out
+}
+
+/// One change of a text element's content as AT-SPI `text-changed` reports it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextEdit {
+    /// `true` is `insert`, `false` is `delete`
+    pub insert: bool,
+    pub at: i32,
+    pub len: i32,
+    pub text: String,
+}
+
+/// The edits turning `old` into `new`, by common prefix and suffix (char offsets): a delete, then an insert for a replace.
+/// Empty when nothing changed.
+pub fn text_edits(old: &str, new: &str) -> Vec<TextEdit> {
+    let (o, n): (Vec<char>, Vec<char>) = (old.chars().collect(), new.chars().collect());
+    let pre = o.iter().zip(&n).take_while(|(a, b)| a == b).count();
+    let suf = o[pre..].iter().rev().zip(n[pre..].iter().rev()).take_while(|(a, b)| a == b).count();
+    let (gone, came) = (&o[pre..o.len() - suf], &n[pre..n.len() - suf]);
+    let mut out = Vec::new();
+    if !gone.is_empty() {
+        out.push(TextEdit { insert: false, at: pre as i32, len: gone.len() as i32, text: gone.iter().collect() });
+    }
+    if !came.is_empty() {
+        out.push(TextEdit { insert: true, at: pre as i32, len: came.len() as i32, text: came.iter().collect() });
     }
     out
 }
@@ -319,5 +382,40 @@ mod tests {
         assert_eq!(numeric("3/10"), Some((3.0, 10.0)));
         assert_eq!(numeric("3/0"), None);
         assert_eq!(numeric("abc"), None);
+    }
+
+    #[test]
+    fn text_edits_report_inserts_deletes_and_replaces() {
+        assert_eq!(text_edits("abc", "abc"), vec![]);
+        assert_eq!(text_edits("ac", "abc"), vec![TextEdit { insert: true, at: 1, len: 1, text: "b".into() }]);
+        assert_eq!(text_edits("abc", "ac"), vec![TextEdit { insert: false, at: 1, len: 1, text: "b".into() }]);
+        let r = text_edits("h\u{e9}llo", "hallo");
+        assert_eq!((r[0].insert, r[0].at, r[0].text.as_str()), (false, 1, "\u{e9}"));
+        assert_eq!((r[1].insert, r[1].at, r[1].text.as_str()), (true, 1, "a"));
+    }
+
+    #[test]
+    fn password_fields_never_expose_text() {
+        let nodes = vec![node(1, Role::TextField, "hunter2")];
+        let t = bifrost_proto::AxText { id: 1, caret: 7, sel_start: 7, sel_end: 7, vis_start: 0, vis_end: 7, secure: true, len: 7 };
+        let s = build_ax(&nodes, &[], &[t], &[]);
+        assert_eq!(s[0].value.chars().count(), 7);
+        assert!(!s[0].value.contains("hunter"));
+        assert_eq!(s[0].atspi_role(), role::PASSWORD_TEXT);
+        // a plain field keeps ENTRY and its text
+        let plain = build_ax(&nodes, &[], &[bifrost_proto::AxText { secure: false, ..t }], &[]);
+        assert_eq!((plain[0].atspi_role(), plain[0].value.as_str()), (role::ENTRY, "hunter2"));
+    }
+
+    #[test]
+    fn label_title_and_help_stay_separate() {
+        let mut n = node(1, Role::Button, "");
+        n.label = String::new();
+        let metas = [bifrost_proto::AxMeta { id: 1, title: "Send".into(), help: "Sends the message".into() }];
+        let s = build_ax(&[n.clone()], &[], &[], &metas);
+        assert_eq!((s[0].accessible_name(), s[0].help.as_str()), ("Send", "Sends the message"));
+        n.label = "Send message".into();
+        let s = build_ax(&[n], &[], &[], &metas);
+        assert_eq!((s[0].accessible_name(), s[0].title.as_str()), ("Send message", "Send"));
     }
 }

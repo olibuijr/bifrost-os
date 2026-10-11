@@ -302,6 +302,12 @@ pub struct AppHost {
     pub app_menus: Vec<bifrost_proto::AppMenu>,
     /// Hierarchy and state beside `controls` (`ToShell::ControlsTree`); empty means a flat list.
     pub controls_tree: Vec<bifrost_proto::NodeExt>,
+    /// Caret, selection and visible range of text elements (`ToShell::AxText`); the AT-SPI `Text` interface reads it.
+    pub ax_text: Vec<bifrost_proto::AxText>,
+    /// `accessibilityTitle` / `accessibilityHelp` per element (`ToShell::AxMeta`).
+    pub ax_meta: Vec<bifrost_proto::AxMeta>,
+    /// Announcements waiting for the accessibility bridge (`ToShell::Announce`), oldest first, at most 8.
+    pub announcements: Vec<(String, bifrost_proto::AnnouncePriority)>,
     last_notification: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
@@ -382,6 +388,9 @@ impl AppHost {
             controls: Vec::new(),
             app_menus: Vec::new(),
             controls_tree: Vec::new(),
+            ax_text: Vec::new(),
+            ax_meta: Vec::new(),
+            announcements: Vec::new(),
             last_notification: None,
             badge: String::new(),
             sudden: false,
@@ -557,6 +566,14 @@ impl AppHost {
             ToShell::Controls(nodes) => self.controls=nodes,
             ToShell::AppMenus(menus) => {if self.app_menus!=menus {self.app_menus=menus;out.frame=true;}},
             ToShell::ControlsTree(tree) => self.controls_tree=tree,
+            ToShell::AxText(list) => self.ax_text=list,
+            ToShell::AxMeta(list) => self.ax_meta=list,
+            ToShell::Announce { text, priority } => {
+                if self.announcements.len() >= 8 {
+                    self.announcements.remove(0);
+                }
+                self.announcements.push((text, priority));
+            }
             ToShell::TextState(t) => {
                 // an empty state is the app saying no text field has focus any more
                 if t == bifrost_proto::TextState::default() {

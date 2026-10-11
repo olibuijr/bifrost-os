@@ -221,6 +221,14 @@ pub trait View: 'static {
     fn apply_text_input(&mut self, _ev: &crate::proto::ToApp) -> bool {
         false
     }
+    /// Caret, selection and visible range of a text element, as `AXSelectedTextRange` and `AXVisibleCharacterRange` report them.
+    fn ax_text(&self) -> Option<bifrost_ui::ax::AxText> {
+        None
+    }
+    /// `(accessibilityTitle, accessibilityHelp)` of this element when it has either.
+    fn ax_meta(&self) -> Option<(String, String)> {
+        None
+    }
     /// `AXValue` of a checkable element (checkbox, switch); `None` when not checkable.
     fn ax_checked(&self) -> Option<bool> {
         None
@@ -909,6 +917,19 @@ impl<S: Responder> Window<S> {
             .collect()
     }
 
+    /// `App::ax_text`: caret, selection and visible range of every text element.
+    pub fn ax_texts(&self) -> Vec<bifrost_ui::ax::AxText> {
+        let mut out = Vec::new();
+        collect_text(self.root(), &mut out);
+        out
+    }
+    /// `App::ax_meta`: the title and help of every element that has one.
+    pub fn ax_metas(&self) -> Vec<bifrost_ui::ax::AxMeta> {
+        let mut out = Vec::new();
+        collect_meta(self.root(), &mut out);
+        out
+    }
+
     /// `AXPress`: activates the element as Return would; true when it exists and handled it.
     pub fn ax_press(&mut self, id: u64, state: &mut S) -> bool {
         let mut p = Vec::new();
@@ -939,6 +960,28 @@ impl<S: Responder> Window<S> {
             self.sent.push((id, a));
         }
     }
+}
+
+fn collect_text(v: &dyn View, out: &mut Vec<bifrost_ui::ax::AxText>) {
+    if v.base().hidden {
+        return;
+    }
+    if v.ax_node().is_some() {
+        out.extend(v.ax_text());
+    }
+    v.children().iter().for_each(|c| collect_text(c.as_ref(), out));
+}
+
+fn collect_meta(v: &dyn View, out: &mut Vec<bifrost_ui::ax::AxMeta>) {
+    if v.base().hidden {
+        return;
+    }
+    if v.ax_node().is_some() {
+        if let Some((title, help)) = v.ax_meta() {
+            out.push(bifrost_ui::ax::AxMeta { id: v.id(), title, help });
+        }
+    }
+    v.children().iter().for_each(|c| collect_meta(c.as_ref(), out));
 }
 
 fn collect_checked(v: &dyn View, out: &mut Vec<(u64, Option<bool>)>) {

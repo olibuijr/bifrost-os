@@ -7,7 +7,7 @@ pub mod bridge;
 #[cfg(feature = "atspi")]
 mod glue {
     use super::bridge::Bridge;
-    use super::model::{build, AppSnap};
+    use super::model::{build_ax, AppSnap};
     use crate::shell::apphost::{installed, AppHost};
     use bifrost_proto::ToApp;
     use std::cell::RefCell;
@@ -55,10 +55,16 @@ mod glue {
                         .filter_map(|(slot, h)| {
                             let h = h.as_ref().filter(|h| h.running())?;
                             let name = names.get(slot).map(|a| a.manifest.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| h.id.clone());
-                            Some(AppSnap { slot: slot as u8, app_id: h.id.clone(), name, nodes: build(&h.controls, &h.controls_tree) })
+                            Some(AppSnap { slot: slot as u8, app_id: h.id.clone(), name, nodes: build_ax(&h.controls, &h.controls_tree, &h.ax_text, &h.ax_meta) })
                         })
                         .collect();
                     bridge.publish(apps);
+                    for (slot, h) in ext.iter_mut().enumerate() {
+                        let Some(h) = h else { continue };
+                        for (text, priority) in std::mem::take(&mut h.announcements) {
+                            bridge.announce(slot as u8, &text, priority);
+                        }
+                    }
                     for r in bridge.drain() {
                         if let Some(Some(h)) = ext.get_mut(r.slot as usize) {
                             h.send(&ToApp::AxSet { id: r.id, action: r.action });

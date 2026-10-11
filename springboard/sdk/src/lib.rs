@@ -99,6 +99,11 @@ pub trait App {
     /// Parent/child relations and focus/checked state for the nodes `controls` returns (`NativeAccessibility` hierarchy).
     /// Sent only when they change; the default (empty) leaves every node a direct child of the window.
     fn controls_tree(&self, _ctx: &Ctx) -> Vec<crate::proto::NodeExt> {Vec::new()}
+    /// Caret, selection and visible range of the text elements `controls` returns (`AXSelectedTextRange`,
+    /// `AXVisibleCharacterRange`); a secure field reports only its length. Sent only when they change.
+    fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
+    /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
+    fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
     /// An assistive technology acts on node `id` (`ax set`: `AXPress`, an `AXValue` write, `AXFocused`). The default maps
     /// `Press` onto `Input::Activate(id)` and ignores the rest; apps with editable nodes override it. True when a frame is needed.
     fn ax_set(&mut self, ctx: &Ctx, id: u64, action: crate::proto::AxAction) -> bool {

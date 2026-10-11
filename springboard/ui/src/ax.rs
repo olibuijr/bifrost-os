@@ -49,6 +49,96 @@ pub fn role_name(role: Role) -> &'static str {
     }
 }
 
+/// the announcement-requested accessibility notification priority: low, medium (default) and high. On the
+/// AT-SPI bus they map to the `announcement` event's politeness: low and medium are polite, high is assertive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Priority {
+    Low = 0,
+    #[default]
+    Medium = 1,
+    High = 2,
+}
+
+impl Priority {
+    pub fn from_wire(v: u8) -> Option<Priority> {
+        Some(match v {
+            0 => Priority::Low,
+            1 => Priority::Medium,
+            2 => Priority::High,
+            _ => return None,
+        })
+    }
+    /// `AtspiLive` politeness: 1 polite, 2 assertive.
+    pub fn politeness(self) -> i32 {
+        if self == Priority::High { 2 } else { 1 }
+    }
+}
+
+/// Text attributes of one text element (`AXSelectedText`, `AXSelectedTextRange`, `AXVisibleCharacterRange`, the insertion
+/// point and the character count). Offsets are Unicode scalar (char) offsets, which is what AT-SPI `Text` uses. A secure
+/// field (`isSecureTextEntry`) carries only its length: the element's value is masked and no offset reveals content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct AxText {
+    /// the `Node::id` this describes
+    pub id: u64,
+    /// the insertion point (moving end of the selection)
+    pub caret: u32,
+    pub sel_start: u32,
+    pub sel_end: u32,
+    /// `AXVisibleCharacterRange`: the part not scrolled out of the field
+    pub vis_start: u32,
+    pub vis_end: u32,
+    pub secure: bool,
+    /// characters in the field (for a secure field, the masked length)
+    pub len: u32,
+}
+
+impl AxText {
+    /// `AXSelectedTextRange`: `(start, end)`; empty when only a caret.
+    pub fn selected_range(&self) -> (u32, u32) {
+        (self.sel_start, self.sel_end)
+    }
+    /// `AXSelectedText` of `text` (the element's value). A secure field answers an empty string.
+    pub fn selected_text(&self, text: &str) -> String {
+        if self.secure {
+            return String::new();
+        }
+        text.chars().skip(self.sel_start as usize).take(self.sel_end.saturating_sub(self.sel_start) as usize).collect()
+    }
+}
+
+/// The label/title/help split (`accessibilityTitle`, `accessibilityHelp`); `Node::label` stays `accessibilityLabel`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AxMeta {
+    pub id: u64,
+    /// `accessibilityTitle`: the visible title of the control
+    pub title: String,
+    /// `accessibilityHelp`: what the control does, spoken after the label
+    pub help: String,
+}
+
+/// Char offset of byte `b` in `s` (clamped to `s` and rounded down to a character boundary).
+pub fn char_offset(s: &str, b: usize) -> u32 {
+    let mut b = b.min(s.len());
+    while !s.is_char_boundary(b) {
+        b -= 1;
+    }
+    s[..b].chars().count() as u32
+}
+
+/// Builds the [`AxText`] of a text element from byte offsets: `anchor` and `head` are the selection ends, `visible` the
+/// shown byte range.
+pub fn text_ax(id: u64, text: &str, anchor: usize, head: usize, visible: (usize, usize), secure: bool) -> AxText {
+    let (a, h) = (char_offset(text, anchor), char_offset(text, head));
+    let vs = char_offset(text, visible.0);
+    AxText { id, caret: h, sel_start: a.min(h), sel_end: a.max(h), vis_start: vs, vis_end: char_offset(text, visible.1).max(vs), secure, len: text.chars().count() as u32 }
+}
+
+/// What a secure field exposes as its value: one bullet per character.
+pub fn masked(len: u32) -> String {
+    "\u{2022}".repeat(len as usize)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     pub address: String,
@@ -284,5 +374,48 @@ mod tests {
         assert_eq!(all, ["os/settings/general"]);
         assert_eq!(m.under("").count(), 2, "an empty prefix lists everything");
         assert!(m.listing("os/settings").starts_with("os/settings/general\trow\tGeneral\t\tenabled\n"));
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn selected_text_follows_the_caret() {
+        // "héllo wörld": drag back from the 'w' to the second character
+        let t = "h\u{e9}llo w\u{f6}rld";
+        let a = text_ax(1, t, t.find('w').unwrap(), 3, (0, t.len()), false);
+        assert_eq!(a.caret, 2, "the caret is the moving end");
+        assert_eq!(a.selected_range(), (2, 6));
+        assert_eq!(a.selected_text(t), "llo ");
+        let caret_only = text_ax(1, t, 4, 4, (0, t.len()), false);
+        assert_eq!(caret_only.selected_range(), (3, 3));
+        assert_eq!(caret_only.selected_text(t), "");
+    }
+
+    #[test]
+    fn password_fields_never_expose_text() {
+        let a = text_ax(2, "hunter2", 0, 7, (0, 7), true);
+        assert_eq!(a.selected_text("hunter2"), "", "AXSelectedText is empty for a secure field");
+        assert_eq!(a.len, 7);
+        assert_eq!(masked(a.len).chars().count(), 7);
+        assert!(masked(a.len).chars().all(|c| c == '\u{2022}'));
+    }
+
+    #[test]
+    fn visible_range_is_in_characters_and_never_inverted() {
+        let t = "\u{e9}\u{e9}\u{e9}\u{e9}";
+        let a = text_ax(3, t, 0, 0, (2, 6), false);
+        assert_eq!((a.vis_start, a.vis_end), (1, 3));
+        assert_eq!(text_ax(3, t, 0, 0, (6, 2), false).vis_end, 3);
+        assert_eq!(char_offset(t, 3), 1, "a byte inside a character rounds down");
+    }
+
+    #[test]
+    fn announcement_priority_maps_to_politeness() {
+        assert_eq!(Priority::from_wire(2), Some(Priority::High));
+        assert_eq!(Priority::from_wire(3), None);
+        assert_eq!((Priority::Low.politeness(), Priority::Medium.politeness(), Priority::High.politeness()), (1, 1, 2));
     }
 }
