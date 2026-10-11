@@ -58,6 +58,8 @@ pub mod quicksearch;
 pub mod peek;
 pub mod webview;
 pub mod webview_dev;
+pub mod script_value;
+pub mod script_syntax;
 pub mod view;
 pub mod document;
 pub mod log;
