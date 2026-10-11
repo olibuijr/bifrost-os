@@ -615,6 +615,8 @@ pub mod content_rules;
 pub mod chart;
 pub mod compose;
 pub mod file_provider;
+pub mod widget;
+pub mod widget_list;
 #[cfg(test)]
 mod bench;
 
