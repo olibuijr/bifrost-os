@@ -421,6 +421,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-wm"
+version = "0.1.0"
+
+[[package]]
 name = "bifrostd"
 version = "0.1.0"
 dependencies = [
