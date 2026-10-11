@@ -51,5 +51,10 @@ bg.jpg /usr/share/bifrost/installer/bg.jpg 644
 Godafoss_1080.mp4 /usr/share/bifrost/video/Godafoss_1080.mp4 644
 Svartifoss_1080.mp4 /usr/share/bifrost/video/Svartifoss_1080.mp4 644
 M
+# the packed assets (tools/pack.py): the UI fonts, the font library and the stills, so lab installs get the current
+# set rather than the live medium's (the installer then prunes what the set no longer has)
+ln -sfn "$PWD/springboard/assets" "$SYNC/assets"
+(cd springboard/assets && find SFUI.ttf SFUIMono.ttf Symbols.ttf wallpaper.raw fonts wallpapers -type f 2>/dev/null) |
+  while read -r f; do echo "assets/$f /usr/share/springboard/assets/$f 644"; done >> "$SYNC/manifest"
 ss -ltn | grep -q ":8078 " || (cd "$SYNC" && setsid python3 -m http.server 8078 --bind 10.99.0.1 >/dev/null 2>&1 </dev/null &)
 echo "pushed $(stat -c%s "$SYNC/bifrost-installer") bytes; lab hosts pick it up on their next boot (http://10.99.0.1:8078)"

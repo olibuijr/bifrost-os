@@ -500,12 +500,14 @@ pub fn install(cfg: &Config, progress: &Shared) {
             }
         }
 
-        r.set(2, 86, "Installing SpringBoard");
+        r.set(2, 86, "Installing the desktop");
         // installer media only: splash.efi and wayland/ are owned by the package, and pacman refuses to overwrite files it does not own
         for (src, dst) in [("/usr/share/springboard/assets", "/usr/share/springboard/"), ("/usr/share/bifrost/installer", "/usr/share/bifrost/"), ("/usr/share/bifrost/video", "/usr/share/bifrost/")] {
             std::fs::create_dir_all(sys(dst)).map_err(|e| e.to_string())?;
             r.cmd(&["cp", "-a", &format!("{STAGE}{src}"), &sys(dst)])?;
         }
+        // the live medium can be older than the packed assets the lab sync brought: drop what the packed set no longer has
+        prune_assets(std::path::Path::new(&sys("/usr/share/springboard/assets"))).map_err(|e| format!("assets: {e}"))?;
         // The package owns the shell, units, session and apps. Installing it here, from the same
         // repo System Update uses, keeps one source of truth and no fake pacman registration.
         r.chroot(&["pacman", "-Sy", "--noconfirm", "springboard-shell"])?;
@@ -665,8 +667,59 @@ fn used_bytes(mount: &str) -> Option<f64> {
     String::from_utf8_lossy(&o.stdout).lines().nth(1)?.trim().parse().ok()
 }
 
+/// The UI fonts the packed asset set has at its top level (`tools/pack.py`); the font library lives in `fonts/`.
+const PACKED_FONTS: [&str; 3] = ["SFUI.ttf", "SFUIMono.ttf", "Symbols.ttf"];
+
+/// Removes copied asset files the packed set no longer has: top-level fonts other than `PACKED_FONTS`, and stills
+/// (and their thumbnails) whose id `wallpapers/index.ini` does not list. Without an index the stills are kept.
+fn prune_assets(dir: &std::path::Path) -> std::io::Result<()> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let font = [".ttf", ".otf", ".ttc"].iter().any(|x| name.to_ascii_lowercase().ends_with(x));
+        if font && e.file_type()?.is_file() && !PACKED_FONTS.contains(&name.as_str()) {
+            std::fs::remove_file(e.path())?;
+        }
+    }
+    let stills = dir.join("wallpapers");
+    let Ok(index) = std::fs::read_to_string(stills.join("index.ini")) else { return Ok(()) };
+    let ids: Vec<&str> = index.lines().filter_map(|l| l.split_once('=').map(|(k, _)| k.trim())).collect();
+    for e in std::fs::read_dir(&stills)?.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(id) = name.strip_suffix(".thumb.raw").or_else(|| name.strip_suffix(".raw")) else { continue };
+        if !ids.contains(&id) {
+            std::fs::remove_file(e.path())?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn prune_assets_keeps_only_the_packed_set() {
+        let dir = std::env::temp_dir().join(format!("prune-assets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("wallpapers")).unwrap();
+        std::fs::create_dir_all(dir.join("fonts")).unwrap();
+        for f in ["SFUI.ttf", "SFUIMono.ttf", "Symbols.ttf", "Old-Symbols.ttf", "Stub.otf", "fonts/Geist-Variable.ttf", "wallpaper.raw",
+                  "wallpapers/kirkjufell_dusk.raw", "wallpapers/kirkjufell_dusk.thumb.raw", "wallpapers/desert_day.raw", "wallpapers/desert_day.thumb.raw"] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        std::fs::write(dir.join("wallpapers/index.ini"), "kirkjufell_dusk=Kirkjufell Dusk\n").unwrap();
+        super::prune_assets(&dir).unwrap();
+        let mut left: Vec<String> = walk(&dir, &dir);
+        left.sort();
+        assert_eq!(left, ["SFUI.ttf", "SFUIMono.ttf", "Symbols.ttf", "fonts/Geist-Variable.ttf", "wallpaper.raw", "wallpapers/index.ini", "wallpapers/kirkjufell_dusk.raw", "wallpapers/kirkjufell_dusk.thumb.raw"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn walk(root: &std::path::Path, d: &std::path::Path) -> Vec<String> {
+        std::fs::read_dir(d).unwrap().flatten().flat_map(|e| {
+            if e.path().is_dir() { walk(root, &e.path()) } else { vec![e.path().strip_prefix(root).unwrap().to_string_lossy().into_owned()] }
+        }).collect()
+    }
+
     use super::*;
     use crate::installer::keymaps::{layout_index, layouts};
 

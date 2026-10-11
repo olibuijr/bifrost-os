@@ -1082,7 +1082,7 @@ def follow_install(t0, budget, live, every=10.0):
     def tester_up():
         return bool(ssh("getent passwd tester >/dev/null && ps -u tester -o comm= | head -n 1", 15).strip())
     def locked():
-        return "lock" in (control_text("state", 15) or "").lower().split("screen")[-1][:40]
+        return shell_screen() == "lock"
     ok = wait(shooting(tester_up, "session"), min(180, left()), min(5, every))
     if ok and locked():
         last_shot[0] = 0.0

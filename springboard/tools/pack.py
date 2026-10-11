@@ -41,14 +41,15 @@ DEFAULT_FONTS = {
     "SFUIMono.ttf": ("jetbrainsmono/JetBrainsMono[wght].ttf", "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"),
     "Symbols.ttf": ("notosanssymbols2/NotoSansSymbols2-Regular.ttf", "7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21"),
 }
-# fonts/: other open-source fonts Settings > Fonts offers in place of the defaults (variable builds, every weight)
+# fonts/: other open-source fonts Settings > Fonts offers in place of the defaults (variable builds, every weight);
+# file names avoid brackets so the lab sync (curl, URL globbing on) can fetch them
 LIBRARY_FONTS = {
-    "Geist[wght].ttf": ("geist/Geist[wght].ttf", "73894e0448cae90a92b6c2f8732b7bb9acb7b94c418bff559dad4a18e1de9659"),
-    "IBMPlexSans[wdth,wght].ttf": ("ibmplexsans/IBMPlexSans[wdth,wght].ttf", "3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3"),
-    "SourceSans3[wght].ttf": ("sourcesans3/SourceSans3[wght].ttf", "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"),
-    "GeistMono[wght].ttf": ("geistmono/GeistMono[wght].ttf", "d00e590b8eb3a59acc329b2d044fd143ae935090b7da33199ebee27cc7de8196"),
-    "FiraCode[wght].ttf": ("firacode/FiraCode[wght].ttf", "9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"),
-    "SourceCodePro[wght].ttf": ("sourcecodepro/SourceCodePro[wght].ttf", "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790"),
+    "Geist-Variable.ttf": ("geist/Geist[wght].ttf", "73894e0448cae90a92b6c2f8732b7bb9acb7b94c418bff559dad4a18e1de9659"),
+    "IBMPlexSans-Variable.ttf": ("ibmplexsans/IBMPlexSans[wdth,wght].ttf", "3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3"),
+    "SourceSans3-Variable.ttf": ("sourcesans3/SourceSans3[wght].ttf", "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"),
+    "GeistMono-Variable.ttf": ("geistmono/GeistMono[wght].ttf", "d00e590b8eb3a59acc329b2d044fd143ae935090b7da33199ebee27cc7de8196"),
+    "FiraCode-Variable.ttf": ("firacode/FiraCode[wght].ttf", "9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"),
+    "SourceCodePro-Variable.ttf": ("sourcecodepro/SourceCodePro[wght].ttf", "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790"),
 }
 
 
