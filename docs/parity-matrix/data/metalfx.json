@@ -1,0 +1,25 @@
+{
+  "framework": "MetalFX",
+  "doc": "https://developer.apple.com/documentation/metalfx",
+  "macos_since": "13.0",
+  "status": "gap",
+  "bifrost": "springboard/render/src/gfx.rs:360 (Image::resized), springboard/render/src/gfx/rotate.rs:354 (scale_into), springboard/src/shell/control_center.rs:260 (upscale), springboard/src/gpu/wl.rs:147 (Presenter, GLES)",
+  "summary": "MetalFX offers GPU temporal and spatial upscalers plus frame interpolation, all fed by Metal textures and command buffers. BifrOSt has no upscaling scaler: its nearest code is CPU bilinear resampling and a GL_LINEAR blur pyramid on the GLES presenter, neither of which takes motion, depth or colour-space input.",
+  "rea_evidence": "ev_0ce9d57e5d0b4a3c283da154ba0b0a14527d6bfea12a70f43f67e89c4f6c7348",
+  "features": [
+    {"feature": "Temporal upscaling (MTLFXTemporalScaler)", "apple": "MTLFXTemporalScaler, MTLFXTemporalScalerDescriptor, encode(commandBuffer:)", "bifrost": "none", "status": "gap", "note": "Needs per-frame colour, depth and motion vectors. The presenter (springboard/src/gpu/wl.rs:147) receives CPU rasters uploaded on damage (docs/gpu-first.md, layer model) and no motion or depth buffers."},
+    {"feature": "Temporal denoised upscaling (MTLFXTemporalDenoisedScaler)", "apple": "MTLFXTemporalDenoisedScaler, MTLFXTemporalDenoisedScalerDescriptor (macOS 26)", "bifrost": "none", "status": "gap", "note": "No denoiser and no temporal history buffer in the GPU path."},
+    {"feature": "Spatial upscaling (MTLFXSpatialScaler)", "apple": "MTLFXSpatialScaler, MTLFXSpatialScalerDescriptor, encode(commandBuffer:)", "bifrost": "springboard/render/src/gfx.rs:360 (Image::resized), springboard/render/src/gfx/rotate.rs:354 (scale_into), springboard/src/shell/control_center.rs:260 (upscale)", "status": "gap", "note": "Only CPU bilinear resampling exists (asset density, box draws, control-centre preview). No edge-aware spatial scaler and no GPU path; these are resamplers, not upscalers."},
+    {"feature": "Spatial colour processing modes", "apple": "MTLFXSpatialScalerColorProcessingMode (linear, perceptual, hdr)", "bifrost": "none", "status": "gap", "note": "The bilinear helpers take no colour-space argument, so input and output space are implicit."},
+    {"feature": "Frame interpolation (MTLFXFrameInterpolator)", "apple": "MTLFXFrameInterpolator, MTLFXFrameInterpolatorDescriptor, MTL4FXFrameInterpolator (macOS 26)", "bifrost": "none", "status": "gap", "note": "No frame generation anywhere in the shell or the GPU presenter."},
+    {"feature": "Metal command-buffer encoding of scaler passes", "apple": "encode(commandBuffer:) on each effect; MTL4FX* protocols", "bifrost": "springboard/src/gpu/wl.rs:147 (Presenter), docs/gpu-first.md (one render pass per present, GLES)", "status": "os", "note": "The presenter runs GLES render passes, not Metal. Apps get no SDK API for GPU passes. Metal itself is Apple-only, so the API shape is n/a; the concept of GPU passes is os-level."},
+    {"feature": "Reduced-resolution GPU work with linear upscale", "apple": "Render at low resolution, upscale to output (MetalFX landing page)", "bifrost": "springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)", "status": "os", "note": "The only GPU upscale: the blur pyramid and material blur run at 1/2 or 1/4 size and scale back up with a linear filter. Internal to the shell; no app-facing scaler."}
+  ],
+  "gaps": [
+    "Motion vectors and depth input for temporal scaling: the presenter has no per-pixel motion or depth buffers.",
+    "Spatial upscaler on the GPU: only CPU bilinear resampling exists, in springboard/render/src/gfx.rs and springboard/render/src/gfx/rotate.rs.",
+    "Frame interpolation (macOS 26 API) and the temporal denoiser: no counterpart.",
+    "App-facing scaler API in bifrost_app: none, so apps cannot request GPU upscaling of their own render targets.",
+    "Colour-space-aware scaling (linear, perceptual, HDR modes): the bilinear helpers take no colour-space parameter."
+  ]
+}

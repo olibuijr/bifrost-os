@@ -1,0 +1,29 @@
+{
+  "framework": "Darwin Notify",
+  "doc": "https://developer.apple.com/documentation/darwinnotify",
+  "macos_since": "10.14",
+  "status": "partial",
+  "bifrost": "bifrost_app::DistributedNotificationCenter (springboard/sdk/src/notification.rs), bifrost_app::fsevents (springboard/sdk/src/fswatch.rs)",
+  "summary": "Darwin Notify is a system-wide, name-keyed notification facility with integer tokens, state values and kernel-level delivery. BifrOSt has no equivalent: the nearest app-facing counterpart is the Foundation-style DistributedNotificationCenter, which relays string-named broadcasts between running apps through the shell. System event names (time zone, mounts, clock, network) are not broadcast to apps by name.",
+  "rea_evidence": "ev_525d60606f901be8b59a405caf5a5af1d6f7b2d77f2724156320402b56271398",
+  "features": [
+    {"feature": "Posting a named notification (notify_post)", "apple": "notify_post(_:)", "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with)", "status": "partial", "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names."},
+    {"feature": "Registering a handler for a name (notify_register_dispatch)", "apple": "notify_register_dispatch(_:_:_:_:)", "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer)", "status": "partial", "note": "Observers run on the main thread, not on a caller-chosen dispatch queue. Observer closures are tied to the main thread; no queue argument."},
+    {"feature": "Polling a registration token (notify_check)", "apple": "notify_check(_:_:)", "bifrost": "none", "status": "gap", "note": "No token API; delivery is push only."},
+    {"feature": "Signal-based delivery (notify_register_signal)", "apple": "notify_register_signal(_:_:_:)", "bifrost": "none", "status": "gap", "note": "No POSIX signal delivery for notifications."},
+    {"feature": "File descriptor delivery (notify_register_file_descriptor)", "apple": "notify_register_file_descriptor(_:_:_:_:)", "bifrost": "springboard/sdk/src/fswatch.rs (FSEventStream::fd)", "status": "gap", "note": "fswatch exposes an fd for file-system events only; there is no fd for named notifications."},
+    {"feature": "Mach port delivery (notify_register_mach_port)", "apple": "notify_register_mach_port(_:_:_:_:)", "bifrost": "none", "status": "n/a", "note": "Mach ports are Apple-kernel IPC; Linux build has no equivalent."},
+    {"feature": "Token lifecycle (notify_cancel, notify_suspend, notify_resume, notify_is_valid_token)", "apple": "notify_cancel(_:), notify_suspend(_:), notify_resume(_:), notify_is_valid_token(_:)", "bifrost": "springboard/sdk/src/notification.rs (ObserverToken drop removes observer)", "status": "partial", "note": "Dropping the token removes the observer. No suspend or resume, and no integer token validity check."},
+    {"feature": "Per-name state values (notify_set_state, notify_get_state)", "apple": "notify_set_state(_:_:), notify_get_state(_:_:)", "bifrost": "none", "status": "gap", "note": "Nothing stores a 64-bit state alongside a name."},
+    {"feature": "Posting to a non-running app (suspensionBehavior)", "apple": "notify_post delivery when target not running", "bifrost": "springboard/sdk/src/notification.rs (documented gap)", "status": "gap", "note": "An app that is not running misses the post, equal to Apple's drop behaviour, with no option to hold it."},
+    {"feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)", "apple": "Notify Macros constants", "bifrost": "springboard/sdk/src/fswatch.rs (file events only); docs/bifrost-ui.md (workspace events, did-launch and did-terminate)", "status": "gap", "note": "No shell broadcast for time zone, clock, mount, disk-space, network or host-name changes under these names. Workspace app-launch events exist but use their own message, not Darwin names."},
+    {"feature": "Status codes and macros (NOTIFY_STATUS_*, NOTIFY_TOKEN_INVALID)", "apple": "Status Codes, Miscellaneous Defines", "bifrost": "none", "status": "n/a", "note": "Return codes of the Darwin C API; not applicable to the BifrOSt SDK."}
+  ],
+  "gaps": [
+    "No system-wide named notifications from the kernel or system services (time zone, clock, mount, network, disk space) to apps.",
+    "No notify_check, notify_register_signal, notify_set_state or notify_get_state equivalents.",
+    "No suspend or resume of observers, and no hold-for-later delivery to apps that are not running.",
+    "Observers always run on the main thread; no caller-chosen dispatch queue.",
+    "Broadcast payloads are string to string with a 32-entry and 1024-character cap per value."
+  ]
+}

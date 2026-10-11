@@ -1,0 +1,32 @@
+{
+  "framework": "Compression",
+  "doc": "https://developer.apple.com/documentation/compression",
+  "macos_since": "10.11",
+  "status": "os",
+  "bifrost": "springboard/src/files/zip.rs (deflate, create, extract), springboard/src/shell/books/engine/inflate.rs (inflate, zlib), springboard/src/pngenc.rs (zlib_stored)",
+  "summary": "BifrOSt has DEFLATE and zlib decoding and a simple DEFLATE encoder, both internal to the shell and the Files app, with no SDK API for apps. It has no LZFSE, LZ4, LZMA or ZLIB-algorithm selection, no streaming API, and no filter types.",
+  "rea_evidence": "ev_cb330756976058e533cab29baea93a36094946c5054a4d4b6a5c84ce6503354e",
+  "features": [
+    {"feature": "Single-step buffer compression", "apple": "compression_encode_buffer, compression_encode_scratch_buffer_size", "bifrost": "springboard/src/files/zip.rs:331 (deflate)", "status": "partial", "note": "one-shot DEFLATE only, returns a Vec; no algorithm argument and no scratch buffer concept"},
+    {"feature": "Single-step buffer decompression", "apple": "compression_decode_buffer, compression_decode_scratch_buffer_size", "bifrost": "springboard/src/shell/books/engine/inflate.rs:194 (inflate), :200 (inflate_limited)", "status": "partial", "note": "DEFLATE and zlib only; output is capped at MAX_OUT (256 MiB) or a caller-declared size"},
+    {"feature": "Algorithm selection", "apple": "compression_algorithm, Algorithm (LZFSE, LZ4, LZ4_RAW, LZMA, ZLIB)", "bifrost": "springboard/src/shell/books/engine/inflate.rs (DEFLATE, zlib)", "status": "partial", "note": "no LZFSE, LZ4, LZMA; ZLIB is decode-only with no encoder"},
+    {"feature": "Multiple-step stream compression", "apple": "compression_stream, compression_stream_init, compression_stream_process, compression_stream_destroy", "bifrost": "none", "status": "gap", "note": "no incremental encoder or decoder state; inflate works on whole buffers"},
+    {"feature": "Input and output filters", "apple": "InputFilter, OutputFilter, FilterOperation, FilterError", "bifrost": "springboard/src/shell/books/engine/inflate.rs:9 (Error enum)", "status": "gap", "note": "the Error enum covers decode failures only; there are no stream filter types for apps"},
+    {"feature": "DEFLATE decoding (RFC 1951)", "apple": "compression_decode_buffer with ZLIB or raw DEFLATE", "bifrost": "springboard/src/shell/books/engine/inflate.rs:194", "status": "os", "note": "written out for the Books engine; no crate; zlib framing via zlib at :251 and zlib_lenient at :260"},
+    {"feature": "DEFLATE encoding", "apple": "compression_encode_buffer with ZLIB", "bifrost": "springboard/src/files/zip.rs:331 (deflate)", "status": "partial", "note": "greedy LZ77 over a 32 KiB window with one fixed-Huffman block; no dynamic Huffman tables and no compression levels"},
+    {"feature": "zlib stream for PNG output", "apple": "compression_encode_buffer with ZLIB", "bifrost": "springboard/src/pngenc.rs:31 (zlib_stored)", "status": "partial", "note": "writes stored (uncompressed) deflate blocks only, so PNG output is not compressed"},
+    {"feature": "Error reporting", "apple": "FilterError, compression_status", "bifrost": "springboard/src/shell/books/engine/inflate.rs:9 (Error)", "status": "os", "note": "decode errors only; no encode error type"},
+    {"feature": "Zip archive creation", "apple": "Compressing and decompressing files with stream compression (sample code)", "bifrost": "springboard/src/files/zip.rs:569 (create)", "status": "os", "note": "Files app archive feature; not exposed to apps through the SDK"},
+    {"feature": "Zip archive extraction", "apple": "Compressing and decompressing files with stream compression (sample code)", "bifrost": "springboard/src/files/zip.rs:222 (extract)", "status": "os", "note": "Files app archive feature; progress callback and safe relative paths (safe_rel at :79)"},
+    {"feature": "SDK compression API for apps", "apple": "Compression module (Swift and C)", "bifrost": "springboard/sdk/src (no compression module)", "status": "gap", "note": "bifrost_app has no compression module; sdk hits for compress are compression-resistance layout only (springboard/sdk/src/view/autolayout.rs)"},
+    {"feature": "Scratch buffer sizing", "apple": "compression_encode_scratch_buffer_size, compression_decode_scratch_buffer_size", "bifrost": "none", "status": "n/a", "note": "tied to Apple's C buffer API; Rust Vec output needs no scratch size"}
+  ],
+  "gaps": [
+    "No SDK compression API for apps (no bifrost_app module for buffer, stream or filter compression)",
+    "No LZFSE, LZ4, LZ4_RAW or LZMA codec in either direction",
+    "No incremental stream API (init, process, destroy) and no input or output filter types",
+    "DEFLATE encoder is fixed-Huffman only with no compression levels, so output is larger than zlib",
+    "PNG writer stores uncompressed zlib blocks (springboard/src/pngenc.rs:31), not deflate-compressed",
+    "ZLIB encoding is not provided; zlib exists only on the decode side"
+  ]
+}

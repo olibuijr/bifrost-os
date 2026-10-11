@@ -1,0 +1,28 @@
+{
+  "framework": "HIDDriverKit",
+  "doc": "https://developer.apple.com/documentation/hiddriverkit",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/src/bare/input.rs (Device, InputSet, Decoder), springboard/src/bare/pointer_finger.rs, springboard/sdk/src/runtime.rs (Input enum)",
+  "summary": "BifrOSt reads human interface devices (keyboards, touch, pointers, lid and jack switches) through Linux evdev in the system layer, and writes synthetic evdev events. Apps get decoded key and touch events but no HID report, element or stylus API, and there is no SDK for authoring a device driver; DriverKit driver authoring is treated as n/a for a desktop SDK because the Linux kernel owns drivers.",
+  "rea_evidence": "ev_56224fc3f71aad95df7cb680e84b7313d12904ea2c2efa90c0ef737710c346da",
+  "features": [
+    {"feature": "Driver authoring (HIDDriverKit C++ driver classes, system extension packaging)", "apple": "HIDDriverKit, IOUserHIDEventDriver, IOUserHIDDevice, System Extensions", "bifrost": "none; drivers are Linux kernel drivers", "status": "n/a", "note": "A user-space driver model for a desktop SDK is not planned; the Linux kernel owns HID drivers"},
+    {"feature": "Reading HID input from devices", "apple": "IOHIDDevice, IOUserHIDDevice, IOHIDInterface", "bifrost": "springboard/src/bare/input.rs:140 (Device::open, exclusive EVIOCGRAB), :178 (Device::read)", "status": "os", "note": "Runs in the shell; apps never open devices"},
+    {"feature": "Device discovery and matching by capability", "apple": "Match Criteria, kIOHIDEventServicePropertiesRequiredForMatching, IOHIDEventService", "bifrost": "springboard/src/bare/input.rs:497 (InputSet, found by capability and kept current on hotplug), :308 (device roles)", "status": "os", "note": "Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"},
+    {"feature": "Keyboard events", "apple": "Handling Keyboard Events from a Human Interface Device, kIOHIDSupportedKeyboardUsagePairsKey", "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key)", "status": "partial", "note": "Key codes are evdev codes, not HID usages; no keyboard usage-pair declaration"},
+    {"feature": "Touch and multitouch digitizer data", "apple": "IOHIDDigitizerTouchData, IOHIDDigitizerCollection", "bifrost": "springboard/src/bare/input.rs:63-65 (protocol B decoder, first contact only), springboard/sdk/src/runtime.rs:21 (Input::Touch)", "status": "partial", "note": "Only slot 0 is tracked; no digitizer collection or per-contact data for apps"},
+    {"feature": "Stylus and pen input", "apple": "IOHIDDigitizerStylusData, Handling Stylus Input from a Human Interface Device", "bifrost": "none found in springboard/src/bare/input.rs", "status": "gap", "note": "Pen tilt, pressure and eraser are not decoded"},
+    {"feature": "Pointer and scrolling devices", "apple": "IOUserHIDEventDriver (pointer and scroll events)", "bifrost": "springboard/src/bare/pointer_finger.rs (Mouse, PointerFinger), springboard/src/bare/input.rs:382 (PointerDecoder), :656 (pointer source selection)", "status": "os", "note": "Mouse and pointer events reach the shell only"},
+    {"feature": "Switches (lid, jack insert)", "apple": "IOHIDEventService sensor and switch elements", "bifrost": "springboard/src/bare/input.rs:16 (Switch event), :172 (Device::switches, EVIOCGSW)", "status": "os", "note": "Shell reads switches; apps get no switch events"},
+    {"feature": "Virtual HID devices (synthetic input)", "apple": "com.apple.developer.hid.virtual.device", "bifrost": "springboard/src/bare/input.rs:205-207 (writes a one-finger swipe or tap into an evdev node)", "status": "partial", "note": "Only touch gestures are synthesised, for test and automation; no app-facing virtual device API"},
+    {"feature": "Raw HID report and element access for apps", "apple": "IOHIDElement, HID Usage Tables, Low-Level Information", "bifrost": "none; read_caps and read_abs in springboard/src/bare/input.rs:520-533 are internal", "status": "gap", "note": "No API exposes HID report elements or usage tables to apps"}
+  ],
+  "gaps": [
+    "No app-facing API for raw HID reports, elements or usage tables",
+    "Stylus and pen data (pressure, tilt, eraser) is not decoded",
+    "Touch decoding tracks only the first contact (slot 0)",
+    "No app-facing device matching or hotplug notification by HID usage",
+    "Synthetic input exists only for touch gestures, with no general virtual HID device API"
+  ]
+}

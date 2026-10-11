@@ -1,0 +1,27 @@
+{
+  "framework": "DiskImageKit",
+  "doc": "https://developer.apple.com/documentation/diskimagekit",
+  "macos_since": "27.0",
+  "status": "gap",
+  "bifrost": "none for apps. The installer partitions real disks (springboard/src/installer/plan.rs, springboard/src/installer/disks.rs). tools/arch-vm.sh uses truncate, mkfs.ext4 and mount -o loop, but only for the developer VM harness, not the desktop.",
+  "summary": "DiskImageKit creates, opens and stacks disk images (ASIF, RAW, layered) for Virtualization. BifrOSt has no app-facing API for disk images, and the Files app has no ISO or image mount path. The only loop-mount code is build and test tooling.",
+  "rea_evidence": "ev_49c79ee7c56e023628fbe116e2a434e2e68a414dd0630fb67a75277ee691163f",
+  "features": [
+    {"feature": "Create an empty disk image (RAW)", "apple": "DiskImage.init(creating:), RAWCreationConfiguration, DiskImage.CreationConfiguration", "bifrost": "none; the installer only partitions physical disks (springboard/src/installer/plan.rs)", "status": "gap", "note": "No SDK type creates an image file of a given size and block size."},
+    {"feature": "Create an ASIF sparse image", "apple": "ASIFCreationConfiguration, DiskImage.Format", "bifrost": "none", "status": "n/a", "note": "ASIF is Apple's sparse image format. Linux has no equivalent; RAW or qcow2 would need a new format path."},
+    {"feature": "Open an existing disk image", "apple": "DiskImage.init(opening:), OpenConfiguration, OpenConfigurationProtocol, OpenConfiguration.Mode", "bifrost": "none; the Files app has no ISO or image handling (springboard/apps/files/src)", "status": "gap", "note": "Opening an image as a block device needs a loop device or a userspace mount through the system layer, and apps get no API for it."},
+    {"feature": "Stacked disk images and layers", "apple": "StackedImage, DiskImage.StackableLayer, appending(_:), DiskImage.LayerType, IncompatibleStackingError", "bifrost": "none", "status": "n/a", "note": "Layered stacking is part of Apple's image format. Linux has no direct counterpart, so an overlay design would be new work."},
+    {"feature": "Block size and format values", "apple": "DiskImage.Format, DiskImage.BlockSize, DiskImage.LayerType", "bifrost": "none", "status": "gap", "note": "No types for image format or block size exist in the SDK."},
+    {"feature": "Truncate or extend an image", "apple": "DiskImage truncate and extend, as described on the framework overview page", "bifrost": "tools/arch-vm.sh uses truncate -s for its test disk only", "status": "gap", "note": "No app-facing resize call. The filesystem inside the image is not resized."},
+    {"feature": "Inspect image properties", "apple": "DiskImage properties (framework overview page)", "bifrost": "none", "status": "gap", "note": "No image metadata API."},
+    {"feature": "Virtualization integration", "apple": "Passing an image or stack to the Virtualization framework as VM storage", "bifrost": "none in the SDK. tools/arch-vm.sh and tools/arch-vm-iso.sh run QEMU VMs for testing, outside the desktop.", "status": "gap", "note": "No app-facing VM storage API. The test VMs are developer tooling only."},
+    {"feature": "Error types", "apple": "IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError", "bifrost": "none", "status": "gap", "note": "Depends on the create, open and stack APIs above."}
+  ],
+  "gaps": [
+    "No SDK API to create, open or mount disk image files (RAW or ISO) for apps. Apps cannot do what DiskImageKit does for a user opening an ISO or disk image in Files.",
+    "Files has no ISO or image mount action, and no removable or mounted-volume eject path (springboard/apps/files/src).",
+    "No loop-device or userspace mount service in the system layer exposed to apps. The loop mount in tools/arch-vm.sh is developer tooling only.",
+    "No image metadata, resize or block-size API.",
+    "ASIF and stacked-layer formats are Apple-only. Their status is n/a, and a Linux format would need its own design."
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "framework": "IOUSBHost",
+  "doc": "https://developer.apple.com/documentation/iousbhost",
+  "macos_since": "10.15",
+  "status": "gap",
+  "bifrost": "springboard/src/bare/input.rs (kernel input devices), springboard/src/media/v4l2.rs (UVC cameras via kernel V4L2), springboard/audiod (audio devices); no app-facing USB API",
+  "summary": "IOUSBHost is Apple's framework for user-space host-mode USB drivers that let apps talk to custom USB devices. BifrOSt has no app-facing USB transport API: the Linux kernel drives USB, and the shell and daemons handle input, camera and audio devices by class. Raw device claim, descriptors, pipes and isochronous streams have no SDK counterpart, and the app sandbox does not expose USB device nodes.",
+  "rea_evidence": "ev_a8792b7a789634fc2e35b8dfc894673ef8d9fe7860fc71b9c0e72e944432958c",
+  "features": [
+    {"feature": "Device driver access (claim, configure, descriptors, device requests)", "apple": "IOUSBHostDevice, IOUSBHostObject", "bifrost": "none in springboard/sdk/src; kernel USB stack only", "status": "gap", "note": "No SDK call for an app to claim a USB device or send control requests. Apps run under bwrap with no /dev/bus/usb binding (springboard/src/bare/app_policy.rs binds only /dev/snd and /dev/dri)."},
+    {"feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)", "apple": "IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream, IOUSBHostIOSource", "bifrost": "none in springboard/sdk/src", "status": "gap", "note": "No pipe or stream abstraction exposed to apps."},
+    {"feature": "Isochronous transfer options", "apple": "IOUSBHostIsochronousTransfer*, IOUSBHostIsochronousTransaction", "bifrost": "none", "status": "gap", "note": "Needed for audio and video class devices if apps are to drive them directly."},
+    {"feature": "Matching and IOServicePlane device and interface properties", "apple": "IOUSBHostMatchingPropertyKey, IOUSBHostDevicePropertyKey, IOUSBHostInterfacePropertyKey, IOUSBHostPropertyKey", "bifrost": "springboard/src/bare/input.rs (device discovery by capability, kept current on hotplug)", "status": "os", "note": "The system layer tracks hotplug for input devices. No app SDK exposes USB properties or matching."},
+    {"feature": "Keyboards, mice and pointing devices", "apple": "IOUSBHost (HID devices via USB)", "bifrost": "springboard/src/bare/input.rs", "status": "os", "note": "Input works in the shell. Apps get events through the window system, not USB descriptors."},
+    {"feature": "Video cameras (UVC)", "apple": "IOUSBHost (camera devices via USB)", "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs", "status": "os", "note": "Cameras are reached through kernel V4L2 by the shell camera code, not through a USB API."},
+    {"feature": "Audio devices (USB audio class)", "apple": "IOUSBHost (audio devices via USB)", "bifrost": "springboard/audiod", "status": "os", "note": "Audio service handles playback and capture. Apps do not open USB audio endpoints directly."},
+    {"feature": "Scanners and printers over USB", "apple": "IOUSBHost (scanner and printer devices)", "bifrost": "springboard/sdk/src/print.rs (print API, no USB transport exposed)", "status": "gap", "note": "The print API does not expose a USB transport. No scanner API exists."},
+    {"feature": "Host controller interface and state machines (hubs, controller, port, endpoint)", "apple": "IOUSBHostControllerInterface, IOUSBHostCIControllerStateMachine, IOUSBHostCIPortStateMachine, IOUSBHostCIEndpointStateMachine, IOUSBHostCIDeviceStateMachine", "bifrost": "Linux kernel xHCI and USB stack", "status": "n/a", "note": "Controller-side DriverKit plumbing. On Linux the kernel owns it, and a desktop app has no use for it."},
+    {"feature": "Error domain and structures, enumerations, constants", "apple": "IOUSBHostErrorDomain, IOUSBHost Structures, Enumerations, Constants", "bifrost": "none", "status": "n/a", "note": "Apple error and ABI types for the IOKit USB path. No equivalent is needed without the framework."}
+  ],
+  "gaps": [
+    "No app-facing API to claim a USB device, read descriptors or send control, bulk, interrupt or isochronous requests (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
+    "The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.",
+    "No scanner API and no USB transport for printers (springboard/sdk/src/print.rs).",
+    "Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "framework": "MediaExtension",
+  "doc": "https://developer.apple.com/documentation/mediaextension",
+  "macos_since": "15.0",
+  "status": "gap",
+  "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder), springboard/src/media/hwdec/ffmpeg.rs, springboard/src/media/demux/mod.rs, springboard/render/src/imgdec.rs",
+  "summary": "MediaExtension is an extension point that lets third-party code add format readers, video decoders and RAW processors. BifrOSt has no such extension point: the video decoder seam, the demuxers and the image decoders are compiled into the desktop binary and are not pluggable by apps. The internal counterparts for format reading and video decoding exist; RAW processing does not.",
+  "rea_evidence": "ev_3cbae968582578d0f9a65e810ea563aa77c03cba8024aa04679f87b142212718",
+  "features": [
+    {"feature": "Format readers (MEFormatReader, MEFormatReaderExtension, MEByteSource)", "apple": "MEFormatReader, MEFormatReaderExtension, MEFormatReaderInstantiationOptions, MEFileInfo, MEByteSource", "bifrost": "springboard/src/media/demux/mod.rs (Pure-Rust demuxers: mp4.rs, webm.rs, mse.rs); springboard/src/media/mp4.rs", "status": "partial", "note": "Demuxers for MP4/fMP4 and WebM are built in. No app-facing extension point, no out-of-process reader, no byte-source abstraction, no sidecar file handling."},
+    {"feature": "Track readers and sample cursors (METrackReader, METrackInfo, MESampleCursor)", "apple": "METrackReader, METrackInfo, MESampleCursor, MESampleLocation, MESampleCursorChunk, MEEstimatedSampleLocation, MEHEVCDependencyInfo", "bifrost": "springboard/src/media/demux/mod.rs (Sample, TrackKind, CodecId)", "status": "partial", "note": "Tracks and samples are parsed internally with microsecond times. No public sample cursor for seeking and stepping; the cursor API is not exposed to apps."},
+    {"feature": "Video decoders (MEVideoDecoder, MEVideoDecoderExtension, MEDecodeFrameOptions)", "apple": "MEVideoDecoder, MEVideoDecoderExtension, MEDecodeFrameOptions, MEVideoDecoderPixelBufferManager", "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder); springboard/src/media/hwdec/ffmpeg.rs (libavcodec via dlopen, VA-API hwaccel)", "status": "partial", "note": "The VideoDecoder trait is an internal seam with one implementation (libavcodec, VA-API when available). Apps cannot register a decoder for a codec type. No per-frame decode options."},
+    {"feature": "Video decoder registration by codec type (kMEVideoDecoderCodecInfoKey and related property-list keys)", "apple": "kMEVideoDecoderClassImplementationIDKey, kMEVideoDecoderCodecTypeKey, kMEVideoDecoderCodecInfoKey, kMEVideoDecoderExtensionPointName", "bifrost": "springboard/src/media/mod.rs (Codec enum, default_decoder)", "status": "gap", "note": "No property-list or manifest mechanism that declares a decoder for a four-character codec type. Codec choice is a closed enum in the desktop binary."},
+    {"feature": "RAW processors (MERAWProcessor, MERAWProcessorExtension, MERAWProcessingParameter)", "apple": "MERAWProcessor, MERAWProcessorExtension, MERAWProcessorPixelBufferManager, MERAWProcessingParameter, MERAWProcessorNotification", "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode only)", "status": "gap", "note": "No RAW camera format decoding, no processing parameters, no RAW processor extension point."},
+    {"feature": "Out-of-process extension hosting and entitlements (format reader and video decoder entitlements)", "apple": "Format reader entitlement, Video decoder entitlement, RAW processor entitlement", "bifrost": "springboard/src/media/dl.rs (dlopen of system libraries only)", "status": "os", "note": "The OS can dlopen system libraries, and apps are sandboxed (bubblewrap, see springboard/src/bare/app_policy.rs in the index), but there is no extension host that loads third-party format or decoder plug-ins with a declared entitlement."},
+    {"feature": "Errors (MEError, MediaExtensionErrorDomain)", "apple": "MEError, MEError.Code, MediaExtensionErrorDomain", "bifrost": "springboard/src/media/demux/mod.rs (DemuxError), springboard/src/media/mod.rs (Error enum)", "status": "partial", "note": "Internal error enums exist for demux and playback. They do not map to MediaExtension's error domain and codes, and no app receives them through a public error type."}
+  ],
+  "gaps": [
+    "No public extension point for third-party format readers, video decoders or RAW processors.",
+    "No public track reader or sample cursor API for apps; sample cursors are internal to springboard/src/media/demux/.",
+    "No RAW image processing (camera RAW decode, processing parameters) in springboard/render/src/imgdec.rs.",
+    "No property-list or manifest mechanism that registers a decoder for a four-character codec type.",
+    "No extension host or entitlement that loads a sandboxed plug-in to read a format or decode a codec.",
+    "VideoDecoder is an internal trait with one implementation; there is no second decoder or per-frame decode options."
+  ]
+}

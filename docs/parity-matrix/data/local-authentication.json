@@ -1,0 +1,28 @@
+{
+  "framework": "Local Authentication",
+  "doc": "https://developer.apple.com/documentation/localauthentication",
+  "macos_since": "10.10",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs, springboard/src/keychain.rs, springboard/sdk/src/keychain.rs",
+  "summary": "BifrOSt checks a device-owner password at login and unlock (PAM through the root helper) and a lock-screen passcode, but apps get no API for either and there is no biometric support. The app keychain is the only app-facing secret store, and it has no user-presence or biometric access control.",
+  "rea_evidence": "ev_970ec89cf86817a12826f704b629abf4861aad230b10053a9350fe42ebe2caea",
+  "features": [
+    {"feature": "Biometric policy evaluation (LAContext, evaluatePolicy)", "apple": "LAContext, kLAPolicyDeviceOwnerAuthenticationWithBiometrics", "bifrost": "none", "status": "gap", "note": "No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410)."},
+    {"feature": "Device-owner password or passcode authentication for apps", "apple": "LAContext, kLAPolicyDeviceOwnerAuthentication", "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs", "status": "os", "note": "Login and unlock check the account password through the root helper (PAM service bifrost-login, faillock). The lock-screen passcode is a salted, stretched hash in passcode.ini. Neither is exposed to apps as an SDK call that asks the user to authenticate."},
+    {"feature": "Authentication prompt UI (LocalAuthenticationView)", "apple": "LocalAuthenticationView (SwiftUI)", "bifrost": "springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)", "status": "gap", "note": "The Rust shell has no SwiftUI. Only the system login and lock prompts exist; an app cannot show a reusable authentication sheet."},
+    {"feature": "Keychain items protected by user presence or biometrics", "apple": "SecAccessControl, kSecAttrAccessControl (Accessing Keychain Items with Face ID or Touch ID)", "bifrost": "springboard/src/keychain.rs, springboard/sdk/src/keychain.rs", "status": "gap", "note": "Items are readable whenever the shell runs. There is no access control class and no prompt before reading a secret (docs/bifrost-ui.md, Keychain section, parity gaps)."},
+    {"feature": "Persisted rights and secrets (LARight, LAPersistedRight, LASecret, LARightStore)", "apple": "LARight, LARightStore, LAPersistedRight, LASecret", "bifrost": "none", "status": "gap", "note": "No right or requirement model exists. The keychain stores only generic passwords keyed by (service, account)."},
+    {"feature": "Authentication requirements and biometry fallback (LAAuthenticationRequirement, LABiometryFallbackRequirement)", "apple": "LAAuthenticationRequirement, LABiometryFallbackRequirement", "bifrost": "none", "status": "gap", "note": "No requirement objects or fallback chain. The only fallback is the password path at login."},
+    {"feature": "Key pairs gated by authentication (LAPublicKey, LAPrivateKey)", "apple": "LAPublicKey, LAPrivateKey", "bifrost": "none", "status": "gap", "note": "The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."},
+    {"feature": "Authentication errors (LAError, LAErrorDomain)", "apple": "LAError, LAError.Code, LAErrorDomain", "bifrost": "springboard/sdk/src/keychain.rs (Error, Reply)", "status": "partial", "note": "The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). No LAError codes exist, since there is no LAContext."},
+    {"feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)", "apple": "LADomainState, LADomainStateBiometry, LAEnvironment, kLABiometryTypeNone/TouchID/FaceID/OpticID", "bifrost": "none", "status": "gap", "note": "No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."},
+    {"feature": "Companion device authentication (Apple Watch, Vision Pro)", "apple": "LACompanionType, kLACompanionTypeWatch, kLACompanionTypeVision, kLAPolicyDeviceOwnerAuthenticationWithCompanion", "bifrost": "none", "status": "n/a", "note": "Tied to Apple-only companion hardware with no BifrOSt counterpart."}
+  ],
+  "gaps": [
+    "No biometric authentication (Touch ID, Face ID, fingerprint). Nothing in the shell or SDK; fprint, fprintd and howdy are absent.",
+    "No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).",
+    "Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
+    "No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).",
+    "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants)."
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "framework": "Sound Analysis",
+  "doc": "https://developer.apple.com/documentation/soundanalysis",
+  "macos_since": "10.15",
+  "status": "gap",
+  "bifrost": "springboard/audiod, springboard/src/media/capture.rs, springboard/proto/src/svc.rs (microphone capture only; no classifier)",
+  "summary": "Apple's framework classifies sounds (over 300 built-in labels, or a custom Core ML model) in audio files and live streams. BifrOSt has no sound classification at all. The audio service owns the microphone and can record a take, but no SDK API exposes live audio to apps, and nothing classifies it.",
+  "rea_evidence": "ev_95fde2c755696d376ce4734db2b2f74c70142b286a3544dbc77accab7c0305b0",
+  "features": [
+    {"feature": "Audio file analyzer", "apple": "SNAudioFileAnalyzer (init(url:), add(_:withObserver:), analyze(), analyze(completionHandler:), cancelAnalysis())", "bifrost": "springboard/src/media/audiofile.rs (file decoding only)", "status": "gap", "note": "Files can be decoded, but no analysis pass runs over them and no SDK type wraps this"},
+    {"feature": "Audio stream analyzer", "apple": "SNAudioStreamAnalyzer (init(format:), analyze(_:atAudioFramePosition:), completeAnalysis())", "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/capture.rs (Recorder)", "status": "os", "note": "The audio service owns the microphone and records takes (RecordStart and RecordStop in springboard/proto/src/svc.rs). Apps get no SDK access to the buffer stream"},
+    {"feature": "Built-in sound classifier request", "apple": "SNClassifySoundRequest(classifierIdentifier:), SNClassifierIdentifier, windowDuration, overlapFactor, knownClassifications", "bifrost": "none", "status": "gap", "note": "No classifier model, label set or request object exists"},
+    {"feature": "Custom Core ML sound classifier request", "apple": "SNClassifySoundRequest(mlModel:), SNTimeDurationConstraint, windowDurationConstraint", "bifrost": "none", "status": "gap", "note": "No Core ML or other model runtime for audio. No code matches a model-loading path"},
+    {"feature": "Classification results", "apple": "SNClassificationResult (timeRange, classifications, classification(forIdentifier:)), SNClassification", "bifrost": "none", "status": "gap", "note": "No result type with time ranges or confidences"},
+    {"feature": "Results observer callbacks", "apple": "SNResultsObserving, SNRequest, add(_:withObserver:), remove(_:), removeAllRequests()", "bifrost": "springboard/sdk/src/observable.rs; springboard/sdk/src/notification.rs (callback patterns only)", "status": "gap", "note": "The SDK callback patterns exist, but nothing delivers sound results to an observer"},
+    {"feature": "Live audio classification sample", "apple": "Classifying Live Audio Input with a Built-in Sound Classifier (sample code)", "bifrost": "springboard/apps/voicememos-desktop (recording only)", "status": "gap", "note": "Voice Memos records audio and has no classification"},
+    {"feature": "Errors", "apple": "SNError, SNError.Code, SNErrorDomain", "bifrost": "none", "status": "gap", "note": "No Sound Analysis error domain. It follows from the missing classifier"}
+  ],
+  "gaps": [
+    "No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path",
+    "No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream",
+    "No analysis of audio files: springboard/src/media/audiofile.rs decodes files only",
+    "No result types for time-ranged classifications with confidences, and no observer delivery to apps"
+  ]
+}

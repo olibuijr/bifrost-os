@@ -1,0 +1,29 @@
+{
+  "framework": "GSS",
+  "doc": "https://developer.apple.com/documentation/gss",
+  "macos_since": "10.14",
+  "status": "gap",
+  "bifrost": "none for GSS-API. Adjacent: springboard/src/keychain.rs, springboard/sdk/src/keychain.rs (generic password items, not GSS credentials), springboard/src/net/wifi_config.rs (Wi-Fi Enterprise EAP settings, not GSS)",
+  "summary": "Apple's GSS framework is the GSS-API (RFC 2743/2744) for Kerberos-style authenticated sessions, message protection and name handling. BifrOSt has no GSS-API implementation, no Kerberos or krb5 code and no SDK surface for it. The only nearby work is the per-app keychain for stored passwords and Wi-Fi Enterprise (EAP) settings, which do not perform GSS security-context exchange.",
+  "rea_evidence": "ev_03afbf53fe958fca77ef73ab27bde47da0f2635756db20c77c1ccb84573f0d63",
+  "features": [
+    {"feature": "Memory and context (object lifetime, allocation)", "apple": "gss_release_buffer, gss_release_oid_set, GSS object release functions (Allocating and Releasing Objects)", "bifrost": "none", "status": "gap", "note": "Rust ownership replaces GSS release calls; no GSS objects exist to release"},
+    {"feature": "Function status codes (GSS_S_*, GSSCreateError, gss_display_status)", "apple": "GSS_S_COMPLETE, GSS_S_FAILURE, GSS_C_MECH_CODE, gss_display_status, GSSCreateError (Function Status)", "bifrost": "springboard/sdk/src/keychain.rs (Error mirrors errSec* codes)", "status": "gap", "note": "keychain errors use OSStatus-style codes only; there is no GSS major/minor status model"},
+    {"feature": "Buffer management (gss_buffer_desc, buffer sets, IOV buffers)", "apple": "gss_buffer_desc, gss_buffer_set_t, gss_iov_buffer_desc, gss_create_empty_buffer_set (Buffer Management)", "bifrost": "none", "status": "gap", "note": "no GSS buffer descriptors; apps use Rust slices and Vec"},
+    {"feature": "Context services (gss_init_sec_context, gss_accept_sec_context, context flags)", "apple": "gss_init_sec_context, gss_accept_sec_context, GSS_C_MUTUAL_FLAG, GSS_C_DELEG_FLAG (Context Services)", "bifrost": "none", "status": "gap", "note": "no security-context negotiation code in springboard/ or the SDK"},
+    {"feature": "Credential management (gss_acquire_cred, gss_inquire_cred, kGSSIC* keys)", "apple": "gss_acquire_cred, gss_acquire_cred_with_password, gss_add_cred, gss_iter_creds (Credential Management)", "bifrost": "springboard/sdk/src/keychain.rs (add/get/update/delete per app)", "status": "gap", "note": "the keychain stores app secrets as (service, account) items; it does not acquire, inquire or refresh Kerberos or GSS credentials"},
+    {"feature": "Security mechanisms (gss_indicate_mechs, mechanism attributes)", "apple": "gss_indicate_mechs, gss_indicate_mechs_by_attrs, gss_inquire_mech_for_saslname (Security Mechanisms)", "bifrost": "none", "status": "gap", "note": "no mechanism registry; no SASL mapping"},
+    {"feature": "Name handling (gss_import_name, gss_display_name, gss_compare_name)", "apple": "GSSCreateName, gss_import_name, gss_display_name, gss_compare_name, gss_canonicalize_name (Name Handling)", "bifrost": "none", "status": "gap", "note": "keychain items are keyed by plain (service, account) strings, not GSS name objects"},
+    {"feature": "Object identifiers (gss_OID, gss_OID_set)", "apple": "gss_OID_desc, gss_create_empty_oid_set, gss_oid_equal, gss_oid_to_str (Object Identifiers)", "bifrost": "none", "status": "gap", "note": "no ASN.1 OID handling in the SDK or shell"},
+    {"feature": "Token management (gss_encapsulate_token, gss_decapsulate_token)", "apple": "gss_encapsulate_token, gss_decapsulate_token (Token Management)", "bifrost": "none", "status": "gap", "note": "no GSS token framing"},
+    {"feature": "Message protection (gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic)", "apple": "gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic, gss_seal, gss_unseal, gss_sign (Message Protection)", "bifrost": "springboard/src/keychain.rs (ChaCha20 and HMAC-SHA256 for keychain files at rest)", "status": "gap", "note": "the keychain file cipher is local storage protection with a per-app key; it is not GSS per-message wrap or MIC and cannot be used as one"},
+    {"feature": "Kerberos implementation (gss_krb5_*, lucid context, acceptor identity)", "apple": "gss_krb5_export_lucid_sec_context, gss_krb5_ccache_name, gss_krb5_set_allowable_enctypes, gsskrb5_register_acceptor_identity (Kerberos Implementation)", "bifrost": "none", "status": "gap", "note": "no Kerberos or krb5 code in the repo (grep for kerberos, gssapi, gss_, krb5, spnego over the whole tree returns no GSS hits); no KDC or ticket cache support"}
+  ],
+  "gaps": [
+    "No GSS-API (RFC 2743/2744) implementation: no security contexts, credentials, names, tokens or message protection.",
+    "No Kerberos (krb5) client or ticket cache, so enterprise Kerberos sign-in and SPNEGO/Negotiate HTTP auth are unavailable to apps.",
+    "No SDK API for app-level GSS credentials; the keychain (springboard/sdk/src/keychain.rs) stores generic passwords only.",
+    "No mechanism or name registry (gss_indicate_mechs, GSSCreateName), so apps cannot select or compare authentication mechanisms.",
+    "Wi-Fi Enterprise (EAP) credentials in springboard/src/net/wifi_config.rs are a separate 802.1X path and are not a GSS counterpart."
+  ]
+}

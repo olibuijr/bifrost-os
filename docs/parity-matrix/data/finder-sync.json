@@ -1,0 +1,26 @@
+{
+  "framework": "Finder Sync",
+  "doc": "https://developer.apple.com/documentation/findersync",
+  "macos_since": "10.10",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/fswatch.rs (directory watching), springboard/sdk/src/file_coordination.rs (cross-process coordination), springboard/apps/files/src/main.rs (the file manager, with its own context menu); no Finder extension point",
+  "summary": "Finder Sync lets a third-party extension add badges, shortcut menus and toolbar buttons to the Finder and observe directories. BifrOSt has no extension point for the Files app (its Finder counterpart): apps cannot add badges, menu items or toolbar buttons to it. Directory watching and file coordination exist as SDK APIs for apps, but not as file-manager extension hooks.",
+  "rea_evidence": "ev_f3f24717e6ac18f6d1dba32e8abd434c92851592ad666ad96d263c56c0764b88",
+  "features": [
+    {"feature": "Badges on files and folders", "apple": "FIFinderSync.requestBadgeIdentifier(for:), FIFinderSyncController.setBadgeIdentifier(_:for:), setBadgeImage(_:label:forBadgeIdentifier:)", "bifrost": "none", "status": "gap", "note": "Files shows no per-item badge from an app. Nothing in the SDK or Files app sets one."},
+    {"feature": "Custom shortcut menus in the file manager", "apple": "FIFinderSyncProtocol.menu(for:), FIMenuKind (contextualMenuForItems, contextualMenuForContainer)", "bifrost": "springboard/apps/files/src/main.rs (ContextItem menu, Files-internal); springboard/sdk/src/runtime.rs:256 (context_menu, app windows only)", "status": "gap", "note": "Files builds its own context menu. Apps cannot add items to it. The SDK context_menu call only serves the app's own window."},
+    {"feature": "Toolbar buttons in the file manager", "apple": "FIFinderSyncProtocol.toolbarItemName, toolbarItemImage, toolbarItemToolTip", "bifrost": "docs/bifrost-ui.md:37 (Toolbar widgets for an app's own window)", "status": "gap", "note": "The toolbar kit is for an app's own unified window. Files has no toolbar slot for other apps."},
+    {"feature": "Observing monitored directories", "apple": "FIFinderSyncProtocol.beginObservingDirectory(at:), endObservingDirectory(at:), FIFinderSyncController.directoryURLs", "bifrost": "springboard/sdk/src/fswatch.rs (WatchStream: recursive inotify, coalesced events)", "status": "partial", "note": "Apps can watch a folder tree and get change events. There is no begin or end callback tied to the user viewing a folder, and no list of directories an extension manages."},
+    {"feature": "Current selection and target folder", "apple": "FIFinderSyncController.selectedItemURLs(), targetedURL()", "bifrost": "springboard/apps/files/src/main.rs (selection held inside Files)", "status": "gap", "note": "No SDK call returns the Files selection or current folder to another app."},
+    {"feature": "Extension controller and enablement", "apple": "FIFinderSyncController.default(), isExtensionEnabled, showExtensionManagementInterface()", "bifrost": "none", "status": "gap", "note": "No extension host for file-manager plugins, and no enable or disable UI for one."},
+    {"feature": "Per-item tags and last-used data shared with the Finder", "apple": "FIFinderSyncController.tagDataForItem(with:), setTagData(_:forItemWith:completion:), lastUsedDateForItem(with:), setLastUsedDate(_:forItemWith:completion:), values(forAttributes:forItemWith:completion:)", "bifrost": "none", "status": "gap", "note": "No SDK API exposes item tags or last-used dates to other apps."},
+    {"feature": "Cross-process file coordination for sync clients", "apple": "Used with Finder Sync by sync extensions (not a Finder Sync symbol)", "bifrost": "springboard/sdk/src/file_coordination.rs (NativeFileCoordinator, flock on the parent directory)", "status": "partial", "note": "Read and write coordination exists for apps. It is not a Finder Sync hook and does not notify the file manager."}
+  ],
+  "gaps": [
+    "No file-manager extension point: apps cannot add badges, context-menu items or toolbar buttons to Files.",
+    "No selection or targeted-folder API for other apps to query the file manager.",
+    "No per-item tag, last-used or attribute sharing with the file manager.",
+    "No extension host or enable UI for file-manager plugins.",
+    "fswatch gives change events but no per-folder observe begin or end signal tied to the file manager view."
+  ]
+}

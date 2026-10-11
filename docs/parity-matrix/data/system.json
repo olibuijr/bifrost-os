@@ -1,0 +1,111 @@
+{
+  "framework": "System",
+  "doc": "https://developer.apple.com/documentation/system",
+  "macos_since": "11.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/file_coordination.rs, springboard/sdk/src/fswatch.rs, springboard/src/bare/docbroker.rs, springboard/src/bare/sys.rs, springboard/sdk/src/runtime.rs, Rust std::fs and std::os::unix (Linux layer)",
+  "summary": "The System framework is a set of typed Swift wrappers over POSIX file calls (FileDescriptor, FilePath, Stat, FileMode, Errno). BifrOSt has the same POSIX operations at the Linux and Rust level, plus file grants that hand apps a descriptor, advisory directory locks and a filesystem watch, but no SDK wrapper types for any of them.",
+  "rea_evidence": "ev_74b96e744f1a19c8a81a4310e14bad602b4e3b31621cdc7988908f5c2ef0d72a",
+  "features": [
+    {
+      "feature": "File descriptors (open, read, write, seek, close, duplicate)",
+      "apple": "FileDescriptor, FileDescriptor.AccessMode, OpenOptions, SeekOrigin, DuplicateOptions, PipeOptions (https://developer.apple.com/documentation/system/filedescriptor)",
+      "bifrost": "springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
+      "status": "partial",
+      "note": "Apps get raw descriptors through document grants and shared memory, and they can use Rust std::fs. There is no typed SDK FileDescriptor with open options, positional read and write, or pipe creation."
+    },
+    {
+      "feature": "Document grants (user-chosen file access without a path)",
+      "apple": "FileDescriptor.open with a FilePath chosen by the user (no direct Apple System type; the sandbox counterpart is the open and save panels)",
+      "bifrost": "springboard/src/bare/docbroker.rs:1-20 (shell opens the file as the account, refuses symlinks and .. escapes, hands the app a descriptor, checks device and inode on reopen)",
+      "status": "partial",
+      "note": "Covers the open and save path. The app never receives a path, which is a stricter model than System's FilePath. Known limit: root's supplementary groups are kept while acting as the account."
+    },
+    {
+      "feature": "File paths (typed, component-wise paths)",
+      "apple": "FilePath, FilePath.Component, FilePath.ComponentView, FilePath.Root (https://developer.apple.com/documentation/system/filepath)",
+      "bifrost": "Rust std::path::Path and PathBuf, used across springboard/src/ and springboard/sdk/src/ (for example springboard/sdk/src/file_coordination.rs:105 takes &Path)",
+      "status": "os",
+      "note": "The language's path type is the counterpart. No SDK type gives a null-terminated platform string or component views; the Rust path type is what apps use."
+    },
+    {
+      "feature": "File permissions and modes",
+      "apple": "FilePermissions, FileMode, FileType (https://developer.apple.com/documentation/system/filepermissions)",
+      "bifrost": "springboard/sdk/src/control.rs:124 (sets 0600 on the control socket); springboard/src/shell/terminal/:285 (sets 0700 on the config directory)",
+      "status": "os",
+      "note": "Modes are set with std::os::unix::fs::PermissionsExt. There is no typed mode, type or permission set in the SDK."
+    },
+    {
+      "feature": "File status (stat, file size, link count, owner, inode, timestamps)",
+      "apple": "Stat, Stat.Flags, Inode, DeviceID, UserID, GroupID (https://developer.apple.com/documentation/system/stat; macOS 27.0 for Stat)",
+      "bifrost": "Rust std::fs::metadata and std::os::unix::fs::MetadataExt (used in springboard/src/bare/power.rs:155 for mode checks); springboard/src/bare/docbroker.rs (device and inode check on reopen)",
+      "status": "os",
+      "note": "The Linux metadata calls exist in the system layer. No SDK wrapper exposes Stat or the ID types."
+    },
+    {
+      "feature": "Filesystem capacity (statvfs)",
+      "apple": "No direct System type; used by Foundation volume APIs and the Storage pane",
+      "bifrost": "springboard/src/bare/sys.rs:121 (statvfs extern) and springboard/src/bare/sys.rs:125 (disk_space); springboard/src/shell/storage.rs:145 (shell caller)",
+      "status": "os",
+      "note": "Shell-only. Apps have no SDK call for free and total space of a volume."
+    },
+    {
+      "feature": "Error numbers (Errno)",
+      "apple": "Errno (https://developer.apple.com/documentation/system/errno)",
+      "bifrost": "Rust std::io::Error with raw OS errors (springboard/src/bare/sys.rs:97-98 uses io::Error::last_os_error)",
+      "status": "os",
+      "note": "Errors come through io::Error. No typed Errno enum in the SDK, so apps match on raw codes or ErrorKind."
+    },
+    {
+      "feature": "Advisory directory locks for coordinated reads and writes",
+      "apple": "No direct System type; used with NSFileCoordinator (Foundation)",
+      "bifrost": "springboard/sdk/src/file_coordination.rs:1-20 (flock on the parent directory, shared for reads, exclusive for writes, bounded wait) and springboard/sdk/src/file_coordination.rs:105, :112 (coordinate_reading, coordinate_writing)",
+      "status": "partial",
+      "note": "Advisory only. A process that does not coordinate is not blocked. Presenters and relinquish negotiation are not modelled."
+    },
+    {
+      "feature": "File system change events",
+      "apple": "No direct System type; FSEvents and file coordination presenters use it",
+      "bifrost": "springboard/sdk/src/fswatch.rs:73 (WatchEvent), :78 (WatchStream), :185 (poll); springboard/sdk/src/file_coordination.rs:145 (deliver_events)",
+      "status": "partial",
+      "note": "A poll-based stream. Apps must call poll themselves; there is no callback API."
+    },
+    {
+      "feature": "Typed system-call results and option sets (FileFlags, FileMode bits, open options)",
+      "apple": "FileFlags, Stat.Flags, FileDescriptor.OpenOptions, FileDescriptor.AccessMode (OptionSet types)",
+      "bifrost": "No SDK option sets; flags are passed as raw integers (for example the std OpenOptions builder in springboard/src/shell/terminal/:285)",
+      "status": "gap",
+      "note": "No typed option sets exist for file flags or open options in the SDK."
+    },
+    {
+      "feature": "File ownership by user and group identity",
+      "apple": "UserID, GroupID, DeviceID, Inode (strongly typed wrappers over uid_t, gid_t, dev_t, ino_t)",
+      "bifrost": "springboard/src/bare/docbroker.rs:1-20 (fsuid and fsgid switched for the calling thread)",
+      "status": "os",
+      "note": "Identity switching is done in the shell. The types are not exposed to apps."
+    },
+    {
+      "feature": "Adopting C file operations in Swift (migration guides)",
+      "apple": "Adopting Swift File Operations, Adopting Swift File Options, Adopting Swift Error Constants (articles)",
+      "bifrost": "Not applicable: the BifrOSt SDK is Rust and has no Swift or C migration path",
+      "status": "n/a",
+      "note": "Migration articles for Swift code only."
+    },
+    {
+      "feature": "Mach ports and platform C types (CInterop, Mach, MachPortRight)",
+      "apple": "CInterop, Mach, MachPortRight (https://developer.apple.com/documentation/system)",
+      "bifrost": "Not applicable: Mach is Apple-only",
+      "status": "n/a",
+      "note": "Apple kernel IPC and platform type namespaces. No Linux counterpart is needed."
+    }
+  ],
+  "gaps": [
+    "No SDK file-descriptor type with typed open options, positional read and write, seek, duplicate and pipe creation.",
+    "No SDK path type with component views. Apps use Rust std::path only.",
+    "No SDK stat call or typed file mode, file type and permission set.",
+    "No SDK call for volume capacity. disk_space in springboard/src/bare/sys.rs:125 is shell-only.",
+    "No typed Errno enum for apps.",
+    "File coordination is advisory and has no relinquish or save-negotiation step (springboard/sdk/src/file_coordination.rs:1-20).",
+    "The file-change feed must be polled by the app (springboard/sdk/src/fswatch.rs:185); no callback API."
+  ]
+}

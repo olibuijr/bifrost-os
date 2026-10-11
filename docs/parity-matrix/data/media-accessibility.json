@@ -1,0 +1,27 @@
+{
+  "framework": "Media Accessibility",
+  "doc": "https://developer.apple.com/documentation/mediaaccessibility",
+  "macos_since": "10.9",
+  "status": "gap",
+  "bifrost": "springboard/src/shell/accessibility/mod.rs (system accessibility settings only); springboard/src/media/ (playback, no caption or haptic layer)",
+  "summary": "The framework exposes system caption appearance, audible media preferences, flashing-light dimming and Music Haptics. BifrOSt has none of these as an app-facing API: there is no caption appearance or audible media preference, no flashing-light detection or dimming, and no music haptics. The media player drops subtitle tracks at demux time. Reduce Motion and Increase Contrast exist in the shell, but they are not part of this framework.",
+  "rea_evidence": "ev_638847f577c821df90ff1e7bb3d494e65444e64de6b02caaf879bc750ba14bc6",
+  "features": [
+    {"feature": "Caption appearance settings (font, colours, opacity, edge style, window, display type)", "apple": "MACaptionAppearanceCopyFontDescriptorForStyle, MACaptionAppearanceCopyForegroundColor, MACaptionAppearanceCopyBackgroundColor, MACaptionAppearanceCopyWindowColor, MACaptionAppearanceGetDisplayType, MACaptionAppearanceSetDisplayType", "bifrost": "none", "status": "gap", "note": "No caption preference store in springboard/src/shell/accessibility/mod.rs or springboard/src/shell/options.rs; no caption settings page in springboard/src/shell/pages.rs."},
+    {"feature": "Caption language selection and profiles", "apple": "MACaptionAppearanceAddSelectedLanguage, MACaptionAppearanceCopySelectedLanguages, MACaptionAppearanceCopyProfileIDs, MACaptionAppearanceSetActiveProfileID", "bifrost": "none", "status": "gap", "note": "No language stack or profile API. The Options keys in springboard/src/shell/options.rs have no caption entry."},
+    {"feature": "Caption change notification and display reporting", "apple": "kMACaptionAppearanceSettingsChangedNotification, MACaptionAppearanceDidDisplayCaptions", "bifrost": "springboard/sdk/src/notification.rs (generic NotificationCenter only)", "status": "gap", "note": "No caption-specific notification is posted. The generic notification centre does not carry this event."},
+    {"feature": "Subtitle and caption tracks in playback", "apple": "MAMediaCharacteristicTranscribesSpokenDialogForAccessibility, MAMediaCharacteristicDescribesMusicAndSoundForAccessibility (track characteristics)", "bifrost": "springboard/src/media/demux/webm.rs (parse_tracks keeps only video and audio); springboard/src/media/demux/mod.rs (TrackKind: Video, Audio)", "status": "gap", "note": "The WebM parser drops subtitle tracks; its test asserts 'subtitle track dropped'. The MP4 path (springboard/src/media/mp4.rs, Kind: Video, Audio) has no text track either. No caption rendering exists."},
+    {"feature": "Audible media selection (described video, audio description preference)", "apple": "MAAudibleMediaCopyPreferredCharacteristics, MAMediaCharacteristicDescribesVideoForAccessibility, kMAAudibleMediaSettingsChangedNotification", "bifrost": "none", "status": "gap", "note": "No preference is read or exposed. The player in springboard/src/media/player.rs selects audio tracks without any accessibility characteristic."},
+    {"feature": "Flashing lights detection and dimming", "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor", "bifrost": "none", "status": "gap", "note": "No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter."},
+    {"feature": "Music Haptics", "apple": "MAMusicHapticsManager", "bifrost": "springboard/src/bare/vibrator.rs (vibrator presence check); springboard/src/shell/options.rs (keyboard_haptics)", "status": "n/a", "note": "Music Haptics plays a haptic track on the Taptic Engine of Apple hardware. PCs have no equivalent actuator, and the only vibrator code is a presence check for Keyboard Haptics. No music haptic track is played."},
+    {"feature": "Image accessibility captions (metadata)", "apple": "MAImageCaptioningCopyCaption, MAImageCaptioningSetCaption, MAImageCaptioningCopyMetadataTagPath", "bifrost": "none", "status": "gap", "note": "No code reads or writes an image caption in image metadata. springboard/src/shell/md.rs only renders markdown image lines."}
+  ],
+  "gaps": [
+    "Caption appearance preferences: font, colours, opacity, edge style, window and display type, with a settings page and a change notification.",
+    "Caption and subtitle track support in the demuxers and the player (WebM drops subtitle tracks; MP4 has no text track), plus a caption renderer.",
+    "Audible media selection preferences (described video, music and sound descriptions) exposed to apps.",
+    "Flashing-light detection and dimming for video and UI, with a system setting and a change notification.",
+    "Image caption metadata API (set and read the accessibility caption of an image).",
+    "Music Haptics is n/a on PC hardware; the framework's Apple-only features are not expected to map here."
+  ]
+}

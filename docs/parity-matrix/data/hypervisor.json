@@ -1,0 +1,24 @@
+{
+  "framework": "Hypervisor",
+  "doc": "https://developer.apple.com/documentation/hypervisor",
+  "macos_since": "10.10",
+  "status": "n/a",
+  "bifrost": "none (no app-facing API). Test rig only: tools/arch-vm.sh, docs/arch-x86-vm.md",
+  "summary": "Apple's Hypervisor framework is a C API that lets sandboxed user-space apps create VMs and vCPUs on Apple silicon and Intel Macs. BifrOSt exposes no VM API to apps; QEMU/KVM is used only as a developer test rig for running the shell in an Arch guest, and the SDK's host module reads only the task's memory footprint from /proc.",
+  "rea_evidence": "ev_094daaca9b148ecb4f10e8a56d3d5ccdbb32562244264bedb754fe40a54359ab",
+  "features": [
+    {"feature": "VM management (hv_vm_create, hv_vm_destroy, VM configuration)", "apple": "hv_vm_create(_:), hv_vm_destroy(), hv_vm_config_create(), hv_vm_config_t, hv_vm_options_t", "bifrost": "none in springboard/sdk/src/", "status": "n/a", "note": "Apps have no way to create a VM. A desktop SDK would not normally offer this, and apps run under the bubblewrap sandbox (springboard/src/bare/app_policy.rs)."},
+    {"feature": "vCPU management (create, run, registers)", "apple": "hv_vcpu_create, hv_vcpu_run, vCPU Management collection", "bifrost": "none", "status": "n/a", "note": "No vCPU abstraction exists in the SDK or the shell."},
+    {"feature": "Memory mapping into guest physical address space", "apple": "hv_vm_map, Memory Management collection", "bifrost": "none", "status": "n/a", "note": "The guest-memory mapping is only the Arch VM under QEMU, not an app API."},
+    {"feature": "Timers and time-stamp counter", "apple": "hv_vcpu_get/set_vtimer_mask, hv_vcpu_get/set_vtimer_offset, hv_tsc_clock, hv_vcpu_set_tsc_relative", "bifrost": "none", "status": "n/a", "note": "Only guest timers inside the QEMU VM are used; no SDK surface."},
+    {"feature": "Capability queries (hv_capability, sysctl availability check)", "apple": "hv_capability(_:_:), hv_capability_t", "bifrost": "none for hypervisor capabilities; springboard/core/src/host.rs is a different thing (host CPU and memory statistics)", "status": "n/a", "note": "host.rs does not report virtualisation support, so an app could not learn whether a hypervisor is available."},
+    {"feature": "Nested virtualisation (EL2)", "apple": "hv_vm_config_get_el2_supported, hv_vm_config_set_el2_enabled", "bifrost": "none", "status": "n/a", "note": "Apple silicon only."},
+    {"feature": "Interrupt controllers (GIC, APIC, I/O notifiers)", "apple": "GIC functions and registers, hv_vm_add_pio_notifier, hv_vcpu_apic_* functions", "bifrost": "none", "status": "n/a", "note": "Device emulation for guests does not exist in BifrOSt. Only the QEMU test VM provides it."},
+    {"feature": "Entitlements (com.apple.security.hypervisor, com.apple.vm.networking, com.apple.vm.device-access)", "apple": "com.apple.security.hypervisor, com.apple.vm.hypervisor, com.apple.vm.networking, com.apple.vm.device-access", "bifrost": "none", "status": "n/a", "note": "BifrOSt has no entitlement model. App isolation is in springboard/src/bare/app_policy.rs and docs/app-isolation.md."},
+    {"feature": "Developer test rig: Arch Linux guest under QEMU/KVM", "apple": "not applicable (Apple's framework is an app API)", "bifrost": "tools/arch-vm.sh, tools/vm-install.sh, tools/vm-cycle.py, docs/arch-x86-vm.md", "status": "os", "note": "Developer tooling only. It runs the shell on tty1 in a KVM guest. It is not an SDK feature and no app can use it."}
+  ],
+  "gaps": [
+    "No app-facing VM API. Decision: a desktop SDK does not expose hypervisors to apps, so the Hypervisor framework is marked n/a rather than gap. Revisit only if a VM-hosting app (for example a Linux VM app) is planned.",
+    "The shell cannot report whether KVM or a hypervisor is available. host.rs covers CPU and memory statistics only."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "framework": "OSLog",
+  "doc": "https://developer.apple.com/documentation/oslog",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "bifrost_app::log (springboard/sdk/src/log.rs re-exporting springboard/core/src/log.rs), bifrost-log CLI (springboard/sdk/src/bin/bifrost-log.rs), Console app (springboard/apps/console-desktop)",
+  "summary": "The read side (OSLogStore, OSLogEntryLog) and the write side (os.Logger levels, subsystem registry, per-subsystem private and level config) are built, with journald as the store. Entries, activities, signposts, boundaries, enumerator and position tokens, and format payloads are not built; OSSignposter is planned for phase 3 only.",
+  "rea_evidence": "ev_98629aec169af014cb9c6e74b3a9a88788db737854e70b759c29f99c2d962a60",
+  "features": [
+    {"feature": "Log store (read historical entries)", "apple": "OSLogStore, OSLogStore.Scope", "bifrost": "springboard/core/src/log.rs (LogStore::current_process, LogStore::local, LogStore::system, LogStore::entries)", "status": "partial", "note": "current_process reads an in-memory ring of 2000 entries; local() needs kind = \"system-app\" and the log-store entitlement; no Apple scope enum type"},
+    {"feature": "Log entries (OSLogEntryLog)", "apple": "OSLogEntry, OSLogEntryLog", "bifrost": "springboard/core/src/log.rs (LogEntry { date, process, pid, subsystem, category, level, message })", "status": "parity", "note": "same core fields as OSLogEntryLog; the entry class hierarchy is flattened into one struct"},
+    {"feature": "Logging calls and levels (os.Logger)", "apple": "Logger, debug, info, notice, error, fault", "bifrost": "springboard/core/src/log.rs (Logger::new, Logger::debug/info/notice/error/fault)", "status": "parity", "note": "levels map to syslog priorities 7, 6, 5, 3, 2; info is written when the level allows it, not kept in memory only"},
+    {"feature": "Live streaming of entries", "apple": "OSLogStore.entries(...) polled or streamed in Console and Instruments", "bifrost": "springboard/core/src/log.rs (LogStore::stream, blocking, run on a thread)", "status": "partial", "note": "journald follow via journalctl for system scope; in-process stream polls the ring every 200 ms"},
+    {"feature": "Predicate queries", "apple": "NSPredicate over subsystem, category, process, level, composedMessage", "bifrost": "springboard/core/src/log.rs (Query, Query::parse_predicate, Query::matches)", "status": "partial", "note": "subset: ==, >=, CONTAINS joined by AND; subsystem, category, process, level, message, last, limit"},
+    {"feature": "Privacy of dynamic values", "apple": "Message interpolation with privacy: .public and .private, redacted in logs", "bifrost": "springboard/core/src/log.rs (private, redact); springboard/sdk/src/log.rs", "status": "partial", "note": "privacy is per subsystem (private = true in the registry), not per value; no per-argument masks"},
+    {"feature": "Subsystem and category registry", "apple": "Subsystem and category on Logger; per-subsystem log config", "bifrost": "springboard/core/src/log.rs (Spec, registry_from_manifests, write_overrides, effective); docs/milestone-unified-logging.md", "status": "parity", "note": "manifests declare subsystems and categories; /etc/bifrost/log.toml overrides levels"},
+    {"feature": "Log configuration CLI", "apple": "log config --subsystem ... --mode level:...", "bifrost": "springboard/sdk/src/bin/bifrost-log.rs (config, subsystems)", "status": "parity", "note": "bifrost-log config --subsystem X --level debug --private on"},
+    {"feature": "Log viewer app", "apple": "Console app (reads OSLogStore)", "bifrost": "springboard/apps/console-desktop/src/model.rs (Query::parse, entry model)", "status": "partial", "note": "reads and filters entries; subsystem ownership checks apply on read; not verified on every filter path"},
+    {"feature": "Subsystem ownership on read", "apple": "Subsystem tied to the writing process (kernel-set identity)", "bifrost": "springboard/core/src/log.rs (may_log_as, app_of_exe, attributed)", "status": "os", "note": "security rule in the system layer; the app cannot claim another app's subsystem, but apps still write the datagram themselves so the check is on read only; not an SDK API"},
+    {"feature": "Activity entries (OSLogEntryActivity)", "apple": "OSLogEntryActivity, os_activity", "bifrost": "", "status": "gap", "note": "no activity events in the log model"},
+    {"feature": "Signpost entries and OSSignposter", "apple": "OSLogEntrySignpost, OSSignposter, interval begin and end", "bifrost": "docs/milestone-unified-logging.md (phase 3 plan)", "status": "gap", "note": "no signposter; the milestone lists it for phase 3 only; the bifrost-ui.md gaps section says so explicitly"},
+    {"feature": "Boundary entries (OSLogEntryBoundary)", "apple": "OSLogEntryBoundary", "bifrost": "", "status": "gap", "note": "no partition metadata between entry sequences"},
+    {"feature": "Enumerator and persistent positions", "apple": "OSLogEnumerator, OSLogPosition, OSLogStore.getEntries(at:)", "bifrost": "springboard/core/src/log.rs (LogStore::entries returns Vec, oldest first, capped by limit)", "status": "gap", "note": "no lazy enumerator and no position tokens; docs/bifrost-ui.md states this gap"},
+    {"feature": "Payload entries with format strings", "apple": "OSLogEntryWithPayload, OSLogMessageComponent", "bifrost": "", "status": "gap", "note": "no format specifiers or message components; the whole value is marked private or public"},
+    {"feature": "Process metadata on entries", "apple": "OSLogEntryFromProcess (sender, process image, pid)", "bifrost": "springboard/core/src/log.rs (LogEntry.process, LogEntry.pid)", "status": "partial", "note": "process name and pid only; no sender image or library metadata"}
+  ],
+  "gaps": [
+    "OSSignposter and signpost entries (phase 3 in docs/milestone-unified-logging.md)",
+    "Activity, boundary and payload entry types and OSLogMessageComponent",
+    "Lazy OSLogEnumerator and persistent OSLogPosition tokens (LogStore::entries returns a Vec)",
+    "Per-argument privacy (.public, .private(mask:)) and format specifiers; privacy is per subsystem only",
+    "Info-level entries kept in memory only (Apple keeps info transiently)",
+    "Predicate language is a subset (==, >=, CONTAINS, AND only)",
+    "Journal reader shells out to journalctl; app access to the journal needs the systemd-journal group (unverified on Midget)"
+  ]
+}

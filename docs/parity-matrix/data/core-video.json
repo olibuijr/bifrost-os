@@ -1,0 +1,27 @@
+{
+  "framework": "Core Video",
+  "doc": "https://developer.apple.com/documentation/corevideo",
+  "macos_since": "10.4",
+  "status": "os",
+  "bifrost": "springboard/src/gpu/desktop.rs (GBM buffers exported as dma-bufs), springboard/src/gpu/wl.rs (Presenter), springboard/src/bare/kms.rs (next_vsync), springboard/src/media/mod.rs (DmaBuf, DmaPicture)",
+  "summary": "Core Video's buffer, pool, display-timing and GPU texture layers have counterparts in the Linux system layer (GBM and dma-buf buffers, a GPU presenter, vsync prediction), but no SDK API exposes them to apps. Apple's CVPixelBuffer, CVDisplayLink and CVImageBuffer attachment APIs have no app-facing equivalent.",
+  "rea_evidence": "ev_7cbdc5db8b24589f84a7a08750d4c3039a494671e1e04ff83fa0aaecc00633d4",
+  "features": [
+    {"feature": "Pixel buffers (CPU-side image buffers)", "apple": "CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferLockBaseAddress, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow", "bifrost": "springboard/src/gpu/desktop.rs (GBM buffer exported as dma-buf, line 74 onward); springboard/render/src/gfx.rs (row-strided pixel view)", "status": "os", "note": "buffers exist in the system layer only; no SDK type wraps a locked base address with a pixel format"},
+    {"feature": "Pixel buffer pool", "apple": "CVPixelBufferPool, CVPixelBufferPoolCreate, CVPixelBufferPoolCreatePixelBuffer, CVPixelBufferPoolFlush", "bifrost": "springboard/src/gpu/wl.rs (create_surface with n buffers, add_drawable, pop_drawable)", "status": "os", "note": "the presenter keeps a fixed set of drawables per surface; no pool with minimum count, maximum age or allocation threshold is exposed to apps"},
+    {"feature": "Image buffer attachments and colour metadata", "apple": "CVBufferSetAttachment, CVBufferCopyAttachments, CVImageBufferGetColorSpace, CVImageBufferGetCleanRect, CVImageBufferCreateColorSpaceFromAttachments", "bifrost": "springboard/src/media/mod.rs (DmaPicture: stride, rows, crop_left, crop_top, width)", "status": "gap", "note": "decoded pictures carry crop and stride only; no colour primaries, transfer function or YCbCr matrix attachments"},
+    {"feature": "Pixel format description and fourcc types", "apple": "CVPixelFormatDescription, CVPixelFormatType, CVPixelBufferIsPlanar, CVPixelBufferGetPlaneCount", "bifrost": "springboard/src/gpu/desktop.rs (Bo allocation takes a DRM fourcc); springboard/src/gpu/nv12.rs (NV12 planar path)", "status": "os", "note": "formats are DRM fourccs chosen internally; apps cannot register or query pixel format descriptions"},
+    {"feature": "Display timing and vsync (CVDisplayLink, CVTime, CVTimeStamp)", "apple": "CVDisplayLinkCreateWithActiveCGDisplays, CVDisplayLinkSetOutputHandler, CVDisplayLinkStart, CVDisplayLinkGetActualOutputVideoRefreshPeriod, CVTimeStamp", "bifrost": "springboard/src/bare/kms.rs (next_vsync, line 1014; DRM flip-complete timestamps); springboard/sdk/src/lib.rs (App::next_wake, line 206)", "status": "os", "note": "vsync prediction is internal to the KMS path; the SDK ticks through next_wake, with no per-display callback and no refresh-period query. docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink"},
+    {"feature": "GPU presenter and frame submission", "apple": "CVDisplayLink with OpenGL or Metal rendering, CVOpenGLBuffer, CVOpenGLBufferAttach", "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/src/gpu/scanout.rs; springboard/src/gpu/overlay.rs", "status": "os", "note": "GPU-first presenter and scanout exist; apps do not render into presenter buffers through an SDK call"},
+    {"feature": "Texture caches for GPU import (Metal, OpenGL, OpenGL ES)", "apple": "CVMetalTextureCacheCreateTextureFromImage, CVOpenGLTextureCacheCreateTextureFromImage, CVOpenGLESTextureCacheCreateTextureFromImage, CVOpenGLTextureGetName", "bifrost": "springboard/src/gpu/egl.rs (EGL_EXT_image_dma_buf_import, line 64); springboard/src/gpu/texture.rs", "status": "os", "note": "dma-buf to GL texture import exists in the presenter; no cache object is offered to apps, and Metal has no Linux counterpart"},
+    {"feature": "dma-buf surfaces for windows", "apple": "CVPixelBufferCreateWithIOSurface, CVPixelBufferGetIOSurface", "bifrost": "springboard/src/bare/wayland.rs (dma-buf wl_buffer around a presenter drawable, line 48); springboard/src/bare/scanout.rs (scanout render buffer)", "status": "os", "note": "shared memory between the GPU and the compositor is a system feature, not an app API; IOSurface itself is Apple-only"},
+    {"feature": "Core Video result codes and error type", "apple": "CVError, CVReturn result codes", "bifrost": "springboard/src/gpu/error.rs", "status": "n/a", "note": "CVReturn is an Apple-specific code space; BifrOSt uses Rust Result and io::Error"}
+  ],
+  "gaps": [
+    "No SDK pixel buffer type (lock, base address, bytes per row, plane access) for apps; buffers exist only inside the presenter.",
+    "No display link API: apps get next_wake ticks, with no per-display output callback or refresh-period query.",
+    "No image buffer attachments: colour primaries, transfer function, YCbCr matrix and clean aperture are not carried on decoded pictures (springboard/src/media/mod.rs DmaPicture).",
+    "No app-facing pixel buffer pool with minimum count, maximum age and allocation threshold.",
+    "No texture cache API for apps to import pixel buffers as GPU textures."
+  ]
+}

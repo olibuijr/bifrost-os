@@ -1,0 +1,33 @@
+{
+  "framework": "Audio Toolbox",
+  "doc": "https://developer.apple.com/documentation/audiotoolbox",
+  "macos_since": "10.0",
+  "status": "partial",
+  "bifrost": "springboard/audiod/src/main.rs, springboard/src/svc.rs (audio client), springboard/sdk/src/lib.rs:87-88 (bifrost_app::audio), springboard/src/media/",
+  "summary": "Playback and capture work through one audio service (audiod) that apps reach over a socket, and the service decodes AAC, FLAC, Vorbis and WAV internally. Apps get transport and record calls only; there is no SDK codec, converter, file-services, audio-unit or audio-session API.",
+  "rea_evidence": "ev_3b0d660dcca64759df5b18a85bcfee7c8f914dcc3e9f65197a6b727e1473ba78",
+  "features": [
+    {"feature": "Playback and queue (Audio Queue Services, Music Player)", "apple": "AudioQueue, MPMusicPlayer-style queues via Audio Queue Services and Music Player", "bifrost": "springboard/sdk/src/lib.rs:87-88 (audio::Client), springboard/src/svc.rs, springboard/audiod/src/main.rs, springboard/src/media/queue.rs", "status": "partial", "note": "Music and Podcasts play through the audio service: PlayQueue, Play, Pause, Next, Prev, SeekMs, SetShuffle, SetRepeat, SetVolume. One queue and one speaker, last PlayQueue wins. No app-side buffer callbacks."},
+    {"feature": "Audio recording (Audio Queue input)", "apple": "AudioQueue input queues, AudioServices recording", "bifrost": "springboard/src/media/capture.rs, springboard/src/svc.rs:274 (record_start), springboard/apps/voicememos-desktop/src/voicememos.rs", "status": "partial", "note": "ALSA capture to WAV with a level meter, only through the service (RecordStart, RecordStop). Apps get no raw sample callback."},
+    {"feature": "Audio Unit v2 render API (AudioUnit, render callbacks, I/O start and stop)", "apple": "AudioUnitRender, AURenderCallback, AudioOutputUnitStart/Stop, AudioUnitSetProperty", "bifrost": "springboard/src/media/speaker.rs (AudioOut trait, SpeakerOut), springboard/src/media/alsa.rs", "status": "gap", "note": "The PCM output path is internal to the springboard crate. No SDK render callback and no property or parameter model."},
+    {"feature": "Audio Unit v3 plug-ins and AUAudioUnit host (parameters, presets, buses)", "apple": "AUAudioUnit, AUAudioUnitBus, AUParameterTree, AUAudioUnitPreset, AUv3 app extensions", "bifrost": "none found", "status": "gap", "note": "No plug-in host, extension point or parameter tree. Searched for audio unit, plugin and parameter terms in springboard/."},
+    {"feature": "Audio components (registration, lookup, instantiation)", "apple": "AudioComponentFindNext, AudioComponentInstanceNew, AudioComponentDescription", "bifrost": "none found", "status": "gap", "note": "No component registry. Codecs are chosen by sniffing in springboard/src/media/codec.rs."},
+    {"feature": "Audio file parsing and demuxing (Audio File Stream, Audio File, Extended Audio File)", "apple": "AudioFileStream, AudioFile, ExtAudioFile", "bifrost": "springboard/src/media/mp4.rs, springboard/src/media/symfile.rs, springboard/src/media/audiofile.rs, springboard/src/media/codec.rs, springboard/src/media/stream.rs", "status": "os", "note": "MP4 (AAC track), FLAC, Ogg Vorbis, PCM WAV, ID3 tags and live internet radio streams (MP3, AAC ADTS/LATM, Ogg, FLAC over http) parse in the springboard crate. No SDK file-services API for apps."},
+    {"feature": "Audio codec and format conversion (Audio Converter, Audio Format Services)", "apple": "AudioConverter, AudioFormat", "bifrost": "springboard/src/media/aac.rs (AAC-LC decode, downmix to 48 kHz stereo S16), springboard/src/media/convert.rs (pixel conversion only)", "status": "os", "note": "AAC-LC decoding and sample conversion run in the system layer. Decoders are pure Rust (symphonia). No general converter API, and no encoder."},
+    {"feature": "Audio session and output route (headphones, speaker)", "apple": "Audio session support (route, category, interruption handling)", "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/src/media/mixer.rs", "status": "os", "note": "Route switching on the headphone jack, per-route volume and the headphone cap run in the system layer. Apps have no session category or interruption API. The service gives audio focus to the latest player."},
+    {"feature": "System sounds and alert playback (Audio Services)", "apple": "AudioServicesPlaySystemSound, AudioServicesCreateSystemSoundID", "bifrost": "none found", "status": "gap", "note": "No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."},
+    {"feature": "Scheduled file regions and slices (ScheduledAudioFileRegion)", "apple": "ScheduledAudioFileRegion, ScheduledAudioSlice", "bifrost": "none found", "status": "gap", "note": "No scheduled playback of file regions. The service plays whole tracks."},
+    {"feature": "Voice I/O (Audio Unit Voice I/O, echo cancellation)", "apple": "Audio Unit Voice I/O", "bifrost": "none found", "status": "gap", "note": "Capture has no echo cancellation or voice processing stage."},
+    {"feature": "Spatial audio (spatial mixer, head tracking, AUHeadTrackingBinauralRenderer)", "apple": "Spatial mixer audio unit, AUHeadTrackingBinauralRenderer, spatial audio structs", "bifrost": "none found", "status": "n/a", "note": "Tied to Apple headphone head-tracking hardware and services. No counterpart on a Linux PC."},
+    {"feature": "Audio debugging, Instruments and Apple silicon porting", "apple": "Analyzing audio performance with Instruments, Audio Toolbox Debugging, Porting your audio code to Apple silicon", "bifrost": "springboard/audiod/src/main.rs (service log lines), springboard/docs/services.md", "status": "n/a", "note": "Developer tooling for Apple platforms. BifrOSt has no Instruments counterpart for audio."}
+  ],
+  "gaps": [
+    "No SDK API for raw audio buffers or render callbacks; apps can only use transport and record calls on the audio service",
+    "No audio unit or audio component host (AUv3 or AUv2), and no parameter tree",
+    "No system sound or alert API (AudioServices)",
+    "No general format converter or encoder API for apps",
+    "No app-facing audio session category, interruption or route API (system layer only)",
+    "No scheduled playback of file regions",
+    "No voice processing (echo cancellation) on capture"
+  ]
+}

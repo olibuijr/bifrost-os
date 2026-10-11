@@ -1,0 +1,38 @@
+{
+  "framework": "SpriteKit",
+  "doc": "https://developer.apple.com/documentation/spritekit",
+  "macos_since": "10.9",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/view/ (retained views, animation), springboard/ui/src/anim.rs, springboard/ui/src/scroll.rs, springboard/apps/games-desktop/src/games.rs, springboard/render/src/gfx, springboard/render/src/imgdec.rs",
+  "summary": "SpriteKit is a 2D scene, node, action, physics, particle and tile-map framework for games. BifrOSt has no 2D scene graph, physics world, particle system, tile map or shader API for apps. Its retained view tree, property animation, timing curves and image decoding cover the general UI counterparts only; the Games app (2048, Minesweeper, Klondike) is hand-written and does not use an engine.",
+  "rea_evidence": "ev_9be83454be472ad9b63487454441d5b45d38296db93613aa7ecffa332b60902f",
+  "features": [
+    {"feature": "Scene and scene lifecycle", "apple": "SKScene, SKView, SKRenderer, SpriteView", "bifrost": "springboard/sdk/src/view/mod.rs (retained view tree)", "status": "gap", "note": "no scene object with an update loop, no game-scene presenter; apps get a retained UI view tree and a Surface"},
+    {"feature": "Node tree and camera", "apple": "SKNode, SKCameraNode, SKReferenceNode", "bifrost": "springboard/sdk/src/view/mod.rs", "status": "partial", "note": "views nest and lay out, but there is no camera node, no archived .sks scene files and no per-node z-order or transform API for 2D content"},
+    {"feature": "Drawing shapes, images and text", "apple": "SKSpriteNode, SKShapeNode, SKLabelNode", "bifrost": "springboard/render/src/gfx, springboard/sdk/src/glyphs.rs, springboard/apps/games-desktop/src/games.rs", "status": "partial", "note": "apps draw into a Surface with damage tracking (the Games app does); no node-based sprite, shape or label objects"},
+    {"feature": "Textures and texture atlases", "apple": "SKTexture, SKTextureAtlas, SKMutableTexture", "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode)", "status": "partial", "note": "images decode to pixels; there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"},
+    {"feature": "Actions", "apple": "SKAction, Getting Started with Actions", "bifrost": "springboard/sdk/src/view/animation.rs", "status": "partial", "note": "Window::animate interpolates frame, opacity and background when a closure changes them; there are no composable action objects (sequence, group, repeat, remove) run by a node"},
+    {"feature": "Timing curves and springs", "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation", "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs", "status": "partial", "note": "curves and springs exist as pure functions; keyframe sequences with per-key interpolation modes do not"},
+    {"feature": "Node constraints", "apple": "SKConstraint, SKReachConstraints", "bifrost": "springboard/ui/src/constraint.rs (Cassowary solver for layout)", "status": "gap", "note": "the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"},
+    {"feature": "Physics simulation", "apple": "SKPhysicsWorld, SKPhysicsBody, SKPhysicsContact, SKPhysicsContactDelegate, SKFieldNode", "bifrost": "springboard/ui/src/scroll.rs (list scroll only)", "status": "gap", "note": "the only physics is list fling deceleration and rubber-banding; no rigid bodies, gravity, collisions or contact callbacks"},
+    {"feature": "Physics joints", "apple": "SKPhysicsJoint, SKPhysicsJointPin, SKPhysicsJointSpring, SKPhysicsJointSliding, SKPhysicsJointLimit, SKPhysicsJointFixed", "bifrost": "none", "status": "gap", "note": "no joint solver"},
+    {"feature": "Particle emitters", "apple": "SKEmitterNode, SKParticleRenderOrder", "bifrost": "none", "status": "gap", "note": "no particle system in the SDK or the renderer"},
+    {"feature": "Tile maps", "apple": "SKTileMapNode, SKTileSet, SKTileGroup, SKTileDefinition, SKTileGroupRule", "bifrost": "none", "status": "gap", "note": "no tile map or auto-tiling rules"},
+    {"feature": "Custom shaders and uniforms", "apple": "SKShader, SKAttribute, SKAttributeValue, SKUniform", "bifrost": "docs/gpu-first.md (system presenter); springboard/render/src/glass.rs (system blur)", "status": "os", "note": "the GPU presenter and glass pass run in the system layer; apps cannot supply a fragment shader or per-node attributes"},
+    {"feature": "Effect, crop and transform nodes", "apple": "SKEffectNode, SKCropNode, SKTransformNode", "bifrost": "springboard/src/shell/window_fx.rs (window effects), springboard/render/src/glass.rs", "status": "os", "note": "window transitions and blur run in the shell; no app-facing node that renders children into an offscreen buffer with a filter"},
+    {"feature": "Warp geometry", "apple": "SKWarpGeometry, SKWarpGeometryGrid, SKWarpable", "bifrost": "none", "status": "gap", "note": "no mesh deformation API"},
+    {"feature": "Environmental nodes (audio, light)", "apple": "SKAudioNode, SKLightNode", "bifrost": "none in the SDK", "status": "gap", "note": "audio playback exists as a daemon (springboard/audiod) but has no scene-positioned node API; no 2D light nodes"},
+    {"feature": "Renderer hand-off and custom Metal pipeline", "apple": "SKRenderer, SKView", "bifrost": "docs/gpu-first.md (Metal-shaped presenter), springboard/sdk/src/lib.rs", "status": "gap", "note": "the presenter is internal; apps cannot render into their own pipeline or drive a scene update cycle"}
+  ],
+  "gaps": [
+    "No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).",
+    "No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.",
+    "No particle emitter system (SKEmitterNode).",
+    "No tile map system (SKTileMapNode and its tile set and rules).",
+    "No app-facing node actions (SKAction sequence, group, repeat) or keyframe sequences (SKKeyframeSequence).",
+    "No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.",
+    "No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).",
+    "No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).",
+    "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer."
+  ]
+}

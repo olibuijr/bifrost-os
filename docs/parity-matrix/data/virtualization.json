@@ -1,0 +1,39 @@
+{
+  "framework": "Virtualization",
+  "doc": "https://developer.apple.com/documentation/virtualization",
+  "macos_since": "11.0",
+  "status": "gap",
+  "bifrost": "tools/arch-vm.sh, tools/arch-vm-iso.sh, tools/arch-vm-installed.sh, tools/vm-cycle.py, tools/vm-click.py (developer tooling only; no SDK module)",
+  "summary": "BifrOSt has no app-facing API to create or run virtual machines. Developer-only QEMU/KVM scripts boot Arch and installer guests for testing the shell; apps and the desktop cannot reach them. Apple's macOS guest, Rosetta and iCloud-in-guest features have no BifrOSt counterpart.",
+  "rea_evidence": "ev_cad456ec58cc3bd034a5b664e7c3f46017fffcf5304ed53db766f3cef3ad876f",
+  "features": [
+    {"feature": "Adding the virtualization entitlement", "apple": "com.apple.security.virtualization entitlement", "bifrost": "springboard/src/bare/app_policy.rs (bwrap sandbox, no VM entitlement)", "status": "n/a", "note": "Apple entitlement model does not apply; BifrOSt sandboxes apps with bubblewrap and has no VM grant"},
+    {"feature": "Running macOS guests", "apple": "VZMacPlatformConfiguration, macOS restore image install, Virtualize macOS on a Mac", "bifrost": "none", "status": "n/a", "note": "macOS guests need Apple hardware and restore images; no BifrOSt counterpart"},
+    {"feature": "Running Linux guests from an app", "apple": "VZVirtualMachineConfiguration, Running Linux in a Virtual Machine, Creating and Running a Linux Virtual Machine", "bifrost": "tools/arch-vm.sh (QEMU/KVM Arch guest, see docs/arch-x86-vm.md)", "status": "gap", "note": "The Arch guest harness is dev-only shell tooling with hardcoded QEMU args; no SDK type or system service lets an app create, start, pause or resume a guest"},
+    {"feature": "VM runtime (start, pause, resume, state)", "apple": "VZVirtualMachine", "bifrost": "none in springboard/sdk/src/", "status": "gap", "note": "tools/arch-vm.sh start/stop/status drive QEMU from the shell; no in-process object model"},
+    {"feature": "Displaying a guest in a window", "apple": "VZVirtualMachineView", "bifrost": "none", "status": "gap", "note": "tools/arch-vm-iso.sh opens QEMU in a Hyprland window; the desktop has no embeddable guest view"},
+    {"feature": "Graphics device for guests", "apple": "Graphics (virtio GPU configuration)", "bifrost": "tools/arch-vm.sh uses virtio-gpu for the guest shell", "status": "partial", "note": "Only the dev harness configures a virtio-gpu; no app-facing device configuration"},
+    {"feature": "Network devices", "apple": "Network (VZNATNetworkDeviceAttachment and similar)", "bifrost": "tools/arch-vm.sh uses user-mode networking with a virtio-net device and an ssh hostfwd", "status": "partial", "note": "Dev harness only; netd (Wi-Fi, DHCP) has no VM attachment API"},
+    {"feature": "Storage devices", "apple": "Storage (block-storage devices, disk images)", "bifrost": "tools/arch-vm.sh creates a raw ext4 image and passes it to QEMU; tools/arch-vm-iso.sh adds a blank target disk", "status": "partial", "note": "Dev harness creates raw disk images; no SDK API for guest disk images"},
+    {"feature": "Shared directories", "apple": "Shared directories (VirtioFS)", "bifrost": "none", "status": "gap", "note": "The file portal (docs/file-portal-design.md) covers host-to-app grants, not guest shares"},
+    {"feature": "Clipboard sharing", "apple": "Clipboard sharing (SPICE agent)", "bifrost": "none", "status": "gap", "note": "The pasteboard SDK does not bridge to a guest"},
+    {"feature": "Keyboard and pointing devices", "apple": "Keyboards and pointing devices (USB and virtio input)", "bifrost": "tools/vm-click.py sends QMP input events; tools/arch-vm.sh key/tap/swipe", "status": "partial", "note": "Dev automation only; the input path is not a reusable SDK feature"},
+    {"feature": "Audio devices", "apple": "Audio (virtio sound, host audio)", "bifrost": "tools/arch-vm.sh passes -audio none", "status": "gap", "note": "No guest audio; springboard/audiod has no VM route"},
+    {"feature": "Memory balloon", "apple": "Memory (VZMemoryBalloonDevice)", "bifrost": "tools/arch-vm.sh virtio-balloon-pci with free-page-reporting", "status": "partial", "note": "Dev harness only; no runtime resize API"},
+    {"feature": "Randomization", "apple": "Randomization (entropy device)", "bifrost": "none", "status": "gap", "note": "The dev harness inherits a default entropy device from QEMU; nothing is configured"},
+    {"feature": "Serial ports and consoles", "apple": "Serial ports, Consoles", "bifrost": "tools/arch-vm.sh -serial file:... and the SERIAL log path", "status": "partial", "note": "Serial output goes to a log file for debugging; no host-side console API"},
+    {"feature": "Sockets", "apple": "Sockets (VZVirtioSocketDevice)", "bifrost": "none", "status": "gap", "note": "The dev harness reaches the guest over ssh port forwarding instead"},
+    {"feature": "USB devices", "apple": "USB Devices (VZXHCIController)", "bifrost": "none", "status": "gap", "note": "usbhost access is not exposed to VMs"},
+    {"feature": "Rosetta for Linux", "apple": "VZLinuxRosettaDirectoryShare, Running Intel Binaries in Linux VMs", "bifrost": "none", "status": "n/a", "note": "Rosetta is Apple silicon only"},
+    {"feature": "Custom Virtio drivers", "apple": "Custom Virtio drivers", "bifrost": "none", "status": "gap", "note": "No BifrOSt guest driver code exists"},
+    {"feature": "Errors and enumerations", "apple": "VZError, VZErrorDomain, caching, disk sync and auxiliary storage enums", "bifrost": "none in springboard/sdk/src/", "status": "gap", "note": "tools/arch-vm.sh reports failures through shell exit codes only"}
+  ],
+  "gaps": [
+    "An SDK module that creates, starts, pauses and stops a Linux guest (VZVirtualMachine counterpart) with a sandboxed launcher",
+    "A guest display view that can be placed in a desktop window",
+    "Virtio device configuration for app-created guests: storage, network, entropy, memory balloon, serial console",
+    "Shared directories and clipboard bridging between host and guest",
+    "Guest audio and USB passthrough",
+    "Documentation note: tools/vm-click.py hardcodes an out/arch-vm path under /home/olibuijr/Projects/tab-a8 and is not portable; docs/arch-vm.md does not exist (the doc is docs/arch-x86-vm.md)"
+  ]
+}

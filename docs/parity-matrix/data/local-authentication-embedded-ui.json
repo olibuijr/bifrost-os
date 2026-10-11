@@ -1,0 +1,21 @@
+{
+  "framework": "Local Authentication Embedded UI",
+  "doc": "https://developer.apple.com/documentation/localauthenticationembeddedui",
+  "macos_since": "12.0",
+  "status": "gap",
+  "bifrost": "springboard/src/shell/login.rs (password-only login UI, Backend trait); springboard/src/privd/auth.rs (password check)",
+  "summary": "Apple's framework is one graphical view (LAAuthenticationView) that shows the state of biometric authentication. BifrOSt has no biometric authentication, so there is nothing for this view to reflect. The login screen is a custom password-only UI, which is the nearest counterpart to a custom authentication view.",
+  "rea_evidence": "ev_8bfde7d9f5e68744aef3bf5812b87c52d34c94db8f57c3bb4751ef2b046e2471",
+  "features": [
+    {"feature": "Authentication view (biometric state icon)", "apple": "LAAuthenticationView", "bifrost": "none", "status": "gap", "note": "no biometric state source and no SDK view that shows one"},
+    {"feature": "Creating the view from an authentication context", "apple": "LAAuthenticationView.init(context:), context", "bifrost": "none", "status": "gap", "note": "no LAContext-style object exists in the SDK; springboard/sdk/src/ has no biometric module"},
+    {"feature": "Sizing the view with a control size", "apple": "LAAuthenticationView.init(context:controlSize:), controlSize", "bifrost": "none", "status": "gap", "note": "depends on the view above"},
+    {"feature": "Presentation context data type", "apple": "LAPresentationContext", "bifrost": "none", "status": "gap", "note": "no Apple-style presentation context for auth UI"},
+    {"feature": "Custom authentication UI around the system check", "apple": "Building a custom auth interface around the view (framework default UI is system-managed)", "bifrost": "springboard/src/shell/login.rs (capsule password field, Backend::authenticate); springboard/src/privd/auth.rs; docs/privd-protocol.md", "status": "partial", "note": "custom login UI exists, but only password checks run through privd; no biometric or paired-device unlock"}
+  ],
+  "gaps": [
+    "No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").",
+    "No SDK API equivalent to an authentication context or to LAAuthenticationView, and no control size token for it.",
+    "The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists."
+  ]
+}

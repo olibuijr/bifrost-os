@@ -1,0 +1,26 @@
+{
+  "framework": "Audio Unit",
+  "doc": "https://developer.apple.com/documentation/audiounit",
+  "macos_since": "10.0",
+  "status": "gap",
+  "bifrost": "springboard/apps/daw/src/devices/ (built-in instruments and effects), springboard/audiod/src/main.rs (audio service)",
+  "summary": "Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provides the AUAudioUnit subclassing API for plug-in extensions. BifrOSt has no plug-in host and no plug-in extension API. The DAW ships its own built-in instruments and effects as JavaScript plug-in directories, which are not Audio Units. The Apple page itself marks the framework as deprecated in favour of Audio Toolbox.",
+  "rea_evidence": "ev_3bf9c005e0da939facd73989466bcbdab9f09176783e42e4aeed3b6e830276e4",
+  "features": [
+    {"feature": "Hosting third-party AU v2 and v3 plug-ins", "apple": "AUAudioUnit, AudioUnit instantiation (Audio Unit framework landing page)", "bifrost": "none; springboard/apps/daw/src/devices/mod.rs (built-in devices only)", "status": "gap", "note": "no code loads an external plug-in binary; grep for audio unit, AUv2/AUv3, clap, lv2, vst, dlopen of plug-ins returned only system library loads (springboard/src/media/dl.rs, springboard/src/gpu/egl.rs)"},
+    {"feature": "Implementing AU v3 plug-in extensions", "apple": "AUAudioUnit subclassing for app extensions (landing page: Version 3 extensions)", "bifrost": "none", "status": "gap", "note": "no extension point for apps to ship audio processors"},
+    {"feature": "Built-in effects", "apple": "Apple's built-in Audio Units (effects)", "bifrost": "springboard/apps/daw/src/devices/fx.rs (17 effects), springboard/apps/daw/src/dsp.rs (biquad, compressor, delay, LFO, oscillator)", "status": "partial", "note": "DAW-only, not exposed to other apps as an audio unit; effect routing is fixed in the DAW"},
+    {"feature": "Built-in instruments", "apple": "Apple's built-in instrument Audio Units", "bifrost": "springboard/apps/daw/src/devices/inst/, springboard/apps/daw/assets/plugins/celesta/index.js (sampled instruments via host.multisample)", "status": "partial", "note": "instrument set is fixed; sample-based instruments load from plugin.json and zones.json folders"},
+    {"feature": "Parameters and presets", "apple": "AudioUnitParameter, AUParameterTree, presets", "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params)", "status": "partial", "note": "parameters are defined per built-in device; no parameter tree or preset API for external processors"},
+    {"feature": "Audio rendering and offline render", "apple": "AudioUnit render callbacks, offline render", "bifrost": "springboard/apps/daw/src/playback.rs (Player renders to a cache), springboard/apps/daw/src/conv.rs (convolver)", "status": "partial", "note": "rendering is internal to the DAW and is not an app-facing render API"},
+    {"feature": "System audio service", "apple": "Audio Unit host and Core Audio I/O (not a separate Apple feature row)", "bifrost": "springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/alsalib.rs (ALSA output)", "status": "os", "note": "the service exists, but the SDK has no audio module (springboard/sdk/src/ has no audio file)"},
+    {"feature": "MIDI input and note data", "apple": "MIDI events delivered to instrument units", "bifrost": "springboard/apps/daw/src/compose.rs (note names to MIDI pitch), springboard/apps/daw/src/dsp.rs (mtof)", "status": "gap", "note": "note data is internal to the DAW; no MIDI device input or MIDI event API found"}
+  ],
+  "gaps": [
+    "No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.",
+    "No AUAudioUnit-style extension point for apps to ship audio processors.",
+    "No app-facing audio unit or render API; the DAW's rendering and devices are internal.",
+    "No MIDI input or MIDI event API.",
+    "The audio service (springboard/audiod) has no SDK module for apps."
+  ]
+}

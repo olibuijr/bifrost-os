@@ -42,7 +42,7 @@ PARTS = {  # large frameworks split by official topic sections; slug prefix -> f
     "appkit-": "AppKit", "foundation-": "Foundation", "swiftui-": "SwiftUI", "avfoundation-": "AVFoundation",
 }
 DOCS_URL = "https://developer.apple.com/tutorials/data/documentation/"
-PATH_RE = re.compile(r"((?:springboard|docs|tools|packaging)/[A-Za-z0-9_./-]+)")
+PATH_RE = re.compile(r"(?<![\w/~.:-])((?:springboard|docs|tools|packaging)/[A-Za-z0-9_./-]+)")  # this repo only
 
 
 def norm(s):

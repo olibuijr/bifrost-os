@@ -1,0 +1,34 @@
+{
+  "framework": "IOBluetooth",
+  "doc": "https://developer.apple.com/documentation/iobluetooth",
+  "macos_since": "10.2",
+  "status": "partial",
+  "bifrost": "springboard/src/bare/bluetooth.rs (mgmt socket radio, discovery, pairing, connect, forget), springboard/src/media/route.rs (audio sink), springboard/src/shell/pages.rs and settings.rs (Bluetooth settings UI)",
+  "summary": "The shell drives the radio (power, discovery, Just Works pairing, connect, disconnect, forget) and routes audio to a connected headset through the kernel mgmt socket. No app-facing Bluetooth SDK exists, and none of the RFCOMM, OBEX, SDP, hands-free or user-notification classes have a counterpart.",
+  "rea_evidence": "ev_b3de145449eaba672251b09dc9e10a424003927602414a2428e8c63d785e6b7c",
+  "features": [
+    {"feature": "Host controller (power, name, bondable, SSP)", "apple": "IOBluetoothHostController", "bifrost": "springboard/src/bare/bluetooth.rs (OP_SET_POWERED, OP_SET_LOCAL_NAME, OP_SET_BONDABLE, OP_SET_SSP, Cmd::Enable)", "status": "os", "note": "Shell only. Apps get no SDK call to read or set the local controller."},
+    {"feature": "Device inquiry (scan)", "apple": "IOBluetoothDeviceInquiry, IOBluetoothDeviceInquiryDelegate", "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Scan, OP_START_DISCOVERY, OP_STOP_DISCOVERY)", "status": "os", "note": "Discovery runs through the mgmt socket. No delegate or callback API for apps."},
+    {"feature": "Remote device model (name, class, paired, connected)", "apple": "IOBluetoothDevice, IOBluetoothDeviceRef, IOBluetoothObject", "bifrost": "springboard/src/bare/bluetooth.rs:193 (struct Device), :222 (State), :231 (Status)", "status": "os", "note": "A device list exists in the shell's Status. No app API."},
+    {"feature": "Pairing (Just Works, user confirm, timeout)", "apple": "IOBluetoothDevicePair, IOBluetoothDevicePairDelegate", "bifrost": "springboard/src/bare/bluetooth.rs:68 (NoInputNoOutput Just Works), :73 (PAIR_MS timeout), OP_PAIR_DEVICE, OP_USER_CONFIRM_REPLY", "status": "os", "note": "Just Works (no input, no output) for the pairing the shell started. Legacy PIN requests are answered with a fixed \"0000\" (springboard/src/bare/bluetooth.rs:641-650). No user-entered PIN or passkey."},
+    {"feature": "Connect, disconnect and forget a device", "apple": "IOBluetoothDevice (openConnection, closeConnection, remove)", "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Connect, Cmd::Disconnect, Cmd::Forget, OP_DISCONNECT, OP_UNPAIR_DEVICE); springboard/src/shell/pages.rs (BluetoothDetail: Connect / Disconnect / Forget This Device)", "status": "os", "note": "Works from the Settings page. Apps cannot connect to a device."},
+    {"feature": "Audio output routing to a headset", "apple": "IOBluetoothDevice audio via system audio routing", "bifrost": "springboard/src/media/route.rs:37 (bluetooth_sink)", "status": "partial", "note": "Now Playing shows the connected audio device as the route. Selecting it as the output is done by the system audio layer, not by an app API."},
+    {"feature": "L2CAP channels", "apple": "IOBluetoothL2CAPChannel, IOBluetoothL2CAPChannelDelegate, IOBluetoothL2CAPChannelRef", "bifrost": "springboard/src/bare/bluetooth.rs:894 (link: AF_BLUETOOTH SEQPACKET socket to PSM 1 for BR/EDR or ATT CID 4 for LE)", "status": "partial", "note": "The shell opens L2CAP links only to keep a device connected. Apps cannot open a channel to an arbitrary PSM, and there is no channel-close notification."},
+    {"feature": "RFCOMM channels", "apple": "IOBluetoothRFCOMMChannel, IOBluetoothRFCOMMChannelDelegate", "bifrost": "none found in springboard/", "status": "gap", "note": "No RFCOMM code. Needed for serial-style profiles."},
+    {"feature": "SDP service records and data elements", "apple": "IOBluetoothSDPServiceRecord, IOBluetoothSDPDataElement, IOBluetoothSDPUUID, IOBluetoothSDPServiceAttribute", "bifrost": "none found in springboard/", "status": "gap", "note": "The SDP PSM is used only as the link target in springboard/src/bare/bluetooth.rs:894. No SDP queries or records."},
+    {"feature": "OBEX sessions and file transfer", "apple": "OBEXSession, OBEXFileTransferServices, OBEX.h functions", "bifrost": "none found in springboard/", "status": "gap", "note": "No OBEX code. Object exchange over Bluetooth is absent."},
+    {"feature": "Hands-free profile (audio gateway and device)", "apple": "IOBluetoothHandsFree, IOBluetoothHandsFreeAudioGateway, IOBluetoothHandsFreeDevice and their delegates", "bifrost": "none found in springboard/", "status": "gap", "note": "No call control or hands-free profile. The audio route in media/route.rs covers playback only."},
+    {"feature": "HID device handling (ignore, counts)", "apple": "IOBluetoothIgnoreHIDDevice, IOBluetoothRemoveIgnoredHIDDevice, IOBluetoothNumberOf*HIDDevices", "bifrost": "springboard/src/media/route.rs:273 (test: keyboard is not an audio sink); HID input is left to the kernel", "status": "gap", "note": "No API to count or ignore HID devices. Keyboards and mice are not visible to apps through Bluetooth calls."},
+    {"feature": "User notifications on device events", "apple": "IOBluetoothUserNotification, IOBluetoothUserNotificationCallback", "bifrost": "springboard/src/bare/bluetooth.rs (EV_DEVICE_CONNECTED :53, EV_DEVICE_DISCONNECTED :54 are handled inside the shell)", "status": "gap", "note": "Connect and disconnect events go to the shell's own state. No app subscription API."},
+    {"feature": "Address and utility helpers", "apple": "IOBluetoothNSStringFromDeviceAddress, IOBluetoothNSStringToDeviceAddress, IOBluetoothGetUniqueFileNameAndPath", "bifrost": "springboard/src/bare/bluetooth.rs:108 (parse_addr), :122 (fmt_addr)", "status": "os", "note": "Conversion helpers exist inside the shell crate. Not an SDK API."},
+    {"feature": "Low-level HCI structures and commands", "apple": "IOBluetooth Structures (BluetoothHCI*, BluetoothL2CAP*, BluetoothLE*)", "bifrost": "springboard/src/bare/bluetooth.rs:1-24 (module header: uses the mgmt API instead of raw HCI, by design)", "status": "partial", "note": "The shell uses mgmt commands, not the HCI structure set. Apps get none of the HCI or LE types."}
+  ],
+  "gaps": [
+    "No app-facing Bluetooth SDK module: nothing under springboard/sdk/src/ covers Bluetooth.",
+    "No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).",
+    "No hands-free (call control) profile.",
+    "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
+    "Pairing has no user-entered PIN or passkey flow; only Just Works and a fixed \"0000\" legacy PIN are handled.",
+    "No HID device counts or ignore controls exposed to apps."
+  ]
+}

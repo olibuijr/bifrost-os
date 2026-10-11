@@ -1,0 +1,36 @@
+{
+  "framework": "Video Toolbox",
+  "doc": "https://developer.apple.com/documentation/videotoolbox",
+  "macos_since": "10.8",
+  "status": "os",
+  "bifrost": "springboard/src/media/hwdec/ (libavcodec + VA-API decode), springboard/src/media/convert.rs (NV12 to RGBA), springboard/src/gpu/nv12.rs (NV12 dma-buf import), springboard/src/shell/video.rs (consumer)",
+  "summary": "BifrOSt decodes H.264 and HEVC in hardware (VA-API through libavcodec, software fallback) and converts NV12 to RGBA for the shell, but only inside the media stack. No app-facing SDK API exists, and there is no compression session, encoder, pixel transfer, rotation, RAW, HDR metadata or frame processing.",
+  "rea_evidence": "ev_8d9d9d0fe1cf32381023d3cddfdb7ed9d489879706d7276fd201f21500922b18",
+  "features": [
+    {"feature": "Decompression session (VTDecompressionSession)", "apple": "VTDecompressionSessionCreate, VTDecompressionSessionDecodeFrame, output handler", "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (Decoder, impl VideoDecoder), springboard/src/media/mod.rs (VideoDecoder trait, line 226)", "status": "os", "note": "H.264 and HEVC only, behind the VideoDecoder trait; no SDK type is exposed to apps"},
+    {"feature": "Hardware decode capability query", "apple": "VTIsHardwareDecodeSupported, VTDecompressionSessionCanAcceptFormatDescription", "bifrost": "springboard/src/media/hwdec/vaapi.rs (libva probe on the DRM render node)", "status": "os", "note": "probe decides VA-API use; falls back to software; no per-codec query for apps"},
+    {"feature": "Zero-copy decoded frames", "apple": "CVPixelBuffer output with IOSurface backing", "bifrost": "springboard/src/media/mod.rs (Pixels::Dma, DmaPicture), springboard/src/gpu/nv12.rs (EGL dma-buf import)", "status": "os", "note": "Linux dma-buf instead of IOSurface; the shell GPU path imports NV12 directly"},
+    {"feature": "Compression session (encoding)", "apple": "VTCompressionSessionCreate, VTCompressionSessionEncodeFrame, output callback, PrepareToEncodeFrames, CompleteFrames", "bifrost": "none found", "status": "gap", "note": "no encoder in springboard/src, springboard/render or springboard/sdk; the only recording path is audio (springboard/src/svc.rs Record)"},
+    {"feature": "Encoder list and property query", "apple": "VTCopyVideoEncoderList, VTCopySupportedPropertyDictionaryForEncoder, Video Encoder List Keys", "bifrost": "none found", "status": "gap", "note": "depends on the encode gap"},
+    {"feature": "Session properties", "apple": "VTSessionSetProperty, VTSessionCopyProperty, VTSessionCopySupportedPropertyDictionary", "bifrost": "none found", "status": "gap", "note": "libavcodec options are set internally in ffmpeg.rs with no property API"},
+    {"feature": "Multi-pass encoding (frame silo, multipass storage)", "apple": "VTFrameSiloCreate, VTMultiPassStorageCreate, VTCompressionSessionBeginPass / EndPass", "bifrost": "none found", "status": "gap", "note": "depends on the encode gap"},
+    {"feature": "Pixel transfer (format conversion and scaling)", "apple": "VTPixelTransferSessionCreate, VTPixelTransferSessionTransferImage", "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba, dma_to_rgba, rgba_scale), springboard/src/gpu/nv12.rs (BT.709 / BT.601 matrix)", "status": "os", "note": "conversion exists for the shell's own video path only; no app-facing pixel transfer session"},
+    {"feature": "Pixel rotation (VTPixelRotationSession)", "apple": "VTPixelRotationSessionCreate, VTPixelRotationSessionRotateImage", "bifrost": "springboard/render/src/gfx/rotate.rs (90/180 degree rotation of damaged areas for the display, not video buffers)", "status": "os", "note": "display rotation only; not exposed as a video-buffer rotation API"},
+    {"feature": "RAW processing", "apple": "VTRAWProcessingSession", "bifrost": "none found", "status": "gap", "note": "no camera-native or Bayer path in springboard/src/media; v4l2.rs converts only YUV formats it lists"},
+    {"feature": "HDR per-frame metadata", "apple": "VTHDRPerFrameMetadataGenerationSession, VTCompressionPropertyKey_LogTransferFunction", "bifrost": "none found", "status": "gap", "note": "decoder path is 8-bit NV12 only; no 10-bit or HDR transfer handling found"},
+    {"feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)", "apple": "VTFrameProcessor, VTSuperResolutionScalerConfiguration, VTFrameRateConversionConfiguration, VTMotionBlurConfiguration, VTOpticalFlowConfiguration, VTTemporalNoiseFilterConfiguration", "bifrost": "none found", "status": "gap", "note": "no ML or frame-processing module found in the index"},
+    {"feature": "Motion estimation", "apple": "VTMotionEstimationSession", "bifrost": "none found", "status": "gap", "note": "no motion estimation code found"},
+    {"feature": "CGImage from pixel buffer", "apple": "VTCreateCGImageFromCVPixelBuffer", "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba to gfx::Image)", "status": "partial", "note": "same conversion to the shell's own image type, not to CGImage"},
+    {"feature": "Media extensions and codec registration", "apple": "VTRegisterSupplementalVideoDecoderIfAvailable, VTRegisterProfessionalVideoWorkflowVideoDecoders, VTExtensionPropertiesKey", "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (libavcodec dlopen, codec set fixed to H.264 and HEVC)", "status": "os", "note": "codec set is fixed in the Codec enum (springboard/src/media/mod.rs line 101); no plug-in registration"},
+    {"feature": "Error codes", "apple": "Error Code Constants (kVT...Err)", "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (io::Error results)", "status": "partial", "note": "errors surface as io::Error, not VT status codes"}
+  ],
+  "gaps": [
+    "Video encoding: no compression session, encoder list or encode path (only audio recording exists)",
+    "An app-facing video decode API: the decoder is internal to the media stack and not in springboard/sdk",
+    "10-bit and HDR decode, HDR metadata generation and log transfer functions",
+    "RAW and camera-native (Bayer) processing",
+    "Pixel transfer and rotation as SDK sessions for app pixel buffers",
+    "Frame processing: super resolution, frame interpolation, optical flow, motion blur, noise filter and motion estimation",
+    "Multi-pass encoding storage (frame silo, multipass storage)"
+  ]
+}

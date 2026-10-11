@@ -1,0 +1,34 @@
+{
+  "framework": "Authentication Services",
+  "doc": "https://developer.apple.com/documentation/authenticationservices",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "bifrost_app::keychain (springboard/sdk/src/keychain.rs) for stored secrets; springboard/sdk/src/url.rs and springboard/sdk/src/webview.rs for network and web content; springboard/src/shell/login.rs for the desktop sign-in screen; springboard/src/shell/account.rs for the local account",
+  "summary": "Only secret storage has a counterpart: an app-facing keychain (generic passwords, per app) and a local account. There is no web authentication session, no passkey or FIDO2 API, no AutoFill or credential provider, no Sign in with Apple, and no credential import or export. Most of the framework is a gap for a desktop that has no account service of its own.",
+  "rea_evidence": "ev_eb4e8515f63dbb5347ffb186beb68ad982580d05bf3ac09772095c773e2d5156",
+  "features": [
+    {"feature": "Authorization requests (controller, results)", "apple": "ASAuthorizationController, ASAuthorizationResult, AuthorizationController (SwiftUI)", "bifrost": "none", "status": "gap", "note": "no request/controller abstraction for sign-in providers; the desktop login screen is shell-internal"},
+    {"feature": "Sign in with Apple", "apple": "ASAuthorizationAppleIDProvider, ASAuthorizationAppleIDCredential, SignInWithAppleButton, Sign in with Apple entitlement", "bifrost": "none", "status": "n/a", "note": "Apple ID service; the BifrOSt Account service lives in ~/Projects/bifrost-cloud, outside this repo, and is not an Apple ID provider"},
+    {"feature": "Password credentials (sign-in form and keychain sharing)", "apple": "ASAuthorizationPasswordProvider, ASPasswordCredential, ASGeneratePasswordsRequest, ASSavePasswordRequest", "bifrost": "springboard/sdk/src/keychain.rs (add/get/update/delete of generic passwords, per app id)", "status": "partial", "note": "stores secrets only; no shared credential store, no save-password or generate-password prompt, no password suggestions across apps (kSecAttrAccessGroup absent per docs/bifrost-ui.md Keychain section)"},
+    {"feature": "Passkeys and FIDO2 (public-key credentials)", "apple": "ASAuthorizationPlatformPublicKeyCredential requests, ASPublicKeyCredentialClientData, passkey use in web browsers", "bifrost": "none; springboard/apps/browser/README.md lists WebAuthn as a known breakage", "status": "gap", "note": "no platform authenticator, no key generation, no credential registration; the browser cannot run WebAuthn"},
+    {"feature": "Web authentication sessions", "apple": "ASWebAuthenticationSession, WebAuthenticationSession (SwiftUI), ASWebAuthenticationSessionWebBrowserSessionManager, ASWebAuthenticationSessionWebBrowserSupportCapabilities", "bifrost": "springboard/sdk/src/webview.rs (WebView create/show/eval) and springboard/sdk/src/url.rs (HTTP with redirects)", "status": "gap", "note": "no API that opens an auth page in a separate sandboxed session and returns the callback URL to the app; the WebView SDK has no callback-scheme handoff. The deildu app signs in by posting its own form (springboard/src/deildu/auth.rs), which is not reusable"},
+    {"feature": "Single sign-on in a web browser app", "apple": "ASWebAuthenticationSession browser handoff and support capabilities", "bifrost": "springboard/apps/browser (browser app)", "status": "gap", "note": "the browser does not act as an SSO broker for other apps"},
+    {"feature": "AutoFill credential provider", "apple": "ASCredentialProviderViewController, AutoFill Credential Provider entitlement, ASCredentialDataManager, ASCredentialUpdater", "bifrost": "none", "status": "gap", "note": "no system-wide AutoFill; the browser has no password fill"},
+    {"feature": "One-time passcodes", "apple": "ASDeliveredVerificationCodesManager, ASOneTimeCodeCredentialIdentity, ASVerificationCode", "bifrost": "none", "status": "gap", "note": "no SMS or message code capture and no code suggestion"},
+    {"feature": "Credential import and export", "apple": "ASCredentialExportManager, ASCredentialImportManager, ASImportable* types (CXF)", "bifrost": "none", "status": "gap", "note": "no credential exchange format"},
+    {"feature": "Account authentication upgrades", "apple": "ASAccountAuthenticationModificationController, ASAccountAuthenticationModificationViewController, extension context", "bifrost": "none", "status": "n/a", "note": "upgrades accounts on Apple's account providers to Sign in with Apple or strong passwords; no BifrOSt counterpart"},
+    {"feature": "Local account", "apple": "(no direct Apple counterpart; closest is the system user account)", "bifrost": "springboard/src/shell/account.rs (full_name and username from the installer file), springboard/src/shell/login.rs (login screen)", "status": "partial", "note": "reads name and username and detects an unset password (passwd -S NP/L); no account provider API for apps"},
+    {"feature": "Apple TV custom authorization methods", "apple": "customAuthorizationMethods, ASAuthorizationCustomMethod", "bifrost": "none", "status": "n/a", "note": "tvOS only"},
+    {"feature": "Enterprise and platform single sign-on", "apple": "Enterprise SSO and Platform SSO extensions (macOS)", "bifrost": "none", "status": "n/a", "note": "requires an identity provider integration with the macOS platform; no BifrOSt identity provider"},
+    {"feature": "Account security upgrades", "apple": "ASAccountAuthenticationModificationExtensionContext and related classes", "bifrost": "none", "status": "n/a", "note": "depends on Apple account providers"},
+    {"feature": "Time-based codes on device (iCloud Keychain verification codes)", "apple": "Securing Logins with iCloud Keychain Verification Codes", "bifrost": "none", "status": "n/a", "note": "depends on iCloud Keychain"}
+  ],
+  "gaps": [
+    "Web authentication session: an API that opens a sign-in page in an isolated session and returns the callback URL to the app (ASWebAuthenticationSession), with a callback scheme that the shell routes to the requesting app.",
+    "Passkeys and FIDO2: a platform authenticator, public-key credential registration and assertion, and WebAuthn support in the browser (springboard/apps/browser/README.md lists WebAuthn as broken).",
+    "Shared credential store and AutoFill: keychain access groups (shared items between apps), a save-password prompt, and a credential provider for the browser and other apps.",
+    "One-time passcodes: capture and suggestion of verification codes delivered to the device.",
+    "Credential import and export in the CXF format.",
+    "Keychain access control: biometric or user-presence protection of items (already listed as a parity gap in docs/bifrost-ui.md, Keychain section)."
+  ]
+}

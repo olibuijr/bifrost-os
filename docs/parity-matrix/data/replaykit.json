@@ -1,0 +1,29 @@
+{
+  "framework": "ReplayKit",
+  "doc": "https://developer.apple.com/documentation/replaykit",
+  "macos_since": "11.0",
+  "status": "gap",
+  "bifrost": "springboard/src/media/capture.rs (microphone WAV recorder), springboard/audiod/src/main.rs (recording owner), springboard/src/svc.rs (record_start), springboard/src/shell/screenshot.rs (still frames)",
+  "summary": "ReplayKit records screen video, app audio and microphone, and feeds live broadcasts. BifrOSt has no screen video recording and no SDK API for it; the only capture is a system microphone recorder used by Voice Memos, which apps cannot call through the SDK. Screenshots are still frames only.",
+  "rea_evidence": "ev_c4ba3910cfcbf8f974fbf669dd555cf372f3fe0700fc0e1ed0f84ba862404d57",
+  "features": [
+    {"feature": "App screen recording (RPScreenRecorder start/stop)", "apple": "RPScreenRecorder: startRecording(handler:), stopRecording(withOutput:completionHandler:), discardRecording(handler:), isRecording, isAvailable", "bifrost": "none (springboard/src/shell/screenshot.rs captures still frames only)", "status": "gap", "note": "no video capture path in the shell, the SDK or the MCP tools; the REA render of the landing page marks RPScreenRecorder as Deprecated, but the DocC JSON for that symbol does not show the flag, so the deprecation is unconfirmed"},
+    {"feature": "Clip buffering and export", "apple": "RPScreenRecorder: startClipBuffering, stopClipBuffering, exportClip(to:duration:)", "bifrost": "none", "status": "gap", "note": "no rolling buffer of screen or audio"},
+    {"feature": "Microphone capture during recording", "apple": "RPScreenRecorder: startRecording(withMicrophoneEnabled:handler:), isMicrophoneEnabled", "bifrost": "springboard/src/media/capture.rs (Recorder::start), springboard/audiod/src/main.rs (recording owner), springboard/src/svc.rs:274 (record_start)", "status": "partial", "note": "system ALSA microphone recording to WAV exists; it is used by the Voice Memos app and has no app-facing SDK API and no screen track to mux with"},
+    {"feature": "App and system audio capture", "apple": "RPSampleBufferType audio samples from startCapture(handler:completionHandler:)", "bifrost": "none", "status": "gap", "note": "audiod plays and records the microphone only; no loopback of app output"},
+    {"feature": "Camera preview during recording", "apple": "RPScreenRecorder: isCameraEnabled, cameraPreviewView, cameraPosition, RPCameraPosition", "bifrost": "springboard/src/shell/camera/mod.rs", "status": "gap", "note": "the camera module serves the Camera app, not a recording overlay; no preview view is exposed to apps"},
+    {"feature": "Capture delegate and availability", "apple": "RPScreenRecorderDelegate, RPScreenRecorder.shared()", "bifrost": "none", "status": "gap", "note": "no recorder object or availability callback"},
+    {"feature": "Preview and edit UI for a recording", "apple": "RPPreviewViewController", "bifrost": "none", "status": "gap", "note": "no clip preview or trim sheet in the shell or SDK"},
+    {"feature": "Live broadcast controller and handlers", "apple": "RPBroadcastController, RPBroadcastHandler, RPBroadcastSampleHandler, RPBroadcastMP4ClipHandler, RPBroadcastConfiguration", "bifrost": "none", "status": "gap", "note": "no broadcast extension point and no streaming of app frames"},
+    {"feature": "Broadcast picker UI", "apple": "RPBroadcastActivityViewController, RPSystemBroadcastPickerView, RPBroadcastActivityController, RPBroadcastActivityControllerDelegate", "bifrost": "springboard/sdk/src/share.rs (show_picker, share sheet)", "status": "gap", "note": "the share picker covers sharing items, not choosing a broadcast service"},
+    {"feature": "Error domain", "apple": "RPRecordingErrorCode, RPRecordingErrorDomain, SCStreamErrorDomain", "bifrost": "none", "status": "n/a", "note": "errors belong to the ReplayKit and ScreenCaptureKit pipeline, which BifrOSt does not have"}
+  ],
+  "gaps": [
+    "No screen video recording for apps, the shell or the MCP tools (only still screenshots in springboard/src/shell/screenshot.rs).",
+    "No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/.",
+    "Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only.",
+    "No app or system audio capture; audiod does not loop back output.",
+    "No clip buffer, clip export, preview or trim UI.",
+    "No live broadcast extension point or broadcast picker."
+  ]
+}

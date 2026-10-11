@@ -1,0 +1,74 @@
+{
+ "framework": "iTunes Library",
+ "doc": "https://developer.apple.com/documentation/ituneslibrary",
+ "macos_since": "10.13",
+ "status": "partial",
+ "bifrost": "springboard/apps/music-desktop/src/music/library.rs, springboard/apps/music-desktop/src/music/playlists.rs (Music app internals only; no SDK module)",
+ "summary": "Apple's framework is a read-only, legacy window onto the iTunes library (library, albums, playlists, media items, artwork, change notification). BifrOSt has no app-facing media library API; the Music app scans its own folders and keeps its own library and playlists internally, so the data exists but other apps cannot read it.",
+ "rea_evidence": "ev_1dbdc7e0189d11cf547a0d566aac0b24245c29394b21d4ab380d2c50eb2afe8c",
+ "features": [
+  {
+   "feature": "Library entry point and loading (ITLibrary, reloadData, unloadData, apiVersion)",
+   "apple": "ITLibrary, init(apiVersion:options:), reloadData(), unloadData()",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Library::build, scan_all, find_files)",
+   "status": "gap",
+   "note": "Scanning and building the library happens inside the Music app binary. No SDK type or control method exposes it to other apps (springboard/sdk/src/control.rs is a generic RPC socket)."
+  },
+  {
+   "feature": "Media items (tracks)",
+   "apple": "ITLibMediaItem: title, artist, album, totalTime, trackNumber, location, year",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs:16 (Song: title, artist, album, album_artist, track, year, duration_ms, path)",
+   "status": "partial",
+   "note": "Covers title, artist, album, duration, track number, year and file path. Missing rating, playCount, lastPlayedDate, genre, composer, BPM, comments and content rating."
+  },
+  {
+   "feature": "Albums and artists",
+   "apple": "ITLibAlbum, ITLibArtist",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs:33 (Album), :42 (Artist)",
+   "status": "partial",
+   "note": "Album name, artist, year and track order exist. No disc number, disc count, gapless flag, rating or persistent IDs."
+  },
+  {
+   "feature": "Playlists",
+   "apple": "ITLibPlaylist: name, items, kind, parentID, isPrimary, distinguishedKind",
+   "bifrost": "springboard/apps/music-desktop/src/music/playlists.rs (Playlists, .m3u files)",
+   "status": "partial",
+   "note": "User playlists are plain .m3u files, one song path per line, owned by the Music app. No distinguished kinds (master, folders), no parent IDs, no read path for other apps."
+  },
+  {
+   "feature": "Artwork",
+   "apple": "ITLibArtwork, artwork(forMediaFile:), ITLibArtworkFormat",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Scanned.has_cover, Library.covers, MAX_COVER); springboard/render/src/imgdec.rs (PNG/JPEG decode)",
+   "status": "partial",
+   "note": "Album covers are read from tags and kept encoded, with a size cap. No public image or imageData accessor and no artwork lookup for an arbitrary file."
+  },
+  {
+   "feature": "Change notification (DidChangeLibraryMessage)",
+   "apple": "DidChangeLibraryMessage",
+   "bifrost": "springboard/sdk/src/fswatch.rs; docs/bifrost-ui.md (file watching notes)",
+   "status": "gap",
+   "note": "The Music app still polls its folders (docs/bifrost-ui.md states it should migrate to fswatch). No library-change message is published to other apps."
+  },
+  {
+   "feature": "Video media info (ITLibMediaItemVideoInfo)",
+   "apple": "ITLibMediaItemVideoInfo",
+   "bifrost": "springboard/src/media/ (decoders only, no library)",
+   "status": "gap",
+   "note": "The Music library is audio-only. Video decode exists in the system media layer but has no library or metadata API."
+  },
+  {
+   "feature": "Access rules (code signing, read-only, iTunes version gate)",
+   "apple": "Framework notes: code signing required, read-only, iTunes 11 or later",
+   "bifrost": "springboard/src/bare/app_policy.rs (per-app sandbox policy)",
+   "status": "n/a",
+   "note": "The iTunes version gate and code-signing requirement are specific to Apple's app. BifrOSt would need its own grant model (for example a file or media permission) before exposing a library to apps."
+  }
+ ],
+ "gaps": [
+  "No SDK module exposes the Music library or playlists to other apps (no equivalent of ITLibrary).",
+  "Playlists are .m3u files readable only by the Music app; no read API, no distinguished playlists.",
+  "No library change notification; Music polls its folders instead of using fswatch.",
+  "Per-track play statistics (playCount, lastPlayedDate, rating) are not stored in the library model.",
+  "No artwork accessor for an arbitrary media file."
+ ]
+}

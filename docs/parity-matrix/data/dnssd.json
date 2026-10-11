@@ -1,0 +1,31 @@
+{
+  "framework": "dnssd",
+  "doc": "https://developer.apple.com/documentation/dnssd",
+  "macos_since": "10.12",
+  "status": "partial",
+  "bifrost": "springboard/src/net/share.rs (custom UDP beacon, not DNS-SD), springboard/sdk/src/share.rs (share sheet only)",
+  "summary": "The dnssd C API (DNS-SD over mDNS and unicast DNS) has no BifrOSt counterpart. The only LAN discovery is a custom UDP multicast beacon in share.rs (group 224.0.0.251:5354, format TSB1) that finds other BifrOSt machines sharing the same secret; it uses no DNS records, service types or TXT data, and no app-facing discovery API exists.",
+  "rea_evidence": "ev_652bd44970aeadd7f824944f537895812cb6eb118df514b0ce7fa9316e59ce84",
+  "features": [
+    {"feature": "Browse for services by type (DNSServiceBrowse)", "apple": "DNSServiceBrowse, DNSServiceBrowseReply", "bifrost": "springboard/src/net/share.rs:370-400 (Peer, Peers)", "status": "partial", "note": "Peer list is built from the TSB1 beacon only. Finds BifrOSt peers with the same secret, not arbitrary DNS-SD service types. No app API."},
+    {"feature": "Resolve a service to host, port and TXT (DNSServiceResolve)", "apple": "DNSServiceResolve, DNSServiceResolveReply", "bifrost": "springboard/src/net/share.rs:61-104 (Beacon encode/decode)", "status": "partial", "note": "The beacon gives address, TCP port and device name. There is no TXT data and no resolve call that apps can make."},
+    {"feature": "Register and advertise a service (DNSServiceRegister)", "apple": "DNSServiceRegister, DNSServiceRegisterReply", "bifrost": "springboard/src/net/share.rs:394-462 (Service::start)", "status": "partial", "note": "Advertises a fixed beacon with name, port and fingerprint every 2 s. Only the share service registers; apps cannot advertise their own service type or name."},
+    {"feature": "Custom records on a service (AddRecord, UpdateRecord, RemoveRecord, RegisterRecord)", "apple": "DNSServiceAddRecord, DNSServiceUpdateRecord, DNSServiceRemoveRecord, DNSServiceRegisterRecord", "bifrost": "none found", "status": "gap", "note": "No DNS resource record sets are built or published."},
+    {"feature": "Query arbitrary DNS records (DNSServiceQueryRecord)", "apple": "DNSServiceQueryRecord, DNSServiceQueryRecordReply", "bifrost": "springboard/src/deildu/http.rs:27 (Tls, UDP resolver for the tracker client)", "status": "gap", "note": "The UDP resolver is private to the tracker HTTP client and is not exposed to apps. It does not run mDNS or multicast queries."},
+    {"feature": "Resolve hostnames to IPv4 and IPv6 (DNSServiceGetAddrInfo)", "apple": "DNSServiceGetAddrInfo, DNSServiceGetAddrInfoReply", "bifrost": "springboard/src/deildu/http.rs:27 (private resolver)", "status": "gap", "note": "No app-facing address lookup. The private resolver is used only for HTTPS fetches."},
+    {"feature": "TXT record construction and parsing (TXTRecordCreate, TXTRecordSetValue, TXTRecordGetValuePtr and the rest)", "apple": "TXTRecordRef, TXTRecordCreate, TXTRecordSetValue, TXTRecordGetValuePtr, TXTRecordGetItemAtIndex", "bifrost": "none found", "status": "gap", "note": "The beacon uses its own fixed binary layout and has no TXT key/value encoding."},
+    {"feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)", "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection", "bifrost": "springboard/sdk/src/dispatch.rs (GCD counterpart, unrelated to DNS-SD)", "status": "gap", "note": "No DNSServiceRef or daemon connection exists. The SDK dispatch module does not drive DNS-SD sockets."},
+    {"feature": "NAT port mapping (DNSServiceNATPortMappingCreate)", "apple": "DNSServiceNATPortMappingCreate, DNSServiceNATPortMappingReply", "bifrost": "none found", "status": "gap", "note": "Searched for NAT-PMP, PCP, UPnP and IGD in springboard/src, springboard/netd and springboard/sdk/src: no hits."},
+    {"feature": "Enumerate recommended domains (DNSServiceEnumerateDomains)", "apple": "DNSServiceEnumerateDomains, DNSServiceDomainEnumReply", "bifrost": "none found", "status": "gap", "note": "No domain browsing or registration-domain lookup."},
+    {"feature": "Error codes, flags and interface indices (kDNSServiceErr_*, kDNSServiceFlags*, kDNSServiceInterfaceIndex*)", "apple": "DNSServiceErrorType, DNSServiceFlags, DNSServiceProtocol, kDNSServiceInterfaceIndexAny and related constants", "bifrost": "none found", "status": "gap", "note": "The beacon uses its own error results and no DNS-SD flags or interface indices are exposed."},
+    {"feature": "Multicast DNS and DNS-SD wire protocol on port 5353", "apple": "dnssd C API over mDNSResponder (RFC 6762, RFC 6763 wire format)", "bifrost": "springboard/src/net/share.rs:1-20 (beacon format on port 5354, not 5353)", "status": "gap", "note": "No code sends or parses mDNS packets or DNS-SD PTR, SRV and TXT records. The share beacon interoperates only with BifrOSt peers."}
+  ],
+  "gaps": [
+    "No app-facing DNS-SD API: apps cannot browse, resolve or advertise arbitrary service types (for example _ipp._tcp or _airplay._tcp).",
+    "No mDNS on port 5353 and no DNS-SD PTR/SRV/TXT records, so ordinary LAN devices cannot find BifrOSt and BifrOSt cannot find them.",
+    "No TXT record encoding or parsing.",
+    "No DNSServiceRef-style connection to a discovery daemon, and no dispatch-queue integration for discovery callbacks.",
+    "No NAT port mapping (NAT-PMP, PCP or UPnP) and no domain enumeration.",
+    "The share beacon (springboard/src/net/share.rs) is a BifrOSt-only protocol with a fixed secret model. It could be the base for a DNS-SD-compatible layer, but that is a separate decision."
+  ]
+}

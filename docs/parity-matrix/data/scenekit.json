@@ -1,0 +1,32 @@
+{
+  "framework": "SceneKit",
+  "doc": "https://developer.apple.com/documentation/scenekit",
+  "macos_since": "10.8",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/view/animation.rs (2D implicit animation only); springboard/render/src/gfx/rotate.rs (2D frame rotation); no 3D scene graph, mesh, camera, light, physics or particle code",
+  "summary": "SceneKit is a 3D scene graph (nodes, cameras, lights, materials, geometry, physics, particles, audio, shaders). BifrOSt has no 3D scene, mesh or camera type anywhere in the SDK, UI or render crates; its rendering is 2D. Apple deprecated SceneKit in favour of RealityKit, so a 3D gap is expected on a 2D macOS-style desktop and most rows are n/a or gap.",
+  "rea_evidence": "ev_264767f12439dbf1103290ef90b074174ebee91d7df825b31e986dca6396794a",
+  "features": [
+    {"feature": "Scene graph and nodes", "apple": "SCNScene, SCNNode, SCNReferenceNode", "bifrost": "none", "status": "gap", "note": "no 3D node hierarchy; the closest is the 2D window/view tree in springboard/sdk/src/view/"},
+    {"feature": "Views for 3D content", "apple": "SCNView, SCNRenderer, SCNLayer, SCNSceneRenderer, SCNHitTestResult", "bifrost": "none", "status": "gap", "note": "the GPU presenter (springboard/src/gpu/wl.rs) draws 2D surfaces only"},
+    {"feature": "Cameras, lights and materials", "apple": "SCNCamera, SCNLight, SCNMaterial, SCNMaterialProperty", "bifrost": "none", "status": "gap", "note": "no 3D camera or lighting model; colours are 2D pairs in springboard/render/src/ui.rs"},
+    {"feature": "Geometry and built-in shapes", "apple": "SCNGeometry, SCNGeometrySource, SCNGeometryElement, SCNBox, SCNSphere, SCNText, SCNShape", "bifrost": "none", "status": "gap", "note": "no mesh type; springboard/src/shell/browser/style/values.rs has 2D TransformFn only"},
+    {"feature": "Animation and actions", "apple": "SCNAction, SCNTransaction, SCNAnimation, SCNAnimationPlayer", "bifrost": "springboard/sdk/src/view/animation.rs", "status": "partial", "note": "implicit 2D animation of frame, opacity and background; no keyframe or 3D property animation"},
+    {"feature": "Constraints", "apple": "SCNConstraint, SCNLookAtConstraint, SCNBillboardConstraint, SCNIKConstraint", "bifrost": "springboard/ui/src/constraint.rs (2D Cassowary layout)", "status": "gap", "note": "2D layout constraints only; no orientation or inverse-kinematics constraints"},
+    {"feature": "Skinning and morphing", "apple": "SCNSkinner, SCNMorpher", "bifrost": "none", "status": "gap", "note": "no skeletal or blend-shape animation"},
+    {"feature": "Physics simulation", "apple": "SCNPhysicsWorld, SCNPhysicsBody, SCNPhysicsVehicle, joints, SCNPhysicsContactDelegate", "bifrost": "springboard/ui/src/lib.rs (scroll physics only)", "status": "gap", "note": "the only physics in the repo is list scroll momentum; no rigid-body or contact simulation"},
+    {"feature": "Particle systems", "apple": "SCNParticleSystem, SCNParticlePropertyController", "bifrost": "none", "status": "gap", "note": "no particle emitter in the SDK or render crates"},
+    {"feature": "Positional audio", "apple": "SCNAudioSource, SCNAudioPlayer", "bifrost": "none", "status": "gap", "note": "audiod has no spatial or panned playback; the audio service is springboard/audiod"},
+    {"feature": "Custom shaders and render passes", "apple": "SCNProgram, SCNShadable, SCNTechnique, SCNNodeRendererDelegate", "bifrost": "springboard/render/src/gfx.rs", "status": "gap", "note": "the GPU path has no app-facing shader or technique API"},
+    {"feature": "Scene asset import", "apple": "SCNSceneSource", "bifrost": "none", "status": "gap", "note": "no 3D file importer (DAE, USDZ, glTF); the image decoder springboard/render/src/imgdec.rs handles 2D only"},
+    {"feature": "3D data types", "apple": "SCNVector3, SCNVector4, SCNMatrix4, SCNQuaternion", "bifrost": "springboard/render/src/gfx/affinity.rs (2D affine only)", "status": "gap", "note": "no 3D vector, matrix or quaternion types; 2D affine transforms only"},
+    {"feature": "JavaScript export", "apple": "SCNExportJavaScriptModule", "bifrost": "none", "status": "n/a", "note": "bifrost's JavaScript runs in the webview (springboard/sdk/src/webview.rs), not a SceneKit bridge"}
+  ],
+  "gaps": [
+    "No 3D scene graph, camera, light, mesh or material type anywhere in the SDK or render crates",
+    "No 3D physics, rigid-body or contact simulation; list scroll physics is 2D only",
+    "No particle system, positional audio or 3D asset import",
+    "No app-facing custom shader or render-pass API",
+    "Apple deprecated SceneKit (macOS 26) in favour of RealityKit (doc header), so a parity target would be RealityKit, not SceneKit"
+  ]
+}

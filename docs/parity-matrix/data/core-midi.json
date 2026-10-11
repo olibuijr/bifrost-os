@@ -1,0 +1,30 @@
+{
+  "framework": "Core MIDI",
+  "doc": "https://developer.apple.com/documentation/coremidi",
+  "macos_since": "10.0",
+  "status": "gap",
+  "bifrost": "springboard/apps/daw/src/compose.rs (midi(), pitches()), springboard/apps/daw/src/dsp.rs (mtof), springboard/src/bare/bluetooth.rs (Bluetooth management socket, audio-class devices only)",
+  "summary": "BifrOSt has no MIDI device I/O, no MIDI message encoding (1.0 or UMP), no MIDI driver, network or Bluetooth MIDI profile, and no app SDK API for MIDI. The only MIDI-related code is note-number math in the DAW (note names to pitch, pitch to frequency), which is a small part of what a MIDI note carries.",
+  "rea_evidence": "ev_ef3f87daee6586bf7d1842912581de9266baebc583129c4b3454c831ae785502",
+  "features": [
+    {"feature": "MIDI Services (clients, ports, device and entity lookup)", "apple": "MIDIClientCreate, MIDIInputPortCreateWithProtocol, MIDIOutputPortCreate, MIDIGetNumberOfDevices, MIDIPortConnectSource, MIDIReceiveBlock (https://developer.apple.com/documentation/coremidi/midi-services)", "bifrost": "none", "status": "gap", "note": "No client, port or endpoint code. Searches for snd_seq, /dev/snd/seq and rawmidi in the repo return nothing. Input devices in springboard/src/bare/input.rs are evdev keyboards, mice and touch only."},
+    {"feature": "MIDI System Setup (driver and external device management)", "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)", "bifrost": "none", "status": "gap", "note": "No system-wide MIDI device registry. Hotplug for audio devices is in springboard/src/media/ and springboard/src/bare/input.rs, not for MIDI."},
+    {"feature": "MIDI Bluetooth (BLE MIDI peripherals)", "apple": "MIDIBluetoothDriverActivateAllConnections, MIDIBluetoothDriverDisconnect (https://developer.apple.com/documentation/coremidi/midi-bluetooth)", "bifrost": "springboard/src/bare/bluetooth.rs (Bluetooth management socket, class_is_audio at :186)", "status": "os", "note": "The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. There is no MIDI GATT service support and no app-facing SDK API for it."},
+    {"feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)", "apple": "MIDI1UPNoteOn, MIDI1UPControlChange, MIDI2NoteOn, MIDI2PitchBend, MIDIMessage_32, MIDIMessage_64 (https://developer.apple.com/documentation/coremidi/midi-messages)", "bifrost": "springboard/apps/daw/src/model.rs:152 (note struct: pitch p, velocity v in 0..1)", "status": "partial", "note": "The DAW note model holds a pitch number and a velocity. There is no encoding to or from MIDI 1.0 bytes or Universal MIDI Packets, and no control change, pitch bend or SysEx support."},
+    {"feature": "Note number to pitch and frequency", "apple": "kMIDINoteAttributePitch, kMIDINoteAttributeManufacturerSpecific, kMIDINoteAttributeProfileSpecific, kMIDINoteAttributeNone (https://developer.apple.com/documentation/coremidi)", "bifrost": "springboard/apps/daw/src/compose.rs:88 (midi() note-name parser, pitches()), springboard/apps/daw/src/dsp.rs:7 (mtof)", "status": "partial", "note": "Covers note names (C#4, Bb2) to note numbers and note numbers to Hz. The per-note attribute types (pitch, manufacturer-specific, profile-specific) have no counterpart."},
+    {"feature": "MIDI Thru Connection (play-through, value maps, transforms)", "apple": "MIDIThruConnectionCreate, MIDIThruConnectionSetParams, MIDIValueMap, MIDIControlTransform (https://developer.apple.com/documentation/coremidi/midi-thru-connection)", "bifrost": "none", "status": "gap", "note": "No routing layer between MIDI sources and destinations. No transform tables."},
+    {"feature": "MIDI Networking (network sessions and hosts)", "apple": "MIDINetworkSession, MIDINetworkHost, MIDINetworkConnection (https://developer.apple.com/documentation/coremidi/midi-networking)", "bifrost": "none", "status": "gap", "note": "The LAN code (springboard/src/net/share.rs, UDP beacon on port 5354) does not carry MIDI sessions."},
+    {"feature": "MIDI Drivers (driver plug-ins and device lists)", "apple": "MIDIDeviceCreate, MIDIDeviceListAddDevice, MIDIGetDriverDeviceList, MIDIDriverInterface (https://developer.apple.com/documentation/coremidi/midi-drivers)", "bifrost": "none", "status": "n/a", "note": "The Apple driver plug-in model is specific to macOS. The Linux counterpart would be the kernel ALSA sequencer, which BifrOSt does not use for MIDI."},
+    {"feature": "MIDI Capability Inquiry (MIDI-CI discovery, profiles, property exchange)", "apple": "MIDICIDiscoveryManager, MIDICISession, MIDICIProfile, MIDICIResponder, MIDICIDevice (https://developer.apple.com/documentation/coremidi/midi-capability-inquiry)", "bifrost": "none", "status": "gap", "note": "No MIDI-CI discovery, profile or property exchange code."}
+  ],
+  "gaps": [
+    "No MIDI device I/O for apps: no client, input or output port, and no source or destination enumeration (MIDI Services).",
+    "No MIDI 1.0 or UMP message encoding and decoding; the DAW note model stores only pitch and velocity (model.rs:152).",
+    "No MIDI over Bluetooth LE (BLE MIDI service) on top of springboard/src/bare/bluetooth.rs.",
+    "No USB or hardware MIDI device hotplug, no system-level MIDI device registry, and no virtual endpoints.",
+    "No MIDI thru routing, value maps or transforms.",
+    "No MIDI network sessions.",
+    "No MIDI-CI discovery, profiles or property exchange.",
+    "No app-facing SDK API for MIDI. The SDK (springboard/sdk/src/) has no MIDI module."
+  ]
+}

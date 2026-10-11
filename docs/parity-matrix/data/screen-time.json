@@ -1,0 +1,25 @@
+{
+  "framework": "Screen Time",
+  "doc": "https://developer.apple.com/documentation/screentime",
+  "macos_since": "11.0",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/screentime/ (usage.rs, config.rs, shield.rs, page.rs, chart.rs), springboard/src/shell/settings.rs; no SDK module",
+  "summary": "Apple's framework is a parent-controls API for web-usage reporting, web-history deletion and child-restriction queries, and it does nothing on visionOS. BifrOSt has no web-usage reporting and no web-history deletion API. Its shell has a Screen Time feature (per-app usage, daily app limits, Downtime, a Time Limit shield) that is not exposed to apps through any SDK API.",
+  "rea_evidence": "ev_6d467ec078fad5fc6ed9b03ae9dd3f3fccad1b9ddef9ae1402e35c91121fa076",
+  "features": [
+    {"feature": "Web-usage reporting (STWebpageController)", "apple": "STWebpageController: url, urlIsBlocked, urlIsPlayingVideo, urlIsPictureInPicture, suppressUsageRecording, setBundleIdentifier(_:), profileIdentifier", "bifrost": "springboard/apps/browser/src/store.rs (visit list for the History menu only)", "status": "gap", "note": "The browser keeps visits for its own History menu. Nothing reports web usage to a Screen Time store, and no block check for URLs exists."},
+    {"feature": "Configuration observer and configuration (STScreenTimeConfigurationObserver, STScreenTimeConfiguration)", "apple": "STScreenTimeConfigurationObserver(updateQueue:), startObserving(), stopObserving(), configuration; STScreenTimeConfiguration.enforcesChildRestrictions", "bifrost": "springboard/src/shell/screentime/config.rs (Config::load from screentime.ini), springboard/src/shell/passcode.rs", "status": "os", "note": "The shell reads its own configuration. Apps get no observer and no child-restrictions query."},
+    {"feature": "Web-history deletion (STWebHistory)", "apple": "STWebHistory: init(bundleIdentifier:), init(profileIdentifier:), deleteAllHistory(), deleteHistory(during:), deleteHistory(for:), fetchAllHistory(completionHandler:), fetchHistory(during:completionHandler:)", "bifrost": "none; springboard/apps/browser/src/store.rs keeps history in the browser app only", "status": "gap", "note": "No API lets an app or a parent delete or fetch another app's web history by bundle identifier or date range."},
+    {"feature": "Per-app usage records", "apple": "Not an Apple API; the Screen Time app's usage data (no public API in this framework)", "bifrost": "springboard/src/shell/screentime/usage.rs (Tracker, one key=value day file per day, 7-day chart history)", "status": "os", "note": "Foreground seconds per app and per hour, pickups and notifications per app. Read only by Settings, not by apps."},
+    {"feature": "Daily app limits and the Time Limit shield", "apple": "Not in this framework (system Screen Time)", "bifrost": "springboard/src/shell/screentime/config.rs (LIMIT_STEPS, Config::block, Ignore grants), springboard/src/shell/screentime/shield.rs", "status": "os", "note": "Limits from 15 min to 4 h, a full-screen shield with OK and Ignore Limit for 15 min or the rest of the day, behind the Screen Time passcode when one is set. Settings is never shielded."},
+    {"feature": "Downtime schedule and always-allowed apps", "apple": "Not in this framework (system Screen Time)", "bifrost": "springboard/src/shell/screentime/config.rs (Downtime, Schedule from springboard/src/shell/notify/schedule.rs), springboard/src/shell/screentime/page.rs", "status": "os", "note": "A daily window that may cross midnight. During Downtime only the apps the user always allows can run."},
+    {"feature": "Settings UI for Screen Time", "apple": "Not in this framework (system Settings)", "bifrost": "springboard/src/shell/screentime/page.rs, springboard/src/shell/screentime/chart.rs, springboard/src/shell/settings.rs (st_spec and the Screen Time handlers)", "status": "partial", "note": "Settings has Screen Time, Downtime, App Limits and Always Allowed pages with a weekly chart. Web usage is not charted, and there is no Content Restrictions page."}
+  ],
+  "gaps": [
+    "Web-usage reporting: no equivalent of STWebpageController to report visited URLs, playing video or picture-in-picture, or to ask whether a URL is blocked.",
+    "Web-history API: no equivalent of STWebHistory to fetch or delete browsing history by bundle identifier, profile or date range.",
+    "Configuration query: apps cannot observe the device Screen Time configuration or ask whether child restrictions are enforced.",
+    "Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.",
+    "No SDK module exposes the shell's Screen Time usage or limit state to apps; none is documented in docs/bifrost-ui.md."
+  ]
+}

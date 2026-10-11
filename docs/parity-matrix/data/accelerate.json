@@ -1,0 +1,34 @@
+{
+  "framework": "Accelerate",
+  "doc": "https://developer.apple.com/documentation/accelerate",
+  "macos_since": "10.3",
+  "status": "partial",
+  "bifrost": "No SDK module. Ad hoc equivalents: springboard/render/src/gfx/rotate.rs, springboard/src/media/convert.rs, springboard/apps/daw/src/conv.rs, springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/photos/edit.rs",
+  "summary": "Accelerate's vector, signal, linear algebra, sparse solver, compression and ML APIs have no BifrOSt SDK counterpart. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, DEFLATE decoding, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
+  "rea_evidence": "ev_371efbd6465434fa7c238d2db92f2f8a9c41b8360f6013ec6863082d97dc6c3e",
+  "features": [
+    {"feature": "vDSP vector arithmetic and stride operations", "apple": "vDSP (vector-vector and vector-scalar operations, strided access, interpolation, decimation)", "bifrost": "none in SDK; springboard/src/media/aac.rs:119 (Resampler, codec-internal)", "status": "gap", "note": "No public vector arithmetic API. The only resampler is private to the AAC decoder."},
+    {"feature": "FFT, DFT and DCT", "apple": "vDSP Fourier transforms, Discrete Cosine transforms, fast Fourier transforms", "bifrost": "springboard/apps/daw/src/conv.rs (private Fft struct, radix-2 complex)", "status": "gap", "note": "The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."},
+    {"feature": "Convolution and morphology", "apple": "vImage convolution kernels, dilation and erosion (Convolution, Morphology collections)", "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material)", "status": "partial", "note": "Blur exists for materials. No general kernel convolution, dilation or erosion."},
+    {"feature": "Image buffer geometry", "apple": "vImage geometric transforms (rotate, reflect, shear, scale) and resampling", "bifrost": "springboard/render/src/gfx/rotate.rs:157 (rotated), springboard/render/src/emoji.rs:402 (resample), springboard/src/shell/photos/edit.rs:214 (rotate)", "status": "partial", "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API."},
+    {"feature": "Compositing and blend modes", "apple": "vImage alpha blending and blend modes", "bifrost": "springboard/src/shell/controls.rs:82 (blend, source-over with alpha)", "status": "partial", "note": "Source-over alpha blend only. No blend-mode set and no SDK-level image compositing."},
+    {"feature": "Pixel format and colour conversion", "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)", "bifrost": "springboard/src/media/convert.rs:45-46 (BT601 and BT709 fixed-point matrices), springboard/src/media/convert.rs:49 (matrix_for)", "status": "os", "note": "NV12 and RGBA to premultiplied RGBA for the video thread. No CMYK, no grayscale conversion, and no public conversion API."},
+    {"feature": "Tone and brightness adjustment, histogram", "apple": "vImage gamma, tone curves, histogram calculation, specification and equalization", "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness)", "status": "partial", "note": "A brightness and contrast lookup table inside the Photos app. No histogram, equalization or tone-curve API."},
+    {"feature": "Compression and decompression", "apple": "Compression (buffer, stream and filter APIs), Directories and Data Archives", "bifrost": "springboard/src/shell/books/engine/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)", "status": "partial", "note": "DEFLATE and zlib decoding exist inside the Books engine. There is no compressor and no SDK compression API. The PNG writer emits uncompressed blocks."},
+    {"feature": "Linear algebra (BLAS, LAPACK, sparse solvers)", "apple": "BLAS, LAPACK, Sparse Solvers, Solving systems of linear equations", "bifrost": "none; springboard/ui/src/constraint.rs (Cassowary layout solver, not general linear algebra)", "status": "gap", "note": "No matrix solver or BLAS-style routines. The constraint solver serves layout only."},
+    {"feature": "Vectors, matrices, quaternions and simd", "apple": "Working with Vectors, Matrices and Quaternions; simd; vForce", "bifrost": "none in SDK", "status": "gap", "note": "No public small-vector or quaternion types. vForce-style vector transcendental functions are missing."},
+    {"feature": "Neural networks", "apple": "BNNS (neural network training and inference)", "bifrost": "none in SDK", "status": "gap", "note": "No neural network inference or training API for apps. Searches for neural network and tensor code found nothing."},
+    {"feature": "Audio DSP (biquad filters, spectrogram)", "apple": "Biquadratic IIR filters, audio spectrogram sample (vDSP plus vImage)", "bifrost": "springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs", "status": "os", "note": "Audio playback runs in the system daemon. Biquad filtering exists only inside the DAW instrument. No DSP filter API for apps."},
+    {"feature": "Core Video pixel buffer interop", "apple": "Core Video interoperability with vImage pixel buffers", "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (hardware decode), springboard/src/media/convert.rs (frame conversion)", "status": "os", "note": "Video frames are converted in the media layer. Apps get no pixel buffer API."},
+    {"feature": "Numerical quadrature", "apple": "Quadrature (definite integration over finite or infinite intervals)", "bifrost": "none", "status": "gap", "note": "No numerical integration routines."}
+  ],
+  "gaps": [
+    "No SDK module for vDSP, vImage, BNNS, compression, BLAS/LAPACK, sparse solvers or simd.",
+    "No app-facing FFT or DCT API. The only FFT is private to the DAW convolver (springboard/apps/daw/src/conv.rs).",
+    "No compressor. DEFLATE is decode-only and lives in the Books engine, and the PNG writer stores uncompressed blocks.",
+    "No general image convolution, morphology, histogram, or arbitrary-angle geometric transform API.",
+    "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
+    "No neural network inference or training API for apps.",
+    "No small-vector, matrix or quaternion types exposed to the SDK."
+  ]
+}

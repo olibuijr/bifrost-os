@@ -1,0 +1,34 @@
+{
+  "framework": "Apple CryptoKit",
+  "doc": "https://developer.apple.com/documentation/cryptokit",
+  "macos_since": "10.15",
+  "status": "os",
+  "bifrost": "springboard/core/src/sha256.rs (bifrost_core::sha256), springboard/src/keychain.rs (HMAC-SHA256, ChaCha20, encrypt-then-MAC), springboard/sdk/src/keychain.rs (secret storage only)",
+  "summary": "BifrOSt has SHA-256, HMAC-SHA256 and ChaCha20 inside the shell, used only to protect the keychain file and to verify updates and backups. Apps get no hashing, cipher, signature, key agreement or typed key API; the SDK keychain stores opaque secret bytes. Most of CryptoKit (SHA-2 384/512, SHA-3, AES-GCM, ChaCha20-Poly1305, Curve25519, NIST curves, HPKE, HKDF, post-quantum KEM and signatures, Secure Enclave) has no counterpart.",
+  "rea_evidence": "ev_daa965c42360c845f78ea59d8b10278b229b5e0289fef403e27794bb99134bc7",
+  "features": [
+    {"feature": "SHA-2 hashing (SHA256, SHA384, SHA512, HashFunction)", "apple": "SHA256, SHA384, SHA512, HashFunction", "bifrost": "springboard/core/src/sha256.rs (digest() at line 95, incremental Sha256 new/update/finish)", "status": "os", "note": "SHA-256 only, in the shell's core crate; no SDK type, no SHA-384 or SHA-512, no HashFunction protocol"},
+    {"feature": "SHA-3 hashing", "apple": "SHA3_256, SHA3_384, SHA3_512 (and digest types)", "bifrost": "none", "status": "gap", "note": "no SHA-3 implementation in springboard/"},
+    {"feature": "HMAC message authentication", "apple": "HMAC, SymmetricKey, SymmetricKeySize", "bifrost": "springboard/src/keychain.rs:332 (private fn hmac)", "status": "os", "note": "HMAC-SHA256 is private to the keychain module; no SymmetricKey type and no HMAC API for apps"},
+    {"feature": "ChaCha20-Poly1305 (ChaChaPoly)", "apple": "ChaChaPoly", "bifrost": "springboard/src/keychain.rs:349 (chacha20_block), :387 (chacha20_xor)", "status": "os", "note": "ChaCha20 stream cipher only (RFC 8439 block function) with HMAC-SHA256 in place of Poly1305; encrypt-then-MAC is in keychain.rs:305 (seal_with) and :316 (open_box); not exposed to apps"},
+    {"feature": "AES ciphers (AES.GCM)", "apple": "AES", "bifrost": "none", "status": "gap", "note": "no AES in springboard/; the noVNC JavaScript under springboard/apps/remote is a web client and not used by apps"},
+    {"feature": "Per-app key derivation (HKDF)", "apple": "HKDF", "bifrost": "springboard/src/keychain.rs:292 (fn derive)", "status": "partial", "note": "derives per-app subkeys with HMAC from a master key; this is an ad hoc construction, not HKDF, and is not exposed to apps"},
+    {"feature": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)", "apple": "Curve25519, P256, P384, P521", "bifrost": "none", "status": "gap", "note": "no asymmetric primitives in springboard/"},
+    {"feature": "Key agreement (X25519, SharedSecret)", "apple": "Curve25519, SharedSecret", "bifrost": "none", "status": "gap", "note": "no Diffie-Hellman or X25519 in springboard/"},
+    {"feature": "Hybrid public key encryption (HPKE)", "apple": "HPKE and HPKE key protocols", "bifrost": "none", "status": "gap", "note": "no HPKE"},
+    {"feature": "Post-quantum KEM and signatures (ML-KEM, X-Wing, ML-DSA)", "apple": "MLKEM768, MLKEM1024, XWingMLKEM768X25519, KEM, KEMPrivateKey, KEMPublicKey, MLDSA65, MLDSA87", "bifrost": "none", "status": "gap", "note": "no post-quantum primitives"},
+    {"feature": "Typed key storage in the keychain", "apple": "CryptoKit keys stored as keychain items (sample: Storing CryptoKit Keys in the Keychain)", "bifrost": "springboard/sdk/src/keychain.rs:36-51 (add, get, update, delete)", "status": "partial", "note": "SDK keychain stores opaque secret bytes keyed by service and account, with a permission; there are no typed key objects and no key references"},
+    {"feature": "Hardware-backed keys (SecureEnclave)", "apple": "SecureEnclave", "bifrost": "none", "status": "n/a", "note": "Apple hardware. The keychain comments say no TPM or login-password key source exists yet (springboard/src/keychain.rs header), so a hardware key source would be a new gap, not a port"},
+    {"feature": "Legacy insecure algorithms (Insecure: MD5, SHA-1)", "apple": "Insecure", "bifrost": "none", "status": "gap", "note": "the shell has no MD5 or SHA-1; only the noVNC web client has MD5"},
+    {"feature": "Export compliance declaration", "apple": "ITSAppUsesNonExemptEncryption, ITSEncryptionExportComplianceCode", "bifrost": "none", "status": "n/a", "note": "App Store Connect metadata; BifrOSt's PC App Store has no equivalent key in its manifest format"}
+  ],
+  "gaps": [
+    "No app-facing SDK API for any hashing, cipher, MAC or signature primitive; apps can only store opaque secrets",
+    "SHA-2 is only SHA-256 and is not exposed; SHA-384, SHA-512 and SHA-3 are missing",
+    "No AES-GCM and no ChaCha20-Poly1305 with Poly1305; the shell's ChaCha20 is internal and paired with HMAC instead",
+    "No asymmetric crypto: Ed25519, X25519 and NIST curve signatures or key agreement",
+    "No HKDF, HPKE or post-quantum KEM and signatures",
+    "No typed key objects (SymmetricKey, key references) in the keychain API",
+    "No hardware-backed key source (Secure Enclave or TPM)"
+  ]
+}

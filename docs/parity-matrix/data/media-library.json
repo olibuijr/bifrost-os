@@ -1,0 +1,27 @@
+{
+  "framework": "Media Library",
+  "doc": "https://developer.apple.com/documentation/medialibrary",
+  "macos_since": "10.9",
+  "status": "partial",
+  "bifrost": "springboard/apps/music-desktop/src/music/library.rs, springboard/apps/music-desktop/src/music/jobs.rs, springboard/src/shell/photos/library.rs, springboard/src/shell/photos/mod.rs",
+  "summary": "Apple's Media Library is a read-only, deprecated Objective-C model of media sources, groups and objects (the docs point to PhotoKit and the iTunes Library framework instead). BifrOSt scans the Music and Pictures folders in two places (the Music app and the shell Photos code), but it has no app-facing SDK API for read-only media collections, and the source and group hierarchy is missing.",
+  "rea_evidence": "ev_b2a2237afd42db6a56ffd90db72bd24caa3b0ac96dfd9819d374acb1b8ce738e",
+  "features": [
+    {"feature": "Library entry point (MLMediaLibrary)", "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey", "bifrost": "springboard/apps/music-desktop/src/app.rs (Music roots = $HOME/Music)", "status": "gap", "note": "no shared entry point; each app picks its own roots, and there is no include/exclude source filter"},
+    {"feature": "Media sources (MLMediaSource)", "apple": "MLMediaSource, MLMediaSourceType, source identifiers (iTunes, Photos, Movies folder, app-defined folders)", "bifrost": "none", "status": "gap", "note": "no source abstraction; files come from plain folder scans"},
+    {"feature": "Media groups (MLMediaGroup)", "apple": "MLMediaGroup, root group, group type identifiers (folders, albums, moments)", "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Album, Artist, Library::build)", "status": "partial", "note": "the Music library builds albums and artists from tags; there is no generic group tree or group type identifier"},
+    {"feature": "Media objects (MLMediaObject)", "apple": "MLMediaObject: name, media type, URL, attributes dictionary", "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Song, Scanned, scan_file); springboard/src/shell/photos/library.rs (Photo, from_path)", "status": "partial", "note": "songs and photos have typed structs with tags and times; there is no generic attribute dictionary (Media Object Attribute Keys)"},
+    {"feature": "Media types (MLMediaType)", "apple": "MLMediaType (image, audio, movie), type attributes on objects", "bifrost": "springboard/src/shell/photos/library.rs (image extensions), springboard/apps/music-desktop/src/music/library.rs (audio files)", "status": "partial", "note": "type is decided per app by file extension; no shared media-type enum in the SDK"},
+    {"feature": "Background loading", "apple": "Library load runs off the main thread with media-object change notifications", "bifrost": "springboard/apps/music-desktop/src/music/jobs.rs (library scan on the dispatch pool); springboard/src/shell/photos/mod.rs (rescan)", "status": "partial", "note": "both scans run on worker threads; there is no change notification for other apps to observe"},
+    {"feature": "Live changes to the collection", "apple": "read-only snapshot per library instance; reloading is explicit", "bifrost": "springboard/src/shell/photos/mod.rs (rescan)", "status": "partial", "note": "the shell Photos code rescans; the Music app builds once from its roots and has no file-watch update path in this module"},
+    {"feature": "Source-specific identifiers and group types (iTunes, iPhoto, Aperture, Final Cut, GarageBand, Logic, Photos)", "apple": "MLMediaSource*Identifier and *GroupTypeIdentifier constants", "bifrost": "none", "status": "n/a", "note": "tied to Apple's apps and their libraries; these sources are deprecated in the docs, which point to PhotoKit and the iTunes Library framework"}
+  ],
+  "gaps": [
+    "No app-facing SDK module for read-only media collections (nothing under springboard/sdk/src covers sources, groups or objects).",
+    "No source abstraction: Music and Photos each scan their own folders with their own code (springboard/src/shell/photos/library.rs and springboard/apps/music-desktop/src/music/library.rs).",
+    "Photo scanning is in the shell (springboard/src/shell/photos/library.rs), not in the SDK, so other apps cannot reuse it.",
+    "No generic media-object attribute dictionary; metadata is fixed structs per app.",
+    "No change notification for other apps when the photo or music collection changes.",
+    "Apple's source-specific identifiers (iTunes, iPhoto, Aperture, Final Cut and similar) have no counterpart and are deprecated in the docs."
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "framework": "ScreenCaptureKit",
+  "doc": "https://developer.apple.com/documentation/screencapturekit",
+  "macos_since": "12.3",
+  "status": "os",
+  "bifrost": "springboard/src/shell/screenshot.rs (screenshot chord), springboard/src/shell/camera/mod.rs (save_capture), springboard/mcp/src/wl.rs (capture_screen, ext-image-copy-capture window capture), springboard/mcp/src/tools.rs (screenshot tool)",
+  "summary": "The system layer captures single frames: the Power plus Volume Up chord saves a PNG and the agent tooling reads the compositor's screen and window pixels. No app-facing SDK API exists for streams, content filters, shareable content, the content-sharing picker or recording, so apps cannot do what ScreenCaptureKit offers.",
+  "rea_evidence": "ev_6d6cbeddf18306bf211d1a3395d6e08f819ed36c32445805d95d8134e49c3d3f",
+  "features": [
+    {"feature": "Stream screen content to an app (SCStream, SCStreamConfiguration, SCStreamOutput)", "apple": "SCStream, SCStreamConfiguration, SCStreamOutput, SCStreamOutputType, SCStreamFrameInfo, SCFrameStatus", "bifrost": "none in springboard/sdk/src/ (no capture module); compositor capture lives in springboard/mcp/src/wl.rs", "status": "gap", "note": "The compositor exposes wlr-screencopy and ext-image-copy-capture, but only the agent MCP server uses them. No app receives a frame stream."},
+    {"feature": "Discover displays, apps and windows to capture (SCShareableContent, SCDisplay, SCRunningApplication, SCWindow)", "apple": "SCShareableContent, SCShareableContentInfo, SCShareableContentStyle, SCDisplay, SCRunningApplication, SCWindow", "bifrost": "springboard/mcp/src/wl.rs (toplevel list via wlr-foreign-toplevel)", "status": "os", "note": "The window list is available to the agent tooling only. Apps get no enumeration API."},
+    {"feature": "Filter what a stream captures (SCContentFilter)", "apple": "SCContentFilter", "bifrost": "none", "status": "gap", "note": "No per-window or per-app filter exists for app-facing capture."},
+    {"feature": "Single-frame screenshots (SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput)", "apple": "SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput", "bifrost": "springboard/src/shell/screenshot.rs (chord, capture animation); springboard/src/shell/camera/mod.rs:818 (save_capture, JPEG encode); springboard/mcp/src/wl.rs:245 (capture_screen, wlr-screencopy region capture)", "status": "os", "note": "The chord saves to Photos and the shell's tests cover it (springboard/src/shell/tests.rs, screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos). No app SDK call takes a capture. Output is PNG only and the configuration has no size, quality or scale options."},
+    {"feature": "Capture a single window even when covered (window image capture source)", "apple": "SCWindow filter with SCScreenshotManager", "bifrost": "springboard/mcp/src/wl.rs (one window through ext-image-copy-capture and ext-foreign-toplevel-image-capture-source)", "status": "os", "note": "Used by the agent tooling only. The shell's own screenshot chord captures the full screen."},
+    {"feature": "System content-sharing picker (SCContentSharingPicker, SCContentSharingPickerConfiguration, SCContentSharingPickerMode, SCContentSharingPickerObserver)", "apple": "SCContentSharingPicker and related types", "bifrost": "none", "status": "gap", "note": "The picker is Apple's recommended selection UI. BifrOSt has no equivalent and no portal frontend for screen sharing."},
+    {"feature": "Permission for screen recording and persistent capture (Persistent Content Capture, privacy string)", "apple": "Persistent Content Capture symbol, screen recording permission prompt", "bifrost": "docs/bifrost-ui.md:313 (xdg-desktop-portal screenshot frontend, listed as a gap)", "status": "gap", "note": "No permission model covers screen capture for apps."},
+    {"feature": "Clip buffering and recording editor (SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput)", "apple": "SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput and their delegates", "bifrost": "none", "status": "gap", "note": "No instant-replay buffer or recording editor exists. The media stack is audio-focused (springboard/audiod) plus hardware video decode in springboard/src/media/."},
+    {"feature": "Stream errors and lifecycle (SCStreamDelegate, SCStreamError)", "apple": "SCStreamDelegate, SCStreamError, SCStreamErrorDomain", "bifrost": "none", "status": "gap", "note": "There is no stream to report errors for."}
+  ],
+  "gaps": [
+    "No app-facing capture stream API (SCStream with an output delegate) in springboard/sdk/src/.",
+    "No content enumeration API for apps (SCShareableContent and its displays, applications and windows).",
+    "No content filter (SCContentFilter) for per-window or per-app capture.",
+    "No system content-sharing picker or xdg-desktop-portal screencast frontend.",
+    "No screen-recording permission flow for apps.",
+    "Screenshot API for apps is missing: the shell chord works, but apps cannot request a frame with size, scale or format options (SCScreenshotConfiguration).",
+    "No clip buffering or recording editor (SCClipBufferingOutput, SCRecordingEditor)."
+  ]
+}

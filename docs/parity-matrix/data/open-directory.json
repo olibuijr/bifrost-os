@@ -1,0 +1,24 @@
+{
+  "framework": "Open Directory",
+  "doc": "https://developer.apple.com/documentation/opendirectory",
+  "macos_since": "10.6",
+  "status": "gap",
+  "bifrost": "springboard/src/shell/account.rs (one local account); springboard/sdk/src/keychain.rs (credential store); springboard/sdk/src/dispatch.rs (async completions)",
+  "summary": "Open Directory authenticates users and searches records (people, groups) in directory nodes such as LDAP servers. BifrOSt has one local account created by the installer, no directory node, no record query API and no directory authentication, so the directory client API is a gap. The contacts app and cloud sync are separate services and are not a directory counterpart.",
+  "rea_evidence": "ev_eb014de815128860cdce7126c81b1af84b12a2dbedf415d0b3a6a5b4a663a05f",
+  "features": [
+    {"feature": "Directory sessions and node connections", "apple": "ODSession, ODSessionRef, ODNode, ODNodeRef, ODNodeCreateWithName, ODNodeCopySubnodeNames (https://developer.apple.com/documentation/opendirectory/opendirectory-functions)", "bifrost": "none", "status": "gap", "note": "No API connects to a directory server or lists its nodes."},
+    {"feature": "Record queries and search results", "apple": "ODQuery, ODQueryRef, ODQueryCreateWithNodeType, ODQueryCopyResults, ODQueryDelegate", "bifrost": "springboard/sdk/src/quicksearch.rs (local search index only)", "status": "gap", "note": "Quick search indexes local app content; it does not query a directory."},
+    {"feature": "Directory records: read, write, group membership", "apple": "ODRecord, ODRecordRef, ODRecordCopyDetails, ODRecordSetValue, ODRecordAddMember, ODRecordDelete", "bifrost": "springboard/src/shell/account.rs (local account fields: full_name, username)", "status": "partial", "note": "The local account record is read by Settings; there is no record model for other people or groups and no write API."},
+    {"feature": "User authentication and password verification", "apple": "ODRecordVerifyPassword, ODRecordChangePassword, ODRecordAuthenticationAllowed, ODNodeSetCredentials", "bifrost": "springboard/sdk/src/keychain.rs; springboard/src/shell/login.rs (login screen)", "status": "partial", "note": "The installer account signs in locally; passwords are not checked against a directory and no SDK call verifies a password for another account."},
+    {"feature": "Asynchronous query results", "apple": "ODQuerySetDispatchQueue, ODQueryScheduleWithRunLoop, ODQuerySetCallback", "bifrost": "springboard/sdk/src/dispatch.rs", "status": "partial", "note": "Dispatch queues exist for apps; nothing feeds them directory results, so this row is partial only through the generic dispatch API."},
+    {"feature": "Directory account and password policies", "apple": "ODNodeSetPolicies, ODRecordSetPolicy, ODRecordCopyEffectivePolicies, ODNodeCopyAccountPolicies", "bifrost": "none", "status": "n/a", "note": "Policies are enforced by a directory server for managed accounts. BifrOSt has no managed multi-user directory to apply them to."},
+    {"feature": "Contacts search in LDAP or Open Directory", "apple": "ODQuery against an LDAP node for contact attributes (framework summary)", "bifrost": "springboard/apps/contacts-desktop/manifest.toml (contacts app; contacts sync lives in ~/Projects/bifrost-cloud)", "status": "gap", "note": "The contacts app stores local contacts. Searching a directory server for contacts has no counterpart."}
+  ],
+  "gaps": [
+    "No client for LDAP or directory nodes: no session, node or record query API for apps.",
+    "No directory-backed user lookup or sign-in; the desktop has one local account.",
+    "No SDK call to verify or change the password of another account.",
+    "Contacts app cannot search a directory server for people."
+  ]
+}

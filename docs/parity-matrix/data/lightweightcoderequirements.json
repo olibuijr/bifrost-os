@@ -1,0 +1,26 @@
+{
+  "framework": "LightweightCodeRequirements",
+  "doc": "https://developer.apple.com/documentation/lightweightcoderequirements",
+  "macos_since": "14.4",
+  "status": "gap",
+  "bifrost": "springboard/src/bare/app_policy.rs (launch identity and sandbox), springboard/src/shell/update.rs (SHA-256 of update packages), springboard/src/shell/apphost.rs (app host)",
+  "summary": "Apple's framework tests the signed identity of code on disk and of running or launching processes. BifrOSt has no code-signing or signature verification, so none of the requirement DSL has a counterpart. The launch path only starts installed packages under the shell-assigned app ID inside a sandbox, and update downloads are checked against a SHA-256 hash that is not signed.",
+  "rea_evidence": "ev_dbbb762a765fe68bf2569db83adfe9db281323ec42d7100f5cd54ae3c6e282f2",
+  "features": [
+    {"feature": "Checking code requirements for running processes", "apple": "SecTaskValidateForRequirement(task:requirement:), ProcessCodeRequirement, ProcessConstraint, anyOf, allOf", "bifrost": "none found; springboard/src/shell/apphost.rs holds the running app host", "status": "gap", "note": "No check of a running process's signed identity. Peer identity is not checked either (no SO_PEERCRED use in the app host files)."},
+    {"feature": "Checking code requirements for launching processes", "apple": "LaunchCodeRequirement, launchRequirement, SecCodeCheckValidityWithProcessRequirement(code:flags:requirement:)", "bifrost": "springboard/src/bare/app_policy.rs; docs/app-isolation.md", "status": "os", "note": "The shell launches only installed packages, using the app ID it assigned and the installed manifest, inside bubblewrap. Launch fails if identity or permission validation fails. The check uses manifest data, not a code signature, and apps get no SDK API for it."},
+    {"feature": "Checking code requirements for code files on disk", "apple": "OnDiskCodeRequirement, SecCodeCheckValidityWithOnDiskRequirement, SecStaticCodeCheckValidityWithOnDiskRequirement, ValidationResult", "bifrost": "springboard/src/shell/update.rs:148", "status": "gap", "note": "Downloaded updates are checked by SHA-256 against the manifest. The module header says there is no client-side manifest signature, so nothing ties the hash to a trusted signer."},
+    {"feature": "Signing identity constraints", "apple": "TeamIdentifier, TeamIdentifierMatchesCurrentProcess, SigningIdentifier, CodeDirectoryHash, InfoPlistHash", "bifrost": "none found", "status": "gap", "note": "No team, signing or code-directory identity concept exists. App identity is the app ID assigned at install."},
+    {"feature": "Signing flags and validation category", "apple": "ProcessCodeSigningFlags, OnDiskCodeSigningFlags, ValidationCategory", "bifrost": "none found", "status": "gap", "note": "No code-signing flags or validation categories are read or enforced."},
+    {"feature": "Entitlements queries", "apple": "EntitlementsQuery", "bifrost": "springboard/src/bare/app_policy.rs (manifest capabilities such as documents)", "status": "partial", "note": "Declared manifest capabilities gate file and resource access. They are not signed entitlements and are not exposed as a query API to apps."},
+    {"feature": "Platform, SIP and init-process tests", "apple": "PlatformType, IsSIPProtected, IsInitProcess, IsMainBinary", "bifrost": "none", "status": "n/a", "note": "Tied to Apple's platform types and System Integrity Protection. BifrOSt runs bifrostd as init, so IsInitProcess has no direct counterpart."},
+    {"feature": "Requirement-building operators and errors", "apple": "allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder", "bifrost": "none", "status": "gap", "note": "There is no requirement DSL or constraint builder. Apps have no way to express identity tests."}
+  ],
+  "gaps": [
+    "No code-signature verification of executables before launch or after download.",
+    "No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.",
+    "No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).",
+    "No SDK API for apps to query identity, entitlements or validity of other code.",
+    "Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8)."
+  ]
+}

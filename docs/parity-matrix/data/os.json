@@ -1,0 +1,27 @@
+{
+  "framework": "os",
+  "doc": "https://developer.apple.com/documentation/os",
+  "macos_since": "10.10",
+  "status": "partial",
+  "bifrost": "bifrost_app::log (springboard/sdk/src/log.rs, re-export of springboard/core/src/log.rs), bifrost_app::dispatch (springboard/sdk/src/dispatch.rs)",
+  "summary": "Unified logging covers Logger levels, per-subsystem levels and privacy, and a log reader (LogStore, bifrost-log). Signposts and the unfair-lock wrapper are missing. Apps get std::sync primitives in place of OSAllocatedUnfairLock.",
+  "rea_evidence": "ev_9ab4fd9b2ac295da9e15da98f80f3b868dc636fb22ad247e84c24880e5d4c2d5",
+  "features": [
+    {"feature": "Logging: Logger and log levels", "apple": "Logger, OSLogType (debug, info, notice, error, fault)", "bifrost": "springboard/core/src/log.rs (Logger at :370, Level at :34); springboard/sdk/src/log.rs", "status": "parity", "note": "Logger::new(subsystem, category) with debug/info/notice/error/fault; syslog priorities map to journald. See docs/bifrost-ui.md 'Unified Logging'."},
+    {"feature": "Logging: privacy and message formatting", "apple": "Message Argument Formatters, privacy: .public / .private", "bifrost": "springboard/core/src/log.rs:99 (private()), :104 (redact)", "status": "partial", "note": "Privacy is per subsystem, not per value. No format specifiers or per-argument .private(mask:)."},
+    {"feature": "Logging: runtime configuration", "apple": "Customizing Logging Behavior While Debugging (log config)", "bifrost": "springboard/core/src/log.rs:290-309 (registry and overrides); springboard/sdk/src/bin/bifrost-log.rs", "status": "parity", "note": "bifrost-log config --subsystem X --level debug, override file under /etc/bifrost/log.toml."},
+    {"feature": "Logging: reading logs (OSLogStore, log show and stream)", "apple": "OSLogStore, OSLogEntryLog", "bifrost": "springboard/core/src/log.rs:679 (LogStore), :498 (Query), :706 (entries), :729 (stream)", "status": "partial", "note": "current_process and local (entitlement) stores exist. The journal reader shells out to journalctl. No persistent position tokens (getEntries(at:))."},
+    {"feature": "Signposts (OSSignposter, os_signpost)", "apple": "OSSignposter, OSSignpostType, os_signpost_id_t, Legacy Signpost Symbols", "bifrost": "none; docs/bifrost-ui.md line 1041 lists it as Phase 3", "status": "gap", "note": "No interval or event measurement API. Performance history lives in tools/bench.py, not in the app SDK."},
+    {"feature": "Synchronization (OSAllocatedUnfairLock)", "apple": "OSAllocatedUnfairLock, OSAllocatedUnfairLockFlags", "bifrost": "springboard/sdk/src/dispatch.rs (DispatchGroup uses Mutex and Condvar); std::sync used in apps", "status": "gap", "note": "No unfair-lock wrapper in the SDK. Apps use std::sync::Mutex directly; the poison-recovery helper lock() appears in several modules."},
+    {"feature": "Task scheduling used with locks (DispatchGroup, DispatchWorkItem)", "apple": "Not in the os doc; libdispatch is a separate framework", "bifrost": "springboard/sdk/src/dispatch.rs:468 (DispatchGroup), :536 (DispatchWorkItem)", "status": "partial", "note": "Listed for context only. docs/bifrost-ui.md line 1096 says there is no DispatchSource, but dispatch.rs:744 has a memory-pressure DispatchSource. The doc is out of date."},
+    {"feature": "Deprecated os_trace functions and macros", "apple": "os_trace_debug_enabled, os_trace_info_enabled, os_trace_type_enabled, OS_TRACE_TYPE_*", "bifrost": "none", "status": "n/a", "note": "All deprecated in Apple's os framework. Use Logger instead."},
+    {"feature": "OS_LOG_STRING_SECTION constant", "apple": "OS_LOG_STRING_SECTION", "bifrost": "none", "status": "n/a", "note": "Apple linker section for log strings. It has no meaning for the Rust build."}
+  ],
+  "gaps": [
+    "Signposts: no OSSignposter or os_signpost equivalent (docs/bifrost-ui.md:1041 names it as Phase 3)",
+    "OSAllocatedUnfairLock: no unfair-lock wrapper in the SDK",
+    "Per-value privacy and format specifiers: privacy is per subsystem only",
+    "Log reading: no persistent position tokens and the journal reader depends on journalctl",
+    "docs/bifrost-ui.md:1096 says no DispatchSource, but springboard/sdk/src/dispatch.rs:744 has a memory-pressure source; the doc needs a fix"
+  ]
+}
