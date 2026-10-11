@@ -1,5 +1,11 @@
 # BifrOSt changelog
 
+## 0.5.30 — 2026-10-11
+
+- Fonts: BifrOSt ships only open-source fonts. The defaults are open lookalikes of the reference system fonts: Inter (system), JetBrains Mono (monospaced) and Noto Sans Symbols 2 (symbols). `tools/pack.py` fetches them from one pinned google/fonts commit and checks their SHA-256; the proprietary symbol stub is no longer packed.
+- Settings > General > Fonts: choose the system and monospaced fonts from BifrOSt's font library (Geist, IBM Plex Sans, Source Sans 3; Geist Mono, Fira Code, Source Code Pro, plus fonts apps install in `/var/lib/springboard/fonts`). The choice applies to the shell and every app after Restart BifrOSt; a font that fails to load falls back to the default.
+- Wallpaper: a fresh install starts on a random Icelandic photo.
+
 ## 0.5.29 — 2026-10-11
 
 - Login window (stage 1 of the login round, ported from branch `login-hardened`): boot and every later lock show the reference's login window instead of "Press Return to unlock". The date sits over a large clock at the top; the avatar, full name and a password field sit low in the middle; a power button at the right of the status icons opens Sleep, Restart… and Shut Down…. The password is checked by the new root helper `bifrost-privd` (PAM service `bifrost-login`: faillock, 5 tries then 5 minutes; an in-daemon delay; fail closed on PAM errors). `/etc/bifrost/no-login` is the explicit lab bypass.
@@ -8,6 +14,7 @@
 - Installer: a Look step after the account: Light, Dark or Auto, the accent colour and the wallpaper on one page; the page itself follows the pick, and the choice is written to the new system's `settings.ini` (`appearance_mode`, `accent_color`, `wallpaper`). Unattended presets take optional `appearance`, `accent` and `wallpaper` keys.
 - Lab: `midget.py unlock` types the lab password (never printed; only key codes cross ssh) and every Enter-unlock in the tools uses it; `midget.py login-bypass on|off`.
 
+||||||| Stash base
 ## 0.5.28 — 2026-10-11
 
 - WoW, the built-in game-streaming app, is removed from the shell together with its `wowstream-client` dependency and the landscape-forcing rotation path that only it used. First step of moving components out of the shell so they update without a restart (`docs/shell-decomposition.md`).
