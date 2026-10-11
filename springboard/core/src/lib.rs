@@ -5,6 +5,7 @@ pub mod fsutil;
 pub mod log;
 pub mod log_entries;
 pub mod log_cursor;
+pub mod signpost;
 pub mod host;
 pub mod random;
 pub mod meter;

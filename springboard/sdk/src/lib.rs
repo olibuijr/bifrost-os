@@ -67,6 +67,7 @@ pub mod script_syntax;
 pub mod view;
 pub mod document;
 pub mod log;
+pub mod signpost;
 pub mod dispatch;
 pub mod synchronization;
 pub mod fswatch;

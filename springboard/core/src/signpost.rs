@@ -1,126 +1,180 @@
-//! Signposts: named intervals and events that mark where work starts and ends, so that a trace or the log can show
-//! how long a task took. This is a pure model. The caller passes the time (a `Duration` from a fixed origin, such
-//! as a process-start `Instant`), and finished records wait in memory until `drain` takes them. Nothing is written
-//! anywhere. A disabled signposter emits nothing at all.
+//! Signposts: named, id-keyed intervals and events that a profiler pairs up and measures. This module is the pure
+//! bookkeeping. A `Signposter` hands out ids and makes sure each interval ends once, under the name it began with and
+//! from the signposter that began it. It returns the finished `Interval`. Times are nanoseconds from any fixed origin
+//! the caller supplies, so nothing here reads a clock. `Summary` folds finished intervals into per-name totals, the
+//! shape of a daily metric report.
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use std::time::Duration;
+static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 
-/// Tells apart intervals that share a name.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SignpostId(pub u64);
+/// Identifies one interval among those that share a name. Ids are unique within one signposter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Id(pub u64);
 
-/// An open interval, returned by `begin_interval`. Hand it back to `end_interval` with the same name.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IntervalState {
-    name: String,
-    id: SignpostId,
-    begin: Duration,
-}
-
-impl IntervalState {
-    pub fn id(&self) -> SignpostId {
-        self.id
+impl Id {
+    /// A stable id for a text key (FNV-1a), so the same key gives the same id in every process.
+    pub fn from_key(key: &str) -> Id {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in key.bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        Id(hash)
     }
 }
 
-/// A finished record.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Record {
-    Interval { name: String, id: SignpostId, begin: Duration, end: Duration, message: Option<String> },
-    Event { name: String, id: SignpostId, at: Duration, message: Option<String> },
+/// Why a signpost call was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Error {
+    /// The interval was begun by a different signposter.
+    ForeignInterval,
+    /// `end` named a different interval than `begin` did.
+    NameMismatch,
+    /// The end time is earlier than the begin time.
+    TimeReversed,
 }
 
+/// An interval that has begun and not yet ended. `Signposter::end` consumes it, so it can end only once.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Open {
+    owner: u64,
+    name: String,
+    id: Id,
+    begun_ns: u64,
+}
+
+impl Open {
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// A finished interval.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Interval {
+    pub name: String,
+    pub id: Id,
+    pub begun_ns: u64,
+    pub ended_ns: u64,
+}
+
+impl Interval {
+    pub fn duration_ns(&self) -> u64 {
+        self.ended_ns.saturating_sub(self.begun_ns)
+    }
+}
+
+/// A point of interest in time, with no duration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Event {
+    pub name: String,
+    pub id: Id,
+    pub at_ns: u64,
+}
+
+/// Begins and ends intervals and emits events. A disabled signposter accepts the same calls and records nothing,
+/// so callers need no checks of their own.
 #[derive(Debug)]
 pub struct Signposter {
-    subsystem: String,
-    category: String,
+    owner: u64,
     enabled: bool,
-    next_id: u64,
-    records: Vec<Record>,
+    last_id: u64,
 }
 
 impl Signposter {
-    pub fn new(subsystem: &str, category: &str) -> Self {
-        Signposter {
-            subsystem: subsystem.to_string(),
-            category: category.to_string(),
-            enabled: true,
-            next_id: 1,
-            records: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self { owner: NEXT_OWNER.fetch_add(1, Ordering::Relaxed), enabled: true, last_id: 0 }
     }
 
-    /// A signposter that emits nothing, so call sites compile the same whether signposts are on or off.
     pub fn disabled() -> Self {
-        Signposter { enabled: false, ..Signposter::new("", "") }
-    }
-
-    pub fn subsystem(&self) -> &str {
-        &self.subsystem
-    }
-
-    pub fn category(&self) -> &str {
-        &self.category
+        Self { enabled: false, ..Self::new() }
     }
 
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 
-    /// A new identifier, unique within this signposter.
-    pub fn make_id(&mut self) -> SignpostId {
-        let id = SignpostId(self.next_id);
-        self.next_id += 1;
-        id
+    /// A new id, unique within this signposter.
+    pub fn make_id(&mut self) -> Id {
+        self.last_id += 1;
+        Id(self.last_id)
     }
 
-    /// Opens an interval at time `at`. Returns None when the signposter is disabled.
-    pub fn begin_interval(&mut self, name: &str, id: SignpostId, at: Duration) -> Option<IntervalState> {
+    /// Begins an interval at `begun_ns`. Pass the returned `Open` to `end` when the work finishes.
+    pub fn begin(&self, name: &str, id: Id, begun_ns: u64) -> Open {
+        Open { owner: self.owner, name: name.to_string(), id, begun_ns }
+    }
+
+    /// Ends `open` at `ended_ns`. `name` must match the name it began with. Returns the finished interval, or None
+    /// when this signposter is disabled.
+    pub fn end(&self, open: Open, name: &str, ended_ns: u64) -> Result<Option<Interval>, Error> {
+        if open.owner != self.owner {
+            return Err(Error::ForeignInterval);
+        }
+        if open.name != name {
+            return Err(Error::NameMismatch);
+        }
+        if ended_ns < open.begun_ns {
+            return Err(Error::TimeReversed);
+        }
         if !self.enabled {
-            return None;
+            return Ok(None);
         }
-        Some(IntervalState { name: name.to_string(), id, begin: at })
+        Ok(Some(Interval { name: open.name, id: open.id, begun_ns: open.begun_ns, ended_ns }))
     }
 
-    /// Closes the interval at time `at` and returns its length. A name that does not match the state returns None
-    /// and records nothing. An end before the begin gives a zero length.
-    pub fn end_interval(
-        &mut self,
-        name: &str,
-        state: IntervalState,
-        at: Duration,
-        message: Option<&str>,
-    ) -> Option<Duration> {
-        if !self.enabled || state.name != name {
-            return None;
-        }
-        let end = at.max(state.begin);
-        self.records.push(Record::Interval {
-            name: state.name,
-            id: state.id,
-            begin: state.begin,
-            end,
-            message: message.map(str::to_string),
-        });
-        Some(end - state.begin)
+    /// A point of interest at `at_ns`, or None when disabled.
+    pub fn event(&self, name: &str, id: Id, at_ns: u64) -> Option<Event> {
+        self.enabled.then(|| Event { name: name.to_string(), id, at_ns })
+    }
+}
+
+impl Default for Signposter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Totals for one interval name.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Stats {
+    pub count: u64,
+    pub total_ns: u64,
+    pub max_ns: u64,
+}
+
+/// Per-name totals of finished intervals: how many, how long in all, and the longest one.
+#[derive(Debug, Default)]
+pub struct Summary {
+    by_name: BTreeMap<String, Stats>,
+}
+
+impl Summary {
+    pub fn record(&mut self, interval: &Interval) {
+        let duration = interval.duration_ns();
+        let stats = self.by_name.entry(interval.name.clone()).or_default();
+        stats.count += 1;
+        stats.total_ns = stats.total_ns.saturating_add(duration);
+        stats.max_ns = stats.max_ns.max(duration);
     }
 
-    /// Records a point in time.
-    pub fn event(&mut self, name: &str, id: SignpostId, at: Duration, message: Option<&str>) {
-        if !self.enabled {
-            return;
-        }
-        self.records.push(Record::Event {
-            name: name.to_string(),
-            id,
-            at,
-            message: message.map(str::to_string),
-        });
+    pub fn stats(&self, name: &str) -> Option<Stats> {
+        self.by_name.get(name).copied()
     }
 
-    /// Takes every finished record, oldest first.
-    pub fn drain(&mut self) -> Vec<Record> {
-        std::mem::take(&mut self.records)
+    /// The recorded names, in sorted order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.by_name.keys().map(|k| k.as_str())
+    }
+
+    /// Takes the totals and clears the summary, as a metric report is delivered once.
+    pub fn take(&mut self) -> BTreeMap<String, Stats> {
+        std::mem::take(&mut self.by_name)
     }
 }
 
@@ -128,74 +182,81 @@ impl Signposter {
 mod tests {
     use super::*;
 
-    fn secs(s: u64) -> Duration {
-        Duration::from_secs(s)
+    #[test]
+    fn ids_from_keys_are_stable_and_distinct() {
+        assert_eq!(Id::from_key("request-7"), Id::from_key("request-7"));
+        assert_ne!(Id::from_key("request-7"), Id::from_key("request-8"));
+        assert_eq!(Id::from_key(""), Id(0xcbf2_9ce4_8422_2325), "an empty key keeps the FNV offset basis");
     }
 
     #[test]
-    fn interval_reports_its_length_and_bounds() {
-        let mut sp = Signposter::new("is.olibuijr.app", "load");
-        let id = sp.make_id();
-        let state = sp.begin_interval("decode", id, secs(2)).unwrap();
-        assert_eq!(state.id(), id);
-        assert_eq!(sp.end_interval("decode", state, secs(5), Some("ok")), Some(secs(3)));
-        assert_eq!(
-            sp.drain(),
-            vec![Record::Interval {
-                name: "decode".into(),
-                id,
-                begin: secs(2),
-                end: secs(5),
-                message: Some("ok".into()),
-            }]
-        );
-    }
-
-    #[test]
-    fn end_with_a_different_name_is_ignored() {
-        let mut sp = Signposter::new("is.olibuijr.app", "load");
-        let id = sp.make_id();
-        let state = sp.begin_interval("load", id, secs(1)).unwrap();
-        assert_eq!(sp.end_interval("save", state.clone(), secs(4), None), None);
-        assert!(sp.drain().is_empty());
-        assert_eq!(sp.end_interval("load", state, secs(4), None), Some(secs(3)));
-    }
-
-    #[test]
-    fn end_before_begin_gives_zero_length() {
-        let mut sp = Signposter::new("is.olibuijr.app", "load");
-        let id = sp.make_id();
-        let state = sp.begin_interval("x", id, secs(5)).unwrap();
-        assert_eq!(sp.end_interval("x", state, secs(1), None), Some(Duration::ZERO));
-    }
-
-    #[test]
-    fn disabled_signposter_emits_nothing() {
-        let mut sp = Signposter::disabled();
-        assert!(!sp.is_enabled());
-        let id = sp.make_id();
-        assert!(sp.begin_interval("x", id, secs(1)).is_none());
-        sp.event("hit", id, secs(1), None);
-        assert!(sp.drain().is_empty());
-    }
-
-    #[test]
-    fn ids_are_unique_within_a_signposter() {
-        let mut sp = Signposter::new("is.olibuijr.app", "load");
+    fn make_id_is_unique_within_a_signposter() {
+        let mut sp = Signposter::new();
         let a = sp.make_id();
         let b = sp.make_id();
         assert_ne!(a, b);
+        assert_ne!(a, Id(0));
     }
 
     #[test]
-    fn events_keep_their_message_and_drain_empties_the_queue() {
-        let mut sp = Signposter::new("is.olibuijr.app", "cache");
+    fn an_interval_ends_once_under_its_own_name() {
+        let sp = Signposter::new();
+        let open = sp.begin("load", Id(1), 100);
+        assert_eq!(open.name(), "load");
+        assert_eq!(open.id(), Id(1));
+        let done = sp.end(open, "load", 350).unwrap().unwrap();
+        assert_eq!(done.duration_ns(), 250);
+        assert_eq!(done.name, "load");
+        let wrong = sp.begin("load", Id(2), 0);
+        assert_eq!(sp.end(wrong, "save", 5), Err(Error::NameMismatch));
+    }
+
+    #[test]
+    fn a_foreign_interval_is_refused() {
+        let a = Signposter::new();
+        let b = Signposter::new();
+        let open = a.begin("draw", Id(1), 0);
+        assert_eq!(b.end(open, "draw", 10), Err(Error::ForeignInterval));
+    }
+
+    #[test]
+    fn a_reversed_clock_is_refused() {
+        let sp = Signposter::new();
+        let open = sp.begin("draw", Id(1), 500);
+        assert_eq!(sp.end(open, "draw", 400), Err(Error::TimeReversed));
+    }
+
+    #[test]
+    fn a_disabled_signposter_records_nothing() {
+        let mut sp = Signposter::disabled();
+        assert!(!sp.is_enabled());
         let id = sp.make_id();
-        sp.event("hit", id, secs(7), Some("page 3"));
-        assert_eq!(
-            sp.drain(),
-            vec![Record::Event { name: "hit".into(), id, at: secs(7), message: Some("page 3".into()) }]
-        );
-        assert!(sp.drain().is_empty());
+        let open = sp.begin("draw", id, 0);
+        assert_eq!(sp.end(open, "draw", 10), Ok(None), "the call is accepted, with no interval kept");
+        assert!(sp.event("tap", id, 3).is_none());
+    }
+
+    #[test]
+    fn events_carry_their_time_and_id() {
+        let sp = Signposter::new();
+        let e = sp.event("tap", Id(9), 42).unwrap();
+        assert_eq!((e.name.as_str(), e.id, e.at_ns), ("tap", Id(9), 42));
+    }
+
+    #[test]
+    fn summary_totals_each_name() {
+        let sp = Signposter::new();
+        let mut summary = Summary::default();
+        for (name, begun, ended) in [("load", 0, 10), ("load", 100, 130), ("save", 0, 5)] {
+            let open = sp.begin(name, Id(begun), begun);
+            let done = sp.end(open, name, ended).unwrap().unwrap();
+            summary.record(&done);
+        }
+        assert_eq!(summary.stats("load"), Some(Stats { count: 2, total_ns: 40, max_ns: 30 }));
+        assert_eq!(summary.names().collect::<Vec<_>>(), vec!["load", "save"], "names come out sorted");
+        assert_eq!(summary.stats("missing"), None);
+        let taken = summary.take();
+        assert_eq!(taken.len(), 2);
+        assert!(summary.names().next().is_none(), "take clears the summary");
     }
 }
