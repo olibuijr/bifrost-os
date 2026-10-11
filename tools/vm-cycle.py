@@ -382,19 +382,25 @@ def vm_unattended(a):
     if not wait_for(synced, 60, 3):
         notes.append("the live system runs a different installer than the one just published (lab-sync could not fetch it)")
         return finish(a, ok=False)
+    # QEMU's user network: the ISO's resolver (Quad9 through the NAT) is slow and answers IPv6 the VM cannot route, so
+    # pacstrap's downloads timed out. QEMU's own DNS proxy (10.0.2.3) uses titan's resolver.
+    ssh("for i in /sys/class/net/*; do n=${i##*/}; [ $n = lo ] && continue; resolvectl dns $n 10.0.2.3; resolvectl domain $n '~.'; done;"
+        " resolvectl flush-caches", 15)
+    # the unattended run starts now the network is right; an earlier one may have died on DNS (the preset stays in /run)
+    ssh("systemctl restart bifrost-installer", 30)
 
     # 3. the unattended install: follow the installer's own log until the machine reboots into the new system
     t = time.time()
     seen = {}
 
     def installing():
-        j = ssh("journalctl -u bifrost-installer -b --no-pager -n 400 2>/dev/null | grep -aE 'unattended|bifrost-installer: \\[' | tail -n 1", 15).strip()
+        j = ssh("journalctl -u bifrost-installer -b --no-pager -n 400 2>/dev/null | grep -aE 'unattended|bifrost-installer: \\[|ERROR' | tail -n 1", 15).strip()
         if j and j not in seen:
             seen[j] = round(time.time() - t, 1)
             print("    " + j[-150:], flush=True)
             if len(seen) % 2 == 1:
                 shot_vm(f"08-progress-{len(seen):02d}")
-        if "refused or failed" in j:
+        if "refused or failed" in j or "Failed to install packages" in j:
             raise RuntimeError(j)
         return live() == "installed"
 
