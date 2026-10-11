@@ -1,4 +1,5 @@
-//! `NativeDataDetector` (Foundation): finds links, dates and phone numbers in plain text.
+//! `NativeDataDetector` (Foundation): finds links, email addresses, dates, street addresses, money amounts and
+//! phone numbers in plain text.
 //! Results are byte ranges into the input, cut only at ASCII bytes, so they are always char boundaries.
 //! Overlaps are resolved by kind priority (link, then date, then phone), so "2026-10-09" is a date, not a phone number.
 
@@ -11,6 +12,10 @@ pub enum Kind {
     Date,
     Address,
     Phone,
+    /// `local@domain.tld`.
+    Email,
+    /// A number with a currency symbol or code, or `kr`: `$12.50`, `ISK 2.000`, `1.500 kr`, `12,99 EUR`.
+    Money,
 }
 
 /// One piece of text the detector recognised.
@@ -30,15 +35,17 @@ impl Match {
 /// Finds every `kinds` item in `text`, sorted by position and without overlaps.
 pub fn find(text: &str, kinds: &[Kind]) -> Vec<Match> {
     let mut accepted: Vec<Match> = Vec::new();
-    // Priority order, whatever order the caller listed the kinds in.
-    for kind in [Kind::Link, Kind::Date, Kind::Address, Kind::Phone] {
+    // Priority order, whatever order the caller listed the kinds in. A link wins over an address inside it.
+    for kind in [Kind::Link, Kind::Email, Kind::Date, Kind::Address, Kind::Money, Kind::Phone] {
         if !kinds.contains(&kind) {
             continue;
         }
         let found = match kind {
             Kind::Link => links(text),
+            Kind::Email => emails(text),
             Kind::Date => dates(text),
             Kind::Address => addresses(text),
+            Kind::Money => money(text),
             Kind::Phone => phones(text),
         };
         for range in found {
@@ -65,7 +72,8 @@ fn links(text: &str) -> Vec<Range<usize>> {
         let mut from = 0;
         while let Some(at) = lower[from..].find(prefix).map(|i| i + from) {
             from = at + prefix.len();
-            if at > 0 && is_word(bytes[at - 1]) {
+            // a word or an `@` before the prefix means it is part of another token (`x@www.is` is an address)
+            if at > 0 && (is_word(bytes[at - 1]) || bytes[at - 1] == b'@') {
                 continue;
             }
             let mut end = at + prefix.len();
@@ -292,6 +300,121 @@ fn phones(text: &str) -> Vec<Range<usize>> {
     out
 }
 
+/// Email addresses, `local@domain.tld`. The local part is ASCII letters, digits and `._%+-`; the domain is
+/// dot-separated labels of letters, digits and `-`, and its last label is at least two letters, so "a@b" is no address.
+fn emails(text: &str) -> Vec<Range<usize>> {
+    let bytes = text.as_bytes();
+    let is_local = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'%' | b'+' | b'-');
+    let mut out = Vec::new();
+    for at in (0..bytes.len()).filter(|&i| bytes[i] == b'@') {
+        let mut start = at;
+        while start > 0 && is_local(bytes[start - 1]) {
+            start -= 1;
+        }
+        while start < at && bytes[start] == b'.' {
+            start += 1;
+        }
+        if start == at || bytes[at - 1] == b'.' {
+            continue;
+        }
+        let mut end = at + 1;
+        while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || matches!(bytes[end], b'.' | b'-')) {
+            end += 1;
+        }
+        while end > at + 1 && bytes[end - 1] == b'.' {
+            end -= 1;
+        }
+        let labels: Vec<&str> = text[at + 1..end].split('.').collect();
+        let tld = labels.last().copied().unwrap_or("");
+        let valid = labels.len() >= 2
+            && labels.iter().all(|l| !l.is_empty() && !l.starts_with('-') && !l.ends_with('-'))
+            && tld.len() >= 2
+            && tld.bytes().all(|b| b.is_ascii_alphabetic());
+        if valid {
+            out.push(start..end);
+        }
+    }
+    out
+}
+
+/// Currency codes that may stand before or after an amount. `kr` (krónur) is handled apart: it is only a suffix.
+const CURRENCY_CODES: [&str; 9] = ["ISK", "USD", "EUR", "GBP", "SEK", "DKK", "NOK", "JPY", "CHF"];
+const CURRENCY_SYMBOLS: [&str; 4] = ["$", "€", "£", "¥"];
+
+/// Money amounts: `$12.50`, `€ 3,99`, `ISK 2.000` (a symbol or code before) and `1.500 kr`, `12,99 EUR` (after).
+/// Digits group with `.` or `,`, and a fraction follows a `.` or `,`. A bare number is not money.
+fn money(text: &str) -> Vec<Range<usize>> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let boundary = i == 0 || !(is_word(bytes[i - 1]) || matches!(bytes[i - 1], b'.' | b','));
+        match prefixed_money(bytes, i).or_else(|| if boundary { suffixed_money(bytes, i) } else { None }) {
+            Some(end) => {
+                out.push(i..end);
+                i = end;
+            }
+            None => i += 1,
+        }
+    }
+    out
+}
+
+/// The ASCII `word` at `at`, ignoring case, that ends at a word boundary.
+fn word_at(bytes: &[u8], at: usize, word: &str) -> bool {
+    bytes.get(at..at + word.len()).is_some_and(|s| s.eq_ignore_ascii_case(word.as_bytes())) && !bytes.get(at + word.len()).is_some_and(|&b| is_word(b))
+}
+
+/// Digits with `.` or `,` group and fraction separators (`1.500`, `12,99`, `1.250.000,50`): the index after them.
+fn amount(bytes: &[u8], at: usize) -> Option<usize> {
+    let mut p = at;
+    while bytes.get(p).is_some_and(u8::is_ascii_digit) {
+        p += 1;
+    }
+    if p == at {
+        return None;
+    }
+    while matches!(bytes.get(p).copied(), Some(b'.' | b',')) && bytes.get(p + 1).is_some_and(u8::is_ascii_digit) {
+        p += 1;
+        while bytes.get(p).is_some_and(u8::is_ascii_digit) {
+            p += 1;
+        }
+    }
+    Some(p)
+}
+
+/// A symbol or code, optional spaces, then the amount: the index after the amount.
+fn prefixed_money(bytes: &[u8], at: usize) -> Option<usize> {
+    let len = if let Some(symbol) = CURRENCY_SYMBOLS.iter().find(|s| bytes[at..].starts_with(s.as_bytes())) {
+        symbol.len()
+    } else {
+        if at > 0 && is_word(bytes[at - 1]) {
+            return None;
+        }
+        CURRENCY_CODES.iter().find(|c| word_at(bytes, at, c))?.len()
+    };
+    let mut p = at + len;
+    while bytes.get(p) == Some(&b' ') {
+        p += 1;
+    }
+    let end = amount(bytes, p)?;
+    (!bytes.get(end).is_some_and(|&b| is_word(b))).then_some(end)
+}
+
+/// An amount, optional spaces, then `kr` or a currency code: the index after that word.
+fn suffixed_money(bytes: &[u8], at: usize) -> Option<usize> {
+    let end = amount(bytes, at)?;
+    let mut p = end;
+    while bytes.get(p) == Some(&b' ') {
+        p += 1;
+    }
+    if word_at(bytes, p, "kr") {
+        return Some(p + 2);
+    }
+    let code = CURRENCY_CODES.iter().find(|c| word_at(bytes, p, c))?;
+    Some(p + code.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,5 +489,49 @@ mod tests {
             let _ = m.text(s); // would panic on a bad boundary
         }
         assert_eq!(texts(s, &[Kind::Phone]), vec![(Kind::Phone, "555 1234".into())]);
+    }
+
+    #[test]
+    fn emails_need_a_local_part_and_a_domain_with_a_top_level_label() {
+        let all = [Kind::Email];
+        assert_eq!(texts("Skrifaðu á olibuijr@olibuijr.com, takk.", &all), vec![(Kind::Email, "olibuijr@olibuijr.com".into())]);
+        assert_eq!(texts("a.b+tag@mail.example.is.", &all), vec![(Kind::Email, "a.b+tag@mail.example.is".into())]);
+        assert!(texts("a@b.", &all).is_empty(), "a single-label domain is not an address");
+        assert!(texts("a@b.c", &all).is_empty(), "the top-level label needs two letters");
+        assert!(texts("@x.is", &all).is_empty(), "no local part");
+        assert!(texts("a.@x.is", &all).is_empty(), "the local part cannot end in a dot");
+    }
+
+    #[test]
+    fn a_link_keeps_its_at_sign_and_a_www_host_after_at_is_an_address() {
+        assert_eq!(texts("https://user@host.is/x", &[Kind::Link, Kind::Email]), vec![(Kind::Link, "https://user@host.is/x".into())]);
+        assert_eq!(texts("mail x@www.is now", &[Kind::Link, Kind::Email]), vec![(Kind::Email, "x@www.is".into())]);
+    }
+
+    #[test]
+    fn money_takes_a_symbol_or_code_before_or_kr_and_codes_after() {
+        let all = [Kind::Money];
+        assert_eq!(
+            texts("Verðið 1.500 kr. og $12.50 eða ISK 2.000, 12,99 EUR", &all),
+            vec![(Kind::Money, "1.500 kr".into()), (Kind::Money, "$12.50".into()), (Kind::Money, "ISK 2.000".into()), (Kind::Money, "12,99 EUR".into())]
+        );
+        assert_eq!(texts("€ 3,99", &all), vec![(Kind::Money, "€ 3,99".into())]);
+    }
+
+    #[test]
+    fn bare_numbers_and_glued_words_are_not_money() {
+        let all = [Kind::Money];
+        assert!(texts("Verð 1500 og 2026-10-09, US45, 12kronur, 12 kr2", &all).is_empty());
+        assert!(texts("pöntun 7 stk", &all).is_empty());
+    }
+
+    #[test]
+    fn email_and_money_share_the_text_with_the_other_kinds_without_overlap() {
+        let s = "Sendu á hjalp@bifrost.is 1.500 kr https://x.is 2026-10-09 og 555 1234";
+        let found = find(s, &[Kind::Phone, Kind::Money, Kind::Date, Kind::Email, Kind::Link]);
+        let kinds: Vec<Kind> = found.iter().map(|m| m.kind).collect();
+        assert_eq!(kinds, vec![Kind::Email, Kind::Money, Kind::Link, Kind::Date, Kind::Phone]);
+        assert!(found.windows(2).all(|w| w[0].range.end <= w[1].range.start));
+        assert!(find(s, &[Kind::Date]).iter().all(|m| m.kind == Kind::Date));
     }
 }
