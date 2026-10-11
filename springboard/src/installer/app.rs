@@ -4,6 +4,8 @@
 use super::disks::{self, Disk, Kind, Mode, GIB};
 use super::keymaps::{self, Keyboard, Typed};
 use super::plan::{self, Config, Progress, Shared};
+use crate::shell::wallpaper_page::Wallpaper;
+use bifrost_render::appearance::{self as ap, Accent};
 use crate::bare::input::Event;
 use crate::gfx::{pack, rgba, Image, Surface};
 use crate::shell::ui::{centred, Ui, Weight, BLACK, CELL, SECONDARY, SEPARATOR, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_RED, TRACK, WHITE};
@@ -34,6 +36,8 @@ pub enum Page {
     Welcome,
     Language,
     Account,
+    /// Appearance, accent colour and wallpaper on one page.
+    Look,
     Disk,
     Confirm,
     Progress,
@@ -48,6 +52,9 @@ enum Act {
     Lang(usize),
     Layout(usize),
     Focus(usize),
+    Look(ap::Mode),
+    Tint(Accent),
+    Wall(usize),
     Disk(usize),
     SetMode(Mode),
     Install,
@@ -73,6 +80,16 @@ pub struct App {
     pub disks: Vec<Disk>,
     disk: Option<usize>,
     mode: Mode,
+    look: ap::Mode,
+    accent: Accent,
+    /// the section of the Look page the arrow keys act on: 0 appearance, 1 accent, 2 wallpaper
+    look_row: usize,
+    /// (id, name, thumbnail) of every wallpaper tile; the first is the packaged default (empty id)
+    walls: Vec<(String, String, Option<Image>)>,
+    wall: usize,
+    wall_cols: usize,
+    /// the thumbnails scaled to the tile size they were last drawn at
+    wall_scaled: ((usize, usize), Vec<Option<Image>>),
     pub progress: Shared,
     pub want_install: Option<Config>,
     pub want_restart: bool,
@@ -91,6 +108,18 @@ fn inside(h: &Hit, x: f32, y: f32) -> bool {
     x >= h.0 && x < h.0 + h.2 && y >= h.1 && y < h.1 + h.3
 }
 
+/// The system wallpapers packed in `assets` (`wallpapers/index.ini` + `<id>.thumb.raw`); empty when there are none.
+pub fn load_wallpapers(assets: &str) -> Vec<Wallpaper> {
+    let index = crate::shell::prefs::Prefs::load(format!("{assets}/wallpapers/index.ini"));
+    index
+        .entries()
+        .filter_map(|(id, name)| {
+            let thumb = Image::from_raw(&std::fs::read(format!("{assets}/wallpapers/{id}.thumb.raw")).ok()?)?;
+            Some(Wallpaper { id: id.to_string(), name: name.to_string(), thumb })
+        })
+        .collect()
+}
+
 pub fn size_text(b: u64) -> String {
     if b >= 1000 * 1_000_000_000 { format!("{:.1} TB", b as f64 / 1e12) } else { format!("{:.0} GB", b as f64 / 1e9) }
 }
@@ -99,12 +128,34 @@ impl App {
     pub fn new(ui: Ui, w: usize, h: usize, disks: Vec<Disk>, logo: Option<Image>, bg: Option<Image>) -> Self {
         let mut a = App {
             ui, w, h, page: Page::Welcome, lang: 0, layout: 0, column: 0, kb: Keyboard::new(0), test: String::new(), fields: Default::default(), focus: 0,
-            user_edited: false, disks, disk: None, mode: Mode::Erase, progress: Arc::new(Mutex::new(Progress::default())), want_install: None, want_restart: false,
+            user_edited: false, disks, disk: None, mode: Mode::Erase,
+            look: ap::Mode::Dark, accent: Accent::Blue, look_row: 0, walls: vec![(String::new(), "Default".into(), None)], wall: 0, wall_cols: 4,
+            wall_scaled: ((0, 0), vec![]), progress: Arc::new(Mutex::new(Progress::default())), want_install: None, want_restart: false,
             hits: vec![], down: None, pointer: (w as f32 / 2.0, h as f32 / 2.0), hw_cursor: false, logo, bg: vec![], msg: (String::new(), 0.0), t: 0.0,
         };
         a.disk = (a.disks.len() == 1).then_some(0);
         a.bg = make_background(bg, w, h);
         a
+    }
+
+    /// Offers the system wallpapers on the Look page (after the packaged default, which stays first).
+    pub fn set_wallpapers(&mut self, list: Vec<Wallpaper>) {
+        self.walls.truncate(1);
+        self.walls.extend(list.into_iter().filter(|w| plan::valid_wallpaper_id(&w.id)).map(|w| (w.id, w.name, Some(w.thumb))));
+        self.wall = 0;
+        self.wall_scaled = ((0, 0), vec![]);
+    }
+
+    /// Whether the Look page is drawn light: the pick, or the hour of day for Auto (UTC: no timezone is chosen yet).
+    fn look_light(&self) -> bool {
+        match self.look {
+            ap::Mode::Light => true,
+            ap::Mode::Dark => false,
+            ap::Mode::Auto => {
+                let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                ap::auto_is_light((secs / 3600 % 24) as u32)
+            }
+        }
     }
 
     /// The still image behind the screens (the fallback when no video plays).
@@ -168,6 +219,18 @@ impl App {
             Act::Lang(i) => self.set_lang(i),
             Act::Layout(i) => self.set_layout(i),
             Act::Focus(i) => self.focus = i,
+            Act::Look(m) => {
+                self.look = m;
+                self.look_row = 0;
+            }
+            Act::Tint(a) => {
+                self.accent = a;
+                self.look_row = 1;
+            }
+            Act::Wall(i) => {
+                self.wall = i.min(self.walls.len() - 1);
+                self.look_row = 2;
+            }
             Act::Disk(i) => self.disk = Some(i),
             Act::SetMode(m) => self.mode = m,
             Act::Install => {
@@ -182,7 +245,8 @@ impl App {
         match self.page {
             Page::Welcome => self.go(Page::Language),
             Page::Language => self.go(Page::Account),
-            Page::Account if self.account_error().is_none() => self.go(Page::Disk),
+            Page::Account if self.account_error().is_none() => self.go(Page::Look),
+            Page::Look => self.go(Page::Disk),
             Page::Disk if self.disk.is_some() => self.act(Act::Install),
             Page::Confirm => self.start(),
             _ => {}
@@ -193,7 +257,8 @@ impl App {
         match self.page {
             Page::Language => self.go(Page::Welcome),
             Page::Account => self.go(Page::Language),
-            Page::Disk => self.go(Page::Account),
+            Page::Look => self.go(Page::Account),
+            Page::Disk => self.go(Page::Look),
             Page::Confirm => self.go(Page::Disk),
             // the password was wiped when the install started: ask for it again
             Page::Failed => self.go(Page::Account),
@@ -214,6 +279,8 @@ impl App {
         self.want_install = Some(Config {
             disk: d, mode: self.mode, locale: LANGUAGES[self.lang].1.to_string(), layout: lay, full_name: self.fields[0].trim().to_string(),
             username: self.fields[1].clone(), password, hostname: "bifrost".into(), timezone: String::new(), mirror: String::new(),
+            appearance: self.look.key().to_string(), accent: self.accent.key().to_string(),
+            wallpaper: self.walls.get(self.wall).map(|w| w.0.clone()).unwrap_or_default(),
         });
         self.go(Page::Progress);
     }
@@ -241,6 +308,17 @@ impl App {
                 }
                 self.autofill();
             }
+            (Page::Look, Typed::Tab) => self.look_row = (self.look_row + 1) % 3,
+            (Page::Look, Typed::BackTab) => self.look_row = (self.look_row + 2) % 3,
+            (Page::Look, k @ (Typed::Left | Typed::Right)) => self.look_step(if matches!(k, Typed::Right) { 1 } else { -1 }),
+            (Page::Look, k @ (Typed::Up | Typed::Down)) => {
+                let d: i32 = if matches!(k, Typed::Down) { 1 } else { -1 };
+                if self.look_row == 2 && (0..self.walls.len() as i32).contains(&(self.wall as i32 + d * self.wall_cols as i32)) {
+                    self.look_step(d * self.wall_cols as i32);
+                } else {
+                    self.look_row = (self.look_row as i32 + d).clamp(0, 2) as usize;
+                }
+            }
             (Page::Disk, k @ (Typed::Up | Typed::Down)) => {
                 let n = self.disks.len();
                 if n > 0 {
@@ -266,6 +344,22 @@ impl App {
             }
             (_, Typed::Escape) => self.back(),
             _ => {}
+        }
+    }
+
+    /// Moves the pick of the focused Look section by `d` places (clamped).
+    fn look_step(&mut self, d: i32) {
+        let modes = [ap::Mode::Light, ap::Mode::Dark, ap::Mode::Auto];
+        match self.look_row {
+            0 => {
+                let i = modes.iter().position(|m| *m == self.look).unwrap_or(1) as i32;
+                self.look = modes[(i + d).clamp(0, 2) as usize];
+            }
+            1 => {
+                let i = Accent::ALL.iter().position(|a| *a == self.accent).unwrap_or(1) as i32;
+                self.accent = Accent::ALL[(i + d).clamp(0, Accent::ALL.len() as i32 - 1) as usize];
+            }
+            _ => self.wall = (self.wall as i32 + d).clamp(0, self.walls.len() as i32 - 1) as usize,
         }
     }
 
@@ -305,9 +399,12 @@ impl App {
         // smoked-glass container behind the content, so text stays readable over the video
         let (pw, ph) = ((self.u(700.0)).min(self.w as f32 * 0.96), self.h as f32 * 0.94);
         let (px, py) = ((self.w as f32 - pw) / 2.0, (self.h as f32 - ph) / 2.0);
-        s.fill_rrect(px - 1.0, py - 1.0, pw + 2.0, ph + 2.0, self.u(22.0), rgba(255, 255, 255, 28));
-        s.fill_rrect(px, py, pw, ph, self.u(21.0), rgba(18, 18, 20, 178));
+        // the Look page follows the scheme being picked; the other pages keep the dark glass
+        let (edge, fill) = if self.page == Page::Look && self.look_light() { (rgba(0, 0, 0, 36), rgba(244, 244, 247, 236)) } else { (rgba(255, 255, 255, 28), rgba(18, 18, 20, 178)) };
+        s.fill_rrect(px - 1.0, py - 1.0, pw + 2.0, ph + 2.0, self.u(22.0), edge);
+        s.fill_rrect(px, py, pw, ph, self.u(21.0), fill);
         match self.page {
+            Page::Look => self.look_page(s),
             Page::Welcome => self.welcome(s),
             Page::Language => self.language(s),
             Page::Account => self.account(s, t),
@@ -343,18 +440,26 @@ impl App {
     }
 
     fn link(&mut self, s: &mut Surface, label: &str, cx: f32, y: f32, act: Act) {
-        let im = self.ui.text(label, 17.0, Weight::Semibold, SYSTEM_BLUE);
+        self.link_c(s, label, cx, y, act, SYSTEM_BLUE);
+    }
+
+    fn link_c(&mut self, s: &mut Surface, label: &str, cx: f32, y: f32, act: Act, color: u32) {
+        let im = self.ui.text(label, 17.0, Weight::Semibold, color);
         let (x, w, h) = (cx - im.w as f32 / 2.0, im.w as f32, im.h as f32);
         s.blit(&im, x as i32, y as i32, 255, 255);
         self.hits.push((x - self.u(12.0), y - self.u(8.0), w + self.u(24.0), h + self.u(16.0), act));
     }
 
     fn header(&self, s: &mut Surface, title: &str, sub: &str, y: f32) -> f32 {
+        self.header_c(s, title, sub, y, WHITE, SECONDARY)
+    }
+
+    fn header_c(&self, s: &mut Surface, title: &str, sub: &str, y: f32, fg: u32, sub_fg: u32) -> f32 {
         let cx = self.w as f32 / 2.0;
-        self.text(s, title, 28.0, Weight::Bold, WHITE, cx, y);
+        self.text(s, title, 28.0, Weight::Bold, fg, cx, y);
         let mut y = y + self.u(40.0);
         for line in self.ui.wrap(sub, 17.0, Weight::Regular, self.u(520.0)) {
-            self.text(s, &line, 17.0, Weight::Regular, SECONDARY, cx, y);
+            self.text(s, &line, 17.0, Weight::Regular, sub_fg, cx, y);
             y += self.u(24.0);
         }
         y + self.u(14.0)
@@ -470,6 +575,131 @@ impl App {
         let by = top + rh * 4.0 + self.u(56.0);
         self.button(s, "Continue", cx, by, 200.0, SYSTEM_BLUE, err.is_none(), Act::Next);
         self.link(s, "Back", cx, by + self.u(56.0), Act::Back);
+    }
+
+    /// A miniature desktop in the given scheme (Auto: light on the left, dark on the right), the window tinted with the accent.
+    fn look_preview(&self, s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), m: ap::Mode, accent: Accent) {
+        let (lbg, lbar, lwin) = (pack(226, 226, 231, 255), pack(238, 238, 242, 255), pack(255, 255, 255, 255));
+        let (dbg, dbar, dwin) = (pack(44, 44, 48, 255), pack(30, 30, 32, 255), pack(66, 66, 70, 255));
+        let (r, rw) = (self.u(8.0), self.u(4.0));
+        let light_first = m != ap::Mode::Dark;
+        let (bg, bar, win, acc) = if light_first { (lbg, lbar, lwin, accent.colours().1) } else { (dbg, dbar, dwin, accent.colours().0) };
+        s.fill_rrect(x, y, w, h, r, if m == ap::Mode::Auto { dbg } else { bg });
+        if m == ap::Mode::Auto {
+            s.fill_rrect(x, y, w / 2.0 + r, h, r, lbg);
+            s.fill_rect((x + w / 2.0) as usize, y as usize, r as usize + 1, h as usize, dbg);
+        }
+        let (wx, wy, ww, wh) = (x + w * 0.16, y + h * 0.30, w * 0.68, h * 0.56);
+        s.fill_rrect(wx, wy, ww, wh, rw, win);
+        s.fill_rrect(wx, wy, ww, wh * 0.2, rw, bar);
+        if m == ap::Mode::Auto {
+            let (hx, hw) = ((wx + ww / 2.0) as usize, (ww / 2.0) as usize);
+            s.fill_rect(hx, wy as usize, hw, wh as usize, dwin);
+            s.fill_rect(hx, wy as usize, hw, (wh * 0.2) as usize, dbar);
+        }
+        s.fill_rrect(wx + ww * 0.08, wy + wh * 0.5, ww * 0.34, wh * 0.14, self.u(2.0), acc);
+    }
+
+    /// Light or dark, the accent colour and the wallpaper, together on one page. The page itself is drawn in the scheme
+    /// and accent being picked, so each choice shows at once.
+    fn look_page(&mut self, s: &mut Surface) {
+        let light = self.look_light();
+        let (fg, sub) = if light { (pack(28, 28, 30, 255), pack(99, 99, 102, 255)) } else { (WHITE, SECONDARY) };
+        let acc = if light { self.accent.colours().1 } else { self.accent.colours().0 };
+        let neutral = if light { pack(208, 208, 214, 255) } else { pack(58, 58, 60, 255) };
+        let cx = self.w as f32 / 2.0;
+        let mut y = self.header_c(s, "Choose your look", "Pick light or dark, an accent colour and a wallpaper.", self.h as f32 * 0.05, fg, sub);
+        let section = |this: &Self, s: &mut Surface, label: &str, row: usize, y: f32| {
+            this.text(s, label, 13.0, Weight::Semibold, if this.look_row == row { acc } else { sub }, cx, y);
+        };
+        // appearance
+        section(self, s, "Appearance", 0, y);
+        y += self.u(24.0);
+        let gap = self.u(16.0);
+        let tw = self.u(120.0).min((self.w as f32 * 0.88 - gap * 2.0) / 3.0);
+        let th = tw * 0.62;
+        let x0 = cx - (tw * 3.0 + gap * 2.0) / 2.0;
+        for (i, (m, label)) in [(ap::Mode::Light, "Light"), (ap::Mode::Dark, "Dark"), (ap::Mode::Auto, "Auto")].into_iter().enumerate() {
+            let x = x0 + (tw + gap) * i as f32;
+            self.look_preview(s, (x, y, tw, th), m, self.accent);
+            if self.look == m {
+                let p = self.u(3.0);
+                s.stroke_rrect(x - p, y - p, tw + 2.0 * p, th + 2.0 * p, self.u(8.0) + p, self.u(2.5), acc);
+            }
+            self.text(s, label, 13.0, if self.look == m { Weight::Semibold } else { Weight::Regular }, fg, x + tw / 2.0, y + th + self.u(8.0));
+            self.hits.push((x, y, tw, th + self.u(28.0), Act::Look(m)));
+        }
+        y += th + self.u(44.0);
+        // accent colour
+        section(self, s, "Accent colour", 1, y);
+        y += self.u(26.0);
+        let n = Accent::ALL.len() as f32;
+        let dgap = self.u(14.0);
+        let d = self.u(26.0).min((self.w as f32 * 0.88 - dgap * (n - 1.0)) / n);
+        let dx0 = cx - (d * n + dgap * (n - 1.0)) / 2.0;
+        for (i, a) in Accent::ALL.into_iter().enumerate() {
+            let x = dx0 + (d + dgap) * i as f32;
+            let col = if light { a.colours().1 } else { a.colours().0 };
+            if a == Accent::Multicolour {
+                // the automatic choice: stacked rings of several accents
+                for (k, c) in [Accent::Orange, Accent::Pink, Accent::Purple, Accent::Blue].into_iter().enumerate() {
+                    let inset = d * 0.17 * k as f32;
+                    s.fill_rrect(x + inset, y + inset, d - 2.0 * inset, d - 2.0 * inset, (d - 2.0 * inset) / 2.0, if light { c.colours().1 } else { c.colours().0 });
+                }
+            } else {
+                s.fill_rrect(x, y, d, d, d / 2.0, col);
+            }
+            if self.accent == a {
+                let p = self.u(4.0);
+                s.stroke_rrect(x - p, y - p, d + 2.0 * p, d + 2.0 * p, (d + 2.0 * p) / 2.0, self.u(2.0), col);
+            }
+            self.hits.push((x - dgap / 2.0, y - self.u(4.0), d + dgap, d + self.u(8.0), Act::Tint(a)));
+        }
+        y += d + self.u(14.0);
+        let name = if self.accent == Accent::Multicolour { "Multicolour".to_string() } else { self.accent.label().to_string() };
+        self.text(s, &name, 12.0, Weight::Regular, sub, cx, y);
+        y += self.u(32.0);
+        // wallpaper
+        section(self, s, "Wallpaper", 2, y);
+        y += self.u(26.0);
+        let foot = (self.h as f32 - self.u(130.0)).max(0.0);
+        let count = self.walls.len();
+        let cols = count.min(4).max(1);
+        self.wall_cols = cols;
+        let rows = (count + cols - 1) / cols;
+        let wgap = self.u(12.0);
+        let max_w = (self.w as f32 * 0.88).min(self.u(560.0));
+        let mut tw = (max_w - wgap * (cols as f32 - 1.0)) / cols as f32;
+        let room = (foot - y - self.u(36.0) - wgap * (rows as f32 - 1.0)) / rows as f32;
+        tw = tw.min((room * 16.0 / 9.0).max(self.u(40.0)));
+        let th = tw * 9.0 / 16.0;
+        let gx0 = cx - (tw * cols as f32 + wgap * (cols as f32 - 1.0)) / 2.0;
+        let size = (tw as usize, th as usize);
+        if self.wall_scaled.0 != size {
+            let scaled = self.walls.iter().map(|w| w.2.as_ref().map(|im| im.resized(size.0.max(1), size.1.max(1)))).collect();
+            self.wall_scaled = (size, scaled);
+        }
+        for i in 0..count {
+            let (x, ty) = (gx0 + (tw + wgap) * (i % cols) as f32, y + (th + wgap) * (i / cols) as f32);
+            match self.wall_scaled.1.get(i).and_then(|o| o.as_ref()) {
+                Some(im) => s.blit(im, x as i32, ty as i32, 255, 255),
+                None => {
+                    s.fill_rrect(x, ty, tw, th, self.u(4.0), neutral);
+                    let label = self.ui.fit(&self.walls[i].1, 11.0, tw - self.u(8.0));
+                    self.text(s, &label, 11.0, Weight::Regular, fg, x + tw / 2.0, ty + th / 2.0 - self.u(7.0));
+                }
+            }
+            if i == self.wall {
+                let p = self.u(3.0);
+                s.stroke_rrect(x - p, ty - p, tw + 2.0 * p, th + 2.0 * p, self.u(6.0), self.u(2.5), acc);
+            }
+            self.hits.push((x, ty, tw, th, Act::Wall(i)));
+        }
+        y += (th + wgap) * rows as f32;
+        let picked = self.walls[self.wall.min(count - 1)].1.clone();
+        self.text(s, &picked, 13.0, Weight::Regular, sub, cx, y - wgap + self.u(8.0));
+        self.button(s, "Continue", cx, foot, 200.0, acc, true, Act::Next);
+        self.link_c(s, "Back", cx, foot + self.u(56.0), Act::Back, acc);
     }
 
     fn disk_page(&mut self, s: &mut Surface) {
@@ -751,6 +981,8 @@ mod tests {
         type_str(&mut a, "secret1");
         assert_eq!((a.fields[2].as_str(), a.fields[3].as_str()), ("secret1", "secret1"));
         a.event(Event::Key { code: 28, down: true });
+        assert_eq!(a.page, Page::Look, "the look comes after the account");
+        a.event(Event::Key { code: 28, down: true });
         assert_eq!(a.page, Page::Disk);
     }
 
@@ -765,6 +997,9 @@ mod tests {
         a.fields = ["Ada Lovelace".into(), "ada".into(), "pw".into(), "pw".into()];
         render(&mut a);
         a.act(Act::Next);
+        assert_eq!(a.page, Page::Look);
+        render(&mut a);
+        a.act(Act::Next);
         assert_eq!(a.page, Page::Disk);
         render(&mut a);
         a.act(Act::Install);
@@ -777,6 +1012,127 @@ mod tests {
         let cfg = a.want_install.take().unwrap();
         assert_eq!((cfg.username.as_str(), cfg.locale.as_str(), cfg.layout.id), ("ada", "en_US.UTF-8", "us"));
         assert_eq!(cfg.mode, Mode::Erase);
+        assert_eq!((cfg.appearance.as_str(), cfg.accent.as_str(), cfg.wallpaper.as_str()), ("dark", "blue", ""), "untouched choices keep today's look");
+    }
+
+    /// The centre of the hit region of `act` on the page as last drawn.
+    fn centre_of(a: &App, act: Act) -> (f32, f32) {
+        let h = a.hits.iter().find(|h| h.4 == act).unwrap_or_else(|| panic!("no hit region for {act:?}"));
+        (h.0 + h.2 / 2.0, h.1 + h.3 / 2.0)
+    }
+
+    fn look_app() -> App {
+        let mut a = app();
+        a.set_wallpapers(
+            ["gullfoss_canyon", "kirkjufell_dusk"]
+                .iter()
+                .map(|id| Wallpaper { id: id.to_string(), name: id.replace('_', " "), thumb: Image { w: 320, h: 180, px: vec![pack(30, 90, 140, 255); 320 * 180] } })
+                .collect(),
+        );
+        a.fields = ["Ada Lovelace".into(), "ada".into(), "pw".into(), "pw".into()];
+        a.page = Page::Look;
+        render(&mut a);
+        a
+    }
+
+    #[test]
+    fn the_look_page_sits_between_account_and_disk() {
+        let mut a = look_app();
+        a.page = Page::Account;
+        a.act(Act::Next);
+        assert_eq!(a.page, Page::Look);
+        a.event(Event::Key { code: 28, down: true });
+        assert_eq!(a.page, Page::Disk);
+        a.act(Act::Back);
+        assert_eq!(a.page, Page::Look);
+        a.act(Act::Back);
+        assert_eq!(a.page, Page::Account);
+    }
+
+    #[test]
+    fn clicking_light_dark_and_auto_changes_the_appearance() {
+        let mut a = look_app();
+        assert_eq!(a.look, ap::Mode::Dark);
+        for m in [ap::Mode::Light, ap::Mode::Auto, ap::Mode::Dark] {
+            let (x, y) = centre_of(&a, Act::Look(m));
+            click(&mut a, x, y);
+            assert_eq!(a.look, m);
+            render(&mut a);
+        }
+    }
+
+    #[test]
+    fn the_page_follows_the_picked_scheme() {
+        let mut a = look_app();
+        let dark = render(&mut a);
+        let (x, y) = centre_of(&a, Act::Look(ap::Mode::Light));
+        click(&mut a, x, y);
+        let light = render(&mut a);
+        let probe = a.w * (a.h / 2) + a.w / 2 - a.u(300.0) as usize;
+        assert_ne!(dark[probe], light[probe], "the card behind the page changes with the scheme");
+    }
+
+    #[test]
+    fn clicking_an_accent_dot_changes_the_accent_and_tints_the_button() {
+        let mut a = look_app();
+        let (x, y) = centre_of(&a, Act::Tint(Accent::Green));
+        click(&mut a, x, y);
+        assert_eq!(a.accent, Accent::Green);
+        let px = render(&mut a);
+        assert!(px.contains(&Accent::Green.colours().0), "the primary button takes the accent");
+        let (x, y) = centre_of(&a, Act::Tint(Accent::Multicolour));
+        click(&mut a, x, y);
+        assert_eq!(a.accent, Accent::Multicolour);
+    }
+
+    #[test]
+    fn clicking_a_wallpaper_tile_changes_the_wallpaper() {
+        let mut a = look_app();
+        assert_eq!(a.walls.len(), 3, "the default plus two system wallpapers");
+        let (x, y) = centre_of(&a, Act::Wall(2));
+        click(&mut a, x, y);
+        assert_eq!(a.wall, 2);
+        render(&mut a);
+    }
+
+    #[test]
+    fn the_arrow_keys_and_tab_move_the_look_picks() {
+        let mut a = look_app();
+        let key = |a: &mut App, code: u16| {
+            a.event(Event::Key { code, down: true });
+            a.event(Event::Key { code, down: false });
+        };
+        key(&mut a, 106); // right: Dark -> Auto
+        assert_eq!(a.look, ap::Mode::Auto);
+        key(&mut a, 15); // tab: accent row
+        key(&mut a, 106);
+        assert_eq!(a.accent, Accent::Purple, "Blue is followed by Purple");
+        key(&mut a, 15); // wallpaper row
+        key(&mut a, 106);
+        assert_eq!(a.wall, 1);
+    }
+
+    #[test]
+    fn the_look_choice_reaches_the_install_config() {
+        let mut a = look_app();
+        for act in [Act::Look(ap::Mode::Light), Act::Tint(Accent::Orange), Act::Wall(1)] {
+            a.act(act);
+        }
+        a.disk = Some(0);
+        a.start();
+        let cfg = a.want_install.take().unwrap();
+        assert_eq!((cfg.appearance.as_str(), cfg.accent.as_str(), cfg.wallpaper.as_str()), ("light", "orange", "gullfoss_canyon"));
+        assert_eq!(a.page, Page::Progress);
+    }
+
+    #[test]
+    fn missing_wallpapers_do_not_break_the_page() {
+        let mut a = app();
+        assert!(load_wallpapers("/nonexistent/assets").is_empty());
+        a.set_wallpapers(vec![]);
+        a.page = Page::Look;
+        render(&mut a);
+        assert_eq!(a.walls.len(), 1);
     }
 
     #[test]
@@ -807,7 +1163,7 @@ mod tests {
     #[test]
     fn every_page_draws_something() {
         let mut a = app();
-        for p in [Page::Welcome, Page::Language, Page::Account, Page::Disk, Page::Confirm, Page::Progress] {
+        for p in [Page::Welcome, Page::Language, Page::Account, Page::Look, Page::Disk, Page::Confirm, Page::Progress] {
             a.page = p;
             let px = render(&mut a);
             assert!(px.iter().any(|&c| c == WHITE || c == SYSTEM_BLUE || c == SYSTEM_RED), "{p:?} drew nothing visible");

@@ -57,6 +57,7 @@ fn run() -> std::io::Result<()> {
             disk, mode: springboard::installer::disks::Mode::Erase, locale: "en_US.UTF-8".into(), layout, full_name: user.into(),
             username: user.into(), password: pass.into(), hostname: "bifrost".into(), timezone: String::new(),
             mirror: std::env::var("BIFROST_MIRROR").unwrap_or_default(),
+            appearance: plan::DEFAULT_APPEARANCE.into(), accent: plan::DEFAULT_ACCENT.into(), wallpaper: String::new(),
         };
         let progress: plan::Shared = Default::default();
         plan::install(&cfg, &progress);
@@ -94,6 +95,7 @@ fn run() -> std::io::Result<()> {
     let mut inputs = if wayland { input::InputSet::none() } else { input::InputSet::desktop(w as f32, h as f32, unsafe { geteuid() } == 0) };
     let image = |name: &str| std::fs::read(format!("{branding}/{name}")).ok().and_then(|b| springboard::imgdec::decode(&b));
     let mut app = App::new(ui, w, h, disks::probe(), image("logo.png"), image("bg.jpg").or_else(|| image("bg.png")));
+    app.set_wallpapers(springboard::installer::app::load_wallpapers(&assets));
     if let Ok(id) = std::env::var("BIFROST_LAYOUT") {
         if let Some(i) = springboard::installer::keymaps::layout_index(&id) {
             app.set_layout(i);
