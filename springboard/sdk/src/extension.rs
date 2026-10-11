@@ -6,6 +6,7 @@
 //! list the extensions before any of them runs. See docs/parity/extensionfoundation.md.
 
 pub use bifrost_core::extension_process::{ConnectionId, Key, ProcessId, ProcessTable, State as ProcessState};
+pub use bifrost_ui::actionrequest::{ActionRequest, Outcome, RequestError};
 pub use bifrost_ui::extension::{valid_bundle_id, Error, Identity, Point, Registry, Scope};
 
 /// The `[[extension_point]]` and `[[extension]]` tables for a manifest: every point, then every identity, in order.
