@@ -596,6 +596,9 @@ pub mod graph;
 pub mod nn;
 pub mod save_sync;
 pub mod gamepad;
+pub mod affine;
+pub mod path;
+pub mod gradient;
 #[cfg(test)]
 mod bench;
 
