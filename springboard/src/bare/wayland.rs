@@ -49,6 +49,16 @@ const GPU_BG: u32 = u32::MAX;
 struct GpuSlot { buffer: wl_buffer::WlBuffer, busy: bool }
 
 fn err(e: impl std::fmt::Display) -> io::Error { io::Error::other(e.to_string()) }
+/// The Wayland socket is non-blocking: `WouldBlock` means nothing to read yet, or a full send buffer whose queued
+/// requests go out with the next flush. Only other errors are a broken connection (a busy compositor's momentarily
+/// full socket ended the session under bifrost-wm).
+fn transient<T>(r: Result<T, wayland_client::backend::WaylandError>) -> io::Result<()> {
+    match r {
+        Ok(_) => Ok(()),
+        Err(wayland_client::backend::WaylandError::Io(e)) if e.kind() == io::ErrorKind::WouldBlock => Ok(()),
+        Err(e) => Err(err(e)),
+    }
+}
 struct Slot { buffer: wl_buffer::WlBuffer, map: memmap2::MmapMut, busy: bool, damage: Damage }
 #[derive(Default)]
 struct State {
@@ -118,7 +128,7 @@ impl Display {
             let mut damage = Damage::new(w as usize,h as usize); damage.all();
             state.slots.push(Slot { buffer, map, busy: false, damage });
         }
-        conn.flush().map_err(err)?;
+        transient(conn.flush())?;
         let stats = std::path::Path::new("/var/lib/springboard/render-stats").exists()
             .then(|| (std::time::Instant::now(),0,0));
         queue.roundtrip(&mut state).map_err(err)?;
@@ -137,13 +147,13 @@ impl Display {
                 Err(e) => { bifrost_core::log::shell_logger("presenter").error(format!("presenter unavailable, SHM path: {e}")); state.gpu_slots.clear(); None }
             }
         };
-        conn.flush().map_err(err)?;
+        transient(conn.flush())?;
         Ok(Self { conn, queue, state, stats, gpu })
     }
     pub fn active(&self) -> bool {!self.state.idle}
     pub fn resumed(&mut self) -> bool {std::mem::take(&mut self.state.resumed)}
     pub fn power(&mut self,on:bool) -> io::Result<()> {
-        if let Some(power)=&self.state.output_power {power.set_mode(if on {output_power::Mode::On} else {output_power::Mode::Off});self.conn.flush().map_err(err)?;}
+        if let Some(power)=&self.state.output_power {power.set_mode(if on {output_power::Mode::On} else {output_power::Mode::Off});transient(self.conn.flush())?;}
         Ok(())
     }
     pub fn refresh(&self) -> u32 { if self.state.refresh == 0 {60} else {self.state.refresh} }
@@ -169,18 +179,18 @@ impl Display {
         }
         if let Some(g) = &mut self.gpu { g.p.invalidate(GPU_BG); }
         self.state.pending=false; self.state.redraw=true;
-        self.conn.flush().map_err(err)
+        transient(self.conn.flush())
     }
     pub fn size(&self) -> (usize,usize) { (self.state.size.0 as usize,self.state.size.1 as usize) }
     pub fn fd(&self) -> i32 { use std::os::fd::AsRawFd; self.conn.as_fd().as_raw_fd() }
     pub fn busy(&self) -> bool { self.state.pending }
     pub fn read(&mut self) -> io::Result<()> {
         self.queue.dispatch_pending(&mut self.state).map_err(err)?;
-        if let Some(read) = self.conn.prepare_read() { read.read().map_err(err)?; }
+        if let Some(read) = self.conn.prepare_read() { transient(read.read())?; }
         self.queue.dispatch_pending(&mut self.state).map_err(err)?;
         self.render_windows()?;
         self.render_chrome()?;
-        self.conn.flush().map_err(err)?;
+        transient(self.conn.flush())?;
         if self.state.closed { return Err(err("Wayland desktop closed or output resized; restart required")); }
         Ok(())
     }
@@ -189,7 +199,7 @@ impl Display {
         Some(self.state.foreign.iter().filter(|w| !w.info.app_id.is_empty()).map(|w| w.info.clone()).collect())
     }
     pub fn activate_foreign(&mut self,id:u32) -> io::Result<()> {
-        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); self.conn.flush().map_err(err)?; }
+        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
         Ok(())
     }
     pub fn window_events(&mut self) -> Vec<WindowEvent> { std::mem::take(&mut self.state.window_events) }
@@ -244,7 +254,7 @@ impl Display {
         }
         self.render_windows()?;
         self.render_chrome()?;
-        self.conn.flush().map_err(err)
+        transient(self.conn.flush())
     }
     /// Raises the front window over every client with the next `windows` call.
     pub fn raise_front(&mut self) {self.state.raise_front=true;}
@@ -408,7 +418,7 @@ impl Display {
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }
         }
-        self.render_chrome()?;self.conn.flush().map_err(err)
+        self.render_chrome()?;transient(self.conn.flush())
     }
     fn render_chrome(&mut self)->io::Result<()> {
         let qh=self.queue.handle();
@@ -454,9 +464,9 @@ impl Display {
     }
     pub fn foreign_action(&mut self,id:u32,minimize:bool)->io::Result<()> {
         if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if minimize {w.handle.set_minimized();}else{w.handle.close();}}
-        self.conn.flush().map_err(err)
+        transient(self.conn.flush())
     }
-    pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}self.conn.flush().map_err(err)}
+    pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}transient(self.conn.flush())}
     pub fn inputs(&mut self, out: &mut Vec<Event>) {
         self.trim_idle();
         // a backdrop rebuild the 30 Hz cap skipped is due: owe the glass that samples it and ask for a frame
@@ -543,7 +553,7 @@ impl Display {
             s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
             if !self.state.lock_wanted { self.state.main.attached(); }
             mark_first_frame();
-            return self.conn.flush().map_err(err);
+            return transient(self.conn.flush());
         }
         for slot in &mut self.state.slots { slot.damage.union(damage); }
         let Some(slot) = self.state.slots.iter_mut().find(|s| !s.busy) else { return Ok(()); };
@@ -557,7 +567,7 @@ impl Display {
         s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
         if !self.state.lock_wanted { self.state.main.attached(); }
         mark_first_frame();
-        self.conn.flush().map_err(err)
+        transient(self.conn.flush())
     }
 }
 /// Writes `$XDG_RUNTIME_DIR/shell-ready` once, after the first desktop frame is committed.
@@ -838,6 +848,16 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_full_or_empty_socket_is_not_a_broken_connection() {
+        use wayland_client::backend::WaylandError;
+        let would_block: Result<(), WaylandError> = Err(WaylandError::Io(std::io::Error::from(std::io::ErrorKind::WouldBlock)));
+        assert!(super::transient(would_block).is_ok());
+        let broken: Result<(), WaylandError> = Err(WaylandError::Io(std::io::Error::from(std::io::ErrorKind::BrokenPipe)));
+        assert!(super::transient(broken).is_err());
+        assert!(super::transient::<usize>(Ok(3)).is_ok());
+    }
+
     #[test]
     fn relocking_a_shown_desktop_waits_for_a_new_configure_before_attaching() {
         let mut m = MainMap::default();
