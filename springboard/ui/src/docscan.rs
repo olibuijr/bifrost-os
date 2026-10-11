@@ -180,9 +180,9 @@ mod tests {
 
     #[test]
     fn a_page_size_keeps_the_aspect_ratio_and_fits_the_longer_side() {
-        // An A4-shaped page of 210 x 297 units, scaled so the longer side is 1000 pixels.
+        // An A4-shaped page of 210 x 297 units, scaled down so the longer side is 100 pixels.
         let a4 = [p(0.0, 0.0), p(210.0, 0.0), p(210.0, 297.0), p(0.0, 297.0)];
-        assert_eq!(page_size(a4, 1000), Some((707, 1000)));
+        assert_eq!(page_size(a4, 100), Some((71, 100)));
         // A page smaller than the limit is not enlarged.
         assert_eq!(page_size(a4, 5000), Some((210, 297)));
         assert_eq!(page_size(a4, 0), None);

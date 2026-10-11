@@ -51,11 +51,12 @@ impl Card {
             .filter(|part| !part.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
-        [self.formatted_name.trim(), person.as_str(), self.organization.trim()]
+        let name = [self.formatted_name.trim(), person.as_str(), self.organization.trim()]
             .into_iter()
             .find(|part| !part.is_empty())
             .unwrap_or("")
-            .to_string()
+            .to_string();
+        name
     }
 
     /// Writes the card as one vCard 3.0 object with CRLF line endings.

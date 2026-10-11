@@ -392,7 +392,9 @@ mod tests {
         tag.put("label", Value::Text("shopping".into()));
         groceries.add("tag", tag);
         root.add("note", groceries);
-        root.add("note", Object::new("note", "n2", "Ideas"));
+        let mut ideas = Object::new("note", "n2", "Ideas");
+        ideas.put("title", Value::Text("Ideas".into()));
+        root.add("note", ideas);
         Target::new(dict, root)
     }
 

@@ -2,7 +2,7 @@
 //! Unique constraints are checked on every write. Relations and their delete rules come from `relations`, and each
 //! save appends one transaction to `history`. Nothing here touches disk. The app persists what it chooses to.
 
-use crate::history::{Change, History, Token};
+use crate::model_history::{Change, History, Token};
 use crate::relations::{Relation, RelationError, Relations};
 use std::collections::BTreeMap;
 
@@ -211,7 +211,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::Descriptor;
+    use crate::model_history::Descriptor;
     use crate::relations::DeleteRule;
 
     #[test]

@@ -11,7 +11,7 @@
 //! stands upright in portrait; pitch is zero flat. The estimator owns no thread and no clock: the caller
 //! feeds it samples at its own cadence.
 use std::f64::consts::{PI, TAU};
-use std::ops::{Neg, Sub};
+use std::ops::{Add, Mul, Neg, Sub};
 
 /// How long the slow gravity estimate takes to follow a change, in seconds.
 const GRAVITY_TIME_CONSTANT: f64 = 1.0;
@@ -42,6 +42,20 @@ impl Sub for Vec3 {
     type Output = Vec3;
     fn sub(self, o: Vec3) -> Vec3 {
         Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
+    }
+}
+
+impl Add for Vec3 {
+    type Output = Vec3;
+    fn add(self, o: Vec3) -> Vec3 {
+        Vec3::new(self.x + o.x, self.y + o.y, self.z + o.z)
+    }
+}
+
+impl Mul<f64> for Vec3 {
+    type Output = Vec3;
+    fn mul(self, k: f64) -> Vec3 {
+        Vec3::new(self.x * k, self.y * k, self.z * k)
     }
 }
 

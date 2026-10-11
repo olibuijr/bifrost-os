@@ -369,14 +369,15 @@ mod tests {
     #[test]
     fn select_next_and_previous_walk_the_arranged_order() {
         let mut c = ArrayController::new(vec![5, 1, 3]);
+        // avoiding an empty selection selects the first content object (5); sorting keeps it, now last
         c.add_sort(|a: &i32, b: &i32| a.cmp(b));
-        assert!(c.select_next());
-        assert_eq!(c.selected_objects(), vec![&1]);
-        assert!(c.select_next());
-        assert!(c.select_next());
         assert_eq!(c.selected_objects(), vec![&5]);
         assert!(!c.can_select_next(), "the last arranged object has no successor");
         assert!(c.select_previous());
+        assert!(c.select_previous());
+        assert_eq!(c.selected_objects(), vec![&1]);
+        assert!(!c.can_select_previous(), "the first arranged object has no predecessor");
+        assert!(c.select_next());
         assert_eq!(c.selected_objects(), vec![&3]);
     }
 

@@ -149,8 +149,7 @@ mod tests {
             .proxy(PRIVATE, Visibility::OwnProcess, export_private)
     }
 
-    struct Memo;
-    impl Transferable for Memo {
+    impl Transferable for Note {
         fn transfer_representations() -> Representations<Note> {
             note_representations()
         }
@@ -205,7 +204,7 @@ mod tests {
 
     #[test]
     fn transferable_model_declares_its_representations() {
-        let reps = Memo::transfer_representations();
+        let reps = Note::transfer_representations();
         assert_eq!(reps.types_for(Viewer::Other), vec![PLAIN, HTML]);
     }
 }

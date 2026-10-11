@@ -284,7 +284,7 @@ mod tests {
         let r = Rect { x: 0.0, y: 0.0, w: 100.0, h: 50.0 };
         let b = Shape::Ellipse.path(r).bounds().unwrap();
         assert!(near(b.x, 0.0) && near(b.y, 0.0) && near(b.w, 100.0) && near(b.h, 50.0), "{b:?}");
-        let circumference = std::f32::consts::PI * (3.0 * (50.0 + 25.0) - ((3.0 * 50.0 + 25.0) * (50.0 + 3.0 * 25.0)).sqrt());
+        let circumference = std::f32::consts::PI * (3.0 * (50.0 + 25.0) - ((3.0f32 * 50.0 + 25.0) * (50.0 + 3.0 * 25.0)).sqrt());
         assert!((Shape::Ellipse.path(r).length() - circumference).abs() < 0.5, "flattened length tracks the ellipse");
     }
 

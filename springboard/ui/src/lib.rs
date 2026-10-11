@@ -635,6 +635,7 @@ pub mod contact_groups;
 pub mod contact_changes;
 pub mod fetch;
 pub mod history;
+pub mod model_history;
 pub mod shape;
 pub mod assetpack;
 pub mod downloadqueue;

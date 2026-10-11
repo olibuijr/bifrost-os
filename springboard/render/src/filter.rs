@@ -103,7 +103,7 @@ pub fn equalization_table(bins: &[u32]) -> Vec<u8> {
     bins.iter()
         .map(|&c| {
             cumulative += c as u64;
-            ((cumulative - first) * 255 / (total - first)) as u8
+            (cumulative.saturating_sub(first) * 255 / (total - first)) as u8
         })
         .collect()
 }

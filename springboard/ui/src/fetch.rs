@@ -273,8 +273,8 @@ mod tests {
     fn offset_and_limit_apply_after_sorting() {
         let all = items();
         let req = FetchRequest::new().sorted_by("name", true).offset(1).limit(2);
-        assert_eq!(names(&fetch(&all, &req)), ["alder", "Birch"]);
-        assert_eq!(fetch_indices(&all, &req), vec![1, 0]);
+        assert_eq!(names(&fetch(&all, &req)), ["Aspen", "Birch"]);
+        assert_eq!(fetch_indices(&all, &req), vec![3, 0]);
     }
 
     #[test]

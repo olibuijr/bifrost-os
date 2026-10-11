@@ -533,8 +533,8 @@ fn sector_centre(o: Orientation) -> f32 {
 /// g, and the vector points toward the ground (so a device standing upright reads `(0, 1)`). Returns `None` when the
 /// device lies too flat to tell, and keeps `current` while gravity stays within the band around it.
 pub fn orientation_from_gravity(x: f32, y: f32, current: Orientation) -> Option<Orientation> {
-    // written so that a NaN reading also returns None
-    if !((x * x + y * y).sqrt() >= FLAT_G) {
+    // a NaN or infinite reading also returns None
+    if !(x.is_finite() && y.is_finite() && (x * x + y * y).sqrt() >= FLAT_G) {
         return None;
     }
     let theta = x.atan2(y);
