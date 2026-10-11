@@ -134,9 +134,15 @@ impl Shell {
 
     }
     fn draw_desktop_status_icon(&self,s:&mut Surface,menu:Menu,label:&str,x:f32,y:f32) {
-        // legibility shadow over the wallpaper, then the white glyph
-        let sh=(super::ui::BAR_TEXT_SHADOW&0x00ff_ffff)|(super::ui::BAR_TEXT_SHADOW_ALPHA<<24);
-        self.draw_status_glyph(s,menu,label,x,y+self.ui.pt(0.5),sh);self.draw_status_glyph(s,menu,label,x,y,super::ui::BAR_TEXT);
+        // legibility shadow (or halo) over the wallpaper, then the glyph
+        let ink=self.bar_ink();
+        self.draw_status_glyph(s,menu,label,x,y+self.ui.pt(0.5),crate::gfx::scale(ink.shadow,ink.shadow_alpha));self.draw_status_glyph(s,menu,label,x,y,crate::gfx::scale(ink.text,ink.text_alpha));
+    }
+    /// The menu bar's ink: white with a dark shadow, or near-black with a light halo over a light wallpaper.
+    pub(super) fn bar_ink(&self)->BarInk {
+        use super::ui::*;
+        if self.bar_on_light {BarInk{text:BAR_TEXT_ON_LIGHT,text_alpha:BAR_TEXT_ON_LIGHT_ALPHA,shadow:BAR_TEXT_HALO,shadow_alpha:BAR_TEXT_HALO_ALPHA,capsule:BAR_OPEN_CAPSULE_ON_LIGHT}}
+        else {BarInk{text:BAR_TEXT,text_alpha:255,shadow:BAR_TEXT_SHADOW,shadow_alpha:BAR_TEXT_SHADOW_ALPHA,capsule:BAR_OPEN_CAPSULE}}
     }
     fn draw_status_glyph(&self,s:&mut Surface,menu:Menu,label:&str,x:f32,y:f32,ink:u32) {
         let p=self.ui.pt(1.);
@@ -241,13 +247,14 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,super::ui::BAR_OPEN_CAPSULE);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
         let text=self.clock_text();
         self.bar_label(s,&text,12.,Weight::Medium,|im|(self.w-im.w as i32-self.ui.pt(16.) as i32,(height as i32-im.h as i32)/2));
     }
-    /// A menu bar label: white over the wallpaper, with a soft dark shadow drawn first for legibility.
+    /// A menu bar label in the bar's ink, with its soft shadow (or halo) drawn first for legibility.
     fn bar_label(&self,s:&mut Surface,text:&str,pt:f32,weight:Weight,place:impl FnOnce(&Image)->(i32,i32)) {
-        self.label(text,pt,weight,WHITE,|im|{let (x,y)=place(im);let mut shadow=im.clone();shadow.blur(self.ui.pt(1.).max(1.) as usize);s.blit_colored(&shadow,x,y+self.ui.pt(0.5).max(1.) as i32,super::ui::BAR_TEXT_SHADOW,super::ui::BAR_TEXT_SHADOW_ALPHA);s.blit_colored(im,x,y,super::ui::BAR_TEXT,255);});
+        let ink=self.bar_ink();
+        self.label(text,pt,weight,WHITE,|im|{let (x,y)=place(im);let mut shadow=im.clone();shadow.blur(self.ui.pt(1.).max(1.) as usize);s.blit_colored(&shadow,x,y+self.ui.pt(0.5).max(1.) as i32,ink.shadow,ink.shadow_alpha);s.blit_colored(im,x,y,ink.text,ink.text_alpha);});
     }
     pub(super) fn clock_text(&self)->String {format!("{}  {}",super::status::date_text(self.info.wday,self.info.mday,self.info.mon),super::status::clock_in(self.info.hour,self.info.min,self.clock_24h))}
     /// The date and time at the right end of the bar; a tap toggles Notification Center.
@@ -449,6 +456,10 @@ impl Shell {
         Ok(self.run_menu_action(action, t))
     }
 }
+
+/// Colours of the menu bar's titles, status items and open-title capsule.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BarInk { pub text: u32, pub text_alpha: u32, pub shadow: u32, pub shadow_alpha: u32, pub capsule: u32 }
 
 /// True when the wallpaper behind the menu bar (its top `rows` rows) is light enough that the bar needs dark text.
 /// Lightness is the mean Rec. 709 luma (0..255) of every other pixel in the band, against `BAR_LIGHT_LUMA`.

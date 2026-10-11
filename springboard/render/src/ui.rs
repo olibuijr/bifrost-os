@@ -25,6 +25,13 @@ pub const BAR_TEXT: u32 = WHITE;
 pub const BAR_TEXT_SHADOW: u32 = pack(0, 0, 0, 255);
 /// Alpha of the bar text shadow (0..255).
 pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
+/// Over a light wallpaper the bar's titles and status items are near-black (85%), with a faint light halo.
+pub const BAR_TEXT_ON_LIGHT: u32 = pack(0, 0, 0, 255);
+pub const BAR_TEXT_ON_LIGHT_ALPHA: u32 = 217;
+pub const BAR_TEXT_HALO: u32 = WHITE;
+pub const BAR_TEXT_HALO_ALPHA: u32 = 60;
+/// The open menu title's capsule over a light wallpaper (black at ~12%, premultiplied).
+pub const BAR_OPEN_CAPSULE_ON_LIGHT: u32 = pack(0, 0, 0, 31);
 /// The open menu title's light glass capsule (white at ~25%, premultiplied).
 pub const BAR_OPEN_CAPSULE: u32 = pack(64, 64, 64, 64);
 /// Menu item highlight capsule (accent, systemBlue) and the text on it.

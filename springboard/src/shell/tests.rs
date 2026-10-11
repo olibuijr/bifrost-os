@@ -39,6 +39,19 @@
         sh
     }
 
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_menu_bar_text_turns_dark_over_a_light_wallpaper() {
+        let mut sh = desktop_shell();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let light: &'static [u32] = Box::leak(vec![rgba(240, 236, 228, 255); w * h].into_boxed_slice());
+        sh.set_wallpaper(View { w, h, px: light });
+        assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT_ON_LIGHT, "dark text on a light sky");
+        let dark: &'static [u32] = Box::leak(vec![rgba(20, 24, 30, 255); w * h].into_boxed_slice());
+        sh.set_wallpaper(View { w, h, px: dark });
+        assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT, "white text on a dark wallpaper");
+    }
+
     #[test]
     fn unlock_releases_the_lock_wallpaper_buffers() {
         let mut sh = desktop_shell();

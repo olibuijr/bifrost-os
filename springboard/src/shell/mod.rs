@@ -377,6 +377,8 @@ pub struct Shell {
     fit_lock: Option<Image>,
     /// the GPU presenter has the wallpaper texture; stop handing it the view
     wallpaper_uploaded: bool,
+    /// The wallpaper under the menu bar is light: the bar draws dark text (`desktop_bar::wallpaper_is_light`).
+    bar_on_light: bool,
     /// lock/Today buffers were just freed: the main loop hands the heap back once it idles
     heap_trim_due: bool,
     /// the packed stills offered by Settings › Wallpaper
@@ -652,6 +654,7 @@ impl Shell {
             fit_home,
             fit_lock: None,
             wallpaper_uploaded: false,
+            bar_on_light: false,
             heap_trim_due: false,
             wallpapers: Rc::new(Vec::new()),
             wpx: Default::default(),
@@ -1606,6 +1609,7 @@ impl Shell {
         }
         self.wallpaper_uploaded = false;
         *self.bar_backdrop.borrow_mut() = None;
+        self.bar_on_light = desktop_bar::wallpaper_is_light(self.home_still(), self.desktop_bar_height());
         if self.desk_active() {
             // desktop: the dimmed copy and the Today frost are full-screen images only the lock screen and the
             // Today page use; `lazy_wallpapers` builds them when one is on screen
