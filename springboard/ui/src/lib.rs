@@ -607,6 +607,8 @@ pub mod entitlement;
 pub mod download;
 pub mod nav_policy;
 pub mod translation;
+pub mod timeline;
+pub mod relevance;
 #[cfg(test)]
 mod bench;
 
