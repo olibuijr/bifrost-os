@@ -39,6 +39,7 @@ pub mod glyphs;
 pub mod defaults;
 pub mod locale;
 pub mod keychain;
+pub mod accounts;
 pub mod testing;
 pub mod usernotif;
 pub mod service_management;
