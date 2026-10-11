@@ -1,5 +1,11 @@
 # BifrOSt changelog
 
+## 0.5.28 — 2026-10-11
+
+- WoW, the built-in game-streaming app, is removed from the shell together with its `wowstream-client` dependency and the landscape-forcing rotation path that only it used. First step of moving components out of the shell so they update without a restart (`docs/shell-decomposition.md`).
+- Unlock: the desktop surface is mapped again after unlock, which fixes the black wallpaper and the compositor disconnect (cbd807d7).
+- Menu bar: the text turns dark over light wallpapers (7f1900e6, 72722230). Wallpaper ids use underscores.
+
 ## 0.5.27 — 2026-10-11
 
 - Display: the desktop runs at the panel's fastest refresh at its native size (165 Hz on the 2560x1440 lab monitor) by default. `video-arg` had booted in the firmware mode (59.95 Hz) unless `refresh=max` was set in `/etc/bifrost/display.conf`; now the fastest mode is the default and `refresh=firmware` in that file keeps the firmware mode (the monitor retrains its link on each mode change).
