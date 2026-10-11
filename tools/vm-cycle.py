@@ -300,15 +300,18 @@ def lab_password():
 
 
 def lab_http():
-    """The lab server bifrost-lab-sync and the preset's password URL use (10.99.0.1:8078, serving out/lab/sync)."""
-    if ":8078 " in sh(["ss", "-ltn"]).stdout:
+    """The lab server bifrost-lab-sync and the preset's password URL use (10.99.0.1:8078, serving out/lab/sync). A server
+    left running from a replaced out/lab/sync answers 404 for everything (its working directory is gone): restart it."""
+    served = lambda: sh(["curl", "-s", "--max-time", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://10.99.0.1:8078/manifest"]).stdout == "200"
+    if served():
         return True
     if not os.path.exists(os.path.join(LAB_SYNC, "bifrost-installer")):
         return False
+    sh(["pkill", "-f", "http.server 8078 --bind 10.99.0.1"])
+    time.sleep(1)
     subprocess.Popen(["python3", "-m", "http.server", "8078", "--bind", "10.99.0.1"], cwd=LAB_SYNC, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, start_new_session=True)
-    time.sleep(1)
-    return True
+    return wait_for(served, 10, 0.5)
 
 
 def preset_toml(user):
@@ -370,6 +373,15 @@ def vm_unattended(a):
         notes.append("the live system never answered on ssh")
         return finish(a, ok=False)
     mark("live_boot_to_ssh", t)
+    # the boot-time sync gives up after two 1 s tries; run it again now the network is up and prove the new installer
+    # landed (lab-sync restarts the installer when it changed, and the new one finds the preset)
+    want = sh(["sha256sum", os.path.join(LAB_SYNC, "bifrost-installer")]).stdout.split()[:1]
+    synced = lambda: ssh("sha256sum /usr/bin/bifrost-installer", 10).split()[:1] == want
+    if not synced():
+        ssh("systemctl restart bifrost-lab-sync", 90)
+    if not wait_for(synced, 60, 3):
+        notes.append("the live system runs a different installer than the one just published (lab-sync could not fetch it)")
+        return finish(a, ok=False)
 
     # 3. the unattended install: follow the installer's own log until the machine reboots into the new system
     t = time.time()
