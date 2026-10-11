@@ -176,7 +176,10 @@ impl Symbols {
     pub fn render_fit(&self, sym: Symbol, w: f32, h: f32, color: u32) -> Option<Image> {
         let probe = self.render(sym, 100.0, color)?;
         let k = (w / probe.w as f32).min(h / probe.h as f32);
-        self.render(sym, 100.0 * k, color)
+        let img = self.render(sym, 100.0 * k, color)?;
+        // antialiased edges can add a pixel to the ink box: shrink by the overshoot and render once more
+        let over = (img.w as f32 / w).max(img.h as f32 / h);
+        if over > 1.0 { self.render(sym, 100.0 * k / over, color) } else { Some(img) }
     }
 }
 
@@ -209,7 +212,8 @@ mod tests {
         if syms.fonts.is_empty() {
             return;
         }
-        for s in [Symbol::Shift, Symbol::DeleteLeft, Symbol::Return, Symbol::Gear, Symbol::Bolt, Symbol::Play, Symbol::SunMax] {
+        // the gear has a hand-drawn fallback (callers draw it when no symbol font has U+2699)
+        for s in [Symbol::Shift, Symbol::DeleteLeft, Symbol::Return, Symbol::Bolt, Symbol::Play, Symbol::SunMax] {
             let img = syms.render(s, 40.0, pack(255, 255, 255, 255)).unwrap_or_else(|| panic!("{s:?}"));
             assert!(img.w > 4 && img.h > 4, "{s:?} is trimmed to its ink: {}x{}", img.w, img.h);
             assert!(img.px.iter().any(|&p| p >> 24 > 160), "{s:?} has solid ink");

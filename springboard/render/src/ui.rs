@@ -276,10 +276,10 @@ impl Weight {
     }
 }
 
-/// SF Pro's variation settings for text at `pt` points: the real weight and
-/// the optical size bifrost picks (the point size, Text below 20 pt, Display above).
+/// The variation settings for text at `pt` points: the real weight and the optical size (the point size; the
+/// renderer clamps it to the font's own `opsz` range, so a text cut is used for small sizes and a display cut above).
 pub fn vars(pt: f32, weight: Weight) -> [Var; 2] {
-    [(*b"wght", weight.wght()), (*b"opsz", pt.clamp(17.0, 96.0))]
+    [(*b"wght", weight.wght()), (*b"opsz", pt)]
 }
 
 impl Ui {

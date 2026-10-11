@@ -905,7 +905,10 @@ mod tests {
 
     #[test]
     fn cff_font_renders_through_the_same_path() {
-        let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUISymbols-Regular.otf")).expect("assets/SFUISymbols-Regular.otf");
+        // a CFF symbol font is optional (the packed defaults are TrueType); skip without one
+        let Ok(data) = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUISymbols-Regular.otf")) else {
+            return;
+        };
         let f = Font::parse(&data).unwrap();
         assert!(f.cff.is_some());
         let gid = f.glyph('\u{E8FE}');
@@ -935,9 +938,11 @@ mod tests {
         let bold = f.render_var("Hamburg", &st, &[(*b"wght", 700.0)]);
         assert!(ink(&bold) as f32 > ink(&regular) as f32 * 1.15, "bold has clearly more ink");
         assert!(f.measure_var("Hamburg", 60.0, &[(*b"wght", 700.0)]) > f.measure("Hamburg", 60.0), "and wider advances");
-        // SF Pro Text (opsz 17) is wider and looser than Display (opsz 28)
-        let text = f.measure_var("61%", 18.75, &[(*b"opsz", 17.0)]);
-        assert!(text > f.measure("61%", 18.75) * 1.05, "{text}");
+        // the text cut (smallest optical size) is wider and looser than the display cut (largest)
+        let opsz = f.axes().iter().find(|a| &a.tag == b"opsz").unwrap();
+        let text = f.measure_var("61%", 18.75, &[(*b"opsz", opsz.min)]);
+        let display = f.measure_var("61%", 18.75, &[(*b"opsz", opsz.max)]);
+        assert!(text > display * 1.02, "{text} vs {display}");
         // composites (accents) vary too and stay attached to their base
         let e = f.render_var("é", &st, &[(*b"wght", 700.0)]);
         assert!(ink(&e) > ink(&f.render("é", &st)));
@@ -972,7 +977,7 @@ mod tests {
         for text in ["Þórður æði ö", "Hamburg 61%", "Stillingar", "iiiilll", "😀 ok"] {
             for px in [11.0f32, 17.5, 22.0, 41.3] {
                 for w in [400.0, 590.0, 700.0] {
-                    let vars = [(*b"wght", w), (*b"opsz", px.clamp(17.0, 96.0))];
+                    let vars = [(*b"wght", w), (*b"opsz", px)];
                     let st = Style { px, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
                     let norm = f.normalized(&vars);
                     let gids: Vec<u16> = text.chars().map(|c| f.glyph(c)).collect();

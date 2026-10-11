@@ -125,7 +125,8 @@ mod tests {
         let mut buf = vec![0u32; 600 * 80];
         let mut s = Surface { w: 600, h: 80, stride: 600, px: &mut buf, y0: 0 };
         let w = c.draw_chars(&mut s, &ui, "00:05,04", 30.0, Weight::Regular, WHITE, 10.0, 5.0);
-        assert!((w - ui.font.measure("00:05,04", ui.pt(30.0))).abs() < 0.01);
+        let whole = ui.measure("00:05,04", 30.0, Weight::Regular);
+        assert!((w - whole).abs() < 0.01, "{w} vs {whole}");
         assert_eq!(c.len(), 5, "one image per distinct glyph");
         assert!(buf.contains(&WHITE));
         assert!(c.line_h(&ui, 30.0) > 30.0);
