@@ -63,6 +63,7 @@ pub mod synchronization;
 pub mod fswatch;
 pub mod file_coordination;
 pub mod save_sync;
+pub mod file_provider;
 pub mod url;
 pub mod multipart;
 pub mod social;

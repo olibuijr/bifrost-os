@@ -613,6 +613,7 @@ pub mod reading_list;
 pub mod content_rules;
 pub mod chart;
 pub mod compose;
+pub mod file_provider;
 #[cfg(test)]
 mod bench;
 
