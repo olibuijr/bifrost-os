@@ -69,6 +69,12 @@ impl Request {
         self.0.badge = Some(n);
         self
     }
+    /// `UNTimeIntervalNotificationTrigger(timeInterval:repeats:)`: with [`after_ms`] the request fires every `ms` until
+    /// it is removed with [`remove_pending`]. Without a delay the request is delivered once, now.
+    pub fn repeats(mut self, v: bool) -> Self {
+        self.0.repeats = v;
+        self
+    }
 }
 
 impl Event {
@@ -120,8 +126,17 @@ mod tests {
 
     #[test]
     fn request_builder_fills_every_field() {
-        let r = Request::new("id", "T").subtitle("S").body("B").thread("th").category("C").after_ms(250).badge(4);
-        assert_eq!(r.0, NotifRequest { id: "id".into(), title: "T".into(), subtitle: "S".into(), body: "B".into(), thread: "th".into(), category: "C".into(), delay_ms: 250, badge: Some(4) });
+        let r = Request::new("id", "T").subtitle("S").body("B").thread("th").category("C").after_ms(250).badge(4).repeats(true);
+        assert_eq!(r.0, NotifRequest { id: "id".into(), title: "T".into(), subtitle: "S".into(), body: "B".into(), thread: "th".into(), category: "C".into(), delay_ms: 250, badge: Some(4), repeats: true });
+    }
+
+    #[test]
+    fn repeats_is_off_until_asked_and_keeps_the_interval() {
+        assert!(!Request::new("a", "T").after_ms(60_000).0.repeats);
+        let r = Request::new("a", "T").after_ms(60_000).repeats(true);
+        assert!(r.0.repeats);
+        assert_eq!(r.0.delay_ms, 60_000);
+        assert!(!r.repeats(false).0.repeats);
     }
 
     #[test]

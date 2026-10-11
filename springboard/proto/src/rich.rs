@@ -66,6 +66,8 @@ pub struct NotifRequest {
     pub delay_ms: u32,
     /// `content.badge`: `Some(n)` sets the Dock badge to `n` (0 clears it), `None` leaves it
     pub badge: Option<u32>,
+    /// `UNTimeIntervalNotificationTrigger(timeInterval:repeats:)`: fire every `delay_ms` until removed. Only with a delay.
+    pub repeats: bool,
 }
 
 /// The answer to `ToShell::NotifyRequest` (`add(_:withCompletionHandler:)`'s error).
@@ -305,6 +307,7 @@ fn put_request(b: &mut Vec<u8>, q: &NotifRequest) {
         }
         None => b.push(0),
     }
+    b.push(u8::from(q.repeats));
 }
 
 fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
@@ -316,7 +319,8 @@ fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
     let category = get(r, MAX_NOTIF_ID)?;
     let delay_ms = r.u32()?;
     let badge = if flag(r)? { Some(r.u32()?) } else { None };
-    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge })
+    let repeats = flag(r)?;
+    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats })
 }
 
 fn put_payload(b: &mut Vec<u8>, p: &Payload) {
@@ -655,7 +659,7 @@ mod tests {
         shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { id: "EMPTY".into(), actions: vec![] }]));
         shell_rt(ToShell::NotifyRequest {
             request: 4,
-            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3) },
+            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true },
         });
         shell_rt(ToShell::NotifyRequest { request: 5, req: NotifRequest { id: "n2".into(), ..Default::default() } });
         shell_rt(ToShell::NotifyRemove { delivered: true, ids: vec!["a".into(), "b".into()] });
