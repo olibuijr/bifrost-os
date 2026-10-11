@@ -43,6 +43,42 @@ pub struct Config {
     pub timezone: String,
     /// The lab's offline package mirror; pacstrap installs from it alone. Empty uses the internet.
     pub mirror: String,
+    /// Appearance mode key as in `bifrost_render::appearance::Mode` ("light", "dark", "auto").
+    pub appearance: String,
+    /// Accent colour key as in `bifrost_render::appearance::Accent` ("blue", "graphite", "multicolour", ...).
+    pub accent: String,
+    /// Wallpaper id (`wallpapers/<id>.raw` in the assets); empty keeps the packaged default.
+    pub wallpaper: String,
+}
+
+pub const DEFAULT_APPEARANCE: &str = "dark";
+pub const DEFAULT_ACCENT: &str = "blue";
+/// The shell's wallpaper pref (see `bin/shell.rs`: `prefs.get("wallpaper")`).
+pub const WALLPAPER_PREF: &str = "wallpaper";
+
+/// A wallpaper id the shell can map: a plain file stem, never a path.
+pub fn valid_wallpaper_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// The shell's `settings.ini` with the look chosen at install time merged into `existing` (other keys are kept). The
+/// values are normalised through the shell's own parsers, so a bad value becomes the default instead of a bad file.
+pub fn settings_ini(cfg: &Config, existing: &str) -> String {
+    use crate::shell::settings::{ACCENT_PREF, APPEARANCE_PREF};
+    use bifrost_render::appearance::{Accent, Mode};
+    let ours = [APPEARANCE_PREF, ACCENT_PREF, WALLPAPER_PREF];
+    let mut out: String = existing
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter(|l| l.split_once('=').map_or(true, |(k, _)| !ours.contains(&k.trim())))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    out.push_str(&format!("{APPEARANCE_PREF}={}\n", Mode::parse(&cfg.appearance).key()));
+    out.push_str(&format!("{ACCENT_PREF}={}\n", Accent::parse(&cfg.accent).key()));
+    if valid_wallpaper_id(&cfg.wallpaper) {
+        out.push_str(&format!("{WALLPAPER_PREF}={}\n", cfg.wallpaper));
+    }
+    out
 }
 
 /// The pacman configuration pacstrap uses with a lab mirror: that one repository and nothing else, the way the Omarchy
@@ -495,6 +531,12 @@ pub fn install(cfg: &Config, progress: &Shared) {
         }
         let _ = r.chroot(&["passwd", "-l", "root"]);
         r.write(&sys("/var/lib/springboard/account"), &account_file(name, &cfg.username))?;
+        // the look chosen in the installer (merged with any settings the image already carries)
+        {
+            let path = sys("/var/lib/springboard/settings.ini");
+            let existing = std::fs::read_to_string(&path).unwrap_or_default();
+            r.write(&path, &settings_ini(cfg, &existing))?;
+        }
         // a fresh install starts with no crash-loop history (the counter is kept in @state)
         let _ = r.chroot(&["rm", "-f", "/var/lib/springboard/boot_attempts"]);
 
@@ -638,6 +680,30 @@ mod tests {
 
     fn layout(id: &str) -> Layout {
         layouts().nth(layout_index(id).unwrap()).unwrap()
+    }
+
+    fn look_config(appearance: &str, accent: &str, wallpaper: &str) -> Config {
+        Config {
+            disk: crate::installer::disks::parse_parted("BYT;\n/dev/vda:17179869184B:virtio:512:512:unknown:Virtio Block Device:;\n").unwrap(),
+            mode: Mode::Erase, locale: "en_US.UTF-8".into(), layout: layout("us"), full_name: "Ada".into(), username: "ada".into(),
+            password: String::new(), hostname: "bifrost".into(), timezone: String::new(), mirror: String::new(),
+            appearance: appearance.into(), accent: accent.into(), wallpaper: wallpaper.into(),
+        }
+    }
+
+    #[test]
+    fn settings_ini_carries_the_chosen_look() {
+        let s = settings_ini(&look_config("light", "purple", "gullfoss_canyon"), "");
+        assert_eq!(s, "appearance_mode=light\naccent_color=purple\nwallpaper=gullfoss_canyon\n");
+    }
+
+    #[test]
+    fn settings_ini_merges_and_normalises() {
+        let s = settings_ini(&look_config("neon", "nope", "../etc"), "# keep\nliquid_glass=0.5\n\nappearance_mode=auto\nwallpaper=old\n");
+        assert!(s.contains("liquid_glass=0.5\n") && s.contains("# keep\n"));
+        assert!(s.contains("appearance_mode=dark\n") && s.contains("accent_color=blue\n"));
+        assert!(!s.contains("wallpaper=") && !s.contains("auto") && s.matches("appearance_mode").count() == 1);
+        assert!(valid_wallpaper_id("kirkjufell_dusk") && !valid_wallpaper_id("a/b") && !valid_wallpaper_id(""));
     }
 
     #[test]

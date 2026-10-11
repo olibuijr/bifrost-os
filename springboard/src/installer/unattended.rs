@@ -33,6 +33,12 @@ pub struct Preset {
     pub job: String,
     /// The lab's offline package mirror (tools/lab-mirror.sh); empty installs from the internet.
     pub mirror: String,
+    /// Optional look: "light", "dark" or "auto"; empty means the default (dark).
+    pub appearance: String,
+    /// Optional accent key ("blue", "purple", ...); empty means blue.
+    pub accent: String,
+    /// Optional wallpaper id; empty keeps the packaged default.
+    pub wallpaper: String,
 }
 
 /// Minimal TOML subset: `key = "string"`, `key = 123`, `key = true`, `#` comments, blank lines. Unknown keys are an error
@@ -73,6 +79,9 @@ pub fn parse(text: &str) -> Result<Preset, String> {
             "mcp" => p.mcp = bv()?,
             "password_url" => p.password_url = sv()?,
             "mirror" => p.mirror = sv()?,
+            "appearance" => p.appearance = sv()?,
+            "accent" => p.accent = sv()?,
+            "wallpaper" => p.wallpaper = sv()?,
             "created_epoch" => p.created_epoch = nv()?,
             "expires_s" => p.expires_s = nv()?,
             "job" => p.job = sv()?,
@@ -95,6 +104,15 @@ pub fn parse(text: &str) -> Result<Preset, String> {
     }
     if !p.timezone.is_empty() && !plan::valid_timezone(&p.timezone) {
         return Err(format!("invalid timezone {:?}", p.timezone));
+    }
+    if !p.appearance.is_empty() && !["light", "dark", "auto"].contains(&p.appearance.as_str()) {
+        return Err(format!("invalid appearance {:?}", p.appearance));
+    }
+    if !p.accent.is_empty() && !bifrost_render::appearance::Accent::ALL.iter().any(|a| a.key() == p.accent) {
+        return Err(format!("invalid accent {:?}", p.accent));
+    }
+    if !p.wallpaper.is_empty() && !plan::valid_wallpaper_id(&p.wallpaper) {
+        return Err(format!("invalid wallpaper {:?}", p.wallpaper));
     }
     let lab = |u: &str| u.starts_with("http://10.99.0.1:") || u.starts_with("http://192.168.");
     if !lab(&p.password_url) {
@@ -204,6 +222,9 @@ pub fn prepare(text: &str, disk_path: &str) -> Result<plan::Config, String> {
         hostname: p.hostname.clone(),
         timezone: p.timezone.clone(),
         mirror: p.mirror.clone(),
+        appearance: if p.appearance.is_empty() { plan::DEFAULT_APPEARANCE.into() } else { p.appearance.clone() },
+        accent: if p.accent.is_empty() { plan::DEFAULT_ACCENT.into() } else { p.accent.clone() },
+        wallpaper: p.wallpaper.clone(),
     })
 }
 
@@ -239,6 +260,18 @@ mod tests {
         assert_eq!(parse(&with).unwrap().mirror, "http://10.99.0.1:8078/mirror/");
         let elsewhere = format!("{GOOD}mirror = \"http://example.com/mirror/\"\n");
         assert!(parse(&elsewhere).unwrap_err().contains("mirror"));
+    }
+
+    #[test]
+    fn the_look_keys_are_optional_and_checked() {
+        let p = parse(GOOD).unwrap();
+        assert_eq!((p.appearance.as_str(), p.accent.as_str(), p.wallpaper.as_str()), ("", "", ""));
+        let with = format!("{GOOD}appearance = \"light\"\naccent = \"graphite\"\nwallpaper = \"gullfoss_canyon\"\n");
+        let p = parse(&with).unwrap();
+        assert_eq!((p.appearance.as_str(), p.accent.as_str(), p.wallpaper.as_str()), ("light", "graphite", "gullfoss_canyon"));
+        assert!(parse(&format!("{GOOD}appearance = \"neon\"\n")).unwrap_err().contains("appearance"));
+        assert!(parse(&format!("{GOOD}accent = \"teal\"\n")).unwrap_err().contains("accent"));
+        assert!(parse(&format!("{GOOD}wallpaper = \"../x\"\n")).unwrap_err().contains("wallpaper"));
     }
 
     #[test]
