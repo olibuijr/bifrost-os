@@ -632,6 +632,7 @@ pub mod assetpack;
 pub mod downloadqueue;
 pub mod environment;
 pub mod preferences;
+pub mod call;
 #[cfg(test)]
 mod bench;
 
