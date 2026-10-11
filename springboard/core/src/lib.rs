@@ -16,3 +16,5 @@ pub mod sensor_log;
 pub mod migrate;
 pub mod occlusion;
 pub mod progress;
+pub mod tunnel;
+pub mod proxy;
