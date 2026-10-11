@@ -50,12 +50,32 @@ if [[ ${BIFROST_SESSION_MODE:-desktop} != installer ]] && command -v dbus-daemon
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
 fi
 mark compositor-start
+# The window server: labwc, or BifrOSt's own (docs/window-server.md) when /etc/bifrost/compositor says bifrost-wm.
+compositor=$(tr -dc 'a-z-' < /etc/bifrost/compositor 2>/dev/null || true)
+[[ "$compositor" == bifrost-wm && -x /usr/bin/bifrost-wm ]] || compositor=labwc
+# the first desktop of this boot fades in from the loader's frame; a session restart does not
+fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
 # glibc: two arenas and early trim keep the compositor heap (was 18 MiB idle) small; gles2 is the wlroots default, named so a stray env cannot pull in vulkan
 runtime_env=(MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 WLR_RENDERER=gles2)
-runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
-    labwc --verbose --config-dir /usr/share/bifrost/wayland 1>&2 &
-compositor_pid=$!
-for ((i=0;i<100;i++)); do
+if [[ "$compositor" == bifrost-wm ]]; then
+    # bifrost-wm owns the screen, so it shows the loader's frame and does the boot fade, not the shell
+    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 ${fade:+BIFROST_BOOT_FADE=1} \
+        /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
+    compositor_pid=$!
+    for ((i=0;i<250;i++)); do
+        [[ -S "$runtime/wayland-0" ]] && break
+        kill -0 "$compositor_pid" 2>/dev/null || exit 1
+        sleep .02
+    done
+    # what labwc's autostart does: the launchers' environment and the Settings portal
+    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/session-env 1>&2 &
+    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
+else
+    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
+        labwc --verbose --config-dir /usr/share/bifrost/wayland 1>&2 &
+    compositor_pid=$!
+fi
+for ((i=0;i<250;i++)); do
     [[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] && break
     kill -0 "$compositor_pid" 2>/dev/null || exit 1
     sleep .02
@@ -72,16 +92,37 @@ if [[ -n "$shell_version" && "$(cat "$stamp" 2>/dev/null || true)" != "$shell_ve
     printf '%s\n' "$shell_version" > "$stamp"
 fi
 mark shell-launch
-# the first desktop of this boot fades in from the loader's frame; a session restart does not
-fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
-env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 ${fade:+BIFROST_BOOT_FADE=1} "$client" &
-shell_pid=$!
+# under bifrost-wm the compositor fades; the shell only fades on labwc
+shell_fade=; [[ "$compositor" == labwc ]] && shell_fade=$fade
+launch_shell() {
+    env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 ${shell_fade:+BIFROST_BOOT_FADE=1} "$client" &
+    shell_pid=$!
+}
+launch_shell
 # learns the display mode for the next boot's command line; off the critical path
 /usr/lib/bifrost/video-arg >&2 &
-# Either exit stops the other; systemd restarts the entire session on failure.
 set +e
-wait -n "$shell_pid" "$compositor_pid"
-status=$?
+if [[ "$compositor" == bifrost-wm ]]; then
+    # The window server outlives the shell: outputs, the lock and app windows stay while only the shell restarts
+    # (no-restart updates). The shell's own crash-loop latch still applies; three quick exits end the session.
+    quick=0
+    while :; do
+        started=$SECONDS
+        wait -n "$shell_pid" "$compositor_pid"
+        status=$?
+        kill -0 "$compositor_pid" 2>/dev/null || break   # the compositor ended: the session ends
+        [[ "$status" == 3 ]] && break                      # Software Update restarts the whole session
+        if (( SECONDS - started < 60 )); then quick=$((quick + 1)); else quick=0; fi
+        (( quick >= 3 )) && break
+        mark shell-relaunch
+        shell_fade=
+        launch_shell
+    done
+else
+    # Either exit stops the other; systemd restarts the entire session on failure.
+    wait -n "$shell_pid" "$compositor_pid"
+    status=$?
+fi
 # Software Update deliberately exits 3 to restart. Preserve that as failure
 # because the existing service uses Restart=on-failure.
 if [[ "$status" == 3 && -f /var/lib/bifrost-recovery/state ]] && grep -qx system-prepared /var/lib/bifrost-recovery/state; then
