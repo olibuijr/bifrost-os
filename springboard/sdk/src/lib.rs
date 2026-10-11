@@ -62,6 +62,8 @@ pub mod fswatch;
 pub mod file_coordination;
 pub mod url;
 pub mod coding;
+pub mod restoration;
+pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
 pub mod notification;
@@ -168,6 +170,23 @@ pub trait App {
     /// A drag and drop event (`NativeDraggingDestination` for a window that called `dnd::register_types`,
     /// `NativeDraggingSource` ending for a session the app began). Return true when a frame is needed.
     fn drag(&mut self, _ctx: &Ctx, _ev: dnd::Event) -> bool {
+        false
+    }
+    /// State restoration (`NativeWindowRestoration`): the window's restoration identifier. `None` (the default) means the
+    /// window is not restorable; the other restoration hooks are then never called. See `restoration`.
+    fn restoration_identifier(&self) -> Option<&str> {
+        None
+    }
+    /// `NativeWindow.isRestorable`: true when the app has a restoration identifier.
+    fn is_restorable(&self) -> bool {
+        self.restoration_identifier().is_some()
+    }
+    /// `encodeRestorableState(with:)`: put what is needed to restore the window into `state`. Called by the runtime
+    /// after `ctx.invalidate_restorable_state()` (coalesced), on suspend and on quit.
+    fn encode_restorable_state(&self, _ctx: &Ctx, _state: &mut RestorableState) {}
+    /// `restoreState(with:)`: called once, after the first `configure`, when the shell asked this launch to restore.
+    /// Return true when a frame is needed.
+    fn restore_state(&mut self, _ctx: &Ctx, _state: &RestorableState) -> bool {
         false
     }
     /// Called every loop turn while in the foreground; true when a frame is needed.

@@ -198,6 +198,18 @@ impl Ctx {
             self.send(ToShell::SuddenTermination { enabled });
         }
     }
+    /// `NativeApplication.invalidateRestorableState()`: the state `App::encode_restorable_state` would save has changed. Calls
+    /// are coalesced: the runtime writes once, `restoration::DEBOUNCE_MS` after the first call of a burst, never per
+    /// frame. Until the write the app counts as unable to be killed at once (sudden termination is held).
+    pub fn invalidate_restorable_state(&self) {
+        if crate::restoration::invalidate(now_ms()) {
+            self.disable_sudden_termination();
+        }
+    }
+    /// Balances the hold `invalidate_restorable_state` took, once the state is written.
+    pub(crate) fn finish_restorable_write(&self) {
+        self.enable_sudden_termination();
+    }
     /// `ProcessInfo.beginActivity(options:reason:)`: while a user-initiated or latency-critical activity is live the
     /// shell does not suspend the app when it leaves the foreground. Pair with `end_activity`.
     pub fn begin_activity(&self, options: crate::process_info::ActivityOptions, reason: &str) -> crate::process_info::Activity {
@@ -419,6 +431,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut slots: Option<[Slot; 2]> = None;
     let mut last: Option<usize> = None;
     let mut first_frame = true;
+    let mut restore_tried = false;
     let mut repaint_suspended = false;
     let mut need_frame = false;
     let mut active = true;
@@ -454,6 +467,14 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         };
         // async control calls (control::RpcError::pending) are completed and timed out from `service`: poll them
         let timeout = if control.as_ref().is_some_and(|c| c.has_pending()) { Some(timeout.map_or(50, |t| t.min(50))) } else { timeout };
+        // a coalesced restorable-state write is due at its deadline
+        let timeout = match crate::restoration::deadline() {
+            Some(d) if have_ctx => {
+                let ms = (d - t).max(1.0).ceil() as i32;
+                Some(timeout.map_or(ms, |w| w.min(ms)))
+            }
+            _ => timeout,
+        };
         // the app's own descriptor (`App::wake_fd`, a web view engine for example) wakes the loop for `tick`
         let app_fd = if active { app.wake_fd() } else { None };
         let (chan_ready, ready) = chan.wait_many(&[control.as_ref().map_or(-1, |c| c.fd()), app_fd.unwrap_or(-1), crate::dispatch::main_fd()], timeout);
@@ -495,6 +516,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     crate::layout::set_from(&cfg);
                     let c = ctx.as_ref().unwrap();
                     app.configure(c);
+                    // `restoreState(with:)`: once, when the shell asked this launch to restore
+                    if !restore_tried {
+                        restore_tried = true;
+                        if crate::restoration::restore_requested() {
+                            need_frame |= crate::restoration::restore_app(&mut app, c);
+                        }
+                    }
                     if size != (cfg.w, cfg.h) || slots.is_none() {
                         size = (cfg.w, cfg.h);
                         match alloc(&chan, cfg.w, cfg.h) {
@@ -546,6 +574,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     active = false;
                     if let Some(c) = &ctx {
                         app.suspend(c);
+                        flush_restorable(&app, c, true);
                     }
                 }
                 ToApp::Quit => {
@@ -553,6 +582,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         if active {
                             app.suspend(c);
                         }
+                        flush_restorable(&app, c, true);
                     }
                     open = false;
                 }
@@ -675,6 +705,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if active {
             need_frame |= app.tick(c, t);
         }
+        flush_restorable(&app, c, false);
         if (active || repaint_suspended) && need_frame {
             if let Some(slots) = slots.as_mut() {
                 let target = (0..2).find(|&i| !slots[i].held && Some(i) != last).or_else(|| (0..2).find(|&i| !slots[i].held));
@@ -721,6 +752,16 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             clip_seen = now_clip.clone();
             let _ = chan.send(&ToShell::SetClipboard { text: now_clip.unwrap_or_default() }.encode(), &[]);
         }
+    }
+}
+
+/// Writes the restorable state when a coalesced write is due (`force`: at once, for suspend and quit), then releases
+/// the sudden-termination hold `invalidate_restorable_state` took.
+fn flush_restorable<A: App>(app: &A, ctx: &Ctx, force: bool) {
+    let due = if force { crate::restoration::take_now() } else { crate::restoration::take_due(now_ms()) };
+    if due {
+        crate::restoration::save_app(app, ctx);
+        ctx.finish_restorable_write();
     }
 }
 
