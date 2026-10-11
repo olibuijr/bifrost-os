@@ -600,6 +600,7 @@ pub mod gamepad;
 pub mod affine;
 pub mod path;
 pub mod gradient;
+pub mod workflow;
 #[cfg(test)]
 mod bench;
 

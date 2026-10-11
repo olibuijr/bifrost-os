@@ -7,3 +7,4 @@ pub mod host;
 pub mod random;
 pub mod meter;
 pub mod gamepad;
+pub mod script_io;
