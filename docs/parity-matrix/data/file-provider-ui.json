@@ -2,19 +2,67 @@
   "framework": "File Provider UI",
   "doc": "https://developer.apple.com/documentation/fileproviderui",
   "macos_since": "10.15",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/runtime.rs (context_menu, ContextAction); springboard/src/files/mod.rs (Files app context menu); springboard/src/files/fs.rs (Files operations); springboard/src/bare/docbroker.rs (document grants)",
   "summary": "Apple's framework is one extension point: a File Provider extension adds actions to the long-press context menu of its own files in the system document browser, and shows a custom view controller to finish each action. BifrOSt has no File Provider extension, no action extension for the Files browser, and no file provider domain. It has a generic context menu for app-owned items and a fixed set of Files operations, so an app cannot add actions to Files.",
   "rea_evidence": "ev_1fac05280e07c30aa14c90276ef509027811b6f154decf758afd85789940401c",
   "features": [
-    {"feature": "Context-menu actions in the document browser", "apple": "Adding Actions to the Context Menu (article), File Provider extension actions shown in the system file browser", "bifrost": "springboard/sdk/src/runtime.rs:256 (context_menu, app-owned items); springboard/sdk/src/runtime.rs:554 (ToApp::ContextAction routing); springboard/src/files/mod.rs:962 (Files app context menu)", "status": "gap", "note": "apps can show a context menu in their own windows, but cannot add actions to the Files app's browser or to another app's items"},
-    {"feature": "Action extension view controller", "apple": "FPUIActionExtensionViewController (prepare(forAction:itemIdentifiers:), prepare(forError:), extensionContext)", "bifrost": "springboard/src/shell/docpanel.rs (open and save panel, shell-drawn); springboard/sdk/src/runtime.rs (document grant handoff)", "status": "gap", "note": "there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"},
-    {"feature": "Action extension context: complete or cancel", "apple": "FPUIActionExtensionContext (completeRequest(), cancelRequest(withError:), domainIdentifier)", "bifrost": "none found; closest is the document grant lifecycle in springboard/sdk/src/runtime.rs (DocumentGrant, reopen_document)", "status": "gap", "note": "no request object that an extension completes or cancels; grants only carry an open file descriptor"},
-    {"feature": "Action identifiers", "apple": "FPUIActionIdentifier", "bifrost": "springboard/proto/src/lib.rs:812 (CONTEXT_MENU tag and ContextItem ids); springboard/sdk/src/runtime.rs:27 (ContextAction(u32))", "status": "partial", "note": "app-local numeric ids for menu items exist, but no typed system action identifiers and no registry of actions across apps"},
-    {"feature": "Error codes and error domain", "apple": "FPUIExtensionErrorCode (failed, userCancelled), FPUIErrorDomain", "bifrost": "none specific; springboard/proto/src/lib.rs:163 (document grant access enum)", "status": "n/a", "note": "the codes belong to the File Provider UI extension model, which BifrOSt does not have; no counterpart is needed until such an extension exists"},
-    {"feature": "Authentication error handling in actions", "apple": "FPUIActionExtensionViewController.prepare(forError:)", "bifrost": "none found", "status": "n/a", "note": "tied to File Provider account authentication for cloud domains; BifrOSt cloud accounts live in ~/Projects/bifrost-cloud and are not a file provider domain"},
-    {"feature": "Files app operations (context menu, first-party)", "apple": "Not part of File Provider UI; the system Files browser's own actions", "bifrost": "springboard/src/files/fs.rs (operations the context menu offers, tested on a temp dir); springboard/apps/files/CHANGELOG.md 1.1.0 (Copy, Cut, Paste, Rename, Duplicate, Move to Recently Deleted)", "status": "partial", "note": "a fixed first-party set, not a surface that third-party extensions can extend; included as the nearest existing counterpart"},
-    {"feature": "Provider domains and file provider storage", "apple": "File Provider domain (NSFileProviderDomainIdentifier, domainIdentifier) from the File Provider framework, not in this framework", "bifrost": "springboard/src/bare/docbroker.rs (broker opens files for apps as the account); docs/file-portal-design.md (grants, no paths to apps)", "status": "partial", "note": "the broker gives apps granted descriptors, not a provider domain that the system browser lists; the file-portal design has no provider extension point"}
+    {
+      "feature": "Context-menu actions in the document browser",
+      "apple": "Adding Actions to the Context Menu (article), File Provider extension actions shown in the system file browser",
+      "bifrost": "springboard/ui/src/actionrequest.rs, springboard/ui/src/fileaction.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps can show a context menu in their own windows, but cannot add actions to the Files app's browser or to another app's items"
+    },
+    {
+      "feature": "Action extension view controller",
+      "apple": "FPUIActionExtensionViewController (prepare(forAction:itemIdentifiers:), prepare(forError:), extensionContext)",
+      "bifrost": "springboard/src/shell/docpanel.rs (open and save panel, shell-drawn); springboard/sdk/src/runtime.rs (document grant handoff)",
+      "status": "gap",
+      "note": "there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"
+    },
+    {
+      "feature": "Action extension context: complete or cancel",
+      "apple": "FPUIActionExtensionContext (completeRequest(), cancelRequest(withError:), domainIdentifier)",
+      "bifrost": "springboard/ui/src/actionrequest.rs, springboard/ui/src/fileaction.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no request object that an extension completes or cancels; grants only carry an open file descriptor"
+    },
+    {
+      "feature": "Action identifiers",
+      "apple": "FPUIActionIdentifier",
+      "bifrost": "springboard/proto/src/lib.rs:812 (CONTEXT_MENU tag and ContextItem ids); springboard/sdk/src/runtime.rs:27 (ContextAction(u32))",
+      "status": "partial",
+      "note": "app-local numeric ids for menu items exist, but no typed system action identifiers and no registry of actions across apps"
+    },
+    {
+      "feature": "Error codes and error domain",
+      "apple": "FPUIExtensionErrorCode (failed, userCancelled), FPUIErrorDomain",
+      "bifrost": "none specific; springboard/proto/src/lib.rs:163 (document grant access enum)",
+      "status": "n/a",
+      "note": "the codes belong to the File Provider UI extension model, which BifrOSt does not have; no counterpart is needed until such an extension exists"
+    },
+    {
+      "feature": "Authentication error handling in actions",
+      "apple": "FPUIActionExtensionViewController.prepare(forError:)",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "tied to File Provider account authentication for cloud domains; BifrOSt cloud accounts live in ~/Projects/bifrost-cloud and are not a file provider domain"
+    },
+    {
+      "feature": "Files app operations (context menu, first-party)",
+      "apple": "Not part of File Provider UI; the system Files browser's own actions",
+      "bifrost": "springboard/src/files/fs.rs (operations the context menu offers, tested on a temp dir); springboard/apps/files/CHANGELOG.md 1.1.0 (Copy, Cut, Paste, Rename, Duplicate, Move to Recently Deleted)",
+      "status": "partial",
+      "note": "a fixed first-party set, not a surface that third-party extensions can extend; included as the nearest existing counterpart"
+    },
+    {
+      "feature": "Provider domains and file provider storage",
+      "apple": "File Provider domain (NSFileProviderDomainIdentifier, domainIdentifier) from the File Provider framework, not in this framework",
+      "bifrost": "springboard/src/bare/docbroker.rs (broker opens files for apps as the account); docs/file-portal-design.md (grants, no paths to apps)",
+      "status": "partial",
+      "note": "the broker gives apps granted descriptors, not a provider domain that the system browser lists; the file-portal design has no provider extension point"
+    }
   ],
   "gaps": [
     "No extension point through which a third-party app adds actions to the Files browser's item context menu (the core of this framework).",

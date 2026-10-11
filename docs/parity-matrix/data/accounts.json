@@ -2,20 +2,74 @@
   "framework": "Accounts",
   "doc": "https://developer.apple.com/documentation/accounts",
   "macos_since": "10.8",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/keychain.rs (generic secrets only), springboard/src/bare/account.rs (local OS account), springboard/src/shell/login.rs (sign-in), bifrost-cloud account API (separate repo)",
   "summary": "Apple's Accounts framework is deprecated (landing page: for new apps, use the service provider's SDK). BifrOSt has no system account store, no account types, no OAuth credential objects and no access-grant prompt for third-party accounts. The closest pieces are a per-app keychain for opaque secrets and the local OS account used for desktop sign-in.",
   "rea_evidence": "ev_d8db1a18c8881336b7b0a660a3db2cd2b3d18f047fe28313778b31bca64b3a88",
   "features": [
-    {"feature": "Account store (ACAccountStore)", "apple": "ACAccountStore: accounts, account(withIdentifier:), accounts(with:), saveAccount, removeAccount, requestAccessToAccounts", "bifrost": "none", "status": "gap", "note": "No SDK object that lists or saves the user's accounts across apps."},
-    {"feature": "Account objects (ACAccount)", "apple": "ACAccount: identifier, username, userFullName, accountDescription, accountType, credential", "bifrost": "springboard/src/bare/account.rs (Account: local OS account from /var/lib/springboard/src/shell/account.rs and passwd)", "status": "os", "note": "The OS knows the local user name, uid, gid and home. No app-facing SDK API exposes it, and it is not a registry of third-party accounts."},
-    {"feature": "Credentials (ACAccountCredential, OAuth tokens)", "apple": "ACAccountCredential: init(oAuthToken:tokenSecret:), init(oAuth2Token:refreshToken:expiryDate:), oauthToken", "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account)", "status": "partial", "note": "An app can store a token itself as an opaque secret. There is no typed credential, no refresh token or expiry field, and no shared store between apps."},
-    {"feature": "Account types and access grants (ACAccountType)", "apple": "ACAccountType: identifier, accountTypeDescription, accessGranted; accountType(withAccountTypeIdentifier:)", "bifrost": "springboard/src/bare/app_policy.rs (per-app manifest permission keychain)", "status": "gap", "note": "The manifest permission binds only keychain access. There is no account-type registry and no user prompt that grants access to a type of account."},
-    {"feature": "Credential renewal (renewCredentials)", "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult", "bifrost": "none", "status": "gap", "note": "No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."},
-    {"feature": "Sign-in and account creation prompts", "apple": "Account sign-in sheets and the 'create account in app' flow of requestAccessToAccounts", "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout)", "status": "os", "note": "Desktop login only. There is no sheet an app can present to add a third-party account."},
-    {"feature": "Secure secret storage used for credentials", "apple": "Keychain items as the backing store of account credentials (Accounts keeps them in its database)", "bifrost": "springboard/src/keychain.rs (per-app encrypted store), springboard/proto/src/lib.rs (KeychainOp)", "status": "partial", "note": "Per-app, encrypted with a master key on the same disk. No access groups, so apps cannot share credentials, and no user-presence protection."},
-    {"feature": "BifrOSt account sign-in (cloud)", "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in", "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (BifrOSt Cloud API, separate repo)", "status": "gap", "note": "The cloud account lives on the server and is not exposed to apps through an SDK API in bifrost-os."},
-    {"feature": "Errors (ACErrorCode, ACErrorDomain)", "apple": "ACErrorCode and ACErrorDomain", "bifrost": "springboard/sdk/src/keychain.rs (keychain Error codes that mirror Security OSStatus values)", "status": "gap", "note": "No Accounts error domain. Keychain errors are mirrored from Apple's Security codes, not from Accounts."}
+    {
+      "feature": "Account store (ACAccountStore)",
+      "apple": "ACAccountStore: accounts, account(withIdentifier:), accounts(with:), saveAccount, removeAccount, requestAccessToAccounts",
+      "bifrost": "springboard/sdk/src/accounts.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object that lists or saves the user's accounts across apps."
+    },
+    {
+      "feature": "Account objects (ACAccount)",
+      "apple": "ACAccount: identifier, username, userFullName, accountDescription, accountType, credential",
+      "bifrost": "springboard/sdk/src/accounts.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The OS knows the local user name, uid, gid and home. No app-facing SDK API exposes it, and it is not a registry of third-party accounts."
+    },
+    {
+      "feature": "Credentials (ACAccountCredential, OAuth tokens)",
+      "apple": "ACAccountCredential: init(oAuthToken:tokenSecret:), init(oAuth2Token:refreshToken:expiryDate:), oauthToken",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account)",
+      "status": "partial",
+      "note": "An app can store a token itself as an opaque secret. There is no typed credential, no refresh token or expiry field, and no shared store between apps."
+    },
+    {
+      "feature": "Account types and access grants (ACAccountType)",
+      "apple": "ACAccountType: identifier, accountTypeDescription, accessGranted; accountType(withAccountTypeIdentifier:)",
+      "bifrost": "springboard/sdk/src/accounts.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The manifest permission binds only keychain access. There is no account-type registry and no user prompt that grants access to a type of account."
+    },
+    {
+      "feature": "Credential renewal (renewCredentials)",
+      "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
+    },
+    {
+      "feature": "Sign-in and account creation prompts",
+      "apple": "Account sign-in sheets and the 'create account in app' flow of requestAccessToAccounts",
+      "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout)",
+      "status": "os",
+      "note": "Desktop login only. There is no sheet an app can present to add a third-party account."
+    },
+    {
+      "feature": "Secure secret storage used for credentials",
+      "apple": "Keychain items as the backing store of account credentials (Accounts keeps them in its database)",
+      "bifrost": "springboard/src/keychain.rs (per-app encrypted store), springboard/proto/src/lib.rs (KeychainOp)",
+      "status": "partial",
+      "note": "Per-app, encrypted with a master key on the same disk. No access groups, so apps cannot share credentials, and no user-presence protection."
+    },
+    {
+      "feature": "BifrOSt account sign-in (cloud)",
+      "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in",
+      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (BifrOSt Cloud API, separate repo)",
+      "status": "gap",
+      "note": "The cloud account lives on the server and is not exposed to apps through an SDK API in bifrost-os."
+    },
+    {
+      "feature": "Errors (ACErrorCode, ACErrorDomain)",
+      "apple": "ACErrorCode and ACErrorDomain",
+      "bifrost": "springboard/sdk/src/accounts.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Accounts error domain. Keychain errors are mirrored from Apple's Security codes, not from Accounts."
+    }
   ],
   "gaps": [
     "No system account store (ACAccountStore): no list, save, remove or lookup of user accounts that apps share.",

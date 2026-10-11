@@ -2,20 +2,74 @@
   "framework": "ColorSync",
   "doc": "https://developer.apple.com/documentation/colorsync",
   "macos_since": "10.13",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/render/src/imgdec.rs, springboard/src/shell/night_shift.rs, springboard/src/shell/books/engine/pdf/image.rs, springboard/src/gpu/nv12.rs",
   "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt has no ICC profile loading, no profile-to-profile transforms, no device or display profiles and no HDR path. Its only colour work is 8-bit sRGB image decoding, a Night Shift warmth tint applied to the final frame, and Light/Dark colour pairs; apps get no ColorSync-style API.",
   "rea_evidence": "ev_30be09349fd96962c2c0d304f23da436d4e22734281493023b9095453ed6b510",
   "features": [
-    {"feature": "Color transforms", "apple": "ColorSyncTransformCreate, ColorSyncTransformConvert, ColorSyncProfileCreateLink, rendering intents", "bifrost": "springboard/render/src/imgdec.rs", "status": "gap", "note": "No transform object or profile-sequence conversion. imgdec.rs decodes JPEG and PNG to premultiplied RGBA and assumes sRGB. nv12.rs picks Rec.601 or Rec.709 YUV matrices for video only, not profile conversion."},
-    {"feature": "Pixel format and data layout", "apple": "ColorSyncDataLayout, ColorSyncAlphaInfo, ColorSyncDataDepth (8/16/32-bit, float, premultiplied alpha)", "bifrost": "springboard/render/src/imgdec.rs", "status": "partial", "note": "Images are 8-bit premultiplied RGBA. No layout descriptor is exposed, and no 16-bit, float or extended-range buffers exist."},
-    {"feature": "Color profiles (ICC load, create, inspect, embed)", "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData", "bifrost": "springboard/src/shell/books/engine/pdf/image.rs", "status": "gap", "note": "The PDF reader takes ICCBased images only by component count (1 gray, 4 CMYK, else RGB) and ignores the profile bytes. Nothing parses ICC tags."},
-    {"feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto)", "apple": "kColorSyncSRGBProfile, kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile", "bifrost": "springboard/src/appearance_portal.rs", "status": "gap", "note": "Only sRGB appears as a value (accent colour, 0..1). No named working space exists and no wide-gamut display path is present."},
-    {"feature": "Display colour adjustment (warmth)", "apple": "ColorSyncProfileCreateWithDisplayID, display VCGT transfer tables, Night Shift via the system colour pipeline", "bifrost": "springboard/src/shell/night_shift.rs", "status": "partial", "note": "Night Shift tints the final presented frame with a warmth value from 0 to 1 and a daily schedule. This is a shell-level tint, not a profile or VCGT transfer, and it does not read the display's profile."},
-    {"feature": "Device and display profiles", "apple": "ColorSyncRegisterDevice, ColorSyncIterateDeviceProfiles, ColorSyncDeviceSetCustomProfiles, ColorSyncProfileCreateWithDisplayID", "bifrost": "springboard/src/bare/kms.rs", "status": "gap", "note": "kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile. No device registry or custom-profile setting exists in the shell."},
-    {"feature": "Rendering intents and black point compensation", "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncBlackPointCompensation", "bifrost": "springboard/src/shell/night_shift.rs", "status": "gap", "note": "Intent and black-point choices do not exist. Night Shift is a warmth scalar, not a rendering intent."},
-    {"feature": "HDR, extended range and tone mapping", "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)", "bifrost": "springboard/src/gpu/nv12.rs", "status": "gap", "note": "No HDR transfer function (PQ or HLG) and no HAGC metadata. nv12.rs selects Rec.601 or Rec.709 by frame height only."},
-    {"feature": "Color management modules (CMM plug-ins)", "apple": "ColorSyncCMMCreate, ColorSyncIterateInstalledCMMs, CMMApplyTransformProc", "bifrost": "", "status": "n/a", "note": "CMM bundles are a plug-in model Apple's ColorSync loads at run time. BifrOSt has no equivalent, and no app-facing API would sit on top of one."}
+    {
+      "feature": "Color transforms",
+      "apple": "ColorSyncTransformCreate, ColorSyncTransformConvert, ColorSyncProfileCreateLink, rendering intents",
+      "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/pixel_layout.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transform object or profile-sequence conversion. imgdec.rs decodes JPEG and PNG to premultiplied RGBA and assumes sRGB. nv12.rs picks Rec.601 or Rec.709 YUV matrices for video only, not profile conversion."
+    },
+    {
+      "feature": "Pixel format and data layout",
+      "apple": "ColorSyncDataLayout, ColorSyncAlphaInfo, ColorSyncDataDepth (8/16/32-bit, float, premultiplied alpha)",
+      "bifrost": "springboard/render/src/imgdec.rs",
+      "status": "partial",
+      "note": "Images are 8-bit premultiplied RGBA. No layout descriptor is exposed, and no 16-bit, float or extended-range buffers exist."
+    },
+    {
+      "feature": "Color profiles (ICC load, create, inspect, embed)",
+      "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
+      "bifrost": "springboard/src/shell/books/engine/pdf/image.rs",
+      "status": "gap",
+      "note": "The PDF reader takes ICCBased images only by component count (1 gray, 4 CMYK, else RGB) and ignores the profile bytes. Nothing parses ICC tags."
+    },
+    {
+      "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto)",
+      "apple": "kColorSyncSRGBProfile, kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile",
+      "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/pixel_layout.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only sRGB appears as a value (accent colour, 0..1). No named working space exists and no wide-gamut display path is present."
+    },
+    {
+      "feature": "Display colour adjustment (warmth)",
+      "apple": "ColorSyncProfileCreateWithDisplayID, display VCGT transfer tables, Night Shift via the system colour pipeline",
+      "bifrost": "springboard/src/shell/night_shift.rs",
+      "status": "partial",
+      "note": "Night Shift tints the final presented frame with a warmth value from 0 to 1 and a daily schedule. This is a shell-level tint, not a profile or VCGT transfer, and it does not read the display's profile."
+    },
+    {
+      "feature": "Device and display profiles",
+      "apple": "ColorSyncRegisterDevice, ColorSyncIterateDeviceProfiles, ColorSyncDeviceSetCustomProfiles, ColorSyncProfileCreateWithDisplayID",
+      "bifrost": "springboard/src/bare/kms.rs",
+      "status": "gap",
+      "note": "kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile. No device registry or custom-profile setting exists in the shell."
+    },
+    {
+      "feature": "Rendering intents and black point compensation",
+      "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncBlackPointCompensation",
+      "bifrost": "springboard/src/shell/night_shift.rs",
+      "status": "gap",
+      "note": "Intent and black-point choices do not exist. Night Shift is a warmth scalar, not a rendering intent."
+    },
+    {
+      "feature": "HDR, extended range and tone mapping",
+      "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)",
+      "bifrost": "springboard/src/gpu/nv12.rs",
+      "status": "gap",
+      "note": "No HDR transfer function (PQ or HLG) and no HAGC metadata. nv12.rs selects Rec.601 or Rec.709 by frame height only."
+    },
+    {
+      "feature": "Color management modules (CMM plug-ins)",
+      "apple": "ColorSyncCMMCreate, ColorSyncIterateInstalledCMMs, CMMApplyTransformProc",
+      "bifrost": "",
+      "status": "n/a",
+      "note": "CMM bundles are a plug-in model Apple's ColorSync loads at run time. BifrOSt has no equivalent, and no app-facing API would sit on top of one."
+    }
   ],
   "gaps": [
     "No ICC profile parser and no profile-to-profile transform engine (ColorSyncTransformCreate and ColorSyncTransformConvert have no equivalent).",

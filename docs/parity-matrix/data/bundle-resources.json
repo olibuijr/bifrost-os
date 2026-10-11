@@ -7,15 +7,69 @@
   "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout and localized string bundles. It has no Info.plist, no privacy manifest for declaring collected data or required-reason APIs, and no universal links (applinks) service.",
   "rea_evidence": "ev_245e8b8557d7a64dd4d2b2b588dff39b3c6f7443c6959b6b4c47f2a11448de12",
   "features": [
-    {"feature": "Entitlements", "apple": "Entitlements (com.apple.security.* keys in a signed entitlements file)", "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements)", "status": "partial", "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app. Entitlements are a manifest list, not a signed file."},
-    {"feature": "Information property list (bundle identity and configuration)", "apple": "Information Property List (Info.plist): CFBundleIdentifier, CFBundleVersion, CFBundleURLTypes, CFBundleDocumentTypes", "bifrost": "springboard/src/shell/store/install.rs (Manifest, parse_manifest); springboard/src/shell/apphost.rs (Manifest); springboard/docs/apps.md (Package section)", "status": "partial", "note": "manifest.toml carries id, name, version, exec, icon, min_shell, summary, category, permissions, window and kind. It is TOML, not a plist. There are no per-language InfoPlist strings and no plist-based bundle keys."},
-    {"feature": "Privacy manifest: permission declarations", "apple": "Privacy manifest files (NSPrivacyAccessedAPITypes and tracking declarations), with the app's permission use listed in the bundle", "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop)", "status": "partial", "note": "Apps declare permissions in manifest.toml and the shell enforces them. Unknown permission names are rejected. Nothing is shown to the user as a privacy label, and no tracking domains are declared."},
-    {"feature": "Privacy manifest: data collection and required-reason API declarations", "apple": "Privacy manifest files: App Privacy Configuration, collected data types, required reason APIs", "bifrost": "none", "status": "gap", "note": "No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."},
-    {"feature": "Placing content in a bundle (package layout)", "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins", "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py", "status": "partial", "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. No placement rules for frameworks or plug-ins."},
-    {"feature": "Per-app data directory", "apple": "Container directories in the app sandbox (Library, Documents, Caches)", "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants)", "status": "partial", "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. There is no Library, Caches or Documents split."},
-    {"feature": "Localized bundle resources (Bundle.main, Localizable.strings)", "apple": "Bundle, NSLocalizedString, <lang>.lproj/Localizable.strings", "bifrost": "springboard/sdk/src/locale.rs (Bundle::load, set_main_bundle, localized!)", "status": "partial", "note": "Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."},
-    {"feature": "URL schemes and document types declared by the app", "apple": "CFBundleURLTypes and CFBundleDocumentTypes in Info.plist; Launch Services handler registry", "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open)", "status": "partial", "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url."},
-    {"feature": "Universal links service (applinks)", "apple": "applinks: apple-app-site-association domain verification that routes https links to the app", "bifrost": "none", "status": "gap", "note": "No domain association file, no verification and no https link routing to a non-browser app. The browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin)."}
+    {
+      "feature": "Entitlements",
+      "apple": "Entitlements (com.apple.security.* keys in a signed entitlements file)",
+      "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements)",
+      "status": "partial",
+      "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app. Entitlements are a manifest list, not a signed file."
+    },
+    {
+      "feature": "Information property list (bundle identity and configuration)",
+      "apple": "Information Property List (Info.plist): CFBundleIdentifier, CFBundleVersion, CFBundleURLTypes, CFBundleDocumentTypes",
+      "bifrost": "springboard/src/shell/store/install.rs (Manifest, parse_manifest); springboard/src/shell/apphost.rs (Manifest); springboard/docs/apps.md (Package section)",
+      "status": "partial",
+      "note": "manifest.toml carries id, name, version, exec, icon, min_shell, summary, category, permissions, window and kind. It is TOML, not a plist. There are no per-language InfoPlist strings and no plist-based bundle keys."
+    },
+    {
+      "feature": "Privacy manifest: permission declarations",
+      "apple": "Privacy manifest files (NSPrivacyAccessedAPITypes and tracking declarations), with the app's permission use listed in the bundle",
+      "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop)",
+      "status": "partial",
+      "note": "Apps declare permissions in manifest.toml and the shell enforces them. Unknown permission names are rejected. Nothing is shown to the user as a privacy label, and no tracking domains are declared."
+    },
+    {
+      "feature": "Privacy manifest: data collection and required-reason API declarations",
+      "apple": "Privacy manifest files: App Privacy Configuration, collected data types, required reason APIs",
+      "bifrost": "springboard/ui/src/privacy.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."
+    },
+    {
+      "feature": "Placing content in a bundle (package layout)",
+      "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins",
+      "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py",
+      "status": "partial",
+      "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. No placement rules for frameworks or plug-ins."
+    },
+    {
+      "feature": "Per-app data directory",
+      "apple": "Container directories in the app sandbox (Library, Documents, Caches)",
+      "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants)",
+      "status": "partial",
+      "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. There is no Library, Caches or Documents split."
+    },
+    {
+      "feature": "Localized bundle resources (Bundle.main, Localizable.strings)",
+      "apple": "Bundle, NSLocalizedString, <lang>.lproj/Localizable.strings",
+      "bifrost": "springboard/sdk/src/locale.rs (Bundle::load, set_main_bundle, localized!)",
+      "status": "partial",
+      "note": "Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."
+    },
+    {
+      "feature": "URL schemes and document types declared by the app",
+      "apple": "CFBundleURLTypes and CFBundleDocumentTypes in Info.plist; Launch Services handler registry",
+      "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open)",
+      "status": "partial",
+      "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url."
+    },
+    {
+      "feature": "Universal links service (applinks)",
+      "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No domain association file, no verification and no https link routing to a non-browser app. The browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin)."
+    }
   ],
   "gaps": [
     "No privacy manifest: an app cannot declare the data it collects or its required-reason API use (Privacy manifest files).",

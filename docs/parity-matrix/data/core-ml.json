@@ -2,24 +2,102 @@
   "framework": "Core ML",
   "doc": "https://developer.apple.com/documentation/coreml",
   "macos_since": "10.13",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none in the SDK or shell. Nearest code: springboard/apps/keyboard/src/predict.rs (prefix trie and bigram counts, not a learned model), springboard/sdk/src/spellcheck.rs (word checks, no model)",
   "summary": "Core ML runs trained models on the device (MLModel, feature providers, tensors, compute-device policy, on-device updates). BifrOSt has no model loading, inference, tensor or feature-provider API, and no SDK module for it. The keyboard predictor is a hand-built word-frequency trie, and the Assistant app calls a remote Messages API, so neither is an on-device model.",
   "rea_evidence": "ev_61bb5baae834f9b3d498207c8aefac9606a9eefacd2c879fbc0c612a09006428",
   "features": [
-    {"feature": "Loading and running a model", "apple": "MLModel, MLModelAsset, MLModelError", "bifrost": "none", "status": "gap", "note": "no SDK API loads a compiled model or runs a prediction"},
-    {"feature": "Model inputs and outputs", "apple": "MLFeatureValue, MLSendableFeatureValue, MLFeatureProvider, MLDictionaryFeatureProvider, MLBatchProvider, MLArrayBatchProvider", "bifrost": "none", "status": "gap", "note": "no typed feature or batch provider types"},
-    {"feature": "Tensors", "apple": "MLTensor, MLTensorScalar, MLTensorRangeExpression, pointwiseMin/pointwiseMax", "bifrost": "none", "status": "gap", "note": "no multi-dimensional numeric array type in the SDK"},
-    {"feature": "Compute devices and compute policy", "apple": "MLComputeDevice, MLCPUComputeDevice, MLGPUComputeDevice, MLNeuralEngineComputeDevice, MLComputePlan, MLComputePolicy", "bifrost": "springboard/src/gpu/ (GPU presenter, rendering only)", "status": "gap", "note": "the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform"},
-    {"feature": "Stateful models", "apple": "MLState, MLStateConstraint", "bifrost": "none", "status": "gap", "note": "no state buffers for recurrent models"},
-    {"feature": "On-device model updates", "apple": "MLUpdateTask, MLTask, personalization sample", "bifrost": "none", "status": "gap", "note": "no training or fine-tuning path in the SDK"},
-    {"feature": "Downloading and compiling a model at runtime", "apple": "Downloading and Compiling a Model on the User's Device, MLModelCollection", "bifrost": "none", "status": "gap", "note": "model deployment is an Apple service; BifrOSt would need its own model distribution"},
-    {"feature": "Model encryption", "apple": "Generating a Model Encryption Key, Encrypting a Model in Your App", "bifrost": "none", "status": "gap", "note": "no model encryption; the keychain module (springboard/sdk/src/keychain.rs) could hold a key but nothing uses it for models"},
-    {"feature": "Custom layers and custom models", "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers", "bifrost": "none", "status": "gap", "note": "no model graph runtime to extend"},
-    {"feature": "Domain frameworks built on Core ML", "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)", "bifrost": "springboard/sdk/src/spellcheck.rs (spelling only); springboard/src/media/hwdec/vaapi.rs (video decode, not inference)", "status": "gap", "note": "no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"},
-    {"feature": "Text prediction on the on-screen keyboard", "apple": "No direct Core ML API; typical Core ML text model use", "bifrost": "springboard/apps/keyboard/src/predict.rs", "status": "partial", "note": "the predictor is a prefix trie with a bigram bonus and learned words, not a model. It shows that text prediction exists, but it runs no Core ML-style inference"},
-    {"feature": "Model development tools", "apple": "Create ML, Core ML Tools, Analyzing a Core ML model's performance in Xcode", "bifrost": "none", "status": "n/a", "note": "these are Apple developer tools tied to Xcode; no BifrOSt counterpart is expected"},
-    {"feature": "Model collections and deployments", "apple": "MLModelCollection", "bifrost": "none", "status": "n/a", "note": "depends on Apple's model deployment service"}
+    {
+      "feature": "Loading and running a model",
+      "apple": "MLModel, MLModelAsset, MLModelError",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no SDK API loads a compiled model or runs a prediction"
+    },
+    {
+      "feature": "Model inputs and outputs",
+      "apple": "MLFeatureValue, MLSendableFeatureValue, MLFeatureProvider, MLDictionaryFeatureProvider, MLBatchProvider, MLArrayBatchProvider",
+      "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no typed feature or batch provider types"
+    },
+    {
+      "feature": "Tensors",
+      "apple": "MLTensor, MLTensorScalar, MLTensorRangeExpression, pointwiseMin/pointwiseMax",
+      "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-dimensional numeric array type in the SDK"
+    },
+    {
+      "feature": "Compute devices and compute policy",
+      "apple": "MLComputeDevice, MLCPUComputeDevice, MLGPUComputeDevice, MLNeuralEngineComputeDevice, MLComputePlan, MLComputePolicy",
+      "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform"
+    },
+    {
+      "feature": "Stateful models",
+      "apple": "MLState, MLStateConstraint",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no state buffers for recurrent models"
+    },
+    {
+      "feature": "On-device model updates",
+      "apple": "MLUpdateTask, MLTask, personalization sample",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no training or fine-tuning path in the SDK"
+    },
+    {
+      "feature": "Downloading and compiling a model at runtime",
+      "apple": "Downloading and Compiling a Model on the User's Device, MLModelCollection",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "model deployment is an Apple service; BifrOSt would need its own model distribution"
+    },
+    {
+      "feature": "Model encryption",
+      "apple": "Generating a Model Encryption Key, Encrypting a Model in Your App",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no model encryption; the keychain module (springboard/sdk/src/keychain.rs) could hold a key but nothing uses it for models"
+    },
+    {
+      "feature": "Custom layers and custom models",
+      "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no model graph runtime to extend"
+    },
+    {
+      "feature": "Domain frameworks built on Core ML",
+      "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
+      "bifrost": "springboard/sdk/src/spellcheck.rs (spelling only); springboard/src/media/hwdec/vaapi.rs (video decode, not inference)",
+      "status": "gap",
+      "note": "no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"
+    },
+    {
+      "feature": "Text prediction on the on-screen keyboard",
+      "apple": "No direct Core ML API; typical Core ML text model use",
+      "bifrost": "springboard/apps/keyboard/src/predict.rs",
+      "status": "partial",
+      "note": "the predictor is a prefix trie with a bigram bonus and learned words, not a model. It shows that text prediction exists, but it runs no Core ML-style inference"
+    },
+    {
+      "feature": "Model development tools",
+      "apple": "Create ML, Core ML Tools, Analyzing a Core ML model's performance in Xcode",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "these are Apple developer tools tied to Xcode; no BifrOSt counterpart is expected"
+    },
+    {
+      "feature": "Model collections and deployments",
+      "apple": "MLModelCollection",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "depends on Apple's model deployment service"
+    }
   ],
   "gaps": [
     "No SDK API to load a model file and run a prediction (MLModel, MLFeatureProvider)",

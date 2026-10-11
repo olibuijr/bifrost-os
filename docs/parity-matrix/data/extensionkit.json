@@ -2,19 +2,67 @@
   "framework": "ExtensionKit",
   "doc": "https://developer.apple.com/documentation/extensionkit",
   "macos_since": "13.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/share.rs, springboard/src/shell/sharing.rs (manifest-declared share targets); springboard/sdk/src/intents.rs (app-declared actions); springboard/src/bare/app_policy.rs (app sandbox)",
   "summary": "ExtensionKit lets a third-party app extension supply a custom UI that the host app presents out of process, and lets the user enable or disable extensions. BifrOSt has no app-extension model: apps cannot supply UI that another app hosts, and there is no extension management UI. The nearest pieces are a manifest-based share target list and App Intents, neither of which is an extension point.",
   "rea_evidence": "ev_66f2e23d9209aec92885debef8fcd9b97c0d94d942688fc0cf04fa1effd43117",
   "features": [
-    {"feature": "Extension-based UI in a host app (remote views)", "apple": "ExtensionKit: Including extension-based UI in your interface (article)", "bifrost": "none; springboard/sdk/src/view/app.rs is in-process (ControllerHost)", "status": "gap", "note": "No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."},
-    {"feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)", "apple": "AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder", "bifrost": "none; springboard/sdk/src/view/ (retained in-process views)", "status": "gap", "note": "No scene type an extension can publish for a host to render."},
-    {"feature": "Extension scene configuration", "apple": "AppExtensionSceneConfiguration", "bifrost": "none", "status": "gap", "note": "No extension configuration object."},
-    {"feature": "Host view controller for remote extension views", "apple": "EXHostViewController", "bifrost": "none; springboard/sdk/src/view/app.rs:40 ControllerHost<C> hosts a view controller in the same process only", "status": "gap", "note": "ControllerHost does not isolate or load another app's view."},
-    {"feature": "Enable and disable extensions UI", "apple": "EXAppExtensionBrowserViewController; Displaying the app extensions available to your app (article)", "bifrost": "none", "status": "gap", "note": "No user-facing list to approve, enable or disable extensions for an app."},
-    {"feature": "Share targets provided by other apps", "apple": "Share extensions (ExtensionKit host of ExtensionFoundation share UI)", "bifrost": "springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs (targets from manifest handles and schemes)", "status": "partial", "note": "Other apps can receive shared items when they declare handles or schemes in their manifest. Apps cannot ship their own share UI or a share view that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."},
-    {"feature": "Actions declared by apps for other surfaces", "apple": "App Intents (separate from ExtensionKit; listed for context)", "bifrost": "springboard/sdk/src/intents.rs (App::intents, perform_intent over the control socket)", "status": "partial", "note": "Apps declare typed actions and entities, but the shell does not host any extension UI for them."},
-    {"feature": "Process isolation for third-party app code", "apple": "Extension processes launched and sandboxed by the system (ExtensionFoundation runtime)", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups)", "status": "os", "note": "The OS sandboxes apps, but no SDK API lets an app load another app's extension process."}
+    {
+      "feature": "Extension-based UI in a host app (remote views)",
+      "apple": "ExtensionKit: Including extension-based UI in your interface (article)",
+      "bifrost": "none; springboard/sdk/src/view/app.rs is in-process (ControllerHost)",
+      "status": "gap",
+      "note": "No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."
+    },
+    {
+      "feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)",
+      "apple": "AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder",
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scene type an extension can publish for a host to render."
+    },
+    {
+      "feature": "Extension scene configuration",
+      "apple": "AppExtensionSceneConfiguration",
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension configuration object."
+    },
+    {
+      "feature": "Host view controller for remote extension views",
+      "apple": "EXHostViewController",
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ControllerHost does not isolate or load another app's view."
+    },
+    {
+      "feature": "Enable and disable extensions UI",
+      "apple": "EXAppExtensionBrowserViewController; Displaying the app extensions available to your app (article)",
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No user-facing list to approve, enable or disable extensions for an app."
+    },
+    {
+      "feature": "Share targets provided by other apps",
+      "apple": "Share extensions (ExtensionKit host of ExtensionFoundation share UI)",
+      "bifrost": "springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs (targets from manifest handles and schemes)",
+      "status": "partial",
+      "note": "Other apps can receive shared items when they declare handles or schemes in their manifest. Apps cannot ship their own share UI or a share view that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."
+    },
+    {
+      "feature": "Actions declared by apps for other surfaces",
+      "apple": "App Intents (separate from ExtensionKit; listed for context)",
+      "bifrost": "springboard/sdk/src/intents.rs (App::intents, perform_intent over the control socket)",
+      "status": "partial",
+      "note": "Apps declare typed actions and entities, but the shell does not host any extension UI for them."
+    },
+    {
+      "feature": "Process isolation for third-party app code",
+      "apple": "Extension processes launched and sandboxed by the system (ExtensionFoundation runtime)",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups)",
+      "status": "os",
+      "note": "The OS sandboxes apps, but no SDK API lets an app load another app's extension process."
+    }
   ],
   "gaps": [
     "No app-extension model: apps cannot publish a UI or service that another app hosts (AppExtensionScene, EXHostViewController).",

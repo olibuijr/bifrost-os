@@ -7,18 +7,90 @@
   "summary": "Apps can download a file to disk with progress and cancel through the URLSession counterpart. There is no asset-pack API, no manifest, no download scheduling while the app is not running, and no app-store-hosted assets.",
   "rea_evidence": "ev_180740ee1a0ec65ffc7ac09c38e751b28c444a300d607a50e6185f472c5efe0c",
   "features": [
-    {"feature": "Managed asset packs (AssetPack, AssetPackManager, AssetPackManifest)", "apple": "AssetPack, AssetPackManager, AssetPackManifest", "bifrost": "none", "status": "gap", "note": "no pack concept, no on-demand pack status or removal"},
-    {"feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)", "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks", "bifrost": "none for apps; the OS updater downloads only system updates in springboard/src/shell/update.rs", "status": "gap", "note": "the updater is not exposed to apps"},
-    {"feature": "Apple-hosted packs and App Store Connect upload", "apple": "BAUsesAppleHosting, Creating managed asset packs, Downloading Apple-hosted asset packs", "bifrost": "none", "status": "n/a", "note": "tied to App Store Connect; the PC App Store has no hosted asset service"},
-    {"feature": "Localized asset packs", "apple": "Reducing download and storage demands with localized asset packs", "bifrost": "springboard/sdk/src/locale.rs gives the language, but nothing selects packs by it", "status": "gap", "note": ""},
-    {"feature": "Testing packs against a local mock server", "apple": "Testing asset packs locally", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Unmanaged download manager and URL downloads (BADownloadManager, BAURLDownload, BADownload)", "apple": "BADownloadManager, BAURLDownload, BADownload", "bifrost": "springboard/sdk/src/url.rs (download_task: dest.part renamed on success, progress, cancel)", "status": "partial", "note": "runs only while the app is alive; no persistent queue, no scheduling, no essential/non-essential priority"},
-    {"feature": "Downloader extension and manifest (BADownloaderExtension, BAManifestURL)", "apple": "BADownloaderExtension, BADownloaderExtensionConfiguration, BAManifestURL", "bifrost": "none", "status": "gap", "note": "no extension that runs while the app is closed or before first launch"},
-    {"feature": "Install-size limits for initial downloads", "apple": "BAInitialDownloadRestrictions, BAEssentialMaxInstallSize, BAMaxInstallSize", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "System update download with size and hash check", "apple": "not part of the framework; closest system-side analogue", "bifrost": "springboard/src/shell/update.rs (download(), springboard.part, verify then rename), springboard/updated/src", "status": "os", "note": "system only"},
-    {"feature": "File sharing staging", "apple": "not part of the framework", "bifrost": "springboard/src/net/share.rs (.part staging)", "status": "os", "note": "system only"},
-    {"feature": "Errors (ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError)", "apple": "ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError", "bifrost": "URLError in springboard/sdk/src/url.rs", "status": "partial", "note": "no asset-specific errors"},
-    {"feature": "Size calculation methods", "apple": "SizeCalculationMethod", "bifrost": "none", "status": "gap", "note": ""}
+    {
+      "feature": "Managed asset packs (AssetPack, AssetPackManager, AssetPackManifest)",
+      "apple": "AssetPack, AssetPackManager, AssetPackManifest",
+      "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pack concept, no on-demand pack status or removal"
+    },
+    {
+      "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
+      "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks",
+      "bifrost": "none for apps; the OS updater downloads only system updates in springboard/src/shell/update.rs",
+      "status": "gap",
+      "note": "the updater is not exposed to apps"
+    },
+    {
+      "feature": "Apple-hosted packs and App Store Connect upload",
+      "apple": "BAUsesAppleHosting, Creating managed asset packs, Downloading Apple-hosted asset packs",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "tied to App Store Connect; the PC App Store has no hosted asset service"
+    },
+    {
+      "feature": "Localized asset packs",
+      "apple": "Reducing download and storage demands with localized asset packs",
+      "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+    },
+    {
+      "feature": "Testing packs against a local mock server",
+      "apple": "Testing asset packs locally",
+      "bifrost": "none",
+      "status": "gap",
+      "note": ""
+    },
+    {
+      "feature": "Unmanaged download manager and URL downloads (BADownloadManager, BAURLDownload, BADownload)",
+      "apple": "BADownloadManager, BAURLDownload, BADownload",
+      "bifrost": "springboard/sdk/src/url.rs (download_task: dest.part renamed on success, progress, cancel)",
+      "status": "partial",
+      "note": "runs only while the app is alive; no persistent queue, no scheduling, no essential/non-essential priority"
+    },
+    {
+      "feature": "Downloader extension and manifest (BADownloaderExtension, BAManifestURL)",
+      "apple": "BADownloaderExtension, BADownloaderExtensionConfiguration, BAManifestURL",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no extension that runs while the app is closed or before first launch"
+    },
+    {
+      "feature": "Install-size limits for initial downloads",
+      "apple": "BAInitialDownloadRestrictions, BAEssentialMaxInstallSize, BAMaxInstallSize",
+      "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+    },
+    {
+      "feature": "System update download with size and hash check",
+      "apple": "not part of the framework; closest system-side analogue",
+      "bifrost": "springboard/src/shell/update.rs (download(), springboard.part, verify then rename), springboard/updated/src",
+      "status": "os",
+      "note": "system only"
+    },
+    {
+      "feature": "File sharing staging",
+      "apple": "not part of the framework",
+      "bifrost": "springboard/src/net/share.rs (.part staging)",
+      "status": "os",
+      "note": "system only"
+    },
+    {
+      "feature": "Errors (ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError)",
+      "apple": "ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError",
+      "bifrost": "URLError in springboard/sdk/src/url.rs",
+      "status": "partial",
+      "note": "no asset-specific errors"
+    },
+    {
+      "feature": "Size calculation methods",
+      "apple": "SizeCalculationMethod",
+      "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+    }
   ],
   "gaps": [
     "No app-facing asset-pack API (list, download on demand, status, remove, manifest)",

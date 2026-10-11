@@ -7,14 +7,62 @@
   "summary": "BifrOSt has typed pasteboard, typed drag and drop, the share picker and UTType conformance, all keyed by UTType ids and raw payloads. It has no Transferable protocol or TransferRepresentation for app model types, so apps cannot declare how a model type moves through copy, drag or share.",
   "rea_evidence": "ev_204d2250a85fbed80af6efc1eed63bdc68c4a5cebcae65f3aefc2e791273a6e0",
   "features": [
-    {"feature": "Transferable protocol and TransferRepresentation builder", "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation", "bifrost": "none; springboard/sdk/src/pasteboard.rs takes raw bytes and UTType ids", "status": "gap", "note": "no app-model protocol that declares import and export representations; apps convert by hand"},
-    {"feature": "Data transfer (Codable and binary data)", "apple": "CodableRepresentation, DataRepresentation", "bifrost": "springboard/sdk/src/coding.rs (JSONEncoder, JSONDecoder, PropertyListEncoder); springboard/sdk/src/pasteboard.rs (set_data, data(uti))", "status": "partial", "note": "encoders and raw pasteboard bytes exist separately; no bridge from Codable types to the pasteboard or drag"},
-    {"feature": "File transfer (file URL representations)", "apple": "FileRepresentation, SentTransferredFile, ReceivedTransferredFile", "bifrost": "springboard/proto/src/rich.rs (Payload::File with a document grant); springboard/sdk/src/dnd.rs (dropped files arrive as App::document events with read-only grants)", "status": "partial", "note": "files move as document grants, not as a typed file representation with sent and received roles"},
-    {"feature": "Copy and paste of typed items", "apple": "NSPasteboard-backed Transferable items, PasteButton", "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs", "status": "partial", "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps"},
-    {"feature": "Drag and drop of typed items", "apple": "draggable and dropDestination (Transferable-based), NSDraggingSource and NSDraggingDestination", "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/proto/src/rich.rs (DragItem, DragPreview)", "status": "partial", "note": "typed source and destination exist; no declarative per-model drag or drop modifier"},
-    {"feature": "Share sheet for transferable items", "apple": "ShareLink, sharing of Transferable items", "bifrost": "springboard/sdk/src/share.rs (show_picker, is_inbound); springboard/src/shell/sharing.rs (handles, targets, copy_text)", "status": "partial", "note": "shares text, URLs and granted files; the share menu is not driven by Transferable representations"},
-    {"feature": "Uniform type conformance used by transfers", "apple": "UTType identifiers used as representation types (via UniformTypeIdentifiers)", "bifrost": "springboard/ui/src/uttype.rs (conforms, distance, type_for_extension, type_for_mime)", "status": "partial", "note": "conformance and extension lookup exist; app-declared custom types for transfers were not verified"},
-    {"feature": "Proxy representation and transfer visibility", "apple": "ProxyRepresentation, TransferRepresentationVisibility", "bifrost": "none; per-app isolation is in springboard/src/bare/app_policy.rs (sandbox), not a per-item visibility level", "status": "gap", "note": "no way to limit which apps or processes see a transferred item"}
+    {
+      "feature": "Transferable protocol and TransferRepresentation builder",
+      "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation",
+      "bifrost": "springboard/sdk/src/transfer.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-model protocol that declares import and export representations; apps convert by hand"
+    },
+    {
+      "feature": "Data transfer (Codable and binary data)",
+      "apple": "CodableRepresentation, DataRepresentation",
+      "bifrost": "springboard/sdk/src/coding.rs (JSONEncoder, JSONDecoder, PropertyListEncoder); springboard/sdk/src/pasteboard.rs (set_data, data(uti))",
+      "status": "partial",
+      "note": "encoders and raw pasteboard bytes exist separately; no bridge from Codable types to the pasteboard or drag"
+    },
+    {
+      "feature": "File transfer (file URL representations)",
+      "apple": "FileRepresentation, SentTransferredFile, ReceivedTransferredFile",
+      "bifrost": "springboard/proto/src/rich.rs (Payload::File with a document grant); springboard/sdk/src/dnd.rs (dropped files arrive as App::document events with read-only grants)",
+      "status": "partial",
+      "note": "files move as document grants, not as a typed file representation with sent and received roles"
+    },
+    {
+      "feature": "Copy and paste of typed items",
+      "apple": "NSPasteboard-backed Transferable items, PasteButton",
+      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs",
+      "status": "partial",
+      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps"
+    },
+    {
+      "feature": "Drag and drop of typed items",
+      "apple": "draggable and dropDestination (Transferable-based), NSDraggingSource and NSDraggingDestination",
+      "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/proto/src/rich.rs (DragItem, DragPreview)",
+      "status": "partial",
+      "note": "typed source and destination exist; no declarative per-model drag or drop modifier"
+    },
+    {
+      "feature": "Share sheet for transferable items",
+      "apple": "ShareLink, sharing of Transferable items",
+      "bifrost": "springboard/sdk/src/share.rs (show_picker, is_inbound); springboard/src/shell/sharing.rs (handles, targets, copy_text)",
+      "status": "partial",
+      "note": "shares text, URLs and granted files; the share menu is not driven by Transferable representations"
+    },
+    {
+      "feature": "Uniform type conformance used by transfers",
+      "apple": "UTType identifiers used as representation types (via UniformTypeIdentifiers)",
+      "bifrost": "springboard/ui/src/uttype.rs (conforms, distance, type_for_extension, type_for_mime)",
+      "status": "partial",
+      "note": "conformance and extension lookup exist; app-declared custom types for transfers were not verified"
+    },
+    {
+      "feature": "Proxy representation and transfer visibility",
+      "apple": "ProxyRepresentation, TransferRepresentationVisibility",
+      "bifrost": "springboard/sdk/src/transfer.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to limit which apps or processes see a transferred item"
+    }
   ],
   "gaps": [
     "No Transferable protocol or TransferRepresentation for app model types, so there is no single declaration that drives copy, paste, drag, and share.",

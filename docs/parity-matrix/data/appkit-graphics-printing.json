@@ -7,21 +7,111 @@
   "summary": "Semantic colours, a colour panel, PNG/JPEG decoding, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage-like object model, no Bezier path or gradient API for apps, no colour spaces or colour lists, and no print sheet.",
   "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
   "features": [
-    {"feature": "Images and PDF: image objects and representations", "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)", "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs", "status": "partial", "note": "PNG and JPEG decode into a raw pixel Image; no representation classes, no TIFF/GIF/WebP/HEIC encode or multi-rep images, no template or resizable images"},
-    {"feature": "Images and PDF: symbol images", "apple": "NSImage(systemSymbolName:), NSImage.SymbolConfiguration", "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs", "status": "partial", "note": "fixed set of procedural line glyphs (59), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md)"},
-    {"feature": "Images and PDF: PDF rendering", "apple": "NSPDFImageRep, PDF content in NSImage", "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs", "status": "os", "note": "PDF parser and page renderer lives inside the Books shell engine; apps get no SDK API"},
-    {"feature": "Images and PDF: file and app icons", "apple": "NSWorkspace icon(forFile:), NSImage named icons", "bifrost": "springboard/sdk/src/workspace.rs, docs/bifrost-ui.md (widgets::folder_icon)", "status": "partial", "note": "procedural folder icon only; no per-file-type icon set"},
-    {"feature": "Drawing: 2D drawing context and basic shapes", "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects", "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage)", "status": "partial", "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; no general path object, no clipping paths, no affine transform stack for apps"},
-    {"feature": "Drawing: Bezier paths, gradients, shadows", "apple": "NSBezierPath, NSGradient, NSShadow", "bifrost": "springboard/render/src/gfx.rs", "status": "gap", "note": "gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects"},
-    {"feature": "Drawing: materials and vibrancy", "apple": "NSVisualEffectView, Liquid Glass", "bifrost": "springboard/render/src/glass.rs, springboard/render/src/appearance.rs", "status": "partial", "note": "glass hook and light/dark cross-fade exist; Spotlight blur still missing per CLAUDE.md"},
-    {"feature": "Drawing: view-level drawing and redraw", "apple": "NSView draw(_:), needsDisplay, NSCell drawing", "bifrost": "springboard/sdk/src/view/", "status": "partial", "note": "retained views with damage rects; not the NSView draw cycle or NSCell model"},
-    {"feature": "Drawing: GPU/Metal-style compositing", "apple": "CALayer-backed drawing, Metal presentation", "bifrost": "springboard/src/gpu/wl.rs, docs/gpu-first.md", "status": "os", "note": "GPU Wayland presenter in the shell; apps do not get a GPU drawing API"},
-    {"feature": "Color: semantic system colours", "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor", "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours", "status": "partial", "note": "most named colours as light/dark Pairs; user accent colour not wired; windowFrameColor, findHighlightColor, shadowColor missing"},
-    {"feature": "Color: colour panel", "apple": "NSColorPanel, NSColorWell", "bifrost": "springboard/ui/src/panels.rs (ColorPanel)", "status": "partial", "note": "RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"},
-    {"feature": "Color: colour spaces and lists", "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler", "bifrost": "springboard/render/src/imgdec.rs", "status": "gap", "note": "colours are sRGB-style packed u32; ICC handling exists only for PDF images in the Books engine, no app API; no eyedropper"},
-    {"feature": "Printing: print info and operation", "apple": "NSPrintInfo, NSPrintOperation", "bifrost": "springboard/sdk/src/print.rs", "status": "partial", "note": "paper, orientation, margins, copies, page range; submits a PDF or image file via lp; Save as PDF copies the file; printing a view's drawing is not supported"},
-    {"feature": "Printing: print panel, page layout, accessory views", "apple": "NSPrintPanel, NSPageLayout, accessory view controllers", "bifrost": "docs/bifrost-ui.md (section Printing)", "status": "gap", "note": "print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel"},
-    {"feature": "Printing: printer discovery", "apple": "NSPrinter", "bifrost": "springboard/sdk/src/print.rs", "status": "partial", "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list"}
+    {
+      "feature": "Images and PDF: image objects and representations",
+      "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
+      "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs",
+      "status": "partial",
+      "note": "PNG and JPEG decode into a raw pixel Image; no representation classes, no TIFF/GIF/WebP/HEIC encode or multi-rep images, no template or resizable images"
+    },
+    {
+      "feature": "Images and PDF: symbol images",
+      "apple": "NSImage(systemSymbolName:), NSImage.SymbolConfiguration",
+      "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs",
+      "status": "partial",
+      "note": "fixed set of procedural line glyphs (59), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md)"
+    },
+    {
+      "feature": "Images and PDF: PDF rendering",
+      "apple": "NSPDFImageRep, PDF content in NSImage",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs",
+      "status": "os",
+      "note": "PDF parser and page renderer lives inside the Books shell engine; apps get no SDK API"
+    },
+    {
+      "feature": "Images and PDF: file and app icons",
+      "apple": "NSWorkspace icon(forFile:), NSImage named icons",
+      "bifrost": "springboard/sdk/src/workspace.rs, docs/bifrost-ui.md (widgets::folder_icon)",
+      "status": "partial",
+      "note": "procedural folder icon only; no per-file-type icon set"
+    },
+    {
+      "feature": "Drawing: 2D drawing context and basic shapes",
+      "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects",
+      "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage)",
+      "status": "partial",
+      "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; no general path object, no clipping paths, no affine transform stack for apps"
+    },
+    {
+      "feature": "Drawing: Bezier paths, gradients, shadows",
+      "apple": "NSBezierPath, NSGradient, NSShadow",
+      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects"
+    },
+    {
+      "feature": "Drawing: materials and vibrancy",
+      "apple": "NSVisualEffectView, Liquid Glass",
+      "bifrost": "springboard/render/src/glass.rs, springboard/render/src/appearance.rs",
+      "status": "partial",
+      "note": "glass hook and light/dark cross-fade exist; Spotlight blur still missing per CLAUDE.md"
+    },
+    {
+      "feature": "Drawing: view-level drawing and redraw",
+      "apple": "NSView draw(_:), needsDisplay, NSCell drawing",
+      "bifrost": "springboard/sdk/src/view/",
+      "status": "partial",
+      "note": "retained views with damage rects; not the NSView draw cycle or NSCell model"
+    },
+    {
+      "feature": "Drawing: GPU/Metal-style compositing",
+      "apple": "CALayer-backed drawing, Metal presentation",
+      "bifrost": "springboard/src/gpu/wl.rs, docs/gpu-first.md",
+      "status": "os",
+      "note": "GPU Wayland presenter in the shell; apps do not get a GPU drawing API"
+    },
+    {
+      "feature": "Color: semantic system colours",
+      "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor",
+      "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours",
+      "status": "partial",
+      "note": "most named colours as light/dark Pairs; user accent colour not wired; windowFrameColor, findHighlightColor, shadowColor missing"
+    },
+    {
+      "feature": "Color: colour panel",
+      "apple": "NSColorPanel, NSColorWell",
+      "bifrost": "springboard/ui/src/panels.rs (ColorPanel)",
+      "status": "partial",
+      "note": "RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
+    },
+    {
+      "feature": "Color: colour spaces and lists",
+      "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
+      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. colours are sRGB-style packed u32; ICC handling exists only for PDF images in the Books engine, no app API; no eyedropper"
+    },
+    {
+      "feature": "Printing: print info and operation",
+      "apple": "NSPrintInfo, NSPrintOperation",
+      "bifrost": "springboard/sdk/src/print.rs",
+      "status": "partial",
+      "note": "paper, orientation, margins, copies, page range; submits a PDF or image file via lp; Save as PDF copies the file; printing a view's drawing is not supported"
+    },
+    {
+      "feature": "Printing: print panel, page layout, accessory views",
+      "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
+      "bifrost": "docs/bifrost-ui.md (section Printing)",
+      "status": "gap",
+      "note": "print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel"
+    },
+    {
+      "feature": "Printing: printer discovery",
+      "apple": "NSPrinter",
+      "bifrost": "springboard/sdk/src/print.rs",
+      "status": "partial",
+      "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list"
+    }
   ],
   "gaps": [
     "Shell-drawn print sheet and page layout panel (print.rs has no run_modal)",

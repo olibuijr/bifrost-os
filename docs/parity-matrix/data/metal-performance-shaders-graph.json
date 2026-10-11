@@ -2,20 +2,74 @@
   "framework": "Metal Performance Shaders Graph",
   "doc": "https://developer.apple.com/documentation/metalperformanceshadersgraph",
   "macos_since": "11.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/gpu/ (GPU presenter for rendering and scanout only); springboard/render/src/glass.rs (glass blur hook); no tensor or graph API in the SDK",
   "summary": "MPSGraph is a symbolic tensor compute graph that compiles to GPU, CPU and Neural Engine executables. BifrOSt has no tensor type, graph compiler, ML runtime or compute API for apps. Its GPU code (springboard/src/gpu/) only draws the desktop and handles scanout, and the Neural Engine has no Linux counterpart.",
   "rea_evidence": "ev_7f2f052886ef363942cce17fd7f1f69890b6852d3a7c6de79925c44969f4201f",
   "features": [
-    {"feature": "Graph construction (MPSGraph, MPSGraphTensor, MPSGraphOperation)", "apple": "MPSGraph, MPSGraphTensor, MPSGraphOperation, MPSGraphObject", "bifrost": "none", "status": "gap", "note": "no symbolic tensor graph type anywhere in springboard/sdk or springboard/ui"},
-    {"feature": "Tensor types and data (MPSGraphType, MPSGraphShapedType, MPSGraphTensorData)", "apple": "MPSGraphType, MPSGraphShapedType, MPSGraphTensorData", "bifrost": "none", "status": "gap", "note": "image types exist (springboard/render/src/imgdec, the GPU texture id in springboard/src/gpu/mod.rs) but no shaped tensor type"},
-    {"feature": "Compilation and executables (MPSGraphCompilationDescriptor, MPSGraphExecutable, serialization)", "apple": "MPSGraphCompilationDescriptor, MPSGraphExecutable, MPSGraphExecutableSerializationDescriptor, MPSGraphOptimization", "bifrost": "none", "status": "gap", "note": "no graph compiler or serialized executable format"},
-    {"feature": "Convolution, pooling and RNN operators (Convolution2D/3D, Pooling, LSTM, GRU)", "apple": "MPSGraphConvolution2DOpDescriptor, MPSGraphConvolution3DOpDescriptor, MPSGraphPooling2DOpDescriptor, MPSGraphLSTMDescriptor, MPSGraphGRUDescriptor", "bifrost": "none", "status": "gap", "note": "no neural-network operators; springboard/src/gpu/shaders.rs holds only rendering shaders"},
-    {"feature": "FFT and random operations (MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor)", "apple": "MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor, MPSGraphFFTScalingMode, MPSGraphRandomDistribution", "bifrost": "none", "status": "gap", "note": "no FFT or GPU random number API"},
-    {"feature": "Execution and scheduling (MPSGraphExecutionDescriptor, completion and scheduled handlers, shared-event stages)", "apple": "MPSGraphExecutionDescriptor, MPSGraphExecutableExecutionDescriptor, MPSGraphCompletionHandler, MPSGraphExecutionStage", "bifrost": "springboard/src/gpu/wl.rs (presenter frame submission, not app compute)", "status": "os", "note": "frame timing and submission exist for the compositor; apps get no compute submission or completion callback"},
-    {"feature": "Devices (MPSGraphDevice, MPSGraphDeviceType)", "apple": "MPSGraphDevice, MPSGraphDeviceType", "bifrost": "springboard/src/gpu/plan.rs (what the GPU can do right now); springboard/src/gpu/egl.rs", "status": "os", "note": "the system knows the GPU capabilities, but no app-facing device object for compute"},
-    {"feature": "Neural Engine and Apple-silicon compute blocks", "apple": "MPSGraphDeviceType (Neural Engine), MPSGraphDeployment", "bifrost": "none", "status": "n/a", "note": "Apple Neural Engine hardware has no Linux or BifrOSt counterpart"},
-    {"feature": "Fast math and reduced precision (MPSGraphReducedPrecisionFastMath)", "apple": "MPSGraphReducedPrecisionFastMath", "bifrost": "none", "status": "gap", "note": "no reduced precision compute path"}
+    {
+      "feature": "Graph construction (MPSGraph, MPSGraphTensor, MPSGraphOperation)",
+      "apple": "MPSGraph, MPSGraphTensor, MPSGraphOperation, MPSGraphObject",
+      "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no symbolic tensor graph type anywhere in springboard/sdk or springboard/ui"
+    },
+    {
+      "feature": "Tensor types and data (MPSGraphType, MPSGraphShapedType, MPSGraphTensorData)",
+      "apple": "MPSGraphType, MPSGraphShapedType, MPSGraphTensorData",
+      "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. image types exist (springboard/render/src/imgdec, the GPU texture id in springboard/src/gpu/mod.rs) but no shaped tensor type"
+    },
+    {
+      "feature": "Compilation and executables (MPSGraphCompilationDescriptor, MPSGraphExecutable, serialization)",
+      "apple": "MPSGraphCompilationDescriptor, MPSGraphExecutable, MPSGraphExecutableSerializationDescriptor, MPSGraphOptimization",
+      "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no graph compiler or serialized executable format"
+    },
+    {
+      "feature": "Convolution, pooling and RNN operators (Convolution2D/3D, Pooling, LSTM, GRU)",
+      "apple": "MPSGraphConvolution2DOpDescriptor, MPSGraphConvolution3DOpDescriptor, MPSGraphPooling2DOpDescriptor, MPSGraphLSTMDescriptor, MPSGraphGRUDescriptor",
+      "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no neural-network operators; springboard/src/gpu/shaders.rs holds only rendering shaders"
+    },
+    {
+      "feature": "FFT and random operations (MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor)",
+      "apple": "MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor, MPSGraphFFTScalingMode, MPSGraphRandomDistribution",
+      "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no FFT or GPU random number API"
+    },
+    {
+      "feature": "Execution and scheduling (MPSGraphExecutionDescriptor, completion and scheduled handlers, shared-event stages)",
+      "apple": "MPSGraphExecutionDescriptor, MPSGraphExecutableExecutionDescriptor, MPSGraphCompletionHandler, MPSGraphExecutionStage",
+      "bifrost": "springboard/src/gpu/wl.rs (presenter frame submission, not app compute)",
+      "status": "os",
+      "note": "frame timing and submission exist for the compositor; apps get no compute submission or completion callback"
+    },
+    {
+      "feature": "Devices (MPSGraphDevice, MPSGraphDeviceType)",
+      "apple": "MPSGraphDevice, MPSGraphDeviceType",
+      "bifrost": "springboard/src/gpu/plan.rs (what the GPU can do right now); springboard/src/gpu/egl.rs",
+      "status": "os",
+      "note": "the system knows the GPU capabilities, but no app-facing device object for compute"
+    },
+    {
+      "feature": "Neural Engine and Apple-silicon compute blocks",
+      "apple": "MPSGraphDeviceType (Neural Engine), MPSGraphDeployment",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple Neural Engine hardware has no Linux or BifrOSt counterpart"
+    },
+    {
+      "feature": "Fast math and reduced precision (MPSGraphReducedPrecisionFastMath)",
+      "apple": "MPSGraphReducedPrecisionFastMath",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no reduced precision compute path"
+    }
   ],
   "gaps": [
     "No tensor or symbolic graph API for apps. A desktop SDK would need a graph type, a compiler and executables before any ML feature could land.",

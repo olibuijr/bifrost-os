@@ -7,18 +7,90 @@
   "summary": "Application Services is mostly legacy Carbon C API (Apple Event Manager, ColorSync, Speech Synthesis, PDEPlugIn, HIShape, Translation). BifrOSt covers the pasteboard, the accessibility tree (AT-SPI2 instead of AXUIElement), and printing through CUPS; ColorSync, speech synthesis and the print-plug-in and shape APIs have no counterpart.",
   "rea_evidence": "ev_aa67df2e51e2916455b18b5705ec62cb03dcae34a55905e84b9fc3290a9c1ff9",
   "features": [
-    {"feature": "Pasteboard (NSPasteboard)", "apple": "Pasteboard class, NSPasteboard.general, UTType items", "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs", "status": "partial", "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name."},
-    {"feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)", "apple": "Carbon Accessibility: AXUIElement.h, AXRoleConstants.h, AXAttributeConstants.h, AXNotificationConstants.h, AXActionConstants.h", "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/src/shell/atspi/model.rs, docs/bifrost-ui.md (Accessibility bridge)", "status": "partial", "note": "AT-SPI2 bridge maps app node trees to roles, states and actions (Press, SetValue, Focus). Apps that send no tree appear as a flat list; shell chrome is not in the tree; the bridge is untested with a live Orca."},
-    {"feature": "Accessibility text (AXText, attributed strings, text markers)", "apple": "AXTextAttributedString.h, AXTextMarker, AXTextMarkerRange, AXValue.h", "bifrost": "springboard/sdk/src/attributed.rs, docs/bifrost-ui.md (Accessibility bridge gaps)", "status": "gap", "note": "No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."},
-    {"feature": "Accessibility announcements and actions", "apple": "AXNotification, NSAccessibilityAnnouncementRequested, custom actions", "bifrost": "docs/bifrost-ui.md (Accessibility bridge gaps); springboard/ui/src/ax.rs", "status": "gap", "note": "No live-region announcements, no custom actions beyond press, and SetValue and Focus reach only apps that override ax_set."},
-    {"feature": "Universal Access (zoom focus)", "apple": "UniversalAccess.h (zoom focus control)", "bifrost": "springboard/src/shell/magnifier.rs", "status": "partial", "note": "Shell magnifier with Original, Invert and Contrast filters. No app-facing API to read or set zoom focus."},
-    {"feature": "Core Printing (PMPageFormat, PMPrintSettings, PMSession)", "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect", "bifrost": "springboard/sdk/src/print.rs (PrintInfo, PrintOperation, printers, available)", "status": "partial", "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked."},
-    {"feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)", "apple": "PDEPlugIn, PDEPanel, PDEPlugInCallbackProtocol", "bifrost": "springboard/sdk/src/print.rs", "status": "gap", "note": "No print panel plug-in mechanism; the print sheet is not shell-drawn yet."},
-    {"feature": "ColorSync Manager (profiles, transforms, CMM)", "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM", "bifrost": "springboard/src/shell/books/engine/pdf/image.rs (ICCBased colour space decode only)", "status": "gap", "note": "PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."},
-    {"feature": "Speech Synthesis Manager", "apple": "NewSpeechChannel, CountVoices, SetSpeechRate, SpeechBusy", "bifrost": "none found in code search", "status": "gap", "note": "No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."},
-    {"feature": "Apple Event Manager (AEDesc, Apple Event dispatch)", "apple": "AECreateAppleEvent, AEPutParamDesc, AEGetParamDesc, object specifiers", "bifrost": "springboard/sdk/src/control.rs (control socket RPC), springboard/sdk/src/intents.rs (App Intents)", "status": "n/a", "note": "Carbon-era IPC with no BifrOSt counterpart. The control socket RPC and App Intents cover the same app-automation role, not the descriptor format."},
-    {"feature": "HIShape (region geometry)", "apple": "HIShape, HIMutableShape", "bifrost": "springboard/ui/src/geometry.rs", "status": "gap", "note": "The geometry module has rectangles and points; no shape or region type with boolean operations or hit testing for shapes."},
-    {"feature": "Translation (Translation Services)", "apple": "Translation class", "bifrost": "none", "status": "n/a", "note": "Legacy Carbon translation service for document conversion. Not applicable to BifrOSt."}
+    {
+      "feature": "Pasteboard (NSPasteboard)",
+      "apple": "Pasteboard class, NSPasteboard.general, UTType items",
+      "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs",
+      "status": "partial",
+      "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name."
+    },
+    {
+      "feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)",
+      "apple": "Carbon Accessibility: AXUIElement.h, AXRoleConstants.h, AXAttributeConstants.h, AXNotificationConstants.h, AXActionConstants.h",
+      "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/src/shell/atspi/model.rs, docs/bifrost-ui.md (Accessibility bridge)",
+      "status": "partial",
+      "note": "AT-SPI2 bridge maps app node trees to roles, states and actions (Press, SetValue, Focus). Apps that send no tree appear as a flat list; shell chrome is not in the tree; the bridge is untested with a live Orca."
+    },
+    {
+      "feature": "Accessibility text (AXText, attributed strings, text markers)",
+      "apple": "AXTextAttributedString.h, AXTextMarker, AXTextMarkerRange, AXValue.h",
+      "bifrost": "springboard/sdk/src/attributed.rs, docs/bifrost-ui.md (Accessibility bridge gaps)",
+      "status": "gap",
+      "note": "No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."
+    },
+    {
+      "feature": "Accessibility announcements and actions",
+      "apple": "AXNotification, NSAccessibilityAnnouncementRequested, custom actions",
+      "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/geometry.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No live-region announcements, no custom actions beyond press, and SetValue and Focus reach only apps that override ax_set."
+    },
+    {
+      "feature": "Universal Access (zoom focus)",
+      "apple": "UniversalAccess.h (zoom focus control)",
+      "bifrost": "springboard/src/shell/magnifier.rs",
+      "status": "partial",
+      "note": "Shell magnifier with Original, Invert and Contrast filters. No app-facing API to read or set zoom focus."
+    },
+    {
+      "feature": "Core Printing (PMPageFormat, PMPrintSettings, PMSession)",
+      "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect",
+      "bifrost": "springboard/sdk/src/print.rs (PrintInfo, PrintOperation, printers, available)",
+      "status": "partial",
+      "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked."
+    },
+    {
+      "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",
+      "apple": "PDEPlugIn, PDEPanel, PDEPlugInCallbackProtocol",
+      "bifrost": "springboard/sdk/src/print.rs",
+      "status": "gap",
+      "note": "No print panel plug-in mechanism; the print sheet is not shell-drawn yet."
+    },
+    {
+      "feature": "ColorSync Manager (profiles, transforms, CMM)",
+      "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
+      "bifrost": "springboard/src/shell/books/engine/pdf/image.rs (ICCBased colour space decode only)",
+      "status": "gap",
+      "note": "PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."
+    },
+    {
+      "feature": "Speech Synthesis Manager",
+      "apple": "NewSpeechChannel, CountVoices, SetSpeechRate, SpeechBusy",
+      "bifrost": "none found in code search",
+      "status": "gap",
+      "note": "No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."
+    },
+    {
+      "feature": "Apple Event Manager (AEDesc, Apple Event dispatch)",
+      "apple": "AECreateAppleEvent, AEPutParamDesc, AEGetParamDesc, object specifiers",
+      "bifrost": "springboard/sdk/src/control.rs (control socket RPC), springboard/sdk/src/intents.rs (App Intents)",
+      "status": "n/a",
+      "note": "Carbon-era IPC with no BifrOSt counterpart. The control socket RPC and App Intents cover the same app-automation role, not the descriptor format."
+    },
+    {
+      "feature": "HIShape (region geometry)",
+      "apple": "HIShape, HIMutableShape",
+      "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/geometry.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The geometry module has rectangles and points; no shape or region type with boolean operations or hit testing for shapes."
+    },
+    {
+      "feature": "Translation (Translation Services)",
+      "apple": "Translation class",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Legacy Carbon translation service for document conversion. Not applicable to BifrOSt."
+    }
   ],
   "gaps": [
     "Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.",

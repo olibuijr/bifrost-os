@@ -2,18 +2,60 @@
   "framework": "Notification Center",
   "doc": "https://developer.apple.com/documentation/notificationcenter",
   "macos_since": "10.10",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/shell/today.rs and springboard/src/shell/widgets/mod.rs (shell-internal Today View widgets); springboard/src/shell/notify/center.rs (Notification Center column, system UI only); no app-facing widget API in springboard/sdk/src/",
   "summary": "The framework is a set of Today-widget extension classes (NCWidgetProviding, NCWidgetController, search and list view controllers). Apple's landing page marks it deprecated in favour of WidgetKit. BifrOSt has a shell-internal Today View and a Notification Center column, but no app can supply a Today widget, so none of the framework's API has an app-facing counterpart.",
   "rea_evidence": "ev_a365b0b1626848378c0b955b55ce0bc7fb3c3f9ce03a732a868f5783e4460582",
   "features": [
-    {"feature": "Widget provider (NCWidgetProviding)", "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)", "bifrost": "springboard/src/shell/widgets/mod.rs (fixed Kind list rendered into tiles by the shell); springboard/src/shell/today.rs (Today View page)", "status": "os", "note": "The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."},
-    {"feature": "Widget content controller (NCWidgetController)", "apple": "NCWidgetController: widgetController(), setHasContent(_:forWidgetWithBundleIdentifier:), default()", "bifrost": "none", "status": "gap", "note": "Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."},
-    {"feature": "Widget editing and ordering", "apple": "NCWidgetProviding: widgetAllowsEditing, widgetDidBeginEditing()", "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes)", "status": "partial", "note": "The shell edits its own widget list. Per-widget editing hooks for apps are missing; the widget gallery is also not exposed to apps."},
-    {"feature": "Search view (NCWidgetSearchViewController)", "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate", "bifrost": "none in the SDK", "status": "gap", "note": "The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/)."},
-    {"feature": "List view (NCWidgetListViewController)", "apple": "NCWidgetListViewController: contents, row(for:), viewController(atRow:makeIfNecessary:), minimumVisibleRowCount, hasDividerLines; NCWidgetListViewDelegate", "bifrost": "none in the SDK", "status": "gap", "note": "No list-of-content view for a third-party widget. Shell-side lists are drawn in springboard/src/shell/today.rs and springboard/src/shell/notify/center.rs and are not reusable by apps."},
-    {"feature": "Notification list in the system column", "apple": "Not part of this framework. Apple's user-facing Notification Center is system UI; apps post notifications through UserNotifications.", "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API)", "status": "partial", "note": "The column and delivery exist and apps can post through usernotif. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."},
-    {"feature": "Framework status (deprecated)", "apple": "Landing page: 'Deprecated. Use WidgetKit instead.' (macOS 10.10+, iOS 8.0+, Mac Catalyst 8.0+). See https://developer.apple.com/documentation/notificationcenter", "bifrost": "none (WidgetKit is not implemented on BifrOSt)", "status": "n/a", "note": "Parity for the deprecated framework should be judged against WidgetKit, which is outside this row. Apple itself points new work there."}
+    {
+      "feature": "Widget provider (NCWidgetProviding)",
+      "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)",
+      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."
+    },
+    {
+      "feature": "Widget content controller (NCWidgetController)",
+      "apple": "NCWidgetController: widgetController(), setHasContent(_:forWidgetWithBundleIdentifier:), default()",
+      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."
+    },
+    {
+      "feature": "Widget editing and ordering",
+      "apple": "NCWidgetProviding: widgetAllowsEditing, widgetDidBeginEditing()",
+      "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes)",
+      "status": "partial",
+      "note": "The shell edits its own widget list. Per-widget editing hooks for apps are missing; the widget gallery is also not exposed to apps."
+    },
+    {
+      "feature": "Search view (NCWidgetSearchViewController)",
+      "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate",
+      "bifrost": "none in the SDK",
+      "status": "gap",
+      "note": "The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/)."
+    },
+    {
+      "feature": "List view (NCWidgetListViewController)",
+      "apple": "NCWidgetListViewController: contents, row(for:), viewController(atRow:makeIfNecessary:), minimumVisibleRowCount, hasDividerLines; NCWidgetListViewDelegate",
+      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No list-of-content view for a third-party widget. Shell-side lists are drawn in springboard/src/shell/today.rs and springboard/src/shell/notify/center.rs and are not reusable by apps."
+    },
+    {
+      "feature": "Notification list in the system column",
+      "apple": "Not part of this framework. Apple's user-facing Notification Center is system UI; apps post notifications through UserNotifications.",
+      "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API)",
+      "status": "partial",
+      "note": "The column and delivery exist and apps can post through usernotif. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."
+    },
+    {
+      "feature": "Framework status (deprecated)",
+      "apple": "Landing page: 'Deprecated. Use WidgetKit instead.' (macOS 10.10+, iOS 8.0+, Mac Catalyst 8.0+). See https://developer.apple.com/documentation/notificationcenter",
+      "bifrost": "none (WidgetKit is not implemented on BifrOSt)",
+      "status": "n/a",
+      "note": "Parity for the deprecated framework should be judged against WidgetKit, which is outside this row. Apple itself points new work there."
+    }
   ],
   "gaps": [
     "No app-facing Today widget extension point (NCWidgetProviding): apps cannot supply widget content to the Today View or the home-screen gallery.",

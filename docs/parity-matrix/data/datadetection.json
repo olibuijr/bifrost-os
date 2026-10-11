@@ -7,17 +7,88 @@
   "summary": "A plain-text detector finds links, dates, street addresses and phone numbers as byte ranges. There are no email, flight, money or tracking detectors, no typed match values, and no pasteboard detection.",
   "rea_evidence": "ev_32d54383c45c4bc26b56927f872de0ae62b4c401125dc968da7060a21b5609b6",
   "features": [
-    {"feature": "Match base type and string scanning", "apple": "DDMatch, DataDetector", "bifrost": "springboard/ui/src/detect.rs (find, Kind, Match)", "status": "partial", "note": "returns kind plus byte range only; no typed payload per match"},
-    {"feature": "Web links", "apple": "DDMatchLink", "bifrost": "springboard/ui/src/detect.rs (Kind::Link)", "status": "parity", "note": "http, https and www; used for tappable links in Notes via springboard/src/shell/textarea.rs"},
-    {"feature": "Phone numbers", "apple": "DDMatchPhoneNumber", "bifrost": "springboard/ui/src/detect.rs (Kind::Phone)", "status": "partial", "note": "range only, 7 to 15 digits; no parsed number value"},
-    {"feature": "Postal addresses", "apple": "DDMatchPostalAddress", "bifrost": "springboard/ui/src/detect.rs (Kind::Address)", "status": "partial", "note": "street plus house number, English and Icelandic; no components (city, postcode)"},
-    {"feature": "Calendar events and dates", "apple": "DDMatchCalendarEvent", "bifrost": "springboard/ui/src/detect.rs (Kind::Date)", "status": "partial", "note": "only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates"},
-    {"feature": "Email addresses", "apple": "DDMatchEmailAddress", "bifrost": "none", "status": "gap", "note": "Kind has no Email variant"},
-    {"feature": "Flight numbers", "apple": "DDMatchFlightNumber", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Money amounts", "apple": "DDMatchMoneyAmount", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Shipment tracking numbers", "apple": "DDMatchShipmentTrackingNumber", "bifrost": "none", "status": "gap", "note": ""},
-    {"feature": "Pasteboard detection", "apple": "detectPatterns, detectedPatterns, detectValues, detectedValues", "bifrost": "springboard/sdk/src/pasteboard.rs has no detector hooks", "status": "gap", "note": "the detector could run over pasteboard text but is not wired"},
-    {"feature": "SDK reach and docs", "apple": "framework availability", "bifrost": "springboard/sdk/tests/kits.rs, docs/bifrost-ui.md (Data detectors), springboard/CHANGELOG.md 0.4.71", "status": "parity", "note": "detect is reachable from apps and documented"}
+    {
+      "feature": "Match base type and string scanning",
+      "apple": "DDMatch, DataDetector",
+      "bifrost": "springboard/ui/src/detect.rs (find, Kind, Match)",
+      "status": "partial",
+      "note": "returns kind plus byte range only; no typed payload per match"
+    },
+    {
+      "feature": "Web links",
+      "apple": "DDMatchLink",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Link)",
+      "status": "parity",
+      "note": "http, https and www; used for tappable links in Notes via springboard/src/shell/textarea.rs"
+    },
+    {
+      "feature": "Phone numbers",
+      "apple": "DDMatchPhoneNumber",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Phone)",
+      "status": "partial",
+      "note": "range only, 7 to 15 digits; no parsed number value"
+    },
+    {
+      "feature": "Postal addresses",
+      "apple": "DDMatchPostalAddress",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Address)",
+      "status": "partial",
+      "note": "street plus house number, English and Icelandic; no components (city, postcode)"
+    },
+    {
+      "feature": "Calendar events and dates",
+      "apple": "DDMatchCalendarEvent",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Date)",
+      "status": "partial",
+      "note": "only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates"
+    },
+    {
+      "feature": "Email addresses",
+      "apple": "DDMatchEmailAddress",
+      "bifrost": "springboard/ui/src/detect.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Kind has no Email variant"
+    },
+    {
+      "feature": "Flight numbers",
+      "apple": "DDMatchFlightNumber",
+      "bifrost": "none",
+      "status": "gap",
+      "note": ""
+    },
+    {
+      "feature": "Money amounts",
+      "apple": "DDMatchMoneyAmount",
+      "bifrost": "springboard/ui/src/detect.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+    },
+    {
+      "feature": "Shipment tracking numbers",
+      "apple": "DDMatchShipmentTrackingNumber",
+      "bifrost": "springboard/ui/src/detect.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+    },
+    {
+      "feature": "Pasteboard detection",
+      "apple": "detectPatterns, detectedPatterns, detectValues, detectedValues",
+      "bifrost": "springboard/ui/src/detect.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the detector could run over pasteboard text but is not wired"
+    },
+    {
+      "feature": "SDK reach and docs",
+      "apple": "framework availability",
+      "bifrost": "springboard/sdk/tests/kits.rs, docs/bifrost-ui.md (Data detectors), springboard/CHANGELOG.md 0.4.71",
+      "status": "parity",
+      "note": "detect is reachable from apps and documented"
+    }
   ],
-  "gaps": ["Email, flight, money and tracking-number detectors", "Typed match values (parsed phone, address parts, date with time)", "Pasteboard detection API", "Transit information (needs data)"]
+  "gaps": [
+    "Email, flight, money and tracking-number detectors",
+    "Typed match values (parsed phone, address parts, date with time)",
+    "Pasteboard detection API",
+    "Transit information (needs data)"
+  ]
 }

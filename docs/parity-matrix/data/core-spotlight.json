@@ -7,21 +7,111 @@
   "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents. It does not cover app-side queries and suggestions, index extensions and delegates, custom or person attributes, error reporting, or the Foundation models search tool.",
   "rea_evidence": "ev_4438bf59535e4bd6ba0ca70598c6a17e34d2cbccb6b6a1ca563a4e22a50cb41b",
   "features": [
-    {"feature": "Searchable items and attribute sets", "apple": "CSSearchableItem, CSSearchableItemAttributeSet", "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new)", "status": "partial", "note": "title, description, keywords, thumbnail path and content URL only; no other Apple attribute keys"},
-    {"feature": "Indexing items in an on-device index", "apple": "CSSearchableIndex.indexSearchableItems", "bifrost": "springboard/sdk/src/quicksearch.rs:83 (index_searchable_items); springboard/src/shell/spotindex.rs:54 (Index::index)", "status": "partial", "note": "fire-and-forget message to the shell; no completion handler, so the app learns nothing about success or failure; identifier reuse replaces the item"},
-    {"feature": "Deleting indexed items", "apple": "CSSearchableIndex.deleteSearchableItems(withIdentifiers:), deleteSearchableItems(withDomainIdentifiers:), deleteAllSearchableItems", "bifrost": "springboard/sdk/src/quicksearch.rs:103-113; springboard/src/shell/spotindex.rs:70 (Index::delete)", "status": "parity", "note": "delete by identifier, by domain and all items; the Apple completion handlers are not present"},
-    {"feature": "Index storage, bounds and lifecycle", "apple": "CSSearchableIndex (on-device, private to the device owner), CSSearchableIndex.default()", "bifrost": "springboard/src/shell/spotindex.rs (saved as spotlight-index/<app id>.json, 1000 items per app, 64 apps); springboard/sdk/src/quicksearch.rs:76 (default_index)", "status": "partial", "note": "shell-side JSON store with oldest-first eviction; no named custom indexes, no protection classes, no per-app index description"},
-    {"feature": "Index client delegate", "apple": "CSSearchableIndexDelegate", "bifrost": "none found", "status": "gap", "note": "no callback surface for index events or data-protection hooks; the SDK App trait has no index delegate method"},
-    {"feature": "Index descriptions", "apple": "CSSearchableIndexDescription", "bifrost": "none found", "status": "gap", "note": "no way to describe an index or its protection class"},
-    {"feature": "Index extensions and on-demand regeneration", "apple": "CSIndexExtensionRequestHandler, CSImportExtension, Regenerating your app's indexes on demand", "bifrost": "none found", "status": "gap", "note": "apps can only push items from a running process; the system never asks an app to rebuild its index. Apple also notes that file import extensions do not work on macOS, so an import extension would need a different counterpart"},
-    {"feature": "App-side search queries", "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app", "bifrost": "springboard/src/shell/spotindex.rs:96 (Index::search) and :221 (search) are shell-internal; no SDK query type", "status": "gap", "note": "an app cannot query its own or other apps' indexed items through the SDK"},
-    {"feature": "User query interface and suggestions", "apple": "CSUserQuery, CSUserQueryContext, CSSuggestion, Building a search interface for your app", "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row)", "status": "partial", "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index"},
-    {"feature": "Opening a search result", "apple": "NSUserActivity continuation with CSSearchableItemActionType", "bifrost": "springboard/sdk/src/lib.rs:162 (App::continue_activity); springboard/sdk/src/quicksearch.rs (UserActivity, ACTION_TYPE); springboard/src/shell/quicksearch.rs:1348 (ToApp::ContinueActivity)", "status": "partial", "note": "continuation works for indexed items; the general NSUserActivity handoff path is not exposed by this SDK module"},
-    {"feature": "Errors and error domains", "apple": "CSIndexError, CSIndexErrorDomain, CSSearchQueryError, CSSearchQueryErrorDomain", "bifrost": "none found", "status": "gap", "note": "indexing returns nothing, so no error codes reach the app"},
-    {"feature": "Custom attributes, localized strings and persons", "apple": "CSCustomAttributeKey, CSLocalizedString, CSPerson", "bifrost": "none found", "status": "gap", "note": "no custom attribute keys, localized display strings or person records in the item attributes"},
-    {"feature": "Summary and priority data for mail and messages", "apple": "Generating summary and priority data for indexed items", "bifrost": "none found", "status": "n/a", "note": "depends on Apple Mail, Messages and Apple Intelligence data sources, which BifrOSt does not have"},
-    {"feature": "Foundation models search tool", "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult", "bifrost": "none found", "status": "gap", "note": "no app-facing way to expose indexed content to the on-device assistant as model context; springboard/apps/assistant-desktop exists but has no index tool"},
-    {"feature": "Framework version", "apple": "CoreSpotlightAPIVersion, SearchableItem (Swift value type)", "bifrost": "not applicable", "status": "n/a", "note": "Swift-only and version constant; no BifrOSt counterpart needed"}
+    {
+      "feature": "Searchable items and attribute sets",
+      "apple": "CSSearchableItem, CSSearchableItemAttributeSet",
+      "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new)",
+      "status": "partial",
+      "note": "title, description, keywords, thumbnail path and content URL only; no other Apple attribute keys"
+    },
+    {
+      "feature": "Indexing items in an on-device index",
+      "apple": "CSSearchableIndex.indexSearchableItems",
+      "bifrost": "springboard/sdk/src/quicksearch.rs:83 (index_searchable_items); springboard/src/shell/spotindex.rs:54 (Index::index)",
+      "status": "partial",
+      "note": "fire-and-forget message to the shell; no completion handler, so the app learns nothing about success or failure; identifier reuse replaces the item"
+    },
+    {
+      "feature": "Deleting indexed items",
+      "apple": "CSSearchableIndex.deleteSearchableItems(withIdentifiers:), deleteSearchableItems(withDomainIdentifiers:), deleteAllSearchableItems",
+      "bifrost": "springboard/sdk/src/quicksearch.rs:103-113; springboard/src/shell/spotindex.rs:70 (Index::delete)",
+      "status": "parity",
+      "note": "delete by identifier, by domain and all items; the Apple completion handlers are not present"
+    },
+    {
+      "feature": "Index storage, bounds and lifecycle",
+      "apple": "CSSearchableIndex (on-device, private to the device owner), CSSearchableIndex.default()",
+      "bifrost": "springboard/src/shell/spotindex.rs (saved as spotlight-index/<app id>.json, 1000 items per app, 64 apps); springboard/sdk/src/quicksearch.rs:76 (default_index)",
+      "status": "partial",
+      "note": "shell-side JSON store with oldest-first eviction; no named custom indexes, no protection classes, no per-app index description"
+    },
+    {
+      "feature": "Index client delegate",
+      "apple": "CSSearchableIndexDelegate",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no callback surface for index events or data-protection hooks; the SDK App trait has no index delegate method"
+    },
+    {
+      "feature": "Index descriptions",
+      "apple": "CSSearchableIndexDescription",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no way to describe an index or its protection class"
+    },
+    {
+      "feature": "Index extensions and on-demand regeneration",
+      "apple": "CSIndexExtensionRequestHandler, CSImportExtension, Regenerating your app's indexes on demand",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "apps can only push items from a running process; the system never asks an app to rebuild its index. Apple also notes that file import extensions do not work on macOS, so an import extension would need a different counterpart"
+    },
+    {
+      "feature": "App-side search queries",
+      "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app",
+      "bifrost": "springboard/src/shell/spotindex.rs:96 (Index::search) and :221 (search) are shell-internal; no SDK query type",
+      "status": "gap",
+      "note": "an app cannot query its own or other apps' indexed items through the SDK"
+    },
+    {
+      "feature": "User query interface and suggestions",
+      "apple": "CSUserQuery, CSUserQueryContext, CSSuggestion, Building a search interface for your app",
+      "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row)",
+      "status": "partial",
+      "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index"
+    },
+    {
+      "feature": "Opening a search result",
+      "apple": "NSUserActivity continuation with CSSearchableItemActionType",
+      "bifrost": "springboard/sdk/src/lib.rs:162 (App::continue_activity); springboard/sdk/src/quicksearch.rs (UserActivity, ACTION_TYPE); springboard/src/shell/quicksearch.rs:1348 (ToApp::ContinueActivity)",
+      "status": "partial",
+      "note": "continuation works for indexed items; the general NSUserActivity handoff path is not exposed by this SDK module"
+    },
+    {
+      "feature": "Errors and error domains",
+      "apple": "CSIndexError, CSIndexErrorDomain, CSSearchQueryError, CSSearchQueryErrorDomain",
+      "bifrost": "springboard/sdk/src/quicksearch.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. indexing returns nothing, so no error codes reach the app"
+    },
+    {
+      "feature": "Custom attributes, localized strings and persons",
+      "apple": "CSCustomAttributeKey, CSLocalizedString, CSPerson",
+      "bifrost": "springboard/sdk/src/quicksearch.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no custom attribute keys, localized display strings or person records in the item attributes"
+    },
+    {
+      "feature": "Summary and priority data for mail and messages",
+      "apple": "Generating summary and priority data for indexed items",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "depends on Apple Mail, Messages and Apple Intelligence data sources, which BifrOSt does not have"
+    },
+    {
+      "feature": "Foundation models search tool",
+      "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no app-facing way to expose indexed content to the on-device assistant as model context; springboard/apps/assistant-desktop exists but has no index tool"
+    },
+    {
+      "feature": "Framework version",
+      "apple": "CoreSpotlightAPIVersion, SearchableItem (Swift value type)",
+      "bifrost": "not applicable",
+      "status": "n/a",
+      "note": "Swift-only and version constant; no BifrOSt counterpart needed"
+    }
   ],
   "gaps": [
     "No app-facing query API (CSSearchQuery, CSUserQuery) and no suggestions, so apps cannot search their own index or build a search field on it.",

@@ -21,6 +21,8 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
                                  semantic search over feature rows (Titan embeddings, then rerank)
   related                        nearest frameworks per framework by embedding -> related.json
   themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
+  apply FILE.json [--dry-run]    apply closures [{slug, feature, status, bifrost, note}]: each updates the row it
+                                 matches (exact feature, else rerank) or is appended as a new row
 
 Coverage of a framework: rows that apply (status not n/a) score parity 1, partial 0.5, os 0.5, gap 0;
 coverage = score / applicable rows. A framework with no applicable rows has no coverage (n/a).
@@ -495,6 +497,54 @@ def cmd_themes(a):
         print(f"  {t['id']} ({t['size']:3} rows, {len(t['frameworks'])} frameworks): {t['title']}")
 
 
+RANK = {"n/a": -1, "gap": 0, "os": 1, "partial": 2, "parity": 3}
+
+
+def cmd_apply(a):
+    sem = _semantic()
+    entries, _ = load_entries()
+    by_slug = {e["slug"]: e for e in entries}
+    by_slug.update({e["index_slug"]: e for e in entries if e.get("index_slug")})
+    closures = json.load(open(a.file))
+    changed, appended, unknown = set(), 0, []
+    for c in closures:
+        e = by_slug.get(c["slug"])
+        if not e:
+            unknown.append(c["slug"])
+            continue
+        path = os.path.join(DATA, e["slug"] + ".json")
+        d = json.load(open(path))
+        e["rows"] = [dict(r, status=norm(r.get("status"))) for r in d.get("features") or []]
+        status = norm(c.get("status") or "partial")
+        i, score = sem.match_row(e, c["feature"])
+        note = c.get("note", "")
+        if i is None:
+            d.setdefault("features", []).append({"feature": c["feature"], "apple": c.get("apple", ""),
+                                                 "bifrost": c.get("bifrost", ""), "status": status, "note": note})
+            appended += 1
+            print(f"+ {e['slug']}: new row {c['feature'][:70]!r} ({status})")
+        else:
+            r = d["features"][i]
+            if RANK[status] > RANK[norm(r.get("status"))]:
+                print(f"~ {e['slug']}: {r.get('feature', '')[:60]!r} {norm(r.get('status'))} -> {status} (match {score:.2f})")
+                r["status"] = status
+                r["bifrost"] = c.get("bifrost") or r.get("bifrost", "")
+                r["note"] = (note + " " + (r.get("note") or "")).strip()
+            else:
+                print(f"= {e['slug']}: {r.get('feature', '')[:60]!r} already {norm(r.get('status'))} (match {score:.2f})")
+                continue
+        rows = d["features"]
+        st = collections.Counter(norm(r.get("status")) for r in rows)
+        if norm(d.get("status")) in ("gap", "n/a") and (st["partial"] or st["parity"]):
+            d["status"] = "partial"
+        changed.add(e["slug"])
+        if not a.dry_run:
+            json.dump(d, open(path, "w"), indent=2, ensure_ascii=False)
+            open(path, "a").write("\n")
+    print(f"{len(changed)} frameworks changed, {appended} rows appended, unknown slugs: {sorted(set(unknown))}"
+          + (" (dry run)" if a.dry_run else ""))
+
+
 def load_semantic_files():
     rel = json.load(open(RELATED))["related"] if os.path.exists(RELATED) else {}
     th = json.load(open(THEMES))["themes"] if os.path.exists(THEMES) else []
@@ -531,12 +581,15 @@ def main(argv=None):
     q.add_argument("--status")
     r = sub.add_parser("related")
     r.add_argument("--k", type=int, default=5)
+    ap = sub.add_parser("apply")
+    ap.add_argument("file")
+    ap.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("themes")
     t.add_argument("--k", type=int)
     a = p.parse_args(argv)
     {"status": cmd_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
      "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index,
-     "search": cmd_search, "related": cmd_related, "themes": cmd_themes}[a.cmd](a)
+     "search": cmd_search, "related": cmd_related, "themes": cmd_themes, "apply": cmd_apply}[a.cmd](a)
 
 
 if __name__ == "__main__":

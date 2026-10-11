@@ -2,27 +2,123 @@
   "framework": "MapKit",
   "doc": "https://developer.apple.com/documentation/mapkit",
   "macos_since": "10.9",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/shell/weather/data.rs (Open-Meteo place search and forecasts only); springboard/src/shell/photos/exif.rs (GPS formatting only); springboard/sdk/src/workspace.rs (open a URL, no maps handling)",
   "summary": "MapKit covers embedded map views, annotations and overlays, search, geocoding, directions, Look Around and snapshots. BifrOSt has no map view, tiles, annotations, overlays, directions or snapshots, and no SDK map API. The only overlap is text-to-coordinate place search in the Weather app, which uses Open-Meteo rather than Apple services.",
   "rea_evidence": "ev_5038d4166e073fda1d3c9a45097a5e4a6248d56d4e7d145505ef5ac919db932f",
   "features": [
-    {"feature": "Map view (MKMapView, Map)", "apple": "MKMapView, Map (SwiftUI)", "bifrost": "none found in springboard/src or springboard/sdk/src", "status": "gap", "note": "no map renderer, tile source or map widget in the SDK"},
-    {"feature": "Map camera and region", "apple": "MKCoordinateRegion, MKCoordinateSpan, MKMapCamera, MapCameraPosition", "bifrost": "springboard/src/shell/weather/data.rs:115 (Location holds lat/lon only)", "status": "gap", "note": "a coordinate pair exists; no region, span or camera type"},
-    {"feature": "Annotations, markers and overlays", "apple": "MKAnnotation views, MapPolygon, MapPolyline, MapCircle, Marker, Annotation", "bifrost": "none found", "status": "gap", "note": "nothing draws pins, shapes or callouts on a map"},
-    {"feature": "Forward geocoding (place name to coordinate)", "apple": "MKGeocodingRequest", "bifrost": "springboard/src/shell/weather/data.rs:248 (geocode_url), :253 (parse_places), :456 (search_places)", "status": "partial", "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display"},
-    {"feature": "Reverse geocoding (coordinate to address)", "apple": "MKReverseGeocodingRequest, MKAddress, MKAddressRepresentations", "bifrost": "none found", "status": "gap", "note": "no coordinate-to-place lookup; the Weather app only names places it searched for"},
-    {"feature": "Local search and search completion", "apple": "MKLocalSearch, MKLocalSearchCompleter, MKLocalPointsOfInterestRequest", "bifrost": "springboard/src/shell/weather/data.rs:456 (search_places)", "status": "partial", "note": "city and place text search only; no points-of-interest search, nearby search or completion list"},
-    {"feature": "Points of interest and map features", "apple": "MKMapFeatureAnnotation, MKMapFeatureOptions, MKPointOfInterestFilter, MKPointOfInterestCategory, MapFeature, MapSelection", "bifrost": "none found", "status": "gap", "note": "no POI categories, selectable features or map-item detail"},
-    {"feature": "Directions and routes", "apple": "MKDirections, MKRoute, MKRoute.Step, MKDirections.ETAResponse", "bifrost": "none found", "status": "gap", "note": "no routing service or route data"},
-    {"feature": "Map snapshots (static images)", "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot", "bifrost": "none found", "status": "gap", "note": "would need a map renderer first; the renderer has no map layer"},
-    {"feature": "Map controls (compass, zoom, scale, user tracking)", "apple": "MKCompassButton, MKZoomControl, MKScaleView, MKPitchControl, MKUserTrackingButton, MapZoomStepper, MapScaleView", "bifrost": "none found", "status": "gap", "note": "no map controls exist to adapt"},
-    {"feature": "User location on a map", "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent", "bifrost": "none found", "status": "gap", "note": "no location service API was found in the SDK index (searched for location and geolocation terms)"},
-    {"feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)", "apple": "MKMapPoint, MKMapRect, MKMapSize, MKDistanceFormatter", "bifrost": "springboard/src/shell/photos/exif.rs:110 (format_gps: degrees with N/S/E/W)", "status": "gap", "note": "only a GPS display string exists; no projection or distance types"},
-    {"feature": "Street-level imagery (Look Around)", "apple": "MKLookAroundScene, MKLookAroundViewController, LookAroundPreview, MKLookAroundSnapshotter", "bifrost": "none found", "status": "n/a", "note": "Apple-only imagery service with no BifrOSt counterpart"},
-    {"feature": "Place information and detail sheets", "apple": "MKMapItem, MKMapItemDetailViewController, mapItemDetailSheet, MKSelectionAccessory", "bifrost": "springboard/src/shell/weather/data.rs:115 (Location name and region)", "status": "gap", "note": "a place has a name and region only; no detail view, phone, URL or hours"},
-    {"feature": "Maps URLs and opening in the default map app", "apple": "Unified Maps URLs, default navigation app setup", "bifrost": "springboard/sdk/src/workspace.rs (open URL)", "status": "gap", "note": "the workspace API opens URLs, but no maps scheme is handled and no default navigation app exists"},
-    {"feature": "Indoor maps and GeoJSON", "apple": "MKGeoJSONDecoder, MKGeoJSONFeature, MKGeoJSONObject, IMDF sample", "bifrost": "none found", "status": "gap", "note": "no GeoJSON or IMDF parsing in the SDK"}
+    {
+      "feature": "Map view (MKMapView, Map)",
+      "apple": "MKMapView, Map (SwiftUI)",
+      "bifrost": "none found in springboard/src or springboard/sdk/src",
+      "status": "gap",
+      "note": "no map renderer, tile source or map widget in the SDK"
+    },
+    {
+      "feature": "Map camera and region",
+      "apple": "MKCoordinateRegion, MKCoordinateSpan, MKMapCamera, MapCameraPosition",
+      "bifrost": "springboard/ui/src/geo.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type"
+    },
+    {
+      "feature": "Annotations, markers and overlays",
+      "apple": "MKAnnotation views, MapPolygon, MapPolyline, MapCircle, Marker, Annotation",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "nothing draws pins, shapes or callouts on a map"
+    },
+    {
+      "feature": "Forward geocoding (place name to coordinate)",
+      "apple": "MKGeocodingRequest",
+      "bifrost": "springboard/src/shell/weather/data.rs:248 (geocode_url), :253 (parse_places), :456 (search_places)",
+      "status": "partial",
+      "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display"
+    },
+    {
+      "feature": "Reverse geocoding (coordinate to address)",
+      "apple": "MKReverseGeocodingRequest, MKAddress, MKAddressRepresentations",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no coordinate-to-place lookup; the Weather app only names places it searched for"
+    },
+    {
+      "feature": "Local search and search completion",
+      "apple": "MKLocalSearch, MKLocalSearchCompleter, MKLocalPointsOfInterestRequest",
+      "bifrost": "springboard/src/shell/weather/data.rs:456 (search_places)",
+      "status": "partial",
+      "note": "city and place text search only; no points-of-interest search, nearby search or completion list"
+    },
+    {
+      "feature": "Points of interest and map features",
+      "apple": "MKMapFeatureAnnotation, MKMapFeatureOptions, MKPointOfInterestFilter, MKPointOfInterestCategory, MapFeature, MapSelection",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no POI categories, selectable features or map-item detail"
+    },
+    {
+      "feature": "Directions and routes",
+      "apple": "MKDirections, MKRoute, MKRoute.Step, MKDirections.ETAResponse",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no routing service or route data"
+    },
+    {
+      "feature": "Map snapshots (static images)",
+      "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "would need a map renderer first; the renderer has no map layer"
+    },
+    {
+      "feature": "Map controls (compass, zoom, scale, user tracking)",
+      "apple": "MKCompassButton, MKZoomControl, MKScaleView, MKPitchControl, MKUserTrackingButton, MapZoomStepper, MapScaleView",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no map controls exist to adapt"
+    },
+    {
+      "feature": "User location on a map",
+      "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no location service API was found in the SDK index (searched for location and geolocation terms)"
+    },
+    {
+      "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",
+      "apple": "MKMapPoint, MKMapRect, MKMapSize, MKDistanceFormatter",
+      "bifrost": "springboard/ui/src/geo.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a GPS display string exists; no projection or distance types"
+    },
+    {
+      "feature": "Street-level imagery (Look Around)",
+      "apple": "MKLookAroundScene, MKLookAroundViewController, LookAroundPreview, MKLookAroundSnapshotter",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "Apple-only imagery service with no BifrOSt counterpart"
+    },
+    {
+      "feature": "Place information and detail sheets",
+      "apple": "MKMapItem, MKMapItemDetailViewController, mapItemDetailSheet, MKSelectionAccessory",
+      "bifrost": "springboard/src/shell/weather/data.rs:115 (Location name and region)",
+      "status": "gap",
+      "note": "a place has a name and region only; no detail view, phone, URL or hours"
+    },
+    {
+      "feature": "Maps URLs and opening in the default map app",
+      "apple": "Unified Maps URLs, default navigation app setup",
+      "bifrost": "springboard/sdk/src/workspace.rs (open URL)",
+      "status": "gap",
+      "note": "the workspace API opens URLs, but no maps scheme is handled and no default navigation app exists"
+    },
+    {
+      "feature": "Indoor maps and GeoJSON",
+      "apple": "MKGeoJSONDecoder, MKGeoJSONFeature, MKGeoJSONObject, IMDF sample",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no GeoJSON or IMDF parsing in the SDK"
+    }
   ],
   "gaps": [
     "No map view or map tile rendering in the SDK or renderer, so no app can show a map",

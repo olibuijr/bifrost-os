@@ -2,17 +2,53 @@
   "framework": "MetalKit",
   "doc": "https://developer.apple.com/documentation/metalkit",
   "macos_since": "10.11",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/gpu/wl.rs (Presenter), springboard/src/gpu/batch.rs, springboard/render/src/imgdec.rs",
   "summary": "MetalKit is Apple's Metal helper layer: a view that owns a drawable loop (MTKView), a texture loader, and Model I/O mesh wrappers. BifrOSt has a GPU presenter with a Metal-shaped internal API (device, drawables, one render pass per present) on GLES, but no app-facing SDK equivalent of any MetalKit class, and no mesh handling.",
   "rea_evidence": "ev_6daab09477ece3392a006798a03c8f877cc58a29a34b3ff5363ab2d632b075ca",
   "features": [
-    {"feature": "View management (MTKView, MTKViewDelegate)", "apple": "MTKView, MTKViewDelegate", "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/sdk/src/view/", "status": "gap", "note": "Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"},
-    {"feature": "Device and drawable setup", "apple": "MTKView.device, preferredDevice, colorPixelFormat", "bifrost": "springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs", "status": "os", "note": "GBM and EGL drawables exist in the system layer; apps get no device or drawable API"},
-    {"feature": "Texture loading from image files", "apple": "MTKTextureLoader (newTexture URL, asset catalog)", "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352)", "status": "partial", "note": "Images decode to RGBA on the CPU and upload to GLES. No app-facing GPU texture object, no asynchronous load, no asset catalog lookup, no texture options"},
-    {"feature": "Model I/O mesh handling (MTKMesh, MTKSubmesh, MTKMeshBuffer, allocator)", "apple": "MTKMesh, MTKSubmesh, MTKMeshBuffer, MTKMeshBufferAllocator, newMeshes(asset:device:)", "bifrost": "none found", "status": "gap", "note": "No mesh, vertex-descriptor or index-buffer type outside the shell's internal 2D batch (springboard/src/gpu/batch.rs, a fixed 64-byte quad vertex)"},
-    {"feature": "Vertex batching for 2D draws", "apple": "(no direct MetalKit class; Metal draw calls)", "bifrost": "springboard/src/gpu/batch.rs (Vertex, ATTRIBS)", "status": "os", "note": "Internal batching of shell primitives into one vertex list per frame. Not exposed to apps"},
-    {"feature": "Conversion functions and model errors", "apple": "Conversion Functions (Metal and Model I/O vertex layouts), Model Errors", "bifrost": "none found", "status": "n/a", "note": "Depends on Model I/O, which BifrOSt does not have"}
+    {
+      "feature": "View management (MTKView, MTKViewDelegate)",
+      "apple": "MTKView, MTKViewDelegate",
+      "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/sdk/src/view/",
+      "status": "gap",
+      "note": "Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
+    },
+    {
+      "feature": "Device and drawable setup",
+      "apple": "MTKView.device, preferredDevice, colorPixelFormat",
+      "bifrost": "springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs",
+      "status": "os",
+      "note": "GBM and EGL drawables exist in the system layer; apps get no device or drawable API"
+    },
+    {
+      "feature": "Texture loading from image files",
+      "apple": "MTKTextureLoader (newTexture URL, asset catalog)",
+      "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352)",
+      "status": "partial",
+      "note": "Images decode to RGBA on the CPU and upload to GLES. No app-facing GPU texture object, no asynchronous load, no asset catalog lookup, no texture options"
+    },
+    {
+      "feature": "Model I/O mesh handling (MTKMesh, MTKSubmesh, MTKMeshBuffer, allocator)",
+      "apple": "MTKMesh, MTKSubmesh, MTKMeshBuffer, MTKMeshBufferAllocator, newMeshes(asset:device:)",
+      "bifrost": "springboard/render/src/mesh.rs, springboard/render/src/texture.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mesh, vertex-descriptor or index-buffer type outside the shell's internal 2D batch (springboard/src/gpu/batch.rs, a fixed 64-byte quad vertex)"
+    },
+    {
+      "feature": "Vertex batching for 2D draws",
+      "apple": "(no direct MetalKit class; Metal draw calls)",
+      "bifrost": "springboard/src/gpu/batch.rs (Vertex, ATTRIBS)",
+      "status": "os",
+      "note": "Internal batching of shell primitives into one vertex list per frame. Not exposed to apps"
+    },
+    {
+      "feature": "Conversion functions and model errors",
+      "apple": "Conversion Functions (Metal and Model I/O vertex layouts), Model Errors",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "Depends on Model I/O, which BifrOSt does not have"
+    }
   ],
   "gaps": [
     "No app-facing GPU view with a per-frame delegate (MTKView and MTKViewDelegate equivalent) in springboard/sdk/src/",

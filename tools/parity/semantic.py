@@ -41,8 +41,11 @@ class Embedder:
         self.path = os.path.join(CACHE_DIR, f"embeddings-{self.model}.npz")
         self.cache = {}
         if os.path.exists(self.path):
-            z = np.load(self.path)
-            self.cache = dict(zip(z["keys"].tolist(), z["vecs"]))
+            try:
+                z = np.load(self.path)
+                self.cache = dict(zip(z["keys"].tolist(), z["vecs"]))
+            except Exception:  # noqa: BLE001 - a damaged cache is rebuilt, never fatal
+                self.cache = {}
         self.dirty = False
 
     def embed(self, texts):
@@ -57,7 +60,9 @@ class Embedder:
             self.dirty = True
         if self.dirty:
             ks = list(self.cache)
-            np.savez(self.path, keys=np.array(ks), vecs=np.stack([self.cache[k] for k in ks]))
+            tmp = f"{self.path}.{os.getpid()}.tmp.npz"  # several processes may embed at once: write, then rename
+            np.savez(tmp, keys=np.array(ks), vecs=np.stack([self.cache[k] for k in ks]))
+            os.replace(tmp, self.path)
             self.dirty = False
         return np.stack([self.cache[k] for k in keys]) if keys else np.zeros((0, 1), dtype=np.float32)
 
@@ -165,3 +170,17 @@ def themes(entries, k=None, status=("gap",)):
     for n, t in enumerate(out, 1):
         t["id"] = f"theme-{n:02d}"
     return out, emb.model
+
+
+def match_row(entry, text, threshold=0.35):
+    """The index of the row of `entry` that `text` describes: exact feature match first, else the best rerank
+    score among the framework's rows when it reaches `threshold`. None when nothing fits."""
+    want = text.strip().lower()
+    for i, r in enumerate(entry["rows"]):
+        if (r.get("feature") or "").strip().lower() == want:
+            return i, 1.0
+    if not entry["rows"]:
+        return None, 0.0
+    scores, _ = rerank(text, [f"{r.get('feature', '')}. {r.get('apple', '')}. {r.get('note', '')}" for r in entry["rows"]])
+    best = max(range(len(scores)), key=lambda i: scores[i])
+    return (best, scores[best]) if scores[best] >= threshold else (None, scores[best])

@@ -2,18 +2,60 @@
   "framework": "Evaluations",
   "doc": "https://developer.apple.com/documentation/evaluations",
   "macos_since": "27.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/testing.rs (TestWindow, UI testing kit only); springboard/apps/assistant-desktop/src/model.rs (model runner, no eval harness)",
   "summary": "Apple's Evaluations framework measures the quality of intelligence-powered features: datasets, evaluators, metrics, model-judge scoring, tool-call trajectory checks and Swift Testing integration. BifrOSt has no model-quality evaluation harness. Its testing kit covers UI and app tests, and the Assistant app runs a model with no scoring.",
   "rea_evidence": "ev_756075273a0ac335520262738baf7c9059ec686f84b2fc7f27b211c0e86a0e9b",
   "features": [
-    {"feature": "Evaluation definition and run", "apple": "Evaluation (protocol)", "bifrost": "springboard/apps/assistant-desktop/src/model.rs", "status": "gap", "note": "The Assistant runs the model but has no way to define a suite and run it against samples."},
-    {"feature": "Datasets and sample generation", "apple": "ModelSample, Loader, SampleGenerator", "bifrost": "none", "status": "gap", "note": "No dataset type, loader or synthetic sample generator exists in the repo."},
-    {"feature": "Metrics, evaluators and aggregation", "apple": "Metric, Evaluator, MetricsAggregator", "bifrost": "none", "status": "gap", "note": "No pass/fail or scored metric type; the calculator's springboard/apps/calculator-desktop/src/eval.rs is an expression parser, not an evaluation harness."},
-    {"feature": "Result tables and columns", "apple": "EvaluationResult, ResultColumn, inputColumn, responseColumn, expectedColumn", "bifrost": "none", "status": "gap", "note": "No typed result table for model responses."},
-    {"feature": "Model-judge evaluators", "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension", "bifrost": "none", "status": "gap", "note": "No LLM-as-judge scoring anywhere in docs/ or tools/."},
-    {"feature": "Tool-call trajectory evaluation", "apple": "ToolCallEvaluator, TrajectoryExpectation, ArgumentMatcher", "bifrost": "tools/arch-vm-bench.py", "status": "gap", "note": "The bench script has an evaluation dict for VM boot checks (service active, home reached), not tool-call trajectories."},
-    {"feature": "Swift Testing integration (evaluation traits)", "apple": "EvaluationTrait, EvaluationContext", "bifrost": "springboard/sdk/src/testing.rs", "status": "partial", "note": "The SDK testing kit (TestWindow, click and state assertions) covers UI tests; it has no evaluation trait and no model scoring."}
+    {
+      "feature": "Evaluation definition and run",
+      "apple": "Evaluation (protocol)",
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Assistant runs the model but has no way to define a suite and run it against samples."
+    },
+    {
+      "feature": "Datasets and sample generation",
+      "apple": "ModelSample, Loader, SampleGenerator",
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No dataset type, loader or synthetic sample generator exists in the repo."
+    },
+    {
+      "feature": "Metrics, evaluators and aggregation",
+      "apple": "Metric, Evaluator, MetricsAggregator",
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pass/fail or scored metric type; the calculator's springboard/apps/calculator-desktop/src/eval.rs is an expression parser, not an evaluation harness."
+    },
+    {
+      "feature": "Result tables and columns",
+      "apple": "EvaluationResult, ResultColumn, inputColumn, responseColumn, expectedColumn",
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed result table for model responses."
+    },
+    {
+      "feature": "Model-judge evaluators",
+      "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No LLM-as-judge scoring anywhere in docs/ or tools/."
+    },
+    {
+      "feature": "Tool-call trajectory evaluation",
+      "apple": "ToolCallEvaluator, TrajectoryExpectation, ArgumentMatcher",
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The bench script has an evaluation dict for VM boot checks (service active, home reached), not tool-call trajectories."
+    },
+    {
+      "feature": "Swift Testing integration (evaluation traits)",
+      "apple": "EvaluationTrait, EvaluationContext",
+      "bifrost": "springboard/sdk/src/testing.rs",
+      "status": "partial",
+      "note": "The SDK testing kit (TestWindow, click and state assertions) covers UI tests; it has no evaluation trait and no model scoring."
+    }
   ],
   "gaps": [
     "No model-quality evaluation harness: no suite definition, sample runner or scoring for the Assistant or any on-device model feature.",

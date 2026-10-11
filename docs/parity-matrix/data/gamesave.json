@@ -2,19 +2,67 @@
   "framework": "GameSave",
   "doc": "https://developer.apple.com/documentation/gamesave",
   "macos_since": "26.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/defaults.rs and springboard/sdk/src/restoration.rs (per-app data directory only); springboard/sdk/src/file_coordination.rs (advisory locks); no save sync in springboard/sdk/src/ or springboard/apps/games-desktop/",
   "summary": "GameSave syncs an app's save files through iCloud Drive with conflict resolution, offline play and alerts. BifrOSt has no app-facing save sync: apps get a private local data directory and advisory file locks, and the games app keeps only best scores on disk. The bifrost-cloud backend stores encrypted whole-device backups, but no SDK path maps an app save directory to it.",
   "rea_evidence": "ev_fcb07673c7548ce7ddb7c1b1a701fccb1390da8285cedfcac134310f6a43a96e",
   "features": [
-    {"feature": "Synced directory: open, state, close", "apple": "GameSaveSyncedDirectory.openDirectory(containerIdentifier:), state, GameSaveSyncedDirectory.State, close() (https://developer.apple.com/documentation/gamesave/gamesavesynceddirectory)", "bifrost": "springboard/sdk/src/defaults.rs (app data directory file, atomic write)", "status": "gap", "note": "No API returns a cloud-backed directory for an app. The app data directory is local only; nothing syncs it."},
-    {"feature": "Syncing a directory and progress UI", "apple": "finishSyncing(), finishSyncing(statusDisplay:) with modal progress alert", "bifrost": "none", "status": "gap", "note": "No sync engine and no sync progress alert. The shell's backup code (springboard/src/shell/backup.rs) covers only the shell's own data (Notes, Contacts, Calendar, reminders, settings), not app directories."},
-    {"feature": "Conflict resolution between versions", "apple": "GameSaveSyncedDirectory.Version, resolveConflicts(with:)", "bifrost": "springboard/sdk/src/file_coordination.rs (advisory flock on the parent directory)", "status": "gap", "note": "The coordinator locks writes between local processes. Its own doc lists no version or ubiquitous-item coordination, so there is no version list and no conflict resolution."},
-    {"feature": "Triggering and deferring uploads", "apple": "triggerPendingUpload()", "bifrost": "none", "status": "gap", "note": "No upload queue. Files are only written to local disk."},
-    {"feature": "Offline and local-only saving", "apple": "Local saving when the device is not signed into iCloud Drive (GameSave overview)", "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs (FILE in the app data directory)", "status": "partial", "note": "Local saving works without any account. The save is not synced, so this matches only the offline half of the feature."},
-    {"feature": "Error domain for save errors", "apple": "GameSaveErrorDomain (let, String)", "bifrost": "none", "status": "gap", "note": "No error domain exists because no save API exists. Would follow the sync API."},
-    {"feature": "Objective-C class", "apple": "GSSyncedDirectory (Objective-C synced directory)", "bifrost": "none", "status": "n/a", "note": "Objective-C-only name for the same class; BifrOSt apps are Rust."},
-    {"feature": "Cloud account backup of user data", "apple": "Not part of GameSave; nearest Apple counterpart is iCloud Drive", "bifrost": "~/Projects/bifrost-cloud/docs/schema.md (device_backups, encrypted backups of a BifrOSt PC); ~/Projects/bifrost-cloud/skill/SKILL.md (backups timer)", "status": "partial", "note": "Account-level encrypted device backups exist in the cloud backend, but the PC client code that uploads them was not found in bifrost-os, and no app can reach its save directory through them. Counted as partial background only, not as GameSave parity."}
+    {
+      "feature": "Synced directory: open, state, close",
+      "apple": "GameSaveSyncedDirectory.openDirectory(containerIdentifier:), state, GameSaveSyncedDirectory.State, close() (https://developer.apple.com/documentation/gamesave/gamesavesynceddirectory)",
+      "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API returns a cloud-backed directory for an app. The app data directory is local only; nothing syncs it."
+    },
+    {
+      "feature": "Syncing a directory and progress UI",
+      "apple": "finishSyncing(), finishSyncing(statusDisplay:) with modal progress alert",
+      "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sync engine and no sync progress alert. The shell's backup code (springboard/src/shell/backup.rs) covers only the shell's own data (Notes, Contacts, Calendar, reminders, settings), not app directories."
+    },
+    {
+      "feature": "Conflict resolution between versions",
+      "apple": "GameSaveSyncedDirectory.Version, resolveConflicts(with:)",
+      "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The coordinator locks writes between local processes. Its own doc lists no version or ubiquitous-item coordination, so there is no version list and no conflict resolution."
+    },
+    {
+      "feature": "Triggering and deferring uploads",
+      "apple": "triggerPendingUpload()",
+      "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No upload queue. Files are only written to local disk."
+    },
+    {
+      "feature": "Offline and local-only saving",
+      "apple": "Local saving when the device is not signed into iCloud Drive (GameSave overview)",
+      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs (FILE in the app data directory)",
+      "status": "partial",
+      "note": "Local saving works without any account. The save is not synced, so this matches only the offline half of the feature."
+    },
+    {
+      "feature": "Error domain for save errors",
+      "apple": "GameSaveErrorDomain (let, String)",
+      "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No error domain exists because no save API exists. Would follow the sync API."
+    },
+    {
+      "feature": "Objective-C class",
+      "apple": "GSSyncedDirectory (Objective-C synced directory)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Objective-C-only name for the same class; BifrOSt apps are Rust."
+    },
+    {
+      "feature": "Cloud account backup of user data",
+      "apple": "Not part of GameSave; nearest Apple counterpart is iCloud Drive",
+      "bifrost": "~/Projects/bifrost-cloud/docs/schema.md (device_backups, encrypted backups of a BifrOSt PC); ~/Projects/bifrost-cloud/skill/SKILL.md (backups timer)",
+      "status": "partial",
+      "note": "Account-level encrypted device backups exist in the cloud backend, but the PC client code that uploads them was not found in bifrost-os, and no app can reach its save directory through them. Counted as partial background only, not as GameSave parity."
+    }
   ],
   "gaps": [
     "Synced save directory API for apps (open a container, read and write files, sync in the background)",

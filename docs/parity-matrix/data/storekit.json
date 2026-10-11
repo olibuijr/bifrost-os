@@ -7,24 +7,132 @@
   "summary": "BifrOSt has a free app catalogue and installer (browse, install, update, changelog, sha256 check), which covers only the product-page and download side of the App Store. Purchases, transactions, entitlements, subscriptions, offers, signed JWS verification, reviews prompts and StoreKit testing have no counterpart.",
   "rea_evidence": "ev_ec765369e0094fb5383feea4b83916e0db64930fc6191bd855930ed9c90f5f46",
   "features": [
-    {"feature": "Product catalogue and metadata", "apple": "Product, Product.SubscriptionInfo, SubscriptionInfo", "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch)", "status": "partial", "note": "StoreApp has id, name, version, size, sha256, category, changelog; no price, currency, product type or subscription fields"},
-    {"feature": "Purchase flow", "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult", "bifrost": "none; springboard/src/shell/store/install.rs installs free packages only", "status": "gap", "note": "no payment sheet, no purchase result type, no paid-app install path"},
-    {"feature": "Transactions and entitlements", "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements", "bifrost": "none", "status": "gap", "note": "installed state is kept in apps/installed.json (install.rs), not as transactions an app can query"},
-    {"feature": "Signed transaction verification (JWS)", "apple": "VerificationResult, VerificationResult.VerificationError", "bifrost": "springboard/src/shell/store/install.rs (sha256 of package bytes only)", "status": "gap", "note": "package hash is checked; there is no signed-receipt or signed-transaction verification"},
-    {"feature": "Subscription status and renewal", "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState", "bifrost": "none", "status": "gap", "note": "no subscription groups, renewal or billing state"},
-    {"feature": "Offers, offer codes and win-back offers", "apple": "Product.SubscriptionOffer, OfferType, offer code redemption, win-back offer sheet", "bifrost": "none", "status": "gap", "note": "no offer data in the catalogue"},
-    {"feature": "Promoted purchases", "apple": "PurchaseIntent, Product.PromotionInfo", "bifrost": "none", "status": "gap", "note": "tied to the App Store product page; BifrOSt would need a store-side promotion model first"},
-    {"feature": "App Store product page and overlay", "apple": "SKStoreProductViewController, SKOverlay (Offering media for sale)", "bifrost": "springboard/src/shell/store/mod.rs (browse, app detail, GET and OPEN actions)", "status": "partial", "note": "the built-in store shows app detail and changelog; no embedded product sheet for other apps and no App Clip overlay"},
-    {"feature": "Store catalogue install and update", "apple": "No direct StoreKit equivalent (App Store download and update); closest is StoreDownloaderExtension", "bifrost": "springboard/src/shell/store/install.rs, springboard/src/shell/store/mod.rs (Updates)", "status": "partial", "note": "installs resume and verify sha256; no background asset-pack downloads for apps"},
-    {"feature": "App transaction (purchase of the app itself)", "apple": "AppTransaction, AppStore.sync, original purchase date and version", "bifrost": "none", "status": "gap", "note": "BifrOSt apps have no signed record of how they were obtained"},
-    {"feature": "App Store interactions", "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification", "bifrost": "none", "status": "gap", "note": "no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"},
-    {"feature": "Storefront information", "apple": "Storefront, Storefront.current, Storefront.updates", "bifrost": "none", "status": "n/a", "note": "regional App Store storefront has no BifrOSt counterpart"},
-    {"feature": "Review prompts", "apple": "RequestReviewAction, SKStoreReviewController", "bifrost": "none", "status": "gap", "note": "no SDK call to ask the user for a rating; a simple SDK prompt helper would fit the usernotif and sheet patterns"},
-    {"feature": "App Store messages", "apple": "Message, Message.Reason, DisplayMessageAction", "bifrost": "none", "status": "n/a", "note": "App Store-delivered messages depend on the App Store service"},
-    {"feature": "StoreKit testing", "apple": "StoreKit Test, sandbox testing, Xcode testing for IAP", "bifrost": "none", "status": "gap", "note": "no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware"},
-    {"feature": "Ad network attribution", "apple": "SKAdNetwork, SKAdImpression, SKANError", "bifrost": "none", "status": "n/a", "note": "Apple ad attribution; no BifrOSt advertising system"},
-    {"feature": "External purchase and external link account", "apple": "ExternalPurchase, ExternalPurchaseLink, ExternalLinkAccount", "bifrost": "none", "status": "n/a", "note": "entitlement-gated Apple programmes for EU, Japan, Korea and the EEA"},
-    {"feature": "Payment method binding and Store Downloader extension", "apple": "PaymentMethodBinding, StoreDownloaderExtension", "bifrost": "none", "status": "n/a", "note": "Apple Account and Apple-hosted asset packs"}
+    {
+      "feature": "Product catalogue and metadata",
+      "apple": "Product, Product.SubscriptionInfo, SubscriptionInfo",
+      "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch)",
+      "status": "partial",
+      "note": "StoreApp has id, name, version, size, sha256, category, changelog; no price, currency, product type or subscription fields"
+    },
+    {
+      "feature": "Purchase flow",
+      "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
+      "bifrost": "none; springboard/src/shell/store/install.rs installs free packages only",
+      "status": "gap",
+      "note": "no payment sheet, no purchase result type, no paid-app install path"
+    },
+    {
+      "feature": "Transactions and entitlements",
+      "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
+      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query"
+    },
+    {
+      "feature": "Signed transaction verification (JWS)",
+      "apple": "VerificationResult, VerificationResult.VerificationError",
+      "bifrost": "springboard/src/shell/store/install.rs (sha256 of package bytes only)",
+      "status": "gap",
+      "note": "package hash is checked; there is no signed-receipt or signed-transaction verification"
+    },
+    {
+      "feature": "Subscription status and renewal",
+      "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState",
+      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no subscription groups, renewal or billing state"
+    },
+    {
+      "feature": "Offers, offer codes and win-back offers",
+      "apple": "Product.SubscriptionOffer, OfferType, offer code redemption, win-back offer sheet",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no offer data in the catalogue"
+    },
+    {
+      "feature": "Promoted purchases",
+      "apple": "PurchaseIntent, Product.PromotionInfo",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "tied to the App Store product page; BifrOSt would need a store-side promotion model first"
+    },
+    {
+      "feature": "App Store product page and overlay",
+      "apple": "SKStoreProductViewController, SKOverlay (Offering media for sale)",
+      "bifrost": "springboard/src/shell/store/mod.rs (browse, app detail, GET and OPEN actions)",
+      "status": "partial",
+      "note": "the built-in store shows app detail and changelog; no embedded product sheet for other apps and no App Clip overlay"
+    },
+    {
+      "feature": "Store catalogue install and update",
+      "apple": "No direct StoreKit equivalent (App Store download and update); closest is StoreDownloaderExtension",
+      "bifrost": "springboard/src/shell/store/install.rs, springboard/src/shell/store/mod.rs (Updates)",
+      "status": "partial",
+      "note": "installs resume and verify sha256; no background asset-pack downloads for apps"
+    },
+    {
+      "feature": "App transaction (purchase of the app itself)",
+      "apple": "AppTransaction, AppStore.sync, original purchase date and version",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "BifrOSt apps have no signed record of how they were obtained"
+    },
+    {
+      "feature": "App Store interactions",
+      "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
+    },
+    {
+      "feature": "Storefront information",
+      "apple": "Storefront, Storefront.current, Storefront.updates",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "regional App Store storefront has no BifrOSt counterpart"
+    },
+    {
+      "feature": "Review prompts",
+      "apple": "RequestReviewAction, SKStoreReviewController",
+      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "status": "partial",
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK call to ask the user for a rating; a simple SDK prompt helper would fit the usernotif and sheet patterns"
+    },
+    {
+      "feature": "App Store messages",
+      "apple": "Message, Message.Reason, DisplayMessageAction",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "App Store-delivered messages depend on the App Store service"
+    },
+    {
+      "feature": "StoreKit testing",
+      "apple": "StoreKit Test, sandbox testing, Xcode testing for IAP",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware"
+    },
+    {
+      "feature": "Ad network attribution",
+      "apple": "SKAdNetwork, SKAdImpression, SKANError",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple ad attribution; no BifrOSt advertising system"
+    },
+    {
+      "feature": "External purchase and external link account",
+      "apple": "ExternalPurchase, ExternalPurchaseLink, ExternalLinkAccount",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "entitlement-gated Apple programmes for EU, Japan, Korea and the EEA"
+    },
+    {
+      "feature": "Payment method binding and Store Downloader extension",
+      "apple": "PaymentMethodBinding, StoreDownloaderExtension",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple Account and Apple-hosted asset packs"
+    }
   ],
   "gaps": [
     "No purchase API: no product lookup with price, no purchase flow, no paid-app install path (springboard/src/shell/store/api.rs has no price or product type).",
