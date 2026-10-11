@@ -1,0 +1,97 @@
+{
+  "framework": "File Provider",
+  "doc": "https://developer.apple.com/documentation/fileprovider",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/file_provider.rs, springboard/ui/src/file_provider.rs, springboard/sdk/src/file_coordination.rs, springboard/sdk/src/fswatch.rs, springboard/src/bare/docbroker.rs, springboard/src/shell/docpanel.rs (local document grants only)",
+  "summary": "Apple's File Provider framework lets an app's extension expose remote or managed files to the system, with replicated or nonreplicated placeholder-based sync. BifrOSt still has no provider extension host, no placeholder or on-demand hydration and no provider search. It now has an in-process domain registry, provided-item and capability models, the official provider error codes, and queued enumerator signals, but nothing delivers those signals to a provider or the shell yet.",
+  "rea_evidence": "ev_c9d3cec28f780836bffdd407ba62cfa3f732fdc01ccc27abf59e4fdde25b0703",
+  "features": [
+    {
+      "feature": "Share local files without an extension",
+      "apple": "UIFileSharingEnabled / LSSupportsOpeningDocumentsInPlace, document browser (landing page 'Share files locally')",
+      "bifrost": "springboard/src/bare/docbroker.rs (Opener, Grants), springboard/src/shell/docpanel.rs (desktop document panel), springboard/sdk/src/document.rs",
+      "status": "partial",
+      "note": "Per-app grants open and save files through a broker with a 'documents' permission. There is no in-place sharing setting, and the picker is confined to the account home (docs/file-portal-design.md)."
+    },
+    {
+      "feature": "Replicated File Provider extension (sync local copies with remote storage)",
+      "apple": "Replicated File Provider extension",
+      "bifrost": "none in bifrost-os; cloud sync lives in ~/Projects/bifrost-cloud, outside this repo",
+      "status": "gap",
+      "note": "No extension host, no upload or download queue, and no remote-to-local sync inside the desktop."
+    },
+    {
+      "feature": "Nonreplicated File Provider extension (managed local files with placeholders)",
+      "apple": "Nonreplicated File Provider extension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No placeholder or dataless file concept, and no on-demand hydration. Files app reads and writes ordinary files only (springboard/src/files/fs.rs)."
+    },
+    {
+      "feature": "Extension management (NSFileProviderManager: domains, signalEnumerator, reimport)",
+      "apple": "NSFileProviderManager",
+      "bifrost": "springboard/sdk/src/file_provider.rs (DomainRegistry: add, remove, disconnect, reconnect, signal_enumerator, take_signals)",
+      "status": "partial",
+      "note": "In-process registry of domains and coalesced enumerator signals with generations. Nothing reads the signals yet: there is no extension process to receive them and no reimport, waitForChanges or materialized-item enumerator."
+    },
+    {
+      "feature": "Provided items (item, identifier, capabilities, type and creator)",
+      "apple": "NSFileProviderItem, NSFileProviderItemProtocol, NSFileProviderItemIdentifier, NSFileProviderItemCapabilities, NSFileProviderTypeAndCreator",
+      "bifrost": "springboard/ui/src/file_provider.rs (ItemIdentifier, ItemCapabilities, TypeAndCreator, ProvidedItem), springboard/src/files/fs.rs (local item model)",
+      "status": "partial",
+      "note": "Provider items carry an identifier, parent, validated filename, content type, type and creator codes and a capability set; rename and reparent check their capability. No content version, sync anchor or download state."
+    },
+    {
+      "feature": "Cloud search (NSFileProviderSearching)",
+      "apple": "NSFileProviderSearching",
+      "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/src/shell/quicksearch.rs (local Spotlight-style index)",
+      "status": "gap",
+      "note": "Quick search indexes local content only. Apps cannot register a provider search source."
+    },
+    {
+      "feature": "Domains (NSFileProviderDomain, external volume eligibility)",
+      "apple": "NSFileProviderDomain, NSFileProviderVolumeUnsupportedReason",
+      "bifrost": "springboard/sdk/src/file_provider.rs (Domain, DomainRegistry)",
+      "status": "partial",
+      "note": "Domains have an identifier, display name, storage path, replicated, hidden, user-enabled and disconnected state, with validation. No external volume eligibility (volume unsupported reasons), no known-folder replication and no testing modes."
+    },
+    {
+      "feature": "Errors (NSFileProviderError codes, sync error keys)",
+      "apple": "NSFileProviderError, NSFileProviderErrorDomain and its keys",
+      "bifrost": "springboard/sdk/src/file_provider.rs (ErrorCode, ProviderError, RegistryError), springboard/sdk/src/file_coordination.rs (CoordinationError: Timeout, Io)",
+      "status": "partial",
+      "note": "19 official provider error codes, with item association and retry or restart classification. There is no user-info dictionary and no item-key metadata beyond the item identifier, and the error domain is this crate's own name."
+    },
+    {
+      "feature": "Coordinated access to items shared with other processes (adjacent, Foundation)",
+      "apple": "NSFileCoordinator, NSFilePresenter (used by providers)",
+      "bifrost": "springboard/sdk/src/file_coordination.rs, docs/bifrost-ui.md section 'NSFileCoordinator and NSFilePresenter'",
+      "status": "partial",
+      "note": "Advisory flock on the parent directory, with a 5 s timeout. Presenters get change callbacks. There is no relinquish or save negotiation, no will-move callback, and no versions."
+    },
+    {
+      "feature": "Change feed for item updates (adjacent, FSEvents)",
+      "apple": "FSEventStream as used by providers to detect changes",
+      "bifrost": "springboard/sdk/src/fswatch.rs (inotify WatchStream, FSEvent flags)",
+      "status": "os",
+      "note": "Changes are reported for local folders only. Apps get the feed, but nothing connects it to a remote provider."
+    },
+    {
+      "feature": "Metrics data export",
+      "apple": "Exporting file provider metrics data",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple's metrics pipeline is a developer-portal service for providers distributed through the Apple store."
+    }
+  ],
+  "gaps": [
+    "No provider extension host: no replicated or nonreplicated extension, and no way for an app to register a provider process.",
+    "Enumerator signals are queued but never delivered: no provider or shell reads them, and there is no reimport, waitForChanges or materialized-item enumeration.",
+    "No placeholder (dataless) files and no on-demand hydration in Files or the document panel.",
+    "No provider search source; quick search covers local content only.",
+    "No external volume eligibility (volume unsupported reasons) and no known-folder replication for domains.",
+    "Documented plan to open the file system to a provider is absent: docs/file-portal-design.md covers only local grants and the picker, and it says nothing about a cloud provider.",
+    "Coordination is advisory and has no save negotiation, no relinquish, and no versions, so a provider cannot hold a file safely while it syncs."
+  ]
+}
