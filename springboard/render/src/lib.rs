@@ -26,6 +26,8 @@ pub mod pixel_layout;
 pub mod bezier;
 pub mod colorlab;
 pub mod colormap;
+pub mod plane_stats;
+pub mod plane_arith;
 
 #[cfg(test)]
 mod tests {
