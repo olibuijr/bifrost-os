@@ -437,6 +437,19 @@ impl DispatchQueue {
         let it = item.clone();
         self.async_(move || it.perform());
     }
+
+    /// `asyncAndWait(execute:)`: submits `f` and returns once it has finished. The caller waits, but the closure runs
+    /// on this queue, also for the global queues (unlike `sync`, which runs it on the caller there). A panicking
+    /// closure is logged by the pool and still counts as finished. Waiting from a serial queue onto itself deadlocks
+    /// as in GCD, and the main queue refuses a wait from the main thread, as `sync` does.
+    pub fn async_and_wait<F: FnOnce() + Send + 'static>(&self, f: F) {
+        if matches!(self.0, Kind::Main) && on_main_thread() {
+            panic!("DispatchQueue::main().asyncAndWait called on the main thread (deadlock)");
+        }
+        let item = DispatchWorkItem::new(f);
+        self.async_item(&item);
+        item.wait(None);
+    }
 }
 
 fn drain_serial(s: Arc<Serial>) {
@@ -599,6 +612,65 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
 
     const T: Option<Duration> = Some(Duration::from_secs(5));
+
+    #[test]
+    fn async_and_wait_returns_only_after_the_closure_finished() {
+        let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let d = done.clone();
+        DispatchQueue::global(Qos::Utility).async_and_wait(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            d.store(true, Ordering::SeqCst);
+        });
+        assert!(done.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn async_and_wait_runs_the_closure_on_the_queue_thread() {
+        let q = DispatchQueue::serial("t.wait.thread");
+        let caller = std::thread::current().id();
+        let seen = Arc::new(Mutex::new(None));
+        let s = seen.clone();
+        q.async_and_wait(move || *s.lock().unwrap() = Some(std::thread::current().id()));
+        let ran_on = (*seen.lock().unwrap()).expect("the closure ran");
+        assert_ne!(ran_on, caller);
+    }
+
+    #[test]
+    fn async_and_wait_on_a_serial_queue_keeps_submission_order() {
+        let q = DispatchQueue::serial("t.wait.order");
+        let out = Arc::new(Mutex::new(Vec::new()));
+        for i in 1..=3 {
+            let o = out.clone();
+            q.async_(move || o.lock().unwrap().push(i));
+        }
+        let o = out.clone();
+        q.async_and_wait(move || o.lock().unwrap().push(4));
+        assert_eq!(*out.lock().unwrap(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn async_and_wait_counts_a_panicking_closure_as_finished() {
+        let q = DispatchQueue::serial("t.wait.panic");
+        q.async_and_wait(|| panic!("expected test panic"));
+        let n = Arc::new(AtomicUsize::new(0));
+        let c = n.clone();
+        q.async_and_wait(move || {
+            c.fetch_add(1, Ordering::SeqCst);
+        });
+        assert_eq!(n.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn async_and_wait_returns_after_each_job_in_turn() {
+        let n = Arc::new(AtomicUsize::new(0));
+        for step in 1..=5 {
+            let c = n.clone();
+            DispatchQueue::global(Qos::Utility).async_and_wait(move || {
+                c.fetch_add(1, Ordering::SeqCst);
+            });
+            assert_eq!(n.load(Ordering::SeqCst), step);
+        }
+    }
 
     #[test]
     fn serial_queue_runs_in_order() {
