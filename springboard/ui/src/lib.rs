@@ -584,6 +584,8 @@ pub mod constraint;
 pub mod table;
 pub mod panels;
 pub mod sheet;
+pub mod state_machine;
+pub mod grid_graph;
 #[cfg(test)]
 mod bench;
 
