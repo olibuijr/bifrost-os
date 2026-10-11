@@ -28,3 +28,5 @@ pub mod signpost;
 pub mod notify_center;
 pub mod disk_events;
 pub mod txt_record;
+pub mod codereq;
+pub mod biometry;
