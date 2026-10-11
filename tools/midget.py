@@ -839,7 +839,7 @@ def cmd_reinstall(args):
     t0 = time.time()
     # what the live system pulls: the installer and shell under test, and every package pacstrap installs
     repo = Path(__file__).resolve().parent.parent
-    for cmd in (["tools/lab-push.sh"] + (["--skip-cargo"] if "--skip-build" in args else []), ["tools/lab-mirror.sh"]):
+    for cmd in (["tools/lab-push.sh", "--skip-cargo" if "--skip-build" in args else "--installer-only"], ["tools/lab-mirror.sh"]):
         r = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, timeout=1800)
         if r.returncode:
             print(f"{cmd[0]} failed: {(r.stderr or r.stdout)[-400:]}")

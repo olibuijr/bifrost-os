@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Push the current installer build to the lab hosts that boot a --lab/--debug ISO: they fetch it at boot (bifrost-lab-sync),
-# so no ISO rebuild is needed. usage: tools/lab-push.sh [--skip-cargo]
+# so no ISO rebuild is needed. usage: tools/lab-push.sh [--skip-cargo | --installer-only]
+# --installer-only (midget.py reinstall): the installed system's shell comes from the package repo, so the live copy is
+# only rebuilt when there is none; relinking it cost ~45 s after every installer change
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SYNC=out/lab/sync; mkdir -p "$SYNC"
-[ "${1:-}" = --skip-cargo ] || (cd springboard && cargo build --profile fast --features desktop-wayland --bin installer --bin shell)
+BINS="--bin installer --bin shell"
+[ "${1:-}" = --installer-only ] && [ -x springboard/target/fast/shell ] && BINS="--bin installer"
+# shellcheck disable=SC2086
+[ "${1:-}" = --skip-cargo ] || (cd springboard && cargo build --profile fast --features desktop-wayland $BINS)
 # the guard (guard.rs and its modules) only when a source is newer than the last build
 [ -f out/bifrost-update-guard-lab ] && [ -z "$(find packaging/arch/recovery -name '*.rs' -newer out/bifrost-update-guard-lab)" ] ||
   rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-lab
