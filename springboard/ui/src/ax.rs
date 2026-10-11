@@ -282,6 +282,45 @@ impl Map {
     }
 }
 
+// --- rotors: a named set of elements an assistive user steps through, one at a time --------------------------------------------
+
+/// A rotor: a short list of element roles (a "Controls" rotor steps through buttons, toggles and sliders). The name is what
+/// the user hears when they pick the rotor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rotor {
+    pub name: &'static str,
+    pub roles: &'static [&'static str],
+}
+
+/// The rotors every screen gets, in the order a user cycles through them. Each role name is the one [`role_name`] writes.
+pub const STANDARD_ROTORS: &[Rotor] = &[
+    Rotor { name: "Controls", roles: &["button", "toggle", "checkbox", "slider", "segmented-control"] },
+    Rotor { name: "Fields", roles: &["field"] },
+    Rotor { name: "Lists", roles: &["list", "row"] },
+    Rotor { name: "Menu items", roles: &["menu-item"] },
+    Rotor { name: "Text", roles: &["text"] },
+    Rotor { name: "Progress", roles: &["progress-indicator"] },
+];
+
+impl Map {
+    /// The next (`forward`) or previous element of `rotor` after `from` in map order, wrapping at the ends. `from` need not be
+    /// in the rotor: the step starts from its place in the map. With no `from`, forward is the first match and backward the
+    /// last. Returns `None` when no element has a role of the rotor.
+    pub fn rotor_step(&self, rotor: &Rotor, from: Option<&str>, forward: bool) -> Option<&Element> {
+        let all = &self.elements;
+        let n = all.len();
+        let hit = |i: &usize| rotor.roles.iter().any(|r| *r == all[*i].role.as_str());
+        let at = from.and_then(|a| all.iter().position(|e| e.address == a));
+        let i = match (at, forward) {
+            (None, true) => (0..n).find(hit),
+            (None, false) => (0..n).rev().find(hit),
+            (Some(p), true) => (p + 1..n).find(hit).or_else(|| (0..n).find(hit)),
+            (Some(p), false) => (0..p).rev().find(hit).or_else(|| (0..n).rev().find(hit)),
+        }?;
+        Some(&all[i])
+    }
+}
+
 // --- announcements: text the screen reader speaks without focus moving (a live region) -------------------------------------------
 
 /// How urgently an announcement is spoken. An assertive one is taken before any polite one waiting (the priority key).
@@ -561,5 +600,77 @@ mod text_tests {
         assert_eq!(Priority::from_wire(2), Some(Priority::High));
         assert_eq!(Priority::from_wire(3), None);
         assert_eq!((Priority::Low.politeness(), Priority::Medium.politeness(), Priority::High.politeness()), (1, 1, 2));
+    }
+
+    fn screen() -> Map {
+        let mut m = Map::new();
+        m.add("app/x", "text", "Title", "", true, None, "");
+        m.add("app/x", "button", "Save", "", true, None, "");
+        m.add("app/x", "field", "Name", "", true, None, "");
+        m.add("app/x", "button", "Cancel", "", true, None, "");
+        m
+    }
+
+    fn controls() -> Rotor {
+        *STANDARD_ROTORS.iter().find(|r| r.name == "Controls").unwrap()
+    }
+
+    #[test]
+    fn a_rotor_steps_over_its_roles_and_wraps_both_ways() {
+        let m = screen();
+        let c = controls();
+        let name = |e: Option<&Element>| e.map(|e| e.name.clone());
+        assert_eq!(name(m.rotor_step(&c, None, true)), Some("Save".into()));
+        assert_eq!(name(m.rotor_step(&c, Some("app/x/save"), true)), Some("Cancel".into()));
+        assert_eq!(name(m.rotor_step(&c, Some("app/x/cancel"), true)), Some("Save".into()), "forward wraps");
+        assert_eq!(name(m.rotor_step(&c, None, false)), Some("Cancel".into()));
+        assert_eq!(name(m.rotor_step(&c, Some("app/x/save"), false)), Some("Cancel".into()), "backward wraps");
+    }
+
+    #[test]
+    fn a_step_from_outside_the_rotor_starts_at_its_place_in_the_map() {
+        let m = screen();
+        let c = controls();
+        // the title is text, not a control: forward finds Save, backward wraps to Cancel
+        assert_eq!(m.rotor_step(&c, Some("app/x/title"), true).map(|e| e.name.as_str()), Some("Save"));
+        assert_eq!(m.rotor_step(&c, Some("app/x/title"), false).map(|e| e.name.as_str()), Some("Cancel"));
+        // the field sits between Save and Cancel
+        assert_eq!(m.rotor_step(&c, Some("app/x/name"), true).map(|e| e.name.as_str()), Some("Cancel"));
+        assert_eq!(m.rotor_step(&c, Some("app/x/name"), false).map(|e| e.name.as_str()), Some("Save"));
+        // an address the map does not hold behaves like no start at all
+        assert_eq!(m.rotor_step(&c, Some("app/x/gone"), true).map(|e| e.name.as_str()), Some("Save"));
+    }
+
+    #[test]
+    fn a_rotor_with_no_matching_element_finds_nothing() {
+        let m = screen();
+        let progress = *STANDARD_ROTORS.iter().find(|r| r.name == "Progress").unwrap();
+        assert!(m.rotor_step(&progress, None, true).is_none());
+        assert!(m.rotor_step(&progress, Some("app/x/save"), false).is_none());
+        assert!(Map::new().rotor_step(&controls(), None, true).is_none(), "an empty map has nothing to step to");
+    }
+
+    #[test]
+    fn the_standard_rotors_cover_every_role_except_the_window() {
+        let roles = [
+            Role::Button, Role::TextField, Role::List, Role::Row, Role::Toggle, Role::Checkbox, Role::Slider,
+            Role::SegmentedControl, Role::StaticText, Role::MenuItem, Role::Window, Role::ProgressIndicator,
+        ];
+        for r in roles {
+            let covered = STANDARD_ROTORS.iter().any(|rot| rot.roles.contains(&role_name(r)));
+            assert_eq!(covered, r != Role::Window, "{:?} is covered by a rotor only when it is not the window", r);
+        }
+        let mut names: Vec<&str> = STANDARD_ROTORS.iter().map(|r| r.name).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), STANDARD_ROTORS.len(), "rotor names are unique");
+    }
+
+    #[test]
+    fn a_disabled_control_is_still_reached_so_the_user_hears_it_is_unavailable() {
+        let mut m = Map::new();
+        m.add("app/x", "button", "Off", "", false, None, "");
+        m.add("app/x", "text", "Note", "", true, None, "");
+        assert_eq!(m.rotor_step(&controls(), None, true).map(|e| (e.name.as_str(), e.enabled)), Some(("Off", false)));
     }
 }
