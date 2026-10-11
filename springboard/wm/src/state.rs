@@ -44,6 +44,8 @@ pub struct WmState {
     /// Toplevels waiting for their first buffer before `wm` places them.
     pub pending: Vec<Window>,
 
+    /// `ext-background-effect-v1` (live glass); the renderer reads each surface's blur region.
+    pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub layer_shell_state: WlrLayerShellState,
@@ -94,6 +96,7 @@ impl WmState {
             next_id: 1,
             pending: Vec::new(),
             on_vblank: None,
+            background_effect: crate::background_effect::init(&dh),
             compositor_state: CompositorState::new::<WmState>(&dh),
             xdg_shell_state: XdgShellState::new::<WmState>(&dh),
             layer_shell_state: WlrLayerShellState::new::<WmState>(&dh),

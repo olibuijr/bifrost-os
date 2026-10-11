@@ -22,6 +22,8 @@ nested = ["smithay/backend_winit"]
 [dependencies]
 smithay = { version = "0.7", default-features = false, features = ["wayland_frontend", "desktop", "renderer_gl", "backend_egl"] }
 png = "0.18"
+# ext-background-effect-v1 lives in the staging set
+wayland-protocols = { version = "0.32", features = ["server", "staging"] }
 
 [dev-dependencies]
 wayland-client = "0.31"
