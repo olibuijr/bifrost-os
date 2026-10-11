@@ -617,6 +617,7 @@ pub mod compose;
 pub mod file_provider;
 pub mod widget;
 pub mod widget_list;
+pub mod media_search;
 #[cfg(test)]
 mod bench;
 
