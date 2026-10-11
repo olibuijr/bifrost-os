@@ -55,11 +55,22 @@ impl ColorCube {
     /// The table's colour for `c`. Each channel is clamped to 0..=1 and the result is interpolated
     /// between the eight nearest samples.
     pub fn lookup(&self, c: Rgb) -> Rgb {
+        self.sample(c, true)
+    }
+
+    /// Like `lookup`, but channels outside 0..=1 are not clamped. The cube is extended linearly from
+    /// its edge samples, as the `extrapolate` option of a colour cube filter does.
+    pub fn lookup_extrapolated(&self, c: Rgb) -> Rgb {
+        self.sample(c, false)
+    }
+
+    fn sample(&self, c: Rgb, clamp: bool) -> Rgb {
         let top = (self.size - 1) as f32;
         // (index of the lower sample, fraction towards the next one)
         let axis = |v: f32| {
-            let f = v.clamp(0.0, 1.0) * top;
-            let i = (f.floor() as usize).min(self.size - 2);
+            let v = if clamp { v.clamp(0.0, 1.0) } else { v };
+            let f = v * top;
+            let i = (f.floor().max(0.0) as usize).min(self.size - 2);
             (i, f - i as f32)
         };
         let (r0, tr) = axis(c.r);
@@ -134,6 +145,18 @@ mod tests {
         assert!(ColorCube::new(2, vec![Rgb::new(0.0, 0.0, 0.0); 8]).is_some());
         assert!(ColorCube::identity(MAX_SIZE + 1).is_none());
         assert!(ColorCube::identity(MAX_SIZE).is_some());
+    }
+
+    #[test]
+    fn extrapolated_lookup_continues_past_the_edges() {
+        // Red runs 0 to 1 along the cube, so red 1.5 extrapolates to 1.5 and red -0.5 to -0.5.
+        let identity = ColorCube::identity(3).unwrap();
+        let hi = identity.lookup_extrapolated(Rgb::new(1.5, 0.5, 0.25));
+        assert!(close(hi.r, 1.5) && close(hi.g, 0.5) && close(hi.b, 0.25), "{hi:?}");
+        let lo = identity.lookup_extrapolated(Rgb::new(-0.5, 0.5, 0.25));
+        assert!(close(lo.r, -0.5), "{lo:?}");
+        // The clamped lookup of the same colour stays inside the cube.
+        assert!(close(identity.lookup(Rgb::new(1.5, 0.5, 0.25)).r, 1.0));
     }
 
     #[test]

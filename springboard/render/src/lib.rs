@@ -24,6 +24,8 @@ pub mod gradient;
 pub mod colorspace;
 pub mod pixel_layout;
 pub mod bezier;
+pub mod colorlab;
+pub mod colormap;
 
 #[cfg(test)]
 mod tests {
