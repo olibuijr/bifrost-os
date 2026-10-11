@@ -594,6 +594,7 @@ pub mod grid_graph;
 pub mod tensor;
 pub mod graph;
 pub mod nn;
+pub mod save_sync;
 #[cfg(test)]
 mod bench;
 

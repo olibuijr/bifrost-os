@@ -60,6 +60,7 @@ pub mod log;
 pub mod dispatch;
 pub mod fswatch;
 pub mod file_coordination;
+pub mod save_sync;
 pub mod url;
 pub mod coding;
 pub mod restoration;
