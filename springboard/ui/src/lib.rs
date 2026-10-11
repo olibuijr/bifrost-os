@@ -579,6 +579,7 @@ pub mod launch;
 pub mod detect;
 pub mod prefs_layout;
 pub mod search;
+pub mod metaquery;
 pub mod pathbar;
 pub mod constraint;
 pub mod table;

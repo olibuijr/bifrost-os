@@ -1,0 +1,104 @@
+{
+ "framework": "Foundation (Files and Data Persistence)",
+ "doc": "https://developer.apple.com/documentation/foundation",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "bifrost_app::defaults, coding, file_coordination, file_manager, fswatch, workspace, quicksearch, document; bifrost_ui::metaquery; docbroker file grants",
+ "summary": "Settings, JSON and plist coding, file coordination, change events, a FileManager-style item API (copy, move, remove, attributes, enumeration), metadata predicates over file records and Spotlight-style indexing have SDK APIs. There is no keyed archiver or binary plist, no FileWrapper, no iCloud, and no file-system-wide metadata query.",
+ "rea_evidence": "ev_60ea0b0305ae4fc0c01f500535d342081d1a51aee160b0c23afd18e3fc5c328e",
+ "features": [
+  {
+   "feature": "File System (create, read, write, examine files)",
+   "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
+   "bifrost": "springboard/sdk/src/file_manager.rs (NativeFileManager); springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs",
+   "status": "partial",
+   "note": "NativeFileManager covers existence and kind, attributes (kind, size, modified), shallow and deep listings, directory creation, copy, move and remove for files, links and trees, with refusal of existing destinations. Apps outside the portal grants still work only in their data dir. No FileWrapper, no bookmarks or security-scoped URLs, no link creation, no extended attributes, no progress callbacks."
+  },
+  {
+   "feature": "File coordination and presenters",
+   "apple": "NSFileCoordinator, NSFilePresenter",
+   "bifrost": "springboard/sdk/src/file_coordination.rs",
+   "status": "partial",
+   "note": "Advisory flock; no relinquish or move negotiation, no versions."
+  },
+  {
+   "feature": "File change events",
+   "apple": "FSEvents, DispatchSource file system objects",
+   "bifrost": "springboard/sdk/src/fswatch.rs",
+   "status": "parity",
+   "note": "Recursive inotify stream with latency and a SHALLOW flag."
+  },
+  {
+   "feature": "Trash and workspace file operations",
+   "apple": "FileManager.trashItem, NSWorkspace open/recycle/reveal",
+   "bifrost": "springboard/sdk/src/workspace.rs",
+   "status": "parity",
+   "note": "Recycle uses the shared Recently Deleted folder with Put Back."
+  },
+  {
+   "feature": "Archives and Serialization: JSON and property lists",
+   "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
+   "bifrost": "springboard/sdk/src/coding.rs",
+   "status": "partial",
+   "note": "JSON and XML plist only; no binary plist, Data unsupported, few strategies."
+  },
+  {
+   "feature": "Archives and Serialization: keyed archiving",
+   "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
+   "bifrost": "springboard/sdk/src/coding.rs",
+   "status": "gap",
+   "note": "Codable-style traits exist; no keyed archive format."
+  },
+  {
+   "feature": "Settings",
+   "apple": "UserDefaults, NSUbiquitousKeyValueStore (local part)",
+   "bifrost": "springboard/sdk/src/defaults.rs",
+   "status": "parity",
+   "note": "Typed get/set and register(defaults:); no change-observation across processes noted."
+  },
+  {
+   "feature": "State restoration data",
+   "apple": "NSUserActivity restoration, app state",
+   "bifrost": "springboard/sdk/src/restoration.rs",
+   "status": "partial",
+   "note": "One restorable window per app, JSON file."
+  },
+  {
+   "feature": "Spotlight: indexing app content",
+   "apple": "CSSearchableIndex",
+   "bifrost": "springboard/sdk/src/quicksearch.rs",
+   "status": "partial",
+   "note": "Per-app JSON index, capped at 1000 items."
+  },
+  {
+   "feature": "Spotlight: metadata queries",
+   "apple": "NSMetadataQuery, MDQuery",
+   "bifrost": "springboard/ui/src/metaquery.rs",
+   "status": "partial",
+   "note": "Predicates on name, extension, kind, size and modification time, combined with all, any and not; sorted and limited. The caller supplies the records; no file-system-wide query and no live updates."
+  },
+  {
+   "feature": "iCloud documents and key-value store",
+   "apple": "NSUbiquitousKeyValueStore, ubiquity containers",
+   "bifrost": "springboard/sdk/src/keychain.rs",
+   "status": "n/a",
+   "note": "Apple iCloud service; BifrOSt Cloud backups/sync are separate and not an SDK file API."
+  },
+  {
+   "feature": "Backup exclusion and purgeable data",
+   "apple": "URLResourceKey isExcludedFromBackup, purgeable",
+   "bifrost": "springboard/render/src/purgeable.rs",
+   "status": "partial",
+   "note": "Memory caches purge on pressure; no on-disk purgeable or backup exclusion flags."
+  }
+ ],
+ "gaps": [
+  "FileWrapper (bundles of files), bookmarks and security-scoped URLs for apps outside the portal grants",
+  "Symbolic link creation, extended attributes and copy progress in the FileManager-style API",
+  "Keyed archiver and binary plist",
+  "File-system-wide metadata query with live updates",
+  "iCloud / cloud-synced documents and key-value store",
+  "Backup exclusion and on-disk purgeable data",
+  "File versions"
+ ]
+}
