@@ -1,0 +1,1313 @@
+//! What every Settings page lists, as data: `spec` builds a page's groups
+//! from the device info and the user's options, and `Action` says what a
+//! row does. Rendering and hit testing live in `list`.
+
+use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
+use super::battery::{self, Graph};
+use super::desktop_dock::Position;
+use super::icons::Icon;
+use super::row_glyphs::Glyph;
+use super::low_battery::last_charged;
+use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
+use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
+use super::{Info, WifiAction};
+use crate::bare::bluetooth::{Cmd, State as BtState};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PageId {
+    Root,
+    Network,
+    Ethernet,
+    Wifi,
+    WifiDetail,
+    KnownNetworks,
+    Bluetooth,
+    BluetoothDetail,
+    Wallpaper,
+    Sounds,
+    Focus,
+    Notifications,
+    NotificationApp,
+    General,
+    About,
+    /// About › Legal & Regulatory
+    Legal,
+    Nearby,
+    AirPlayHandoff,
+    Pip,
+    BackgroundRefresh,
+    Gestures,
+    Fonts,
+    Dictionary,
+    Vpn,
+    SoftwareUpdate,
+    Backup,
+    DateTime,
+    Keyboard,
+    /// Keyboard > Keyboards
+    Keyboards,
+    Language,
+    Reset,
+    Display,
+    NightShift,
+    AutoLock,
+    Energy,
+    HomeScreen,
+    Battery,
+    ControlCentre,
+    MenuBar,
+    Accessibility,
+    DisplayZoom,
+    TouchHold,
+    /// Display & Brightness › Interface Scale (desktop only)
+    InterfaceScale,
+    Appearance,
+    Privacy,
+    /// Privacy › Analytics & Diagnostics
+    Diagnostics,
+    Storage,
+    /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
+    Graphics,
+    Passcode,
+    Developer,
+    ScreenTime,
+    StDowntime,
+    StLimits,
+    StAllowed,
+    /// General > Default Apps (desktop): which app opens each kind of file and link
+    DefaultApps,
+    /// General > Login Items (desktop): the apps that start with the session (`SMAppService`)
+    LoginItems,
+    /// Desktop & Dock > Hot Corners (desktop)
+    HotCorners,
+    /// Keyboard Shortcuts (desktop): the shortcuts the shell answers to
+    Shortcuts,
+    /// Overview (desktop): how windows are grouped and when desktops switch
+    Overview,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Toggle {
+    /// Settings › Menu Bar: shows or hides one menu extra
+    MenuExtra(super::options::MenuExtra),
+    AutoUpdate,
+    BackupBeforeUpdate,
+    Airplane,
+    Wifi,
+    Bluetooth,
+    KeyboardClicks,
+    KeyboardHaptics,
+    LockSound,
+    Clock24,
+    AutoCaps,
+    /// enables or removes a keyboard layout (index into `kb_layouts::Layout::ALL`)
+    Layout(usize),
+    EnableCapsLock,
+    PeriodShortcut,
+    BoldText,
+    AutoJoin,
+    Dnd,
+    AssistiveTouch,
+    ReduceMotion,
+    IncreaseContrast,
+    ReduceTransparency,
+    ButtonShapes,
+    AutoTime,
+    LowPower,
+    BatteryPercent,
+    DockRecents,
+    /// Desktop & Dock › Automatically Hide and Show
+    DockAutohide,
+    /// Desktop & Dock > Magnification
+    DockMagnify,
+    /// Overview > Group Windows by Application
+    OverviewGroup,
+    /// Overview > Switch to a Desktop with Open Windows
+    OverviewSwitch,
+    /// Developer: root adbd at boot, adb over Wi-Fi
+    RootedDebug,
+    WifiAdb,
+    /// Developer: the frame time / temperature / memory overlay
+    PerfHud,
+    /// Developer: GPU frames flip straight to the display (next start)
+    GpuScanout,
+    Handoff,
+    PipAuto,
+    BgRefresh,
+    FourFinger,
+    CornerSwipe,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    AutoLock(usize),
+    SystemSleep(usize),
+    IconSize(usize),
+    PowerMode(usize),
+    DisplayZoom(usize),
+    TouchHold(usize),
+    /// 0 is Auto, n the n-th of `layout::SCALE_CHOICES`
+    InterfaceScale(usize),
+    /// Displays > Appearance: 0 Light, 1 Dark, 2 Auto
+    Appearance(usize),
+    /// Appearance > Accent colour: the index into `Accent::ALL`
+    Accent(usize),
+    /// Appearance > Liquid Glass style: 0 Clear, 1 Tinted
+    GlassStyle(usize),
+    Nearby(usize),
+    /// Desktop & Dock › Position: index into Bottom, Left, Right
+    DockPosition(usize),
+    /// Desktop & Dock > Minimize Windows Using: index into `MINIMIZE_EFFECTS`
+    MinimizeEffect(usize),
+    /// Hot Corners: (corner 0..4, action index into `CORNER_ACTIONS`)
+    HotCorner(usize, usize),
+    /// Appearance > Highlight colour: 0 follows the accent, n is `Accent::ALL[n]`
+    Highlight(usize),
+    /// Appearance > Sidebar icon size: 0 Small, 1 Medium, 2 Large
+    SidebarIcons(usize),
+    /// Appearance > Show scroll bars: index into `SCROLL_BAR_MODES`
+    ScrollBars(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Slider {
+    Brightness,
+    Volume,
+    TextSize,
+    Warmth,
+    /// Desktop & Dock › Size (the dock height, 32..=80 pt)
+    DockSize,
+    /// Displays › Liquid Glass: 0 clear .. 1 tinted (Golden Gate Golden Gate)
+    LiquidGlass,
+    /// Desktop & Dock > Magnification size, 0..1
+    DockMagnify,
+}
+
+/// Something that asks for confirmation first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Command {
+    ResetSettings,
+    Restart,
+    /// power the computer off (General › Shut Down)
+    ShutDown,
+    /// reboot the computer (General › Restart)
+    Reboot,
+    Forget(String),
+    /// unpairs a Bluetooth device (by address)
+    ForgetBluetooth(String),
+    /// empties one disposable cache (bifrost Storage)
+    ClearCache(super::storage::Clear),
+    /// turning Rooted Debugging off, after the warning
+    RootedOff,
+    BackUpNow,
+    RestoreBackup,
+    CheckUpdate,
+    DownloadUpdate,
+    /// restarts the shell so boot.sh promotes the staged binary
+    InstallUpdate,
+    /// Software Update: roll back to the previous system (pacman profile, through the guard unit)
+    RollbackSystem,
+    /// Analytics & Diagnostics: upload the bundle to the update server
+    ShareDiagnostics,
+    DeleteCrashLogs,
+}
+
+/// The Reduce Transparency switch: Increase Contrast turns it on and locks it (the reference desktop's
+/// Accessibility > Display does the same), so with contrast on it shows on and does nothing when tapped.
+fn reduce_transparency_item(reduce: bool, contrast: bool) -> Item {
+    let action = if contrast { Action::None } else { Action::Toggle(Toggle::ReduceTransparency) };
+    Item::new("Reduce Transparency").switch(reduce || contrast, action)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Action {
+    None,
+    Push(PageId),
+    Toggle(Toggle),
+    /// opens the passcode keypad for this purpose; true picks a custom-length code
+    Passcode(super::passcode::Purpose, bool),
+    Pick(Pick),
+    Slider(Slider),
+    Run(Command),
+    /// join, select or ask for the password of a scanned network
+    Network(String),
+    /// open the Time Zone picker
+    TimeZone,
+    SetTime,
+    /// a notification setting: DND schedule rows or a per-app mute
+    Notify(super::notify_page::NotifyEdit),
+    Night(super::night_shift::NightEdit),
+    /// a Screen Time row: range, limits, Downtime, allowed apps, its passcode
+    ScreenTime(super::screentime::page::StEdit),
+    /// opens the "Other Network" sheet
+    JoinOther,
+    /// a Wi-Fi change straight from a row
+    Wifi(WifiAction),
+    /// a Bluetooth change straight from a row (pair, connect, disconnect)
+    Bluetooth(crate::bare::bluetooth::Cmd),
+    /// shows a text file in Files' viewer (a crash log)
+    OpenFile(std::path::PathBuf),
+    /// Default Apps: make this app (key) the default for the category (index)
+    DefaultApp(usize, String),
+    /// Login Items: stop starting this app (id) at login
+    LoginItemRemove(String),
+}
+
+/// Compile-time identity of this build (build.rs supplies the git fields).
+pub struct Build {
+    pub version: &'static str,
+    pub git: &'static str,
+    pub date: &'static str,
+}
+
+pub const BUILD: Build = Build { version: env!("CARGO_PKG_VERSION"), git: match option_env!("SPRINGBOARD_GIT") { Some(g) => g, None => "unknown" }, date: match option_env!("SPRINGBOARD_BUILD_DATE") { Some(d) => d, None => "unknown" } };
+
+/// Live state a page is built from.
+pub struct Model<'a> {
+    pub info: &'a Info,
+    pub opts: &'a Options,
+    pub a11y: &'a AccessibilitySettings,
+    pub airplane: bool,
+    /// the device has a vibrator (Keyboard Haptics is only offered then)
+    pub haptics: bool,
+    /// the switch as the user left it, before the device confirms
+    pub wifi_on: bool,
+    pub brightness: f32,
+    /// display name of the current wallpaper
+    pub wallpaper: String,
+    /// the network whose detail page is open
+    pub detail: &'a str,
+    /// Unix time now, for the battery graph
+    pub now: i64,
+    /// an OS update is on offer: red badges on General and Software Update
+    pub update_badge: bool,
+    /// the desktop dock as the shell holds it (Desktop & Dock page)
+    pub dock: super::desktop_dock::Preferences,
+    /// the Default Apps page: categories, candidates and the current default
+    pub defaults: &'a [super::defaultapps::CategoryView],
+    /// the Login Items page: (app id, name) of each login item
+    pub login_items: &'a [(String, String)],
+}
+
+/// "117.9 GB" style size.
+pub fn gb(bytes: u64) -> String {
+    let gb = bytes as f64 / 1e9;
+    if gb >= 100.0 {
+        format!("{gb:.0} GB")
+    } else {
+        format!("{gb:.1} GB")
+    }
+}
+
+/// "3d 2h 7m" / "2h 7m" / "7m".
+pub fn uptime(minutes: i64) -> String {
+    let (d, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60);
+    match (d, h) {
+        (0, 0) => format!("{m}m"),
+        (0, _) => format!("{h}h {m}m"),
+        _ => format!("{d}d {h}h {m}m"),
+    }
+}
+
+/// The About page's rows: (label, value) in page order, grouped.
+/// The battery level as text. A desktop without a battery has no level to show.
+fn battery_level(info: &Info) -> String {
+    if info.desktop_network.is_some() && !info.battery_present {
+        return "None".into();
+    }
+    format!("{}%", info.battery)
+}
+
+pub fn about(info: &Info) -> Vec<Vec<(&'static str, String)>> {
+    let dash = |s: &str| if s.is_empty() { "—".to_string() } else { s.to_string() };
+    vec![
+        vec![
+            ("Name", dash(&info.name)),
+            ("BifrOSt Version", BUILD.version.to_string()),
+            ("Model", dash(&info.model)),
+            ("Processor", dash(&info.cpu)),
+            ("Memory", dash(&info.memory)),
+            ("Serial Number", dash(&info.serial)),
+        ],
+        vec![("Capacity", gb(info.storage_total)), ("Available", gb(info.storage_free))],
+        vec![("Wi-Fi Address", dash(&info.mac)), ("IP Address", dash(&info.ip)), ("Kernel", dash(&info.kernel)), ("Uptime", uptime(info.uptime_min))],
+    ]
+}
+
+fn rows(pairs: Vec<(&'static str, String)>) -> Group {
+    Group::new(pairs.into_iter().map(|(l, v)| Item::new(l).value(v)).collect())
+}
+
+/// Why `ssid` is not connected ("Incorrect Password"), or "".
+fn note_of<'a>(info: &'a Info, ssid: &str) -> &'a str {
+    info.saved.iter().find(|n| n.ssid == ssid).map_or("", |n| n.note.as_str())
+}
+
+fn on_off(b: bool) -> &'static str {
+    if b {
+        "On"
+    } else {
+        "Off"
+    }
+}
+
+/// Settings › Bluetooth: the switch, my devices, the devices found nearby.
+fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> Spec {
+    let bt = &m.info.bt;
+    let mut groups = vec![Group::new(vec![Item::new("Bluetooth").switch(bt.on(), Action::Toggle(Toggle::Bluetooth))])];
+    if bt.state == BtState::Unavailable {
+        groups[0] = groups[0].clone().footer("Bluetooth is not available on this computer right now.");
+        return page("Bluetooth", false, groups);
+    }
+    if bt.on() {
+        let note = |addr: &str, connected: bool| match (bt.busy.as_deref() == Some(addr), connected) {
+            (true, _) => "Connecting…",
+            (_, true) => "Connected",
+            _ => "Not Connected",
+        };
+        let mine: Vec<Item> = bt
+            .devices
+            .iter()
+            .filter(|d| d.paired)
+            .map(|d| Item { accessory: Accessory::Info, action: Action::Push(PageId::BluetoothDetail), ..Item::new(d.label()).value(note(&d.addr, d.connected)) })
+            .collect();
+        if !mine.is_empty() {
+            groups.push(Group::new(mine).header("MY DEVICES"));
+        }
+        let nearby: Vec<Item> = bt
+            .devices
+            .iter()
+            .filter(|d| !d.paired)
+            .map(|d| {
+                let value = if bt.busy.as_deref() == Some(d.addr.as_str()) { "Connecting…" } else { "" };
+                Item::new(d.label()).value(value).action(Action::Bluetooth(Cmd::Pair(d.addr.clone())))
+            })
+            .collect();
+        let nearby = if nearby.is_empty() { vec![Item::new(if bt.scanning { "Searching…" } else { "No Devices Found" }).tint(Tint::Dim)] } else { nearby };
+        let mut other = Group::new(nearby).header("OTHER DEVICES");
+        if let Some(e) = &bt.error {
+            other = other.footer(e);
+        }
+        groups.push(other);
+    } else if let Some(e) = &bt.error {
+        groups[0] = groups[0].clone().footer(e);
+    } else {
+        groups[0] = groups[0].clone().footer("Turn on Bluetooth to pair headphones, speakers and keyboards.");
+    }
+    page("Bluetooth", false, groups)
+}
+
+/// The page `id` as the model shows it now.
+pub fn spec(id: PageId, m: &Model) -> Spec {
+    let (info, o) = (m.info, m.opts);
+    let page = |title: &str, large: bool, groups: Vec<Group>| Spec { id, title: title.into(), large, groups };
+    match id {
+        PageId::Root => page(
+            "Settings",
+            true,
+            vec![
+                Group::new(vec![
+                    Item::new("Airplane Mode").icon(Icon::Airplane).switch(m.airplane, Action::Toggle(Toggle::Airplane)),
+                    if info.desktop_network.is_some() {Item::new("Network").icon(Icon::Wifi).value(if info.online {"Connected"}else{"Not Connected"}).link(PageId::Network)} else {Item::new("Wi-Fi").icon(Icon::Wifi).value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi)},
+                    Item::new("Bluetooth").icon(Icon::Bluetooth).value(info.bt.summary()).link(PageId::Bluetooth),
+                ]),
+                Group::new(vec![
+                    Item::new("Notifications").icon(Icon::Notifications).link(PageId::Notifications),
+                    Item::new("Sounds").icon(Icon::Sounds).link(PageId::Sounds),
+                    Item::new("Focus").icon(Icon::Focus).value(on_off(o.dnd)).link(PageId::Focus),
+                    Item::new("Screen Time").icon(Icon::ScreenTime).link(PageId::ScreenTime),
+                ]),
+                Group::new(vec![
+                    Item::new("General").icon(Icon::General).badge(usize::from(m.update_badge)).link(PageId::General),
+                    Item::new("Control Centre").icon(Icon::ControlCentre).link(PageId::ControlCentre),
+                    Item::new("Menu Bar").icon(Icon::ControlCentre).link(PageId::MenuBar),
+                    Item::new("Display & Brightness").icon(Icon::Display).link(PageId::Display),
+                    Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
+                    Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
+                    Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
+                    Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
+                    Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
+                    Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
+                    Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                    Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
+                ]),
+                Group::new(vec![Item::new("Developer").icon(Icon::General).link(PageId::Developer)]),
+            ],
+        ),
+        PageId::Network => desktop_network_page(info),
+        PageId::Ethernet => desktop_ethernet_page(info),
+        PageId::Wifi if info.desktop_network.as_ref().is_some_and(|n|!n.wifi_available) => page("Wi-Fi",false,vec![Group::new(vec![Item::new("No Wi-Fi adapter").tint(Tint::Dim)]).footer("Connect a supported Wi-Fi adapter to browse and join wireless networks. Ethernet is managed separately in Network settings.")]),
+        PageId::Wifi => {
+            let current = info.current_ssid.as_deref().filter(|_| m.wifi_on);
+            let mut first = vec![Item::new("Wi-Fi").switch(m.wifi_on, Action::Toggle(Toggle::Wifi))];
+            if let Some(ssid) = current {
+                first.push(Item { leading_check: true, accessory: Accessory::Info, action: Action::Push(PageId::WifiDetail), ..Item::new(ssid) });
+            }
+            let mut groups = vec![match info.wifi_notice.as_deref().filter(|_| m.wifi_on) {
+                Some(n) => Group::new(first).footer(n),
+                None => Group::new(first),
+            }];
+            if m.wifi_on {
+                let nets: Vec<Item> = info
+                    .networks
+                    .iter()
+                    .filter(|n| Some(n.ssid.as_str()) != current)
+                    .map(|n| Item { accessory: Accessory::Wifi { secure: n.secure, bars: n.bars }, action: Action::Network(n.ssid.clone()), ..Item::new(&n.ssid).value(note_of(info, &n.ssid)) })
+                    .collect();
+                let mut nets = if nets.is_empty() { vec![Item::new("Searching…").tint(Tint::Dim)] } else { nets };
+                nets.push(Item::new("Other…").action(Action::JoinOther));
+                groups.push(Group::new(nets).header("NETWORKS"));
+                if !info.saved.is_empty() {
+                    groups.push(Group::new(vec![Item::new("Known Networks").value(info.saved.len().to_string()).link(PageId::KnownNetworks)]).footer("Known networks are joined automatically when they are in range."));
+                }
+            }
+            page("Wi-Fi", false, groups)
+        }
+        PageId::WifiDetail => {
+            let place = info.saved.iter().position(|n| n.ssid == m.detail);
+            let auto_join = place.is_none_or(|i| info.saved[i].auto_join);
+            let mut groups = vec![
+                Group::new(vec![Item::new("Forget This Network").tint(Tint::Blue).action(Action::Run(Command::Forget(m.detail.into())))]),
+                Group::new(vec![Item::new("Auto-Join").switch(auto_join, Action::Wifi(WifiAction::SetAutoJoin { ssid: m.detail.into(), on: !auto_join }))]),
+            ];
+            if info.current_ssid.as_deref() == Some(m.detail) {
+                groups.push(rows(vec![("IP Address", info.ip.clone()), ("Router", info.router.clone())]).header("IPV4 ADDRESS"));
+            }
+            groups.push(rows(vec![("Wi-Fi Address", info.mac.clone())]));
+            if let Some(i) = place {
+                let step = |label: &str, up: bool, possible: bool| {
+                    let row = Item::new(label).tint(if possible { Tint::Blue } else { Tint::Dim });
+                    row.action(Action::Wifi(WifiAction::Move { ssid: m.detail.into(), up }))
+                };
+                groups.push(
+                    Group::new(vec![step("Move Up", true, i > 0), step("Move Down", false, i + 1 < info.saved.len())])
+                        .header(&format!("PRIORITY {} OF {}", i + 1, info.saved.len()))
+                        .footer("Networks higher in the list are joined first when several are in range."),
+                );
+            }
+            page(m.detail, false, groups)
+        }
+        PageId::Bluetooth => bluetooth_spec(m, page),
+        PageId::BluetoothDetail => {
+            let Some(d) = info.bt.devices.iter().find(|d| d.label() == m.detail) else {
+                return page(m.detail, false, vec![Group::new(vec![Item::new("Device Not Found").tint(Tint::Dim)])]);
+            };
+            let busy = info.bt.busy.is_some();
+            let link = match (d.connected, busy) {
+                (_, true) => Item::new("Connecting…").tint(Tint::Dim),
+                (true, _) => Item::new("Disconnect").tint(Tint::Blue).action(Action::Bluetooth(Cmd::Disconnect(d.addr.clone()))),
+                (false, _) => Item::new("Connect").tint(Tint::Blue).action(Action::Bluetooth(Cmd::Connect(d.addr.clone()))),
+            };
+            page(
+                d.label(),
+                false,
+                vec![
+                    Group::new(vec![link]),
+                    Group::new(vec![Item::new("Forget This Device").tint(Tint::Blue).action(Action::Run(Command::ForgetBluetooth(d.addr.clone())))]),
+                    rows(vec![("Address", d.addr.clone()), ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string())]),
+                ],
+            )
+        }
+        PageId::KnownNetworks => {
+            let rows: Vec<Item> = info
+                .saved
+                .iter()
+                .map(|n| {
+                    let value = if !n.note.is_empty() { n.note.as_str() } else if n.auto_join { "" } else { "Auto-Join Off" };
+                    Item { accessory: Accessory::Info, action: Action::Push(PageId::WifiDetail), ..Item::new(&n.ssid).value(value) }
+                })
+                .collect();
+            let rows = if rows.is_empty() { vec![Item::new("No Known Networks").tint(Tint::Dim)] } else { rows };
+            page("Known Networks", false, vec![Group::new(rows).header("MY NETWORKS").footer("Networks higher in the list are joined first. Open a network to change its priority, turn off Auto-Join or forget it.")])
+        }
+        PageId::Wallpaper => page("Wallpaper", false, vec![]),
+        PageId::Sounds => page(
+            "Sounds",
+            false,
+            vec![
+                Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
+                Group::new(sound_switches(o, m.haptics)),
+            ],
+        ),
+        PageId::Focus => page(
+            "Focus",
+            false,
+            vec![Group::new(vec![Item::new("Do Not Disturb").icon(Icon::Focus).switch(o.dnd, Action::Toggle(Toggle::Dnd))])
+                .footer("Silences notification banners and keeps the screen asleep. Notifications remain in Notification Centre and on app badges. Alarms and timers still ring.")],
+        ),
+        PageId::General => {
+            page(
+                "General",
+                false,
+                vec![
+                    Group::new(vec![Item::new("About").glyph(Glyph::About).link(PageId::About), Item::new("Software Update").glyph(Glyph::Update).badge(usize::from(m.update_badge)).link(PageId::SoftwareUpdate)]),
+                    Group::new(vec![Item::new("Nearby Share").glyph(Glyph::Nearby).link(PageId::Nearby)]),
+                    Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
+                    Group::new(vec![
+                        Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
+                        Item::new("Keyboard").glyph(Glyph::Keyboard).link(PageId::Keyboard),
+                        Item::new("Fonts").glyph(Glyph::Fonts).link(PageId::Fonts),
+                        Item::new("Language & Region").glyph(Glyph::Language).link(PageId::Language),
+                        Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
+                        Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
+                        Item::new("Login Items").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
+                    ]),
+                    Group::new(vec![Item::new("Legal & Regulatory").glyph(Glyph::Info).link(PageId::Legal)]),
+                    Group::new(vec![Item::new("Backup").glyph(Glyph::Backup).link(PageId::Backup)]),
+                    Group::new(vec![
+                        Item::new("Restart").tint(Tint::Blue).action(Action::Run(Command::Reboot)),
+                        Item::new("Shut Down").tint(Tint::Blue).action(Action::Run(Command::ShutDown)),
+                    ]),
+                ],
+            )
+        }
+        PageId::About => {
+            let mut groups: Vec<Group> = about(info).into_iter().map(rows).collect();
+            groups.push(Group::new(vec![Item::new("Legal & Regulatory").link(PageId::Legal)]));
+            page("About", false, groups)
+        }
+        PageId::Nearby => page(
+            "Nearby Share",
+            false,
+            vec![Group::new(["Receiving Off", "Contacts Only", "Everyone"].iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
+                .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
+        ),
+        PageId::AirPlayHandoff => page(
+            "AirPlay & Handoff",
+            false,
+            vec![
+                Group::new(vec![Item::new("Automatically AirPlay to TVs").value("Never")]),
+                Group::new(vec![Item::new("Handoff").switch(o.handoff, Action::Toggle(Toggle::Handoff))])
+                    .footer("Handoff lets you start something on one device and instantly pick it up on other devices nearby."),
+            ],
+        ),
+        PageId::DefaultApps => page(
+            "Default Apps",
+            false,
+            m.defaults
+                .iter()
+                .enumerate()
+                .map(|(c, v)| {
+                    let rows: Vec<Item> = if v.apps.is_empty() { vec![Item::new("No app available")] } else { v.apps.iter().map(|(key, name)| Item::new(name.as_str()).check(v.current.as_deref() == Some(key.as_str()), Action::DefaultApp(c, key.clone()))).collect() };
+                    Group::new(rows).header(&v.label.to_uppercase())
+                })
+                .chain(std::iter::once(Group::new(vec![]).footer("Choosing an app opens every file of that kind with it, as Change All does in Files's Get Info. Apps announce what they can open in their manifest.")))
+                .collect(),
+        ),
+        PageId::LoginItems => page(
+            "Login Items",
+            false,
+            vec![
+                Group::new(if m.login_items.is_empty() {
+                    vec![Item::new("No login items")]
+                } else {
+                    m.login_items.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemRemove(id.clone()))).collect()
+                })
+                .header("OPEN AT LOGIN")
+                .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
+            ],
+        ),
+        PageId::Pip => page(
+            "Picture in Picture",
+            false,
+            vec![Group::new(vec![Item::new("Start PiP Automatically").switch(o.pip_auto, Action::Toggle(Toggle::PipAuto))])
+                .footer("When this is on, videos will continue playing in an overlay, even when you press the Home button.")],
+        ),
+        PageId::BackgroundRefresh => page(
+            "Background App Refresh",
+            false,
+            vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
+                .footer("Allow apps to refresh their content when on Wi-Fi in the background. Turning off apps may help preserve battery life.")],
+        ),
+        PageId::Gestures => page(
+            "Gestures",
+            false,
+            vec![
+                Group::new(vec![Item::new("Four & Five Finger Swipe").switch(o.four_finger, Action::Toggle(Toggle::FourFinger))]).header("MULTITASKING GESTURES").footer("Use four or five fingers to swipe between apps."),
+                Group::new(vec![Item::new("Allow Finger to Swipe From Corner").switch(o.corner_swipe, Action::Toggle(Toggle::CornerSwipe))]).header("CORNER GESTURES"),
+                Group::new(vec![Item::new("Left Corner Swipe").value(if o.corner_swipe { "Screenshot" } else { "Off" }), Item::new("Right Corner Swipe").value("Off")])
+                    .footer("Actions when you swipe your finger from a bottom corner."),
+            ],
+        ),
+        PageId::Fonts => page(
+            "Fonts",
+            false,
+            vec![Group::new(vec![Item::new("No Fonts Installed").tint(Tint::Dim)]).footer("You can download apps that install fonts from the App Store.")],
+        ),
+        PageId::Dictionary => page(
+            "Dictionary",
+            false,
+            vec![Group::new(dictionaries().into_iter().map(|d| Item::new(d).check(true, Action::None)).collect())],
+        ),
+        PageId::Vpn => page(
+            "VPN & Device Management",
+            false,
+            vec![
+                Group::new(vec![Item::new("VPN").value("Not Connected")]),
+                Group::new(vec![Item::new("Sign In to Work or School Account…").tint(Tint::Dim)]),
+            ],
+        ),
+        PageId::Legal => page(
+            "Legal & Regulatory",
+            false,
+            vec![
+                rows(vec![("Model", info.model.clone()), ("Regulatory Model", info.model.clone())]).footer("BifrOSt is open software; third-party components remain under their own licenses."),
+            ],
+        ),
+        PageId::SoftwareUpdate => page(
+            "Software Update",
+            false,
+            vec![rows(vec![("BifrOSt", BUILD.version.into()), ("Build", BUILD.git.into()), ("Built", BUILD.date.into())])
+                .footer("BifrOSt updates arrive over the air from the BifrOSt repository; the build below is what is installed now.")],
+        ),
+        PageId::DateTime => page(
+            "Date & Time",
+            false,
+            vec![
+                Group::new(vec![Item::new("Set Automatically").switch(!info.time_manual, Action::Toggle(Toggle::AutoTime))]).footer(&info.time_sync),
+                Group::new(vec![Item::new("24-Hour Time").switch(o.clock_24h, Action::Toggle(Toggle::Clock24))]),
+                Group::new(vec![Item::new("Time Zone").value(info.timezone.as_str()).link(PageId::DateTime).action(Action::TimeZone), { let t = Item::new("Time").value(crate::status::clock_in(info.hour, info.min, o.clock_24h)); if info.time_manual { t.link(PageId::DateTime).action(Action::SetTime) } else { t } }]),
+            ],
+        ),
+        PageId::Keyboard => page(
+            "Keyboard",
+            false,
+            vec![
+                Group::new(vec![Item::new("Keyboards").value(super::kb_layouts::summary()).link(PageId::Keyboards)]),
+                Group::new(vec![
+                    Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
+                    Item::new("Enable Caps Lock").switch(o.enable_caps_lock, Action::Toggle(Toggle::EnableCapsLock)),
+                    Item::new("\".\" Shortcut").switch(o.period_shortcut, Action::Toggle(Toggle::PeriodShortcut)),
+                ])
+                .header("ALL KEYBOARDS")
+                .footer("Double-tapping the space bar will insert a period followed by a space."),
+            ],
+        ),
+        PageId::Keyboards => page(
+            "Keyboards",
+            false,
+            vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one.")]),
+        PageId::Language => page("Language & Region", false, vec![rows(vec![("Language", "English".into()), ("Region", "Iceland".into()), ("Calendar", "Gregorian".into())])]),
+        PageId::Reset => page(
+            "Reset",
+            false,
+            vec![
+                Group::new(vec![Item::new("Reset All Settings").tint(Tint::Blue).action(Action::Run(Command::ResetSettings))]).footer("Returns every setting, including the wallpaper, to its default. Saved Wi-Fi networks are kept."),
+                Group::new(vec![Item::new("Restart BifrOSt").tint(Tint::Blue).action(Action::Run(Command::Restart))]).footer("Quits the shell and starts it again."),
+            ],
+        ),
+        PageId::Display => page(
+            "Display & Brightness",
+            false,
+            {
+            let mut groups = vec![
+                Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"),
+                Group::new(vec![Item::new("Night Shift").value(super::night_shift::published().label()).link(PageId::NightShift), Item::new("True Tone").value("Off")]),
+                Group::new(vec![Item::new("Auto-Lock").value(o.auto_lock_label()).link(PageId::AutoLock)]),
+                Group::new(vec![
+                    Item::slider(Ends::TextSize, o.text_size_step() as f32 / (TEXT_SIZES.len() - 1) as f32, Action::Slider(Slider::TextSize)),
+                    Item::new("Bold Text").switch(o.bold_text, Action::Toggle(Toggle::BoldText)),
+                ])
+                .header("TEXT SIZE")
+                .footer("The text in the shell scales as you drag the slider. Bold Text makes every weight heavier."),
+            ];
+            // a desktop panel also picks the size of everything
+            if crate::layout::adaptive() {
+                groups.insert(3, Group::new(vec![Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale)]));
+            }
+            groups
+            },
+        ),
+        PageId::AutoLock => page("Auto-Lock", false, vec![Group::new(AUTO_LOCK.iter().enumerate().map(|(i, (l, ms))| Item::new(*l).check(*ms == o.auto_lock_ms, Action::Pick(Pick::AutoLock(i)))).collect())]),
+        PageId::Energy => page(
+            "Energy",
+            false,
+            vec![Group::new(SYSTEM_SLEEP.iter().enumerate().map(|(i, (l, mi))| Item::new(*l).check(*mi == o.system_sleep_min, Action::Pick(Pick::SystemSleep(i)))).collect())
+                .header("PUT THE COMPUTER TO SLEEP WHEN THE DISPLAY IS OFF")
+                .footer("Turning the display off or locking the screen never sleeps the computer by itself; this timeout starts once the display is off. The change takes effect at once.")],
+        ),
+        PageId::HomeScreen => page(
+            "Home Screen & Dock",
+            false,
+            vec![Group::new(ICON_SIZES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.icon_size, Action::Pick(Pick::IconSize(i)))).collect()).header("APP ICONS"),
+                Group::new(vec![Item::new("Show Suggested and Recent Apps in Dock").switch(o.dock_recents, Action::Toggle(Toggle::DockRecents))]).header("DOCK")],
+        ),
+        PageId::Battery => page(
+            "Battery",
+            false,
+            vec![
+                rows(vec![
+                    ("Battery Level", battery_level(info)),
+                    ("Status", if info.charging { "Charging" } else { "Not Charging" }.into()),
+                    ("Last Charged", last_charged(&info.battery_history, m.now, info.charging)),
+                ]),
+                Group::new(vec![Item::graph(Graph { bins: battery::bins(&info.battery_history, m.now), end_hour: info.hour, end_min: info.min })]).header("LAST 24 HOURS"),
+                Group::new(info.battery_health.iter().map(|(k, v)| Item::new(k.clone()).value(v.clone())).collect()).header("BATTERY HEALTH"),
+                Group::new(vec![Item::new("Energy").value(o.system_sleep_label()).link(PageId::Energy)]),
+                Group::new(vec![Item::new("Battery Percentage").switch(o.battery_percent, Action::Toggle(Toggle::BatteryPercent))]),
+                Group::new(vec![Item::new("Low Power Mode").switch(o.low_power, Action::Toggle(Toggle::LowPower))])
+                    .footer("Caps the brightness at 50%, locks the screen after 30 seconds and limits animations to 30 frames a second until you turn it off."),
+                Group::new(POWER_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.power_profile, Action::Pick(Pick::PowerMode(i)))).collect())
+                    .header("POWER MODE")
+                    .footer(&format!(
+                        "In effect: {}. Automatic runs Performance while charging and Battery Saver at 30% or less; Low Power Mode always means Battery Saver, which caps the clock speeds to save energy.",
+                        if info.power_profile.is_empty() { "Balanced" } else { &info.power_profile }
+                    )),
+            ],
+        ),
+        PageId::MenuBar => page(
+            "Menu Bar",
+            false,
+            vec![Group::new(super::options::MenuExtra::ALL.iter().map(|&e| Item::new(e.label()).switch(o.menu_extras & e.bit() != 0, Action::Toggle(Toggle::MenuExtra(e)))).collect())
+                .header("MENU BAR CONTROLS")
+                .footer("Choose the controls and readouts shown at the right of the menu bar, beside the clock. Controls that do not fit are left out from the left.")],
+        ),
+        PageId::ControlCentre => page(
+            "Control Centre",
+            false,
+            vec![rows(vec![("Brightness", String::new()), ("Volume", String::new()), ("Wi-Fi", String::new()), ("Screen Lock", String::new()), ("Focus", on_off(o.dnd).into())])
+                .header("INCLUDED CONTROLS")
+                .footer("Swipe down from the top-right corner of the screen to open Control Centre.")],
+        ),
+        PageId::Accessibility => {
+            let a = m.a11y;
+            page(
+                "Accessibility",
+                false,
+                vec![
+                    Group::new(vec![
+                        Item::new("Display Zoom").value(ZOOMS[a.zoom.min(ZOOMS.len() - 1)].0).link(PageId::DisplayZoom),
+                        Item::new("Larger Text").value(format!("{:.0}%", o.text_scale * 100.0)).link(PageId::Display),
+                        Item::new("Bold Text").switch(o.bold_text, Action::Toggle(Toggle::BoldText)),
+                        Item::new("Increase Contrast").switch(a.increase_contrast, Action::Toggle(Toggle::IncreaseContrast)),
+                        reduce_transparency_item(a.reduce_transparency, a.increase_contrast),
+                        Item::new("Show Borders").switch(a.button_shapes, Action::Toggle(Toggle::ButtonShapes)),
+                    ])
+                    .header("VISION"),
+                    Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
+                        .header("MOTION")
+                        .footer("Opening, closing and switching apps cross-fade instead of zooming."),
+                    Group::new(vec![
+                        Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
+                        Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
+                    ])
+                    .header("TOUCH")
+                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
+                ],
+            )
+        }
+        PageId::DisplayZoom => page("Display Zoom", false, vec![Group::new(ZOOMS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.zoom, Action::Pick(Pick::DisplayZoom(i)))).collect()).header("VIEW")]),
+        PageId::Appearance => appearance_page(m, &DeskPrefs::default()),
+        PageId::HotCorners => hot_corners_page(&DeskPrefs::default()),
+        PageId::Shortcuts => shortcuts_page(),
+        PageId::Overview => overview_page(&DeskPrefs::default()),
+        PageId::InterfaceScale => {
+            let now = crate::layout::user_scale();
+            let rows = std::iter::once(None).chain(crate::layout::SCALE_CHOICES.iter().map(|&s| Some(s))).enumerate();
+            page(
+                "Interface Scale",
+                false,
+                vec![Group::new(rows.map(|(i, s)| Item::new(scale_label(s)).check(s == now, Action::Pick(Pick::InterfaceScale(i)))).collect())
+                    .header("SIZE OF EVERYTHING")
+                    .footer("Auto picks a size from the screen's resolution and physical size.")],
+            )
+        }
+        PageId::TouchHold => page(
+            "Touch Accommodations",
+            false,
+            vec![Group::new(HOLD_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.hold, Action::Pick(Pick::TouchHold(i)))).collect())
+                .header("HOLD DURATION")
+                .footer("A press must last this long before it counts as a touch and hold.")],
+        ),
+        // built by `storage_page::spec`, which also knows the live state
+        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        // built by `notify_page::spec`
+        PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
+        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
+        // built by `diagnostics_page::spec`, which knows the crash logs
+        PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
+    }
+}
+
+/// The switches under Sounds: Keyboard Haptics only exists with a vibrator.
+/// "Auto" or the scale as a percentage ("125%").
+pub fn scale_label(s: Option<f32>) -> String {
+    s.map_or_else(|| "Auto".to_string(), |s| format!("{:.0}%", s * 100.0))
+}
+
+fn sound_switches(o: &Options, haptics: bool) -> Vec<Item> {
+    let mut rows = vec![Item::new("Keyboard Clicks").switch(o.keyboard_clicks, Action::Toggle(Toggle::KeyboardClicks))];
+    if haptics {
+        rows.push(Item::new("Keyboard Haptics").switch(o.keyboard_haptics, Action::Toggle(Toggle::KeyboardHaptics)));
+    }
+    rows.push(Item::new("Lock Sound").switch(o.lock_sound, Action::Toggle(Toggle::LockSound)));
+    rows
+}
+
+/// General › Dictionary: the word lists built in (src/shell/words), used by
+/// the keyboard's suggestions and Look Up.
+fn dictionaries() -> Vec<&'static str> {
+    vec!["English", "Íslenska"]
+}
+
+/// Desktop & Dock (desktop profile only): the same dock state the bar's Dock menu edits.
+pub fn desktop_dock_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
+    let positions = [("Bottom", Position::Bottom), ("Left", Position::Left), ("Right", Position::Right)];
+    Spec { id: PageId::HomeScreen, title: "Desktop & Dock".into(), large: false, groups: vec![
+        Group::new(positions.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == m.dock.position, Action::Pick(Pick::DockPosition(i)))).collect())
+            .header("POSITION ON SCREEN"),
+        Group::new(vec![Item::slider(Ends::TextSize, (m.dock.size - 32.) / 48., Action::Slider(Slider::DockSize))]).header("SIZE"),
+        Group::new(vec![
+            Item::new("Magnification").switch(d.magnify, Action::Toggle(Toggle::DockMagnify)),
+            Item::slider(Ends::TextSize, d.magnify_size, Action::Slider(Slider::DockMagnify)),
+        ]).footer("Icons under the pointer grow. The slider sets how large they get."),
+        Group::new(MINIMIZE_EFFECTS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.minimize_effect, Action::Pick(Pick::MinimizeEffect(i)))).collect())
+            .header("MINIMIZE WINDOWS USING"),
+        Group::new(vec![
+            Item::new("Automatically Hide and Show").switch(m.dock.autohide, Action::Toggle(Toggle::DockAutohide)),
+            Item::new("Show Suggested and Recent Apps").switch(m.opts.dock_recents, Action::Toggle(Toggle::DockRecents)),
+        ]).footer("The dock slides away until you move the pointer to its edge."),
+        Group::new(vec![Item::new("Hot Corners").link(PageId::HotCorners)]),
+    ] }
+}
+
+/// Where a window goes when it is minimized.
+pub const MINIMIZE_EFFECTS: [&str; 2] = ["Funnel Effect", "Scale Effect"];
+/// What a hot corner does; index 0 is nothing.
+pub const CORNER_ACTIONS: [&str; 6] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search"];
+pub const CORNER_NAMES: [&str; 4] = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
+pub const SIDEBAR_ICON_SIZES: [&str; 3] = ["Small", "Medium", "Large"];
+pub const SCROLL_BAR_MODES: [&str; 3] = ["Automatically Based on Mouse or Trackpad", "When Scrolling", "Always"];
+
+pub const DOCK_MAGNIFY_PREF: &str = "dock_magnify";
+pub const DOCK_MAGNIFY_SIZE_PREF: &str = "dock_magnify_size";
+pub const DOCK_MINIMIZE_PREF: &str = "dock_minimize_effect";
+pub const HOT_CORNER_PREFS: [&str; 4] = ["hot_corner_tl", "hot_corner_tr", "hot_corner_bl", "hot_corner_br"];
+pub const OVERVIEW_GROUP_PREF: &str = "overview_group_by_app";
+pub const OVERVIEW_SWITCH_PREF: &str = "overview_switch_desktop";
+pub const HIGHLIGHT_PREF: &str = "highlight_color";
+pub const SIDEBAR_ICON_PREF: &str = "sidebar_icon_size";
+pub const SCROLL_BARS_PREF: &str = "show_scroll_bars";
+
+/// The desktop preferences Settings owns that live in `settings.ini` (the dock's position, size and auto-hide
+/// stay in `desktop_dock::Preferences`). Other tracks read the same keys; `apply` publishes the appearance ones.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeskPrefs {
+    pub magnify: bool,
+    /// 0..1 across the enlarged size range
+    pub magnify_size: f32,
+    pub minimize_effect: usize,
+    /// per corner (top left, top right, bottom left, bottom right): index into `CORNER_ACTIONS`
+    pub corners: [usize; 4],
+    pub overview_group: bool,
+    pub overview_switch: bool,
+    /// 0 follows the accent colour
+    pub highlight: usize,
+    pub sidebar_icons: usize,
+    pub scroll_bars: usize,
+}
+
+impl Default for DeskPrefs {
+    fn default() -> Self {
+        DeskPrefs { magnify: true, magnify_size: 0.4, minimize_effect: 0, corners: [0; 4], overview_group: true, overview_switch: true, highlight: 0, sidebar_icons: 1, scroll_bars: 0 }
+    }
+}
+
+impl DeskPrefs {
+    pub fn load(prefs: &super::prefs::Prefs) -> Self {
+        let d = DeskPrefs::default();
+        let flag = |key: &str, default: bool| prefs.get(key).map_or(default, |v| v == "1");
+        let index = |key: &str, default: usize, len: usize| prefs.get_parsed::<usize>(key).filter(|&v| v < len).unwrap_or(default);
+        let mut corners = d.corners;
+        for (c, key) in corners.iter_mut().zip(HOT_CORNER_PREFS) {
+            *c = index(key, 0, CORNER_ACTIONS.len());
+        }
+        DeskPrefs {
+            magnify: flag(DOCK_MAGNIFY_PREF, d.magnify),
+            magnify_size: prefs.get_parsed::<f32>(DOCK_MAGNIFY_SIZE_PREF).filter(|v| v.is_finite()).map_or(d.magnify_size, |v| v.clamp(0., 1.)),
+            minimize_effect: index(DOCK_MINIMIZE_PREF, 0, MINIMIZE_EFFECTS.len()),
+            corners,
+            overview_group: flag(OVERVIEW_GROUP_PREF, d.overview_group),
+            overview_switch: flag(OVERVIEW_SWITCH_PREF, d.overview_switch),
+            highlight: index(HIGHLIGHT_PREF, 0, bifrost_render::appearance::Accent::ALL.len()),
+            sidebar_icons: index(SIDEBAR_ICON_PREF, 1, SIDEBAR_ICON_SIZES.len()),
+            scroll_bars: index(SCROLL_BARS_PREF, 0, SCROLL_BAR_MODES.len()),
+        }
+    }
+
+    /// Publishes the appearance preferences (`bifrost_render::ui::highlight_now` and friends).
+    pub fn apply(&self) {
+        bifrost_render::ui::set_highlight(self.highlight as u32);
+        bifrost_render::ui::set_sidebar_icon_size(self.sidebar_icons as u32);
+        bifrost_render::ui::set_scroll_bars(self.scroll_bars as u32);
+    }
+}
+
+/// Appearance: the scheme, accent and highlight colour, sidebar icon size, scroll bars and transparency.
+pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
+    use bifrost_render::appearance::{accent, mode, mode_label, Accent, Mode};
+    let now = mode();
+    let highlights = std::iter::once(Item::new("Accent Colour").check(d.highlight == 0, Action::Pick(Pick::Highlight(0))))
+        .chain(Accent::ALL.into_iter().enumerate().skip(1).map(|(i, a)| Item::new(a.label()).glyph(Glyph::Swatch(i as u8)).check(d.highlight == i, Action::Pick(Pick::Highlight(i)))))
+        .collect();
+    Spec { id: PageId::Appearance, title: "Appearance".into(), large: false, groups: vec![
+        Group::new([Mode::Light, Mode::Dark, Mode::Auto].into_iter().enumerate().map(|(i, md)| Item::new(mode_label(md)).check(md == now, Action::Pick(Pick::Appearance(i)))).collect())
+            .header("APPEARANCE")
+            .footer("Light and Dark change the look of the whole desktop and fade between them. Auto is light from 07:00 to 19:00 and dark at night."),
+        Group::new(Accent::ALL.into_iter().enumerate().map(|(i, a)| Item::new(a.label()).glyph(Glyph::Swatch(i as u8)).check(a == accent(), Action::Pick(Pick::Accent(i)))).collect())
+            .header("ACCENT COLOUR")
+            .footer("The colour of buttons, links, switches, sliders and the selected sidebar row. Multicolour uses blue for controls."),
+        Group::new(highlights).header("HIGHLIGHT COLOUR").footer("The colour of selected text."),
+        Group::new(SIDEBAR_ICON_SIZES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.sidebar_icons, Action::Pick(Pick::SidebarIcons(i)))).collect())
+            .header("SIDEBAR ICON SIZE"),
+        Group::new(SCROLL_BAR_MODES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.scroll_bars, Action::Pick(Pick::ScrollBars(i)))).collect())
+            .header("SHOW SCROLL BARS"),
+        Group::new(vec![
+            Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass)),
+            reduce_transparency_item(m.a11y.reduce_transparency, m.a11y.increase_contrast),
+        ]).header("TRANSPARENCY")
+            .footer("Move toward the filled pane for more opaque menus, the dock and Search. Reduce Transparency replaces every translucent material with a solid one."),
+    ] }
+}
+
+/// Desktop & Dock > Hot Corners: one group per corner.
+pub fn hot_corners_page(d: &DeskPrefs) -> Spec {
+    let groups = CORNER_NAMES.iter().enumerate().map(|(c, name)| {
+        Group::new(CORNER_ACTIONS.iter().enumerate().map(|(a, l)| Item::new(*l).check(d.corners[c] == a, Action::Pick(Pick::HotCorner(c, a)))).collect()).header(&name.to_uppercase())
+    }).collect();
+    Spec { id: PageId::HotCorners, title: "Hot Corners".into(), large: false, groups }
+}
+
+/// Overview: grouping and desktop switching.
+pub fn overview_page(d: &DeskPrefs) -> Spec {
+    Spec { id: PageId::Overview, title: "Overview".into(), large: false, groups: vec![
+        Group::new(vec![Item::new("Group Windows by Application").switch(d.overview_group, Action::Toggle(Toggle::OverviewGroup))])
+            .footer("Overview shows the windows of one application stacked together instead of side by side."),
+        Group::new(vec![Item::new("When Switching to an Application, Switch to a Desktop with Open Windows for the Application").switch(d.overview_switch, Action::Toggle(Toggle::OverviewSwitch))]),
+    ] }
+}
+
+/// The shortcuts the shell answers to, as (heading, [(action, keys)]).
+pub const SHORTCUTS: [(&str, &[(&str, &str)]); 4] = [
+    ("DESKTOP", &[("Search", "Cmd+Space"), ("Switch Application", "Cmd+Tab"), ("Settings", "Cmd+,"), ("Back", "Escape")]),
+    ("WINDOWS", &[("Close Window", "Cmd+W"), ("Minimize Window", "Cmd+M"), ("Quit Application", "Cmd+Q")]),
+    ("EDITING", &[("Undo", "Cmd+Z"), ("Redo", "Cmd+Shift+Z"), ("Cut", "Cmd+X"), ("Copy", "Cmd+C"), ("Paste", "Cmd+V"), ("Select All", "Cmd+A")]),
+    ("FIND AND TEXT SIZE", &[("Find", "Cmd+F"), ("Find Next", "Cmd+G"), ("Find Previous", "Cmd+Shift+G"), ("Actual Size", "Cmd+0"), ("Bigger", "Cmd+="), ("Smaller", "Cmd+-")]),
+];
+
+/// Keyboard Shortcuts: read-only lists.
+pub fn shortcuts_page() -> Spec {
+    let groups = SHORTCUTS.iter().map(|(h, rows)| Group::new(rows.iter().map(|(a, k)| Item::new(*a).value(*k)).collect()).header(*h)).collect();
+    Spec { id: PageId::Shortcuts, title: "Keyboard Shortcuts".into(), large: false, groups }
+}
+
+/// Desktop controls describe the active physical display, independent of the Settings window.
+pub fn desktop_display(m: &Model<'_>) -> Spec {
+    let page = |title: &str, large, groups| Spec { id: PageId::Display, title: title.into(), large, groups };
+    let mut display = vec![];
+    if let Some((w, h, hz)) = m.info.display_mode {
+        display.push(Item::new("Resolution").value(format!("{w} × {h}")));
+        display.push(Item::new("Refresh Rate").value(format!("{hz} Hz")));
+    }
+    display.push(Item::new("Appearance").value(bifrost_render::appearance::mode_label(bifrost_render::appearance::mode())).link(PageId::Appearance));
+    display.push(Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale));
+    display.push(Item::new("Graphics").link(PageId::Graphics));
+    let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
+        .footer("The native resolution and refresh rate are selected automatically. Interface Scale changes the size of windows, menus and controls.")];
+    if m.info.brightness_supported {
+        groups.push(Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"));
+    }
+    groups.push(Group::new(vec![Item::new("Night Shift").value(super::night_shift::published().label()).link(PageId::NightShift)]));
+    groups.push(Group::new(vec![Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass))]).header("LIQUID GLASS")
+        .footer("Clear shows more of the desktop through the menu bar, menus, the dock and Search. Tinted makes them more opaque."));
+    groups.push(Group::new(vec![
+        Item::slider(Ends::TextSize, m.opts.text_size_step() as f32 / (TEXT_SIZES.len() - 1) as f32, Action::Slider(Slider::TextSize)),
+        Item::new("Bold Text").switch(m.opts.bold_text, Action::Toggle(Toggle::BoldText)),
+    ]).header("TEXT SIZE"));
+    groups.push(Group::new(vec![Item::new("Lock After Inactivity").value(m.opts.auto_lock_label()).link(PageId::AutoLock)]));
+    page("Displays", false, groups)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::desktop_dock::Preferences as DockPrefs;
+    use super::*;
+
+    #[test]
+    fn a_desktop_without_a_battery_shows_none_not_a_made_up_level() {
+        let mut info = Info { battery: 100, ..Info::default() };
+        assert_eq!(battery_level(&info), "100%", "a bifrost keeps its level");
+        info.desktop_network = Some(Default::default());
+        info.battery_present = false;
+        assert_eq!(battery_level(&info), "None");
+        info.battery_present = true;
+        info.battery = 64;
+        assert_eq!(battery_level(&info), "64%", "a desktop with a battery shows it");
+    }
+    use crate::shell::{Network, SavedNetwork};
+
+    fn info() -> Info {
+        Info {
+            battery: 63,
+            charging: true,
+            wifi: "WIFI-5G".into(),
+            wifi_on: true,
+            current_ssid: Some("WIFI-5G".into()),
+            networks: vec![Network { ssid: "WIFI-5G".into(), bars: 3, secure: true, saved: true }, Network { ssid: "Cafe".into(), bars: 1, secure: false, saved: false }],
+            ip: "192.168.1.40".into(),
+            router: "192.168.1.1".into(),
+            mac: "AC:E4:B5:35:20:F0".into(),
+            model: "SM-X200".into(),
+            kernel: "4.14.186".into(),
+            memory: "3.6 GB".into(),
+            cpu: "Unisoc T618, 8 cores".into(),
+            storage_total: 32_000_000_000,
+            storage_free: 17_900_000_000,
+            uptime_min: 1_500,
+            name: "Tab A8".into(),
+            serial: "R9XR40ABC".into(),
+            timezone: "Atlantic/Reykjavik".into(),
+            hour: 14,
+            min: 5,
+            ..Info::default()
+        }
+    }
+
+    fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[] }
+    }
+
+    #[test]
+    fn the_settings_map_is_generated_from_the_page_specs() {
+        let (info, opts) = (info(), Options::default());
+        let mut map = bifrost_ui::ax::Map::new();
+        crate::shell::axmap::settings(&mut map, &|id| spec(id, &model(&info, &opts)));
+        assert!(map.len() > 100, "{} elements", map.len());
+        let su = map.get("os/settings/general/software-update").expect("General > Software Update is addressable");
+        assert_eq!((su.role.as_str(), su.handle.as_str()), ("page", "General>Software Update"));
+        assert!(map.get("os/settings/general").is_some_and(|e| e.role == "page"));
+        let mut addresses: Vec<_> = map.elements().iter().map(|e| e.address.as_str()).collect();
+        let n = addresses.len();
+        addresses.sort();
+        addresses.dedup();
+        assert_eq!(addresses.len(), n, "addresses are unique");
+        assert!(map.elements().iter().any(|e| e.role == "toggle" && (e.value == "on" || e.value == "off")), "switches carry their state");
+        eprintln!("{}", map.listing("os/settings/general").lines().take(14).collect::<Vec<_>>().join("\n"));
+    }
+
+    #[test]
+    fn about_values_are_formatted_like_mobile() {
+        assert_eq!(gb(117_870_000_000), "118 GB");
+        assert_eq!(gb(17_900_000_000), "17.9 GB");
+        assert_eq!(gb(0), "0.0 GB");
+        assert_eq!(uptime(7), "7m");
+        assert_eq!(uptime(127), "2h 7m");
+        assert_eq!(uptime(1_500), "1d 1h 0m");
+        let a = about(&info());
+        assert_eq!(a[0][0], ("Name", "Tab A8".into()));
+        assert_eq!(a[0][2], ("Model", "SM-X200".into()));
+        assert_eq!(a[1][0], ("Capacity", "32.0 GB".into()));
+        assert_eq!(a[2][0], ("Wi-Fi Address", "AC:E4:B5:35:20:F0".into()));
+        assert_eq!(a[2][3], ("Uptime", "1d 1h 0m".into()));
+        let blank = about(&Info::default());
+        assert_eq!(blank[0][0].1, "—", "missing values show a dash");
+        assert_eq!(blank[2][1].1, "—");
+    }
+
+    #[test]
+    fn root_lists_the_bifrost_sections_with_live_values() {
+        let (info, opts) = (info(), Options::default());
+        let s = spec(PageId::Root, &model(&info, &opts));
+        assert!(s.large);
+        let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
+        assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
+        assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Battery", "Privacy", "Passcode", "Developer"]);
+        assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
+        assert_eq!(s.groups[2].items[8].value, "Lake Day");
+        assert_eq!(s.groups[2].items[9].value, "63%");
+        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
+        assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
+        let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
+        let s = spec(PageId::Root, &off);
+        assert_eq!(s.groups[0].items[1].value, "Off");
+        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
+    }
+
+    #[test]
+    fn wifi_page_lists_the_joined_network_first_and_the_rest_under_networks() {
+        let (info, opts) = (info(), Options::default());
+        let s = spec(PageId::Wifi, &model(&info, &opts));
+        assert_eq!(s.groups[0].items[1].label, "WIFI-5G");
+        assert!(s.groups[0].items[1].leading_check);
+        assert_eq!(s.groups[0].items[1].action, Action::Push(PageId::WifiDetail));
+        assert_eq!(s.groups[1].header.as_deref(), Some("NETWORKS"));
+        assert_eq!(s.groups[1].items[0].action, Action::Network("Cafe".into()));
+        assert_eq!(s.groups[1].items[0].accessory, Accessory::Wifi { secure: false, bars: 1 });
+        let off = spec(PageId::Wifi, &Model { wifi_on: false, ..model(&info, &opts) });
+        assert_eq!(off.groups.len(), 1, "nothing but the switch while off");
+        assert_eq!(off.groups[0].items.len(), 1);
+        let none = Info { networks: vec![], current_ssid: None, ..info.clone() };
+        let searching = spec(PageId::Wifi, &model(&none, &opts));
+        assert_eq!(searching.groups[1].items[0].label, "Searching…");
+        assert!(!searching.groups[1].items[0].tappable());
+        let d = spec(PageId::WifiDetail, &model(&info, &opts));
+        assert_eq!(d.title, "WIFI-5G");
+        assert_eq!(d.groups[0].items[0].action, Action::Run(Command::Forget("WIFI-5G".into())));
+        assert_eq!(d.groups[2].items[1].value, "192.168.1.1");
+    }
+
+    #[test]
+    fn saved_networks_show_notes_priority_and_the_other_row() {
+        let (mut info, opts) = (info(), Options::default());
+        let saved = |ssid: &str, auto_join, note: &str| SavedNetwork { ssid: ssid.into(), auto_join, note: note.into() };
+        info.saved = vec![saved("WIFI-5G", true, ""), saved("Cafe", false, "Incorrect Password")];
+        let s = spec(PageId::Wifi, &model(&info, &opts));
+        assert_eq!(s.groups[1].items[0].value, "Incorrect Password", "the failure shows in the row");
+        assert_eq!(s.groups[1].items.last().unwrap().action, Action::JoinOther);
+        assert_eq!(s.groups[2].items[0].action, Action::Push(PageId::KnownNetworks));
+        let k = spec(PageId::KnownNetworks, &model(&info, &opts));
+        assert_eq!(k.groups[0].items.len(), 2);
+        assert_eq!(k.groups[0].items[0].value, "");
+        assert_eq!(k.groups[0].items[1].value, "Incorrect Password");
+        let d = spec(PageId::WifiDetail, &model(&info, &opts));
+        assert_eq!(d.groups[1].items[0].action, Action::Wifi(WifiAction::SetAutoJoin { ssid: "WIFI-5G".into(), on: false }));
+        let priority = d.groups.last().unwrap();
+        assert_eq!(priority.header.as_deref(), Some("PRIORITY 1 OF 2"));
+        assert!(!priority.items[0].tappable(), "already first");
+        assert_eq!(priority.items[1].action, Action::Wifi(WifiAction::Move { ssid: "WIFI-5G".into(), up: false }));
+        let off = Model { detail: "Cafe", ..model(&info, &opts) };
+        assert_eq!(spec(PageId::WifiDetail, &off).groups[1].items[0].accessory, Accessory::Switch(false));
+    }
+
+    #[test]
+    fn desktop_display_shows_panel_mode_and_only_working_controls() {
+        let mut info = info();
+        info.display_mode = Some((2048, 1152, 60));
+        let opts = Options::default();
+        let s = desktop_display(&model(&info, &opts));
+        assert_eq!(s.title, "Displays");
+        assert_eq!(s.groups[0].items[0].value, "2048 × 1152");
+        assert_eq!(s.groups[0].items[1].value, "60 Hz");
+        assert!(s.groups[0].items.iter().any(|i| i.label == "Graphics" && i.action == Action::Push(PageId::Graphics)), "the Graphics page is reachable");
+        assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Use as" || i.label == "Brightness"));
+        assert_eq!(s.groups[1].items[0].label, "Night Shift");
+        assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "True Tone"));
+        info.brightness_supported = true;
+        let s = desktop_display(&model(&info, &opts));
+        assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+    }
+
+    #[test]
+    fn option_pages_reflect_the_options() {
+        let info = info();
+        let opts = Options { auto_lock_ms: 0, text_scale: 1.3, bold_text: true, icon_size: 1, volume: 0.25, ..Options::default() };
+        let m = model(&info, &opts);
+        let d = spec(PageId::Display, &m);
+        assert_eq!(d.groups[2].items[0].value, "Never");
+        assert_eq!(d.groups[3].items[0].body, super::super::list::Body::Slider { ends: Ends::TextSize, value: 1.0 });
+        assert_eq!(d.groups[3].items[1].accessory, Accessory::Switch(true));
+        let e_opts = Options { system_sleep_min: 15, ..Options::default() };
+        let e = spec(PageId::Energy, &Model { opts: &e_opts, ..model(&info, &opts) });
+        assert_eq!(e.groups[0].items.len(), SYSTEM_SLEEP.len());
+        assert_eq!(e.groups[0].items[3].accessory, Accessory::Check(true));
+        assert_eq!(e.groups[0].items[6].accessory, Accessory::Check(false));
+        let a = spec(PageId::AutoLock, &m);
+        assert_eq!(a.groups[0].items.len(), AUTO_LOCK.len());
+        assert_eq!(a.groups[0].items[4].accessory, Accessory::Check(true));
+        assert_eq!(a.groups[0].items[0].accessory, Accessory::Check(false));
+        let h = spec(PageId::HomeScreen, &m);
+        assert_eq!(h.groups[0].items[1].accessory, Accessory::Check(true));
+        let s = spec(PageId::Sounds, &m);
+        assert_eq!(s.groups[0].items[0].body, super::super::list::Body::Slider { ends: Ends::Volume, value: 0.25 });
+        let b = spec(PageId::Battery, &m);
+        assert_eq!(b.groups[0].items[0].value, "63%");
+        assert_eq!(b.groups[0].items[1].value, "Charging");
+        assert!(matches!(b.groups[1].items[0].body, super::super::list::Body::Graph(_)));
+        let u = spec(PageId::SoftwareUpdate, &m);
+        assert_eq!(u.groups[0].items[0].value, env!("CARGO_PKG_VERSION"));
+        assert!(!BUILD.git.is_empty() && !BUILD.date.is_empty());
+        let t = spec(PageId::DateTime, &m);
+        assert_eq!(t.groups[2].items[1].value, "14:05");
+        assert_eq!(t.groups[2].items[0].action, Action::TimeZone);
+        let acc = spec(PageId::Accessibility, &m);
+        assert_eq!(acc.groups[0].items[1].value, "130%");
+        for id in [PageId::General, PageId::About, PageId::Keyboard, PageId::Language, PageId::Reset, PageId::ControlCentre, PageId::Privacy] {
+            assert!(!spec(id, &m).groups.is_empty(), "{id:?}");
+        }
+    }
+
+    fn bt_device(addr: &str, name: &str, paired: bool, connected: bool) -> crate::bare::bluetooth::Device {
+        crate::bare::bluetooth::Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: true, rssi: None }
+    }
+
+    #[test]
+    fn bluetooth_page_lists_my_devices_then_the_ones_nearby() {
+        use crate::bare::bluetooth::{Cmd, State, Status};
+        let opts = Options::default();
+        let mut info = info();
+        info.bt = Status { state: State::On, scanning: true, devices: vec![bt_device("A", "Buds", true, true), bt_device("B", "Speaker", false, false)], ..Status::default() };
+        let s = spec(PageId::Bluetooth, &model(&info, &opts));
+        assert_eq!(s.groups[0].items[0].action, Action::Toggle(Toggle::Bluetooth));
+        assert_eq!(s.groups[1].header.as_deref(), Some("MY DEVICES"));
+        assert_eq!((s.groups[1].items[0].label.as_str(), s.groups[1].items[0].value.as_str()), ("Buds", "Connected"));
+        assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::BluetoothDetail));
+        assert_eq!(s.groups[2].items[0].action, Action::Bluetooth(Cmd::Pair("B".into())));
+        let root = spec(PageId::Root, &model(&info, &opts));
+        assert_eq!(root.groups[0].items[2].value, "Connected");
+        info.bt.state = State::Off;
+        assert_eq!(spec(PageId::Bluetooth, &model(&info, &opts)).groups.len(), 1, "off: just the switch");
+        info.bt.state = State::Unavailable;
+        let none = spec(PageId::Bluetooth, &model(&info, &opts));
+        assert!(none.groups[0].footer.as_deref().unwrap().contains("not available"));
+    }
+
+    #[test]
+    fn bluetooth_detail_offers_connect_or_disconnect_and_forget() {
+        use crate::bare::bluetooth::{Cmd, State, Status};
+        let opts = Options::default();
+        let mut info = info();
+        info.bt = Status { state: State::On, devices: vec![bt_device("A", "Buds", true, false)], ..Status::default() };
+        let m = Model { detail: "Buds", ..model(&info, &opts) };
+        let s = spec(PageId::BluetoothDetail, &m);
+        assert_eq!(s.title, "Buds");
+        assert_eq!(s.groups[0].items[0].action, Action::Bluetooth(Cmd::Connect("A".into())));
+        assert_eq!(s.groups[1].items[0].action, Action::Run(Command::ForgetBluetooth("A".into())));
+        info.bt.devices[0].connected = true;
+        let m = Model { detail: "Buds", ..model(&info, &opts) };
+        assert_eq!(spec(PageId::BluetoothDetail, &m).groups[0].items[0].action, Action::Bluetooth(Cmd::Disconnect("A".into())));
+    }
+
+    #[test]
+    fn keyboard_haptics_switch_needs_a_vibrator() {
+        let (info, opts) = (info(), Options::default());
+        let labels = |haptics| {
+            let s = spec(PageId::Sounds, &Model { haptics, ..model(&info, &opts) });
+            format!("{s:?}")
+        };
+        assert!(!labels(false).contains("Keyboard Haptics"));
+        assert!(labels(true).contains("Keyboard Haptics"));
+        assert!(labels(false).contains("Keyboard Clicks"));
+    }
+}
+
+fn desktop_network_page(info:&Info)->Spec {
+    let network=info.desktop_network.as_ref();
+    let ethernet=network.and_then(|n|n.interfaces.iter().find(|i|i.kind=="ethernet"));
+    let wifi=network.is_some_and(|n|n.wifi_available);
+    let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
+    Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi)]).header("CONNECTIONS"),
+        rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
+    ]}
+}
+fn desktop_ethernet_page(info:&Info)->Spec {
+    let interfaces:Vec<_>=info.desktop_network.as_ref().map(|n|n.interfaces.iter().filter(|i|i.kind=="ethernet").collect()).unwrap_or_default();
+    let groups=if interfaces.is_empty(){vec![Group::new(vec![Item::new("No Ethernet adapter").tint(Tint::Dim)])]}else{interfaces.into_iter().map(|i|rows(vec![
+        ("Status",if i.connected(){"Connected".into()}else{"Not Connected".into()}),("Interface",i.name.clone()),("Connection",i.connection.clone()),
+        ("Configure IPv4",match i.method.as_str(){"auto"=>"Automatic (DHCP)","manual"=>"Manually",_=>"—"}.into()),
+        ("IP Address",if i.ipv4.is_empty(){"—".into()}else{i.ipv4.join(", ")}),("Router",if i.gateway.is_empty(){"—".into()}else{i.gateway.clone()}),("DNS Servers",if i.dns.is_empty(){"—".into()}else{i.dns.join(", ")}),
+        ("Ethernet Address",if i.mac.is_empty(){"—".into()}else{i.mac.clone()}),("IPv6 Address",if i.ipv6.is_empty(){"—".into()}else{i.ipv6.join(", ")}),
+    ]).header(&i.name).footer("Connection details update automatically. Unplugging this cable disconnects remote access over Ethernet.")).collect()};
+    Spec{id:PageId::Ethernet,title:"Ethernet".into(),large:false,groups}
+}

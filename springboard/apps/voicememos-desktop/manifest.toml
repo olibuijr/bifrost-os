@@ -1,0 +1,11 @@
+id = "is.olibuijr.voicememos.desktop"
+name = "Voice Memos"
+version = "1.2.3"
+exec = "bifrost-voicememos"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Manage voice recordings; recording and playback require the audio service."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["audio", "storage"]
+window = "full-size"

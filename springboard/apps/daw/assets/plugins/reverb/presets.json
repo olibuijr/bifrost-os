@@ -1,0 +1,7 @@
+[
+ { "name": "Room", "params": { "size": 0.6, "damp": 5000, "mix": 0.18 } },
+ { "name": "Hall", "params": { "size": 2.5, "damp": 6000, "mix": 0.25 } },
+ { "name": "Plate", "params": { "size": 1.5, "damp": 9000, "mix": 0.2 } },
+ { "name": "Shimmer", "params": { "size": 5, "damp": 12000, "mix": 0.3 } },
+ { "name": "Dark Wash", "params": { "size": 4.5, "damp": 1500, "mix": 0.3 } }
+]

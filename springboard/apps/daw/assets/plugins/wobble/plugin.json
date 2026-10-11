@@ -1,0 +1,15 @@
+{
+  "id": "wobble",
+  "name": "Wobble",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "wobble",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Mono dubstep/riddim/trap wobble bass: saw + square + sine sub through a 24 dB resonant lowpass swept by a tempo-synced LFO. Set rate in beat divisions (1/4, 1/8, 1/8T...); bpm 0 follows the song tempo. Change rate per clip via automation for talking wobbles",
+  "family": "synth",
+  "category": "synth",
+  "tags": ["bass", "wobble", "dubstep", "riddim", "lfo"],
+  "entry": "index.js",
+  "files": ["index.js", "presets.json"]
+}

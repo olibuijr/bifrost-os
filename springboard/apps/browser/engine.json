@@ -1,0 +1,10 @@
+{
+  "version": "0.7.0-bifrost.12",
+  "upstream_version": "0.7.0",
+  "url": "https://bifrost.olibuijr.com/store/is.olibuijr.browser.desktop/servo-0.7.0-bifrost.12.tar.gz",
+  "sha256": "9c0bb55f87bb4ee05a741f8da59debcd7c28ac6c881417d4822dd2c1d101e998",
+  "source": "https://github.com/servo/servo/tree/v0.7.0",
+  "engine": "engine/",
+  "build": "tools/build-webview-engine.sh",
+  "source_archive_sha256": "707f97dce2d017773eaf6b6c91c42c2e8085b70e9f35e4fbd6d5bc64d6c87bc7"
+}

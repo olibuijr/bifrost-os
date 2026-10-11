@@ -1,0 +1,71 @@
+# Maintainer: Olafur Bui Olafsson <olibuijr@olibuijr.com>
+# Local package, never published. Builds from this repo checkout; see README.md.
+pkgname=springboard-shell
+pkgver=0.3.15
+pkgrel=1
+pkgdesc='BifrOSt macOS-style desktop shell for x86_64 PCs'
+arch=(x86_64)
+url='https://bifrost.olibuijr.com'
+license=(custom)
+mapfile -t depends < "${PC_PKGSRC:-$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")}/runtime-packages.txt"
+makedepends=(cargo)
+options=(!lto !strip)
+install=springboard.install
+source=(springboard.service seed-data)
+sha256sums=(SKIP SKIP)
+
+# Inputs (override from the environment):
+#   SPRINGBOARD_REPO    tab-a8 checkout            (default: two levels above this PKGBUILD)
+#   SPRINGBOARD_DEPS    parent dir of the sibling repos iOSTerm, wow-private, ipad-deildu-rust
+#                       (default: the checkout parent, where sibling repositories live)
+#   SPRINGBOARD_ASSETS  packed assets dir          (default: <repo>/springboard/assets, from tools/pack.py)
+_here=$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")
+_repo=${SPRINGBOARD_REPO:-$(cd "$_here/../.." && pwd)}
+_deps=${SPRINGBOARD_DEPS:-$(dirname "$_repo")}
+_assets=${SPRINGBOARD_ASSETS:-$_repo/springboard/assets}
+
+pkgver() {
+  grep -m1 '^version' "$_repo/springboard/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/'
+}
+
+prepare() {
+  # Self-contained build tree: the checkout plus copies of the path-dependency repos, with the
+  # sibling dependency paths in Cargo.toml rewritten to the copies. Sources only, no target dirs.
+  rm -rf "$srcdir/tree"
+  mkdir -p "$srcdir/tree/deps"
+  tar -C "$_repo" --exclude=target --exclude=assets -cf - springboard packaging | tar -C "$srcdir/tree" -xf -
+  for d in iOSTerm wow-private ipad-deildu-rust; do
+    [ -d "$_deps/$d" ] || { echo "missing sibling repo $_deps/$d (set SPRINGBOARD_DEPS)" >&2; return 1; }
+    tar -C "$_deps" --exclude=target --exclude=.git -cf - "$d" | tar -C "$srcdir/tree/deps" -xf -
+  done
+  sed -i 's#path = "../../#path = "../deps/#g' "$srcdir/tree/springboard/Cargo.toml"
+}
+
+build() {
+  cd "$srcdir/tree/springboard"
+  export CARGO_TARGET_DIR="$srcdir/target"
+  # Crates come from the local cargo registry cache (CARGO_HOME); nothing is fetched when it is warm.
+  rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols "$_repo/packaging/arch/recovery/guard.rs" -o "$srcdir/bifrost-update-guard"
+  cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked -p bifrost-mcp ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked -p bifrost-app --bin bifrost-log ${SPRINGBOARD_CARGO_FLAGS:---offline}
+}
+
+check() {
+  [ -x "$srcdir/target/release/shell" ]
+}
+
+package() {
+  source "$_repo/packaging/arch/package-files.sh"
+  package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
+  install -Dm755 "$srcdir/target/release/bootweave" "$pkgdir/usr/bin/bifrost-bootweave"
+  install -Dm755 "$srcdir/target/release/bifrost-portal" "$pkgdir/usr/bin/bifrost-portal"
+  install -Dm755 "$srcdir/target/release/bifrost-mcp" "$pkgdir/usr/bin/bifrost-mcp"
+  install -Dm755 "$srcdir/target/release/bifrost-log" "$pkgdir/usr/bin/bifrost-log"
+  install -d "$pkgdir/usr/share/springboard"
+  if [ -d "$_assets" ]; then
+    cp -a "$_assets" "$pkgdir/usr/share/springboard/assets"
+  else
+    install -d "$pkgdir/usr/share/springboard/assets"
+  fi
+}

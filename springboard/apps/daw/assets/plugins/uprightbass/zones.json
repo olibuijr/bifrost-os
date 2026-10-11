@@ -1,0 +1,279 @@
+{
+ "id": "uprightbass",
+ "name": "Upright Bass",
+ "desc": "Acoustic upright/double bass, pizzicato (plucked), 2 velocity layers, E1-G4 (MIDI 28-67). Walking jazz bass, acoustic ballads, orchestral pizz bass lines.",
+ "family": "bass",
+ "license": "CC0 1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Strings/Solo%20Contrabass/Pizz",
+ "attribution": "VS Chamber Orchestra: Community Edition (VSCO-2 CE) by Versilian Studios (Sam Gossner, Simon Dalzell; sample cutting by Elan Hickler/Soundemote). CC0 1.0.",
+ "attack": 0.002,
+ "release": 0.15,
+ "range": [
+  26,
+  67
+ ],
+ "rrNeighbor": true,
+ "zones": [
+  {
+   "file": "E1_p.ogg",
+   "root": 28,
+   "lo": 26,
+   "hi": 29,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "E1_f.ogg",
+   "root": 28,
+   "lo": 26,
+   "hi": 29,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs1_p.ogg",
+   "root": 30,
+   "lo": 30,
+   "hi": 30,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "Fs1_f.ogg",
+   "root": 30,
+   "lo": 30,
+   "hi": 30,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G1_p.ogg",
+   "root": 31,
+   "lo": 31,
+   "hi": 32,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "G1_f.ogg",
+   "root": 31,
+   "lo": 31,
+   "hi": 32,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "As1_p.ogg",
+   "root": 34,
+   "lo": 33,
+   "hi": 35,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "As1_f.ogg",
+   "root": 34,
+   "lo": 33,
+   "hi": 35,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C2_p.ogg",
+   "root": 36,
+   "lo": 36,
+   "hi": 37,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "C2_f.ogg",
+   "root": 36,
+   "lo": 36,
+   "hi": 37,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "D2_p.ogg",
+   "root": 38,
+   "lo": 38,
+   "hi": 39,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366,
+   "tune": -15
+  },
+  {
+   "file": "D2_p.ogg",
+   "root": 38,
+   "lo": 38,
+   "hi": 39,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429,
+   "tune": -15
+  },
+  {
+   "file": "E2_p.ogg",
+   "root": 40,
+   "lo": 40,
+   "hi": 41,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366,
+   "tune": 22
+  },
+  {
+   "file": "E2_f.ogg",
+   "root": 40,
+   "lo": 40,
+   "hi": 41,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs2_p.ogg",
+   "root": 42,
+   "lo": 42,
+   "hi": 43,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366,
+   "tune": -26
+  },
+  {
+   "file": "Fs2_p.ogg",
+   "root": 42,
+   "lo": 42,
+   "hi": 43,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429,
+   "tune": -26
+  },
+  {
+   "file": "Gs2_p.ogg",
+   "root": 44,
+   "lo": 44,
+   "hi": 44,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "Gs2_p.ogg",
+   "root": 44,
+   "lo": 44,
+   "hi": 44,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429
+  },
+  {
+   "file": "A2_p.ogg",
+   "root": 45,
+   "lo": 45,
+   "hi": 47,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366,
+   "tune": -21
+  },
+  {
+   "file": "A2_p.ogg",
+   "root": 45,
+   "lo": 45,
+   "hi": 47,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429,
+   "tune": -21
+  },
+  {
+   "file": "Cs3_p.ogg",
+   "root": 49,
+   "lo": 48,
+   "hi": 50,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "Cs3_p.ogg",
+   "root": 49,
+   "lo": 48,
+   "hi": 50,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429
+  },
+  {
+   "file": "E3_p.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 54,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "E3_p.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 54,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429
+  },
+  {
+   "file": "Gs3_p.ogg",
+   "root": 56,
+   "lo": 55,
+   "hi": 57,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366,
+   "tune": 18
+  },
+  {
+   "file": "Gs3_p.ogg",
+   "root": 56,
+   "lo": 55,
+   "hi": 57,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429,
+   "tune": 18
+  },
+  {
+   "file": "B3_p.ogg",
+   "root": 59,
+   "lo": 58,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 0.6,
+   "gain": 1.366
+  },
+  {
+   "file": "B3_p.ogg",
+   "root": 59,
+   "lo": 58,
+   "hi": 67,
+   "vlo": 0.6,
+   "vhi": 1.0,
+   "gain": 2.429
+  }
+ ]
+}

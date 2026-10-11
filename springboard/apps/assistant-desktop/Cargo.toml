@@ -1,0 +1,16 @@
+[package]
+name = "bifrost-assistant"
+version = "1.0.2"
+edition = "2021"
+
+[lib]
+name = "assistant"
+path = "src/lib.rs"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

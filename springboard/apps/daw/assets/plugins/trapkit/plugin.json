@@ -1,0 +1,126 @@
+{
+ "id": "trapkit",
+ "name": "Trap Kit",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "trapkit",
+ "author": "DAW project (synthesized)",
+ "license": "CC0-1.0",
+ "desc": "Trap/drill kit (synthesized 808 voices): long 808 kick, tight clap/snare, crisp hats for rolls. 130-150 BPM (half-time feel): snare/clap on 3, hats in 8ths with 16th/32nd/triplet rolls (short notes, vary velocity), open hat 46 on offbeats, kick 36 with the 808 bass. 42 chokes 46.",
+ "family": "drums",
+ "category": "sampled",
+ "tags": [
+  "drums",
+  "trap",
+  "808",
+  "drill",
+  "hip-hop"
+ ],
+ "entry": "index.js",
+ "files": [
+  "index.js",
+  "zones.json",
+  "presets.json",
+  "README.md",
+  "35_f.ogg",
+  "35_p.ogg",
+  "36_f.ogg",
+  "36_p.ogg",
+  "37_f.ogg",
+  "37_p.ogg",
+  "38_f.ogg",
+  "38_p.ogg",
+  "39_f.ogg",
+  "39_p.ogg",
+  "40_f.ogg",
+  "40_p.ogg",
+  "42_f.ogg",
+  "42_p.ogg",
+  "44_f.ogg",
+  "44_p.ogg",
+  "45_f.ogg",
+  "45_p.ogg",
+  "46_f.ogg",
+  "46_p.ogg",
+  "47_f.ogg",
+  "47_p.ogg",
+  "49_f.ogg",
+  "49_p.ogg",
+  "50_f.ogg",
+  "50_p.ogg",
+  "51_f.ogg",
+  "51_p.ogg",
+  "56_f.ogg",
+  "56_p.ogg",
+  "70_f.ogg",
+  "70_p.ogg"
+ ],
+ "source": "tools/build-hiphop.py (offline synthesis)",
+ "attribution": "",
+ "pads": [
+  [
+   35,
+   "Kick 2"
+  ],
+  [
+   36,
+   "Kick"
+  ],
+  [
+   37,
+   "Rim"
+  ],
+  [
+   38,
+   "Snare"
+  ],
+  [
+   39,
+   "Clap"
+  ],
+  [
+   40,
+   "Snare 2"
+  ],
+  [
+   42,
+   "Hat"
+  ],
+  [
+   44,
+   "Pedal"
+  ],
+  [
+   46,
+   "Open"
+  ],
+  [
+   45,
+   "Low Tom"
+  ],
+  [
+   47,
+   "Mid Tom"
+  ],
+  [
+   50,
+   "Hi Tom"
+  ],
+  [
+   49,
+   "Crash"
+  ],
+  [
+   51,
+   "Ride"
+  ],
+  [
+   56,
+   "Cowbell"
+  ],
+  [
+   70,
+   "Shaker"
+  ]
+ ]
+}

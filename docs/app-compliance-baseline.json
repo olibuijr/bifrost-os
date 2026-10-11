@@ -1,0 +1,48 @@
+{
+  "assistant-desktop": {},
+  "books-desktop": {},
+  "browser": {},
+  "cadcraft-desktop": {},
+  "calculator-desktop": {
+    "COL-01": 3,
+    "GG-04": 1,
+    "LAY-04": 11
+  },
+  "calendar-desktop": {},
+  "clock-desktop": {},
+  "console-desktop": {},
+  "contacts-desktop": {},
+  "daw": {},
+  "deckcraft-desktop": {},
+  "designcraft-desktop": {},
+  "effectcraft-desktop": {},
+  "files": {},
+  "filmcraft-desktop": {},
+  "freeform-desktop": {},
+  "games-desktop": {},
+  "gridcraft-desktop": {},
+  "keyboard": {
+    "COL-01": 9,
+    "COL-02": 1,
+    "RES-03": 1,
+    "TYP-01": 5
+  },
+  "lightcraft-desktop": {},
+  "music-desktop": {},
+  "news-desktop": {},
+  "notes-desktop": {},
+  "pdfcraft-desktop": {},
+  "photocraft-desktop": {},
+  "podcasts-desktop": {},
+  "reminders-desktop": {},
+  "remote": {},
+  "shortcuts-desktop": {},
+  "soundcraft-desktop": {},
+  "vectorcraft-desktop": {},
+  "voicememos-desktop": {},
+  "weather-desktop": {
+    "COL-03": 3,
+    "LAY-04": 4
+  },
+  "wordcraft-desktop": {}
+}

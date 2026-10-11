@@ -1,0 +1,8 @@
+[Unit]
+Description=Follow upstream releases of prebuilt BifrOSt App Store apps
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/bifrost-os
+ExecStart=/usr/bin/python3 tools/upstream-watch.py
+TimeoutStartSec=2h

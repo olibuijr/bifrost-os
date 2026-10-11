@@ -1,0 +1,7 @@
+[
+ { "name": "Warm", "params": { "amount": 0.2, "tone": 5000, "mix": 0.8, "mode": 0, "autogain": 1 } },
+ { "name": "Crunch", "params": { "amount": 0.5, "tone": 7000, "mix": 1, "mode": 1, "autogain": 1 } },
+ { "name": "Tube warmth", "params": { "amount": 0.35, "tone": 8000, "mix": 1, "mode": 2, "autogain": 1 } },
+ { "name": "Fuzz", "params": { "amount": 0.9, "tone": 3500, "mix": 1, "mode": 0, "autogain": 1 } },
+ { "name": "Parallel", "params": { "amount": 0.7, "tone": 9000, "mix": 0.35, "mode": 0, "autogain": 1 } }
+]

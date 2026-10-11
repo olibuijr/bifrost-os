@@ -1,0 +1,13 @@
+[package]
+name = "bifrost-render"
+version = "0.1.0"
+edition = "2021"
+description = "Shared BifrOSt raster graphics, SF UI typography and appearance"
+
+[features]
+testkit = []
+
+[dependencies]
+zune-jpeg = "0.5"
+zune-core = "0.5"
+png = "0.18"

@@ -1,0 +1,105 @@
+{
+ "attack": 0.002,
+ "release": 0.08,
+ "range": [
+  24,
+  60
+ ],
+ "license": "CC0-1.0",
+ "source": "synthesized by tools/build-hiphop.py",
+ "monoSub": true,
+ "chokeTime": 0.015,
+ "zones": [
+  {
+   "file": "n24.ogg",
+   "root": 24,
+   "lo": 12,
+   "hi": 25,
+   "choke": "mono"
+  },
+  {
+   "file": "n27.ogg",
+   "root": 27,
+   "lo": 26,
+   "hi": 28,
+   "choke": "mono"
+  },
+  {
+   "file": "n30.ogg",
+   "root": 30,
+   "lo": 29,
+   "hi": 31,
+   "choke": "mono"
+  },
+  {
+   "file": "n33.ogg",
+   "root": 33,
+   "lo": 32,
+   "hi": 34,
+   "choke": "mono"
+  },
+  {
+   "file": "n36.ogg",
+   "root": 36,
+   "lo": 35,
+   "hi": 37,
+   "choke": "mono"
+  },
+  {
+   "file": "n39.ogg",
+   "root": 39,
+   "lo": 38,
+   "hi": 40,
+   "choke": "mono"
+  },
+  {
+   "file": "n42.ogg",
+   "root": 42,
+   "lo": 41,
+   "hi": 43,
+   "choke": "mono"
+  },
+  {
+   "file": "n45.ogg",
+   "root": 45,
+   "lo": 44,
+   "hi": 46,
+   "choke": "mono"
+  },
+  {
+   "file": "n48.ogg",
+   "root": 48,
+   "lo": 47,
+   "hi": 49,
+   "choke": "mono"
+  },
+  {
+   "file": "n51.ogg",
+   "root": 51,
+   "lo": 50,
+   "hi": 52,
+   "choke": "mono"
+  },
+  {
+   "file": "n54.ogg",
+   "root": 54,
+   "lo": 53,
+   "hi": 55,
+   "choke": "mono"
+  },
+  {
+   "file": "n57.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "choke": "mono"
+  },
+  {
+   "file": "n60.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 72,
+   "choke": "mono"
+  }
+ ]
+}

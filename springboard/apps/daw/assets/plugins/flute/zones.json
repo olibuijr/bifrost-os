@@ -1,0 +1,231 @@
+{
+ "id": "flute",
+ "name": "Flute",
+ "desc": "Concert flute, non-vibrato sustain, 2 dynamics. Airy, pure, soaring highs. Range C4-C7 (best G4-C7). Melodies, countermelodies, pads doubled an octave up.",
+ "family": "woodwind",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Woodwinds/Flute/susNV",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.03,
+ "release": 0.25,
+ "range": [
+  60,
+  96
+ ],
+ "softAttack": 0.8,
+ "releaseTail": true,
+ "autoLoop": true,
+ "minLoop": 0.05,
+ "zones": [
+  {
+   "file": "flute_C3_v1.ogg",
+   "root": 60,
+   "lo": 60,
+   "hi": 62,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.676712,
+   "loopEnd": 2.258662,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_E3_v1.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 66,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.006395,
+   "loopEnd": 2.591837,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_A3_v1.ogg",
+   "root": 69,
+   "lo": 67,
+   "hi": 70,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.743923,
+   "loopEnd": 2.330499,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_C4_v1.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.022902,
+   "loopEnd": 2.62254,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_E4_v1.ogg",
+   "root": 76,
+   "lo": 75,
+   "hi": 78,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.006236,
+   "loopEnd": 2.600544,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_A4_v1.ogg",
+   "root": 81,
+   "lo": 79,
+   "hi": 82,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.796893,
+   "loopEnd": 2.396871,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_C5_v1.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.936054,
+   "loopEnd": 2.534739,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_E5_v1.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 90,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.623356,
+   "loopEnd": 2.218367,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_A5_v1.ogg",
+   "root": 93,
+   "lo": 91,
+   "hi": 94,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.71,
+   "loopEnd": 2.308866,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_C6_v1.ogg",
+   "root": 96,
+   "lo": 95,
+   "hi": 96,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.023197,
+   "loopEnd": 2.621406,
+   "gain": 0.6
+  },
+  {
+   "file": "flute_C3_v2.ogg",
+   "root": 60,
+   "lo": 60,
+   "hi": 62,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.745102,
+   "loopEnd": 2.33737
+  },
+  {
+   "file": "flute_E3_v2.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 66,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.779751,
+   "loopEnd": 2.360363
+  },
+  {
+   "file": "flute_A3_v2.ogg",
+   "root": 69,
+   "lo": 67,
+   "hi": 70,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.023175,
+   "loopEnd": 2.607279
+  },
+  {
+   "file": "flute_C4_v2.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.88322,
+   "loopEnd": 2.473265
+  },
+  {
+   "file": "flute_E4_v2.ogg",
+   "root": 76,
+   "lo": 75,
+   "hi": 78,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.727891,
+   "loopEnd": 2.317642
+  },
+  {
+   "file": "flute_A4_v2.ogg",
+   "root": 81,
+   "lo": 79,
+   "hi": 82,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.988549,
+   "loopEnd": 2.580658
+  },
+  {
+   "file": "flute_C5_v2.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.023039,
+   "loopEnd": 2.616939
+  },
+  {
+   "file": "flute_E5_v2.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 90,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.97102,
+   "loopEnd": 2.569864
+  },
+  {
+   "file": "flute_A5_v2.ogg",
+   "root": 93,
+   "lo": 91,
+   "hi": 94,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.953492,
+   "loopEnd": 2.553515
+  },
+  {
+   "file": "flute_C6_v2.ogg",
+   "root": 96,
+   "lo": 95,
+   "hi": 96,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.023197,
+   "loopEnd": 2.621406
+  }
+ ]
+}

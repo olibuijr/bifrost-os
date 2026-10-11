@@ -1,0 +1,77 @@
+[
+ {
+  "name": "Short Punch",
+  "params": {
+   "release": 0.5,
+   "glide": 0,
+   "tone": 9000,
+   "velocity": 0.6
+  },
+  "tags": [
+   "short",
+   "punchy"
+  ]
+ },
+ {
+  "name": "Slide",
+  "params": {
+   "release": 1.5,
+   "glide": 0.09,
+   "tone": 20000,
+   "velocity": 0.4
+  },
+  "tags": [
+   "glide",
+   "slide",
+   "trap"
+  ]
+ },
+ {
+  "name": "Trap Slide",
+  "params": {
+   "glide": 0.08,
+   "glidecurve": 0.6,
+   "release": 2.5
+  },
+  "tags": [
+   "trap",
+   "slide"
+  ]
+ },
+ {
+  "name": "Short Knock",
+  "params": {
+   "release": 0.35,
+   "glide": 0
+  },
+  "tags": [
+   "short",
+   "knock"
+  ]
+ },
+ {
+  "name": "Long Boom",
+  "params": {
+   "release": 4,
+   "glide": 0,
+   "tone": 20000,
+   "velocity": 0.4
+  },
+  "tags": [
+   "long",
+   "sub"
+  ]
+ },
+ {
+  "name": "Drill Slide",
+  "params": {
+   "glide": 0.15,
+   "glidecurve": 0.8,
+   "release": 3
+  },
+  "tags": [
+   "drill",
+   "slide"
+  ]
+ }
+]

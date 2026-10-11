@@ -1,0 +1,20 @@
+# Maintainer: Olafur Bui Olafsson <olibuijr@olibuijr.com>
+# The update package: the shell binary, its unit and seed script built by `tools/pc-publish.py` (no assets, no cargo here:
+# the binary is prebuilt, which is what makes a publish a few seconds). Assets ship with the installer / their own package.
+pkgname=springboard-shell
+pkgver=${PC_VER:?set by tools/pc-publish.py}
+pkgrel=1
+pkgdesc='BifrOSt system update'
+arch=(x86_64)
+url='https://bifrost.olibuijr.com'
+license=(custom)
+mapfile -t depends < "${PC_PKGSRC:?}/runtime-packages.txt"
+options=(!lto !strip !debug)
+install=springboard.install
+
+package() {
+  source "${PC_PKGSRC:?}/package-files.sh"
+  package_bifrost_files "$PC_PKGSRC" "${PC_BIN:?}" "${PC_GUARD:?}"
+  # Preserve symbols locally; strip only the downloadable binary.
+  strip --strip-unneeded "$pkgdir/usr/bin/springboard"
+}

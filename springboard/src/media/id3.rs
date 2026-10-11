@@ -1,0 +1,323 @@
+//! ID3v2 tag reader (versions 2.2, 2.3 and 2.4) for the Music library:
+//! title, artist, album, album artist, track number, year and the cover
+//! picture, with unsynchronisation undone at the tag (2.3) or frame (2.4)
+//! level. Everything else is skipped without being decoded.
+
+use super::audiofile::Tags;
+
+/// The byte size of the ID3v2 tag at the start of `bytes` (header
+/// included, footer included for 2.4), or 0 when there is none; the audio
+/// stream starts there.
+pub fn tag_len(bytes: &[u8]) -> usize {
+    let Some(h) = Header::parse(bytes) else { return 0 };
+    10 + h.size + if h.footer { 10 } else { 0 }
+}
+
+/// Parses the ID3v2 tag at the start of `bytes`, if any.
+pub fn parse(bytes: &[u8]) -> Option<Tags> {
+    let h = Header::parse(bytes)?;
+    let body = bytes.get(10..10 + h.size).unwrap_or(&bytes[10.min(bytes.len())..]);
+    let body = if h.unsync && h.version <= 3 { resync(body) } else { body.to_vec() };
+    let mut p = 0;
+    if h.extended {
+        // 2.3: the size excludes its own 4 bytes; 2.4: syncsafe and inclusive
+        let size = if h.version == 4 { syncsafe(&body) } else { be32(&body) + 4 };
+        p += size.min(body.len());
+    }
+    let mut tags = Tags::default();
+    while let Some(frame) = Frame::read(&body, &mut p, h) {
+        apply(&mut tags, frame);
+    }
+    Some(tags)
+}
+
+#[derive(Clone, Copy)]
+struct Header {
+    version: u8,
+    size: usize,
+    unsync: bool,
+    extended: bool,
+    footer: bool,
+}
+
+impl Header {
+    fn parse(b: &[u8]) -> Option<Header> {
+        if b.len() < 10 || &b[..3] != b"ID3" || !(2..=4).contains(&b[3]) || b[6..10].iter().any(|&x| x & 0x80 != 0) {
+            return None;
+        }
+        let flags = b[5];
+        Some(Header { version: b[3], size: syncsafe(&b[6..]), unsync: flags & 0x80 != 0, extended: b[3] >= 3 && flags & 0x40 != 0, footer: b[3] == 4 && flags & 0x10 != 0 })
+    }
+}
+
+struct Frame<'a> {
+    id: [u8; 4],
+    data: std::borrow::Cow<'a, [u8]>,
+}
+
+impl<'a> Frame<'a> {
+    /// The frame at `*p`, advancing past it; None at padding or the end.
+    fn read(body: &'a [u8], p: &mut usize, h: Header) -> Option<Frame<'a>> {
+        let (id_len, size_len, flag_len) = if h.version == 2 { (3, 3, 0) } else { (4, 4, 2) };
+        let head = body.get(*p..*p + id_len + size_len + flag_len)?;
+        if head[0] == 0 {
+            return None;
+        }
+        let mut id = [b' '; 4];
+        id[..id_len].copy_from_slice(&head[..id_len]);
+        let size = match h.version {
+            2 => (head[3] as usize) << 16 | (head[4] as usize) << 8 | head[5] as usize,
+            3 => be32(&head[4..]),
+            _ => syncsafe(&head[4..]),
+        };
+        let flags = if flag_len == 2 { u16::from_be_bytes([head[8], head[9]]) } else { 0 };
+        let start = *p + id_len + size_len + flag_len;
+        let raw = body.get(start..start + size)?;
+        *p = start + size;
+        let (compressed, encrypted, grouped, unsync, data_len) = match h.version {
+            3 => (flags & 0x80 != 0, flags & 0x40 != 0, flags & 0x20 != 0, false, false),
+            4 => (flags & 0x08 != 0, flags & 0x04 != 0, flags & 0x40 != 0, flags & 0x02 != 0 || h.unsync, flags & 0x01 != 0),
+            _ => (false, false, false, false, false),
+        };
+        if compressed || encrypted {
+            return Some(Frame { id: *b"    ", data: std::borrow::Cow::Borrowed(&[]) });
+        }
+        let mut skip = 0;
+        if grouped {
+            skip += 1;
+        }
+        if data_len {
+            skip += 4;
+        }
+        if h.version == 3 && compressed {
+            skip += 4;
+        }
+        let raw = raw.get(skip..).unwrap_or(&[]);
+        let data = if unsync { std::borrow::Cow::Owned(resync(raw)) } else { std::borrow::Cow::Borrowed(raw) };
+        Some(Frame { id, data })
+    }
+}
+
+fn apply(tags: &mut Tags, f: Frame) {
+    let text = || decode_text(&f.data);
+    match &f.id {
+        b"TIT2" | b"TT2 " => tags.title = text(),
+        b"TPE1" | b"TP1 " => tags.artist = text(),
+        b"TALB" | b"TAL " => tags.album = text(),
+        b"TPE2" | b"TP2 " => tags.album_artist = text(),
+        b"TRCK" | b"TRK " => tags.track = text().and_then(|t| t.split('/').next()?.trim().parse().ok()),
+        b"TYER" | b"TDRC" | b"TYE " => tags.year = text().and_then(|t| t.get(..4)?.parse().ok()),
+        b"APIC" | b"PIC " => {
+            if tags.cover.is_none() {
+                tags.cover = picture(&f.data, f.id[3] == b' ');
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The picture bytes of an APIC (or 2.2 PIC) frame body.
+fn picture(d: &[u8], v22: bool) -> Option<Vec<u8>> {
+    let enc = *d.first()?;
+    let mut p = 1;
+    if v22 {
+        p += 3;
+    } else {
+        p += d.get(p..)?.iter().position(|&b| b == 0)? + 1;
+    }
+    p += 1; // picture type
+    p += terminator(d.get(p..)?, enc)?;
+    let pic = d.get(p..)?;
+    (!pic.is_empty()).then(|| pic.to_vec())
+}
+
+/// Length of the string at the start of `d` including its terminator, for
+/// the given encoding (two NULs for UTF-16); the whole slice if unterminated.
+fn terminator(d: &[u8], enc: u8) -> Option<usize> {
+    if enc == 1 || enc == 2 {
+        let i = d.chunks_exact(2).position(|c| c == [0, 0]).map(|i| i * 2 + 2);
+        Some(i.unwrap_or(d.len()))
+    } else {
+        Some(d.iter().position(|&b| b == 0).map_or(d.len(), |i| i + 1))
+    }
+}
+
+/// A text frame body (encoding byte then the string); only the first of a
+/// 2.4 NUL-separated list is kept.
+fn decode_text(d: &[u8]) -> Option<String> {
+    let (&enc, rest) = d.split_first()?;
+    let s = match enc {
+        0 => rest.iter().take_while(|&&b| b != 0).map(|&b| b as char).collect(),
+        3 => String::from_utf8_lossy(rest.split(|&b| b == 0).next().unwrap_or(&[])).into_owned(),
+        1 | 2 => {
+            let (be, body) = match rest {
+                [0xFF, 0xFE, body @ ..] => (false, body),
+                [0xFE, 0xFF, body @ ..] => (true, body),
+                body => (enc == 2, body),
+            };
+            let units: Vec<u16> = body.chunks_exact(2).map(|c| if be { u16::from_be_bytes([c[0], c[1]]) } else { u16::from_le_bytes([c[0], c[1]]) }).take_while(|&u| u != 0).collect();
+            String::from_utf16_lossy(&units)
+        }
+        _ => return None,
+    };
+    let s = s.trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+/// Undoes unsynchronisation: every `FF 00` becomes `FF`.
+fn resync(d: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(d.len());
+    let mut i = 0;
+    while i < d.len() {
+        out.push(d[i]);
+        if d[i] == 0xFF && d.get(i + 1) == Some(&0) {
+            i += 1;
+        }
+        i += 1;
+    }
+    out
+}
+
+fn syncsafe(b: &[u8]) -> usize {
+    b.iter().take(4).fold(0, |a, &x| a << 7 | (x & 0x7f) as usize)
+}
+
+fn be32(b: &[u8]) -> usize {
+    b.iter().take(4).fold(0, |a, &x| a << 8 | x as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const V23: &[u8] = include_bytes!("testdata/tone_id3v23.mp3");
+    const V24: &[u8] = include_bytes!("testdata/tone_id3v24.mp3");
+
+    fn frame(id: &[u8; 4], body: &[u8], v4: bool, flags: u16) -> Vec<u8> {
+        let mut f = id.to_vec();
+        let n = body.len() as u32;
+        if v4 {
+            f.extend([(n >> 21) as u8 & 0x7f, (n >> 14) as u8 & 0x7f, (n >> 7) as u8 & 0x7f, n as u8 & 0x7f]);
+        } else {
+            f.extend(n.to_be_bytes());
+        }
+        f.extend(flags.to_be_bytes());
+        f.extend_from_slice(body);
+        f
+    }
+
+    fn tag(version: u8, flags: u8, body: &[u8]) -> Vec<u8> {
+        let mut t = b"ID3".to_vec();
+        let n = body.len() as u32;
+        t.extend([version, 0, flags, (n >> 21) as u8 & 0x7f, (n >> 14) as u8 & 0x7f, (n >> 7) as u8 & 0x7f, n as u8 & 0x7f]);
+        t.extend_from_slice(body);
+        t
+    }
+
+    #[test]
+    fn reads_ffmpegs_v23_tag_with_cover_and_track() {
+        let t = parse(V23).unwrap();
+        assert_eq!(t.title.as_deref(), Some("Tone Song"));
+        assert_eq!(t.artist.as_deref(), Some("Fixture Artist"));
+        assert_eq!(t.album.as_deref(), Some("Test Album"));
+        assert_eq!(t.track, Some(3));
+        let cover = t.cover.unwrap();
+        assert_eq!(&cover[..2], &[0xFF, 0xD8], "jpeg cover");
+        assert_eq!(tag_len(V23), 476);
+        assert_eq!(&V23[476..478], &[0xFF, 0xFB], "audio starts right after the tag");
+    }
+
+    #[test]
+    fn reads_ffmpegs_v24_utf8_tag() {
+        let t = parse(V24).unwrap();
+        assert_eq!(t.title.as_deref(), Some("Höfði"));
+        assert_eq!(t.artist.as_deref(), Some("Bjórk"));
+        assert_eq!(t.album.as_deref(), Some("Album Two"));
+        assert!(t.cover.is_none() && t.track.is_none());
+        assert_eq!(tag_len(V24), 102);
+    }
+
+    #[test]
+    fn no_tag_means_nothing() {
+        assert!(parse(b"\xFF\xFB\x90\x00").is_none());
+        assert_eq!(tag_len(b"\xFF\xFB"), 0);
+        assert!(parse(b"ID3").is_none());
+        assert!(parse(&tag(5, 0, &[])).is_none(), "unknown version");
+    }
+
+    #[test]
+    fn v24_unsynchronised_frame_is_resynced_and_the_data_length_skipped() {
+        // "A\u{ff}B" in ISO-8859-1 becomes A FF 00 B on the wire
+        let body = [0u8, b'A', 0xFF, 0x00, b'B'];
+        let mut f = vec![0, 0, 0, 3]; // data length indicator (syncsafe 3)
+        f.extend(body);
+        let t = parse(&tag(4, 0, &frame(b"TIT2", &f, true, 0x0003))).unwrap();
+        assert_eq!(t.title.as_deref(), Some("AÿB"));
+        // the same with the tag-level flag and no frame flag
+        let t = parse(&tag(4, 0x80, &frame(b"TIT2", &body, true, 0))).unwrap();
+        assert_eq!(t.title.as_deref(), Some("AÿB"));
+    }
+
+    #[test]
+    fn v23_tag_level_unsync_and_extended_header() {
+        let mut body = vec![0, 0, 0, 6, 0, 0, 0, 0, 0, 0]; // ext header: size 6 + 6 bytes
+        body.extend(frame(b"TPE1", &[0, b'X', 0xFF, b'Y'], false, 0));
+        // 2.3 unsynchronises the assembled tag: a NUL after every FF
+        let unsynced: Vec<u8> = body.iter().flat_map(|&b| if b == 0xFF { vec![0xFF, 0x00] } else { vec![b] }).collect();
+        let t = parse(&tag(3, 0xC0, &unsynced)).unwrap();
+        assert_eq!(t.artist.as_deref(), Some("XÿY"));
+    }
+
+    #[test]
+    fn utf16_with_and_without_bom_and_null_separated_lists() {
+        let le: Vec<u8> = [1u8, 0xFF, 0xFE].into_iter().chain("Þór".encode_utf16().flat_map(|u| u.to_le_bytes())).chain([0, 0]).collect();
+        let t = parse(&tag(3, 0, &frame(b"TALB", &le, false, 0))).unwrap();
+        assert_eq!(t.album.as_deref(), Some("Þór"));
+        let be: Vec<u8> = [2u8].into_iter().chain("Ab".encode_utf16().flat_map(|u| u.to_be_bytes())).collect();
+        let t = parse(&tag(4, 0, &frame(b"TALB", &be, true, 0))).unwrap();
+        assert_eq!(t.album.as_deref(), Some("Ab"));
+        let t = parse(&tag(4, 0, &frame(b"TPE1", b"\x03One\0Two", true, 0))).unwrap();
+        assert_eq!(t.artist.as_deref(), Some("One"));
+        let t = parse(&tag(4, 0, &frame(b"TRCK", b"\x03 7/12", true, 0))).unwrap();
+        assert_eq!(t.track, Some(7));
+        let t = parse(&tag(4, 0, &frame(b"TDRC", b"\x032019-05-01", true, 0))).unwrap();
+        assert_eq!(t.year, Some(2019));
+    }
+
+    #[test]
+    fn apic_with_utf16_description_and_v22_pic() {
+        let mut apic = vec![1u8];
+        apic.extend(b"image/png\0");
+        apic.push(3);
+        apic.extend([0xFF, 0xFE, b'c', 0, 0, 0]);
+        apic.extend(b"\x89PNG!");
+        let t = parse(&tag(3, 0, &frame(b"APIC", &apic, false, 0))).unwrap();
+        assert_eq!(t.cover.as_deref(), Some(&b"\x89PNG!"[..]));
+        let mut body = b"PIC".to_vec();
+        body.extend([0, 0, 10]);
+        body.extend([0u8]);
+        body.extend(b"JPG");
+        body.push(0);
+        body.push(0);
+        body.extend(b"\xFF\xD8\xFF\xE0");
+        let t = parse(&tag(2, 0, &body)).unwrap();
+        assert_eq!(t.cover.as_deref(), Some(&b"\xFF\xD8\xFF\xE0"[..]));
+    }
+
+    #[test]
+    fn compressed_or_truncated_frames_are_skipped() {
+        let mut body = frame(b"TIT2", &[0, b'Z'], false, 0x0080);
+        body.extend(frame(b"TALB", &[0, b'Q'], false, 0));
+        body.extend(b"TPE1\0\0\xFF\xFF\0\0");
+        let t = parse(&tag(3, 0, &body)).unwrap();
+        assert_eq!(t.title, None, "compressed frame ignored");
+        assert_eq!(t.album.as_deref(), Some("Q"));
+        assert_eq!(t.artist, None, "a frame running past the tag ends parsing");
+    }
+
+    #[test]
+    fn resync_only_touches_ff_00_pairs() {
+        assert_eq!(resync(&[0xFF, 0x00, 0xFF, 0x00, 0x01, 0xFF]), [0xFF, 0xFF, 0x01, 0xFF]);
+        assert_eq!(resync(&[0xFF, 0xE0]), [0xFF, 0xE0]);
+    }
+}

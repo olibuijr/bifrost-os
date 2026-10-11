@@ -1,0 +1,8 @@
+[package]
+name = "bifrost-proto"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt app <-> SpringBoard wire protocol (see docs/apps.md); no dependencies"
+
+[dependencies]
+bifrost-ui = { path = "../ui" }

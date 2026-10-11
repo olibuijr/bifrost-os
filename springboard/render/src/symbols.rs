@@ -1,0 +1,221 @@
+//! the system symbol set used by the shell, resolved from whatever symbol fonts are
+//! available. bifrost 15 keeps its symbols in CoreGlyphs.bundle (a CoreUI
+//! catalog, not a font); `SFUISymbols-Regular.otf` on the device is an
+//! 8-glyph CFF stub. So each symbol is looked up by its the system symbol set glyph
+//! name first (for a real the system symbol set font dropped next to the other
+//! assets), then by Unicode in Symbols, and callers fall back to the
+//! hand-drawn glyphs in `status.rs` when neither has it.
+
+use crate::font::{Font, Style};
+use crate::gfx::Image;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Symbol {
+    Wifi,
+    Battery,
+    Bolt,
+    Lock,
+    ChevronLeft,
+    ChevronRight,
+    Checkmark,
+    Gear,
+    /// The outlined gear Golden Gate menus put before Settings….
+    GearOutline,
+    Airplane,
+    SunMin,
+    SunMax,
+    Speaker,
+    Keyboard,
+    DeleteLeft,
+    Shift,
+    Capslock,
+    Return,
+    Magnifyingglass,
+    Xmark,
+    Play,
+    Pause,
+}
+
+impl Symbol {
+    pub const ALL: [Symbol; 22] = [
+        Symbol::Wifi,
+        Symbol::Battery,
+        Symbol::Bolt,
+        Symbol::Lock,
+        Symbol::ChevronLeft,
+        Symbol::ChevronRight,
+        Symbol::Checkmark,
+        Symbol::Gear,
+        Symbol::GearOutline,
+        Symbol::Airplane,
+        Symbol::SunMin,
+        Symbol::SunMax,
+        Symbol::Speaker,
+        Symbol::Keyboard,
+        Symbol::DeleteLeft,
+        Symbol::Shift,
+        Symbol::Capslock,
+        Symbol::Return,
+        Symbol::Magnifyingglass,
+        Symbol::Xmark,
+        Symbol::Play,
+        Symbol::Pause,
+    ];
+
+    /// The the system symbol set name, which is also the glyph name in the system symbol set fonts.
+    pub fn name(self) -> &'static str {
+        match self {
+            Symbol::Wifi => "wifi",
+            Symbol::Battery => "battery.100",
+            Symbol::Bolt => "bolt.fill",
+            Symbol::Lock => "lock.fill",
+            Symbol::ChevronLeft => "chevron.left",
+            Symbol::ChevronRight => "chevron.right",
+            Symbol::Checkmark => "checkmark",
+            Symbol::Gear => "gearshape.fill",
+            Symbol::GearOutline => "gearshape",
+            Symbol::Airplane => "airplane",
+            Symbol::SunMin => "sun.min",
+            Symbol::SunMax => "sun.max",
+            Symbol::Speaker => "speaker.wave.2.fill",
+            Symbol::Keyboard => "keyboard",
+            Symbol::DeleteLeft => "delete.left",
+            Symbol::Shift => "shift",
+            Symbol::Capslock => "capslock",
+            Symbol::Return => "return",
+            Symbol::Magnifyingglass => "magnifyingglass",
+            Symbol::Xmark => "xmark",
+            Symbol::Play => "play.fill",
+            Symbol::Pause => "pause.fill",
+        }
+    }
+
+    /// The closest Unicode character, for fonts that map symbols by code point.
+    pub fn unicode(self) -> Option<char> {
+        Some(match self {
+            Symbol::Bolt => '\u{26A1}',
+            Symbol::Lock => '\u{1F512}',
+            Symbol::ChevronLeft => '\u{2039}',
+            Symbol::ChevronRight => '\u{203A}',
+            Symbol::Checkmark => '\u{2713}',
+            Symbol::Gear | Symbol::GearOutline => '\u{2699}',
+            Symbol::Airplane => '\u{2708}',
+            Symbol::SunMin => '\u{263C}',
+            Symbol::SunMax => '\u{2600}',
+            Symbol::Speaker => '\u{1F50A}',
+            Symbol::Keyboard => '\u{2328}',
+            Symbol::DeleteLeft => '\u{232B}',
+            Symbol::Shift => '\u{21E7}',
+            Symbol::Capslock => '\u{21EA}',
+            Symbol::Return => '\u{23CE}',
+            Symbol::Magnifyingglass => '\u{1F50D}',
+            Symbol::Xmark => '\u{2715}',
+            Symbol::Play => '\u{25B6}',
+            Symbol::Pause => '\u{23F8}',
+            Symbol::Wifi | Symbol::Battery => return None,
+        })
+    }
+}
+
+/// Symbol fonts in priority order (an the system symbol set font first, then Symbols).
+#[derive(Default)]
+pub struct Symbols {
+    fonts: Vec<Font<'static>>,
+}
+
+/// Asset file names tried by `Symbols::load`, best first.
+pub const FONT_FILES: [&str; 2] = ["SFUISymbols-Regular.otf", "Symbols.ttf"];
+
+/// The font file mapped (shared page cache) where the platform has mmap, else read and leaked.
+fn read_static(path: &str) -> Option<&'static [u8]> {
+    #[cfg(target_os = "linux")]
+    if let Ok(d) = crate::assets::map_file(path) {
+        return Some(d);
+    }
+    std::fs::read(path).ok().map(|d| &*Box::leak(d.into_boxed_slice()))
+}
+
+impl Symbols {
+    pub fn new(fonts: Vec<Font<'static>>) -> Self {
+        Symbols { fonts }
+    }
+
+    /// Loads whichever of `FONT_FILES` exist in `dir`; missing files are skipped.
+    pub fn load(dir: &str) -> Self {
+        let fonts = FONT_FILES
+            .iter()
+            .filter_map(|f| {
+                let data = read_static(&format!("{dir}/{f}"))?;
+                Font::parse(data)
+            })
+            .collect();
+        Symbols { fonts }
+    }
+
+    /// The first font that has the symbol, by glyph name then by Unicode.
+    pub fn glyph(&self, sym: Symbol) -> Option<(&Font<'static>, u16)> {
+        let by_name = self.fonts.iter().find_map(|f| f.glyph_named(sym.name()).map(|g| (f, g)));
+        by_name.or_else(|| {
+            let c = sym.unicode()?;
+            self.fonts.iter().find_map(|f| Some(f.glyph(c)).filter(|&g| g != 0).map(|g| (f, g)))
+        })
+    }
+
+    pub fn has(&self, sym: Symbol) -> bool {
+        self.glyph(sym).is_some()
+    }
+
+    /// The symbol trimmed to its ink, scaled so the em is `px` tall.
+    pub fn render(&self, sym: Symbol, px: f32, color: u32) -> Option<Image> {
+        let (font, gid) = self.glyph(sym)?;
+        let img = font.render_glyph(gid, &Style { px, embolden: 0.0, color, shadow: false }).trimmed();
+        (img.w > 0).then_some(img)
+    }
+
+    /// The symbol scaled to fit a `w` x `h` px box (aspect kept), trimmed.
+    pub fn render_fit(&self, sym: Symbol, w: f32, h: f32, color: u32) -> Option<Image> {
+        let probe = self.render(sym, 100.0, color)?;
+        let k = (w / probe.w as f32).min(h / probe.h as f32);
+        self.render(sym, 100.0 * k, color)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gfx::pack;
+
+    fn load() -> Symbols {
+        Symbols::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets"))
+    }
+
+    #[test]
+    fn every_symbol_has_a_name_and_most_a_code_point() {
+        let names: std::collections::HashSet<_> = Symbol::ALL.iter().map(|s| s.name()).collect();
+        assert_eq!(names.len(), Symbol::ALL.len(), "names are unique");
+        assert!(Symbol::ALL.iter().filter(|s| s.unicode().is_none()).count() <= 2);
+    }
+
+    #[test]
+    fn missing_fonts_mean_no_symbols() {
+        let none = Symbols::load("/nonexistent");
+        assert!(Symbol::ALL.iter().all(|&s| !none.has(s)));
+        assert!(none.render(Symbol::Shift, 20.0, pack(255, 255, 255, 255)).is_none());
+    }
+
+    #[test]
+    fn symbols_supplies_the_keyboard_glyphs() {
+        let syms = load();
+        if syms.fonts.is_empty() {
+            return;
+        }
+        for s in [Symbol::Shift, Symbol::DeleteLeft, Symbol::Return, Symbol::Gear, Symbol::Bolt, Symbol::Play, Symbol::SunMax] {
+            let img = syms.render(s, 40.0, pack(255, 255, 255, 255)).unwrap_or_else(|| panic!("{s:?}"));
+            assert!(img.w > 4 && img.h > 4, "{s:?} is trimmed to its ink: {}x{}", img.w, img.h);
+            assert!(img.px.iter().any(|&p| p >> 24 > 160), "{s:?} has solid ink");
+        }
+        assert!(!syms.has(Symbol::Wifi), "no font on the bifrost has the wifi symbol");
+        let fit = syms.render_fit(Symbol::Shift, 30.0, 20.0, pack(255, 255, 255, 255)).unwrap();
+        assert!(fit.w <= 30 && fit.h <= 20 && (fit.w == 30 || fit.h >= 19), "{}x{}", fit.w, fit.h);
+    }
+}

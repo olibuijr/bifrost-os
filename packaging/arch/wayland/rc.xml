@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <core><decoration>server</decoration><reuseOutputMode>yes</reuseOutputMode></core>
+  <theme><name>BifrOSt</name><icon>hicolor</icon><cornerRadius>17</cornerRadius>
+    <font place="ActiveWindow"><name>sans</name><size>13</size><weight>bold</weight></font>
+    <titlebar><layout>close,iconify,max:</layout></titlebar>
+  </theme>
+  <!-- the shell draws its own switcher/OSD; no text OSD surfaces or fonts for them -->
+  <windowSwitcher><osd show="no"/></windowSwitcher>
+  <resistance><screenEdgeStrength>0</screenEdgeStrength></resistance>
+  <keyboard>
+    <default/>
+    <!-- Super+Space is Spotlight everywhere: the shell only gets keys while one of its surfaces has focus, so the
+         compositor takes the chord and asks the shell over its control port (control.rs `spotlight`). -->
+    <keybind key="W-space"><action name="Execute" command="bash -c 'echo spotlight &gt; /dev/tcp/127.0.0.1/7777'"/></keybind>
+    <keybind key="W-a"><action name="Execute" command="/usr/bin/bifrost-apps"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+  </keyboard>
+  <windowRules>
+    <windowRule identifier="is.olibuijr.bifrost.*"><serverDecoration>no</serverDecoration></windowRule>
+  </windowRules>
+</labwc_config>

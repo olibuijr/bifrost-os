@@ -1,0 +1,112 @@
+[
+ {
+  "name": "Acid",
+  "params": {
+   "wave": 0,
+   "cutoff": 350,
+   "reso": 24,
+   "envMod": 0.85,
+   "decay": 0.22,
+   "accent": 0.8,
+   "slide": 0.08,
+   "drive": 0.35,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Deep Sub",
+  "params": {
+   "wave": 1,
+   "octave": -1,
+   "cutoff": 180,
+   "reso": 2,
+   "envMod": 0.15,
+   "decay": 0.8,
+   "accent": 0.2,
+   "slide": 0.05,
+   "drive": 0.1,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Rubber",
+  "params": {
+   "wave": 1,
+   "cutoff": 500,
+   "reso": 12,
+   "envMod": 0.6,
+   "decay": 0.35,
+   "accent": 0.5,
+   "slide": 0.12,
+   "drive": 0.25,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Growl",
+  "params": {
+   "wave": 0,
+   "cutoff": 700,
+   "reso": 18,
+   "envMod": 0.5,
+   "decay": 0.5,
+   "accent": 0.6,
+   "slide": 0.04,
+   "drive": 0.8,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Wobble 8th",
+  "params": {
+   "wave": 0,
+   "octave": -1,
+   "cutoff": 260,
+   "reso": 10,
+   "envMod": 0.2,
+   "decay": 0.6,
+   "accent": 0.3,
+   "slide": 0.06,
+   "drive": 0.6,
+   "gain": 0.55,
+   "lfoRate": 4,
+   "lfoAmt": 0.7,
+   "lfoDest": 0,
+   "sub": 0.5
+  }
+ },
+ {
+  "name": "Acid + Sub",
+  "params": {
+   "wave": 0,
+   "cutoff": 350,
+   "reso": 22,
+   "envMod": 0.8,
+   "decay": 0.22,
+   "accent": 0.8,
+   "slide": 0.08,
+   "drive": 0.35,
+   "gain": 0.55,
+   "sub": 0.6
+  }
+ },
+ {
+  "name": "Talking Bass",
+  "params": {
+   "wave": 1,
+   "octave": -1,
+   "cutoff": 420,
+   "reso": 16,
+   "envMod": 0.35,
+   "decay": 0.5,
+   "accent": 0.5,
+   "slide": 0.1,
+   "drive": 0.5,
+   "gain": 0.55,
+   "lfoRate": 3,
+   "lfoAmt": 0.55,
+   "lfoDest": 0,
+   "sub": 0.35
+  }
+ }
+]

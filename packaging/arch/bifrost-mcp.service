@@ -1,0 +1,14 @@
+[Unit]
+Description=BifrOSt MCP server (agent access: screen, input, windows, apps, system)
+Documentation=file:///usr/share/doc/bifrost/bifrost-mcp.md
+After=network.target springboard.service
+
+[Service]
+ExecStart=/usr/bin/bifrost-mcp --serve
+Environment=BIFROST_MCP_PORT=7420
+Restart=always
+RestartSec=1
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

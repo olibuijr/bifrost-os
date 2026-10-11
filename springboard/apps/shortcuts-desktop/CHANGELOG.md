@@ -1,0 +1,43 @@
+# Changelog
+
+## 1.2.2
+
+- Compliance: grid tile sizes and the Remove badge's glyph come from named tokens; the badge's glyph bar is a capsule sized from the spacing token.
+
+## 1.2.1
+
+- Follows a Light/Dark switch immediately, including while the window is in the background.
+
+## 1.2.0 — 2026-10-10
+
+- Golden Gate layout: a Library sidebar (All Shortcuts with its count) beside the content in a full-size window, and a unified toolbar with the title, New Shortcut, Edit/Done, Run and Back in place of the iPad navigation bar and large title.
+- Light and Dark follow the system appearance; colours come from the named system tokens.
+- Toolbar buttons are published as controls so they stay clickable in the window's drag band. Needs system 0.4.84.
+
+## 1.1.3 — 2026-10-10
+
+- Opens again on BifrOSt 0.4.90 and later: rebuilt against the current SDK, whose app socket is `BIFROST_SOCK`.
+
+## 1.1.2 — 2026-10-09
+
+- Spacing follows the system 4-pt grid: 10 padding and gap values moved to the nearest standard step (at most 2 pt).
+- Built for system 0.4.62.
+
+## 1.1.1 — 2026-10-09
+
+- Text that is shortened to fit now measures at the size it is drawn at, so labels are no longer cut off early.
+- Follows the system accessibility settings (Increase Contrast, Reduce Transparency, Show Borders, Bold Text) on system 0.4.61.
+
+## 1.1.0 — 2026-10-09
+
+- Text sizes and spacing come from the shared macOS-style scale, so this app matches the others.
+- No gap above the content for a status bar the desktop does not have.
+- Fixes the coloured fringes on the action-count badges of the shortcut cards.
+
+## 1.0.0 — 2026-10-08
+
+- Shortcuts for the BifrOSt desktop: the tablet app's code, hosted in a window with keyboard and pointer input.
+
+- Use the desktop package identity for the SDK handshake and supported PC permissions.
+- Keep text-field focus without drawing an on-screen keyboard in PC app processes.
+- Show when a shortcut cannot run instead of indicating successful execution.

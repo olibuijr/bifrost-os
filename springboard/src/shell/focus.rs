@@ -1,0 +1,122 @@
+//! Do Not Disturb silences notification delivery without changing alarm behavior.
+//! It is on by hand or by the schedule kept in the notification store (see
+//! `notify::Schedule`); a muted app is silenced the same way on its own.
+
+use super::Shell;
+
+impl Shell {
+    /// Whether Do Not Disturb currently silences notification banners and wakes.
+    pub fn dnd(&self) -> bool {
+        self.notify.dnd()
+    }
+
+    /// Changes Focus from Control Centre and keeps a retained Settings page in sync.
+    pub fn set_dnd(&mut self, on: bool) {
+        if !on {
+            // switching Focus off inside the schedule's window holds until it ends
+            self.notify.end_scheduled();
+        }
+        let mut opts = self.options();
+        opts.dnd = on;
+        opts.save(&mut self.prefs);
+        if let Some(st) = &mut self.settings {
+            st.set_dnd(&self.ui, on);
+        }
+        self.notify.set_dnd(on);
+        self.dirty = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::shell::notify::Notification;
+    use crate::shell::prefs::Prefs;
+    use crate::shell::tests::{settle, shell, unlock};
+    use crate::shell::{AppId, Effect, Event};
+    use std::path::PathBuf;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-focus").join(std::process::id().to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn dnd_keeps_notifications_and_badges_without_banners_or_screen_wakes() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.set_dnd(true);
+        sh.notify(Notification::new(AppId::Settings, "Low Battery", "20% remaining", 1));
+        assert!(sh.notify.banner().is_none());
+        assert_eq!(sh.notify.store().count(AppId::Settings), 1);
+        assert!(sh.notify.badge_gen() > 0);
+        sh.event(Event::Power, 2000.0);
+        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Disconnected", 2));
+        assert_eq!(sh.notify.next_wake(2100.0), None);
+        assert_eq!(sh.next_wake(2100.0), None);
+        assert!(sh.tick(2100.0).is_empty());
+        assert!(!sh.screen_on());
+        assert_eq!(sh.notify.store().count(AppId::Settings), 2);
+    }
+
+    #[test]
+    fn enabling_dnd_clears_an_existing_banner_and_pending_notification_wake() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Connected", 1));
+        assert!(sh.notify.banner().is_some());
+        sh.set_dnd(true);
+        assert!(sh.notify.banner().is_none());
+        assert!(sh.needs_frame());
+        sh.set_dnd(false);
+        assert!(sh.notify.banner().is_none(), "old notifications are not replayed");
+        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Disconnected", 2));
+        assert!(sh.notify.banner().is_some(), "new notifications deliver after Focus ends");
+        sh.event(Event::Power, 2000.0);
+        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Connected", 3));
+        assert_eq!(sh.notify.next_wake(2100.0), Some(2100.0));
+        sh.set_dnd(true);
+        assert_eq!(sh.notify.next_wake(2100.0), None);
+        assert!(sh.tick(2100.0).is_empty());
+        assert_eq!(sh.notify.store().len(), 3);
+    }
+
+    #[test]
+    fn focus_persists_across_restart_and_syncs_retained_settings() {
+        let path = scratch("settings.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut sh = shell();
+        sh.prefs = Prefs::load(&path);
+        unlock(&mut sh);
+        sh.open(AppId::Settings, 1000.0);
+        settle(&mut sh, 1000.0);
+        sh.set_dnd(true);
+        assert!(sh.settings.as_ref().unwrap().options().dnd);
+        let mut again = shell();
+        again.prefs = Prefs::load(&path);
+        again.apply_options();
+        assert!(again.dnd());
+        again.set_dnd(false);
+        let mut third = shell();
+        third.prefs = Prefs::load(&path);
+        third.apply_options();
+        assert!(!third.dnd());
+    }
+
+    #[test]
+    fn alarm_still_sounds_and_wakes_a_dark_screen_during_dnd() {
+        let path = scratch("clock.ini");
+        std::fs::write(&path, "alarm.0.time=00:01\nalarm.0.on=1\nalarm.0.label=Wake up\n").unwrap();
+        let mut sh = shell();
+        sh.set_wall(1_704_067_200, 0, 1000.0);
+        sh.clock.load(path.to_str().unwrap(), 1000.0);
+        sh.set_dnd(true);
+        sh.event(Event::Power, 2000.0);
+        let fx = sh.tick(61_000.0);
+        assert!(fx.contains(&Effect::Alarm), "{fx:?}");
+        assert!(fx.contains(&Effect::ScreenOn), "{fx:?}");
+        assert!(sh.screen_on());
+        assert!(sh.clock.alert().is_some());
+        assert!(sh.notify.banner().is_none());
+    }
+}

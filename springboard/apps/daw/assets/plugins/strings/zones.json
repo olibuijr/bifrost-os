@@ -1,0 +1,263 @@
+{
+ "id": "strings",
+ "name": "Strings",
+ "desc": "Violin section ensemble, sustained arco with vibrato, 2 velocity layers, stereo, looped. MIDI 55-96. Soft high pads, sustained chords, lush melodies.",
+ "family": "strings",
+ "license": "CC0 1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Strings/Violin%20Section/susVib",
+ "attribution": "VS Chamber Orchestra: Community Edition (VSCO-2 CE) by Versilian Studios (Sam Gossner, Simon Dalzell; sample cutting by Elan Hickler/Soundemote). CC0 1.0.",
+ "attack": 0.2,
+ "release": 0.6,
+ "range": [
+  52,
+  90
+ ],
+ "velXfade": 0.1,
+ "softAttack": 1.5,
+ "releaseKeytrack": true,
+ "releaseTail": true,
+ "zones": [
+  {
+   "file": "G3_p.ogg",
+   "root": 55,
+   "lo": 52,
+   "hi": 56,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.31957,
+   "loopEnd": 4.36261,
+   "gain": 1.0
+  },
+  {
+   "file": "G3_f.ogg",
+   "root": 55,
+   "lo": 52,
+   "hi": 56,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.75889,
+   "loopEnd": 4.51463,
+   "gain": 1.0
+  },
+  {
+   "file": "A3_p.ogg",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 3.11732,
+   "loopEnd": 4.3832,
+   "gain": 1.0
+  },
+  {
+   "file": "A3_f.ogg",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.02249,
+   "loopEnd": 4.25376,
+   "gain": 1.0
+  },
+  {
+   "file": "B3_p.ogg",
+   "root": 59,
+   "lo": 59,
+   "hi": 60,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.00882,
+   "loopEnd": 4.29358,
+   "gain": 1.0
+  },
+  {
+   "file": "B3_f.ogg",
+   "root": 59,
+   "lo": 59,
+   "hi": 60,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.12367,
+   "loopEnd": 4.31476,
+   "gain": 1.0
+  },
+  {
+   "file": "D4_p.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 64,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.86336,
+   "loopEnd": 4.43624,
+   "gain": 1.0
+  },
+  {
+   "file": "D4_f.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 64,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 2.01084,
+   "loopEnd": 4.14805,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs4_p.ogg",
+   "root": 66,
+   "lo": 65,
+   "hi": 67,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 1.16166,
+   "loopEnd": 4.2819,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs4_f.ogg",
+   "root": 66,
+   "lo": 65,
+   "hi": 67,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.90868,
+   "loopEnd": 4.25671,
+   "gain": 1.0
+  },
+  {
+   "file": "A4_p.ogg",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 1.99633,
+   "loopEnd": 4.48515,
+   "gain": 1.0
+  },
+  {
+   "file": "A4_f.ogg",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.11361,
+   "loopEnd": 4.18766,
+   "gain": 1.0
+  },
+  {
+   "file": "C5_p.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.04206,
+   "loopEnd": 4.2241,
+   "gain": 1.0
+  },
+  {
+   "file": "C5_f.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.59109,
+   "loopEnd": 4.44476,
+   "gain": 1.0
+  },
+  {
+   "file": "E5_p.ogg",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.32429,
+   "loopEnd": 4.35703,
+   "gain": 1.0
+  },
+  {
+   "file": "E5_f.ogg",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 2.11172,
+   "loopEnd": 4.10032,
+   "gain": 1.0
+  },
+  {
+   "file": "G5_p.ogg",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.47764,
+   "loopEnd": 4.25204,
+   "gain": 1.0
+  },
+  {
+   "file": "G5_f.ogg",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 2.18567,
+   "loopEnd": 4.40771,
+   "gain": 1.0
+  },
+  {
+   "file": "B5_p.ogg",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 2.79685,
+   "loopEnd": 4.18723,
+   "gain": 1.0
+  },
+  {
+   "file": "B5_f.ogg",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.17864,
+   "loopEnd": 4.13689,
+   "gain": 1.0
+  },
+  {
+   "file": "D6_p.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 90,
+   "vlo": 0,
+   "vhi": 0.55,
+   "loopStart": 1.88637,
+   "loopEnd": 4.45762,
+   "gain": 1.0
+  },
+  {
+   "file": "D6_f.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 90,
+   "vlo": 0.55,
+   "vhi": 1,
+   "loopStart": 1.46635,
+   "loopEnd": 4.32683,
+   "gain": 1.0
+  }
+ ]
+}

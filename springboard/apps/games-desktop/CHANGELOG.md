@@ -1,0 +1,50 @@
+# Changelog
+
+## 1.2.3
+
+- App compliance re-check: the source list and the unified toolbar are drawn on the first screen at 1200x780 (Light and Dark), so their rows and buttons are published as controls; no visual or behaviour change.
+
+## 1.2.2
+
+- Playing cards follow Light and Dark: the face and back use the card background and the black suits the label colour; red suits are unchanged.
+- The 2048 and Minesweeper boards are placed from named row tokens instead of fixed points, so they keep their place as the window size changes.
+- The app icon is drawn from the system's named colours.
+- Opts in to sudden termination: nothing is unsaved (best scores are saved as they are set).
+
+## 1.2.1
+
+- Follows a Light/Dark switch immediately, including while the window is in the background.
+
+## 1.2.0 — 2026-10-10
+
+- Golden Gate look: a full-size window with a source-list sidebar (2048, Minesweeper, Solitaire) and a unified toolbar
+  holding the game's title and commands (New Game, Flag, Undo, Draw 1/3, Auto); the tab row and bottom buttons are gone.
+- Follows Light and Dark: backgrounds, boards, labels and the 2048 tiles use the system's named colours.
+- Toolbar buttons are published as controls, so they work under the window-move band and with assistive technology.
+- Needs system 0.4.84.
+
+## 1.1.3 — 2026-10-10
+
+- Opens again on BifrOSt 0.4.90 and later: rebuilt against the current SDK, whose app socket is `BIFROST_SOCK`.
+
+## 1.1.2 — 2026-10-09
+
+- Spacing follows the system 4-pt grid: 8 padding and gap values moved to the nearest standard step (at most 2 pt).
+- Built for system 0.4.62.
+
+## 1.1.1 — 2026-10-09
+
+- Text that is shortened to fit now measures at the size it is drawn at, so labels are no longer cut off early.
+- Follows the system accessibility settings (Increase Contrast, Reduce Transparency, Show Borders, Bold Text) on system 0.4.61.
+
+## 1.1.0 — 2026-10-09
+
+- Text sizes and spacing come from the shared macOS-style scale, so this app matches the others.
+- No gap above the content for a status bar the desktop does not have.
+
+## 1.0.0 — 2026-10-08
+
+- Games for the BifrOSt desktop: the tablet app's code, hosted in a window with keyboard and pointer input.
+
+- Use the desktop package identity for the SDK handshake and supported PC permissions.
+- Keep text-field focus without drawing an on-screen keyboard in PC app processes.

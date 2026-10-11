@@ -1,0 +1,11 @@
+[package]
+name = "bifrost-podcasts"
+version = "1.3.3"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

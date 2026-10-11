@@ -1,0 +1,6 @@
+[
+ { "name": "Trance Lead", "params": { "voices": 7, "detune": 0.4, "mix": 0.7, "spread": 0.8, "shape": 0, "cutoff": 4200, "reso": 2, "keytrack": 0.5, "fAmt": 0.35, "fAtk": 0.005, "fDec": 0.5, "fSus": 0.4, "attack": 0.004, "decay": 0.6, "sustain": 0.85, "release": 0.35, "vibrato": 0.25, "vibDelay": 0.35, "glide": 0.03, "gain": 0.5 } },
+ { "name": "Future Chord", "params": { "voices": 7, "detune": 0.3, "mix": 0.6, "spread": 1, "shape": 1, "cutoff": 1800, "reso": 3, "keytrack": 0.3, "vel2cut": 0.6, "fAmt": 0.7, "fAtk": 0.002, "fDec": 0.35, "fSus": 0.15, "attack": 0.003, "decay": 0.5, "sustain": 0.6, "release": 0.25, "gain": 0.45 } },
+ { "name": "Hoover-ish", "params": { "voices": 9, "detune": 0.75, "mix": 0.85, "spread": 0.9, "shape": 2, "octave": -1, "cutoff": 2600, "reso": 4, "fAmt": 0.3, "fDec": 0.8, "fSus": 0.5, "attack": 0.01, "sustain": 0.9, "release": 0.4, "vibrato": 0.15, "vibRate": 4, "vibDelay": 0, "glide": 0.12, "gain": 0.45 } },
+ { "name": "Anthem Stab", "params": { "voices": 7, "detune": 0.35, "mix": 0.65, "spread": 0.9, "shape": 0, "cutoff": 900, "reso": 5, "keytrack": 0.4, "vel2cut": 0.5, "fAmt": 0.9, "fAtk": 0.001, "fDec": 0.22, "fSus": 0, "attack": 0.002, "decay": 0.3, "sustain": 0.2, "release": 0.2, "gain": 0.5 } }
+]

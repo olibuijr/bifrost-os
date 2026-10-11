@@ -1,0 +1,144 @@
+[
+ {
+  "name": "808",
+  "params": {
+   "kickTune": 42,
+   "kickDecay": 1,
+   "kickPunch": 0.35,
+   "snareTone": 170,
+   "snareSnap": 0.45,
+   "hatTone": 7000,
+   "hatDecay": 0.05,
+   "tomTune": 90,
+   "gain": 0.8
+  }
+ },
+ {
+  "name": "909",
+  "params": {
+   "kickTune": 55,
+   "kickDecay": 0.4,
+   "kickPunch": 0.85,
+   "snareTone": 220,
+   "snareSnap": 0.8,
+   "hatTone": 9500,
+   "hatDecay": 0.07,
+   "tomTune": 130,
+   "gain": 0.8
+  }
+ },
+ {
+  "name": "Lo-fi",
+  "params": {
+   "kickTune": 50,
+   "kickDecay": 0.3,
+   "kickPunch": 0.3,
+   "snareTone": 150,
+   "snareSnap": 0.3,
+   "hatTone": 5000,
+   "hatDecay": 0.04,
+   "tomTune": 100,
+   "gain": 0.75
+  }
+ },
+ {
+  "name": "Tight",
+  "params": {
+   "kickTune": 60,
+   "kickDecay": 0.22,
+   "kickPunch": 1,
+   "snareTone": 260,
+   "snareSnap": 0.9,
+   "hatTone": 11000,
+   "hatDecay": 0.03,
+   "tomTune": 160,
+   "gain": 0.8
+  }
+ },
+ {
+  "name": "Boom",
+  "params": {
+   "kickTune": 36,
+   "kickDecay": 1.2,
+   "kickPunch": 0.5,
+   "snareTone": 140,
+   "snareSnap": 0.5,
+   "hatTone": 8000,
+   "hatDecay": 0.1,
+   "tomTune": 75,
+   "gain": 0.8
+  }
+ },
+ {
+  "name": "Synth 808",
+  "params": {
+   "kickTune": 40,
+   "kickDecay": 1.1,
+   "kickPunch": 0.3,
+   "snareTone": 180,
+   "snareSnap": 0.5,
+   "hatTone": 7500,
+   "hatDecay": 0.05,
+   "tomTune": 85,
+   "gain": 0.8
+  },
+  "tags": [
+   "808",
+   "trap"
+  ]
+ },
+ {
+  "name": "Synth 909",
+  "params": {
+   "kickTune": 58,
+   "kickDecay": 0.35,
+   "kickPunch": 0.9,
+   "snareTone": 230,
+   "snareSnap": 0.85,
+   "hatTone": 10000,
+   "hatDecay": 0.08,
+   "tomTune": 140,
+   "gain": 0.8
+  },
+  "tags": [
+   "909",
+   "house"
+  ]
+ },
+ {
+  "name": "Minimal",
+  "params": {
+   "kickTune": 52,
+   "kickDecay": 0.25,
+   "kickPunch": 0.7,
+   "snareTone": 260,
+   "snareSnap": 0.95,
+   "hatTone": 11500,
+   "hatDecay": 0.025,
+   "tomTune": 150,
+   "gain": 0.75
+  },
+  "tags": [
+   "minimal",
+   "tight"
+  ]
+ },
+ {
+  "name": "Synth Lo-Fi",
+  "params": {
+   "kickTune": 46,
+   "kickDecay": 0.5,
+   "kickPunch": 0.25,
+   "snareTone": 140,
+   "snareSnap": 0.25,
+   "hatTone": 4500,
+   "hatDecay": 0.05,
+   "tomTune": 95,
+   "gain": 0.7
+  },
+  "tags": [
+   "lofi",
+   "dark"
+  ]
+ }
+]

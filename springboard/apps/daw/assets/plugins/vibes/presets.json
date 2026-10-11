@@ -1,0 +1,90 @@
+[
+ {
+  "name": "Soft Mallets",
+  "params": {
+   "velocity": 0.5,
+   "tone": 6000,
+   "release": 2
+  },
+  "tags": [
+   "soft",
+   "jazz"
+  ]
+ },
+ {
+  "name": "Tremolo",
+  "params": {
+   "vibrato": 14,
+   "rate": 6,
+   "release": 2.5,
+   "stereo": 0.3
+  },
+  "tags": [
+   "tremolo",
+   "motor",
+   "vintage"
+  ]
+ },
+ {
+  "name": "Hard Mallets",
+  "params": {
+   "velocity": 0.95,
+   "tone": 20000
+  },
+  "tags": [
+   "bright",
+   "hard"
+  ]
+ },
+ {
+  "name": "Lo-fi Vibes",
+  "params": {
+   "tone": 2500,
+   "detune": 8,
+   "velocity": 0.4,
+   "release": 1.5
+  },
+  "tags": [
+   "lo-fi",
+   "dark"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1,
+   "human": 0.2
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Motor Tremolo",
+  "params": {
+   "pedal": 1,
+   "vibrato": 18,
+   "rate": 6,
+   "human": 0.2
+  },
+  "tags": [
+   "tremolo",
+   "jazz",
+   "motor"
+  ]
+ },
+ {
+  "name": "Chillhop Keys",
+  "params": {
+   "tone": 5000,
+   "human": 0.35,
+   "velcurve": 1.2,
+   "pedal": 1
+  },
+  "tags": [
+   "lofi",
+   "chillhop"
+  ]
+ }
+]

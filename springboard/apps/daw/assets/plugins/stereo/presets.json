@@ -1,0 +1,41 @@
+[
+ {
+  "name": "Wide",
+  "params": {
+   "width": 1.5,
+   "monobass": 120,
+   "bassmono": 1
+  }
+ },
+ {
+  "name": "Extra Wide",
+  "params": {
+   "width": 2,
+   "monobass": 150,
+   "bassmono": 1
+  }
+ },
+ {
+  "name": "Mono",
+  "params": {
+   "width": 0,
+   "bassmono": 0
+  }
+ },
+ {
+  "name": "Narrow",
+  "params": {
+   "width": 0.5,
+   "monobass": 120,
+   "bassmono": 1
+  }
+ },
+ {
+  "name": "Mono Bass Only",
+  "params": {
+   "width": 1,
+   "monobass": 200,
+   "bassmono": 1
+  }
+ }
+]

@@ -1,0 +1,235 @@
+{
+ "id": "trumpet",
+ "name": "Trumpet",
+ "desc": "Solo trumpet, straight sustain, 2 dynamics. Bright, bold, penetrating. Range E3-D6 (best C4-C6). Fanfares, lead lines, brass stabs with short notes.",
+ "family": "brass",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Brass/Trumpet/sus",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.02,
+ "release": 0.2,
+ "range": [
+  52,
+  86
+ ],
+ "softAttack": 1.0,
+ "brassEnv": true,
+ "zones": [
+  {
+   "file": "trumpet_F2_v1.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.744694,
+   "loopEnd": 2.312268,
+   "gain": 0.6,
+   "tune": -8
+  },
+  {
+   "file": "trumpet_A2_v1.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.692834,
+   "loopEnd": 2.285828,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_C3_v1.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 61,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.901678,
+   "loopEnd": 2.48458,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_Ds3_v1.ogg",
+   "root": 63,
+   "lo": 62,
+   "hi": 65,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.727778,
+   "loopEnd": 2.310612,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_G3_v1.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 68,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.884694,
+   "loopEnd": 2.474966,
+   "gain": 0.6,
+   "tune": -8
+  },
+  {
+   "file": "trumpet_As3_v1.ogg",
+   "root": 70,
+   "lo": 69,
+   "hi": 72,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.884354,
+   "loopEnd": 2.48449,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_D4_v1.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.658118,
+   "loopEnd": 2.250703,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_F4_v1.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.796689,
+   "loopEnd": 2.386939,
+   "gain": 0.6,
+   "tune": -8
+  },
+  {
+   "file": "trumpet_A4_v1.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.622902,
+   "loopEnd": 2.220249,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_C5_v1.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.935896,
+   "loopEnd": 2.529297,
+   "gain": 0.6
+  },
+  {
+   "file": "trumpet_F2_v2.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.918798,
+   "loopEnd": 2.485125
+  },
+  {
+   "file": "trumpet_A2_v2.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.798503,
+   "loopEnd": 2.400794
+  },
+  {
+   "file": "trumpet_C3_v2.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 61,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.658231,
+   "loopEnd": 2.242789
+  },
+  {
+   "file": "trumpet_Ds3_v2.ogg",
+   "root": 63,
+   "lo": 62,
+   "hi": 65,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.919546,
+   "loopEnd": 2.510658
+  },
+  {
+   "file": "trumpet_G3_v2.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 68,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.71,
+   "loopEnd": 2.311043,
+   "tune": -7
+  },
+  {
+   "file": "trumpet_As3_v2.ogg",
+   "root": 70,
+   "lo": 69,
+   "hi": 72,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.953356,
+   "loopEnd": 2.539478
+  },
+  {
+   "file": "trumpet_D4_v2.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.796327,
+   "loopEnd": 2.39517,
+   "tune": -10
+  },
+  {
+   "file": "trumpet_F4_v2.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.953356,
+   "loopEnd": 2.547778
+  },
+  {
+   "file": "trumpet_A4_v2.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.91839,
+   "loopEnd": 2.512812,
+   "tune": -6
+  },
+  {
+   "file": "trumpet_C5_v2.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.675646,
+   "loopEnd": 2.271224
+  }
+ ]
+}

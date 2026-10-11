@@ -1,0 +1,16 @@
+{
+  "id": "sampler",
+  "name": "Sampler",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "sampler",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Plays one audio sample (instrument.sample) pitched across the keyboard relative to root. Vocal chops, stabs, textures, one-shots, loops",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "tags": []
+}

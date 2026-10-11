@@ -1,0 +1,7 @@
+Noto Color Emoji
+Copyright 2013 Google LLC. All rights reserved.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is at https://openfontlicense.org/open-font-license-official-text/
+(also http://scripts.sil.org/OFL). The font is redistributed here unmodified, as the
+CBDT/CBLC bitmap build (NotoColorEmoji.ttf) shipped by the Noto fonts package.

@@ -1,0 +1,6 @@
+Wurlitzer EP200 Electric Piano v1.1 (16-May-1999) by Greg Sullivan (http://www.sullivang.net/)
+SFZ mapping by kinwie: https://github.com/sfzinstruments/GregSullivan.E-Pianos
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+
+Changes: onset trimmed, shortened with fade-out, normalized, re-encoded to Ogg Vorbis q4; velocity layers/key ranges follow the SFZ; per-layer gain in zones.json.

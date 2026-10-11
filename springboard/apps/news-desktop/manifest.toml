@@ -1,0 +1,11 @@
+id = "is.olibuijr.news.desktop"
+name = "News"
+version = "1.2.2"
+exec = "bifrost-news"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "RSS reader with Icelandic news feeds."
+category = "Entertainment"
+architecture = "x86_64-linux"
+permissions = ["network", "storage"]
+window = "full-size"

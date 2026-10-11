@@ -1,0 +1,88 @@
+[
+ {
+  "name": "Dusty",
+  "params": {
+   "tone": 9000,
+   "velocity": 0.6,
+   "decay": 4
+  },
+  "tags": [
+   "lofi"
+  ]
+ },
+ {
+  "name": "Tight",
+  "params": {
+   "tone": 20000,
+   "velocity": 0.5,
+   "decay": 0.35
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Vinyl Dark",
+  "params": {
+   "tone": 4500,
+   "velocity": 0.7,
+   "decay": 4
+  },
+  "tags": [
+   "dark",
+   "lofi"
+  ]
+ },
+ {
+  "name": "Dusty SP",
+  "params": {
+   "tone": 7000,
+   "decay": 1.2,
+   "velocity": 0.65,
+   "gain": 0.55
+  },
+  "tags": [
+   "boombap",
+   "lofi"
+  ]
+ },
+ {
+  "name": "Crunchy MPC",
+  "params": {
+   "tone": 11000,
+   "decay": 0.8,
+   "velocity": 0.45,
+   "gain": 0.6
+  },
+  "tags": [
+   "boombap",
+   "punchy"
+  ]
+ },
+ {
+  "name": "Lo-Fi Tape",
+  "params": {
+   "tone": 3800,
+   "decay": 2,
+   "velocity": 0.75,
+   "stereo": 0.1
+  },
+  "tags": [
+   "lofi",
+   "dark"
+  ]
+ },
+ {
+  "name": "Punchy",
+  "params": {
+   "tone": 20000,
+   "decay": 0.6,
+   "velocity": 0.35,
+   "gain": 0.65
+  },
+  "tags": [
+   "punchy",
+   "short"
+  ]
+ }
+]

@@ -1,0 +1,11 @@
+[package]
+name = "bifrost-browser"
+version = "0.9.0"
+edition = "2021"
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+png = "0.18"
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

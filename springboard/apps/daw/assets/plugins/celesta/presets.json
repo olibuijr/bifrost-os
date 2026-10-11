@@ -1,0 +1,75 @@
+[
+ {
+  "name": "Music Box",
+  "params": {
+   "velocity": 0.4,
+   "tone": 8000,
+   "release": 1.5,
+   "stereo": 0.2
+  },
+  "tags": [
+   "music box",
+   "soft"
+  ]
+ },
+ {
+  "name": "Lo-fi Keys",
+  "params": {
+   "tone": 3000,
+   "detune": 10,
+   "velocity": 0.4,
+   "release": 1.2
+  },
+  "tags": [
+   "lo-fi",
+   "dark"
+  ]
+ },
+ {
+  "name": "Sparkle",
+  "params": {
+   "velocity": 0.9,
+   "stereo": 0.35,
+   "release": 2
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1,
+   "human": 0.15
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Lullaby",
+  "params": {
+   "pedal": 1,
+   "tone": 6000,
+   "velcurve": 1.2,
+   "human": 0.25
+  },
+  "tags": [
+   "lullaby",
+   "soft"
+  ]
+ },
+ {
+  "name": "Hip-hop Hook",
+  "params": {
+   "release": 0.5,
+   "human": 0.2,
+   "tone": 9000
+  },
+  "tags": [
+   "hiphop",
+   "hook"
+  ]
+ }
+]

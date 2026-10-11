@@ -1,0 +1,2141 @@
+//! Wire format between SpringBoard and an app process (docs/apps.md).
+//!
+//! One message per `SOCK_SEQPACKET` packet, little-endian, `u32 tag` first.
+//! Strings are `u32 len` + UTF-8. Unknown tags decode to
+//! `Err(DecodeError::UnknownTag)` so both sides can skip them.
+
+/// Bumped on every breaking change of this module.
+pub use bifrost_ui::{Command, Commands, Node, Role, Rect as UiRect};
+
+pub const SDK_VERSION: u32 = 1;
+/// Largest packet either side sends (damage lists and text are clamped to it).
+pub mod sys;
+pub mod svc;
+pub mod rich;
+pub mod extras;
+pub use extras::{LoginOp, LoginStatus, StatusMenuItem};
+pub mod quicksearch;
+pub mod peek;
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+
+pub const MAX_PACKET: usize = 16 * 1024;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    UnknownTag(u32),
+    Truncated,
+    BadUtf8,
+    BadValue,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TouchKind {
+    Down = 0,
+    Move = 1,
+    Up = 2,
+    Cancel = 3,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Configure {
+    pub w: u32,
+    pub h: u32,
+    pub scale: f32,
+    pub safe_top: f32,
+    pub safe_bottom: f32,
+    pub dark: bool,
+    pub text_scale: f32,
+    pub reduce_motion: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KeyInput {
+    Text(String),
+    Code(u32),
+}
+
+/// A Ctrl or Cmd chord the shell did not use, sent as `KeyInput::Code` with `CHORD_FLAG` set.
+/// The SDK checks versions exactly, so chords ride on the existing message: an app built
+/// before chords sees a code it does not match and ignores it.
+pub const CHORD_FLAG: u32 = 0x1_0000;
+pub const CHORD_CTRL: u32 = 1;
+pub const CHORD_SHIFT: u32 = 2;
+pub const CHORD_ALT: u32 = 4;
+pub const CHORD_META: u32 = 8;
+
+impl KeyInput {
+    /// `key` is the evdev code of a letter, digit or punctuation key; `mods` is a set of CHORD_* bits.
+    pub fn chord(key: u32, mods: u32) -> Self {
+        KeyInput::Code(CHORD_FLAG | (mods & 0xff) << 8 | (key & 0xff))
+    }
+    /// The (evdev key, CHORD_* bits) of a chord, or None for plain keys and text.
+    pub fn as_chord(&self) -> Option<(u32, u32)> {
+        match self {
+            KeyInput::Code(c) if c & CHORD_FLAG != 0 => Some((c & 0xff, (c >> 8) & 0xff)),
+            _ => None,
+        }
+    }
+}
+
+/// A damaged rectangle in pixels: x, y, w, h.
+pub type Rect = [u32; 4];
+
+#[derive(Clone,Debug,PartialEq)]
+pub struct ContextItem {pub id:u32,pub label:String,pub enabled:bool}
+
+/// Layout of the on-screen keyboard (`ToApp::KeyboardConfig`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum KeyboardLayout {
+    #[default]
+    Docked = 0,
+    /// two thumb clusters with a gap in the middle
+    Split = 1,
+    /// narrow, slid sideways by dragging the dock handle
+    Floating = 2,
+}
+
+/// What the focused field wants its return key to say (`NativeReturnKeyType`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ReturnKey {
+    #[default]
+    Return = 0,
+    Search = 1,
+    Go = 2,
+    Done = 3,
+    Next = 4,
+    Send = 5,
+}
+
+/// Bits of `KeyboardConfig::flags`.
+pub mod kbflags {
+    pub const PREDICTIVE: u32 = 1;
+    pub const AUTO_CAPS: u32 = 2;
+    /// the terminal accessory row (Esc, Tab, arrows, paste)
+    pub const ACCESSORY: u32 = 4;
+    pub const SHOWN: u32 = 8;
+    /// Settings > General > Keyboard: Enable Caps Lock, the "." Shortcut
+    pub const CAPS_LOCK: u32 = 16;
+    pub const PERIOD_SHORTCUT: u32 = 32;
+}
+
+/// The shell's configuration of the keyboard system app: what the focused field asks of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct KeyboardConfig {
+    pub layout: KeyboardLayout,
+    pub return_key: ReturnKey,
+    pub flags: u32,
+    /// the enabled input languages (Settings > Keyboard > Keyboards), a bit mask in the shell's order
+    pub languages: u8,
+    /// the active input language (an index into that order)
+    pub language: u8,
+}
+
+impl KeyboardConfig {
+    pub fn predictive(&self) -> bool {
+        self.flags & kbflags::PREDICTIVE != 0
+    }
+    pub fn shown(&self) -> bool {
+        self.flags & kbflags::SHOWN != 0
+    }
+}
+
+/// What the keyboard system app tells the shell (`ToShell::KeyboardOut`); the shell forwards it to the focused field.
+#[derive(Clone, Debug, PartialEq)]
+pub enum KeyboardOut {
+    Text(String),
+    Backspace,
+    Enter,
+    /// the dismiss key
+    Hide,
+    /// terminal keys: "Escape", "Tab", "Paste", "Up", "Down", "Left", "Right"
+    Named(String),
+    /// the keyboard's current height in px, so the shell can lay the app above it
+    Height(u32),
+    /// a key sound for the shell to play when Keyboard Clicks is on: 0 letter, 1 delete, 2 modifier
+    Click(u8),
+    /// the user switched input language with the globe key; the shell stores it (Settings > Keyboard > Keyboards)
+    Language(u8),
+    /// composition in progress (candidate text); the shell forwards it as `ToApp::SetMarkedText`. `sel_*` select
+    /// inside `text` in UTF-8 bytes. Empty `text` cancels the composition.
+    Preedit { text: String, sel_start: u32, sel_len: u32 },
+    /// the composition ended; the shell forwards it as `ToApp::UnmarkText { commit }`
+    Unmark { commit: bool },
+}
+
+/// Access asked of a document grant (`NativeOpenPanel` / `NativeSavePanel`, docs/file-portal-design.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocMode {
+    Read = 0,
+    Write = 1,
+}
+
+/// Why a document request produced no file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocErrorCode {
+    /// the user closed the panel
+    Cancelled = 0,
+    /// the user (account) may not open the file, or the grant belongs to another app
+    Denied = 1,
+    NotFound = 2,
+    /// the file was replaced since it was granted
+    Stale = 3,
+    Revoked = 4,
+    /// the shell or the app lacks the `documents` permission or the feature
+    Unsupported = 5,
+}
+
+impl DocErrorCode {
+    fn from_wire(v: u8) -> Option<Self> {
+        Some(match v {
+            0 => Self::Cancelled,
+            1 => Self::Denied,
+            2 => Self::NotFound,
+            3 => Self::Stale,
+            4 => Self::Revoked,
+            5 => Self::Unsupported,
+            _ => return None,
+        })
+    }
+}
+
+/// `NativeOpenPanel` options carried by `ToShell::DocOpenEx::options` (a bit set; 0 is not a valid open panel, the shell
+/// then treats it as `FILES`). Save panels always allow New Folder (`NativeSavePanel.canCreateDirectories` defaults to true).
+pub mod docopt {
+    /// `allowsMultipleSelection`
+    pub const MULTIPLE: u32 = 1;
+    /// `canChooseDirectories`
+    pub const DIRECTORIES: u32 = 2;
+    /// `canChooseFiles`
+    pub const FILES: u32 = 4;
+    /// `canCreateDirectories`: the New Folder button
+    pub const CREATE_DIRS: u32 = 8;
+}
+
+/// At most this many files one open panel answer carries.
+pub const MAX_DOC_BATCH: u32 = 256;
+
+/// A document grant's id: random, chosen by the shell, only valid for the app it was given to.
+pub type GrantId = [u8; 16];
+
+/// At most this many type filters per request, each at most `MAX_DOC_FILTER` bytes (a UTI or an extension).
+
+/// `NativeReturnKeyType` in full. The keyboard system app only knows `ReturnKey`; `basic()` is what it can show today.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ReturnKeyType {
+    #[default]
+    Default = 0,
+    Go = 1,
+    Google = 2,
+    Join = 3,
+    Next = 4,
+    Route = 5,
+    Search = 6,
+    Send = 7,
+    Yahoo = 8,
+    Done = 9,
+    EmergencyCall = 10,
+    Continue = 11,
+}
+
+impl ReturnKeyType {
+    pub fn from_wire(v: u8) -> Option<Self> {
+        use ReturnKeyType::*;
+        Some(match v {
+            0 => Default, 1 => Go, 2 => Google, 3 => Join, 4 => Next, 5 => Route, 6 => Search, 7 => Send,
+            8 => Yahoo, 9 => Done, 10 => EmergencyCall, 11 => Continue,
+            _ => return None,
+        })
+    }
+    /// The nearest label of the keyboard app's `ReturnKey`.
+    pub fn basic(self) -> ReturnKey {
+        use ReturnKeyType::*;
+        match self {
+            Default => ReturnKey::Return,
+            Go | Route | Join | EmergencyCall => ReturnKey::Go,
+            Google | Yahoo | Search => ReturnKey::Search,
+            Next | Continue => ReturnKey::Next,
+            Send => ReturnKey::Send,
+            Done => ReturnKey::Done,
+        }
+    }
+}
+
+/// `NativeKeyboardType` / `NativeTextContentType` in short.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextContentKind {
+    #[default]
+    Default = 0,
+    Ascii = 1,
+    Number = 2,
+    Url = 3,
+    Phone = 4,
+    Email = 5,
+    Decimal = 6,
+    Password = 7,
+}
+
+impl TextContentKind {
+    pub fn from_wire(v: u8) -> Option<Self> {
+        use TextContentKind::*;
+        Some(match v { 0 => Default, 1 => Ascii, 2 => Number, 3 => Url, 4 => Phone, 5 => Email, 6 => Decimal, 7 => Password, _ => return None })
+    }
+}
+
+/// Bits of `InputTraits::flags`.
+pub mod tiflags {
+    /// `autocorrectionType`
+    pub const AUTOCORRECT: u32 = 1;
+    /// `spellCheckingType`
+    pub const SPELLCHECK: u32 = 2;
+    /// `autocapitalizationType = sentences`
+    pub const CAPITALIZE: u32 = 4;
+    /// `enablesReturnKeyAutomatically`: Return stays disabled while the field is empty
+    pub const RETURN_NEEDS_TEXT: u32 = 8;
+    /// `isSecureTextEntry`: no prediction, no marked text shown to the keyboard
+    pub const SECURE: u32 = 16;
+    /// `smartQuotes / smartDashes / smartInsertDelete`
+    pub const SMART_PUNCTUATION: u32 = 32;
+}
+
+/// The traits of the focused text field (`NativeTextInputTraits`), ToShell 0x152.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct InputTraits {
+    pub return_key: ReturnKeyType,
+    pub content: TextContentKind,
+    pub flags: u32,
+}
+
+/// `ProcessInfo.ActivityOptions` bits (`ToShell::Activity`).
+pub mod activity {
+    /// `.userInitiated`: work the user asked for; do not throttle.
+    pub const USER_INITIATED: u32 = 1;
+    /// `.latencyCritical`: timing-sensitive work (audio, capture); do not throttle.
+    pub const LATENCY_CRITICAL: u32 = 2;
+    /// `.background`: may be deferred.
+    pub const BACKGROUND: u32 = 4;
+    /// `.idleSystemSleepDisabled`: keep the machine awake.
+    pub const IDLE_SYSTEM_SLEEP_DISABLED: u32 = 8;
+}
+
+pub const MAX_ACCESSORY_ITEMS: usize = 8;
+
+/// One button of the `inputAccessoryView` (a row above the keyboard), ToShell 0x153. Pressing it answers
+/// `ToApp::AccessoryAction(id)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AccessoryItem {
+    pub id: u32,
+    pub label: String,
+    pub enabled: bool,
+}
+
+/// The text around the caret, for predictive text and IME (`NativeTextInput` `selectedTextRange`, `markedTextRange`,
+/// `textInRange:`), ToShell 0x150. All offsets are UTF-8 byte offsets into `text` (the Wayland `text-input-v3`
+/// convention); `text` is a window of the field around the caret, at most `MAX_SURROUNDING` bytes.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TextState {
+    pub text: String,
+    pub cursor: u32,
+    /// the other end of the selection; equal to `cursor` when nothing is selected
+    pub anchor: u32,
+    /// the marked (composing) range, if any
+    pub marked: Option<(u32, u32)>,
+}
+
+pub const MAX_SURROUNDING: usize = 4000;
+
+pub const MAX_DOC_FILTERS: usize = 16;
+pub const MAX_DOC_FILTER: usize = 64;
+/// Panel titles and file names are cut to this many characters.
+pub const MAX_DOC_TEXT: usize = 255;
+
+/// Shell -> app.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToApp {
+    Configure(Configure),
+    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32 },
+    Key(KeyInput),
+    Release { buf: u32 },
+    Resume,
+    Suspend,
+    Quit,
+    Command(Command),
+    Activate(u64),
+    Context {x:f32,y:f32},
+    ContextAction(u32),
+    Open { url: String },
+    /// the shell clipboard text, sent on Resume and when it changes
+    Clipboard { text: String },
+    /// Rich pasteboard contents (`NativePasteboard`): the change count and every (UTType id, bytes) item.
+    Pasteboard { change_count: u32, items: Vec<(String, Vec<u8>)> },
+    /// System appearance settings (`appearance::*` bits), sent on start and whenever they change. Apps built before
+    /// this message ignore it; bits an app does not know are ignored too.
+    Appearance { flags: u32 },
+    /// Sent only to the keyboard system app (`kind = "system"`, `provides = ["keyboard"]`).
+    KeyboardConfig(KeyboardConfig),
+    /// The answer to `DocOpen`, `DocSave` or `DocReopen`: one file descriptor follows as SCM_RIGHTS. For a save it is
+    /// a temporary file in the chosen folder; `DocCommit` puts it in place. The app never learns the path.
+    DocGranted { request: u32, grant: GrantId, mode: DocMode, name: String, size: u64 },
+    DocError { request: u32, code: DocErrorCode },
+    /// The user chose item `id` of the app's own main menu (`ToShell::AppMenus`), from the bar or by key equivalent.
+    MenuAction(u32),
+    /// The answer to `ToShell::Keychain`. `value` is the secret for a successful `Get`, empty otherwise.
+    KeychainReply { request: u32, status: KeychainStatus, value: Vec<u8> },
+    /// Sent before the answers of a `DocOpenEx` with `docopt::MULTIPLE`: `count` `DocGranted` (each with its
+    /// descriptor and the same `request`) follow. Not sent for a single file.
+    DocBatch { request: u32, count: u32 },
+    /// An assistive technology (the AT-SPI bridge) acts on node `id` of the latest `Controls` (`ax set`). Apps built
+    /// before this message ignore it.
+    AxSet { id: u64, action: AxAction },
+    /// IME composition (`setMarkedText:selectedRange:replacementRange:`), from Wayland `text-input-v3` preedit or the
+    /// on-screen keyboard. Replaces the marked text (or the selection when nothing is marked) with `text`, marked;
+    /// `sel_start`/`sel_len` are the selection inside `text` in UTF-8 bytes. Tag 60.
+    SetMarkedText { text: String, sel_start: u32, sel_len: u32 },
+    /// `unmarkText`: `commit` keeps the marked text as normal text, otherwise it is removed. Tag 61.
+    UnmarkText { commit: bool },
+    /// `text-input-v3` `delete_surrounding_text`: delete `before` bytes before and `after` bytes after the
+    /// selection. Tag 62.
+    DeleteSurrounding { before: u32, after: u32 },
+    /// An `inputAccessoryView` button was pressed. Tag 63.
+    AccessoryAction(u32),
+    /// The user acted on a notification the app posted (`userNotificationCenter(_:didReceive:)`). `action` is the action
+    /// identifier, `NOTIF_DEFAULT_ACTION` for opening it or `NOTIF_DISMISS_ACTION`; `text` is the reply of a text-input
+    /// action. Delivered on start if the app was not running.
+    NotificationAction { id: String, action: String, text: String, thread: String, category: String },
+    /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
+    ContinueActivity { activity_type: String, unique_id: String, domain: String },
+    /// The answer to `ToShell::NotifyRequest`.
+    NotificationStatus { request: u32, status: NotifStatus },
+    /// The answer to `ToShell::NotifyQuery` (`getDeliveredNotifications`, `getPendingNotificationRequests`).
+    NotificationList { request: u32, delivered: bool, ids: Vec<String> },
+    /// The user picked a target of `ToShell::Share`; `target` is the app id, "copy" for Copy, empty when dismissed.
+    ShareDone { request: u32, target: String },
+    /// The answer to `ToShell::LoginItem` (`SMAppService.status`). Tag 0x1b0.
+    LoginItemStatus { request: u32, status: LoginStatus },
+    /// The user chose item `id` in the menu of status item `item` (`NativeStatusItem.menu`). Tag 0x1b1.
+    StatusItemAction { item: u32, id: u32 },
+    /// A `DistributedNotificationCenter` post by another app, relayed by the shell.
+    DistNotify { name: String, user_info: Vec<(String, String)> },
+    /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
+    /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
+    /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
+    DragDest { session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem> },
+    /// The session this app started ended (`draggingSession(_:endedAt:operation:)`); `op` is 0 when nobody took it.
+    DragEnded { session: u32, op: u8 },
+}
+
+/// Keychain Services parity (`SecItem*`, `kSecClassGenericPassword`): the item is `(service, account)`; the shell
+/// stores it for the asking app only (the app id comes from the connection, never from the message).
+#[derive(Clone, Debug, PartialEq)]
+pub enum KeychainOp {
+    /// `SecItemAdd`; `Duplicate` when the item exists
+    Add { service: String, account: String, value: Vec<u8> },
+    /// `SecItemCopyMatching` with `kSecReturnData`
+    Get { service: String, account: String },
+    /// `SecItemUpdate`; `NotFound` when the item does not exist
+    Update { service: String, account: String, value: Vec<u8> },
+    /// `SecItemDelete`; `NotFound` when the item does not exist
+    Delete { service: String, account: String },
+}
+
+/// `OSStatus` of a keychain call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeychainStatus {
+    /// errSecSuccess
+    Ok = 0,
+    /// errSecDuplicateItem
+    Duplicate = 1,
+    /// errSecItemNotFound
+    NotFound = 2,
+    /// errSecNotAvailable: the app has no `keychain` permission
+    NotPermitted = 3,
+    /// errSecParam: empty or oversized service, account or value, or too many items
+    Param = 4,
+    /// errSecIO: the store could not be read or written
+    Io = 5,
+}
+
+impl KeychainStatus {
+    pub fn from_wire(v: u8) -> Option<Self> {
+        Some(match v {
+            0 => Self::Ok,
+            1 => Self::Duplicate,
+            2 => Self::NotFound,
+            3 => Self::NotPermitted,
+            4 => Self::Param,
+            5 => Self::Io,
+            _ => return None,
+        })
+    }
+}
+
+/// Limits of keychain items (longer fields are refused with `Param`).
+pub const MAX_KEYCHAIN_NAME: usize = 255;
+pub const MAX_KEYCHAIN_VALUE: usize = 8 * 1024;
+
+/// Bits of `ToApp::Appearance { flags }`.
+pub mod appearance {
+    pub const INCREASE_CONTRAST: u32 = 1;
+    pub const REDUCE_TRANSPARENCY: u32 = 2;
+    /// Show Borders / Button Shapes: controls draw a visible outline.
+    pub const SHOW_BORDERS: u32 = 4;
+    pub const BOLD_TEXT: u32 = 8;
+    /// The light scheme is on (Appearance: Light, or Auto in daytime). Clear means dark. The shell also sends the
+    /// same as `Configure::dark` (`!light`), so the first frame is right.
+    pub const LIGHT: u32 = 16;
+    /// The shell presents windows on the GPU and blurs the desktop behind declared materials
+    /// (`ToShell::Materials`): sidebars and toolbar bands may paint a translucent tint. Clear on the CPU/SHM path
+    /// and with Reduce Transparency, where they stay opaque.
+    pub const VIBRANCY: u32 = 32;
+    /// The shell decodes every `MaterialKind` and `MaterialState`. Without it an app sends only `Sidebar` and
+    /// `Titlebar` with the default state (`MaterialKind::legacy`), which every shell with `VIBRANCY` decodes.
+    pub const MATERIALS: u32 = 64;
+}
+
+/// `NativeVisualEffectView.Material` (the current, non-deprecated cases) a window may declare behind-window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MaterialKind {
+    Sidebar = 0,
+    Titlebar = 1,
+    HeaderView = 2,
+    WindowBackground = 3,
+    ContentBackground = 4,
+    UnderWindowBackground = 5,
+    UnderPageBackground = 6,
+    Menu = 7,
+    Popover = 8,
+    Sheet = 9,
+    HudWindow = 10,
+    FullScreenUi = 11,
+    ToolTip = 12,
+    Selection = 13,
+}
+
+impl MaterialKind {
+    pub const ALL: [MaterialKind; 14] = [
+        MaterialKind::Sidebar,
+        MaterialKind::Titlebar,
+        MaterialKind::HeaderView,
+        MaterialKind::WindowBackground,
+        MaterialKind::ContentBackground,
+        MaterialKind::UnderWindowBackground,
+        MaterialKind::UnderPageBackground,
+        MaterialKind::Menu,
+        MaterialKind::Popover,
+        MaterialKind::Sheet,
+        MaterialKind::HudWindow,
+        MaterialKind::FullScreenUi,
+        MaterialKind::ToolTip,
+        MaterialKind::Selection,
+    ];
+    /// The kind an older shell (no `appearance::MATERIALS`) understands: the sidebar, or the title bar for the rest.
+    pub fn legacy(self) -> MaterialKind {
+        match self {
+            MaterialKind::Sidebar => MaterialKind::Sidebar,
+            _ => MaterialKind::Titlebar,
+        }
+    }
+}
+
+/// `NativeVisualEffectView.State`: whether the material follows its window's active state (the default; an
+/// inactive window's material is opaque) or always looks active or inactive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum MaterialState {
+    #[default]
+    FollowsWindowActiveState = 0,
+    Active = 1,
+    Inactive = 2,
+}
+
+/// A vibrancy region of the app's window, in window points (the `Configure` space), with its corner radius in points.
+/// On the wire the state rides in the top two bits of the kind byte (zero, the default, for older apps).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Material { pub kind: MaterialKind, pub rect: UiRect, pub radius: f32, pub state: MaterialState }
+
+/// At most this many material regions per window.
+pub const MAX_MATERIALS: usize = 16;
+
+/// Hierarchy and state for one `Node` (`NativeAccessibility` parent/child and the state attributes), sent beside
+/// `ToShell::Controls` as `ToShell::ControlsTree`. A node with no entry, or `parent: None`, is a direct child of the
+/// window, which is how packets from apps that never send the tree decode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeExt {
+    /// the `Node::id` this describes
+    pub id: u64,
+    /// the `Node::id` of the containing node (a `List` for its `Row`s); `None` is the window
+    pub parent: Option<u64>,
+    /// the node holds keyboard focus (`AXFocused`)
+    pub focused: bool,
+    /// `AXValue` of a toggle or checkbox; `None` when the node is not checkable
+    pub checked: Option<bool>,
+}
+
+/// Maximum entries in one `ControlsTree` packet (same cap as `Controls`).
+pub const MAX_NODE_EXT: usize = 128;
+
+/// What `ToApp::AxSet` asks of a node (`AXPress`, `AXValue` write, `AXFocused` write).
+#[derive(Clone, Debug, PartialEq)]
+pub enum AxAction {
+    Press,
+    SetValue(String),
+    Focus,
+}
+
+/// App -> shell.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToShell {
+    Hello { sdk_version: u32, app_id: String },
+    /// two buffers of `w * h * 4` bytes follow as SCM_RIGHTS fds
+    Buffers { w: u32, h: u32 },
+    Frame { buf: u32, damage: Vec<Rect> },
+    WantsKeyboard { on: bool },
+    Haptic,
+    OpenUrl { url: String },
+    Notify { title: String, body: String },
+    Log { text: String },
+    SetClipboard { text: String },
+    /// `NativePasteboard.clearContents` + `setData` for every (UTType id, bytes) item, atomically.
+    PasteboardSet { items: Vec<(String, Vec<u8>)> },
+    Commands(Commands),
+    Controls(Vec<Node>),
+    RemoteSharing { on: bool },
+    ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
+    /// The app's dock badge (`NativeDockTile.badgeLabel`): a short label such as an unread count; empty clears it.
+    SetBadge { label: String },
+    /// Sent only by the keyboard system app.
+    KeyboardOut(KeyboardOut),
+    /// Ask the user for a file (`NativeOpenPanel`). `filters` are UTIs or extensions; they only narrow the panel's list.
+    DocOpen { request: u32, mode: DocMode, title: String, filters: Vec<String> },
+    /// `DocOpen` with `NativeOpenPanel` options (`docopt::*`): several files, folders, New Folder.
+    DocOpenEx { request: u32, mode: DocMode, title: String, filters: Vec<String>, options: u32 },
+    /// Ask the user where to save (`NativeSavePanel`).
+    DocSave { request: u32, suggested_name: String, filters: Vec<String> },
+    /// Put the temporary file of save `request` in place (atomic rename), or throw it away.
+    DocCommit { request: u32 },
+    DocAbort { request: u32 },
+    /// Open an earlier grant again (a recent document), checked against the file it was given for.
+    DocReopen { request: u32, grant: GrantId },
+    /// The app no longer needs the grant.
+    DocRelease { grant: GrantId },
+    /// Save over an existing granted file without a panel (`NativeDocument` save in place, autosave): the answer is a
+    /// temporary file next to it (the same reply as a save panel's), then `DocCommit` renames it over the file and the
+    /// grant keeps its id. Needs a `Write` grant.
+    DocSaveGrant { request: u32, grant: GrantId },
+    /// The window's vibrancy regions (`NativeVisualEffectView` .sidebar / .titlebar), sent when they change, only after
+    /// the shell set `appearance::VIBRANCY`. An empty list clears them.
+    Materials(Vec<Material>),
+    /// The app's own main-menu items (`NativeApp.mainMenu`), shown after the app-name menu while the app is in front.
+    /// Sent when they change; an empty list clears them. The app recomputes enabled and checked state, which is
+    /// `validateMenuItem:`. Choosing an item answers `ToApp::MenuAction(id)`.
+    AppMenus(Vec<AppMenu>),
+    /// `NativeDocument` window state: the title to show (`displayName`), whether the document has unsaved changes
+    /// (`isDocumentEdited`: the close light shows the dirty dot and the title gets "- Edited") and the represented
+    /// file name (`representedFilename`, a name only, never a path). Empty title: the app name.
+    DocumentState { title: String, edited: bool, represented: String },
+    /// Parent/child relations and focus/checked state for the nodes of the latest `Controls` packet. Optional: apps
+    /// that never send it are read as a flat list of window children.
+    ControlsTree(Vec<NodeExt>),
+    /// A keychain call (`SecItemAdd` and friends). Needs the `keychain` permission; answered with `KeychainReply`.
+    Keychain { request: u32, op: KeychainOp },
+    /// Surrounding text, selection and marked range of the focused field. Sent when they change. 0x150.
+    TextState(TextState),
+    /// `firstRectForCharacterRange:`: where the caret (or marked text) is, in window points, so the candidate
+    /// window or keyboard can position itself. 0x151.
+    CaretRect { x: f32, y: f32, w: f32, h: f32 },
+    /// `NativeTextInputTraits` of the focused field. 0x152.
+    InputTraits(InputTraits),
+    /// The `inputAccessoryView` buttons; an empty list removes the row. 0x153.
+    InputAccessory(Vec<AccessoryItem>),
+    /// `ProcessInfo.enableSuddenTermination` / `disableSuddenTermination`: whether the shell may SIGKILL the app
+    /// at once on quit, logout or shutdown, with no Quit round trip. Sent only when the state flips. 0x160.
+    SuddenTermination { enabled: bool },
+    /// `ProcessInfo.beginActivity` / `endActivity`: the union of the `ActivityOptions` bits of the app's live
+    /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
+    /// when it leaves the foreground. Sent only when the union changes. 0x161.
+    Activity { options: u32 },
+    /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
+    NotifyCategories(Vec<NotifCategory>),
+    /// `CSSearchableIndex.indexSearchableItems`: at most `quicksearch::MAX_ITEMS` per message. 0x1c0.
+    QuickSearchIndex(Vec<quicksearch::SearchableItem>),
+    /// `deleteSearchableItems(withIdentifiers:)`, `(withDomainIdentifiers:)` and `deleteAllSearchableItems`; `kind` is a
+    /// `quicksearch::DELETE_*`. 0x1c1.
+    QuickSearchDelete { kind: u8, values: Vec<String> },
+    /// `QLPreviewPanel` shown or updated: the ordered items and the current index (see `peek`). 0x1e0.
+    Preview { items: Vec<peek::PreviewItem>, index: u32 },
+    /// `QLPreviewPanel.close()`. 0x1e1.
+    PreviewClose,
+    /// `UNUserNotificationCenter.add`: answered with `NotificationStatus`.
+    NotifyRequest { request: u32, req: NotifRequest },
+    /// `removeDeliveredNotifications` / `removePendingNotificationRequests`; no ids removes all.
+    NotifyRemove { delivered: bool, ids: Vec<String> },
+    /// `getDeliveredNotifications` / `getPendingNotificationRequests`: answered with `NotificationList`.
+    NotifyQuery { request: u32, delivered: bool },
+    /// `NativeSharingServicePicker.show(relativeTo:)`: `anchor` is in window points. Answered with `ShareDone`.
+    Share { request: u32, items: Vec<Payload>, anchor: UiRect },
+    /// `SMAppService.mainApp` register, unregister or status; always answered with `LoginItemStatus`. Tag 0x1b0.
+    LoginItem { request: u32, op: LoginOp },
+    /// `NativeStatusBar.statusItem`: create or update menu-bar extra `item` of this app (title, symbol name, menu). Tag 0x1b1.
+    StatusItemSet { item: u32, visible: bool, title: String, symbol: String, menu: Vec<StatusMenuItem> },
+    /// `NativeStatusBar.removeStatusItem`. Tag 0x1b2.
+    StatusItemRemove { item: u32 },
+    /// `DistributedNotificationCenter.post`: the shell forwards it to every other running app as `ToApp::DistNotify`.
+    DistPost { name: String, user_info: Vec<(String, String)> },
+    /// `beginDraggingSession`: the shell tracks the pointer until it is released. `session` should have bit 31 set.
+    DragBegin { session: u32, allowed: u8, items: Vec<DragItem>, preview: DragPreview },
+    /// `registerForDraggedTypes`: the UTTypes the window accepts (conformance counts); empty accepts none.
+    DragRegister { types: Vec<String> },
+    /// The operation (a single `dragop` bit, 0 = refuse) the destination will perform at the current point.
+    DragReply { session: u32, op: u8 },
+    /// The result of `performDragOperation`.
+    DragPerformed { session: u32, accepted: bool },
+    /// The source gives the session up.
+    DragCancel { session: u32 },
+}
+
+pub const MAX_APP_MENUS: usize = 8;
+pub const MAX_APP_MENU_ITEMS: usize = 48;
+/// Item titles are cut to this many characters.
+pub const MAX_APP_MENU_TITLE: usize = 64;
+/// How deep submenus nest (items carry a `depth`, 0 to this).
+pub const MAX_APP_MENU_DEPTH: u8 = 2;
+
+/// One top-level menu of an app.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppMenu {
+    pub title: String,
+    /// Items in order. A submenu is an item with `submenu` set, followed by its children at `depth + 1`.
+    pub items: Vec<AppMenuItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppMenuItem {
+    /// Echoed back in `ToApp::MenuAction`; 0 for separators and submenu headers.
+    pub id: u32,
+    pub title: String,
+    /// Key equivalent in `KeyCombo::parse` notation ("cmd+n", "cmd+shift+z"); empty for none.
+    pub key: String,
+    pub enabled: bool,
+    pub checked: bool,
+    pub separator: bool,
+    pub submenu: bool,
+    pub depth: u8,
+}
+
+impl AppMenuItem {
+    pub fn new(id: u32, title: &str) -> Self {
+        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0 }
+    }
+    pub fn separator() -> Self {
+        AppMenuItem { separator: true, enabled: false, ..AppMenuItem::new(0, "") }
+    }
+    pub fn submenu(title: &str) -> Self {
+        AppMenuItem { submenu: true, ..AppMenuItem::new(0, title) }
+    }
+    pub fn key(mut self, combo: &str) -> Self {
+        self.key = combo.into();
+        self
+    }
+    pub fn enabled(mut self, on: bool) -> Self {
+        self.enabled = on;
+        self
+    }
+    pub fn checked(mut self, on: bool) -> Self {
+        self.checked = on;
+        self
+    }
+    pub fn depth(mut self, depth: u8) -> Self {
+        self.depth = depth;
+        self
+    }
+}
+
+mod tag {
+    pub const CONFIGURE: u32 = 1;
+    pub const TOUCH: u32 = 2;
+    pub const KEY: u32 = 3;
+    pub const RELEASE: u32 = 4;
+    pub const RESUME: u32 = 5;
+    pub const SUSPEND: u32 = 6;
+    pub const QUIT: u32 = 7;
+    pub const OPEN: u32 = 8;
+    pub const CLIPBOARD: u32 = 9;
+    pub const COMMAND: u32 = 10;
+    pub const ACTIVATE: u32 = 11;
+    pub const CONTEXT:u32=12;pub const CONTEXT_ACTION:u32=13;
+    pub const APPEARANCE: u32 = 14;
+    pub const KEYBOARD_CONFIG: u32 = 15;
+    pub const DOC_GRANTED: u32 = 16;
+    pub const DOC_ERROR: u32 = 17;
+    pub const MENU_ACTION: u32 = 18;
+    pub const KEYCHAIN_REPLY: u32 = 19;
+    pub const DOC_BATCH: u32 = 20;
+    pub const AX_SET: u32 = 21;
+    pub const SET_MARKED_TEXT: u32 = 60;
+    pub const UNMARK_TEXT: u32 = 61;
+    pub const DELETE_SURROUNDING: u32 = 62;
+    pub const ACCESSORY_ACTION: u32 = 63;
+
+    pub const HELLO: u32 = 0x101;
+    pub const BUFFERS: u32 = 0x102;
+    pub const FRAME: u32 = 0x103;
+    pub const WANTS_KEYBOARD: u32 = 0x104;
+    pub const HAPTIC: u32 = 0x105;
+    pub const OPEN_URL: u32 = 0x106;
+    pub const NOTIFY: u32 = 0x107;
+    pub const LOG: u32 = 0x108;
+    pub const SET_CLIPBOARD: u32 = 0x109;
+    pub const COMMANDS: u32 = 0x10a;
+    pub const CONTROLS: u32 = 0x10b;
+    pub const REMOTE_SHARING: u32 = 0x10c;
+    pub const CONTEXT_MENU:u32=0x10d;
+    pub const SET_BADGE: u32 = 0x10e;
+    pub const KEYBOARD_OUT: u32 = 0x10f;
+    pub const DOC_OPEN: u32 = 0x110;
+    pub const DOC_SAVE: u32 = 0x111;
+    pub const DOC_COMMIT: u32 = 0x112;
+    pub const DOC_ABORT: u32 = 0x113;
+    pub const DOC_REOPEN: u32 = 0x114;
+    pub const DOC_RELEASE: u32 = 0x115;
+    pub const DOC_OPEN_EX: u32 = 0x119;
+    pub const MATERIALS: u32 = 0x116;
+    pub const APP_MENUS: u32 = 0x117;
+    pub const KEYCHAIN: u32 = 0x118;
+    pub const CONTROLS_TREE: u32 = 0x11a;
+    pub const PASTEBOARD: u32 = 0x190;
+    pub const PASTEBOARD_SET: u32 = 0x190;
+    pub const DOCUMENT_STATE: u32 = 0x180;
+    pub const DOC_SAVE_GRANT: u32 = 0x181;
+    pub const TEXT_STATE: u32 = 0x150;
+    pub const CARET_RECT: u32 = 0x151;
+    pub const INPUT_TRAITS: u32 = 0x152;
+    pub const INPUT_ACCESSORY: u32 = 0x153;
+    pub const SUDDEN_TERMINATION: u32 = 0x160;
+    pub const ACTIVITY: u32 = 0x161;
+}
+
+/// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
+/// boundaries. Returns the slice and its start offset in `text`.
+fn surrounding_window(text: &str, caret: usize) -> (&str, usize) {
+    if text.len() <= MAX_SURROUNDING {
+        return (text, 0);
+    }
+    let mut start = caret.saturating_sub(MAX_SURROUNDING / 2).min(text.len() - MAX_SURROUNDING);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    let mut end = (start + MAX_SURROUNDING).min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    (&text[start..end], start)
+}
+
+fn short(s: &str) -> String {
+    s.chars().take(MAX_DOC_TEXT).collect()
+}
+
+fn filters_(b: &mut Vec<u8>, filters: &[String]) {
+    let kept: Vec<&String> = filters.iter().filter(|f| !f.is_empty() && f.len() <= MAX_DOC_FILTER).take(MAX_DOC_FILTERS).collect();
+    u32_(b, kept.len() as u32);
+    for f in kept {
+        str_(b, f);
+    }
+}
+
+fn mode_(v: u8) -> Result<DocMode, DecodeError> {
+    match v {
+        0 => Ok(DocMode::Read),
+        1 => Ok(DocMode::Write),
+        _ => Err(DecodeError::BadValue),
+    }
+}
+
+fn u32_(b: &mut Vec<u8>, v: u32) {
+    b.extend_from_slice(&v.to_le_bytes());
+}
+
+fn f32_(b: &mut Vec<u8>, v: f32) {
+    b.extend_from_slice(&v.to_le_bytes());
+}
+
+fn bytes_(b: &mut Vec<u8>, v: &[u8]) {
+    let n = v.len().min(MAX_KEYCHAIN_VALUE + 1);
+    u32_(b, n as u32);
+    b.extend_from_slice(&v[..n]);
+}
+
+/// Pasteboard items: at most 16, payloads cut so the packet stays under `MAX_PACKET`.
+fn items_(b: &mut Vec<u8>, items: &[(String, Vec<u8>)]) {
+    let items = &items[..items.len().min(16)];
+    u32_(b, items.len() as u32);
+    let per = (MAX_PACKET - 4096) / items.len().max(1);
+    for (t, d) in items {
+        str_(b, &t[..t.len().min(128)]);
+        let n = d.len().min(per);
+        u32_(b, n as u32);
+        b.extend_from_slice(&d[..n]);
+    }
+}
+
+fn str_(b: &mut Vec<u8>, s: &str) {
+    let max = MAX_PACKET - 64;
+    let mut n = s.len().min(max);
+    while !s.is_char_boundary(n) {
+        n -= 1;
+    }
+    u32_(b, n as u32);
+    b.extend_from_slice(&s.as_bytes()[..n]);
+}
+
+struct Reader<'a>(&'a [u8]);
+
+impl<'a> Reader<'a> {
+    fn take(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
+        if self.0.len() < n {
+            return Err(DecodeError::Truncated);
+        }
+        let (a, b) = self.0.split_at(n);
+        self.0 = b;
+        Ok(a)
+    }
+    fn u8(&mut self) -> Result<u8, DecodeError> {
+        Ok(self.take(1)?[0])
+    }
+    fn u32(&mut self) -> Result<u32, DecodeError> {
+        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+    }
+    fn f32(&mut self) -> Result<f32, DecodeError> {
+        Ok(f32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+    }
+    fn items(&mut self) -> Result<Vec<(String, Vec<u8>)>, DecodeError> {
+        let n = self.u32()? as usize;
+        if n > 16 {
+            return Err(DecodeError::BadValue);
+        }
+        let mut v = Vec::with_capacity(n);
+        for _ in 0..n {
+            let t = self.str()?;
+            let l = self.u32()? as usize;
+            v.push((t, self.take(l)?.to_vec()));
+        }
+        Ok(v)
+    }
+    fn str(&mut self) -> Result<String, DecodeError> {
+        let n = self.u32()? as usize;
+        String::from_utf8(self.take(n)?.to_vec()).map_err(|_| DecodeError::BadUtf8)
+    }
+    /// A secret; one byte over `MAX_KEYCHAIN_VALUE` is still read so the store can answer `Param`.
+    fn bytes(&mut self) -> Result<Vec<u8>, DecodeError> {
+        let n = self.u32()? as usize;
+        if n > MAX_KEYCHAIN_VALUE + 1 {
+            return Err(DecodeError::BadValue);
+        }
+        Ok(self.take(n)?.to_vec())
+    }
+    fn grant(&mut self) -> Result<GrantId, DecodeError> {
+        Ok(self.take(16)?.try_into().unwrap())
+    }
+    /// A short text (title, file name): longer than `MAX_DOC_TEXT` characters is refused, not cut.
+    fn short(&mut self) -> Result<String, DecodeError> {
+        let s = self.str()?;
+        if s.chars().count() > MAX_DOC_TEXT {
+            return Err(DecodeError::BadValue);
+        }
+        Ok(s)
+    }
+    fn filters(&mut self) -> Result<Vec<String>, DecodeError> {
+        let n = self.u32()? as usize;
+        if n > MAX_DOC_FILTERS {
+            return Err(DecodeError::BadValue);
+        }
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let f = self.str()?;
+            if f.is_empty() || f.len() > MAX_DOC_FILTER {
+                return Err(DecodeError::BadValue);
+            }
+            out.push(f);
+        }
+        Ok(out)
+    }
+}
+
+impl ToApp {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(32);
+        match self {
+            ToApp::Configure(c) => {
+                u32_(&mut b, tag::CONFIGURE);
+                u32_(&mut b, c.w);
+                u32_(&mut b, c.h);
+                f32_(&mut b, c.scale);
+                f32_(&mut b, c.safe_top);
+                f32_(&mut b, c.safe_bottom);
+                b.push(c.dark as u8);
+                f32_(&mut b, c.text_scale);
+                b.push(c.reduce_motion as u8);
+            }
+            ToApp::Context{x,y}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);},
+            ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
+            ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
+            ToApp::Touch { kind, id, x, y, t_ms } => {
+                u32_(&mut b, tag::TOUCH);
+                b.push(*kind as u8);
+                u32_(&mut b, *id);
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+                u32_(&mut b, *t_ms);
+            }
+            ToApp::Key(k) => {
+                u32_(&mut b, tag::KEY);
+                match k {
+                    KeyInput::Text(s) => {
+                        b.push(0);
+                        str_(&mut b, s);
+                    }
+                    KeyInput::Code(c) => {
+                        b.push(1);
+                        u32_(&mut b, *c);
+                    }
+                }
+            }
+            ToApp::Release { buf } => {
+                u32_(&mut b, tag::RELEASE);
+                u32_(&mut b, *buf);
+            }
+            ToApp::Resume => u32_(&mut b, tag::RESUME),
+            ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
+            ToApp::AxSet { id, action } => {
+                u32_(&mut b, tag::AX_SET);u32_(&mut b, *id as u32);u32_(&mut b, (*id >> 32) as u32);
+                match action {
+                    AxAction::Press => b.push(0),
+                    AxAction::Focus => b.push(2),
+                    AxAction::SetValue(v) => {b.push(1);str_(&mut b, &short(v));}
+                }
+            }
+            ToApp::SetMarkedText { text, sel_start, sel_len } => {
+                u32_(&mut b, tag::SET_MARKED_TEXT);
+                str_(&mut b, text);
+                u32_(&mut b, *sel_start);
+                u32_(&mut b, *sel_len);
+            }
+            ToApp::UnmarkText { commit } => {
+                u32_(&mut b, tag::UNMARK_TEXT);
+                b.push(*commit as u8);
+            }
+            ToApp::DeleteSurrounding { before, after } => {
+                u32_(&mut b, tag::DELETE_SURROUNDING);
+                u32_(&mut b, *before);
+                u32_(&mut b, *after);
+            }
+            ToApp::AccessoryAction(id) => {
+                u32_(&mut b, tag::ACCESSORY_ACTION);
+                u32_(&mut b, *id);
+            }
+            ToApp::Activate(id) => {u32_(&mut b,tag::ACTIVATE);u32_(&mut b,*id as u32);u32_(&mut b,(*id>>32) as u32);}
+            ToApp::Command(command) => {u32_(&mut b,tag::COMMAND);u32_(&mut b,*command as u32);}
+            ToApp::Quit => u32_(&mut b, tag::QUIT),
+            ToApp::Open { url } => {
+                u32_(&mut b, tag::OPEN);
+                str_(&mut b, url);
+            }
+            ToApp::Pasteboard { change_count, items } => {
+                u32_(&mut b, tag::PASTEBOARD);
+                u32_(&mut b, *change_count);
+                items_(&mut b, items);
+            }
+            ToApp::Clipboard { text } => {
+                u32_(&mut b, tag::CLIPBOARD);
+                str_(&mut b, text);
+            }
+            ToApp::Appearance { flags } => {
+                u32_(&mut b, tag::APPEARANCE);
+                u32_(&mut b, *flags);
+            }
+            ToApp::KeyboardConfig(c) => {
+                u32_(&mut b, tag::KEYBOARD_CONFIG);
+                b.push(c.layout as u8);
+                b.push(c.return_key as u8);
+                u32_(&mut b, c.flags);
+                b.push(c.languages);
+                b.push(c.language);
+            }
+            ToApp::DocGranted { request, grant, mode, name, size } => {
+                u32_(&mut b, tag::DOC_GRANTED);
+                u32_(&mut b, *request);
+                b.extend_from_slice(grant);
+                b.push(*mode as u8);
+                str_(&mut b, &short(name));
+                b.extend_from_slice(&size.to_le_bytes());
+            }
+            ToApp::DocError { request, code } => {
+                u32_(&mut b, tag::DOC_ERROR);
+                u32_(&mut b, *request);
+                b.push(*code as u8);
+            }
+            ToApp::KeychainReply { request, status, value } => {
+                u32_(&mut b, tag::KEYCHAIN_REPLY);
+                u32_(&mut b, *request);
+                b.push(*status as u8);
+                bytes_(&mut b, value);
+            }
+            ToApp::DocBatch { request, count } => {
+                u32_(&mut b, tag::DOC_BATCH);
+                u32_(&mut b, *request);
+                u32_(&mut b, *count);
+            }
+            m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
+            m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+        }
+        b
+    }
+
+    pub fn decode(p: &[u8]) -> Result<Self, DecodeError> {
+        let mut r = Reader(p);
+        Ok(match r.u32()? {
+            tag::CONFIGURE => ToApp::Configure(Configure {
+                w: r.u32()?,
+                h: r.u32()?,
+                scale: r.f32()?,
+                safe_top: r.f32()?,
+                safe_bottom: r.f32()?,
+                dark: r.u8()? != 0,
+                text_scale: r.f32()?,
+                reduce_motion: r.u8()? != 0,
+            }),
+            tag::TOUCH => {
+                let kind = match r.u8()? {
+                    0 => TouchKind::Down,
+                    1 => TouchKind::Move,
+                    2 => TouchKind::Up,
+                    3 => TouchKind::Cancel,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToApp::Touch { kind, id: r.u32()?, x: r.f32()?, y: r.f32()?, t_ms: r.u32()? }
+            }
+            tag::KEY => match r.u8()? {
+                0 => ToApp::Key(KeyInput::Text(r.str()?)),
+                1 => ToApp::Key(KeyInput::Code(r.u32()?)),
+                _ => return Err(DecodeError::BadValue),
+            },
+            tag::RELEASE => ToApp::Release { buf: r.u32()? },
+            tag::RESUME => ToApp::Resume,
+            tag::SUSPEND => ToApp::Suspend,
+            tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
+            tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?),
+            tag::MENU_ACTION=>ToApp::MenuAction(r.u32()?),
+            tag::AX_SET => {
+                let low = r.u32()? as u64;
+                let id = low | ((r.u32()? as u64) << 32);
+                let action = match r.u8()? {
+                    0 => AxAction::Press,
+                    1 => AxAction::SetValue(r.str()?),
+                    2 => AxAction::Focus,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToApp::AxSet { id, action }
+            }
+            tag::SET_MARKED_TEXT => {
+                let text = r.str()?;
+                let (sel_start, sel_len) = (r.u32()?, r.u32()?);
+                let end = sel_start as u64 + sel_len as u64;
+                if end > text.len() as u64
+                    || !text.is_char_boundary(sel_start as usize)
+                    || !text.is_char_boundary(end as usize)
+                {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::SetMarkedText { text, sel_start, sel_len }
+            }
+            tag::UNMARK_TEXT => ToApp::UnmarkText { commit: r.u8()? != 0 },
+            tag::DELETE_SURROUNDING => ToApp::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
+            tag::ACCESSORY_ACTION => ToApp::AccessoryAction(r.u32()?),
+            tag::ACTIVATE => {let low=r.u32()? as u64;ToApp::Activate(low|((r.u32()? as u64)<<32))},
+            tag::COMMAND => ToApp::Command(Command::from_wire(r.u32()?).ok_or(DecodeError::BadValue)?),
+            tag::QUIT => ToApp::Quit,
+            tag::OPEN => ToApp::Open { url: r.str()? },
+            tag::PASTEBOARD => ToApp::Pasteboard { change_count: r.u32()?, items: r.items()? },
+            tag::CLIPBOARD => ToApp::Clipboard { text: r.str()? },
+            tag::APPEARANCE => ToApp::Appearance { flags: r.u32()? },
+            tag::KEYBOARD_CONFIG => {
+                let layout = match r.u8()? {
+                    0 => KeyboardLayout::Docked,
+                    1 => KeyboardLayout::Split,
+                    2 => KeyboardLayout::Floating,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let return_key = match r.u8()? {
+                    0 => ReturnKey::Return,
+                    1 => ReturnKey::Search,
+                    2 => ReturnKey::Go,
+                    3 => ReturnKey::Done,
+                    4 => ReturnKey::Next,
+                    5 => ReturnKey::Send,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let flags = r.u32()?;
+                ToApp::KeyboardConfig(KeyboardConfig { layout, return_key, flags, languages: r.u8()?, language: r.u8()? })
+            }
+            tag::DOC_GRANTED => {
+                let request = r.u32()?;
+                let grant = r.grant()?;
+                let mode = mode_(r.u8()?)?;
+                let name = r.short()?;
+                let size = u64::from_le_bytes(r.take(8)?.try_into().unwrap());
+                ToApp::DocGranted { request, grant, mode, name, size }
+            }
+            tag::DOC_ERROR => {
+                let request = r.u32()?;
+                ToApp::DocError { request, code: DocErrorCode::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? }
+            }
+            tag::KEYCHAIN_REPLY => {
+                let request = r.u32()?;
+                let status = KeychainStatus::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?;
+                ToApp::KeychainReply { request, status, value: r.bytes()? }
+            }
+            tag::DOC_BATCH => {
+                let request = r.u32()?;
+                let count = r.u32()?;
+                if count > MAX_DOC_BATCH {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::DocBatch { request, count }
+            }
+            t @ 50..=59 => rich::decode_app(t, &mut r)?,
+            t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
+            t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
+            t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
+            t => return Err(DecodeError::UnknownTag(t)),
+        })
+    }
+}
+
+impl ToShell {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(32);
+        match self {
+            ToShell::Hello { sdk_version, app_id } => {
+                u32_(&mut b, tag::HELLO);
+                u32_(&mut b, *sdk_version);
+                str_(&mut b, app_id);
+            }
+            ToShell::Buffers { w, h } => {
+                u32_(&mut b, tag::BUFFERS);
+                u32_(&mut b, *w);
+                u32_(&mut b, *h);
+            }
+            ToShell::Frame { buf, damage } => {
+                u32_(&mut b, tag::FRAME);
+                u32_(&mut b, *buf);
+                let n = damage.len().min((MAX_PACKET - 16) / 16);
+                u32_(&mut b, n as u32);
+                for r in &damage[..n] {
+                    for v in r {
+                        u32_(&mut b, *v);
+                    }
+                }
+            }
+            ToShell::WantsKeyboard { on } => {
+                u32_(&mut b, tag::WANTS_KEYBOARD);
+                b.push(*on as u8);
+            }
+            ToShell::KeyboardOut(out) => {
+                u32_(&mut b, tag::KEYBOARD_OUT);
+                match out {
+                    KeyboardOut::Text(t) => {
+                        b.push(0);
+                        str_(&mut b, t);
+                    }
+                    KeyboardOut::Backspace => b.push(1),
+                    KeyboardOut::Enter => b.push(2),
+                    KeyboardOut::Hide => b.push(3),
+                    KeyboardOut::Named(n) => {
+                        b.push(4);
+                        let name: String = n.chars().take(16).collect();
+                        str_(&mut b, &name);
+                    }
+                    KeyboardOut::Height(h) => {
+                        b.push(5);
+                        u32_(&mut b, *h);
+                    }
+                    KeyboardOut::Click(k) => {
+                        b.push(6);
+                        b.push(*k);
+                    }
+                    KeyboardOut::Language(l) => {
+                        b.push(7);
+                        b.push(*l);
+                    }
+                    KeyboardOut::Preedit { text, sel_start, sel_len } => {
+                        b.push(8);
+                        str_(&mut b, text);
+                        u32_(&mut b, *sel_start);
+                        u32_(&mut b, *sel_len);
+                    }
+                    KeyboardOut::Unmark { commit } => {
+                        b.push(9);
+                        b.push(*commit as u8);
+                    }
+                }
+            }
+            ToShell::ContextMenu{x,y,items}=>{u32_(&mut b,tag::CONTEXT_MENU);f32_(&mut b,*x);f32_(&mut b,*y);u32_(&mut b,items.len().min(32) as u32);for item in items.iter().take(32){u32_(&mut b,item.id);b.push(item.enabled as u8);let label=item.label.chars().take(128).collect::<String>();str_(&mut b,&label);}},
+            ToShell::AppMenus(menus) => {
+                // Menus that do not fit one packet are cut (whole items, then whole menus), never split.
+                let budget = MAX_PACKET - 1024;
+                u32_(&mut b, tag::APP_MENUS);
+                let count_at = b.len();
+                u32_(&mut b, 0);
+                let mut kept = 0u32;
+                for m in menus.iter().take(MAX_APP_MENUS) {
+                    if b.len() + 80 > budget {
+                        break;
+                    }
+                    str_(&mut b, &m.title.chars().take(48).collect::<String>());
+                    let n_at = b.len();
+                    u32_(&mut b, 0);
+                    let mut n = 0u32;
+                    for i in m.items.iter().take(MAX_APP_MENU_ITEMS) {
+                        let title = i.title.chars().take(MAX_APP_MENU_TITLE).collect::<String>();
+                        let key = i.key.chars().take(24).collect::<String>();
+                        if b.len() + 4 + 4 + title.len() + 4 + key.len() + 2 > budget {
+                            break;
+                        }
+                        u32_(&mut b, i.id);
+                        str_(&mut b, &title);
+                        str_(&mut b, &key);
+                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3);
+                        b.push(i.depth.min(MAX_APP_MENU_DEPTH));
+                        n += 1;
+                    }
+                    b[n_at..n_at + 4].copy_from_slice(&n.to_le_bytes());
+                    kept += 1;
+                }
+                b[count_at..count_at + 4].copy_from_slice(&kept.to_le_bytes());
+            }
+            ToShell::RemoteSharing { on } => {u32_(&mut b,tag::REMOTE_SHARING);b.push(*on as u8);}
+            ToShell::Controls(nodes) => {
+                u32_(&mut b,tag::CONTROLS);u32_(&mut b,0);let mut count=0u32;
+                for node in nodes {
+                    let mut item=Vec::new();u32_(&mut item,node.id as u32);u32_(&mut item,(node.id>>32) as u32);u32_(&mut item,node.role as u32);item.push(node.enabled as u8);
+                    for v in [node.bounds.x,node.bounds.y,node.bounds.w,node.bounds.h]{f32_(&mut item,v);}
+                    str_(&mut item,&node.label);str_(&mut item,&node.value);
+                    if b.len()+item.len()>MAX_PACKET||count>=128 {break;}b.extend_from_slice(&item);count+=1;
+                }b[4..8].copy_from_slice(&count.to_le_bytes());
+            }
+            m @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => extras::encode_shell(m, &mut b),
+            m @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => quicksearch::encode_shell(m, &mut b),
+            m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            ToShell::ControlsTree(list) => {
+                u32_(&mut b, tag::CONTROLS_TREE);
+                let n = list.len().min(MAX_NODE_EXT);
+                u32_(&mut b, n as u32);
+                for e in list.iter().take(n) {
+                    u32_(&mut b, e.id as u32);u32_(&mut b, (e.id >> 32) as u32);
+                    let p = e.parent.unwrap_or(0);
+                    u32_(&mut b, p as u32);u32_(&mut b, (p >> 32) as u32);
+                    // bit0 has parent, bit1 focused, bit2 checkable, bit3 checked
+                    b.push(e.parent.is_some() as u8 | (e.focused as u8) << 1 | (e.checked.is_some() as u8) << 2 | (e.checked == Some(true)) as u8 * 8);
+                }
+            }
+            ToShell::TextState(t) => {
+                u32_(&mut b, tag::TEXT_STATE);
+                let (text, cut) = surrounding_window(&t.text, t.cursor.min(t.anchor) as usize);
+                str_(&mut b, text);
+                let adj = |v: u32| (v as usize).saturating_sub(cut).min(text.len()) as u32;
+                u32_(&mut b, adj(t.cursor));
+                u32_(&mut b, adj(t.anchor));
+                match t.marked {
+                    Some((s, e)) => {
+                        b.push(1);
+                        u32_(&mut b, adj(s));
+                        u32_(&mut b, adj(e));
+                    }
+                    None => b.push(0),
+                }
+            }
+            ToShell::CaretRect { x, y, w, h } => {
+                u32_(&mut b, tag::CARET_RECT);
+                for v in [x, y, w, h] {
+                    f32_(&mut b, *v);
+                }
+            }
+            ToShell::InputTraits(t) => {
+                u32_(&mut b, tag::INPUT_TRAITS);
+                b.push(t.return_key as u8);
+                b.push(t.content as u8);
+                u32_(&mut b, t.flags);
+            }
+            ToShell::SuddenTermination { enabled } => {
+                u32_(&mut b, tag::SUDDEN_TERMINATION);
+                b.push(*enabled as u8);
+            }
+            ToShell::Activity { options } => {
+                u32_(&mut b, tag::ACTIVITY);
+                u32_(&mut b, *options);
+            }
+            ToShell::InputAccessory(items) => {
+                u32_(&mut b, tag::INPUT_ACCESSORY);
+                let n = items.len().min(MAX_ACCESSORY_ITEMS);
+                u32_(&mut b, n as u32);
+                for i in items.iter().take(n) {
+                    u32_(&mut b, i.id);
+                    b.push(i.enabled as u8);
+                    str_(&mut b, &i.label.chars().take(32).collect::<String>());
+                }
+            }
+            ToShell::Commands(commands) => {u32_(&mut b,tag::COMMANDS);u32_(&mut b,commands.0);}
+            ToShell::DocumentState { title, edited, represented } => {
+                u32_(&mut b, tag::DOCUMENT_STATE);
+                str_(&mut b, &short(title));
+                b.push(*edited as u8);
+                str_(&mut b, &short(represented));
+            }
+            ToShell::Haptic => u32_(&mut b, tag::HAPTIC),
+            ToShell::SetBadge { label } => {
+                u32_(&mut b, tag::SET_BADGE);
+                str_(&mut b, label);
+            }
+            ToShell::OpenUrl { url } => {
+                u32_(&mut b, tag::OPEN_URL);
+                str_(&mut b, url);
+            }
+            ToShell::Notify { title, body } => {
+                u32_(&mut b, tag::NOTIFY);
+                str_(&mut b, title);
+                str_(&mut b, body);
+            }
+            ToShell::Log { text } => {
+                u32_(&mut b, tag::LOG);
+                str_(&mut b, text);
+            }
+            ToShell::PasteboardSet { items } => {
+                u32_(&mut b, tag::PASTEBOARD_SET);
+                items_(&mut b, items);
+            }
+            ToShell::SetClipboard { text } => {
+                u32_(&mut b, tag::SET_CLIPBOARD);
+                str_(&mut b, text);
+            }
+            ToShell::DocOpen { request, mode, title, filters } => {
+                u32_(&mut b, tag::DOC_OPEN);
+                u32_(&mut b, *request);
+                b.push(*mode as u8);
+                str_(&mut b, &short(title));
+                filters_(&mut b, filters);
+            }
+            ToShell::DocOpenEx { request, mode, title, filters, options } => {
+                u32_(&mut b, tag::DOC_OPEN_EX);
+                u32_(&mut b, *request);
+                b.push(*mode as u8);
+                str_(&mut b, &short(title));
+                filters_(&mut b, filters);
+                u32_(&mut b, *options);
+            }
+            ToShell::DocSave { request, suggested_name, filters } => {
+                u32_(&mut b, tag::DOC_SAVE);
+                u32_(&mut b, *request);
+                str_(&mut b, &short(suggested_name));
+                filters_(&mut b, filters);
+            }
+            ToShell::DocCommit { request } => {
+                u32_(&mut b, tag::DOC_COMMIT);
+                u32_(&mut b, *request);
+            }
+            ToShell::DocAbort { request } => {
+                u32_(&mut b, tag::DOC_ABORT);
+                u32_(&mut b, *request);
+            }
+            ToShell::DocReopen { request, grant } => {
+                u32_(&mut b, tag::DOC_REOPEN);
+                u32_(&mut b, *request);
+                b.extend_from_slice(grant);
+            }
+            ToShell::DocSaveGrant { request, grant } => {
+                u32_(&mut b, tag::DOC_SAVE_GRANT);
+                u32_(&mut b, *request);
+                b.extend_from_slice(grant);
+            }
+            ToShell::DocRelease { grant } => {
+                u32_(&mut b, tag::DOC_RELEASE);
+                b.extend_from_slice(grant);
+            }
+            ToShell::Keychain { request, op } => {
+                u32_(&mut b, tag::KEYCHAIN);
+                u32_(&mut b, *request);
+                let (kind, service, account, value) = match op {
+                    KeychainOp::Add { service, account, value } => (0u8, service, account, Some(value)),
+                    KeychainOp::Get { service, account } => (1, service, account, None),
+                    KeychainOp::Update { service, account, value } => (2, service, account, Some(value)),
+                    KeychainOp::Delete { service, account } => (3, service, account, None),
+                };
+                b.push(kind);
+                str_(&mut b, service);
+                str_(&mut b, account);
+                if let Some(v) = value {
+                    bytes_(&mut b, v);
+                }
+            }
+            ToShell::Materials(list) => {
+                u32_(&mut b, tag::MATERIALS);
+                let n = list.len().min(MAX_MATERIALS);
+                u32_(&mut b, n as u32);
+                for m in &list[..n] {
+                    b.push(m.kind as u8 | (m.state as u8) << 6);
+                    for v in [m.rect.x, m.rect.y, m.rect.w, m.rect.h, m.radius] {
+                        f32_(&mut b, v);
+                    }
+                }
+            }
+        }
+        b
+    }
+
+    pub fn decode(p: &[u8]) -> Result<Self, DecodeError> {
+        let mut r = Reader(p);
+        Ok(match r.u32()? {
+            tag::CONTEXT_MENU=>{let x=r.f32()?;let y=r.f32()?;let count=r.u32()?;if !x.is_finite()||!y.is_finite()||count>32{return Err(DecodeError::BadValue);}let mut items=Vec::new();for _ in 0..count {let id=r.u32()?;let enabled=r.u8()?!=0;let label=r.str()?;if label.len()>512{return Err(DecodeError::BadValue);}items.push(ContextItem{id,label,enabled});}ToShell::ContextMenu{x,y,items}},
+            tag::REMOTE_SHARING => ToShell::RemoteSharing {on:r.u8()?!=0},
+            tag::CONTROLS => {
+                let count=r.u32()?;if count>128{return Err(DecodeError::BadValue);}let mut nodes=Vec::new();
+                for _ in 0..count {let low=r.u32()? as u64;let id=low|((r.u32()? as u64)<<32);let role=match r.u32()?{0=>Role::Button,1=>Role::TextField,2=>Role::List,3=>Role::Row,4=>Role::Toggle,5=>Role::Checkbox,6=>Role::Slider,7=>Role::SegmentedControl,8=>Role::StaticText,9=>Role::MenuItem,10=>Role::Window,11=>Role::ProgressIndicator,_=>return Err(DecodeError::BadValue)};let enabled=r.u8()?!=0;let bounds=UiRect{x:r.f32()?,y:r.f32()?,w:r.f32()?,h:r.f32()?};if ![bounds.x,bounds.y,bounds.w,bounds.h].iter().all(|v|v.is_finite())||bounds.w<0.||bounds.h<0.{return Err(DecodeError::BadValue);}nodes.push(Node{id,role,enabled,bounds,label:r.str()?,value:r.str()?});}ToShell::Controls(nodes)
+            }
+            tag::COMMANDS => ToShell::Commands(Commands(r.u32()?)),
+            tag::HELLO => ToShell::Hello { sdk_version: r.u32()?, app_id: r.str()? },
+            tag::BUFFERS => ToShell::Buffers { w: r.u32()?, h: r.u32()? },
+            tag::FRAME => {
+                let buf = r.u32()?;
+                let n = r.u32()? as usize;
+                if n > MAX_PACKET / 16 {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut damage = Vec::with_capacity(n);
+                for _ in 0..n {
+                    damage.push([r.u32()?, r.u32()?, r.u32()?, r.u32()?]);
+                }
+                ToShell::Frame { buf, damage }
+            }
+            tag::WANTS_KEYBOARD => ToShell::WantsKeyboard { on: r.u8()? != 0 },
+            tag::KEYBOARD_OUT => ToShell::KeyboardOut(match r.u8()? {
+                0 => KeyboardOut::Text(r.str()?),
+                1 => KeyboardOut::Backspace,
+                2 => KeyboardOut::Enter,
+                3 => KeyboardOut::Hide,
+                4 => KeyboardOut::Named(r.str()?),
+                5 => KeyboardOut::Height(r.u32()?),
+                6 => KeyboardOut::Click(r.u8()?.min(2)),
+                7 => KeyboardOut::Language(r.u8()?),
+                8 => {
+                    let text = r.str()?;
+                    let (sel_start, sel_len) = (r.u32()?, r.u32()?);
+                    let end = sel_start as u64 + sel_len as u64;
+                    if end > text.len() as u64 || !text.is_char_boundary(sel_start as usize) || !text.is_char_boundary(end as usize) {
+                        return Err(DecodeError::BadValue);
+                    }
+                    KeyboardOut::Preedit { text, sel_start, sel_len }
+                }
+                9 => KeyboardOut::Unmark { commit: r.u8()? != 0 },
+                _ => return Err(DecodeError::BadValue),
+            }),
+            tag::HAPTIC => ToShell::Haptic,
+            tag::SET_BADGE => ToShell::SetBadge { label: r.str()? },
+            tag::DOCUMENT_STATE => ToShell::DocumentState { title: r.str()?, edited: r.u8()? != 0, represented: r.str()? },
+            tag::OPEN_URL => ToShell::OpenUrl { url: r.str()? },
+            tag::NOTIFY => ToShell::Notify { title: r.str()?, body: r.str()? },
+            tag::LOG => ToShell::Log { text: r.str()? },
+            tag::PASTEBOARD_SET => ToShell::PasteboardSet { items: r.items()? },
+            tag::SET_CLIPBOARD => ToShell::SetClipboard { text: r.str()? },
+            tag::DOC_OPEN => {
+                let request = r.u32()?;
+                let mode = mode_(r.u8()?)?;
+                ToShell::DocOpen { request, mode, title: r.short()?, filters: r.filters()? }
+            }
+            tag::DOC_OPEN_EX => {
+                let request = r.u32()?;
+                let mode = mode_(r.u8()?)?;
+                ToShell::DocOpenEx { request, mode, title: r.short()?, filters: r.filters()?, options: r.u32()? }
+            }
+            tag::DOC_SAVE => {
+                let request = r.u32()?;
+                ToShell::DocSave { request, suggested_name: r.short()?, filters: r.filters()? }
+            }
+            tag::DOC_COMMIT => ToShell::DocCommit { request: r.u32()? },
+            tag::DOC_ABORT => ToShell::DocAbort { request: r.u32()? },
+            tag::DOC_REOPEN => {
+                let request = r.u32()?;
+                ToShell::DocReopen { request, grant: r.grant()? }
+            }
+            tag::DOC_SAVE_GRANT => {
+                let request = r.u32()?;
+                ToShell::DocSaveGrant { request, grant: r.grant()? }
+            }
+            tag::DOC_RELEASE => ToShell::DocRelease { grant: r.grant()? },
+            tag::APP_MENUS => {
+                let n = r.u32()? as usize;
+                if n > MAX_APP_MENUS {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut menus = Vec::new();
+                for _ in 0..n {
+                    let title = r.str()?;
+                    let count = r.u32()? as usize;
+                    if title.len() > 512 || count > MAX_APP_MENU_ITEMS {
+                        return Err(DecodeError::BadValue);
+                    }
+                    let mut items = Vec::new();
+                    for _ in 0..count {
+                        let id = r.u32()?;
+                        let title = r.str()?;
+                        let key = r.str()?;
+                        let flags = r.u8()?;
+                        let depth = r.u8()?;
+                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 15 {
+                            return Err(DecodeError::BadValue);
+                        }
+                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth });
+                    }
+                    menus.push(AppMenu { title, items });
+                }
+                ToShell::AppMenus(menus)
+            }
+            tag::KEYCHAIN => {
+                let request = r.u32()?;
+                let kind = r.u8()?;
+                let service = r.str()?;
+                let account = r.str()?;
+                if service.len() > MAX_KEYCHAIN_NAME * 4 || account.len() > MAX_KEYCHAIN_NAME * 4 {
+                    return Err(DecodeError::BadValue);
+                }
+                let op = match kind {
+                    0 => KeychainOp::Add { service, account, value: r.bytes()? },
+                    1 => KeychainOp::Get { service, account },
+                    2 => KeychainOp::Update { service, account, value: r.bytes()? },
+                    3 => KeychainOp::Delete { service, account },
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToShell::Keychain { request, op }
+            }
+            tag::TEXT_STATE => {
+                let text = r.str()?;
+                if text.len() > MAX_SURROUNDING {
+                    return Err(DecodeError::BadValue);
+                }
+                let (cursor, anchor) = (r.u32()?, r.u32()?);
+                let ok = |v: u32| v as usize <= text.len() && text.is_char_boundary(v as usize);
+                let marked = match r.u8()? {
+                    0 => None,
+                    1 => {
+                        let (a, b) = (r.u32()?, r.u32()?);
+                        if a > b || !ok(a) || !ok(b) {
+                            return Err(DecodeError::BadValue);
+                        }
+                        Some((a, b))
+                    }
+                    _ => return Err(DecodeError::BadValue),
+                };
+                if !ok(cursor) || !ok(anchor) {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::TextState(TextState { text, cursor, anchor, marked })
+            }
+            tag::CARET_RECT => {
+                let (x, y, w, h) = (r.f32()?, r.f32()?, r.f32()?, r.f32()?);
+                if ![x, y, w, h].iter().all(|v| v.is_finite()) || w < 0. || h < 0. {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::CaretRect { x, y, w, h }
+            }
+            tag::INPUT_TRAITS => ToShell::InputTraits(InputTraits {
+                return_key: ReturnKeyType::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?,
+                content: TextContentKind::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?,
+                flags: r.u32()?,
+            }),
+            tag::SUDDEN_TERMINATION => ToShell::SuddenTermination { enabled: r.u8()? != 0 },
+            tag::ACTIVITY => ToShell::Activity { options: r.u32()? },
+            tag::INPUT_ACCESSORY => {
+                let n = r.u32()? as usize;
+                if n > MAX_ACCESSORY_ITEMS {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut items = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let id = r.u32()?;
+                    let enabled = r.u8()? != 0;
+                    items.push(AccessoryItem { id, enabled, label: r.str()? });
+                }
+                ToShell::InputAccessory(items)
+            }
+            tag::CONTROLS_TREE => {
+                let n = r.u32()? as usize;
+                if n > MAX_NODE_EXT {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut list = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let id = r.u32()? as u64 | ((r.u32()? as u64) << 32);
+                    let parent = r.u32()? as u64 | ((r.u32()? as u64) << 32);
+                    let f = r.u8()?;
+                    if f & !0xf != 0 {
+                        return Err(DecodeError::BadValue);
+                    }
+                    list.push(NodeExt { id, parent: (f & 1 != 0).then_some(parent), focused: f & 2 != 0, checked: (f & 4 != 0).then_some(f & 8 != 0) });
+                }
+                ToShell::ControlsTree(list)
+            }
+            tag::MATERIALS => {
+                let n = r.u32()? as usize;
+                if n > MAX_MATERIALS {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut list = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let byte = r.u8()?;
+                    let kind = *MaterialKind::ALL.get((byte & 0x3f) as usize).ok_or(DecodeError::BadValue)?;
+                    let state = match byte >> 6 {
+                        0 => MaterialState::FollowsWindowActiveState,
+                        1 => MaterialState::Active,
+                        2 => MaterialState::Inactive,
+                        _ => return Err(DecodeError::BadValue),
+                    };
+                    let rect = UiRect { x: r.f32()?, y: r.f32()?, w: r.f32()?, h: r.f32()? };
+                    let radius = r.f32()?;
+                    if ![rect.x, rect.y, rect.w, rect.h, radius].iter().all(|v| v.is_finite()) || rect.w < 0. || rect.h < 0. || radius < 0. {
+                        return Err(DecodeError::BadValue);
+                    }
+                    list.push(Material { kind, rect, radius, state });
+                }
+                ToShell::Materials(list)
+            }
+            t @ 0x140..=0x14f => rich::decode_shell(t, &mut r)?,
+            t @ 0x1b0..=0x1bf => extras::decode_shell(t, &mut r)?,
+            t @ 0x1c0..=0x1cf => quicksearch::decode_shell(t, &mut r)?,
+            t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
+            t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
+            t => return Err(DecodeError::UnknownTag(t)),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keychain_messages_round_trip() {
+        let add = |v| KeychainOp::Add { service: "svc".into(), account: "me".into(), value: v };
+        for m in [
+            ToShell::Keychain { request: 1, op: add(vec![1, 2, 3]) },
+            ToShell::Keychain { request: 2, op: KeychainOp::Get { service: "s".into(), account: "a".into() } },
+            ToShell::Keychain { request: 3, op: KeychainOp::Update { service: "s".into(), account: "a".into(), value: vec![] } },
+            ToShell::Keychain { request: 4, op: KeychainOp::Delete { service: "s".into(), account: "a".into() } },
+        ] {
+            assert_eq!(ToShell::decode(&m.encode()).unwrap(), m);
+        }
+        let r = ToApp::KeychainReply { request: 9, status: KeychainStatus::Duplicate, value: vec![7; 5] };
+        assert_eq!(ToApp::decode(&r.encode()).unwrap(), r);
+        let big = ToShell::Keychain { request: 1, op: add(vec![0; MAX_KEYCHAIN_VALUE + 100]) };
+        let Ok(ToShell::Keychain { op: KeychainOp::Add { value, .. }, .. }) = ToShell::decode(&big.encode()) else { panic!("decodes") };
+        assert_eq!(value.len(), MAX_KEYCHAIN_VALUE + 1, "cut to one over the limit, which the store refuses");
+    }
+
+    #[test]
+    fn document_messages_round_trip_and_are_bounded() {
+        let g: GrantId = [7; 16];
+        for m in [
+            ToShell::DocOpen { request: 1, mode: DocMode::Write, title: "Open".into(), filters: vec!["public.text".into(), "md".into()] },
+            ToShell::DocOpenEx { request: 5, mode: DocMode::Read, title: "Choose".into(), filters: vec!["public.image".into()], options: docopt::MULTIPLE | docopt::DIRECTORIES | docopt::CREATE_DIRS },
+            ToShell::DocSave { request: 2, suggested_name: "notes.md".into(), filters: vec![] },
+            ToShell::DocCommit { request: 2 },
+            ToShell::DocAbort { request: 3 },
+            ToShell::DocReopen { request: 4, grant: g },
+            ToShell::DocRelease { grant: g },
+            ToShell::DocSaveGrant { request: 5, grant: g },
+        ] {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
+        }
+        for m in [
+            ToApp::DocGranted { request: 1, grant: g, mode: DocMode::Read, name: "a.txt".into(), size: 1 << 40 },
+            ToApp::DocError { request: 9, code: DocErrorCode::Stale },
+            ToApp::DocBatch { request: 5, count: 3 },
+        ] {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
+        }
+        // the encoder drops empty and oversized filters and keeps at most MAX_DOC_FILTERS; long titles are cut
+        let many: Vec<String> = (0..40).map(|i| format!("ext{i}")).chain(["".into(), "x".repeat(65)]).collect();
+        let ToShell::DocOpen { filters, title, .. } =
+            ToShell::decode(&ToShell::DocOpen { request: 0, mode: DocMode::Read, title: "t".repeat(1000), filters: many }.encode()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!((filters.len(), title.chars().count()), (MAX_DOC_FILTERS, MAX_DOC_TEXT));
+        // a hand-built packet that breaks the bounds is refused
+        let mut bad = Vec::new();
+        u32_(&mut bad, tag::DOC_OPEN);
+        u32_(&mut bad, 0);
+        bad.push(0);
+        str_(&mut bad, "t");
+        u32_(&mut bad, 17);
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+        let mut bad_mode = ToShell::DocOpen { request: 0, mode: DocMode::Read, title: String::new(), filters: vec![] }.encode();
+        bad_mode[8] = 2;
+        assert_eq!(ToShell::decode(&bad_mode), Err(DecodeError::BadValue));
+        let mut too_many = ToApp::DocBatch { request: 1, count: 1 }.encode();
+        too_many[8..12].copy_from_slice(&(MAX_DOC_BATCH + 1).to_le_bytes());
+        assert_eq!(ToApp::decode(&too_many), Err(DecodeError::BadValue));
+        let mut bad_code = ToApp::DocError { request: 0, code: DocErrorCode::Denied }.encode();
+        bad_code[8] = 6;
+        assert_eq!(ToApp::decode(&bad_code), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&ToShell::DocRelease { grant: g }.encode()[..10]), Err(DecodeError::Truncated));
+    }
+
+    #[test]
+    fn chords_round_trip_as_codes_and_plain_codes_are_not_chords() {
+        let k = KeyInput::chord(49, CHORD_META | CHORD_SHIFT);
+        assert_eq!(k.as_chord(), Some((49, CHORD_META | CHORD_SHIFT)));
+        assert_eq!(KeyInput::Code(49).as_chord(), None, "a plain key is not a chord");
+        assert_eq!(KeyInput::Text("n".into()).as_chord(), None);
+        // a chord is an ordinary Code on the wire, so an SDK 1 app decodes it without error
+        let m = ToApp::Key(k.clone()).encode();
+        assert_eq!(ToApp::decode(&m).unwrap(), ToApp::Key(k));
+    }
+
+    #[test]
+    fn controls_are_bounded_and_invalid_commands_rejected() {
+        let nodes=(0..200).map(|id|Node{id,role:Role::Button,label:"x".repeat(200),value:"y".repeat(200),bounds:UiRect{x:0.,y:0.,w:44.,h:44.},enabled:true}).collect();
+        let packet=ToShell::Controls(nodes).encode();assert!(packet.len()<=MAX_PACKET);
+        let ToShell::Controls(decoded)=ToShell::decode(&packet).unwrap() else{panic!("wrong message")};assert!(!decoded.is_empty());assert!(decoded.len()<200);
+        let mut packet=ToApp::Command(Command::Cut).encode();packet[4..8].copy_from_slice(&99u32.to_le_bytes());assert_eq!(ToApp::decode(&packet),Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn semantic_control_roles_round_trip_with_stable_wire_values() {
+        let roles = [Role::Button, Role::TextField, Role::List, Role::Row, Role::Toggle,
+            Role::Checkbox, Role::Slider, Role::SegmentedControl, Role::StaticText,
+            Role::MenuItem, Role::Window, Role::ProgressIndicator];
+        for (i, role) in roles.into_iter().enumerate() {
+            assert_eq!(role as u32, i as u32, "append-only role wire value");
+            let node = Node { id: i as u64, role, label: format!("role-{i}"), value: String::new(),
+                bounds: UiRect { x: 0., y: 0., w: 40., h: 28. }, enabled: true };
+            assert_eq!(ToShell::decode(&ToShell::Controls(vec![node.clone()]).encode()),
+                Ok(ToShell::Controls(vec![node])));
+        }
+        let node = Node { id: 0, role: Role::Button, label: String::new(), value: String::new(),
+            bounds: UiRect { x: 0., y: 0., w: 1., h: 1. }, enabled: true };
+        let mut invalid = ToShell::Controls(vec![node]).encode();
+        invalid[16..20].copy_from_slice(&99u32.to_le_bytes());
+        assert_eq!(ToShell::decode(&invalid), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn to_app_round_trips() {
+        let cfg = Configure { w: 1200, h: 1920, scale: 1.5625, safe_top: 24.0, safe_bottom: 20.0, dark: true, text_scale: 1.1, reduce_motion: false };
+        let all = vec![
+            ToApp::Configure(cfg),
+            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 10.5, y: -2.0, t_ms: 123456 },
+            ToApp::Touch { kind: TouchKind::Cancel, id: 0, x: 0.0, y: 0.0, t_ms: 0 },
+            ToApp::Key(KeyInput::Text("héllo ✓".into())),
+            ToApp::Key(KeyInput::Code(66)),
+            ToApp::Release { buf: 1 },
+            ToApp::Command(Command::Paste),
+            ToApp::KeyboardConfig(KeyboardConfig::default()),
+            ToApp::KeyboardConfig(KeyboardConfig { layout: KeyboardLayout::Floating, return_key: ReturnKey::Send, flags: kbflags::PREDICTIVE | kbflags::SHOWN, languages: 3, language: 1 }),
+            ToApp::Activate(u64::MAX),
+            ToApp::Resume,
+            ToApp::Suspend,
+            ToApp::Quit,
+            ToApp::Open { url: "https://x.is/?a=1".into() },
+            ToApp::Clipboard { text: String::new() },
+            ToApp::Appearance { flags: appearance::INCREASE_CONTRAST | appearance::SHOW_BORDERS | 0x8000_0000 },
+        ];
+        for m in all {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn to_shell_round_trips() {
+        let all = vec![
+            ToShell::Hello { sdk_version: SDK_VERSION, app_id: "is.olibuijr.calculator".into() },
+            ToShell::Buffers { w: 1200, h: 1920 },
+            ToShell::Frame { buf: 1, damage: vec![[0, 0, 1200, 1920], [5, 6, 7, 8]] },
+            ToShell::Frame { buf: 0, damage: vec![] },
+            ToShell::WantsKeyboard { on: true },
+            ToShell::KeyboardOut(KeyboardOut::Text("é😀".into())),
+            ToShell::KeyboardOut(KeyboardOut::Backspace),
+            ToShell::KeyboardOut(KeyboardOut::Enter),
+            ToShell::KeyboardOut(KeyboardOut::Hide),
+            ToShell::KeyboardOut(KeyboardOut::Named("Escape".into())),
+            ToShell::KeyboardOut(KeyboardOut::Height(824)),
+            ToShell::KeyboardOut(KeyboardOut::Click(2)),
+            ToShell::KeyboardOut(KeyboardOut::Language(1)),
+            ToShell::Commands(Commands(15)),
+            ToShell::Controls(vec![Node{id:u64::MAX,role:Role::TextField,label:"Search".into(),value:"café".into(),bounds:UiRect{x:1.,y:2.,w:100.,h:44.},enabled:true}]),
+            ToShell::RemoteSharing{on:true},
+            ToShell::RemoteSharing{on:false},
+            ToShell::Haptic,
+            ToShell::SetBadge { label: "12".into() },
+            ToShell::SetBadge { label: String::new() },
+            ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState },
+                Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active }]),
+            ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive }).collect()),
+            ToShell::Materials(vec![]),
+            ToShell::OpenUrl { url: "https://bifrost.olibuijr.com".into() },
+            ToShell::Notify { title: "T".into(), body: "B ü".into() },
+            ToShell::Log { text: "hi".into() },
+            ToShell::SetClipboard { text: "1,5".into() },
+        ];
+        for m in all {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn exact_layout() {
+        assert_eq!(ToApp::Release { buf: 1 }.encode(), [4, 0, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(ToShell::Haptic.encode(), [5, 1, 0, 0]);
+        assert_eq!(ToApp::Key(KeyInput::Code(7)).encode(), [3, 0, 0, 0, 1, 7, 0, 0, 0]);
+    }
+
+    #[test]
+    fn rejects_bad_input() {
+        assert_eq!(ToApp::decode(&[]), Err(DecodeError::Truncated));
+        assert_eq!(ToApp::decode(&[99, 0, 0, 0]), Err(DecodeError::UnknownTag(99)));
+        assert_eq!(ToApp::decode(&[4, 0, 0, 0, 1]), Err(DecodeError::Truncated));
+        assert_eq!(ToApp::decode(&[8, 0, 0, 0, 2, 0, 0, 0, 0xff, 0xfe]), Err(DecodeError::BadUtf8));
+        assert_eq!(ToShell::decode(&[0x03, 1, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff]), Err(DecodeError::BadValue));
+        // keyboard enums reject unknown values and a truncated Text
+        assert_eq!(ToApp::decode(&[15, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
+        assert_eq!(ToApp::decode(&[15, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&[0x0f, 1, 0, 0, 99]), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&[0x0f, 1, 0, 0, 0, 5, 0, 0, 0]), Err(DecodeError::Truncated));
+        assert_eq!(ToApp::decode(&[2, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn long_text_is_clamped_on_a_char_boundary() {
+        let m = ToShell::Log { text: "é".repeat(MAX_PACKET) };
+        let b = m.encode();
+        assert!(b.len() <= MAX_PACKET);
+        assert!(matches!(ToShell::decode(&b), Ok(ToShell::Log { .. })));
+    }
+}
+
+#[cfg(test)]
+mod sys_tests {
+    use super::sys::*;
+    use super::*;
+
+    #[test]
+    fn packets_and_fds_cross_a_socketpair() {
+        let (a, b) = socketpair_pair().unwrap();
+        let shm = shm_create("test", 4096).unwrap();
+        let mut m1 = Map::new(&shm, 4096).unwrap();
+        m1.pixels_mut()[3] = 0xdead_beef;
+        a.send(&ToShell::Buffers { w: 32, h: 32 }.encode(), &[shm.0]).unwrap();
+        a.send(&ToShell::Haptic.encode(), &[]).unwrap();
+        let Recv::Packet(p, fds) = b.recv(true).unwrap() else { panic!() };
+        assert_eq!(ToShell::decode(&p), Ok(ToShell::Buffers { w: 32, h: 32 }));
+        assert_eq!(fds.len(), 1);
+        let m2 = Map::new(&fds[0], 4096).unwrap();
+        assert_eq!(m2.pixels()[3], 0xdead_beef, "the same memory");
+        let Recv::Packet(p, fds) = b.recv(false).unwrap() else { panic!() };
+        assert_eq!(ToShell::decode(&p), Ok(ToShell::Haptic));
+        assert!(fds.is_empty());
+        assert!(matches!(b.recv(false).unwrap(), Recv::Empty));
+        drop(a);
+        assert!(matches!(b.recv(false).unwrap(), Recv::Closed));
+    }
+}
+
+#[cfg(test)] mod desktop_context_tests {
+ use super::*;
+ #[test] fn context_roundtrip_and_limits(){let packet=ToShell::ContextMenu{x:12.,y:34.,items:vec![ContextItem{id:7,label:"Open".into(),enabled:true}]};assert_eq!(ToShell::decode(&packet.encode()),Ok(packet));for message in [ToApp::Context{x:12.,y:34.},ToApp::ContextAction(7)]{assert_eq!(ToApp::decode(&message.encode()),Ok(message));}let bad=ToShell::ContextMenu{x:f32::NAN,y:0.,items:vec![]};assert_eq!(ToShell::decode(&bad.encode()),Err(DecodeError::BadValue));let large=ToShell::ContextMenu{x:0.,y:0.,items:(0..100).map(|id|ContextItem{id,label:"x".repeat(10000),enabled:true}).collect()};let bytes=large.encode();assert!(bytes.len()<MAX_PACKET);let ToShell::ContextMenu{items,..}=ToShell::decode(&bytes).unwrap()else{panic!()};assert_eq!(items.len(),32);}
+    #[test]
+    fn app_menus_roundtrip_and_limits() {
+        let menus = vec![AppMenu { title: "Note".into(), items: vec![
+            AppMenuItem::new(1, "New Note").key("cmd+n"),
+            AppMenuItem::separator(),
+            AppMenuItem::new(2, "Pin").checked(true).enabled(false),
+            AppMenuItem::submenu("Sort By"),
+            AppMenuItem::new(3, "Name").depth(1),
+        ] }];
+        let packet = ToShell::AppMenus(menus);
+        assert_eq!(ToShell::decode(&packet.encode()), Ok(packet));
+        let ds = ToShell::DocumentState { title: "Untitled 2".into(), edited: true, represented: "a.txt".into() };
+        assert_eq!(ToShell::decode(&ds.encode()), Ok(ds));
+        let pb = ToShell::PasteboardSet { items: vec![("public.html".into(), b"<b>x</b>".to_vec())] };
+        assert_eq!(ToShell::decode(&pb.encode()), Ok(pb));
+        let pa = ToApp::Pasteboard { change_count: 3, items: vec![("public.png".into(), vec![1, 2, 3])] };
+        assert_eq!(ToApp::decode(&pa.encode()), Ok(pa));
+        assert_eq!(ToApp::decode(&ToApp::MenuAction(9).encode()), Ok(ToApp::MenuAction(9)));
+        assert_eq!(ToShell::decode(&ToShell::AppMenus(vec![]).encode()), Ok(ToShell::AppMenus(vec![])));
+        let many = ToShell::AppMenus((0..20).map(|_| AppMenu { title: "x".into(), items: (0..200).map(|i| AppMenuItem::new(i, &"t".repeat(1000))).collect() }).collect());
+        let bytes = many.encode();
+        assert!(bytes.len() < MAX_PACKET);
+        let ToShell::AppMenus(m) = ToShell::decode(&bytes).unwrap() else { panic!() };
+        assert!(!m.is_empty() && m.len() <= MAX_APP_MENUS);
+        assert_eq!((m[0].items.len(), m[0].items[0].title.chars().count()), (MAX_APP_MENU_ITEMS, MAX_APP_MENU_TITLE));
+    }
+}
+
+#[cfg(test)]
+mod ax_tree_tests {
+    use super::*;
+
+    #[test]
+    fn text_input_messages_round_trip() {
+        let to_app = [
+            ToApp::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 },
+            ToApp::SetMarkedText { text: String::new(), sel_start: 0, sel_len: 0 },
+            ToApp::UnmarkText { commit: true },
+            ToApp::UnmarkText { commit: false },
+            ToApp::DeleteSurrounding { before: 2, after: 1 },
+            ToApp::AccessoryAction(9),
+        ];
+        for m in to_app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
+        }
+        let to_shell = [
+            ToShell::TextState(TextState { text: "héllo wörld".into(), cursor: 3, anchor: 7, marked: Some((1, 3)) }),
+            ToShell::TextState(TextState::default()),
+            ToShell::CaretRect { x: 1.0, y: 2.0, w: 0.0, h: 18.0 },
+            ToShell::InputTraits(InputTraits { return_key: ReturnKeyType::Continue, content: TextContentKind::Email, flags: tiflags::AUTOCORRECT | tiflags::SECURE }),
+            ToShell::InputAccessory(vec![AccessoryItem { id: 1, label: "Done".into(), enabled: true }, AccessoryItem { id: 2, label: "Next".into(), enabled: false }]),
+            ToShell::InputAccessory(vec![]),
+            ToShell::SuddenTermination { enabled: true },
+            ToShell::SuddenTermination { enabled: false },
+            ToShell::Activity { options: 0x3 },
+            ToShell::Activity { options: 0 },
+        ];
+        for m in to_shell {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
+        }
+    }
+
+    #[test]
+    fn keyboard_preedit_round_trips_and_rejects_a_bad_selection() {
+        for o in [KeyboardOut::Preedit { text: "にほん".into(), sel_start: 3, sel_len: 3 }, KeyboardOut::Unmark { commit: true }] {
+            let m = ToShell::KeyboardOut(o);
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
+        }
+        let mut p = ToShell::KeyboardOut(KeyboardOut::Preedit { text: "é".into(), sel_start: 0, sel_len: 2 }).encode();
+        let n = p.len();
+        p[n - 4] = 1;
+        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn text_input_messages_reject_bad_values() {
+        // a selection that ends past the text
+        let mut p = ToApp::SetMarkedText { text: "ab".into(), sel_start: 0, sel_len: 2 }.encode();
+        let n = p.len();
+        p[n - 4] = 9;
+        assert_eq!(ToApp::decode(&p), Err(DecodeError::BadValue));
+        // a selection that cuts a character in half
+        let mut p = ToApp::SetMarkedText { text: "é".into(), sel_start: 0, sel_len: 2 }.encode();
+        let n = p.len();
+        p[n - 4] = 1;
+        assert_eq!(ToApp::decode(&p), Err(DecodeError::BadValue));
+        let mut p = ToShell::InputTraits(InputTraits::default()).encode();
+        p[4] = 99;
+        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&ToShell::CaretRect { x: f32::NAN, y: 0., w: 1., h: 1. }.encode()), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn text_state_window_is_cut_around_the_caret() {
+        let text = "é".repeat(MAX_SURROUNDING); // twice the limit in bytes
+        let cursor = MAX_SURROUNDING as u32; // a character boundary in the middle
+        let m = ToShell::TextState(TextState { text, cursor, anchor: cursor, marked: None });
+        let Ok(ToShell::TextState(t)) = ToShell::decode(&m.encode()) else { panic!("decode") };
+        assert!(t.text.len() <= MAX_SURROUNDING);
+        assert!(t.cursor as usize <= t.text.len());
+        assert_eq!(t.cursor, t.anchor);
+    }
+
+    #[test]
+    fn return_key_types_map_to_the_keyboard_labels() {
+        for v in 0..=11u8 {
+            let t = ReturnKeyType::from_wire(v).unwrap();
+            assert_eq!(t as u8, v);
+            let _ = t.basic();
+        }
+        assert_eq!(ReturnKeyType::from_wire(12), None);
+        assert_eq!(ReturnKeyType::Yahoo.basic(), ReturnKey::Search);
+        assert_eq!(ReturnKeyType::Continue.basic(), ReturnKey::Next);
+    }
+
+    #[test]
+    fn controls_tree_round_trips() {
+        let list = vec![
+            NodeExt { id: 1, parent: None, focused: false, checked: None },
+            NodeExt { id: u64::MAX, parent: Some(1 << 40), focused: true, checked: Some(true) },
+            NodeExt { id: 7, parent: Some(0), focused: false, checked: Some(false) },
+        ];
+        assert_eq!(ToShell::decode(&ToShell::ControlsTree(list.clone()).encode()), Ok(ToShell::ControlsTree(list)));
+    }
+
+    #[test]
+    fn controls_tree_rejects_unknown_flags_and_oversize() {
+        let mut p = ToShell::ControlsTree(vec![NodeExt { id: 1, parent: None, focused: false, checked: None }]).encode();
+        *p.last_mut().unwrap() = 0x80;
+        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+        let big = ToShell::ControlsTree(vec![NodeExt { id: 1, parent: None, focused: false, checked: None }; 300]).encode();
+        let Ok(ToShell::ControlsTree(l)) = ToShell::decode(&big) else { panic!("decode") };
+        assert_eq!(l.len(), MAX_NODE_EXT);
+    }
+
+    #[test]
+    fn ax_set_round_trips() {
+        for action in [AxAction::Press, AxAction::Focus, AxAction::SetValue("héllo".into())] {
+            let m = ToApp::AxSet { id: 0x1_0000_0002, action };
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
+        }
+        let mut bad = ToApp::AxSet { id: 1, action: AxAction::Press }.encode();
+        *bad.last_mut().unwrap() = 9;
+        assert_eq!(ToApp::decode(&bad), Err(DecodeError::BadValue));
+    }
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+
+    #[test]
+    fn every_material_kind_sits_at_its_wire_value() {
+        for (i, k) in MaterialKind::ALL.iter().enumerate() {
+            assert_eq!(*k as usize, i);
+        }
+    }
+
+    #[test]
+    fn an_older_apps_material_byte_decodes_with_the_default_state() {
+        let m = Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 0., y: 0., w: 10., h: 10. }, radius: 0., state: MaterialState::FollowsWindowActiveState };
+        let bytes = ToShell::Materials(vec![m]).encode();
+        // the kind byte of a state-less sender is the bare kind
+        assert!(bytes.windows(1).any(|b| b[0] == 1));
+        assert_eq!(ToShell::decode(&bytes), Ok(ToShell::Materials(vec![m])));
+    }
+
+    #[test]
+    fn legacy_kinds_are_the_two_an_older_shell_decodes() {
+        for k in MaterialKind::ALL {
+            assert!(matches!(k.legacy(), MaterialKind::Sidebar | MaterialKind::Titlebar));
+        }
+        assert_eq!(MaterialKind::Sidebar.legacy(), MaterialKind::Sidebar);
+    }
+
+    #[test]
+    fn an_unknown_kind_or_state_is_refused() {
+        let m = Material { kind: MaterialKind::Selection, rect: UiRect { x: 0., y: 0., w: 1., h: 1. }, radius: 0., state: MaterialState::Inactive };
+        let good = ToShell::Materials(vec![m]).encode();
+        let at = good.iter().position(|&b| b == (13 | 2 << 6)).unwrap();
+        for bad_byte in [14u8, 3 << 6] {
+            let mut bad = good.clone();
+            bad[at] = bad_byte;
+            assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+        }
+    }
+}

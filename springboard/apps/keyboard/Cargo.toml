@@ -1,0 +1,16 @@
+[package]
+name = "bifrost-keyboard"
+version = "1.1.0"
+edition = "2021"
+description = "BifrOSt on-screen keyboard (system app, provides = [\"keyboard\"])"
+
+[[bin]]
+name = "bifrost-keyboard"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

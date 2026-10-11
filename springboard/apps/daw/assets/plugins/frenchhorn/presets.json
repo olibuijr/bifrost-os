@@ -1,0 +1,88 @@
+[
+ {
+  "name": "Soft Pad",
+  "params": {
+   "attack": 4,
+   "release": 4,
+   "tone": 3000,
+   "velocity": 0.35,
+   "stereo": 0.35
+  },
+  "tags": [
+   "pad",
+   "slow"
+  ]
+ },
+ {
+  "name": "Expressive",
+  "params": {
+   "vibrato": 12,
+   "rate": 5,
+   "velocity": 0.85
+  },
+  "tags": [
+   "vibrato",
+   "lead"
+  ]
+ },
+ {
+  "name": "Staccato-ish",
+  "params": {
+   "attack": 0.3,
+   "release": 0.25,
+   "velocity": 0.9
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Dark",
+  "params": {
+   "tone": 1200,
+   "velocity": 0.5
+  },
+  "tags": [
+   "dark"
+  ]
+ },
+ {
+  "name": "Bright",
+  "params": {
+   "tone": 20000,
+   "velocity": 1
+  },
+  "tags": [
+   "bright",
+   "brassy"
+  ]
+ },
+ {
+  "name": "Legato Solo",
+  "params": {
+   "glide": 0.04,
+   "legato": 1,
+   "vibrato": 14,
+   "human": 0.15,
+   "velocity": 0.85
+  },
+  "tags": [
+   "legato",
+   "solo",
+   "lead"
+  ]
+ },
+ {
+  "name": "Film Swell",
+  "params": {
+   "attack": 3,
+   "release": 2,
+   "bright": 0.9,
+   "keytrack": 0.3
+  },
+  "tags": [
+   "film",
+   "swell"
+  ]
+ }
+]

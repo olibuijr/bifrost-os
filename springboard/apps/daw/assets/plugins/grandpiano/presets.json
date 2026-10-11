@@ -1,0 +1,82 @@
+[
+ {
+  "name": "Concert",
+  "params": {
+   "velcurve": 1.6,
+   "bright": 0.6,
+   "keytrack": 0.2,
+   "human": 0.15
+  },
+  "tags": [
+   "classical",
+   "natural"
+  ]
+ },
+ {
+  "name": "Pedal Ballad",
+  "params": {
+   "pedal": 1,
+   "velcurve": 1.3,
+   "release": 1.5,
+   "human": 0.25,
+   "stereo": 0.1
+  },
+  "tags": [
+   "ballad",
+   "pedal",
+   "legato"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Felt Lo-fi",
+  "params": {
+   "tone": 2500,
+   "bright": 0.7,
+   "human": 0.3,
+   "velcurve": 1.2,
+   "release": 1.3
+  },
+  "tags": [
+   "lofi",
+   "soft",
+   "dark"
+  ]
+ },
+ {
+  "name": "Hip-hop Chop",
+  "params": {
+   "release": 0.3,
+   "tone": 6000,
+   "velocity": 0.5,
+   "human": 0.1
+  },
+  "tags": [
+   "hiphop",
+   "short",
+   "chop"
+  ]
+ },
+ {
+  "name": "Bright Pop",
+  "params": {
+   "tone": 20000,
+   "velcurve": 1.1,
+   "bright": 0.3,
+   "keytrack": 0.4
+  },
+  "tags": [
+   "pop",
+   "bright"
+  ]
+ }
+]

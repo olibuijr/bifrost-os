@@ -1,0 +1,413 @@
+{
+ "id": "vibes",
+ "name": "Vibraphone",
+ "desc": "Vibraphone (motor off), 4 velocity layers: soft yarn mallets (pp/mp) and hard mallets (mf/f), long natural ring. Range F3-F6 (MIDI 53-89, playable C3-G6). Jazz, lounge, lo-fi hip-hop hooks, bossa, chillhop, film; comping chords and melodies.",
+ "family": "mallets",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VCSL/tree/master/Idiophones/Struck%20Idiophones/Vibraphone",
+ "attribution": "Versilian Community Sample Library (VCSL) by Versilian Studios / Sam Gossner, CC0 1.0",
+ "attack": 0.002,
+ "release": 0.6,
+ "range": [
+  48,
+  91
+ ],
+ "zones": [
+  {
+   "file": "F3_pp.ogg",
+   "root": 53,
+   "lo": 48,
+   "hi": 55,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "F3_mp.ogg",
+   "root": 53,
+   "lo": 48,
+   "hi": 55,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "F3_mf.ogg",
+   "root": 53,
+   "lo": 48,
+   "hi": 55,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "F3_f.ogg",
+   "root": 53,
+   "lo": 48,
+   "hi": 55,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "A3_pp.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "A3_mp.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "A3_mf.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "A3_f.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C4_pp.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "C4_mp.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "C4_mf.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "C4_f.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E4_pp.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "E4_mp.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "E4_mf.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "E4_f.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G4_pp.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "G4_mp.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "G4_mf.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "G4_f.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "B4_pp.ogg",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "B4_mp.ogg",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "B4_mf.ogg",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "B4_f.ogg",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "D5_pp.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "D5_mp.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "D5_mf.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "D5_f.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "F5_pp.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "F5_mp.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "F5_mf.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "F5_f.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "A5_pp.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "A5_mp.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "A5_mf.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "A5_f.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 82,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C6_pp.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "C6_mp.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "C6_mf.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "C6_f.ogg",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E6_pp.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 91,
+   "vlo": 0.0,
+   "vhi": 0.3,
+   "gain": 1.689
+  },
+  {
+   "file": "E6_mp.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 91,
+   "vlo": 0.3,
+   "vhi": 0.55,
+   "gain": 0.483
+  },
+  {
+   "file": "E6_mf.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 91,
+   "vlo": 0.55,
+   "vhi": 0.8,
+   "gain": 1.708
+  },
+  {
+   "file": "E6_f.ogg",
+   "root": 88,
+   "lo": 87,
+   "hi": 91,
+   "vlo": 0.8,
+   "vhi": 1.0,
+   "gain": 1.0
+  }
+ ]
+}

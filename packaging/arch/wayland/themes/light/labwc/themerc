@@ -1,0 +1,23 @@
+# BifrOSt labwc theme, light variant. The shell copies the matching variant into
+# ~/.local/share/themes/BifrOSt/labwc/ when the system appearance changes.
+border.width: 1
+padding.width: 0
+padding.height: 0
+window.titlebar.padding.width: 10
+window.titlebar.padding.height: 8
+window.button.width: 20
+window.button.height: 20
+window.button.spacing: 4
+window.label.text.justify: center
+window.active.border.color: #C8C8C8
+window.inactive.border.color: #C8C8C8
+window.active.title.bg.color: #ECECEC
+window.inactive.title.bg.color: #F6F6F6
+window.active.label.text.color: #000000
+window.inactive.label.text.color: #8A8A8A
+window.active.button.unpressed.image.color: #000000
+window.inactive.button.unpressed.image.color: #8A8A8A
+menu.items.bg.color: #ECECEC
+menu.items.text.color: #000000
+menu.items.active.bg.color: #0A60FF
+menu.items.active.text.color: #FFFFFF

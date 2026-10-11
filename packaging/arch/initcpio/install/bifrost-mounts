@@ -1,0 +1,8 @@
+#!/bin/bash
+build() {
+    add_runscript
+    add_module vfat
+}
+help() {
+    echo "Mounts the BifrOSt fstab subvolumes and the ESP before switch_root, so systemd starts with them in place."
+}

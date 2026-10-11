@@ -1,0 +1,73 @@
+[
+ {
+  "name": "Sweet Soul",
+  "params": {
+   "velocity": 0.6,
+   "tone": 6000,
+   "release": 1.2
+  },
+  "tags": [
+   "soft",
+   "soul"
+  ]
+ },
+ {
+  "name": "Gritty",
+  "params": {
+   "velocity": 1.0
+  },
+  "tags": [
+   "bark",
+   "rock"
+  ]
+ },
+ {
+  "name": "Lo-fi Dusty",
+  "params": {
+   "tone": 2200,
+   "detune": 10,
+   "velocity": 0.45,
+   "release": 1.5
+  },
+  "tags": [
+   "lo-fi",
+   "dark"
+  ]
+ },
+ {
+  "name": "Vibrato Amp",
+  "params": {
+   "vibrato": 12,
+   "rate": 5.5,
+   "stereo": 0.3
+  },
+  "tags": [
+   "vibrato",
+   "vintage"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1,
+   "human": 0.25
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Motown Comp",
+  "params": {
+   "release": 0.6,
+   "human": 0.3,
+   "velcurve": 1.2
+  },
+  "tags": [
+   "soul",
+   "comp",
+   "short"
+  ]
+ }
+]

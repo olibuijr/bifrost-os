@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check for upstream app releases
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

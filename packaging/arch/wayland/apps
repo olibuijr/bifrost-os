@@ -1,0 +1,45 @@
+#!/usr/bin/python3
+"""Launch installed desktop apps as the local account, never as root."""
+import json, os, re, socket, subprocess, sys
+from pathlib import Path
+runtime = Path('/run/bifrost/user')
+account = dict(line.split('=',1) for line in Path('/var/lib/springboard/account').read_text().splitlines() if '=' in line).get('username','')
+if not re.fullmatch(r'[a-z_][a-z0-9_-]*',account):
+    sys.exit('BifrOSt local account unavailable')
+try:
+    session = json.loads((runtime / 'session.json').read_text())
+except (OSError, ValueError):
+    sys.exit('The Wayland session is not ready')
+allowed = {'XDG_RUNTIME_DIR','WAYLAND_DISPLAY','DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_TYPE','MOZ_ENABLE_WAYLAND','QT_QPA_PLATFORM','GDK_BACKEND','XCURSOR_THEME','XCURSOR_SIZE'}
+env = [f'{k}={v}' for k,v in session.items() if k in allowed and isinstance(v,str)]
+if sys.argv[1:] == ["--screenshot"]:
+    cmd = ["grim","-"]
+elif len(sys.argv) == 3 and sys.argv[1] == "--open":
+    path = Path(sys.argv[2])
+    if not path.is_absolute() or not (path.is_file() or path.is_dir()):
+        sys.exit('Expected an existing absolute file or folder path')
+    if path.is_dir():
+        # Show in Files: the shell opens the Files app at this folder (control request, 512 bytes max)
+        request = f'open-folder is.olibuijr.files.desktop {path}\n'.encode()
+        if len(request) > 511 or '\n' in str(path):
+            sys.exit('Folder path is too long')
+        with socket.create_connection(('127.0.0.1',7777),5) as client:
+            client.settimeout(5);client.sendall(request);response=client.recv(4096).decode()
+        if not response.startswith('ok'):sys.exit(response.strip())
+        sys.exit(0)
+    cmd = ['gio','open',str(path)]
+elif len(sys.argv) == 1:
+    env.append('XDG_DATA_DIRS=/run/bifrost/user/share:/usr/local/share:/usr/share')
+    cmd = ['fuzzel','--prompt','Applications: ']
+else:
+    app = sys.argv[1].removesuffix('.desktop')
+    if len(sys.argv) != 2 or not re.fullmatch(r'[A-Za-z0-9_.-]+',app):
+        sys.exit('Expected one desktop app ID, for example firefox')
+    path = Path('/usr/share/applications') / (app+'.desktop')
+    if not path.is_file(): sys.exit(f'Application not installed: {app}')
+    cmd = ['gio','launch',str(path)]
+if os.geteuid() == 0:
+    cmd = ['runuser','-u',account,'--','env',*env,*cmd]
+else:
+    os.environ.update({k:v for k,v in session.items() if k in allowed})
+os.execvp(cmd[0],cmd)

@@ -1,0 +1,23 @@
+{
+  "id": "autofilter",
+  "name": "Auto Filter",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "autofilter",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Tempo-synced LFO filter sweep; rate = LFO period in 16th steps, depth in octaves",
+  "category": "filter",
+  "tags": [
+    "filter",
+    "lfo",
+    "sweep",
+    "wah",
+    "modulation"
+  ],
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ]
+}

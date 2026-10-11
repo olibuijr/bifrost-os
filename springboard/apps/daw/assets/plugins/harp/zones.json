@@ -1,0 +1,202 @@
+{
+ "id": "harp",
+ "name": "Harp",
+ "desc": "Concert harp, plucked mf, natural ringing decay (no sustain). Range C1-G7. Arpeggios, glissandi-style runs, sparkling ostinatos, gentle chords.",
+ "family": "plucked",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Strings/Harp",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.001,
+ "release": 0.6,
+ "range": [
+  24,
+  103
+ ],
+ "rrNeighbor": true,
+ "zones": [
+  {
+   "file": "harp_E1_mf.ogg",
+   "root": 28,
+   "lo": 24,
+   "hi": 29,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 17
+  },
+  {
+   "file": "harp_G1_mf.ogg",
+   "root": 31,
+   "lo": 30,
+   "hi": 33,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 21
+  },
+  {
+   "file": "harp_B1_mf.ogg",
+   "root": 35,
+   "lo": 34,
+   "hi": 36,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 14
+  },
+  {
+   "file": "harp_D2_mf.ogg",
+   "root": 38,
+   "lo": 37,
+   "hi": 39,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 5
+  },
+  {
+   "file": "harp_F2_mf.ogg",
+   "root": 41,
+   "lo": 40,
+   "hi": 43,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 7
+  },
+  {
+   "file": "harp_A2_mf.ogg",
+   "root": 45,
+   "lo": 44,
+   "hi": 46,
+   "vlo": 0.0,
+   "vhi": 1
+  },
+  {
+   "file": "harp_C3_mf.ogg",
+   "root": 48,
+   "lo": 47,
+   "hi": 50,
+   "vlo": 0.0,
+   "vhi": 1
+  },
+  {
+   "file": "harp_E3_mf.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0.0,
+   "vhi": 1
+  },
+  {
+   "file": "harp_G3_mf.ogg",
+   "root": 55,
+   "lo": 54,
+   "hi": 57,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 8
+  },
+  {
+   "file": "harp_B3_mf.ogg",
+   "root": 59,
+   "lo": 58,
+   "hi": 60,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 14
+  },
+  {
+   "file": "harp_D4_mf.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 13
+  },
+  {
+   "file": "harp_F4_mf.ogg",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 1
+  },
+  {
+   "file": "harp_A4_mf.ogg",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 9
+  },
+  {
+   "file": "harp_C5_mf.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 10
+  },
+  {
+   "file": "harp_E5_mf.ogg",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 11
+  },
+  {
+   "file": "harp_G5_mf.ogg",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 6
+  },
+  {
+   "file": "harp_B5_mf.ogg",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 8
+  },
+  {
+   "file": "harp_D6_mf.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 6
+  },
+  {
+   "file": "harp_F6_mf.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 5
+  },
+  {
+   "file": "harp_A6_mf.ogg",
+   "root": 93,
+   "lo": 92,
+   "hi": 95,
+   "vlo": 0.0,
+   "vhi": 1,
+   "tune": 16
+  },
+  {
+   "file": "harp_D7_mf.ogg",
+   "root": 98,
+   "lo": 96,
+   "hi": 103,
+   "vlo": 0.0,
+   "vhi": 1
+  }
+ ]
+}

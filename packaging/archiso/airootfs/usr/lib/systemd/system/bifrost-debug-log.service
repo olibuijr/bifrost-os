@@ -1,0 +1,17 @@
+[Unit]
+Description=Stream the journal to the lab host (debug builds only)
+ConditionPathExists=/etc/bifrost/debug
+# as early as the network exists: before the rest of the system is up, so a stall later in boot still leaves a trace
+DefaultDependencies=no
+After=systemd-journald.service systemd-networkd.service systemd-udevd.service
+Wants=systemd-networkd.service
+Before=sysinit.target
+
+[Service]
+ExecStart=/usr/local/bin/bifrost-debug-log
+Restart=always
+RestartSec=1
+Nice=-5
+
+[Install]
+WantedBy=sysinit.target

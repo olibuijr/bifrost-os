@@ -1,0 +1,13 @@
+[package]
+name = "updated"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt update agent (is.olibuijr.update): background OS and app update checks, system package installs and the OS download"
+
+[dependencies]
+bifrost-proto = { path = "../proto" }
+springboard = { path = ".." }
+
+[[bin]]
+name = "updated"
+path = "src/main.rs"

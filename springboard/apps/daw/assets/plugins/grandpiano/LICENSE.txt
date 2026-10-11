@@ -1,0 +1,6 @@
+Salamander Grand Piano V3
+Author: Alexander Holm (axeldenstore at gmail dot com)
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+
+Attribution required. Changes made: 4 of 16 velocity layers selected (v4, v8, v12, v15), onset trimmed, shortened with fade-out, re-encoded to Ogg Vorbis q4; per-layer gain in zones.json.

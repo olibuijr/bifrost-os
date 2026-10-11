@@ -1,0 +1,13 @@
+[package]
+name = "audiod"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt audio service (is.olibuijr.audio): speaker playback and microphone capture behind a socket"
+
+[dependencies]
+bifrost-proto = { path = "../proto" }
+springboard = { path = ".." }
+
+[[bin]]
+name = "audiod"
+path = "src/main.rs"

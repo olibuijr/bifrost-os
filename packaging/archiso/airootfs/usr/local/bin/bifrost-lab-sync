@@ -1,0 +1,24 @@
+#!/bin/bash
+# Lab builds only: before the installer starts, pull the newest installer binary and assets from the lab host, so
+# installer changes need no ISO rebuild. Silent no-op when the host is unreachable (the image's own copy is used).
+H=${BIFROST_SYNC_HOST:-10.99.0.1:8078}
+for _ in 1 2; do curl -fsS --max-time 1 "http://$H/manifest" -o /run/bifrost-sync.manifest 2>/dev/null && break; sleep 0.5; done
+[ -s /run/bifrost-sync.manifest ] || { echo "bifrost-lab-sync: $H unreachable, using the image's installer"; exit 0; }
+changed=0
+fetch() {
+  curl -fsS --max-time 60 -o "$2.new" "http://$H/$1" || return 1
+  if cmp -s "$2.new" "$2"; then rm -f "$2.new"; return 0; fi
+  mv -f "$2.new" "$2" && echo "bifrost-lab-sync: updated $2" || return 1
+  # only what the running installer is made of warrants restarting it
+  case $2 in /usr/bin/bifrost-installer|/usr/lib/systemd/system/bifrost-installer.service|/usr/share/bifrost/installer/*) changed=1 ;; esac
+}
+while read -r name dest mode; do
+  [ -n "$name" ] || continue
+  mkdir -p "$(dirname "$dest")"
+  fetch "$name" "$dest" && chmod "${mode:-644}" "$dest"
+done < /run/bifrost-sync.manifest
+
+systemctl daemon-reload
+# the installer started without waiting for the network; restart it only when something it runs changed
+[ "$changed" = 1 ] && systemctl try-restart bifrost-installer.service
+exit 0

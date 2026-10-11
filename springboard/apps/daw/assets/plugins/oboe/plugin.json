@@ -1,0 +1,50 @@
+{
+ "id": "oboe",
+ "name": "Oboe",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "oboe",
+ "author": "Versilian Studios (samples); DAW build script",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "desc": "Oboe, sustained non-vibrato, 2 dynamics. Nasal, plaintive, cutting. Range Bb3-G6. Solo melodies, pastoral themes, doubling strings. | Playable MIDI 58-91 (A#3-G6), 2 velocity layers crossfaded. Params: human 0-1 (timing/level/pitch life), velcurve (velocity response), keytrack/bright (tone follows pitch/velocity). Legato melody: overlap consecutive notes by ~30 ms (next note starts before the previous ends) with glide 0.03-0.06; wide leaps crossfade naturally (legato=1), legato=0 = pure slide.",
+ "family": "woodwind",
+ "entry": "index.js",
+ "files": [
+  "LICENSE.txt",
+  "README.md",
+  "index.js",
+  "oboe_As2_v1.ogg",
+  "oboe_As2_v2.ogg",
+  "oboe_As3_v1.ogg",
+  "oboe_As3_v2.ogg",
+  "oboe_As4_v1.ogg",
+  "oboe_As4_v2.ogg",
+  "oboe_D3_v1.ogg",
+  "oboe_D3_v2.ogg",
+  "oboe_D4_v1.ogg",
+  "oboe_D4_v2.ogg",
+  "oboe_D5_v1.ogg",
+  "oboe_D5_v2.ogg",
+  "oboe_F3_v1.ogg",
+  "oboe_F3_v2.ogg",
+  "oboe_F4_v1.ogg",
+  "oboe_F4_v2.ogg",
+  "oboe_F5_v1.ogg",
+  "oboe_F5_v2.ogg",
+  "zones.json",
+  "presets.json"
+ ],
+ "tags": [
+  "oboe",
+  "woodwind",
+  "orchestral",
+  "sustain"
+ ],
+ "legato": true,
+ "defaults": {
+  "human": 0.15,
+  "glide": 0.04
+ }
+}

@@ -1,0 +1,196 @@
+{
+ "id": "glock",
+ "name": "Glockenspiel",
+ "desc": "Orchestral glockenspiel (metal bars), 3 velocity layers soft/medium/loud, sparkling bell tone with natural ring. Sounds G5-C8 (MIDI 79-108, playable C5-C8). Doubling melodies an octave up, bell hooks, lo-fi/hip-hop and pop sparkle, Christmas/film/cinematic.",
+ "family": "mallets",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VCSL/tree/master/Idiophones/Struck%20Idiophones/Glockenspiel",
+ "attribution": "Versilian Community Sample Library (VCSL) by Versilian Studios / Sam Gossner, CC0 1.0",
+ "attack": 0.001,
+ "release": 0.5,
+ "range": [
+  72,
+  108
+ ],
+ "zones": [
+  {
+   "file": "G5_p.ogg",
+   "root": 79,
+   "lo": 72,
+   "hi": 81,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -8
+  },
+  {
+   "file": "G5_mf.ogg",
+   "root": 79,
+   "lo": 72,
+   "hi": 81,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -8
+  },
+  {
+   "file": "G5_f.ogg",
+   "root": 79,
+   "lo": 72,
+   "hi": 81,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C6_p.ogg",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -12
+  },
+  {
+   "file": "C6_mf.ogg",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -12
+  },
+  {
+   "file": "C6_f.ogg",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0,
+   "tune": -12
+  },
+  {
+   "file": "G6_p.ogg",
+   "root": 91,
+   "lo": 88,
+   "hi": 93,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -12
+  },
+  {
+   "file": "G6_mf.ogg",
+   "root": 91,
+   "lo": 88,
+   "hi": 93,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -12
+  },
+  {
+   "file": "G6_f.ogg",
+   "root": 91,
+   "lo": 88,
+   "hi": 93,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0,
+   "tune": -12
+  },
+  {
+   "file": "C7_p.ogg",
+   "root": 96,
+   "lo": 94,
+   "hi": 99,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -16
+  },
+  {
+   "file": "C7_mf.ogg",
+   "root": 96,
+   "lo": 94,
+   "hi": 99,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -15
+  },
+  {
+   "file": "C7_f.ogg",
+   "root": 96,
+   "lo": 94,
+   "hi": 100,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0,
+   "tune": -15
+  },
+  {
+   "file": "G7_p.ogg",
+   "root": 103,
+   "lo": 100,
+   "hi": 105,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -16
+  },
+  {
+   "file": "G7_mf.ogg",
+   "root": 103,
+   "lo": 100,
+   "hi": 105,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -16
+  },
+  {
+   "file": "Gs7_f.ogg",
+   "root": 104,
+   "lo": 101,
+   "hi": 106,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0,
+   "tune": -16
+  },
+  {
+   "file": "C8_p.ogg",
+   "root": 108,
+   "lo": 106,
+   "hi": 108,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 1.078,
+   "tune": -24
+  },
+  {
+   "file": "C8_mf.ogg",
+   "root": 108,
+   "lo": 106,
+   "hi": 108,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.911,
+   "tune": -24
+  },
+  {
+   "file": "C8_f.ogg",
+   "root": 108,
+   "lo": 107,
+   "hi": 108,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0,
+   "tune": -24
+  }
+ ]
+}

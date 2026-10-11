@@ -1,0 +1,13 @@
+[package]
+name = "netd"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt network service (is.olibuijr.net): Wi-Fi, DHCP and routes behind a socket"
+
+[dependencies]
+bifrost-proto = { path = "../proto" }
+springboard = { path = ".." }
+
+[[bin]]
+name = "netd"
+path = "src/main.rs"

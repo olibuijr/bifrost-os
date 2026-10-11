@@ -1,0 +1,64 @@
+[
+ {
+  "name": "Natural",
+  "params": {
+   "tune": 0,
+   "decay": 4,
+   "tone": 20000,
+   "gain": 0.85
+  },
+  "tags": [
+   "clean"
+  ]
+ },
+ {
+  "name": "Tight",
+  "params": {
+   "tune": 0,
+   "decay": 0.25,
+   "tone": 16000,
+   "gain": 0.85
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Pitched Down",
+  "params": {
+   "tune": -4,
+   "decay": 4,
+   "tone": 9000,
+   "gain": 0.9
+  },
+  "tags": [
+   "dark",
+   "boombap"
+  ]
+ },
+ {
+  "name": "Lo-Fi",
+  "params": {
+   "tune": -2,
+   "decay": 1.5,
+   "tone": 4500,
+   "gain": 0.9
+  },
+  "tags": [
+   "lofi"
+  ]
+ },
+ {
+  "name": "Crisp Up",
+  "params": {
+   "tune": 3,
+   "decay": 0.8,
+   "tone": 20000,
+   "gain": 0.8
+  },
+  "tags": [
+   "bright",
+   "drill"
+  ]
+ }
+]

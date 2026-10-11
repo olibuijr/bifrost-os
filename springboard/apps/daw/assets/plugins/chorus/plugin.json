@@ -1,0 +1,17 @@
+{
+  "id": "chorus",
+  "name": "Chorus",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "chorus",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Stereo chorus; widens and thickens pads, guitars, vocals",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

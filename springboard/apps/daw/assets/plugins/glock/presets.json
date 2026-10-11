@@ -1,0 +1,74 @@
+[
+ {
+  "name": "Music Box",
+  "params": {
+   "velocity": 0.4,
+   "tone": 7000,
+   "release": 1.5,
+   "stereo": 0.2
+  },
+  "tags": [
+   "music box",
+   "soft",
+   "lo-fi"
+  ]
+ },
+ {
+  "name": "Bright Bells",
+  "params": {
+   "velocity": 0.9,
+   "release": 2
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Lo-fi Bells",
+  "params": {
+   "tone": 3500,
+   "detune": 10,
+   "velocity": 0.4
+  },
+  "tags": [
+   "lo-fi",
+   "dark"
+  ]
+ },
+ {
+  "name": "Soft Mallet",
+  "params": {
+   "tone": 6000,
+   "velcurve": 1.2,
+   "human": 0.2
+  },
+  "tags": [
+   "soft"
+  ]
+ },
+ {
+  "name": "Pop Sparkle",
+  "params": {
+   "bright": 0.8,
+   "keytrack": 0.3,
+   "human": 0.15,
+   "stereo": 0.3
+  },
+  "tags": [
+   "pop",
+   "bright"
+  ]
+ },
+ {
+  "name": "Christmas",
+  "params": {
+   "release": 1.5,
+   "stereo": 0.25,
+   "human": 0.2
+  },
+  "tags": [
+   "christmas",
+   "film"
+  ]
+ }
+]

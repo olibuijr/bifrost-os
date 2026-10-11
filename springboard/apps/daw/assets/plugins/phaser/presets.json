@@ -1,0 +1,42 @@
+[
+ {
+  "name": "Slow Sweep",
+  "params": {
+   "rate": 0.2,
+   "depth": 0.8,
+   "freq": 700,
+   "feedback": 0.5,
+   "mix": 0.5
+  }
+ },
+ {
+  "name": "Jet",
+  "params": {
+   "rate": 0.1,
+   "depth": 1,
+   "freq": 1200,
+   "feedback": 0.85,
+   "mix": 0.6
+  }
+ },
+ {
+  "name": "Swirl",
+  "params": {
+   "rate": 2,
+   "depth": 0.6,
+   "freq": 900,
+   "feedback": 0.4,
+   "mix": 0.5
+  }
+ },
+ {
+  "name": "Subtle",
+  "params": {
+   "rate": 0.4,
+   "depth": 0.4,
+   "freq": 600,
+   "feedback": 0.3,
+   "mix": 0.3
+  }
+ }
+]

@@ -1,0 +1,193 @@
+{
+ "id": "choir",
+ "name": "Choir Aahs",
+ "desc": "Mixed choir singing \"aah\", sustained and looped, stereo, MIDI 36-84. Pads, hymns, cinematic swells, soft vocal harmony under melodies; hold long notes.",
+ "family": "voice",
+ "license": "MIT",
+ "source": "FluidR3_GM.sf2 \"Ahh Choir\" (bank 0, program 52), Debian package fluid-soundfont-gm 3.1-6 (http://deb.debian.org/debian/pool/main/f/fluid-soundfont/)",
+ "attribution": "Choir samples from the Fluid R3 GM SoundFont by Frank Wen (2000-2002, 2008) and Toby Smithe (2008), MIT license.",
+ "attack": 0.18,
+ "release": 0.6,
+ "range": [
+  36,
+  84
+ ],
+ "releaseTail": true,
+ "autoLoop": true,
+ "minLoop": 0.05,
+ "zones": [
+  {
+   "file": "Ds2.ogg",
+   "root": 39,
+   "lo": 36,
+   "hi": 40,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.41948,
+   "loopEnd": 5.67667,
+   "gain": 1.0,
+   "tune": 41
+  },
+  {
+   "file": "Fs2.ogg",
+   "root": 42,
+   "lo": 41,
+   "hi": 43,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.17206,
+   "loopEnd": 6.0032,
+   "gain": 1.0,
+   "tune": 19
+  },
+  {
+   "file": "A2.ogg",
+   "root": 45,
+   "lo": 44,
+   "hi": 46,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.13383,
+   "loopEnd": 5.88753,
+   "gain": 1.0
+  },
+  {
+   "file": "C3.ogg",
+   "root": 48,
+   "lo": 47,
+   "hi": 49,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.85497,
+   "loopEnd": 6.03703,
+   "gain": 1.0,
+   "tune": 19
+  },
+  {
+   "file": "Ds3.ogg",
+   "root": 51,
+   "lo": 50,
+   "hi": 52,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.4273,
+   "loopEnd": 5.96456,
+   "gain": 1.0,
+   "tune": 38
+  },
+  {
+   "file": "Fs3.ogg",
+   "root": 54,
+   "lo": 53,
+   "hi": 55,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.02079,
+   "loopEnd": 5.95224,
+   "gain": 1.0,
+   "tune": 27
+  },
+  {
+   "file": "A3.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.53005,
+   "loopEnd": 5.91923,
+   "gain": 1.0,
+   "tune": 31
+  },
+  {
+   "file": "C4.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 61,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.94265,
+   "loopEnd": 5.71084,
+   "gain": 1.0
+  },
+  {
+   "file": "Ds4.ogg",
+   "root": 63,
+   "lo": 62,
+   "hi": 64,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.66395,
+   "loopEnd": 5.88946,
+   "gain": 1.0,
+   "tune": 22
+  },
+  {
+   "file": "Fs4.ogg",
+   "root": 66,
+   "lo": 65,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.42737,
+   "loopEnd": 5.80726,
+   "gain": 1.0
+  },
+  {
+   "file": "A4.ogg",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 2.49093,
+   "loopEnd": 6.02624,
+   "gain": 1.0
+  },
+  {
+   "file": "C5.ogg",
+   "root": 72,
+   "lo": 71,
+   "hi": 73,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.39213,
+   "loopEnd": 5.78401,
+   "gain": 1.0
+  },
+  {
+   "file": "Ds5.ogg",
+   "root": 75,
+   "lo": 74,
+   "hi": 76,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.36222,
+   "loopEnd": 6.04109,
+   "gain": 1.0,
+   "tune": 26
+  },
+  {
+   "file": "Fs5.ogg",
+   "root": 78,
+   "lo": 77,
+   "hi": 79,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.01395,
+   "loopEnd": 6.03995,
+   "gain": 1.0
+  },
+  {
+   "file": "A5.ogg",
+   "root": 81,
+   "lo": 80,
+   "hi": 84,
+   "vlo": 0.0,
+   "vhi": 1.0,
+   "loopStart": 1.57141,
+   "loopEnd": 6.03943,
+   "gain": 1.0
+  }
+ ]
+}

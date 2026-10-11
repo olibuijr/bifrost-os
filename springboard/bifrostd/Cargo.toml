@@ -1,0 +1,12 @@
+[package]
+name = "bifrostd"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt service supervisor (docs/services.md); std only"
+
+[dependencies]
+bifrost-proto = { path = "../proto" }
+
+[[bin]]
+name = "bifrostd"
+path = "src/main.rs"

@@ -1,0 +1,47 @@
+[
+ {
+  "name": "Dotted 8th",
+  "params": {
+   "time": 3,
+   "feedback": 0.4,
+   "tone": 4000,
+   "mix": 0.25
+  }
+ },
+ {
+  "name": "Quarter",
+  "params": {
+   "time": 4,
+   "feedback": 0.35,
+   "tone": 6000,
+   "mix": 0.2
+  }
+ },
+ {
+  "name": "Slapback",
+  "params": {
+   "time": 1,
+   "feedback": 0.1,
+   "tone": 8000,
+   "mix": 0.2
+  }
+ },
+ {
+  "name": "Dub",
+  "params": {
+   "time": 6,
+   "feedback": 0.75,
+   "tone": 1500,
+   "mix": 0.35
+  }
+ },
+ {
+  "name": "Tape Echo",
+  "params": {
+   "time": 2,
+   "feedback": 0.55,
+   "tone": 2500,
+   "mix": 0.3
+  }
+ }
+]

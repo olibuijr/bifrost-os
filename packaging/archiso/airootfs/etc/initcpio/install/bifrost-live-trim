@@ -1,0 +1,30 @@
+#!/bin/bash
+# Live installer initramfs only, run last: drop server-class drivers that the generic block, filesystems and PXE
+# hooks pull in. The firmware reads the whole image from the USB stick before Linux starts, so every MB is boot time
+# (tools/boot-bench.py). Kept: desktop/laptop NICs for PXE, SATA/NVMe/USB/virtio storage, live filesystems.
+# mkinitcpio copies modules after all hooks from its _modpaths table, so this hook edits that table.
+build() {
+    local keep_eth=' intel realtek broadcom aquantia atheros marvell amd '
+    local keep_scsi=' sr_mod sg vmw_pvscsi hv_storvsc device_handler '
+    local p rel top n
+    for p in "${!_modpaths[@]}"; do
+        rel=${p#*/kernel/}
+        case $rel in
+            drivers/net/ethernet/*)
+                top=${rel#drivers/net/ethernet/}; top=${top%%/*}; top=${top%%.ko*}
+                [[ $keep_eth == *" $top "* ]] || unset '_modpaths[$p]' ;;
+            drivers/scsi/*)
+                top=${rel#drivers/scsi/}; top=${top%%/*}; top=${top%%.ko*}
+                [[ $keep_scsi == *" $top "* ]] || unset '_modpaths[$p]' ;;
+            fs/xfs/*|fs/ocfs2/*|fs/smb/*|fs/gfs2/*|fs/jfs/*|fs/nilfs2/*|fs/f2fs/*|fs/ceph/*|fs/orangefs/*|fs/dlm/*|\
+            drivers/net/wireless/*|drivers/net/can/*|drivers/net/wwan/*|drivers/infiniband/*|drivers/target/*)
+                unset '_modpaths[$p]' ;;
+        esac
+    done
+    n=${#_modpaths[@]}
+    msg2 "bifrost-live-trim: $n modules kept"
+}
+
+help() {
+    echo "Removes server-class storage, network and filesystem drivers from the BifrOSt live initramfs."
+}

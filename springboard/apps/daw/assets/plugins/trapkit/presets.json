@@ -1,0 +1,86 @@
+[
+ {
+  "name": "Hard",
+  "params": {
+   "velocity": 0.5,
+   "tone": 20000,
+   "decay": 4
+  },
+  "tags": [
+   "trap"
+  ]
+ },
+ {
+  "name": "Rolls",
+  "params": {
+   "velocity": 0.9,
+   "tone": 20000,
+   "decay": 4
+  },
+  "tags": [
+   "hats",
+   "dynamic"
+  ]
+ },
+ {
+  "name": "Tight",
+  "params": {
+   "velocity": 0.6,
+   "tone": 14000,
+   "decay": 0.4
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Drill",
+  "params": {
+   "decay": 0.6,
+   "tone": 16000,
+   "velocity": 0.55
+  },
+  "tags": [
+   "drill",
+   "short"
+  ]
+ },
+ {
+  "name": "808 Long",
+  "params": {
+   "decay": 4,
+   "tone": 20000,
+   "velocity": 0.4,
+   "gain": 0.55
+  },
+  "tags": [
+   "trap",
+   "808"
+  ]
+ },
+ {
+  "name": "Memphis Dark",
+  "params": {
+   "tone": 6000,
+   "decay": 2.5,
+   "velocity": 0.6
+  },
+  "tags": [
+   "dark",
+   "memphis"
+  ]
+ },
+ {
+  "name": "Rage Bright",
+  "params": {
+   "tone": 20000,
+   "decay": 1.5,
+   "velocity": 0.3,
+   "gain": 0.6
+  },
+  "tags": [
+   "rage",
+   "bright"
+  ]
+ }
+]

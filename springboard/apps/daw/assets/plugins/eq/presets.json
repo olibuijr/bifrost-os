@@ -1,0 +1,10 @@
+[
+ { "name": "Flat", "params": { "low": 0, "mid": 0, "high": 0, "hpf": 20, "lowFreq": 220, "midFreq": 1100, "midQ": 0.8, "highFreq": 4500, "lpf": 20000 } },
+ { "name": "Clear lows (HPF 120)", "params": { "low": 0, "mid": 0, "high": 0, "hpf": 120, "lowFreq": 220, "midFreq": 1100, "midQ": 0.8, "highFreq": 4500, "lpf": 20000 } },
+ { "name": "Vocal & Lead Air", "params": { "low": -2, "mid": -1.5, "high": 4, "hpf": 150, "lowFreq": 250, "midFreq": 400, "midQ": 1.2, "highFreq": 8000, "lpf": 20000 } },
+ { "name": "Bass tighten", "params": { "low": 2, "mid": -3, "high": -2, "hpf": 32, "lowFreq": 90, "midFreq": 300, "midQ": 1.4, "highFreq": 5000, "lpf": 20000 } },
+ { "name": "Master tilt", "params": { "low": 1, "mid": 0, "high": 1.5, "hpf": 25, "lowFreq": 120, "midFreq": 1100, "midQ": 0.8, "highFreq": 9000, "lpf": 20000 } },
+ { "name": "Smile", "params": { "low": 4, "mid": -3, "high": 4, "hpf": 20, "lowFreq": 220, "midFreq": 1100, "midQ": 0.8, "highFreq": 4500, "lpf": 20000 } },
+ { "name": "Warm", "params": { "low": 3, "mid": 1, "high": -4, "hpf": 20, "lowFreq": 220, "midFreq": 1100, "midQ": 0.8, "highFreq": 4500, "lpf": 20000 } },
+ { "name": "Telephone", "params": { "low": -18, "mid": 8, "high": -14, "hpf": 300, "lowFreq": 220, "midFreq": 1100, "midQ": 0.8, "highFreq": 4500, "lpf": 4000 } }
+]

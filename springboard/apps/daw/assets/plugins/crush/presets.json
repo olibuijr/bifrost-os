@@ -1,0 +1,34 @@
+[
+ {
+  "name": "8-bit",
+  "params": {
+   "bits": 8,
+   "rate": 11000,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Lo-fi",
+  "params": {
+   "bits": 10,
+   "rate": 6000,
+   "mix": 0.6
+  }
+ },
+ {
+  "name": "Destroy",
+  "params": {
+   "bits": 3,
+   "rate": 2000,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Grit",
+  "params": {
+   "bits": 6,
+   "rate": 16000,
+   "mix": 0.35
+  }
+ }
+]

@@ -1,0 +1,17 @@
+{
+  "id": "duck",
+  "name": "Pump",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "duck",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Sidechain pump: ducks volume on every beat division (rate in 16ths, 4 = quarter notes)",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

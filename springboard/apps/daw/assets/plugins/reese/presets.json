@@ -1,0 +1,6 @@
+[
+ { "name": "Classic Reese", "params": { "saws": 2, "detune": 16, "beat": 0.25, "motion": 0.5, "octave": -1, "cutoff": 900, "reso": 2, "drive": 0.35, "fmt": 0, "width": 0.5, "sub": 0.6, "gain": 0.6 } },
+ { "name": "Neuro Talk", "params": { "saws": 4, "detune": 22, "beat": 1.2, "motion": 0.7, "octave": -1, "cutoff": 2200, "reso": 6, "drive": 0.85, "fmt": 0.8, "width": 0.6, "sub": 0.5, "gain": 0.5 } },
+ { "name": "Dark Hip-Hop Reese", "params": { "saws": 2, "detune": 10, "beat": 0.12, "motion": 0.4, "octave": -1, "cutoff": 420, "reso": 3, "drive": 0.3, "fmt": 0.15, "width": 0.35, "sub": 0.75, "attack": 0.02, "release": 0.3, "gain": 0.6 } },
+ { "name": "Clean Sub+Reese", "params": { "saws": 2, "detune": 8, "beat": 0.2, "motion": 0.3, "octave": -1, "cutoff": 600, "reso": 1, "drive": 0.1, "fmt": 0, "width": 0.4, "sub": 0.9, "gain": 0.6 } }
+]

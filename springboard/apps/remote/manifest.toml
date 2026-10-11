@@ -1,0 +1,11 @@
+id = "is.olibuijr.remote.desktop"
+name = "Remote"
+version = "0.1.9"
+exec = "bifrost-remote"
+icon = "icon.png"
+window = "full-size"
+min_shell = "0.4.84"
+summary = "Share this desktop with a browser on port 12000."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["network", "storage", "remote-desktop"]

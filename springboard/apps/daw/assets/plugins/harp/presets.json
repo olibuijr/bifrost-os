@@ -1,0 +1,97 @@
+[
+ {
+  "name": "Soft Pad",
+  "params": {
+   "attack": 3,
+   "release": 6,
+   "tone": 5000,
+   "velocity": 0.4,
+   "stereo": 0.5
+  },
+  "tags": [
+   "pad",
+   "slow"
+  ]
+ },
+ {
+  "name": "Expressive",
+  "params": {
+   "vibrato": 8,
+   "rate": 4.5,
+   "velocity": 0.8,
+   "stereo": 0.3
+  },
+  "tags": [
+   "vibrato"
+  ]
+ },
+ {
+  "name": "Staccato-ish",
+  "params": {
+   "release": 0.15,
+   "velocity": 0.85
+  },
+  "tags": [
+   "short",
+   "muted"
+  ]
+ },
+ {
+  "name": "Dark",
+  "params": {
+   "tone": 1800
+  },
+  "tags": [
+   "dark"
+  ]
+ },
+ {
+  "name": "Bright",
+  "params": {
+   "tone": 20000,
+   "velocity": 1,
+   "stereo": 0.35
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1,
+   "human": 0.2
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Gliss Soft",
+  "params": {
+   "pedal": 1,
+   "velcurve": 1.2,
+   "tone": 7000,
+   "human": 0.35,
+   "stereo": 0.35
+  },
+  "tags": [
+   "gliss",
+   "soft",
+   "arpeggio"
+  ]
+ },
+ {
+  "name": "Plucked Ostinato",
+  "params": {
+   "release": 0.5,
+   "human": 0.2,
+   "bright": 0.8
+  },
+  "tags": [
+   "ostinato",
+   "short"
+  ]
+ }
+]

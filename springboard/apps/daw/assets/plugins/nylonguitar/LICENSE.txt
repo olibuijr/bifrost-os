@@ -1,0 +1,4 @@
+Spanish classical guitar - FreePats project (roberto@zenvoid.org)
+CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
+
+Changes: onset trimmed, shortened with fade-out, soft layer derived by lowpass + gain, Ogg Vorbis q4.

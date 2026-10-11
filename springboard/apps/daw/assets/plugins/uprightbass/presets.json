@@ -1,0 +1,37 @@
+[
+ {
+  "name": "Walking Jazz",
+  "params": {
+   "human": 0.3,
+   "velcurve": 1.2,
+   "release": 0.8
+  },
+  "tags": [
+   "jazz",
+   "walking"
+  ]
+ },
+ {
+  "name": "Short Pluck",
+  "params": {
+   "release": 0.4,
+   "tone": 3000
+  },
+  "tags": [
+   "short",
+   "hiphop"
+  ]
+ },
+ {
+  "name": "Round Ballad",
+  "params": {
+   "tone": 1800,
+   "release": 1.5,
+   "velcurve": 1.4
+  },
+  "tags": [
+   "ballad",
+   "warm"
+  ]
+ }
+]

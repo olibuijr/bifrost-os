@@ -1,0 +1,18 @@
+id = "is.olibuijr.reminders.desktop"
+name = "Reminders"
+version = "1.9.4"
+exec = "bifrost-reminders"
+icon = "icon.png"
+min_shell = "0.5.7"
+summary = "Lists, due dates, repeats and alerts."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["storage", "notifications"]
+window = "full-size"
+
+[[intent]]
+id = "add-reminder"
+title = "Add Reminder"
+description = "Adds a reminder to the default list, with an optional due date."
+shortcut = false
+params = ["title:string", "due:date?"]

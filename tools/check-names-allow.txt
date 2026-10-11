@@ -1,0 +1,13 @@
+# path-glob:regex-removed-before-matching:reason
+# The pattern is deleted from the line, then the line is re-tested; only the fragment is excused.
+springboard/Cargo.toml:package = "iosterm":external crate coordinate (../../iOSTerm cannot be renamed here); Rust code uses the alias termcore
+springboard/Cargo.toml:\.\./\.\./iOSTerm:external filesystem path outside this repo
+*:com\.apple\.[A-Za-z0-9_.]*:published/legacy reference icon ids (assets in ipad-ref are keyed by them)
+*:is\.olibuijr\.iosterm:existing store app id already published; renaming breaks installs
+*:\.\./ipad-ref[^"' )]*:font/icon path outside the code tree
+*:ipad-ref:reference asset directory name
+*:-apple-system:CSS system-font keyword defined by web standards
+*:apple-touch-icon(-precomposed)?:HTML link rel value defined by web standards
+*:mobilesafari:legacy icon id
+springboard/apps/remote/assets/novnc/*:.:vendored third-party noVNC source (comments and browser feature detection)
+springboard/Cargo.toml:ipad-deildu-rust:external sibling checkout path outside this repo

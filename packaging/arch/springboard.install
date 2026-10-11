@@ -1,0 +1,30 @@
+bifrost_post_update() {
+    install -d -m700 /var/lib/bifrost-recovery
+    install -m755 /usr/bin/bifrost-update-guard /var/lib/bifrost-recovery/engine
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable bifrost-update-guard.service >/dev/null 2>&1 || true
+    systemctl start bifrost-update-guard.service >/dev/null 2>&1 || true
+    systemctl enable --now power-profiles-daemon.service >/dev/null 2>&1 || true
+    # agent access (docs/bifrost-mcp.md), on by default; restart picks up the new binary
+    systemctl enable bifrost-mcp.service >/dev/null 2>&1 || true
+    systemctl restart bifrost-mcp.service >/dev/null 2>&1 || true
+}
+
+post_install() {
+    bifrost_post_update
+    echo "BifrOSt: run 'systemctl enable springboard.service && systemctl set-default graphical.target'"
+}
+
+post_upgrade() {
+    bifrost_post_update
+    echo "BifrOSt: apply the update through Settings > Software Update."
+}
+
+pre_remove() {
+    systemctl disable --now springboard.service >/dev/null 2>&1 || true
+}
+
+post_remove() {
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    echo "springboard-shell: /var/lib/springboard (user data) was kept."
+}

@@ -1,0 +1,19 @@
+[package]
+name = "bifrost-webview"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MPL-2.0"
+
+[[bin]]
+name = "bifrost-webview"
+path = "src/main.rs"
+
+[dependencies]
+servo = { workspace = true, default-features = false, features = ["background_hang_monitor", "bluetooth", "testbinding", "bundled", "default_web_features", "gamepad", "webgpu", "webgl", "webxr", "multiprocess", "js_jit", "media-gstreamer"] }
+log = { workspace = true, features = ["release_max_level_info"] }
+dpi = { workspace = true }
+euclid = { workspace = true }
+url = { workspace = true }
+image = { workspace = true }
+libc = { workspace = true }

@@ -1,0 +1,42 @@
+[
+ {
+  "name": "Open",
+  "params": {
+   "type": 0,
+   "freq": 18000,
+   "q": 1
+  }
+ },
+ {
+  "name": "Muffled",
+  "params": {
+   "type": 0,
+   "freq": 800,
+   "q": 2
+  }
+ },
+ {
+  "name": "Thin",
+  "params": {
+   "type": 1,
+   "freq": 600,
+   "q": 1
+  }
+ },
+ {
+  "name": "Radio",
+  "params": {
+   "type": 2,
+   "freq": 1500,
+   "q": 4
+  }
+ },
+ {
+  "name": "Resonant LP",
+  "params": {
+   "type": 0,
+   "freq": 1800,
+   "q": 12
+  }
+ }
+]

@@ -1,0 +1,142 @@
+[
+ {
+  "name": "Soft Pad",
+  "params": {
+   "attack": 6,
+   "release": 5,
+   "tone": 5000,
+   "vibrato": 8,
+   "velocity": 0.4,
+   "stereo": 0.4,
+   "gain": 0.8
+  },
+  "tags": [
+   "pad",
+   "slow"
+  ]
+ },
+ {
+  "name": "Expressive",
+  "params": {
+   "vibrato": 22,
+   "rate": 5.5,
+   "velocity": 0.9,
+   "stereo": 0.3
+  },
+  "tags": [
+   "vibrato",
+   "lead"
+  ]
+ },
+ {
+  "name": "Staccato-ish",
+  "params": {
+   "attack": 0.3,
+   "release": 0.2,
+   "velocity": 0.9,
+   "tone": 12000
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Dark",
+  "params": {
+   "tone": 1800,
+   "release": 1.5,
+   "stereo": 0.3
+  },
+  "tags": [
+   "dark"
+  ]
+ },
+ {
+  "name": "Bright",
+  "params": {
+   "tone": 20000,
+   "velocity": 0.9,
+   "stereo": 0.35,
+   "detune": 4
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Wide Ensemble",
+  "params": {
+   "detune": 10,
+   "stereo": 0.9,
+   "vibrato": 10,
+   "attack": 1.5,
+   "release": 2
+  },
+  "tags": [
+   "wide"
+  ]
+ },
+ {
+  "name": "Staccato",
+  "params": {
+   "artic": 1,
+   "velocity": 0.9,
+   "human": 0.15
+  },
+  "tags": [
+   "short",
+   "staccato"
+  ]
+ },
+ {
+  "name": "Pizzicato",
+  "params": {
+   "artic": 2,
+   "human": 0.25,
+   "stereo": 0.25
+  },
+  "tags": [
+   "pizzicato",
+   "plucked",
+   "hiphop"
+  ]
+ },
+ {
+  "name": "Tremolo",
+  "params": {
+   "artic": 3,
+   "vibrato": 0,
+   "stereo": 0.3
+  },
+  "tags": [
+   "tremolo",
+   "tension",
+   "film"
+  ]
+ },
+ {
+  "name": "Marcato",
+  "params": {
+   "artic": 4,
+   "velocity": 0.9
+  },
+  "tags": [
+   "accent",
+   "marcato",
+   "stabs"
+  ]
+ },
+ {
+  "name": "Hip-hop Stabs",
+  "params": {
+   "artic": 4,
+   "tone": 9000,
+   "release": 0.4,
+   "human": 0.1
+  },
+  "tags": [
+   "hiphop",
+   "stabs"
+  ]
+ }
+]

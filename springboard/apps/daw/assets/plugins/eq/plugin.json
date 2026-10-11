@@ -1,0 +1,17 @@
+{
+  "id": "eq",
+  "name": "EQ",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "eq",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Parametric EQ: low cut, low shelf, mid bell, high shelf, high cut (gains in dB)",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

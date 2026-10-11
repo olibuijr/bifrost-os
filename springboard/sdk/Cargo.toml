@@ -1,0 +1,23 @@
+[package]
+name = "bifrost-app"
+version = "0.1.0"
+edition = "2021"
+description = "SDK for BifrOSt apps: protocol client, event loop and the SpringBoard UI kit"
+
+[dependencies]
+bifrost-core = { path = "../core" }
+bifrost-render = { path = "../render" }
+bifrost-ui = { path = "../ui" }
+bifrost-proto = { path = "../proto" }
+springboard = { path = ".." }
+
+[[bin]]
+name = "bifrost-testapp"
+path = "src/bin/testapp.rs"
+
+[[bin]]
+name = "bifrost-log"
+path = "src/bin/bifrost-log.rs"
+
+[dev-dependencies]
+tempfile = "3"

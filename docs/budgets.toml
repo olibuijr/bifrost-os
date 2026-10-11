@@ -1,0 +1,45 @@
+# Snow Leopard budgets (docs/snow-leopard.md). Each value is a maximum; acceptance (`bifrost pc acceptance --midget`)
+# runs `tools/bench.py --midget --no-record` and fails listing every key over its budget. Budgets only get stricter:
+# lower a value when the number drops, never raise one to make a regression pass.
+#
+# Start values: the 2026-10-10 baseline on Midget (0.5.7, idle desktop, 30 s) + 10 %. Where today's measurement
+# is higher than the written baseline (dbus-broker CPU, springboard wakeups), the measured value + 10 % is used.
+# Wakeups for bifrost-bootweave (1/s) and dbus-broker (5/s) are the targets of Snow Leopard findings 1 and 2.
+# Wakeups are counted over every thread of the process (sum of voluntary and nonvoluntary context switches).
+# springboard wakeups: the baseline's 8.6/s does not match this count (79/s, measured 2026-10-10 on all threads);
+# the budget follows the measurement, and the baseline needs re-checking.
+# Thread counts are whole numbers, so +10 % is rounded down. Sizes are MiB.
+[midget]
+midget_idle_cpu_total = 2.1            # all tasks, percent of one core (no baseline written; measured 1.89 + 10 %)
+midget_idle_cpu_springboard = 0.66     # baseline 0.60
+midget_idle_cpu_labwc = 0.077          # baseline 0.07
+midget_idle_cpu_dbus_broker = 0.11     # baseline 0.07, measured 0.10 (one 10 ms tick over 30 s)
+midget_idle_wakeups_springboard = 3.0  # 0.5.12: 2.0 on all threads (was 87, measured 79.2 at 0.5.7)
+midget_idle_wakeups_labwc = 2.5        # baseline 2.1 + 10 % is 2.31, but repeated runs read 2.17 to 2.33: noise of about 0.2
+midget_idle_wakeups_dbus_broker = 5.0  # target (finding 2); baseline 25.8
+midget_idle_wakeups_bootweave = 1.0    # target (finding 1); baseline 51.3
+midget_idle_wakeups_userspace = 20.0   # 0.5.12: 13.5 (was 197; 179.3 at 0.5.7)
+midget_pss_shell_mib = 75.0           # 0.5.14 unlocked desktop: 68 (was 143; 130 at 0.5.7)
+midget_pss_shell_after_lock_mib = 80.0 # after Lock Screen, 8 s locked, unlock, 10 s settle
+midget_pss_compositor_mib = 60.5       # baseline 55
+midget_threads_springboard = 17        # baseline 16
+midget_threads_labwc = 8               # baseline 8
+midget_size_springboard_mib = 14.3     # /usr/bin/springboard, baseline 13
+midget_size_bifrost_total_mib = 1185   # /usr/lib/bifrost + /var/lib/springboard/apps; measured 1077 + 10 %
+midget_ram_used_mib = 862              # baseline 779 (measured 784) + 10 %
+
+# App launch (bench.py --midget [--apps], docs/snow-leopard.md "App launch"): first five installed apps, sorted.
+# Start values: 0.5.12 on Midget (2026-10-11) + 10 %, launch rounded up to 10 ms. Launch is request to first window;
+# PSS and threads are read 3 s after launch.
+midget_launch_ms_assistant = 90
+midget_launch_ms_books = 70
+midget_launch_ms_browser = 80
+midget_launch_ms_files = 70
+midget_launch_ms_notes = 70
+midget_launch_ms_reminders = 70
+midget_pss_app_assistant_mib = 7.8
+midget_pss_app_books_mib = 10.0
+midget_pss_app_browser_mib = 12.6
+midget_pss_app_files_mib = 10.0
+midget_pss_app_notes_mib = 7.8
+midget_pss_app_reminders_mib = 9.8

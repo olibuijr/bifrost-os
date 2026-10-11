@@ -1,0 +1,101 @@
+[
+ {
+  "name": "Nylon",
+  "params": {
+   "damping": 0.55,
+   "decay": 1.8,
+   "brightness": 0.5,
+   "body": 0.5,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Steel",
+  "params": {
+   "damping": 0.2,
+   "decay": 3,
+   "brightness": 0.85,
+   "body": 0.3,
+   "gain": 0.65
+  }
+ },
+ {
+  "name": "Harp",
+  "params": {
+   "damping": 0.35,
+   "decay": 4,
+   "brightness": 0.65,
+   "body": 0.6,
+   "octave": 1,
+   "gain": 0.65
+  }
+ },
+ {
+  "name": "Muted",
+  "params": {
+   "damping": 0.85,
+   "decay": 0.4,
+   "brightness": 0.3,
+   "body": 0.4,
+   "gain": 0.75
+  }
+ },
+ {
+  "name": "Koto",
+  "params": {
+   "damping": 0.3,
+   "decay": 2.2,
+   "brightness": 0.95,
+   "body": 0.15,
+   "gain": 0.65
+  }
+ },
+ {
+  "name": "Pizzicato",
+  "params": {
+   "damping": 0.6,
+   "decay": 0.5,
+   "brightness": 0.5,
+   "body": 0.6,
+   "pick": 0.15,
+   "mute": 0.7,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Kalimba-ish",
+  "params": {
+   "damping": 0.2,
+   "decay": 1.8,
+   "brightness": 0.35,
+   "body": 0.2,
+   "pick": 0.5,
+   "tension": 0.3,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Dark Ostinato",
+  "params": {
+   "damping": 0.85,
+   "decay": 0.4,
+   "brightness": 0.4,
+   "body": 0.4,
+   "pick": 0.25,
+   "mute": 0.5,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Steel Twang",
+  "params": {
+   "damping": 0.25,
+   "decay": 2.5,
+   "brightness": 0.85,
+   "body": 0.3,
+   "pick": 0.1,
+   "tension": 0.6,
+   "gain": 0.65
+  }
+ }
+]

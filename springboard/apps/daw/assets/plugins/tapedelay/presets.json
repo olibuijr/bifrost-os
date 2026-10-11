@@ -1,0 +1,7 @@
+[
+ { "name": "Slapback", "params": { "time": 1, "feedback": 0.1, "wow": 0.2, "tone": 5000, "mix": 0.22, "mode": 0 } },
+ { "name": "Dotted 8th", "params": { "time": 3, "feedback": 0.38, "wow": 0.25, "tone": 3500, "mix": 0.22, "mode": 1 } },
+ { "name": "Dub Echo", "params": { "time": 6, "feedback": 0.45, "wow": 0.35, "tone": 1500, "mix": 0.28, "mode": 1 } },
+ { "name": "Worn Tape", "params": { "time": 4, "feedback": 0.42, "wow": 0.8, "tone": 2000, "mix": 0.25, "mode": 0 } },
+ { "name": "Ping-Pong 8th", "params": { "time": 2, "feedback": 0.4, "wow": 0.15, "tone": 5000, "mix": 0.22, "mode": 1 } }
+]

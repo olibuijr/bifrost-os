@@ -1,0 +1,222 @@
+[
+ {
+  "name": "Sub Bass",
+  "params": {
+   "wave": 0,
+   "voices": 1,
+   "octave": -1,
+   "sub": 0.8,
+   "cutoff": 600,
+   "reso": 1,
+   "envAmt": 0.15,
+   "attack": 0.003,
+   "decay": 0.3,
+   "sustain": 0.8,
+   "release": 0.12,
+   "gain": 0.7
+  }
+ },
+ {
+  "name": "Supersaw Lead",
+  "params": {
+   "wave": 2,
+   "voices": 4,
+   "detune": 28,
+   "cutoff": 5200,
+   "reso": 3,
+   "envAmt": 0.35,
+   "attack": 0.005,
+   "decay": 0.4,
+   "sustain": 0.7,
+   "release": 0.3,
+   "glide": 0.04,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Soft Keys",
+  "params": {
+   "wave": 1,
+   "voices": 2,
+   "detune": 6,
+   "cutoff": 1800,
+   "reso": 1,
+   "envAmt": 0.3,
+   "attack": 0.01,
+   "decay": 0.9,
+   "sustain": 0.35,
+   "release": 0.6,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Pluck",
+  "params": {
+   "wave": 2,
+   "voices": 2,
+   "detune": 10,
+   "cutoff": 900,
+   "reso": 6,
+   "envAmt": 0.85,
+   "attack": 0.001,
+   "decay": 0.18,
+   "sustain": 0,
+   "release": 0.2,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Square Bass",
+  "params": {
+   "wave": 3,
+   "voices": 1,
+   "octave": -1,
+   "sub": 0.4,
+   "cutoff": 900,
+   "reso": 5,
+   "envAmt": 0.55,
+   "attack": 0.002,
+   "decay": 0.2,
+   "sustain": 0.4,
+   "release": 0.08,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Brass Stab",
+  "params": {
+   "wave": 2,
+   "voices": 3,
+   "detune": 14,
+   "cutoff": 1400,
+   "reso": 2,
+   "envAmt": 0.6,
+   "attack": 0.03,
+   "decay": 0.35,
+   "sustain": 0.55,
+   "release": 0.25,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Snappy Pluck LP24",
+  "params": {
+   "wave": 2,
+   "voices": 3,
+   "detune": 10,
+   "width": 0.5,
+   "cutoff": 500,
+   "reso": 6,
+   "fType": 1,
+   "envAmt": 0.9,
+   "legacyEnv": 0,
+   "fAtk": 0.001,
+   "fDec": 0.15,
+   "fSus": 0,
+   "keyTrk": 0.5,
+   "vel2cut": 0.4,
+   "attack": 0.002,
+   "decay": 0.6,
+   "sustain": 0.4,
+   "release": 0.3,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Stereo Supersaw",
+  "params": {
+   "wave": 2,
+   "voices": 7,
+   "detune": 24,
+   "width": 0.9,
+   "cutoff": 5000,
+   "reso": 2,
+   "fType": 1,
+   "envAmt": 0.3,
+   "legacyEnv": 0,
+   "fAtk": 0.005,
+   "fDec": 0.5,
+   "fSus": 0.5,
+   "keyTrk": 0.4,
+   "attack": 0.005,
+   "decay": 0.5,
+   "sustain": 0.8,
+   "release": 0.35,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "PWM Pad",
+  "params": {
+   "wave": 2,
+   "voices": 2,
+   "detune": 8,
+   "width": 0.7,
+   "pwm": 0.7,
+   "pwmRate": 0.6,
+   "cutoff": 1800,
+   "reso": 1,
+   "envAmt": 0.2,
+   "legacyEnv": 0,
+   "fAtk": 0.8,
+   "fDec": 1.5,
+   "fSus": 0.6,
+   "attack": 0.6,
+   "decay": 1,
+   "sustain": 0.8,
+   "release": 1.2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Fifth Stab",
+  "params": {
+   "wave": 2,
+   "voices": 2,
+   "detune": 10,
+   "width": 0.5,
+   "osc2": 3,
+   "semi2": 7,
+   "mix2": 0.7,
+   "cutoff": 900,
+   "reso": 4,
+   "fType": 1,
+   "envAmt": 0.8,
+   "legacyEnv": 0,
+   "fAtk": 0.001,
+   "fDec": 0.25,
+   "fSus": 0.1,
+   "vel2cut": 0.3,
+   "attack": 0.002,
+   "decay": 0.3,
+   "sustain": 0.3,
+   "release": 0.2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Brass",
+  "params": {
+   "wave": 2,
+   "voices": 3,
+   "detune": 7,
+   "width": 0.4,
+   "cutoff": 700,
+   "reso": 1,
+   "fType": 1,
+   "envAmt": 0.6,
+   "legacyEnv": 0,
+   "fAtk": 0.08,
+   "fDec": 0.4,
+   "fSus": 0.5,
+   "keyTrk": 0.6,
+   "vel2cut": 0.5,
+   "attack": 0.03,
+   "decay": 0.4,
+   "sustain": 0.8,
+   "release": 0.2,
+   "noise": 0.05,
+   "gain": 0.55
+  }
+ }
+]

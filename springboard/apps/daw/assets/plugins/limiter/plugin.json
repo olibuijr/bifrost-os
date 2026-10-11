@@ -1,0 +1,22 @@
+{
+  "id": "limiter",
+  "name": "Limiter",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "limiter",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Mastering brickwall limiter: input gain pushes loudness, output never exceeds ceiling",
+  "category": "dynamics",
+  "tags": [
+    "limiter",
+    "mastering",
+    "loudness",
+    "dynamics"
+  ],
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ]
+}

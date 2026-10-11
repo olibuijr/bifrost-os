@@ -1,0 +1,17 @@
+{
+  "id": "drumrack",
+  "name": "Drum Rack",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "drumrack",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Sample-based drum pads (instrument.pads maps note -> sample file). Notes like the Kit: 36 kick, 38 snare, 39 clap, 37 rim, 42 hat, 46 open hat, 45 tom, 50 perc. Closed hat chokes open hat (chokeMode 0 off, 1 hats, 2 hats+self; instrument.chokes {note:group} overrides)",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

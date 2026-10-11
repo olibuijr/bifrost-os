@@ -1,0 +1,5 @@
+repo = "storytold/lightcraft"
+url = "https://github.com/storytold/lightcraft/releases/download/v0.5.0/lightcraft-0.5.0-linux-x86_64.tar.gz"
+sha256 = "164170bb3745b94cffc1e05d59b20778eb51698558224f846e9e1f5424da3265"
+binary = "lightcraft-0.5.0-linux-x86_64/bin/lightcraft"
+licenses = "lightcraft-0.5.0-linux-x86_64/share/doc/lightcraft"

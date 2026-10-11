@@ -1,0 +1,13 @@
+[Unit]
+Description=BifrOSt lab control API (screenshots, input, exec) - lab builds only
+ConditionPathExists=/etc/bifrost/lab.token
+After=network-online.target bifrost-installer.service
+
+[Service]
+ExecStart=/usr/local/bin/bifrost-lab serve
+Environment=DISPLAY=:0
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

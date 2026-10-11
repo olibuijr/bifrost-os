@@ -1,0 +1,30 @@
+{
+  "id": "space",
+  "name": "Space",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "space",
+  "author": "DAW (IRs: OpenAIR, University of York)",
+  "license": "MIT (code); IRs CC-BY-4.0 (see README.md)",
+  "desc": "Real-room convolution reverb (measured IRs: hall, cathedral, church, chamber, room, studio)",
+  "category": "reverb",
+  "tags": [
+    "reverb",
+    "convolution",
+    "room",
+    "hall",
+    "ambience"
+  ],
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "README.md",
+    "hall.ogg",
+    "cathedral.ogg",
+    "church.ogg",
+    "chamber.ogg",
+    "room.ogg",
+    "studio.ogg",
+    "presets.json"
+  ]
+}

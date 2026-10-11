@@ -1,0 +1,11 @@
+id = "is.olibuijr.podcasts.desktop"
+name = "Podcasts"
+version = "1.3.3"
+exec = "bifrost-podcasts"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Browse podcast subscriptions; playback requires the audio service."
+category = "Entertainment"
+architecture = "x86_64-linux"
+permissions = ["network", "audio", "storage"]
+window = "full-size"

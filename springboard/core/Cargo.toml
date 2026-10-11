@@ -1,0 +1,5 @@
+[package]
+name = "bifrost-core"
+version = "0.1.0"
+edition = "2021"
+description = "BifrOSt shared data, integrity and persistence utilities"

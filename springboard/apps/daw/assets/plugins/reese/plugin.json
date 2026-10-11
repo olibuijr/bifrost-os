@@ -1,0 +1,15 @@
+{
+  "id": "reese",
+  "name": "Reese",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "reese",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Mono reese bass for DnB, neuro and dark hip-hop: 2-4 detuned saws with slow phasing motion (beat Hz), 24 dB lowpass, drive, stereo width, formant 'talk' sweep (fmt) and a clean mono sine sub routed around the filter. Long sustained notes; overlapping notes glide",
+  "family": "synth",
+  "category": "synth",
+  "tags": ["bass", "reese", "dnb", "neuro", "sub"],
+  "entry": "index.js",
+  "files": ["index.js", "presets.json"]
+}

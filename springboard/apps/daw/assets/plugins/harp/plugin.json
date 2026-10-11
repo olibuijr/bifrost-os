@@ -1,0 +1,52 @@
+{
+ "id": "harp",
+ "name": "Harp",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "harp",
+ "author": "Versilian Studios (samples); DAW build script",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "desc": "Concert harp, plucked mf, natural ringing decay (no sustain). Range C1-G7. Arpeggios, glissandi-style runs, sparkling ostinatos, gentle chords. | Playable MIDI 24-103 (C1-G7), 1 velocity layer. Params: pedal=1 lets notes ring until the next chord (sustain pedal, re-pedals on each new note); human 0-1 adds timing/level life; velcurve <1.6 = soft notes louder; bright = velocity opens tone; keytrack = high notes brighter.",
+ "family": "plucked",
+ "entry": "index.js",
+ "files": [
+  "LICENSE.txt",
+  "README.md",
+  "harp_A2_mf.ogg",
+  "harp_A4_mf.ogg",
+  "harp_A6_mf.ogg",
+  "harp_B1_mf.ogg",
+  "harp_B3_mf.ogg",
+  "harp_B5_mf.ogg",
+  "harp_C3_mf.ogg",
+  "harp_C5_mf.ogg",
+  "harp_D2_mf.ogg",
+  "harp_D4_mf.ogg",
+  "harp_D6_mf.ogg",
+  "harp_D7_mf.ogg",
+  "harp_E1_mf.ogg",
+  "harp_E3_mf.ogg",
+  "harp_E5_mf.ogg",
+  "harp_F2_mf.ogg",
+  "harp_F4_mf.ogg",
+  "harp_F6_mf.ogg",
+  "harp_G1_mf.ogg",
+  "harp_G3_mf.ogg",
+  "harp_G5_mf.ogg",
+  "index.js",
+  "zones.json",
+  "presets.json"
+ ],
+ "tags": [
+  "harp",
+  "plucked",
+  "orchestral",
+  "arpeggio"
+ ],
+ "pedal": true,
+ "defaults": {
+  "human": 0.25
+ }
+}

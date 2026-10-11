@@ -1,0 +1,5 @@
+Vibraphone samples from the Versilian Community Sample Library (VCSL), Versilian Studios
+https://github.com/sgossner/VCSL
+CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
+
+Changes: onset trimmed, shortened with fade-out, Ogg Vorbis q4.

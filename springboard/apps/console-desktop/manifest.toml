@@ -1,0 +1,12 @@
+id = "is.olibuijr.console.desktop"
+name = "Console"
+version = "1.0.3"
+exec = "bifrost-console"
+icon = "icon.png"
+min_shell = "0.5.4"
+summary = "Reads the system log live and the crash reports, with search by process, subsystem, category and type."
+category = "Utilities"
+architecture = "x86_64-linux"
+kind = "system-app"
+entitlements = ["log-store"]
+window = "full-size"

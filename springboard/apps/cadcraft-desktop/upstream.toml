@@ -1,0 +1,5 @@
+repo = "storytold/cadcraft"
+url = "https://github.com/storytold/cadcraft/releases/download/v0.4.0/cadcraft-0.5.0-linux-x86_64.tar.gz"
+sha256 = "036c3b401987b6a9991b5fc7ba097d5b717e8d18522f7c3f626b0f6a363e208e"
+binary = "cadcraft-0.5.0-linux-x86_64/bin/cadcraft"
+licenses = "cadcraft-0.5.0-linux-x86_64/share/doc/cadcraft"

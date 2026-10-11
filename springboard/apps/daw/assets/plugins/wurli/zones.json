@@ -1,0 +1,445 @@
+{
+ "id": "wurli",
+ "name": "Wurlitzer",
+ "desc": "Wurlitzer EP200 reed electric piano, 4 velocity layers pp/mp/f/ff (soft = sweet and hollow, hard = gritty/honky bark). Range A1-C7 (MIDI 33-96), best C2-C6. Soul, 60s-70s pop/rock, indie, lo-fi, Motown and gospel comping; short natural decay.",
+ "family": "keys",
+ "license": "CC-BY-3.0",
+ "source": "https://github.com/sfzinstruments/GregSullivan.E-Pianos (Wurlitzer EP200 v1.1, http://www.sullivang.net/)",
+ "attribution": "Wurlitzer EP200 samples by Greg Sullivan (http://www.sullivang.net/), SFZ mapping by kinwie, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/); modified.",
+ "attack": 0.002,
+ "release": 0.2,
+ "range": [
+  33,
+  96
+ ],
+ "velXfade": 0.07,
+ "pedalRelease": 0.35,
+ "zones": [
+  {
+   "file": "A1_pp.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 38,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241,
+   "tune": -12
+  },
+  {
+   "file": "A1_mp.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 36,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "A1_f.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 34,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "A1_ff.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 34,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C2_f.ogg",
+   "root": 36,
+   "lo": 35,
+   "hi": 38,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "C2_ff.ogg",
+   "root": 36,
+   "lo": 35,
+   "hi": 38,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E2_mp.ogg",
+   "root": 40,
+   "lo": 37,
+   "hi": 42,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "F2_f.ogg",
+   "root": 41,
+   "lo": 39,
+   "hi": 44,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "F2_ff.ogg",
+   "root": 41,
+   "lo": 39,
+   "hi": 44,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Gs2_pp.ogg",
+   "root": 44,
+   "lo": 39,
+   "hi": 47,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "A2_mp.ogg",
+   "root": 45,
+   "lo": 43,
+   "hi": 48,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "B2_f.ogg",
+   "root": 47,
+   "lo": 45,
+   "hi": 49,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "B2_ff.ogg",
+   "root": 47,
+   "lo": 45,
+   "hi": 49,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Ds3_pp.ogg",
+   "root": 51,
+   "lo": 48,
+   "hi": 53,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241,
+   "tune": -12
+  },
+  {
+   "file": "Ds3_mp.ogg",
+   "root": 51,
+   "lo": 49,
+   "hi": 53,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "E3_f.ogg",
+   "root": 52,
+   "lo": 50,
+   "hi": 54,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "E3_ff.ogg",
+   "root": 52,
+   "lo": 50,
+   "hi": 54,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Gs3_pp.ogg",
+   "root": 56,
+   "lo": 54,
+   "hi": 58,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241,
+   "tune": -13
+  },
+  {
+   "file": "Gs3_mp.ogg",
+   "root": 56,
+   "lo": 54,
+   "hi": 58,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Gs3_f.ogg",
+   "root": 56,
+   "lo": 55,
+   "hi": 58,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "Gs3_ff.ogg",
+   "root": 56,
+   "lo": 55,
+   "hi": 58,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Cs4_pp.ogg",
+   "root": 61,
+   "lo": 59,
+   "hi": 64,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "Cs4_mp.ogg",
+   "root": 61,
+   "lo": 59,
+   "hi": 63,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Cs4_f.ogg",
+   "root": 61,
+   "lo": 59,
+   "hi": 64,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "Cs4_ff.ogg",
+   "root": 61,
+   "lo": 59,
+   "hi": 62,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E4_ff.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs4_mp.ogg",
+   "root": 66,
+   "lo": 64,
+   "hi": 68,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "G4_pp.ogg",
+   "root": 67,
+   "lo": 65,
+   "hi": 70,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "G4_ff.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 70,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Gs4_f.ogg",
+   "root": 68,
+   "lo": 65,
+   "hi": 70,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "B4_mp.ogg",
+   "root": 71,
+   "lo": 69,
+   "hi": 72,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Cs5_pp.ogg",
+   "root": 73,
+   "lo": 71,
+   "hi": 76,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "Cs5_mp.ogg",
+   "root": 73,
+   "lo": 73,
+   "hi": 76,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Cs5_f.ogg",
+   "root": 73,
+   "lo": 71,
+   "hi": 76,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "Cs5_ff.ogg",
+   "root": 73,
+   "lo": 71,
+   "hi": 76,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G5_pp.ogg",
+   "root": 79,
+   "lo": 77,
+   "hi": 82,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "G5_mp.ogg",
+   "root": 79,
+   "lo": 77,
+   "hi": 82,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "G5_f.ogg",
+   "root": 79,
+   "lo": 77,
+   "hi": 82,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "G5_ff.ogg",
+   "root": 79,
+   "lo": 77,
+   "hi": 82,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Cs6_pp.ogg",
+   "root": 85,
+   "lo": 83,
+   "hi": 88,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "Cs6_mp.ogg",
+   "root": 85,
+   "lo": 83,
+   "hi": 88,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Cs6_f.ogg",
+   "root": 85,
+   "lo": 83,
+   "hi": 88,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "Cs6_ff.ogg",
+   "root": 85,
+   "lo": 83,
+   "hi": 88,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Gs6_pp.ogg",
+   "root": 92,
+   "lo": 89,
+   "hi": 96,
+   "vlo": 0.0,
+   "vhi": 0.29,
+   "gain": 0.241
+  },
+  {
+   "file": "Gs6_mp.ogg",
+   "root": 92,
+   "lo": 89,
+   "hi": 96,
+   "vlo": 0.29,
+   "vhi": 0.51,
+   "gain": 0.468
+  },
+  {
+   "file": "Gs6_f.ogg",
+   "root": 92,
+   "lo": 89,
+   "hi": 96,
+   "vlo": 0.51,
+   "vhi": 0.7,
+   "gain": 0.732
+  },
+  {
+   "file": "Gs6_ff.ogg",
+   "root": 92,
+   "lo": 89,
+   "hi": 96,
+   "vlo": 0.7,
+   "vhi": 1.0,
+   "gain": 1.0
+  }
+ ]
+}

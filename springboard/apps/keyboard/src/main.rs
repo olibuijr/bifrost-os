@@ -1,0 +1,200 @@
+//! The on-screen keyboard as a system app (`is.olibuijr.keyboard`, `kind = "system"`, `provides = ["keyboard"]`).
+//!
+//! The shell hosts it like any app but composites its frame at the bottom edge and sends it the focused field's
+//! configuration (`ToApp::KeyboardConfig`) and touches (`ToApp::Touch`, y relative to the keyboard's top). What the
+//! user types goes back as `ToShell::KeyboardOut`, which the shell forwards to the focused field. The keyboard
+//! draws at its resting position; the shell animates the slide.
+#![allow(dead_code)]
+
+mod emoji;
+mod kb_emoji;
+mod kb_floating;
+mod kb_pressed;
+mod kb_shiftswipe;
+mod kb_shortcutbar;
+mod kb_trackpad;
+mod kb_variants;
+mod keyboard;
+mod predict;
+#[cfg(test)]
+mod testutil;
+
+use bifrost_app::proto::{kbflags, KeyboardConfig, KeyboardLayout, KeyboardOut, ReturnKey};
+use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::{App, Ctx, Input, TouchKind};
+use keyboard::{Keyboard, Mode, Out};
+use springboard::shell::kb_capslock::KbPrefs;
+use springboard::shell::kb_clicks::Click;
+use springboard::shell::kb_layouts;
+
+struct KeyboardApp {
+    kb: Option<Keyboard>,
+    config: KeyboardConfig,
+    /// the last height reported to the shell, px
+    reported: u32,
+    /// the input language the shell last knew (index)
+    language: u8,
+}
+
+fn mode_of(layout: KeyboardLayout) -> Mode {
+    match layout {
+        KeyboardLayout::Docked => Mode::Docked,
+        KeyboardLayout::Split => Mode::Split,
+        KeyboardLayout::Floating => Mode::Floating,
+    }
+}
+
+fn return_kind(key: ReturnKey) -> kb_pressed::ReturnKind {
+    use kb_pressed::ReturnKind as K;
+    match key {
+        ReturnKey::Return => K::Return,
+        ReturnKey::Search => K::Search,
+        ReturnKey::Go => K::Go,
+        ReturnKey::Done => K::Done,
+        ReturnKey::Next => K::Next,
+        ReturnKey::Send => K::Send,
+    }
+}
+
+/// `Out::Named` carries `&'static str`; map what travels over the wire back to the static names.
+fn static_name(name: &str) -> Option<&'static str> {
+    ["Escape", "Tab", "Paste", "Up", "Down", "Left", "Right", "More", "Ctrl"].into_iter().find(|n| *n == name)
+}
+
+fn send_out(ctx: &Ctx, out: Out) {
+    ctx.keyboard_out(match out {
+        Out::Text(t) => KeyboardOut::Text(t),
+        Out::Backspace => KeyboardOut::Backspace,
+        Out::Enter => KeyboardOut::Enter,
+        Out::Hide => KeyboardOut::Hide,
+        Out::Named(n) => KeyboardOut::Named(n.into()),
+    });
+}
+
+impl KeyboardApp {
+    fn flush(&mut self, ctx: &Ctx) {
+        let Some(kb) = &mut self.kb else { return };
+        // the globe key changed the input language: the shell owns and stores it
+        let (_, language) = kb_layouts::state();
+        if language != self.language {
+            self.language = language;
+            ctx.keyboard_out(KeyboardOut::Language(language));
+        }
+        for click in kb.take_clicks() {
+            ctx.keyboard_out(KeyboardOut::Click(match click {
+                Click::Key => 0,
+                Click::Delete => 1,
+                Click::Modifier => 2,
+            }));
+        }
+        let h = kb.h.ceil() as u32;
+        if h != self.reported {
+            self.reported = h;
+            ctx.keyboard_height(h);
+        }
+    }
+
+    fn apply(&mut self) {
+        let Some(kb) = &mut self.kb else { return };
+        let c = self.config;
+        // the shell owns the language choice: take it, and do not echo it back
+        kb_layouts::apply(c.languages, c.language);
+        self.language = kb_layouts::state().1;
+        kb.set_mode(mode_of(c.layout));
+        kb.set_return_kind(return_kind(c.return_key));
+        kb.set_predictive(c.predictive());
+        kb.set_auto_caps(c.flags & kbflags::AUTO_CAPS != 0);
+        kb.set_kb_prefs(KbPrefs { enable_caps_lock: c.flags & kbflags::CAPS_LOCK != 0, period_shortcut: c.flags & kbflags::PERIOD_SHORTCUT != 0 });
+        // a keyboard that is hidden resets its typing state when it is shown again
+        kb.set_shown(c.shown(), 0.0);
+    }
+}
+
+impl App for KeyboardApp {
+    fn id(&self) -> &str {
+        "is.olibuijr.keyboard"
+    }
+
+    fn configure(&mut self, ctx: &Ctx) {
+        let (w, s) = (ctx.cfg.w as f32, ctx.cfg.scale);
+        match &mut self.kb {
+            Some(kb) => {
+                kb.resize(w);
+                kb.set_scale(s);
+            }
+            None => {
+                let mut kb = Keyboard::new(w, s, self.config.flags & kbflags::ACCESSORY != 0);
+                kb.set_shown(true, 0.0);
+                self.kb = Some(kb);
+            }
+        }
+        self.apply();
+        self.flush(ctx);
+    }
+
+    fn keyboard_config(&mut self, ctx: &Ctx, config: KeyboardConfig) -> bool {
+        let accessory_changed = (config.flags ^ self.config.flags) & kbflags::ACCESSORY != 0;
+        self.config = config;
+        if accessory_changed {
+            // the terminal row changes the key set: rebuild at the current size
+            if let Some(kb) = self.kb.take() {
+                let (w, s) = (kb.w, ctx.cfg.scale);
+                self.kb = Some(Keyboard::new(w, s, config.flags & kbflags::ACCESSORY != 0));
+            }
+        }
+        self.apply();
+        self.flush(ctx);
+        true
+    }
+
+    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let Input::Touch { kind, x, y, t, .. } = ev else { return false };
+        let Some(kb) = &mut self.kb else { return false };
+        let t = t as f64;
+        match kind {
+            TouchKind::Down => kb.down(x, y, t),
+            TouchKind::Move => kb.moved(x, y),
+            TouchKind::Up => {
+                if let Some(out) = kb.up(x, y, t) {
+                    send_out(ctx, out);
+                }
+            }
+            _ => {}
+        }
+        self.flush(ctx);
+        true
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let Some(kb) = &mut self.kb else { return false };
+        for out in kb.tick(t) {
+            send_out(ctx, out);
+        }
+        let animating = kb.animating();
+        self.flush(ctx);
+        animating
+    }
+
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        self.kb.as_ref().filter(|kb| kb.animating()).map(|_| t + 16.0)
+    }
+
+    fn draw(&mut self, ctx: &Ctx, surface: &mut Surface, t: f64) -> Damage {
+        if let Some(kb) = &mut self.kb {
+            kb.draw(surface, &ctx.ui, 0.0, t);
+        }
+        let mut d = Damage::new(surface.w, surface.h);
+        d.all();
+        d
+    }
+}
+
+fn main() {
+    // no access to the shell's data in the sandbox: layout state arrives in `KeyboardConfig`, the emoji font and word
+    // lists come from this package
+    kb_layouts::use_remote_state();
+    springboard::emoji::reload_from(&predict::package_dir().join("assets/NotoColorEmoji.ttf"));
+    predict::reload_words(&predict::package_words());
+    let config = KeyboardConfig { flags: kbflags::SHOWN, languages: 1, language: 0, ..Default::default() };
+    bifrost_app::run(KeyboardApp { kb: None, config, reported: 0, language: 0 });
+}

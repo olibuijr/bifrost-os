@@ -1,0 +1,44 @@
+# Changelog
+
+## 1.2.2
+
+- The app icon is drawn from the named system colours (Light values) and the page from `WHITE`; no literal colours left in the app.
+
+## 1.2.1
+
+- Follows a Light/Dark switch immediately, including while the window is in the background.
+
+## 1.2.0 — 2026-10-10
+
+- Golden Gate look: a full-size window with a unified toolbar beside the traffic lights (Pen, Marker and Eraser as one segmented group, colour wells, Undo and Clear, Save to Photos as a share button), drawn with the SDK kit in Light and Dark.
+- Toolbar buttons are published as controls, so the window drags from the band around them and they can be pressed by id.
+- The iPad-style 96 pt tool bar and its fixed dark colours are gone; the board fills the rest of the window.
+- Needs system 0.4.84.
+
+## 1.1.3 — 2026-10-10
+
+- Opens again on BifrOSt 0.4.90 and later: rebuilt against the current SDK, whose app socket is `BIFROST_SOCK`.
+
+## 1.1.2 — 2026-10-09
+
+- Spacing follows the system 4-pt grid: 6 padding and gap values moved to the nearest standard step (at most 2 pt).
+- 2 colours now use the system colour tokens (same values).
+- Built for system 0.4.62.
+
+## 1.1.1 — 2026-10-09
+
+- Text that is shortened to fit now measures at the size it is drawn at, so labels are no longer cut off early.
+- Follows the system accessibility settings (Increase Contrast, Reduce Transparency, Show Borders, Bold Text) on system 0.4.61.
+
+## 1.1.0 — 2026-10-09
+
+- Text sizes and spacing come from the shared macOS-style scale, so this app matches the others.
+- No gap above the content for a status bar the desktop does not have.
+
+## 1.0.0 — 2026-10-08
+
+- Freeform for the BifrOSt desktop: the tablet app's code, hosted in a window with keyboard and pointer input.
+
+- Use the desktop package identity for the SDK handshake and supported PC permissions.
+- Export drawings to the local account’s Pictures directory.
+- Keep text-field focus without drawing an on-screen keyboard in PC app processes.

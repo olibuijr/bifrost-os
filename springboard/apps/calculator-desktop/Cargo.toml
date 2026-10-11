@@ -1,0 +1,12 @@
+[package]
+name = "bifrost-calculator"
+version = "1.3.2"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

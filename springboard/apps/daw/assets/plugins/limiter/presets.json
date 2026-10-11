@@ -1,0 +1,7 @@
+[
+ { "name": "Master Safe", "params": { "gain": 2, "ceiling": -1, "release": 150, "soft": 0.4, "output": 0 } },
+ { "name": "Limiter -1 dBTP streaming (-14 LUFS)", "params": { "gain": 3, "ceiling": -1, "release": 180, "soft": 0.4, "output": 0 } },
+ { "name": "Limiter loud (-9)", "params": { "gain": 8, "ceiling": -0.5, "release": 80, "soft": 0.5, "output": 0 } },
+ { "name": "Transparent", "params": { "gain": 0, "ceiling": -0.5, "release": 250, "soft": 0.2, "output": 0 } },
+ { "name": "Brickwall", "params": { "gain": 5, "ceiling": -0.3, "release": 50, "soft": 0.1, "output": 0 } }
+]

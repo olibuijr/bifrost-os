@@ -1,0 +1,57 @@
+[
+ {
+  "name": "Wah 8th",
+  "params": {
+   "rate": 2,
+   "depth": 0.7,
+   "freq": 800,
+   "reso": 8,
+   "shape": 0,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Slow Sweep",
+  "params": {
+   "rate": 32,
+   "depth": 0.9,
+   "freq": 500,
+   "reso": 5,
+   "shape": 1,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Sidechain Saw",
+  "params": {
+   "rate": 4,
+   "depth": 0.8,
+   "freq": 600,
+   "reso": 3,
+   "shape": 2,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Gate 16th",
+  "params": {
+   "rate": 1,
+   "depth": 1,
+   "freq": 1200,
+   "reso": 2,
+   "shape": 3,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Gentle Motion",
+  "params": {
+   "rate": 16,
+   "depth": 0.35,
+   "freq": 1500,
+   "reso": 2,
+   "shape": 0,
+   "mix": 0.6
+  }
+ }
+]

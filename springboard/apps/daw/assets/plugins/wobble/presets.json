@@ -1,0 +1,6 @@
+[
+ { "name": "Riddim Wub", "params": { "rate": 5, "shape": 0, "lfoAmt": 0.75, "retrig": 1, "octave": -1, "cutoff": 150, "reso": 10, "drive": 0.7, "sub": 0.55, "glide": 0.03, "gain": 0.55 } },
+ { "name": "Slow Growl Half", "params": { "rate": 1, "shape": 1, "lfoAmt": 0.8, "retrig": 0, "octave": -1, "cutoff": 120, "reso": 12, "drive": 0.85, "sub": 0.6, "glide": 0.06, "gain": 0.5 } },
+ { "name": "Triplet Wobble", "params": { "rate": 4, "shape": 0, "lfoAmt": 0.7, "retrig": 1, "octave": -1, "cutoff": 180, "reso": 8, "drive": 0.5, "sub": 0.5, "glide": 0.04, "gain": 0.6 } },
+ { "name": "Yoi Talk", "params": { "rate": 3, "shape": 2, "lfoAmt": 0.9, "retrig": 1, "octave": 0, "cutoff": 260, "reso": 16, "drive": 0.6, "sub": 0.35, "glide": 0.08, "gain": 0.5 } }
+]

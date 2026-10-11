@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+"""Learn the monitor's fastest native-resolution mode and keep it in the ESP kernel command line as video=OUT:WxH@R.
+
+With video= the kernel, simpledrm and (reuseOutputMode in rc.xml) labwc all start in that one mode, so the display is
+modeset once and never again. Also adds systemd.tty.rows.console= (PID 1 skips a 333 ms console size query) to
+command lines written before the installer set it. Atomic write, backup kept, only those tokens are touched."""
+import json, os, subprocess, sys
+cmdline = '/boot/EFI/BIFROST/boot.cfg' if os.path.exists('/boot/EFI/BIFROST/boot.cfg') else '/boot/EFI/BOOT/cmdline.txt'  # the file the loader boots first
+env = dict(os.environ, XDG_RUNTIME_DIR='/run/bifrost/user', WAYLAND_DISPLAY='wayland-0')
+def wants_max():
+    # the fastest refresh is the default; `refresh=firmware` in display.conf keeps the firmware mode (no retrain blink)
+    try:
+        return 'refresh=firmware' not in open('/etc/bifrost/display.conf').read().split()
+    except OSError:
+        return True
+CONSOLE = 'systemd.tty.rows.console='
+def base(text):
+    toks = [t for t in text.split(' ') if t and not t.startswith('video=')]
+    return toks if CONSOLE in toks else toks + [CONSOLE]
+try:
+    if not wants_max():
+        # boot in the firmware mode: drop any learned video= token so the kernel never changes it
+        text = open(cmdline).read().rstrip('\n')
+        toks = base(text)
+        if toks != text.split(' ') and 'root=' in text and 'initrd=' in text:
+            tmp = cmdline + '.new'
+            open(tmp, 'w').write(' '.join(toks) + '\n'); os.sync(); os.replace(tmp, cmdline)
+            print('video-arg: ' + ' '.join(sorted(set(text.split(' ')) ^ set(toks))))
+        sys.exit(0)
+    out = json.loads(subprocess.check_output(['wlr-randr', '--json'], text=True, env=env, timeout=10))
+    o = next(x for x in out if x.get('enabled', True))
+    n = next(m for m in o['modes'] if m.get('preferred'))
+    b = max((m for m in o['modes'] if (m['width'], m['height']) == (n['width'], n['height'])), key=lambda m: m['refresh'])
+    arg = f"video={o['name']}:{b['width']}x{b['height']}@{round(b['refresh'])}"
+    text = open(cmdline).read().rstrip('\n')
+except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as e:
+    sys.exit(f'video-arg: unchanged ({e})')
+toks = base(text) + [arg]
+new = ' '.join(toks) + '\n'
+if new == text + '\n':
+    sys.exit(0)
+if 'root=' not in new or 'initrd=' not in new:
+    sys.exit('video-arg: refusing to write an unbootable command line')
+if not os.path.exists(cmdline + '.bak'):
+    open(cmdline + '.bak', 'w').write(text + '\n')
+tmp = cmdline + '.new'
+open(tmp, 'w').write(new)
+os.sync()
+os.replace(tmp, cmdline)
+print(f'video-arg: {arg}')

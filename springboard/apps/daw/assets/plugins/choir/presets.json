@@ -1,0 +1,54 @@
+[
+ {
+  "name": "Ahh Pad",
+  "params": {
+   "attack": 2,
+   "release": 2,
+   "stereo": 0.35,
+   "detune": 6,
+   "human": 0.1
+  },
+  "tags": [
+   "pad",
+   "ahh"
+  ]
+ },
+ {
+  "name": "Dark Chant",
+  "params": {
+   "tone": 2200,
+   "attack": 1.5,
+   "release": 2,
+   "keytrack": 0.3
+  },
+  "tags": [
+   "dark",
+   "chant"
+  ]
+ },
+ {
+  "name": "Cinematic Swell",
+  "params": {
+   "attack": 5,
+   "release": 3,
+   "velocity": 0.9,
+   "bright": 0.8
+  },
+  "tags": [
+   "cinematic",
+   "swell"
+  ]
+ },
+ {
+  "name": "Soft Hymn",
+  "params": {
+   "velcurve": 1.2,
+   "release": 1.5,
+   "human": 0.15
+  },
+  "tags": [
+   "hymn",
+   "soft"
+  ]
+ }
+]

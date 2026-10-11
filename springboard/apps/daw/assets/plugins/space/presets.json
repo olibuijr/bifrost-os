@@ -1,0 +1,8 @@
+[
+ { "name": "Small Room", "params": { "space": 4, "mix": 0.15, "predelay": 5, "decay": 0.7, "tone": 7000, "width": 0.8 } },
+ { "name": "Studio", "params": { "space": 5, "mix": 0.18, "predelay": 8, "decay": 0.8, "tone": 8000, "width": 1 } },
+ { "name": "Chamber", "params": { "space": 3, "mix": 0.22, "predelay": 12, "decay": 0.85, "tone": 7500, "width": 1 } },
+ { "name": "Concert Hall", "params": { "space": 0, "mix": 0.25, "predelay": 25, "decay": 0.95, "tone": 7000, "width": 1.1 } },
+ { "name": "Church", "params": { "space": 2, "mix": 0.28, "predelay": 20, "decay": 1, "tone": 6000, "width": 1.1 } },
+ { "name": "Cathedral Wash", "params": { "space": 1, "mix": 0.3, "predelay": 40, "decay": 1, "tone": 4500, "width": 1.3 } }
+]

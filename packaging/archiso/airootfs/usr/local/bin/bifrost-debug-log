@@ -1,0 +1,20 @@
+#!/bin/bash
+# Debug builds only: stream the whole journal (kernel and systemd at debug level included) to the lab host, so a
+# machine that hangs after its network is up still leaves a trace. Reconnects forever.
+HOST=${BIFROST_LOG_HOST:-10.99.0.1}; PORT=${BIFROST_LOG_PORT:-9100}
+# If DHCP has not produced an IPv4 address on the first wired port, take 10.99.0.77/24 (the lab cable's network) so this
+# machine can always reach the lab host.
+ensure_net() {
+  local i; i=$(ls /sys/class/net | grep -E '^(e|en)' | head -1) || return 0
+  [ -n "$i" ] || return 0
+  ip link set "$i" up 2>/dev/null
+  ip -4 addr show "$i" | grep -q 'inet ' || ip addr add 10.99.0.77/24 dev "$i" 2>/dev/null
+}
+while true; do
+  ensure_net
+  if exec 3<>"/dev/tcp/$HOST/$PORT" 2>/dev/null; then
+    { echo "=== bifrost debug log from $(cat /etc/hostname 2>/dev/null) $(date -u +%FT%TZ) ==="; journalctl -b -o short-monotonic --no-pager --lines=all -f; } >&3 2>&1
+    exec 3>&-
+  fi
+  sleep 2
+done

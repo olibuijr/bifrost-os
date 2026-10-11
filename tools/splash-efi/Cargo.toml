@@ -1,0 +1,17 @@
+[package]
+name = "splash-efi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uefi = { version = "0.41", features = ["alloc", "panic_handler", "global_allocator"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+
+# Keep the EFI build callable from the repository's fast ISO iteration path.
+[profile.fast]
+inherits = "release"
+lto = false

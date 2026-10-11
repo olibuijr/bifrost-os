@@ -1,0 +1,11 @@
+id = "is.olibuijr.keyboard"
+name = "Keyboard"
+version = "1.1.0"
+kind = "system"
+provides = ["keyboard"]
+exec = "bifrost-keyboard"
+icon = "icon.png"
+min_shell = "0.4.77"
+summary = "Keyboards, emoji and word suggestions"
+category = "System"
+architecture = "x86_64-linux"

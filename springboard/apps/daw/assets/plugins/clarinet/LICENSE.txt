@@ -1,0 +1,7 @@
+Audio samples: Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0
+Source: https://github.com/sgossner/VSCO-2-CE (Woodwinds/Clarinet/susLong)
+
+Released under Creative Commons CC0 1.0 Universal (public domain dedication).
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Processed (trimmed, normalized, looped, Ogg Vorbis encoded) by tools/build-instruments-winds.py; the processed files are also CC0.

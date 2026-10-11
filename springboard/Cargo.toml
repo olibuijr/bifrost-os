@@ -1,0 +1,108 @@
+[package]
+name = "springboard"
+version = "0.5.27"
+edition = "2021"
+description = "BifrOSt OS shell for Arch Linux"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+# test helpers for the app crates' tests (shell::tests::ui, clipboard and zip fixtures)
+testkit = ["bifrost-render/testkit"]
+# AT-SPI2 accessibility bridge (Orca): exports app semantic trees on the a11y bus; needs zbus, inert without org.a11y.Bus
+atspi = ["dep:zbus"]
+desktop-wayland = ["dep:wayland-client", "dep:wayland-protocols-wlr", "dep:wayland-protocols", "dep:memmap2", "dep:tempfile", "dep:zbus"]
+
+[dependencies]
+# The browser also uses the row-streaming codec APIs directly.
+zune-jpeg = "0.5"
+zune-core = "0.5"
+png = "0.18"
+bifrost-core = { path = "core" }
+bifrost-render = { path = "render" }
+bifrost-ui = { path = "ui" }
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"], optional = true }
+wayland-client = { version = "0.31", optional = true }
+wayland-protocols-wlr = { version = "0.3", features = ["client"], optional = true }
+memmap2 = { version = "0.9", optional = true }
+tempfile = { version = "3", optional = true }
+# bifrost-portal: org.freedesktop.portal.Settings on the session bus (blocking API).
+zbus = { version = "5", optional = true }
+bifrost-proto = { path = "proto" }
+termcore = { package = "iosterm", path = "../../iOSTerm" }
+# AAC-LC audio decoding (pure Rust; the only codec crate — video is decoded
+# by the hardware through media::VideoDecoder).
+symphonia-core = { version = "0.6", default-features = false, features = ["opt-simd-neon"] }
+symphonia-codec-aac = { version = "0.6", default-features = false }
+# MP3 decoding for the Music app (pure Rust).
+symphonia-bundle-mp3 = { version = "0.6", default-features = false, features = ["mp3"] }
+# Music app file formats (pure Rust, all in the offline registry): FLAC, Ogg
+# Vorbis and PCM WAV, with their Vorbis-comment / RIFF INFO tags.
+symphonia-bundle-flac = { version = "0.6", default-features = false }
+symphonia-codec-vorbis = { version = "0.6", default-features = false }
+symphonia-format-ogg = { version = "0.6", default-features = false }
+symphonia-format-riff = { version = "0.6", default-features = false, features = ["wav"] }
+symphonia-codec-pcm = { version = "0.6", default-features = false }
+# WoW game-streaming client core (pure Rust, std + log): protocol driver, touch UI, draw lists.
+wowstream-client = { path = "../../wow-private/wowstream/client" }
+# Everything below serves the Deildu app only; the shell core stays dependency-free.
+deildu-rust = { path = "../../bifrost-deildu" }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-graviola = "0.4"
+webpki-roots = "1.0"
+scraper = "0.24"
+url = "2.5"
+
+# Browser engine (Servo components + Boa): see docs/browser-plan.md.
+html5ever = "0.40"
+markup5ever = "0.40"
+cssparser = "0.38"
+# selectors 0.38 is built on cssparser 0.37; style/selectors.rs re-parses selector text with it
+cssparser37 = { package = "cssparser", version = "0.37" }
+precomputed-hash = "0.1"
+selectors = "0.38"
+taffy = { version = "0.14", default-features = false, features = ["std", "flexbox", "grid", "block_layout", "content_size"] }
+boa_engine = "0.22"
+
+# AAC-LC decoder with the two-channel limit lifted (MPL-2.0, upstream 0.6.1; only src/aac/mod.rs changed).
+[patch.crates-io]
+symphonia-codec-aac = { path = "third_party/symphonia-codec-aac" }
+
+# Debug builds: line tables only (no full DWARF variable info) to cut debug artifact size and link cost.
+# Runtime behaviour is unchanged; use `fast`/`release` for representative performance.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Host iteration (lab ISOs, lab-push): no LTO, many codegen units, incremental, the same
+# opt-level as release so frame pacing and video are representative. A one-file change links in seconds.
+# Releases still use `release`.
+[profile.fast]
+inherits = "release"
+lto = false
+codegen-units = 32
+incremental = true
+strip = false
+
+[workspace]
+members = ["core", "render", "ui", "proto", "sdk", "bifrostd", "audiod", "netd", "updated", "apps/files", "apps/daw", "apps/browser", "apps/remote", "apps/notes-desktop", "apps/books-desktop", "apps/calculator-desktop", "apps/keyboard", "apps/calendar-desktop", "apps/clock-desktop", "apps/contacts-desktop", "apps/freeform-desktop", "apps/games-desktop", "apps/music-desktop", "apps/news-desktop", "apps/podcasts-desktop", "apps/reminders-desktop", "apps/shortcuts-desktop", "apps/voicememos-desktop", "apps/weather-desktop", "mcp", "apps/assistant-desktop", "apps/console-desktop"]
+
+[dev-dependencies]
+tempfile = "3"
+bifrost-render = { path = "render", features = ["testkit"] }
+
+[[example]]
+name = "app_policy_probe"
+required-features = ["desktop-wayland"]
+
+[[bin]]
+name = "bifrost-portal"
+path = "src/bin/portal.rs"
+required-features = ["desktop-wayland"]

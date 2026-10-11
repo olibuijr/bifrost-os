@@ -1,0 +1,18 @@
+## 0.4.1
+
+- Opens as a native Wayland window (from the Dock, Spotlight and the App Store).
+
+# Changelog
+
+## 0.5.0
+
+- Upstream soundcraft v0.5.0.
+  ## What's Changed
+  * Nudge clip gain with Ctrl+Shift+Up/Down on Windows and Linux too by @grovebit in https://github.com/storytold/soundcraft/pull/105
+  * Keep the MIDI editor dock at its resized height by @reoniazx in https://github.com/storytold/soundcraft/pull/113
+  * Stop playback when replacing the session by @reoniazx in https://github.com/storytold/soundcraft/pull/110
+  * fix(ui): follow live system appearance changes by @coygeek in https://github.com/storytold/soundcraft/pull/85
+
+## 0.4.0
+
+- Initial BifrOSt App Store package of upstream soundcraft v0.4.0.

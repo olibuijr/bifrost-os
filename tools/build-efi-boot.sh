@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Build the BifrOSt-owned UEFI boot application.
+#
+# The firmware still supplies UEFI (or legacy firmware's CSM); everything after
+# the firmware handoff is the Rust BifrOSt loader. Keep the generated binary
+# out of Cargo's target directory so the ISO and recovery package consume the
+# same artifact.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+PROFILE=${1:-release}
+TARGET=x86_64-unknown-uefi
+
+cargo build --offline --manifest-path tools/splash-efi/Cargo.toml \
+  --target "$TARGET" --profile "$PROFILE"
+
+BOOT="tools/splash-efi/target/$TARGET/$PROFILE/splash-efi.efi"
+test -s "$BOOT" || { echo "missing EFI output: $BOOT" >&2; exit 1; }
+install -m 0755 "$BOOT" packaging/archiso/splash.efi
+install -m 0755 "$BOOT" packaging/arch/recovery/splash.efi
+printf 'BifrOSt EFI boot: %s\n' "$BOOT"

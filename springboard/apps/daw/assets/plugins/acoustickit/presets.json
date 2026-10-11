@@ -1,0 +1,87 @@
+[
+ {
+  "name": "Studio",
+  "params": {
+   "velocity": 0.8,
+   "tone": 20000,
+   "stereo": 0
+  },
+  "tags": [
+   "natural"
+  ]
+ },
+ {
+  "name": "Brushy Soft",
+  "params": {
+   "velocity": 0.9,
+   "tone": 7000,
+   "gain": 0.4
+  },
+  "tags": [
+   "jazz",
+   "soft"
+  ]
+ },
+ {
+  "name": "Tight Room",
+  "params": {
+   "velocity": 0.7,
+   "tone": 20000,
+   "decay": 0.6
+  },
+  "tags": [
+   "short",
+   "funk"
+  ]
+ },
+ {
+  "name": "Room",
+  "params": {
+   "tone": 16000,
+   "velocity": 0.75,
+   "stereo": 0.25
+  },
+  "tags": [
+   "natural",
+   "room"
+  ]
+ },
+ {
+  "name": "Dry Jazz",
+  "params": {
+   "tone": 12000,
+   "velocity": 0.95,
+   "stereo": 0.05,
+   "gain": 0.45
+  },
+  "tags": [
+   "jazz",
+   "dry"
+  ]
+ },
+ {
+  "name": "Brushy",
+  "params": {
+   "tone": 6500,
+   "velocity": 1,
+   "gain": 0.4
+  },
+  "tags": [
+   "jazz",
+   "soft"
+  ]
+ },
+ {
+  "name": "Rock Big",
+  "params": {
+   "tone": 20000,
+   "velocity": 0.5,
+   "stereo": 0.3,
+   "gain": 0.65
+  },
+  "tags": [
+   "rock",
+   "loud"
+  ]
+ }
+]

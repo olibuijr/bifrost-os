@@ -1,0 +1,6 @@
+[
+ { "name": "Dusty Vinyl",   "params": { "crackle": 0.45, "wow": 0.2,  "age": 0.55, "drive": 0.3,  "mix": 1 } },
+ { "name": "Old Tape",      "params": { "crackle": 0.1,  "wow": 0.65, "age": 0.45, "drive": 0.45, "mix": 1 } },
+ { "name": "Subtle Warmth", "params": { "crackle": 0.12, "wow": 0.1,  "age": 0.2,  "drive": 0.25, "mix": 0.6 } },
+ { "name": "Broken Radio",  "params": { "crackle": 0.6,  "wow": 0.5,  "age": 1,    "drive": 0.8,  "mix": 1 } }
+]

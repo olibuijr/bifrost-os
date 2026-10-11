@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""bifrost-lab: remote "computer use" for the installer live system (lab builds only).
+
+  bifrost-lab shot [out.png]      screenshot of the X display (or --fb: the Linux framebuffer)
+  bifrost-lab key ctrl+alt+f2     press a key chord          bifrost-lab type 'text'
+  bifrost-lab click X Y [button]  move + click               bifrost-lab move X Y
+  bifrost-lab exec 'shell cmd'    run as root, print output  bifrost-lab info
+  bifrost-lab serve               HTTP API on :8651 (header X-Lab-Token), see /lab/help
+Enabled only when /etc/bifrost/lab.token exists (written by lab image builds)."""
+import ctypes, ctypes.util, json, os, struct, subprocess, sys, time, zlib
+
+TOKEN_FILE = "/etc/bifrost/lab.token"
+DISPLAY = os.environ.get("DISPLAY", ":0")
+
+def png(w, h, rgb):
+    raw = b"".join(b"\x00" + rgb[y * w * 3:(y + 1) * w * 3] for y in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 3)) + chunk(b"IEND", b"")
+
+class X:
+    def __init__(self):
+        self.x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        self.tst = ctypes.CDLL(ctypes.util.find_library("Xtst") or "libXtst.so.6")
+        self.x11.XOpenDisplay.restype = ctypes.c_void_p
+        self.d = self.x11.XOpenDisplay(DISPLAY.encode())
+        if not self.d: raise RuntimeError("cannot open X display " + DISPLAY)
+        self.x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        self.root = self.x11.XDefaultRootWindow(ctypes.c_void_p(self.d))
+        self.x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+        self.x11.XStringToKeysym.restype = ctypes.c_ulong
+    def size(self):
+        self.x11.XDisplayWidth.restype = self.x11.XDisplayHeight.restype = ctypes.c_int
+        return self.x11.XDisplayWidth(ctypes.c_void_p(self.d), 0), self.x11.XDisplayHeight(ctypes.c_void_p(self.d), 0)
+    def shot(self):
+        w, h = self.size()
+        class Img(ctypes.Structure):
+            _fields_ = [("width", ctypes.c_int), ("height", ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int),
+                        ("data", ctypes.POINTER(ctypes.c_ubyte)), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int),
+                        ("bitmap_bit_order", ctypes.c_int), ("bitmap_pad", ctypes.c_int), ("depth", ctypes.c_int),
+                        ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int)]
+        self.x11.XGetImage.restype = ctypes.POINTER(Img)
+        im = self.x11.XGetImage(ctypes.c_void_p(self.d), ctypes.c_ulong(self.root), 0, 0, w, h, ctypes.c_ulong(~0 & 0xFFFFFFFF), 2)
+        if not im: raise RuntimeError("XGetImage failed")
+        i = im.contents; bpl = i.bytes_per_line
+        buf = ctypes.string_at(i.data, bpl * h)
+        out = bytearray(w * h * 3)
+        for y in range(h):
+            row = buf[y * bpl:y * bpl + w * 4]
+            out[y * w * 3:(y + 1) * w * 3:3] = row[2::4]; out[y * w * 3 + 1:(y + 1) * w * 3:3] = row[1::4]; out[y * w * 3 + 2:(y + 1) * w * 3:3] = row[0::4]
+        return png(w, h, bytes(out))
+    def _kc(self, name):
+        names = {"ctrl": "Control_L", "alt": "Alt_L", "shift": "Shift_L", "super": "Super_L", "enter": "Return", "esc": "Escape", "return": "Return",
+                 "backspace": "BackSpace", "del": "Delete", "space": "space", "tab": "Tab", "up": "Up", "down": "Down", "left": "Left", "right": "Right"}
+        ks = self.x11.XStringToKeysym(names.get(name.lower(), name).encode())
+        if not ks: raise ValueError("unknown key " + name)
+        return self.x11.XKeysymToKeycode(ctypes.c_void_p(self.d), ctypes.c_ulong(ks)), ks
+    def key(self, chord):
+        codes = [self._kc(k)[0] for k in chord.split("+")]
+        for c in codes: self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), c, 1, 0)
+        for c in reversed(codes): self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), c, 0, 0)
+        self.x11.XFlush(ctypes.c_void_p(self.d))
+    def type(self, text):
+        for ch in text:
+            if ch == "\n": self.key("Return"); continue
+            sym = {" ": "space", "-": "minus", ".": "period", "/": "slash", "_": "underscore", ":": "colon", "@": "at", "!": "exclam"}.get(ch, ch)
+            shift = ch.isupper() or ch in "_:@!"
+            c, _ = self._kc(sym)
+            if shift: self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), self._kc("Shift_L")[0], 1, 0)
+            self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), c, 1, 0); self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), c, 0, 0)
+            if shift: self.tst.XTestFakeKeyEvent(ctypes.c_void_p(self.d), self._kc("Shift_L")[0], 0, 0)
+        self.x11.XFlush(ctypes.c_void_p(self.d))
+    def move(self, x, y):
+        self.tst.XTestFakeMotionEvent(ctypes.c_void_p(self.d), 0, int(x), int(y), 0); self.x11.XFlush(ctypes.c_void_p(self.d))
+    def click(self, x, y, button=1):
+        self.move(x, y); time.sleep(0.05)
+        self.tst.XTestFakeButtonEvent(ctypes.c_void_p(self.d), int(button), 1, 0); self.tst.XTestFakeButtonEvent(ctypes.c_void_p(self.d), int(button), 0, 0)
+        self.x11.XFlush(ctypes.c_void_p(self.d))
+
+def fb_shot():
+    g = "/sys/class/graphics/fb0/"; rd = lambda n: open(g + n).read().strip()
+    w, h = map(int, rd("virtual_size").split(",")); stride = int(rd("stride")); bpp = int(rd("bits_per_pixel"))
+    raw = open("/dev/fb0", "rb").read(stride * h); out = bytearray(w * h * 3); px = bpp // 8
+    for y in range(h):
+        row = raw[y * stride:y * stride + w * px]
+        out[y * w * 3:(y + 1) * w * 3:3] = row[2::px]; out[y * w * 3 + 1:(y + 1) * w * 3:3] = row[1::px]; out[y * w * 3 + 2:(y + 1) * w * 3:3] = row[0::px]
+    return png(w, h, bytes(out))
+
+US = {c: (code, False) for code, row in ((2, "1234567890-="), (16, "qwertyuiop[]"), (30, "asdfghjkl;'"), (44, "zxcvbnm,./")) for c, code in zip(row, range(code, code + 12))}
+US.update({c: (code, True) for code, row in ((2, "!@#$%^&*()_+"), (16, "QWERTYUIOP{}"), (30, 'ASDFGHJKL:"'), (44, "ZXCVBNM<>?")) for c, code in zip(row, range(code, code + 12))})
+US.update({" ": (57, False), "\n": (28, False), "\t": (15, False)})
+NAMES = {"enter": 28, "return": 28, "esc": 1, "tab": 15, "backspace": 14, "up": 103, "down": 108, "left": 105, "right": 106, "space": 57, "ctrl": 29, "alt": 56, "shift": 42}
+NATIVE = "/run/bifrost-input"
+
+def native():
+    return os.path.exists(NATIVE)
+
+def native_send(*lines):
+    with open(NATIVE, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+def native_key(chord):
+    codes = [NAMES.get(k.lower()) or US[k][0] for k in chord.split("+")]
+    native_send(*[f"key {c} 1" for c in codes], *[f"key {c} 0" for c in reversed(codes)])
+
+def native_type(text):
+    for ch in text:
+        code, shift = US[ch]
+        native_send(*([f"key 42 1"] if shift else []), f"key {code} 1", f"key {code} 0", *([f"key 42 0"] if shift else []))
+        time.sleep(0.02)
+
+def native_click(x, y):
+    native_send(f"move {x} {y}", f"down {x} {y}", f"up {x} {y}")
+
+def native_shot():
+    open("/run/bifrost-shot-on", "a").close()
+    for _ in range(40):
+        if os.path.exists("/run/bifrost-screen.png"):
+            break
+        time.sleep(0.1)
+    time.sleep(0.6)
+    return open("/run/bifrost-screen.png", "rb").read()
+
+def info():
+    sh = lambda c: subprocess.run(c, shell=True, capture_output=True, text=True).stdout.strip()
+    return {"uptime": sh("uptime -p"), "cmdline": sh("cat /proc/cmdline"), "ip": sh("ip -br addr | grep -v '^lo'"),
+            "fb0": sh("for f in stride virtual_size bits_per_pixel name; do echo $f=$(cat /sys/class/graphics/fb0/$f 2>/dev/null); done"),
+            "drm": sh("ls /dev/dri 2>/dev/null; dmesg | grep -iE 'efifb|simpledrm|fb0' | tail -6"), "disks": sh("lsblk -dno NAME,SIZE,MODEL,TYPE"),
+            "installer": sh("systemctl is-active bifrost-installer"), "bootweave": sh("cat /run/bifrost/bootweave/last 2>/dev/null || true")}
+
+def serve():
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    token = open(TOKEN_FILE).read().strip()
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def out(self, body, ct="application/json", code=200):
+            b = body if isinstance(body, bytes) else json.dumps(body).encode()
+            self.send_response(code); self.send_header("Content-Type", ct); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        def auth(self):
+            if self.headers.get("X-Lab-Token") != token: self.out({"error": "unauthorized"}, code=401); return False
+            return True
+        def do_GET(self):
+            if not self.auth(): return
+            try:
+                if self.path.startswith("/lab/screenshot"): return self.out(native_shot() if native() else fb_shot() if "fb=1" in self.path else X().shot(), "image/png")
+                if self.path == "/lab/info": return self.out(info())
+                if self.path == "/lab/log": return self.out(subprocess.run("journalctl -b --no-pager | tail -n 200", shell=True, capture_output=True, text=True).stdout.encode(), "text/plain")
+                self.out({"endpoints": ["GET /lab/screenshot[?fb=1]", "GET /lab/info", "GET /lab/log", "POST /lab/key {chord}", "POST /lab/type {text}",
+                                        "POST /lab/click {x,y,button}", "POST /lab/move {x,y}", "POST /lab/exec {cmd}"]})
+            except Exception as e: self.out({"error": str(e)}, code=500)
+        def do_POST(self):
+            if not self.auth(): return
+            try:
+                b = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                if self.path == "/lab/key": (native_key if native() else X().key)(b["chord"])
+                elif self.path == "/lab/type": (native_type if native() else X().type)(b["text"])
+                elif self.path == "/lab/click": native_click(b["x"], b["y"]) if native() else X().click(b["x"], b["y"], b.get("button", 1))
+                elif self.path == "/lab/move": X().move(b["x"], b["y"])
+                elif self.path == "/lab/exec":
+                    r = subprocess.run(b["cmd"], shell=True, capture_output=True, text=True, timeout=b.get("timeout", 60))
+                    return self.out({"rc": r.returncode, "stdout": r.stdout[-20000:], "stderr": r.stderr[-5000:]})
+                else: return self.out({"error": "not found"}, code=404)
+                self.out({"ok": True})
+            except Exception as e: self.out({"error": str(e)}, code=500)
+    ThreadingHTTPServer(("0.0.0.0", 8651), H).serve_forever()
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    if not a: print(__doc__); sys.exit(1)
+    if a[0] != "serve" and not os.path.exists(TOKEN_FILE) and "--force" not in a: sys.exit("lab control disabled (no " + TOKEN_FILE + ")")
+    c = a[0]
+    if c == "shot":
+        data = native_shot() if native() else fb_shot() if "--fb" in a else X().shot(); p = [x for x in a[1:] if not x.startswith("--")]
+        (open(p[0], "wb") if p else sys.stdout.buffer).write(data)
+    elif c == "key": (native_key if native() else X().key)(a[1])
+    elif c == "type": (native_type if native() else X().type)(a[1])
+    elif c == "click": native_click(a[1], a[2]) if native() else X().click(a[1], a[2], a[3] if len(a) > 3 else 1)
+    elif c == "move": X().move(a[1], a[2])
+    elif c == "exec": sys.exit(subprocess.call(a[1], shell=True))
+    elif c == "info": print(json.dumps(info(), indent=1))
+    elif c == "serve": serve()

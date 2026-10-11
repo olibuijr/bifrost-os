@@ -1,0 +1,10 @@
+#!/bin/sh
+# Seeds /var/lib/springboard from the packaged assets. Every start copies asset files the data dir does
+# not have yet (new or renamed icons and fonts after an update) and never overwrites one that exists,
+# so the user's data and changed files stay as they are.
+set -eu
+src=/usr/share/springboard/assets
+dst=/var/lib/springboard
+mkdir -p "$dst"
+[ -d "$src" ] && cp -an "$src"/. "$dst"/
+touch "$dst/.seeded"

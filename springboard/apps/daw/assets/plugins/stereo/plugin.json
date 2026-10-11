@@ -1,0 +1,23 @@
+{
+  "id": "stereo",
+  "name": "Stereo",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "stereo",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Stereo imager: M/S width (0 mono, 1 normal, 2 extra wide) with bass mono below freq",
+  "category": "utility",
+  "tags": [
+    "stereo",
+    "width",
+    "imager",
+    "mid-side",
+    "mastering"
+  ],
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ]
+}

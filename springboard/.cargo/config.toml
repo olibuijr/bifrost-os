@@ -1,0 +1,7 @@
+# Cortex-A55 is the baseline of the T618 (A55 + A75): dotprod, fp16, rcpc, lse
+[target.aarch64-linux-android]
+rustflags = ["-C", "target-cpu=cortex-a55"]
+
+# lld links the big shell binary several times faster than the default bfd
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]

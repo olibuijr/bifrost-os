@@ -1,0 +1,6 @@
+[package]
+name = "bifrost-ui"
+version = "0.1.0"
+edition = "2021"
+description = "Independent BifrOSt control semantics, focus, commands and text editing"
+[dependencies]

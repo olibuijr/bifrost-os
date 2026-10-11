@@ -1,0 +1,1657 @@
+//! Reminders: lists with colours and icons, smart lists, subtasks, flags,
+//! priority, notes/URL, due date and time with repeat rules, early alerts,
+//! swipe actions with undo, drag to reorder, quick-add parsing, sort, group,
+//! show/hide completed and search. State, input and persistence live here;
+//! drawing is in `view`, every pure rule in `model`, `repeat`, `quick`.
+//! The window is Golden Gate Golden Gate Reminders: a full-size window with the smart-list tiles and My Lists in a
+//! sidebar, the open list (or a reminder's details) beside it, and the unified toolbar (`chrome`).
+#[path = "view.rs"]
+mod view;
+#[path = "chrome.rs"]
+mod chrome;
+
+use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
+use springboard::layout::in_rect as within;
+use bifrost_app::kit::ui::{home_zone, Ui};
+use bifrost_app::kit::{Event, TextCache};
+use crate::{model, quick, repeat, store};
+use springboard::deildu::scroll::Scroller;
+use springboard::shell::clock::{
+    tz::{civil_from_days, days_from_civil},
+    Wall,
+};
+use springboard::shell::keyboard::Out;
+use springboard::shell::textfield::TextField;
+use bifrost_app::controls::undo::UndoManager;
+use model::{Data, Group, ListDef, Options, Reminder, Row, Smart, Sort, View};
+use std::collections::HashSet;
+use std::path::PathBuf;
+use store::local_day;
+
+
+const LONG_PRESS_MS: f64 = 400.0;
+const UNDO_MS: f64 = 6000.0;
+/// How many undoable changes the history keeps.
+const UNDO_LIMIT: usize = 50;
+const ITEM_H: f32 = 48.0;
+const HEAD_H: f32 = 40.0;
+/// Width of one swipe button, in pt.
+const BTN: f32 = 80.0;
+/// Tops of the open list's rows (under the band and its large title) and of a details form, in points.
+const ITEMS_TOP: f32 = 112.0;
+const FORM_TOP: f32 = 64.0;
+/// Points: the options popover's width and the tap zone at the Undo bar's right edge.
+const OPTIONS_W_PT: f32 = 300.0;
+const UNDO_HIT_PT: f32 = 120.0;
+/// Content y (pt, below HOME_TOP) of the "My Lists" rows.
+const MAX_SEARCH: usize = 100;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Screen {
+    /// the open list beside the sidebar
+    Items,
+    Editor,
+    ListEditor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Field {
+    Title,
+    Notes,
+    Url,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Target {
+    /// shows or hides the sidebar
+    Sidebar,
+    New,
+    NewList,
+    Search,
+    Options,
+    Smart(Smart),
+    List(u64),
+    ListInfo(u64),
+    Row(usize),
+    Circle(usize),
+    Collapse(usize),
+    SwipeFlag(usize),
+    SwipeDelete(usize),
+    Undo,
+    OptSort(Sort),
+    OptGroup(Group),
+    OptCompleted,
+    OptClearCompleted,
+    /// None is "Automatic" (the first list).
+    OptDefaultList(Option<u64>),
+    OptExport,
+    OptClose,
+    Cancel,
+    Save,
+    Field(Field),
+    Due,
+    Calendar,
+    Month(i32),
+    Day(i64),
+    Time,
+    TimeStep,
+    Hour(i32),
+    Minute(i32),
+    Repeat,
+    Early,
+    Flag,
+    Priority,
+    MoveList,
+    Indent,
+    Duplicate,
+    Delete,
+    Colors,
+    Icons,
+    Color(u8),
+    Icon(u8),
+    ListUp,
+    ListDown,
+    Scroll,
+}
+
+struct Editor {
+    id: Option<u64>,
+    draft: Reminder,
+    month: i64,
+}
+
+struct ListEdit {
+    id: Option<u64>,
+    color: u8,
+    icon: u8,
+}
+
+struct UndoBar {
+    label: String,
+    until: f64,
+}
+
+/// Puts removed reminders back (undo of a delete or a clear).
+fn restore_items(removed: Vec<(usize, Reminder)>) -> impl Fn(&mut Data) + 'static {
+    move |d| model::restore(&mut d.items, removed.clone())
+}
+
+/// Flips the flag of reminder `id`; undo and redo both do this.
+fn flag_toggle(id: u64) -> impl Fn(&mut Data) + 'static {
+    move |d| {
+        if let Some(r) = d.items.iter_mut().find(|r| r.id == id) {
+            r.flagged = !r.flagged;
+        }
+    }
+}
+
+struct Swipe {
+    id: u64,
+    /// current content offset in px (<= 0)
+    x: f32,
+    base: f32,
+    open: bool,
+}
+
+struct Drag {
+    id: u64,
+    y: f32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Axis {
+    Undecided,
+    Vertical,
+    Horizontal,
+}
+
+pub struct Reminders {
+    /// the content column's width (the window less the sidebar) and its left edge, in px
+    w: i32,
+    x0: f32,
+    full_w: i32,
+    /// View > Hide Sidebar
+    side_hidden: bool,
+    h: i32,
+    /// Safe inset at the top in points (from the shared `Layout`; 0 on the desktop).
+    top_pt: f32,
+    path: PathBuf,
+    wall: Wall,
+    data: Data,
+    screen: Screen,
+    view: View,
+    opts: Options,
+    options_open: bool,
+    /// Desktop only: Export List saves a Markdown file under ~/Documents.
+    file_export: bool,
+    /// A confirmation, shown in place of the error line.
+    notice: Option<String>,
+    searching: bool,
+    saved_query: String,
+    rows: Vec<Row>,
+    /// Row offsets in pt from the top of the list content.
+    row_y: Vec<f32>,
+    items_h: f32,
+    collapsed: HashSet<u64>,
+    today: i64,
+    editor: Option<Editor>,
+    list_edit: Option<ListEdit>,
+    title: TextField,
+    title_hint: &'static str,
+    title_max: usize,
+    notes: TextField,
+    url: TextField,
+    focus: Option<Field>,
+    kb_on: bool,
+    labels: TextCache,
+    scroll: Scroller,
+    pressed: Option<Target>,
+    field_touch: Option<Field>,
+    scrolling: bool,
+    axis: Axis,
+    down: (f32, f32),
+    press_at: Option<f64>,
+    swipe: Option<Swipe>,
+    /// Row selected with the arrow keys (an item id).
+    selected: Option<u64>,
+    undo: Option<UndoBar>,
+    /// Every undoable change (`NativeUndoManager`); the Undo bar offers the latest one.
+    history: UndoManager<Data>,
+    drag: Option<Drag>,
+    dirty: bool,
+    error: bool,
+    load_error: bool,
+    style: (u32, bool),
+    gen: u32,
+}
+
+fn month_start(day: i64) -> i64 {
+    let (year, month, _) = civil_from_days(day);
+    days_from_civil(year, month, 1)
+}
+fn mk_field(ui: &Ui, hint: &str, max: usize, text: &str) -> TextField {
+    let mut f = TextField::new(ui, hint, bifrost_app::kit::ui::MAC_BODY_PT, false, max);
+    f.set_text(ui, text);
+    f.focused = false;
+    f
+}
+/// `YYYY-MM-DD` (or with `THH:MM` after it) as a local day since 1970-01-01 and the minute after midnight.
+fn iso_due(text: &str) -> Option<(i64, Option<u16>)> {
+    let (date, time) = match text.split_once('T') {
+        Some((d, t)) => (d, Some(t)),
+        None => (text, None),
+    };
+    let mut parts = date.split('-');
+    let year: i64 = parts.next()?.parse().ok()?;
+    let month: u32 = parts.next()?.parse().ok()?;
+    let day: u32 = parts.next()?.parse().ok()?;
+    let minute = match time {
+        Some(t) => Some(t.get(0..2)?.parse::<u16>().ok()? * 60 + t.get(3..5)?.parse::<u16>().ok()?),
+        None => None,
+    };
+    Some((days_from_civil(year, month, day), minute))
+}
+
+fn clean(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+impl Reminders {
+    /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
+    pub fn set_size(&mut self, w: i32, h: i32) {
+        self.full_w = w;
+        self.w = w - self.x0 as i32;
+        self.h = h;
+    }
+
+    /// The safe inset above the content, in points (`bifrost_app::layout::Layout::top`).
+    pub fn set_top_inset(&mut self, pt: f32) {
+        self.top_pt = pt;
+    }
+
+    pub fn new(ui: &Ui, w: i32, h: i32, path: PathBuf, wall: Wall) -> Self {
+        let loaded = store::load_checked(&path);
+        let load_error = loaded.is_err();
+        let mut app = Self {
+            w,
+            x0: 0.0,
+            full_w: w,
+            side_hidden: false,
+            h,
+            top_pt: 0.0,
+            data: loaded.unwrap_or_default(),
+            path,
+            wall,
+            screen: Screen::Items,
+            view: View::Smart(Smart::All),
+            opts: Options::default(),
+            options_open: false,
+            file_export: false,
+            notice: None,
+            searching: false,
+            saved_query: String::new(),
+            rows: vec![],
+            row_y: vec![],
+            items_h: 0.0,
+            collapsed: HashSet::new(),
+            today: local_day(wall.unix, wall.offset),
+            editor: None,
+            list_edit: None,
+            title: mk_field(ui, "Reminder", model::MAX_TITLE, ""),
+            title_hint: "Reminder",
+            title_max: model::MAX_TITLE,
+            notes: mk_field(ui, "Notes", model::MAX_NOTES, ""),
+            url: mk_field(ui, "URL", model::MAX_URL, ""),
+            focus: None,
+            kb_on: false,
+            labels: TextCache::default(),
+            scroll: Scroller::new(),
+            pressed: None,
+            field_touch: None,
+            scrolling: false,
+            axis: Axis::Undecided,
+            down: (0.0, 0.0),
+            press_at: None,
+            swipe: None,
+            selected: None,
+            undo: None,
+            history: UndoManager::new(UNDO_LIMIT),
+            drag: None,
+            dirty: true,
+            error: load_error,
+            load_error,
+            style: (ui.text_scale.to_bits(), ui.bold),
+            gen: 0,
+        };
+        app.layout_columns(ui);
+        app.rebuild(ui);
+        app
+    }
+
+    /// Bumped on every successful save; the alert scheduler watches it.
+    /// Open reminders due today or earlier (the dock badge).
+    pub fn due_count(&self) -> usize {
+        model::due_count(&self.data.items, self.today)
+    }
+
+    /// Whether the list of reminders is on screen; the New, Find and Delete commands act only there.
+    pub fn on_items(&self) -> bool {
+        self.screen == Screen::Items
+    }
+
+    /// The arrow-selected reminder, if it still exists.
+    pub fn selected_item(&self) -> Option<u64> {
+        self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id))
+    }
+
+    /// File > New Reminder (Cmd+N), File > New List (Cmd+Shift+N), Edit > Find (Cmd+F): the toolbar and chord paths.
+    pub fn new_reminder(&mut self, ui: &Ui, t: f64) {
+        self.activate(ui, Target::New, t);
+    }
+
+    pub fn new_list(&mut self, ui: &Ui, t: f64) {
+        self.activate(ui, Target::NewList, t);
+    }
+
+    pub fn find(&mut self, ui: &Ui, t: f64) {
+        self.activate(ui, Target::Search, t);
+    }
+
+    /// Edit > Mark as Completed: the selected reminder, as its circle does. False when none is selected.
+    pub fn toggle_selected(&mut self, ui: &Ui) -> bool {
+        let Some(id) = self.selected_item() else { return false };
+        self.toggle_item(ui, id);
+        true
+    }
+
+    /// File > Delete Reminder (Cmd+Backspace): the selected reminder, as the chord deletes it.
+    pub fn delete_selected(&mut self, ui: &Ui, t: f64) -> bool {
+        let Some(id) = self.selected_item() else { return false };
+        if self.delete_item(id, t) {
+            self.rebuild(ui);
+        }
+        true
+    }
+
+    /// The `add-reminder` intent: a reminder in the default list, with an optional due day (`YYYY-MM-DD`, or
+    /// `YYYY-MM-DDTHH:MM` for a time). Returns the new reminder's id.
+    pub fn add_reminder(&mut self, ui: &Ui, title: &str, due: Option<&str>) -> Result<u64, String> {
+        let title = clean(title);
+        if title.is_empty() {
+            return Err("the title is empty".into());
+        }
+        let (day, time) = match due {
+            Some(text) => {
+                let (day, time) = iso_due(text).ok_or_else(|| "the due date is not a date".to_string())?;
+                (Some(day), time)
+            }
+            None => (None, None),
+        };
+        let mut next = self.data.clone();
+        let list = self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id));
+        let Some(list) = list else { return Err("there is no list".into()) };
+        let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
+        let mut r = Reminder::new(id, title);
+        r.list = list;
+        r.due = day;
+        r.time = time;
+        next.items.push(r);
+        if self.commit(next) {
+            self.rebuild(ui);
+            Ok(id)
+        } else {
+            Err("the reminders could not be saved".into())
+        }
+    }
+    pub fn generation(&self) -> u32 {
+        self.gen
+    }
+    pub fn set_wall(&mut self, wall: Wall) {
+        self.wall = wall;
+        let today = local_day(wall.unix, wall.offset);
+        if today != self.today {
+            self.today = today;
+            self.dirty = true;
+            self.labels.clear();
+            self.refresh_rows();
+        }
+    }
+    pub fn needs_frame(&self) -> bool {
+        self.dirty
+    }
+    /// Whether an editor holds a draft that is not saved yet (a reminder or list being created or changed).
+    pub fn has_draft(&self) -> bool {
+        matches!(self.screen, Screen::Editor | Screen::ListEditor)
+    }
+    pub fn keyboard_shown(&self) -> bool {
+        self.kb_on
+    }
+    pub fn describe(&self) -> String {
+        let label = match self.view {
+            View::Smart(s) => s.label().to_string(),
+            View::List(id) => self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
+        };
+        let screen = match self.screen {
+            Screen::Items => "list",
+            Screen::Editor => "editor",
+            Screen::ListEditor => "list-editor",
+        };
+        let shown = self.rows.iter().filter(|r| matches!(r, Row::Item { .. })).count();
+        format!(
+            "reminders_screen={screen}\nreminders_filter={label}\nreminders_lists={}\nreminders_count={}\nreminders_shown={shown}\nreminders_completed={}\nreminders_keyboard={}\nreminders_save_error={}\n",
+            self.data.lists.len(),
+            self.data.items.len(),
+            self.data.items.iter().filter(|r| r.completed).count(),
+            self.kb_on,
+            self.error
+        )
+    }
+
+    // ---- geometry -------------------------------------------------------
+
+    fn top_px(&self, ui: &Ui) -> f32 {
+        ui.pt(self.top_pt + match self.screen {
+            Screen::Items => ITEMS_TOP,
+            _ => FORM_TOP,
+        })
+    }
+    /// Top of the Undo bar (the bottom of the list while there is none).
+    fn bottom(&self, ui: &Ui) -> f32 {
+        self.h as f32 - home_zone(ui) - if self.undo.is_some() { ui.pt(52.0) } else { 0.0 }
+    }
+    fn view_bottom(&self, ui: &Ui) -> f32 {
+        match self.screen {
+            Screen::Items => self.bottom(ui),
+            _ => self.h as f32 - home_zone(ui),
+        }
+    }
+    fn content_pt(&self) -> f32 {
+        match self.screen {
+            Screen::Items => self.items_h,
+            _ => self.form_rows().1,
+        }
+    }
+    fn fit_scroll(&mut self, ui: &Ui) {
+        let viewport = self.view_bottom(ui) - self.top_px(ui);
+        self.scroll.set_max(ui.pt(self.content_pt() + 16.0) - viewport);
+    }
+    fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        let h = match self.rows.get(i) {
+            Some(Row::Header(_)) => HEAD_H,
+            _ => ITEM_H,
+        };
+        (
+            ui.pt(SPACE_XL),
+            self.top_px(ui) + ui.pt(self.row_y.get(i).copied().unwrap_or(0.0)) - self.scroll.offset(),
+            self.w as f32 - ui.pt(SPACE_HUGE),
+            ui.pt(h),
+        )
+    }
+    fn item_id(&self, row: usize) -> Option<u64> {
+        match self.rows.get(row)? {
+            Row::Item { idx, .. } => self.data.items.get(*idx).map(|r| r.id),
+            Row::Header(_) => None,
+        }
+    }
+    fn form_rows(&self) -> (Vec<(Target, f32, f32)>, f32) {
+        fn add(v: &mut Vec<(Target, f32, f32)>, y: &mut f32, t: Target, h: f32, gap: f32) {
+            v.push((t, *y, h));
+            *y += h + gap;
+        }
+        let mut v = vec![];
+        let mut y = 0.0;
+        match self.screen {
+            Screen::Editor => {
+                let Some(e) = &self.editor else { return (v, 0.0) };
+                add(&mut v, &mut y, Target::Field(Field::Title), 56.0, 8.0);
+                add(&mut v, &mut y, Target::Field(Field::Notes), 56.0, 8.0);
+                add(&mut v, &mut y, Target::Field(Field::Url), 56.0, 20.0);
+                add(&mut v, &mut y, Target::Due, 52.0, if e.draft.due.is_some() { 8.0 } else { 20.0 });
+                if e.draft.due.is_some() {
+                    add(&mut v, &mut y, Target::Calendar, 294.0, 8.0);
+                    add(&mut v, &mut y, Target::Time, 52.0, 8.0);
+                    if e.draft.time.is_some() {
+                        add(&mut v, &mut y, Target::TimeStep, 52.0, 8.0);
+                    }
+                    add(&mut v, &mut y, Target::Repeat, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::Early, 52.0, 20.0);
+                }
+                add(&mut v, &mut y, Target::Flag, 52.0, 8.0);
+                add(&mut v, &mut y, Target::Priority, 52.0, 8.0);
+                add(&mut v, &mut y, Target::MoveList, 52.0, 8.0);
+                add(&mut v, &mut y, Target::Indent, 52.0, 20.0);
+                if e.id.is_some() {
+                    add(&mut v, &mut y, Target::Duplicate, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
+                }
+            }
+            Screen::ListEditor => {
+                let Some(e) = &self.list_edit else { return (v, 0.0) };
+                add(&mut v, &mut y, Target::Field(Field::Title), 56.0, 20.0);
+                add(&mut v, &mut y, Target::Colors, 64.0, 8.0);
+                add(&mut v, &mut y, Target::Icons, 64.0, 20.0);
+                if e.id.is_some() {
+                    add(&mut v, &mut y, Target::ListUp, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::ListDown, 52.0, 8.0);
+                    if self.data.lists.len() > 1 {
+                        add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
+                    }
+                }
+            }
+            _ => {}
+        }
+        (v, y)
+    }
+    fn form_rect(&self, ui: &Ui, y: f32, h: f32) -> (f32, f32, f32, f32) {
+        (
+            ui.pt(SPACE_XL),
+            self.top_px(ui) + ui.pt(y) - self.scroll.offset(),
+            self.w as f32 - ui.pt(SPACE_HUGE),
+            ui.pt(h),
+        )
+    }
+    fn field_frame(&self, ui: &Ui, f: Field) -> Option<(f32, f32, f32, f32)> {
+        match self.screen {
+            Screen::Editor | Screen::ListEditor => self
+                .form_rows()
+                .0
+                .iter()
+                .find(|(t, _, _)| *t == Target::Field(f))
+                .map(|&(_, y, h)| {
+                    let r = self.form_rect(ui, y, h);
+                    (ui.pt(36.0), r.1, self.w as f32 - ui.pt(72.0), r.3)
+                }),
+            // the search field is in the toolbar (window coordinates there, content coordinates here)
+            Screen::Items if self.searching && f == Field::Title => self.search_px(ui).map(|(x, y, w, h)| (x - self.x0, y, w, h)),
+            _ => None,
+        }
+    }
+    fn field(&self, f: Field) -> &TextField {
+        match f {
+            Field::Title => &self.title,
+            Field::Notes => &self.notes,
+            Field::Url => &self.url,
+        }
+    }
+    fn field_mut(&mut self, f: Field) -> &mut TextField {
+        match f {
+            Field::Title => &mut self.title,
+            Field::Notes => &mut self.notes,
+            Field::Url => &mut self.url,
+        }
+    }
+    pub(super) fn calendar_days(&self) -> (i64, u32, usize) {
+        let month = self.editor.as_ref().map_or(self.today, |e| e.month);
+        let (year, m, _) = civil_from_days(month);
+        let next = if m == 12 { days_from_civil(year + 1, 1, 1) } else { days_from_civil(year, m + 1, 1) };
+        (month, (next - month) as u32, (month + 3).rem_euclid(7) as usize) // Monday first
+    }
+    fn options_layout(&self, ui: &Ui) -> Vec<(Option<Target>, String, bool, (f32, f32, f32, f32))> {
+        let pw = ui.pt(OPTIONS_W_PT);
+        let x = self.w as f32 - ui.pt(SPACE_XL) - pw;
+        let mut y = ui.pt(self.top_pt + 48.0);
+        let mut out = vec![];
+        let mut push = |t: Option<Target>, label: &str, on: bool, h: f32, y: &mut f32| {
+            out.push((t, label.to_string(), on, (x, *y, pw, ui.pt(h))));
+            *y += ui.pt(h);
+        };
+        push(None, "Sort By", false, 34.0, &mut y);
+        for s in Sort::ALL {
+            push(Some(Target::OptSort(s)), s.label(), self.opts.sort == s, 44.0, &mut y);
+        }
+        push(None, "Group By", false, 34.0, &mut y);
+        for g in Group::ALL {
+            push(Some(Target::OptGroup(g)), g.label(), self.opts.group == g, 44.0, &mut y);
+        }
+        push(Some(Target::OptCompleted), "Show Completed", self.opts.show_completed, 48.0, &mut y);
+        if matches!(self.view, View::List(_)) {
+            push(Some(Target::OptClearCompleted), "Clear Completed", false, 48.0, &mut y);
+            if self.file_export {
+                push(Some(Target::OptExport), "Export List", false, 48.0, &mut y);
+            }
+        }
+        push(None, "New Reminders Go To", false, 34.0, &mut y);
+        push(Some(Target::OptDefaultList(None)), "Automatic (first list)", self.opts.default_list.is_none(), 44.0, &mut y);
+        for l in &self.data.lists {
+            push(Some(Target::OptDefaultList(Some(l.id))), &l.name, self.opts.default_list == Some(l.id), 44.0, &mut y);
+        }
+        out
+    }
+
+    // ---- hit testing ----------------------------------------------------
+
+    fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        if let Some(t) = self.bar_target(ui, x + self.x0, y) {
+            return Some(t);
+        }
+        if x < 0.0 {
+            return self.sidebar_target(ui, x + self.x0, y);
+        }
+        let top_bar = y < ui.pt(self.top_pt + bifrost_app::layout::UNIFIED_BAR_PT);
+        let wpx = self.w as f32;
+        match self.screen {
+            Screen::Editor | Screen::ListEditor => {
+                if y < self.top_px(ui) || y >= self.view_bottom(ui) {
+                    return None;
+                }
+                for (target, ry, rh) in self.form_rows().0 {
+                    let rect = self.form_rect(ui, ry, rh);
+                    if within(x, y, rect) {
+                        return Some(self.refine(ui, target, rect, x, y));
+                    }
+                }
+                Some(Target::Scroll)
+            }
+            Screen::Items => {
+                if self.options_open {
+                    for (t, _, _, rect) in self.options_layout(ui) {
+                        if t.is_some() && within(x, y, rect) {
+                            return t;
+                        }
+                    }
+                    return Some(Target::OptClose);
+                }
+                if top_bar {
+                    return None;
+                }
+                let bar = self.bottom(ui);
+                if self.undo.is_some() && y >= bar && y < bar + ui.pt(52.0) {
+                    return if x > wpx - ui.pt(UNDO_HIT_PT) { Some(Target::Undo) } else { None };
+                }
+                if y < self.top_px(ui) || y >= bar {
+                    return None;
+                }
+                for i in 0..self.rows.len() {
+                    let rect = self.row_rect(ui, i);
+                    if !within(x, y, rect) {
+                        continue;
+                    }
+                    let Some(Row::Item { idx, depth }) = self.rows.get(i) else {
+                        return Some(Target::Scroll);
+                    };
+                    let item = &self.data.items[*idx];
+                    let right = rect.0 + rect.2;
+                    if self.swipe.as_ref().is_some_and(|s| s.open && s.id == item.id) && x >= right - ui.pt(BTN) * 2.0 {
+                        return Some(if x < right - ui.pt(BTN) { Target::SwipeFlag(i) } else { Target::SwipeDelete(i) });
+                    }
+                    if x < rect.0 + ui.pt(52.0 + 30.0 * *depth as f32) {
+                        return Some(Target::Circle(i));
+                    }
+                    if *depth == 0 && model::has_children(&self.data.items, item.id) && x > right - ui.pt(56.0) {
+                        return Some(Target::Collapse(i));
+                    }
+                    return Some(Target::Row(i));
+                }
+                Some(Target::Scroll)
+            }
+        }
+    }
+    fn refine(&self, ui: &Ui, target: Target, rect: (f32, f32, f32, f32), x: f32, y: f32) -> Target {
+        let (rx, ry, rw, _) = rect;
+        match target {
+            Target::Calendar => {
+                if y < ry + ui.pt(48.0) {
+                    if x < rx + ui.pt(56.0) {
+                        return Target::Month(-1);
+                    }
+                    if x >= rx + rw - ui.pt(56.0) {
+                        return Target::Month(1);
+                    }
+                }
+                let (first, count, start) = self.calendar_days();
+                let row = ((y - ry - ui.pt(72.0)) / ui.pt(36.0)).floor() as i32;
+                let col = ((x - rx) / (rw / 7.0)).floor() as i32;
+                let day = row * 7 + col - start as i32;
+                if row >= 0 && (0..7).contains(&col) && day >= 0 && day < count as i32 {
+                    Target::Day(first + day as i64)
+                } else {
+                    Target::Calendar
+                }
+            }
+            Target::TimeStep => {
+                // Zones centred this far (pt) from the right edge: M> M< H> H<
+                let from_right = (rx + rw - x) / ui.pt(1.0);
+                for (centre, t) in [
+                    (24.0, Target::Minute(5)),
+                    (104.0, Target::Minute(-5)),
+                    (156.0, Target::Hour(1)),
+                    (236.0, Target::Hour(-1)),
+                ] {
+                    if (from_right - centre).abs() < 26.0 {
+                        return t;
+                    }
+                }
+                Target::TimeStep
+            }
+            Target::Colors => {
+                let i = (((x - rx) / (rw / view::COLORS.len() as f32)).floor() as i32).clamp(0, view::COLORS.len() as i32 - 1);
+                Target::Color(i as u8)
+            }
+            Target::Icons => {
+                let i = (((x - rx) / (rw / view::ICONS.len() as f32)).floor() as i32).clamp(0, view::ICONS.len() as i32 - 1);
+                Target::Icon(i as u8)
+            }
+            other => other,
+        }
+    }
+
+    // ---- state helpers --------------------------------------------------
+
+    fn refresh_rows(&mut self) {
+        let query = if self.searching && self.screen == Screen::Items { self.title.text().to_string() } else { String::new() };
+        self.rows = model::visible(&self.data, self.view, self.opts, self.today, &query, &self.collapsed);
+        self.row_y.clear();
+        let mut y = 0.0;
+        for row in &self.rows {
+            self.row_y.push(y);
+            y += if matches!(row, Row::Header(_)) { HEAD_H } else { ITEM_H };
+        }
+        self.items_h = y;
+    }
+    fn rebuild(&mut self, ui: &Ui) {
+        self.refresh_rows();
+        self.labels.clear();
+        self.fit_scroll(ui);
+        self.dirty = true;
+    }
+    /// Publishes a mutation only after its atomic write succeeds. A failed
+    /// editor save leaves the draft visible, even if the app goes to Home.
+    fn commit(&mut self, next: Data) -> bool {
+        if self.load_error {
+            self.error = true;
+            self.dirty = true;
+            return false;
+        }
+        self.error = store::save(&self.path, &next).is_err();
+        if !self.error {
+            self.data = next;
+            self.gen = self.gen.wrapping_add(1);
+        }
+        self.dirty = true;
+        !self.error
+    }
+    fn set_focus(&mut self, f: Option<Field>, _t: f64) {
+        self.focus = f;
+        self.title.focused = f == Some(Field::Title);
+        self.notes.focused = f == Some(Field::Notes);
+        self.url.focused = f == Some(Field::Url);
+        self.kb_on = f.is_some();
+    }
+    fn set_title_field(&mut self, ui: &Ui, hint: &'static str, max: usize, text: &str) {
+        self.title = mk_field(ui, hint, max, text);
+        self.title_hint = hint;
+        self.title_max = max;
+    }
+    fn open_view(&mut self, ui: &Ui, view: View) {
+        self.view = view;
+        self.screen = Screen::Items;
+        self.searching = false;
+        self.swipe = None;
+        self.scroll.jump_top();
+        self.rebuild(ui);
+    }
+    fn begin_search(&mut self, ui: &Ui, t: f64) {
+        self.view = View::Smart(Smart::All);
+        self.screen = Screen::Items;
+        self.searching = true;
+        self.swipe = None;
+        self.set_title_field(ui, "Search", MAX_SEARCH, "");
+        self.scroll.jump_top();
+        self.rebuild(ui);
+        self.set_focus(Some(Field::Title), t);
+    }
+    /// Leaves the search: the list shows All again.
+    fn leave_items(&mut self, ui: &Ui, t: f64) {
+        self.searching = false;
+        self.view = View::Smart(Smart::All);
+        self.set_focus(None, t);
+        self.set_title_field(ui, "Reminder", model::MAX_TITLE, "");
+        self.screen = Screen::Items;
+        self.swipe = None;
+        self.options_open = false;
+        self.scroll.jump_top();
+        self.rebuild(ui);
+    }
+    fn open_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        let existing = id.and_then(|i| self.data.items.iter().find(|r| r.id == i)).cloned();
+        let draft = existing.unwrap_or_else(|| {
+            let mut r = Reminder::new(0, "");
+            r.list = match self.view {
+                View::List(l) => l,
+                View::Smart(_) => self
+                    .opts
+                    .default_list
+                    .filter(|id| self.data.lists.iter().any(|l| l.id == *id))
+                    .or_else(|| self.data.lists.first().map(|l| l.id))
+                    .unwrap_or(model::DEFAULT_LIST),
+            };
+            match self.view {
+                View::Smart(Smart::Today) => r.due = Some(self.today),
+                View::Smart(Smart::Flagged) => r.flagged = true,
+                _ => {}
+            }
+            r
+        });
+        if self.searching {
+            self.saved_query = self.title.text().to_string();
+        }
+        self.set_title_field(ui, "Reminder", model::MAX_TITLE, &draft.title);
+        self.notes = mk_field(ui, "Notes", model::MAX_NOTES, &draft.notes);
+        self.url = mk_field(ui, "URL", model::MAX_URL, &draft.url);
+        let month = month_start(draft.due.unwrap_or(self.today));
+        self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month });
+        self.screen = Screen::Editor;
+        self.swipe = None;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    fn open_list_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        let found = id.and_then(|i| self.data.lists.iter().find(|l| l.id == i)).cloned();
+        let (name, color, icon) = found.as_ref().map_or((String::new(), (self.data.lists.len() % view::COLORS.len()) as u8, 0), |l| (l.name.clone(), l.color, l.icon));
+        self.set_title_field(ui, "List Name", model::MAX_NAME, &name);
+        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon });
+        self.screen = Screen::ListEditor;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    fn close_form(&mut self, ui: &Ui, t: f64) {
+        let back_to = Screen::Items;
+        self.set_focus(None, t);
+        self.editor = None;
+        self.list_edit = None;
+        self.screen = back_to;
+        if self.searching && back_to == Screen::Items {
+            let q = std::mem::take(&mut self.saved_query);
+            self.set_title_field(ui, "Search", MAX_SEARCH, &q);
+        } else {
+            self.set_title_field(ui, "Reminder", model::MAX_TITLE, "");
+        }
+        self.scroll.jump_top();
+        self.rebuild(ui);
+    }
+    fn now_min(&self, t: f64) -> u16 {
+        ((self.wall.now(t) + self.wall.offset as i64).rem_euclid(86_400) / 60) as u16
+    }
+    fn show_undo(&mut self, label: String, t: f64) {
+        self.undo = Some(UndoBar { label, until: t + UNDO_MS });
+    }
+    fn delete_item(&mut self, id: u64, t: f64) -> bool {
+        let title = self.data.items.iter().find(|r| r.id == id).map(|r| clean(&r.title));
+        let mut next = self.data.clone();
+        let removed = model::remove_with_children(&mut next.items, id);
+        if removed.is_empty() || !self.commit(next) {
+            return false;
+        }
+        let label = format!("Deleted \"{}\"", title.unwrap_or_default());
+        self.history.register(&label, restore_items(removed), move |d| {
+            model::remove_with_children(&mut d.items, id);
+        });
+        self.show_undo(label, t);
+        true
+    }
+    /// Copies a reminder (title, notes, URL, priority, flag, due, repeat, alert) directly after the
+    /// original, with the same list and parent. The copy starts incomplete and the editor closes.
+    fn duplicate_item(&mut self, ui: &Ui, id: u64, t: f64) {
+        let mut next = self.data.clone();
+        let Some(at) = next.items.iter().position(|r| r.id == id) else { return };
+        let Some(new_id) = next.next_item_id() else { return };
+        let mut copy = next.items[at].clone();
+        copy.id = new_id;
+        copy.completed = false;
+        next.items.insert(at + 1, copy);
+        if self.commit(next) {
+            self.close_form(ui, t);
+        }
+    }
+    /// Removes every completed reminder in the open list. The undo bar restores them.
+    fn clear_completed(&mut self, ui: &Ui, t: f64) {
+        let View::List(list) = self.view else { return };
+        let mut next = self.data.clone();
+        let removed = model::remove_completed(&mut next.items, list);
+        if removed.is_empty() {
+            return;
+        }
+        let count = removed.iter().filter(|(_, r)| r.parent.is_none()).count();
+        if self.commit(next) {
+            let noun = if count == 1 { "reminder" } else { "reminders" };
+            let label = format!("Cleared {count} completed {noun}");
+            self.history.register(&label, restore_items(removed), move |d| {
+                model::remove_completed(&mut d.items, list);
+            });
+            self.show_undo(label, t);
+            self.rebuild(ui);
+        }
+    }
+    /// Arrow keys move the row selection, Enter opens the selected reminder and Space toggles it.
+    /// Only on the item list with no field focused.
+    fn list_key(&mut self, ui: &Ui, out: Out, t: f64) {
+        if self.screen != Screen::Items {
+            return;
+        }
+        let ids: Vec<u64> = self
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                Row::Item { idx, .. } => Some(self.data.items[*idx].id),
+                Row::Header(_) => None,
+            })
+            .collect();
+        let at = self.selected.and_then(|id| ids.iter().position(|&i| i == id));
+        let chosen = self.selected.filter(|id| ids.contains(id));
+        match out {
+            Out::Named("Down") => {
+                let next = at.map_or(0, |i| (i + 1).min(ids.len().saturating_sub(1)));
+                self.selected = ids.get(next).copied();
+            }
+            Out::Named("Up") => {
+                let next = at.map_or(0, |i| i.saturating_sub(1));
+                self.selected = ids.get(next).copied();
+            }
+            Out::Enter => {
+                if let Some(id) = chosen {
+                    self.open_editor(ui, Some(id), t);
+                }
+            }
+            Out::Text(ref s) if s == " " => {
+                if let Some(id) = chosen {
+                    self.toggle_item(ui, id);
+                }
+            }
+            _ => {}
+        }
+        self.dirty = true;
+    }
+    fn toggle_item(&mut self, ui: &Ui, id: u64) {
+        let mut next = self.data.clone();
+        if model::toggle_complete(&mut next.items, id, self.today).is_some() && self.commit(next) {
+            self.rebuild(ui);
+        }
+    }
+    /// Swipe-right completion. A completed reminder stays completed; the circle is the way back.
+    fn complete_swiped(&mut self, ui: &Ui, id: u64) {
+        if self.data.items.iter().any(|r| r.id == id && r.completed) {
+            return;
+        }
+        let mut next = self.data.clone();
+        if model::toggle_complete(&mut next.items, id, self.today).is_some() && self.commit(next) {
+            self.rebuild(ui);
+        }
+    }
+    fn toggle_flag(&mut self, id: u64) -> bool {
+        let mut next = self.data.clone();
+        let Some(r) = next.items.iter_mut().find(|r| r.id == id) else { return false };
+        r.flagged = !r.flagged;
+        self.commit(next)
+    }
+    fn run_undo(&mut self, ui: &Ui) {
+        if self.undo.take().is_none() {
+            return;
+        }
+        let mut next = self.data.clone();
+        if self.history.undo(&mut next).is_none() {
+            return;
+        }
+        if self.commit(next) {
+            self.rebuild(ui);
+        }
+    }
+    fn save_editor(&mut self, ui: &Ui, t: f64) {
+        let Some(e) = &self.editor else { return };
+        let mut title = clean(self.title.text());
+        if title.is_empty() {
+            return;
+        }
+        let mut d = e.draft.clone();
+        let id = e.id;
+        d.notes = self.notes.text().trim().to_string();
+        d.url = self.url.text().trim().to_string();
+        if id.is_none() {
+            let q = quick::parse(&title, self.today, self.now_min(t));
+            title = q.title;
+            d.due = d.due.or(q.due);
+            d.time = d.time.or(q.time);
+            d.repeat = d.repeat.or(q.repeat);
+            d.priority = d.priority.max(q.priority);
+        }
+        d.title = title;
+        let mut next = self.data.clone();
+        match id {
+            Some(id) => {
+                let Some(pos) = next.items.iter().position(|r| r.id == id) else { return };
+                let list_changed = next.items[pos].list != d.list;
+                if model::has_children(&next.items, id) {
+                    d.parent = None;
+                    for kid in next.items.iter_mut().filter(|r| r.parent == Some(id)) {
+                        kid.list = d.list;
+                    }
+                }
+                if list_changed {
+                    d.parent = None;
+                }
+                d.id = id;
+                next.items[pos] = d;
+            }
+            None => {
+                let Some(new_id) = next.next_item_id() else { return };
+                d.id = new_id;
+                next.items.push(d);
+            }
+        }
+        if self.commit(next) {
+            self.close_form(ui, t);
+        }
+    }
+    fn save_list(&mut self, ui: &Ui, t: f64) {
+        let Some(e) = &self.list_edit else { return };
+        let name = clean(self.title.text());
+        if name.is_empty() {
+            return;
+        }
+        let (id, color, icon) = (e.id, e.color, e.icon);
+        let mut next = self.data.clone();
+        match id {
+            Some(id) => {
+                if let Some(l) = next.lists.iter_mut().find(|l| l.id == id) {
+                    l.name = name;
+                    l.color = color;
+                    l.icon = icon;
+                }
+            }
+            None => {
+                let Some(new_id) = next.next_list_id() else { return };
+                next.lists.push(ListDef { id: new_id, name, color, icon });
+            }
+        }
+        if self.commit(next) {
+            self.close_form(ui, t);
+        }
+    }
+    fn finish_drag(&mut self, ui: &Ui) {
+        let Some(drag) = self.drag.take() else { return };
+        let mut before = None;
+        for i in 0..self.rows.len() {
+            if let Some(Row::Item { idx, depth: 0 }) = self.rows.get(i) {
+                let id = self.data.items[*idx].id;
+                let rect = self.row_rect(ui, i);
+                if id != drag.id && rect.1 + rect.3 / 2.0 > drag.y {
+                    before = Some(id);
+                    break;
+                }
+            }
+        }
+        let mut next = self.data.clone();
+        if model::move_before(&mut next.items, drag.id, before) && self.commit(next) {
+            self.rebuild(ui);
+        }
+    }
+    fn can_reorder(&self) -> bool {
+        self.screen == Screen::Items
+            && !self.searching
+            && matches!(self.view, View::List(_))
+            && self.opts.sort == Sort::Manual
+            && self.opts.group == Group::None
+    }
+
+    /// Desktop chords (Cmd or Ctrl; evdev keys): N new reminder (Shift: new list) and F search on
+    /// the list, Return saves the open editor, Z undoes the last delete. False when unused here.
+    pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
+        use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 {
+            return false;
+        }
+        let shift = mods & CHORD_SHIFT != 0;
+        if key == 14 {
+            // Cmd+Backspace deletes the arrow-selected reminder
+            if self.screen != Screen::Items {
+                return false;
+            }
+            let Some(id) = self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id)) else { return false };
+            if self.delete_item(id, t) {
+                self.rebuild(ui);
+            }
+            return true;
+        }
+        let target = match (self.screen, key) {
+            (Screen::Items, 49) if shift => Target::NewList,
+            (Screen::Items, 49) => Target::New,
+            (Screen::Items, 33) if !shift => Target::Search,
+            (Screen::Editor, 28) => Target::Save,
+            (_, 44) if !shift && self.undo.is_some() => Target::Undo,
+            _ => return false,
+        };
+        self.activate(ui, target, t);
+        true
+    }
+
+    /// Escape: leaves a focused field first, then cancels the open editor.
+    pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.focus.is_some() {
+            self.set_focus(None, t);
+            return true;
+        }
+        if self.searching && self.screen == Screen::Items {
+            self.leave_items(ui, t);
+            return true;
+        }
+        match self.screen {
+            Screen::Editor | Screen::ListEditor => {
+                self.activate(ui, Target::Cancel, t);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Desktop builds turn on Export List.
+    pub fn enable_file_export(&mut self) {
+        self.file_export = true;
+    }
+
+    /// Writes the open list as `<name>.md` under ~/Documents/Reminders Export.
+    fn export_list(&mut self) {
+        let View::List(list) = self.view else { return };
+        let name = self.data.lists.iter().find(|l| l.id == list).map_or("Reminders".to_string(), |l| l.name.clone());
+        let text = model::export_markdown(&self.data, list);
+        let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Documents").join("Reminders Export");
+        let written = std::fs::create_dir_all(&dir).and_then(|_| springboard::shell::fsutil::write_atomic(&dir.join(format!("{name}.md")), &text));
+        self.notice = Some(match written {
+            Ok(()) => format!("Exported to Documents/Reminders Export/{name}.md"),
+            Err(e) => {
+                eprintln!("springboard: reminders: {e}");
+                "Could not export the list".to_string()
+            }
+        });
+    }
+
+    fn activate(&mut self, ui: &Ui, target: Target, t: f64) {
+        if !matches!(target, Target::OptExport) {
+            self.notice = None;
+        }
+        match target {
+            Target::OptExport => self.export_list(),
+            Target::OptDefaultList(id) => self.opts.default_list = id,
+            Target::Smart(s) => self.open_view(ui, View::Smart(s)),
+            Target::List(id) => self.open_view(ui, View::List(id)),
+            Target::ListInfo(id) => self.open_list_editor(ui, Some(id), t),
+            Target::NewList => self.open_list_editor(ui, None, t),
+            Target::Search => self.begin_search(ui, t),
+            Target::Sidebar => {
+                self.side_hidden = !self.side_hidden;
+                self.layout_columns(ui);
+                self.rebuild(ui);
+            }
+            Target::Options => self.options_open = !self.options_open,
+            Target::OptClose => self.options_open = false,
+            Target::OptSort(s) => {
+                self.opts.sort = s;
+                self.rebuild(ui);
+            }
+            Target::OptGroup(g) => {
+                self.opts.group = g;
+                self.rebuild(ui);
+            }
+            Target::OptCompleted => {
+                self.opts.show_completed = !self.opts.show_completed;
+                self.rebuild(ui);
+            }
+            Target::New => self.open_editor(ui, None, t),
+            Target::Row(row) => {
+                if let Some(id) = self.item_id(row) {
+                    self.open_editor(ui, Some(id), t);
+                }
+            }
+            Target::Circle(row) => {
+                if let Some(id) = self.item_id(row) {
+                    self.toggle_item(ui, id);
+                }
+            }
+            Target::Collapse(row) => {
+                if let Some(id) = self.item_id(row) {
+                    if !self.collapsed.remove(&id) {
+                        self.collapsed.insert(id);
+                    }
+                    self.rebuild(ui);
+                }
+            }
+            Target::SwipeFlag(row) => {
+                if let Some(id) = self.item_id(row) {
+                    self.swipe = None;
+                    if self.toggle_flag(id) {
+                        let (title, flagged) = self.data.items.iter().find(|r| r.id == id).map(|r| (clean(&r.title), r.flagged)).unwrap_or_default();
+                        let verb = if flagged { "Flagged" } else { "Unflagged" };
+                        let label = format!("{verb} \"{title}\"");
+                        self.history.register(&label, flag_toggle(id), flag_toggle(id));
+                        self.show_undo(label, t);
+                        self.rebuild(ui);
+                    }
+                }
+            }
+            Target::SwipeDelete(row) => {
+                if let Some(id) = self.item_id(row) {
+                    self.swipe = None;
+                    if self.delete_item(id, t) {
+                        self.rebuild(ui);
+                    }
+                }
+            }
+            Target::Undo => self.run_undo(ui),
+            Target::Field(f) => self.set_focus(Some(f), t),
+            Target::Cancel => self.close_form(ui, t),
+            Target::Save => {
+                if self.editor.is_some() {
+                    self.save_editor(ui, t);
+                } else {
+                    self.save_list(ui, t);
+                }
+            }
+            Target::Due => {
+                let today = self.today;
+                if let Some(e) = &mut self.editor {
+                    if e.draft.due.is_some() {
+                        e.draft.due = None;
+                        e.draft.time = None;
+                        e.draft.repeat = None;
+                        e.draft.early = None;
+                    } else {
+                        e.draft.due = Some(today);
+                    }
+                    e.month = month_start(e.draft.due.unwrap_or(today));
+                }
+                self.set_focus(None, t);
+            }
+            Target::Month(delta) => {
+                if let Some(e) = &mut self.editor {
+                    let (year, month, _) = civil_from_days(e.month);
+                    let value = year * 12 + month as i64 - 1 + delta as i64;
+                    if (12..120_000).contains(&value) {
+                        e.month = days_from_civil(value.div_euclid(12), value.rem_euclid(12) as u32 + 1, 1);
+                    }
+                }
+            }
+            Target::Day(day) => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.due = Some(day);
+                }
+            }
+            Target::Time => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.time = if e.draft.time.is_some() { None } else { Some(model::DEFAULT_ALERT_MIN) };
+                }
+                self.set_focus(None, t);
+            }
+            Target::Hour(d) | Target::Minute(d) => {
+                if let Some(e) = &mut self.editor {
+                    if let Some(time) = e.draft.time {
+                        let step = if matches!(target, Target::Hour(_)) { 60 * d } else { d };
+                        e.draft.time = Some((time as i32 + step).rem_euclid(1440) as u16);
+                    }
+                }
+            }
+            Target::Repeat => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.repeat = repeat::Repeat::cycle(e.draft.repeat);
+                }
+            }
+            Target::Early => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.early = model::cycle_early(e.draft.early);
+                }
+            }
+            Target::Flag => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.flagged = !e.draft.flagged;
+                }
+            }
+            Target::Priority => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.priority = (e.draft.priority + 1) % 4;
+                }
+            }
+            Target::MoveList => {
+                let ids: Vec<u64> = self.data.lists.iter().map(|l| l.id).collect();
+                if let Some(e) = &mut self.editor {
+                    let at = ids.iter().position(|&i| i == e.draft.list).unwrap_or(0);
+                    e.draft.list = ids[(at + 1) % ids.len()];
+                    e.draft.parent = None;
+                }
+            }
+            Target::Indent => {
+                let items = &self.data.items;
+                if let Some(e) = &mut self.editor {
+                    if e.draft.parent.is_some() {
+                        e.draft.parent = None;
+                    } else if let Some(id) = e.id {
+                        let mut copy = items.clone();
+                        if let Some(r) = copy.iter_mut().find(|r| r.id == id) {
+                            r.list = e.draft.list;
+                            r.parent = None;
+                        }
+                        if model::indent(&mut copy, id) {
+                            e.draft.parent = copy.iter().find(|r| r.id == id).and_then(|r| r.parent);
+                        }
+                    } else {
+                        e.draft.parent = items.iter().rev().find(|r| r.list == e.draft.list && r.parent.is_none()).map(|r| r.id);
+                    }
+                }
+            }
+            Target::Duplicate => {
+                if let Some(id) = self.editor.as_ref().and_then(|e| e.id) {
+                    self.duplicate_item(ui, id, t);
+                }
+            }
+            Target::OptClearCompleted => {
+                self.options_open = false;
+                self.clear_completed(ui, t);
+            }
+            Target::Delete => match self.editor.as_ref().map(|e| e.id) {
+                Some(Some(id)) => {
+                    if self.delete_item(id, t) {
+                        self.close_form(ui, t);
+                    }
+                }
+                Some(None) => {}
+                None => {
+                    if let Some(id) = self.list_edit.as_ref().and_then(|e| e.id) {
+                        let mut next = self.data.clone();
+                        if next.delete_list(id) && self.commit(next) {
+                            if self.view == View::List(id) {
+                                self.view = View::Smart(Smart::All);
+                            }
+                            self.close_form(ui, t);
+                        }
+                    }
+                }
+            },
+            Target::Colors | Target::Icons | Target::Calendar | Target::TimeStep | Target::Scroll => {}
+            Target::Color(c) => {
+                if let Some(e) = &mut self.list_edit {
+                    e.color = c;
+                }
+            }
+            Target::Icon(i) => {
+                if let Some(e) = &mut self.list_edit {
+                    e.icon = i;
+                }
+            }
+            Target::ListUp | Target::ListDown => {
+                if let Some(id) = self.list_edit.as_ref().and_then(|e| e.id) {
+                    let mut next = self.data.clone();
+                    if next.move_list(id, if target == Target::ListUp { -1 } else { 1 }) {
+                        self.commit(next);
+                    }
+                }
+            }
+        }
+        self.dirty = true;
+    }
+
+    // ---- input ----------------------------------------------------------
+
+    pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        if self.focus.is_none() {
+            self.list_key(ui, out, t);
+            return;
+        }
+        let Some(f) = self.focus else { return };
+        if matches!(out, Out::Hide | Out::Enter) {
+            self.set_focus(None, t);
+        } else {
+            self.field_mut(f).edit(ui, &out, t);
+            if self.searching && self.screen == Screen::Items {
+                self.rebuild(ui);
+                self.scroll.jump_top();
+            }
+        }
+        self.dirty = true;
+    }
+    fn scrollable(target: Target) -> bool {
+        !matches!(
+            target,
+            Target::Sidebar
+                | Target::Smart(_)
+                | Target::List(_)
+                | Target::ListInfo(_)
+                | Target::New
+                | Target::NewList
+                | Target::Search
+                | Target::Options
+                | Target::Undo
+                | Target::Cancel
+                | Target::Save
+                | Target::OptSort(_)
+                | Target::OptGroup(_)
+                | Target::OptCompleted
+                | Target::OptClearCompleted
+                | Target::OptDefaultList(_)
+                | Target::OptExport
+                | Target::OptClose
+                | Target::Field(_)
+        )
+    }
+    fn swipe_to(&mut self, ui: &Ui, x: f32) {
+        let max = ui.pt(BTN) * 2.0;
+        if let Some(sw) = &mut self.swipe {
+            sw.x = (sw.base + (x - self.down.0)).clamp(-max, max);
+        }
+    }
+    pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
+        // the content column's coordinates: the sidebar is left of it (its targets come back from `hit` at x < 0)
+        self.layout_columns(ui);
+        let event = match event {
+            Event::Down(x, y) => Event::Down(x - self.x0, y),
+            Event::Move(x, y) => Event::Move(x - self.x0, y),
+            Event::Up(x, y) => Event::Up(x - self.x0, y),
+            other => other,
+        };
+        let (x, y) = match event {
+            Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
+            _ => return,
+        };
+        self.dirty = true;
+        if let Some(f) = self.field_touch {
+            if let Some(frame) = self.field_frame(ui, f) {
+                let w = self.w as f32;
+                self.field_mut(f).touch(ui, event, frame, w, t);
+            }
+            if matches!(event, Event::Up(..)) {
+                self.field_touch = None;
+            }
+            return;
+        }
+        match event {
+            Event::Down(..) => {
+                self.fit_scroll(ui);
+                // Selection handles and the editing menu extend beyond the
+                // field frame, so the focused field sees the touch first.
+                if let Some(f) = self.focus {
+                    if let Some(frame) = self.field_frame(ui, f) {
+                        let w = self.w as f32;
+                        if self.field_mut(f).touch(ui, event, frame, w, t) {
+                            self.field_touch = Some(f);
+                            self.pressed = None;
+                            return;
+                        }
+                    }
+                }
+                self.down = (x, y);
+                self.axis = Axis::Undecided;
+                self.pressed = self.hit(ui, x, y);
+                match self.pressed {
+                    Some(Target::Field(f)) => {
+                        self.set_focus(Some(f), t);
+                        if let Some(frame) = self.field_frame(ui, f) {
+                            let w = self.w as f32;
+                            if self.field_mut(f).touch(ui, event, frame, w, t) {
+                                self.field_touch = Some(f);
+                            }
+                        }
+                        self.pressed = None;
+                    }
+                    Some(target) if Self::scrollable(target) => {
+                        self.scrolling = true;
+                        self.scroll.down(y, t);
+                        if matches!(target, Target::Row(_)) {
+                            self.press_at = Some(t);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Event::Move(..) => {
+                if self.drag.is_some() {
+                    if let Some(d) = &mut self.drag {
+                        d.y = y;
+                    }
+                } else if self.axis == Axis::Horizontal {
+                    self.swipe_to(ui, x);
+                } else if self.scrolling {
+                    let (dx, dy) = (x - self.down.0, y - self.down.1);
+                    let swipeable = self.screen == Screen::Items && matches!(self.pressed, Some(Target::Row(_) | Target::Circle(_)));
+                    if swipeable && self.axis == Axis::Undecided && dx.abs() > ui.pt(SPACE_M) && dx.abs() > dy.abs() * 1.2 {
+                        let row = match self.pressed {
+                            Some(Target::Row(r) | Target::Circle(r)) => r,
+                            _ => 0,
+                        };
+                        self.axis = Axis::Horizontal;
+                        self.scrolling = false;
+                        self.scroll.up(y, t);
+                        self.press_at = None;
+                        self.pressed = None;
+                        if let Some(id) = self.item_id(row) {
+                            let base = match &self.swipe {
+                                Some(s) if s.open && s.id == id => -ui.pt(BTN) * 2.0,
+                                _ => 0.0,
+                            };
+                            self.swipe = Some(Swipe { id, x: base, base, open: false });
+                            self.swipe_to(ui, x);
+                        }
+                    } else {
+                        self.scroll.moved(y, t);
+                        if self.scroll.dragging() {
+                            self.pressed = None;
+                            self.axis = Axis::Vertical;
+                        }
+                        if dx.abs().max(dy.abs()) > ui.pt(SPACE_S) {
+                            self.press_at = None;
+                        }
+                    }
+                }
+            }
+            Event::Up(..) => {
+                self.press_at = None;
+                if self.drag.is_some() {
+                    self.finish_drag(ui);
+                    self.pressed = None;
+                    return;
+                }
+                if self.axis == Axis::Horizontal {
+                    self.axis = Axis::Undecided;
+                    let max = ui.pt(BTN) * 2.0;
+                    // Swiped right past the threshold: complete the reminder.
+                    if let Some(id) = self.swipe.as_ref().filter(|s| s.x > ui.pt(BTN)).map(|s| s.id) {
+                        self.swipe = None;
+                        self.pressed = None;
+                        self.complete_swiped(ui, id);
+                        return;
+                    }
+                    if let Some(sw) = &mut self.swipe {
+                        sw.open = sw.x < -ui.pt(BTN);
+                        sw.x = if sw.open { -max } else { 0.0 };
+                    }
+                    if self.swipe.as_ref().is_some_and(|s| !s.open) {
+                        self.swipe = None;
+                    }
+                    self.pressed = None;
+                    return;
+                }
+                self.axis = Axis::Undecided;
+                let tap = if std::mem::take(&mut self.scrolling) { self.scroll.up(y, t) } else { true };
+                let pressed = self.pressed.take();
+                if tap {
+                    if let Some(target) = pressed.filter(|&p| self.hit(ui, x, y) == Some(p)) {
+                        let own_button = matches!(target, Target::SwipeFlag(_) | Target::SwipeDelete(_));
+                        if self.swipe.as_ref().is_some_and(|s| s.open) && !own_button {
+                            self.swipe = None;
+                            return;
+                        }
+                        self.activate(ui, target, t);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
+        let style = (ui.text_scale.to_bits(), ui.bold);
+        if style != self.style {
+            self.style = style;
+            self.labels.clear();
+            let (hint, max) = (self.title_hint, self.title_max);
+            let (title, notes, url) = (self.title.text().to_string(), self.notes.text().to_string(), self.url.text().to_string());
+            self.title = mk_field(ui, hint, max, &title);
+            self.notes = mk_field(ui, "Notes", model::MAX_NOTES, &notes);
+            self.url = mk_field(ui, "URL", model::MAX_URL, &url);
+            let focus = self.focus;
+            self.title.focused = focus == Some(Field::Title);
+            self.notes.focused = focus == Some(Field::Notes);
+            self.url.focused = focus == Some(Field::Url);
+            self.dirty = true;
+        }
+        let today = local_day(self.wall.now(t), self.wall.offset);
+        if today != self.today {
+            self.today = today;
+            self.rebuild(ui);
+        }
+        if self.undo.as_ref().is_some_and(|u| t >= u.until) {
+            self.undo = None;
+            self.dirty = true;
+        }
+        if let (Some(p), Some(Target::Row(row))) = (self.press_at, self.pressed) {
+            if t - p >= LONG_PRESS_MS && self.can_reorder() {
+                if let Some(Row::Item { idx, depth: 0 }) = self.rows.get(row) {
+                    let id = self.data.items[*idx].id;
+                    self.drag = Some(Drag { id, y: self.down.1 });
+                    self.press_at = None;
+                    self.pressed = None;
+                    self.scrolling = false;
+                    self.scroll.up(self.down.1, t);
+                    self.swipe = None;
+                    self.dirty = true;
+                }
+            }
+        }
+        self.fit_scroll(ui);
+        let fields = self.title.tick(ui, t) | self.notes.tick(ui, t) | self.url.tick(ui, t);
+        self.dirty |= self.scroll.tick(t) || fields;
+        if self.focus.is_some() {
+            self.dirty = true;
+        }
+        self.dirty
+    }
+    pub fn next_wake(&self, t: f64) -> Option<f64> {
+        let now = self.wall.now(t);
+        let day = local_day(now, self.wall.offset);
+        let midnight = (day + 1) * 86_400 - self.wall.offset as i64;
+        let mut due = Some(self.wall.at + (midnight - self.wall.unix) as f64 * 1e3);
+        for wake in [
+            self.title.next_wake(t),
+            self.notes.next_wake(t),
+            self.url.next_wake(t),
+            self.undo.as_ref().map(|u| u.until),
+            self.press_at.filter(|_| self.pressed.is_some()).map(|p| p + LONG_PRESS_MS),
+            self.scroll.animating().then_some(t),
+        ] {
+            if let Some(wake) = wake {
+                due = Some(due.map_or(wake, |old| old.min(wake)));
+            }
+        }
+        due
+    }
+}
+
+
+#[cfg(test)]
+#[path = "actions_tests.rs"]
+mod actions_tests;

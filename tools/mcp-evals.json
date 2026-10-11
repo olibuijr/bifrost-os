@@ -1,0 +1,296 @@
+[
+ {
+  "id": "state-query",
+  "prompt": "What BifrOSt version is running and how many windows are open? Answer in one line.",
+  "check": {
+   "answer_has_call": [
+    "shell",
+    {
+     "command": "version"
+    },
+    "version=(\\S+)"
+   ]
+  }
+ },
+ {
+  "id": "system-top-process",
+  "prompt": "Which process on the machine uses the most memory (resident)? Give its command name and size.",
+  "check": {
+   "answer_has_exec": "ps -eo rss=,comm= --sort=-rss | head -1 | awk '{print $2}'"
+  }
+ },
+ {
+  "id": "menu-clock",
+  "prompt": "What time does the menu bar clock show right now? Reply with just HH:MM.",
+  "check": {
+   "answer_time_near": 2
+  }
+ },
+ {
+  "id": "calculator",
+  "prompt": "Open the Calculator app and compute 1234 + 5678 in it (operate the app itself, not a shell). Report the number the Calculator displays.",
+  "setup": [
+   [
+    "window",
+    {
+     "window": "calculator",
+     "action": "close"
+    }
+   ]
+  ],
+  "check": {
+   "all": [
+    {
+     "answer_has": "6912"
+    },
+    {
+     "window_open": "calculator"
+    }
+   ]
+  },
+  "cleanup": [
+   [
+    "window",
+    {
+     "window": "calculator",
+     "action": "close"
+    }
+   ]
+  ]
+ },
+ {
+  "id": "note-unicode",
+  "prompt": "In the Notes app, create a new note whose text is exactly: \u00de\u00f3r\u00f0ur \u00e6tlar \u00ed b\u00e6inn {nonce}",
+  "check": {
+   "app_has": [
+    "notes",
+    "notes.list",
+    {},
+    "{nonce}"
+   ]
+  },
+  "cleanup": [
+   [
+    "window",
+    {
+     "window": "notes",
+     "action": "close"
+    }
+   ]
+  ]
+ },
+ {
+  "id": "quicksearch-clock",
+  "prompt": "Open the Clock app through Search (the keyboard shortcut and the search field), not through any launcher tool.",
+  "setup": [
+   [
+    "window",
+    {
+     "window": "clock",
+     "action": "close"
+    }
+   ]
+  ],
+  "check": {
+   "all": [
+    {
+     "window_open": "clock"
+    },
+    {
+     "no_tool": "open"
+    }
+   ]
+  },
+  "cleanup": [
+   [
+    "window",
+    {
+     "window": "clock",
+     "action": "close"
+    }
+   ]
+  ]
+ },
+ {
+  "id": "settings-displays",
+  "prompt": "Open Settings, go to the Displays page, and tell me the display resolution it shows.",
+  "check": {
+   "answer_has": "2560"
+  }
+ },
+ {
+  "id": "minimize-files",
+  "prompt": "Minimize the Files window.",
+  "setup": [
+   [
+    "open",
+    {
+     "app": "is.olibuijr.files.desktop"
+    }
+   ]
+  ],
+  "check": {
+   "window_state": [
+    "files",
+    "minimized"
+   ]
+  },
+  "cleanup": [
+   [
+    "window",
+    {
+     "window": "files",
+     "action": "unminimize"
+    }
+   ]
+  ]
+ },
+ {
+  "id": "write-file",
+  "prompt": "Create the file /tmp/mcp-eval.txt on the machine containing the single line: {nonce}",
+  "setup": [
+   [
+    "exec",
+    {
+     "command": "rm -f /tmp/mcp-eval.txt"
+    }
+   ]
+  ],
+  "check": {
+   "exec_ok": "grep -qx '{nonce}' /tmp/mcp-eval.txt"
+  }
+ },
+ {
+  "id": "files-window-look",
+  "prompt": "Look at the Files window and tell me the name of the folder it is showing (the window title or the selected sidebar item).",
+  "setup": [
+   [
+    "open",
+    {
+     "app": "is.olibuijr.files.desktop"
+    }
+   ],
+   [
+    "window",
+    {
+     "window": "files",
+     "action": "activate"
+    }
+   ]
+  ],
+  "check": {
+   "answer_any": [
+    "Home",
+    "tester",
+    "Recents",
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Applications"
+   ]
+  }
+ },
+ {
+  "id": "logs-new-lines",
+  "prompt": "Write the line {nonce} to the system journal (logger), then use the logs tool twice: once to establish a cursor before and once after. Report the line that the second logs call returned as new.",
+  "check": {
+   "all": [
+    {
+     "answer_has": "{nonce}"
+    },
+    {
+     "exec_ok": "journalctl -b --no-pager -n 20 | grep -q '{nonce}'"
+    }
+   ]
+  }
+ },
+ {
+  "id": "crash-report",
+  "prompt": "Were there any crashes (coredumps or shell panics) on this boot? Answer 'none' or name the crashed program.",
+  "check": {
+   "answer_has_exec": "coredumpctl list --no-pager --no-legend --since -1d 2>/dev/null | tail -1 | awk '{print $NF}' | xargs -r basename | grep . || echo none"
+  }
+ },
+ {
+  "id": "dev-upload-hash",
+  "prompt": "Upload a file /tmp/mcp-dev-{nonce}.txt containing exactly the text {nonce} followed by a newline, using the dev tool, and report the sha256 it returned.",
+  "setup": [
+   [
+    "exec",
+    {
+     "command": "rm -f /tmp/mcp-dev-*.txt"
+    }
+   ]
+  ],
+  "check": {
+   "answer_has_exec": "sha256sum /tmp/mcp-dev-*.txt | cut -c1-64"
+  },
+  "cleanup": [
+   [
+    "exec",
+    {
+     "command": "rm -f /tmp/mcp-dev-*.txt"
+    }
+   ]
+  ]
+ },
+ {
+  "id": "perf-busiest",
+  "prompt": "Using the perf tool, which process uses the most CPU right now? Give its command name.",
+  "setup": [
+   [
+    "exec",
+    {
+     "command": "(timeout 6 sh -c 'while :; do :; done' &) ; true"
+    }
+   ]
+  ],
+  "check": {
+   "answer_any": [
+    "sh",
+    "springboard",
+    "labwc",
+    "shell",
+    "bifrost-mcp"
+   ]
+  }
+ },
+ {
+  "id": "app-describe",
+  "prompt": "Using the app tool in describe mode, which methods does the notes app expose? List three.",
+  "check": {
+   "answer_has": "notes."
+  }
+ },
+ {
+  "id": "app-wait-ready",
+  "prompt": "Restart the notes app with the dev tool, then use wait (app_ready) until it answers. Report how many ms it took.",
+  "check": {
+   "answer_has": "ms"
+  }
+ },
+ {
+  "id": "screenshot-by-app",
+  "prompt": "Take a screenshot of the notes app by app id (it may be covered or minimized). Report the image size in pixels.",
+  "setup": [
+   [
+    "open",
+    {
+     "name": "Notes"
+    }
+   ]
+  ],
+  "check": {
+   "answer_has": "x"
+  },
+  "cleanup": [
+   [
+    "window",
+    {
+     "window": "notes",
+     "action": "close"
+    }
+   ]
+  ]
+ }
+]

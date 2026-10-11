@@ -1,0 +1,38 @@
+[
+ {
+  "name": "Classic",
+  "params": {
+   "rate": 4,
+   "depth": 0.5,
+   "shape": 0,
+   "pan": 0
+  }
+ },
+ {
+  "name": "Chop",
+  "params": {
+   "rate": 2,
+   "depth": 1,
+   "shape": 1,
+   "pan": 0
+  }
+ },
+ {
+  "name": "Auto-Pan",
+  "params": {
+   "rate": 8,
+   "depth": 0.7,
+   "shape": 0,
+   "pan": 1
+  }
+ },
+ {
+  "name": "Stutter",
+  "params": {
+   "rate": 1,
+   "depth": 1,
+   "shape": 1,
+   "pan": 0
+  }
+ }
+]

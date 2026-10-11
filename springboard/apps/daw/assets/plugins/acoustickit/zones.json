@@ -1,0 +1,277 @@
+{
+ "attack": 0.001,
+ "release": 0.05,
+ "oneShot": true,
+ "pitched": false,
+ "range": [
+  35,
+  70
+ ],
+ "license": "CC0-1.0",
+ "source": "https://github.com/sfzinstruments/virtuosity_drums",
+ "attribution": "Virtuosity Drums by Versilian Studios & Karoryfer Samples (drummer Austin McMahon, recorded at Virtuosity Musical Instruments, Boston). CC0 1.0; Claps from VCSL (Versilian Community Sample Library) by Versilian Studios. CC0 1.0.",
+ "zones": [
+  {
+   "file": "35_f.ogg",
+   "root": 35,
+   "lo": 0,
+   "hi": 35,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "35_f.ogg",
+   "root": 35,
+   "lo": 0,
+   "hi": 35,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "36_p.ogg",
+   "root": 36,
+   "lo": 36,
+   "hi": 36,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "36_f.ogg",
+   "root": 36,
+   "lo": 36,
+   "hi": 36,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "37_p.ogg",
+   "root": 37,
+   "lo": 37,
+   "hi": 37,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "37_f.ogg",
+   "root": 37,
+   "lo": 37,
+   "hi": 37,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "38_p.ogg",
+   "root": 38,
+   "lo": 38,
+   "hi": 38,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "38_f.ogg",
+   "root": 38,
+   "lo": 38,
+   "hi": 38,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "39_p.ogg",
+   "root": 39,
+   "lo": 39,
+   "hi": 39,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "39_f.ogg",
+   "root": 39,
+   "lo": 39,
+   "hi": 39,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "40_p.ogg",
+   "root": 40,
+   "lo": 40,
+   "hi": 41,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "40_f.ogg",
+   "root": 40,
+   "lo": 40,
+   "hi": 41,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "42_p.ogg",
+   "root": 42,
+   "lo": 42,
+   "hi": 43,
+   "choke": "hat",
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "42_f.ogg",
+   "root": 42,
+   "lo": 42,
+   "hi": 43,
+   "choke": "hat",
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "44_p.ogg",
+   "root": 44,
+   "lo": 44,
+   "hi": 44,
+   "choke": "hat",
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "44_f.ogg",
+   "root": 44,
+   "lo": 44,
+   "hi": 44,
+   "choke": "hat",
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "45_p.ogg",
+   "root": 45,
+   "lo": 45,
+   "hi": 45,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "45_f.ogg",
+   "root": 45,
+   "lo": 45,
+   "hi": 45,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "46_p.ogg",
+   "root": 46,
+   "lo": 46,
+   "hi": 46,
+   "choke": "hat",
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "46_f.ogg",
+   "root": 46,
+   "lo": 46,
+   "hi": 46,
+   "choke": "hat",
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "47_p.ogg",
+   "root": 47,
+   "lo": 47,
+   "hi": 48,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "47_f.ogg",
+   "root": 47,
+   "lo": 47,
+   "hi": 48,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "49_p.ogg",
+   "root": 49,
+   "lo": 49,
+   "hi": 49,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "49_f.ogg",
+   "root": 49,
+   "lo": 49,
+   "hi": 49,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "50_p.ogg",
+   "root": 50,
+   "lo": 50,
+   "hi": 50,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "50_f.ogg",
+   "root": 50,
+   "lo": 50,
+   "hi": 50,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "51_p.ogg",
+   "root": 51,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "51_f.ogg",
+   "root": 51,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "56_p.ogg",
+   "root": 56,
+   "lo": 54,
+   "hi": 63,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "56_f.ogg",
+   "root": 56,
+   "lo": 54,
+   "hi": 63,
+   "vlo": 0.6,
+   "vhi": 1
+  },
+  {
+   "file": "70_f.ogg",
+   "root": 70,
+   "lo": 64,
+   "hi": 127,
+   "vlo": 0,
+   "vhi": 0.6
+  },
+  {
+   "file": "70_f.ogg",
+   "root": 70,
+   "lo": 64,
+   "hi": 127,
+   "vlo": 0.6,
+   "vhi": 1
+  }
+ ]
+}

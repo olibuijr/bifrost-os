@@ -1,0 +1,38 @@
+springboard/target/
+springboard/apps/*/target/
+ipad-ref/
+springboard/assets/
+*.png
+goldengate_refimages/
+.claude/
+apps/*/target/
+
+__pycache__/
+*.pyc
+packaging/archiso/airootfs/usr/share/bifrost/opencore/
+
+# build outputs, VM images, ISOs, secrets (out/lab holds the lab SSH key)
+out/
+*.core
+packaging/archiso/airootfs/usr/bin/bifrost-installer
+springboard/apps/*/assets/licenses/
+
+# SDK snapshot goldens are committed
+!springboard/sdk/tests/snapshots/*.png
+springboard/sdk/tests/snapshots/*.actual.png
+springboard/sdk/tests/snapshots/*.diff.png
+# app compliance goldens are committed (quarter-size thumbnails)
+!springboard/apps/*/tests/snapshots/*.png
+springboard/apps/*/tests/snapshots/*.actual.png
+springboard/apps/*/tests/snapshots/*.diff.png
+
+# licensed reference material: the Apple-derived fonts, wallpapers and screenshots stay on the build machine only
+bifrost-ref/
+**/SFUI*.ttf
+**/SFUI*.otf
+**/SFUI*.woff
+
+# local agent state, handoff logs and machine-specific config
+HANDOFF.md
+.mcp.json
+packages-before.txt

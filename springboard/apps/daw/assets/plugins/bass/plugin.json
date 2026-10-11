@@ -1,0 +1,17 @@
+{
+  "id": "bass",
+  "name": "Mono",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "bass",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Monophonic 303-style acid bass. High reso + envMod for squelch; velocity > 0.9 = accent (louder, sharper filter); overlapping/legato notes slide. Also fine for plain mono sub/saw basslines with reso low",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

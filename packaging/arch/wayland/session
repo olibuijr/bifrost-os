@@ -1,0 +1,90 @@
+#!/bin/bash
+# The compositor and Linux apps run as the installed account. The existing shell
+# keeps its system-service privileges until those services have separate helpers.
+set -euo pipefail
+timing=/var/log/bifrost-boot-timing.log
+mark() {
+    printf '%s %s\n' "$(cut -d' ' -f1 /proc/uptime)" "$1" >> "$timing" 2>/dev/null || true
+    /usr/bin/bifrost-bootweave mark "$1" 2>/dev/null || true
+}
+mark session-start
+if [[ ${BIFROST_SESSION_MODE:-desktop} == installer ]]; then
+    account=bifrost-live
+    getent passwd "$account" >/dev/null || useradd --system --create-home --shell /usr/bin/nologin --groups seat,video,render,input "$account"
+    client=/usr/bin/bifrost-installer
+else
+    account=$(sed -n 's/^username=//p' /var/lib/springboard/account)
+    client=/usr/bin/springboard
+fi
+[[ "$account" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'No valid BifrOSt local account' >&2; exit 1; }
+# Values come from the validated installer layout catalogue, never source/eval.
+if [[ -f /etc/bifrost/keyboard.env ]]; then
+    while IFS='=' read -r key value; do
+        if [[ "$key" == XKB_DEFAULT_LAYOUT || "$key" == XKB_DEFAULT_VARIANT ]] && [[ "$value" =~ ^[a-zA-Z0-9_,+-]*$ ]]; then export "$key=$value"; fi
+    done < /etc/bifrost/keyboard.env
+fi
+uid=$(id -u "$account")
+runtime=/run/bifrost/user
+install -d -m700 -o "$uid" -g "$(id -g "$account")" "$runtime"
+# A dedicated session runtime is safe to clean after systemd stops the old
+# cgroup. A stale socket must not satisfy the compositor readiness check.
+rm -f "$runtime"/wayland-* "$runtime"/session.json "$runtime"/shell-ready "$runtime"/bus
+usermod -aG seat,video,render,input "$account"
+systemctl start seatd.service
+cleanup() {
+    trap - EXIT TERM INT
+    [[ -n ${shell_pid:-} ]] && kill "$shell_pid" 2>/dev/null || true
+    [[ -n ${compositor_pid:-} ]] && kill "$compositor_pid" 2>/dev/null || true
+    [[ -n ${bus_pid:-} ]] && kill "$bus_pid" 2>/dev/null || true
+    wait 2>/dev/null || true
+}
+# A stop requested by systemd (reboot, shutdown, restart) is deliberate, not a crash: do not let it count toward the
+# shell's crash-loop latch. Only starts that die on their own are counted.
+stopped() { rm -f /var/lib/springboard/boot_attempts; exit 0; }
+trap cleanup EXIT
+trap stopped TERM INT
+# Session bus at a fixed path so apps (and the sandbox) can reach it; activates bifrost-portal (Settings portal).
+if [[ ${BIFROST_SESSION_MODE:-desktop} != installer ]] && command -v dbus-daemon >/dev/null; then
+    runuser -u "$account" -- dbus-daemon --session --nofork --nopidfile --address="unix:path=$runtime/bus" 1>&2 &
+    bus_pid=$!
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+fi
+mark compositor-start
+# glibc: two arenas and early trim keep the compositor heap (was 18 MiB idle) small; gles2 is the wlroots default, named so a stray env cannot pull in vulkan
+runtime_env=(MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 WLR_RENDERER=gles2)
+runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
+    labwc --verbose --config-dir /usr/share/bifrost/wayland 1>&2 &
+compositor_pid=$!
+for ((i=0;i<100;i++)); do
+    [[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] && break
+    kill -0 "$compositor_pid" 2>/dev/null || exit 1
+    sleep .02
+done
+[[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] || { echo 'Wayland startup timed out' >&2; exit 1; }
+mark compositor-ready
+# The shell's crash-loop guard latches after three starts that never stay up for 60 s. A new shell build must
+# not inherit that latch: reset it whenever the installed springboard-shell version changes.
+# (the pacman database directory names the version; `pacman -Q` costs ~100 ms on the boot path)
+shell_version=$(shopt -s nullglob; d=(/var/lib/pacman/local/springboard-shell-[0-9]*/); d=${d[0]%/}; printf '%s' "${d#/var/lib/pacman/local/springboard-shell-}")
+stamp=/var/lib/springboard/shell-version
+if [[ -n "$shell_version" && "$(cat "$stamp" 2>/dev/null || true)" != "$shell_version" ]]; then
+    rm -f /var/lib/springboard/boot_attempts
+    printf '%s\n' "$shell_version" > "$stamp"
+fi
+mark shell-launch
+# the first desktop of this boot fades in from the loader's frame; a session restart does not
+fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
+env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 ${fade:+BIFROST_BOOT_FADE=1} "$client" &
+shell_pid=$!
+# learns the display mode for the next boot's command line; off the critical path
+/usr/lib/bifrost/video-arg >&2 &
+# Either exit stops the other; systemd restarts the entire session on failure.
+set +e
+wait -n "$shell_pid" "$compositor_pid"
+status=$?
+# Software Update deliberately exits 3 to restart. Preserve that as failure
+# because the existing service uses Restart=on-failure.
+if [[ "$status" == 3 && -f /var/lib/bifrost-recovery/state ]] && grep -qx system-prepared /var/lib/bifrost-recovery/state; then
+    /usr/bin/bifrost-update-guard apply
+fi
+exit "$status"

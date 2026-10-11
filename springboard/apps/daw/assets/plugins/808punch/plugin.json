@@ -1,0 +1,46 @@
+{
+ "id": "808punch",
+ "name": "808 Punch",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "punch808",
+ "author": "DAW project (synthesized)",
+ "license": "CC0-1.0",
+ "desc": "Short punchy 808 (~1 s, snappy pitch drop + click), doubles as a tuned kick. Boom-bap/trap/G-funk: 8th/16th-note basslines in MIDI 24-48 locked to the kick; tune notes to the key root. Mono; glide for slides. | 808 recipe: slide = glide 0.06-0.15 and let the next note start before the previous ends (overlap ~1/16); glidecurve 0.5 = even, 0.8-1 = late trap/drill slide; release (x0.08 s tail) 0.35 = short knock, 2.5 = trap, 4+ = long boom. Always mono and centred (sub safe).",
+ "family": "bass",
+ "category": "sampled",
+ "tags": [
+  "808",
+  "bass",
+  "punchy",
+  "kick",
+  "hip-hop",
+  "boom-bap"
+ ],
+ "entry": "index.js",
+ "files": [
+  "index.js",
+  "zones.json",
+  "presets.json",
+  "README.md",
+  "n24.ogg",
+  "n27.ogg",
+  "n30.ogg",
+  "n33.ogg",
+  "n36.ogg",
+  "n39.ogg",
+  "n42.ogg",
+  "n45.ogg",
+  "n48.ogg",
+  "n51.ogg",
+  "n54.ogg",
+  "n57.ogg",
+  "n60.ogg"
+ ],
+ "source": "tools/build-hiphop.py (offline synthesis)",
+ "attribution": "",
+ "range": [
+  24,
+  60
+ ]
+}

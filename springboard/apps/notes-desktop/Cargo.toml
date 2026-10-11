@@ -1,0 +1,17 @@
+[package]
+name = "bifrost-notes"
+version = "1.8.6"
+edition = "2021"
+
+[lib]
+name = "notes"
+path = "src/lib.rs"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }
+png = "0.18"

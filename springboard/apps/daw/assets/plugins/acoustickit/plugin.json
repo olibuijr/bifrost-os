@@ -1,0 +1,125 @@
+{
+ "id": "acoustickit",
+ "name": "Acoustic Kit",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "acoustickit",
+ "author": "Versilian Studios & Karoryfer Samples (Virtuosity Drums)",
+ "license": "CC0-1.0",
+ "desc": "Real acoustic jazz/studio drum kit (multi-mic, 2 velocity layers). Jazz, soul, neo-soul, live hip-hop, funk, rock. Ride 51 swing patterns, hats 42/44/46, snare 38 (40 rimshot, 37 cross-stick), toms 45/47/50, crash 49. Use velocity for ghost notes.",
+ "family": "drums",
+ "category": "sampled",
+ "tags": [
+  "drums",
+  "acoustic",
+  "jazz",
+  "soul",
+  "live",
+  "kit"
+ ],
+ "entry": "index.js",
+ "files": [
+  "index.js",
+  "zones.json",
+  "presets.json",
+  "README.md",
+  "35_f.ogg",
+  "36_f.ogg",
+  "36_p.ogg",
+  "37_f.ogg",
+  "37_p.ogg",
+  "38_f.ogg",
+  "38_p.ogg",
+  "39_f.ogg",
+  "39_p.ogg",
+  "40_f.ogg",
+  "40_p.ogg",
+  "42_f.ogg",
+  "42_p.ogg",
+  "44_f.ogg",
+  "44_p.ogg",
+  "45_f.ogg",
+  "45_p.ogg",
+  "46_f.ogg",
+  "46_p.ogg",
+  "47_f.ogg",
+  "47_p.ogg",
+  "49_f.ogg",
+  "49_p.ogg",
+  "50_f.ogg",
+  "50_p.ogg",
+  "51_f.ogg",
+  "51_p.ogg",
+  "56_f.ogg",
+  "56_p.ogg",
+  "70_f.ogg"
+ ],
+ "source": "https://github.com/sfzinstruments/virtuosity_drums",
+ "attribution": "Virtuosity Drums by Versilian Studios & Karoryfer Samples (drummer Austin McMahon, recorded at Virtuosity Musical Instruments, Boston). CC0 1.0; Claps from VCSL (Versilian Community Sample Library) by Versilian Studios. CC0 1.0.",
+ "pads": [
+  [
+   35,
+   "Kick 2"
+  ],
+  [
+   36,
+   "Kick"
+  ],
+  [
+   37,
+   "Rim"
+  ],
+  [
+   38,
+   "Snare"
+  ],
+  [
+   39,
+   "Clap"
+  ],
+  [
+   40,
+   "Snare 2"
+  ],
+  [
+   42,
+   "Hat"
+  ],
+  [
+   44,
+   "Pedal"
+  ],
+  [
+   46,
+   "Open"
+  ],
+  [
+   45,
+   "Low Tom"
+  ],
+  [
+   47,
+   "Mid Tom"
+  ],
+  [
+   50,
+   "Hi Tom"
+  ],
+  [
+   49,
+   "Crash"
+  ],
+  [
+   51,
+   "Ride"
+  ],
+  [
+   56,
+   "Cowbell"
+  ],
+  [
+   70,
+   "Shaker"
+  ]
+ ]
+}

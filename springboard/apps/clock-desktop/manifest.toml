@@ -1,0 +1,11 @@
+id = "is.olibuijr.clock.desktop"
+name = "Clock"
+version = "1.2.3"
+exec = "bifrost-clock"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "World clocks, stopwatch and timer views; background alarms are not yet supported on PC."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"

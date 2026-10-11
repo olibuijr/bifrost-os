@@ -1,0 +1,73 @@
+{
+  "books-desktop": {
+    "COL-01": 11,
+    "LAY-07": 1,
+    "SPC-02": 28
+  },
+  "browser": {},
+  "calculator-desktop": {
+    "COL-01": 3,
+    "SPC-02": 48
+  },
+  "calendar-desktop": {
+    "COL-01": 2,
+    "SPC-02": 46
+  },
+  "clock-desktop": {
+    "COL-01": 11,
+    "SPC-02": 51
+  },
+  "contacts-desktop": {
+    "COL-01": 7,
+    "SPC-02": 59
+  },
+  "files": {
+    "SPC-02": 11
+  },
+  "freeform-desktop": {
+    "COL-01": 4,
+    "SPC-02": 4
+  },
+  "games-desktop": {
+    "COL-01": 7,
+    "LAY-07": 1,
+    "SPC-02": 23
+  },
+  "music-desktop": {
+    "COL-01": 20,
+    "LAY-07": 1,
+    "SPC-02": 30
+  },
+  "news-desktop": {
+    "COL-01": 3,
+    "LAY-07": 1,
+    "SPC-02": 4
+  },
+  "notes-desktop": {
+    "COL-01": 5,
+    "LAY-07": 2,
+    "SPC-02": 32
+  },
+  "podcasts-desktop": {
+    "COL-01": 3,
+    "SPC-02": 35
+  },
+  "reminders-desktop": {
+    "COL-01": 2,
+    "LAY-07": 2,
+    "SPC-02": 57
+  },
+  "shortcuts-desktop": {
+    "COL-01": 2,
+    "LAY-07": 1,
+    "SPC-02": 32
+  },
+  "voicememos-desktop": {
+    "LAY-07": 1,
+    "SPC-02": 32
+  },
+  "weather-desktop": {
+    "COL-01": 4,
+    "SPC-02": 28
+  }
+}

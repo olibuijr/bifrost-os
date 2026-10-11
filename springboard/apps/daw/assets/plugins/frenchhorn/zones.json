@@ -1,0 +1,255 @@
+{
+ "id": "frenchhorn",
+ "name": "French Horn",
+ "desc": "Solo French horn, sustained, 2 dynamics. Round, noble, mellow; brassy when loud. Range A1-F5 (best C3-C5). Heroic themes, warm chord pads, film swells.",
+ "family": "brass",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Brass/F Horn/sus",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.05,
+ "release": 0.3,
+ "range": [
+  33,
+  77
+ ],
+ "softAttack": 1.0,
+ "brassEnv": true,
+ "zones": [
+  {
+   "file": "frenchhorn_A0_v1.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 34,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.883923,
+   "loopEnd": 2.482857,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_C1_v1.ogg",
+   "root": 36,
+   "lo": 35,
+   "hi": 37,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.849002,
+   "loopEnd": 2.410748,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_Ds1_v1.ogg",
+   "root": 39,
+   "lo": 38,
+   "hi": 41,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.744512,
+   "loopEnd": 2.252925,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_G1_v1.ogg",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.024218,
+   "loopEnd": 2.554558,
+   "gain": 0.6,
+   "tune": -12
+  },
+  {
+   "file": "frenchhorn_As1_v1.ogg",
+   "root": 46,
+   "lo": 45,
+   "hi": 48,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.624082,
+   "loopEnd": 2.175442,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_D2_v1.ogg",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.641474,
+   "loopEnd": 2.204898,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_F2_v1.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.023515,
+   "loopEnd": 2.627029,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_A2_v1.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.00551,
+   "loopEnd": 2.599002,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_C3_v1.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.91966,
+   "loopEnd": 2.496667,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_D4_v1.ogg",
+   "root": 74,
+   "lo": 68,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.62356,
+   "loopEnd": 2.214286,
+   "gain": 0.6,
+   "tune": -7
+  },
+  {
+   "file": "frenchhorn_F4_v1.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 77,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.81449,
+   "loopEnd": 2.414535,
+   "gain": 0.6
+  },
+  {
+   "file": "frenchhorn_A0_v2.ogg",
+   "root": 33,
+   "lo": 33,
+   "hi": 34,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.883923,
+   "loopEnd": 2.482857
+  },
+  {
+   "file": "frenchhorn_C1_v2.ogg",
+   "root": 36,
+   "lo": 35,
+   "hi": 37,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.831293,
+   "loopEnd": 2.41898
+  },
+  {
+   "file": "frenchhorn_Ds1_v2.ogg",
+   "root": 39,
+   "lo": 38,
+   "hi": 41,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.623084,
+   "loopEnd": 2.217959
+  },
+  {
+   "file": "frenchhorn_G1_v2.ogg",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.710476,
+   "loopEnd": 2.311927,
+   "tune": 20
+  },
+  {
+   "file": "frenchhorn_As1_v2.ogg",
+   "root": 46,
+   "lo": 45,
+   "hi": 48,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.762041,
+   "loopEnd": 2.361066
+  },
+  {
+   "file": "frenchhorn_D2_v2.ogg",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.67483,
+   "loopEnd": 2.235034
+  },
+  {
+   "file": "frenchhorn_F2_v2.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.623084,
+   "loopEnd": 2.181247,
+   "tune": 8
+  },
+  {
+   "file": "frenchhorn_A2_v2.ogg",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.936757,
+   "loopEnd": 2.536644
+  },
+  {
+   "file": "frenchhorn_C3_v2.ogg",
+   "root": 60,
+   "lo": 59,
+   "hi": 67,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.866395,
+   "loopEnd": 2.459456
+  },
+  {
+   "file": "frenchhorn_D4_v2.ogg",
+   "root": 74,
+   "lo": 68,
+   "hi": 75,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.62356,
+   "loopEnd": 2.214286,
+   "tune": -7
+  },
+  {
+   "file": "frenchhorn_F4_v2.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 77,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.81449,
+   "loopEnd": 2.414535
+  }
+ ]
+}

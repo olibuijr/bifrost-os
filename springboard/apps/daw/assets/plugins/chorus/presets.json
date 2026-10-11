@@ -1,0 +1,38 @@
+[
+ {
+  "name": "Subtle",
+  "params": {
+   "rate": 0.5,
+   "depth": 0.3,
+   "width": 0.7,
+   "mix": 0.3
+  }
+ },
+ {
+  "name": "Wide",
+  "params": {
+   "rate": 0.8,
+   "depth": 0.6,
+   "width": 1,
+   "mix": 0.5
+  }
+ },
+ {
+  "name": "Vibrato",
+  "params": {
+   "rate": 5,
+   "depth": 0.4,
+   "width": 0.3,
+   "mix": 1
+  }
+ },
+ {
+  "name": "Ensemble",
+  "params": {
+   "rate": 1.6,
+   "depth": 0.7,
+   "width": 0.9,
+   "mix": 0.55
+  }
+ }
+]

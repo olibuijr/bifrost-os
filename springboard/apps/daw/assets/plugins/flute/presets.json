@@ -1,0 +1,87 @@
+[
+ {
+  "name": "Soft Pad",
+  "params": {
+   "attack": 4,
+   "release": 4,
+   "tone": 6000,
+   "vibrato": 6,
+   "velocity": 0.35,
+   "stereo": 0.3
+  },
+  "tags": [
+   "pad",
+   "slow"
+  ]
+ },
+ {
+  "name": "Expressive",
+  "params": {
+   "vibrato": 20,
+   "rate": 5.5,
+   "velocity": 0.8
+  },
+  "tags": [
+   "vibrato",
+   "lead"
+  ]
+ },
+ {
+  "name": "Staccato-ish",
+  "params": {
+   "attack": 0.3,
+   "release": 0.2,
+   "velocity": 0.85
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Dark",
+  "params": {
+   "tone": 2500
+  },
+  "tags": [
+   "dark"
+  ]
+ },
+ {
+  "name": "Bright",
+  "params": {
+   "tone": 20000,
+   "velocity": 0.95
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Legato Solo",
+  "params": {
+   "glide": 0.04,
+   "legato": 1,
+   "vibrato": 14,
+   "human": 0.15,
+   "velocity": 0.85
+  },
+  "tags": [
+   "legato",
+   "solo",
+   "lead"
+  ]
+ },
+ {
+  "name": "Lo-fi Flute",
+  "params": {
+   "tone": 4000,
+   "human": 0.3,
+   "vibrato": 10,
+   "stereo": 0.2
+  },
+  "tags": [
+   "lofi",
+   "hiphop"
+  ]
+ }
+]

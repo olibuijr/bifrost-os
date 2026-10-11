@@ -1,0 +1,10 @@
+id = "is.olibuijr.update"
+name = "Software Update"
+version = "0.1.0"
+kind = "service"
+exec = "updated"
+icon = "icon.png"
+min_shell = "0.3.0"
+summary = "Checks for BifrOSt and app updates in the background"
+category = "System"
+permissions = ["network", "storage"]

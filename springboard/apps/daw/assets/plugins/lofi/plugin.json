@@ -1,0 +1,15 @@
+{
+  "id": "lofi",
+  "name": "Lo-Fi",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "lofi",
+  "author": "DAW",
+  "license": "MIT AND CC0-1.0",
+  "desc": "Lo-fi hip-hop character box: vinyl crackle bed, tape wow/flutter, band-limited aging, soft saturation. Use on drums bus, piano/keys or master for lo-fi hip-hop; keep crackle low (0.2-0.4)",
+  "category": "character",
+  "tags": ["lofi", "vinyl", "crackle", "tape", "wow", "saturation", "hip-hop"],
+  "entry": "index.js",
+  "files": ["index.js", "presets.json", "crackle.ogg"],
+  "attribution": "crackle.ogg synthesized for this project (sources/lofi/make_crackle.py), CC0"
+}

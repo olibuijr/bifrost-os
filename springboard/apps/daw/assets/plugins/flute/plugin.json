@@ -1,0 +1,53 @@
+{
+ "id": "flute",
+ "name": "Flute",
+ "version": "1.0.0",
+ "kind": "instrument",
+ "type": "flute",
+ "author": "Versilian Studios (samples); DAW build script",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "desc": "Concert flute, non-vibrato sustain, 2 dynamics. Airy, pure, soaring highs. Range C4-C7 (MIDI 60-96, best G4-C7). Melodies, countermelodies, pads doubled an octave up. | Playable MIDI 60-96 (C4-C7), 2 velocity layers crossfaded. Params: human 0-1 (timing/level/pitch life), velcurve (velocity response), keytrack/bright (tone follows pitch/velocity). Legato melody: overlap consecutive notes by ~30 ms (next note starts before the previous ends) with glide 0.03-0.06; wide leaps crossfade naturally (legato=1), legato=0 = pure slide.",
+ "family": "woodwind",
+ "entry": "index.js",
+ "files": [
+  "LICENSE.txt",
+  "README.md",
+  "flute_A3_v1.ogg",
+  "flute_A3_v2.ogg",
+  "flute_A4_v1.ogg",
+  "flute_A4_v2.ogg",
+  "flute_A5_v1.ogg",
+  "flute_A5_v2.ogg",
+  "flute_C3_v1.ogg",
+  "flute_C3_v2.ogg",
+  "flute_C4_v1.ogg",
+  "flute_C4_v2.ogg",
+  "flute_C5_v1.ogg",
+  "flute_C5_v2.ogg",
+  "flute_C6_v1.ogg",
+  "flute_C6_v2.ogg",
+  "flute_E3_v1.ogg",
+  "flute_E3_v2.ogg",
+  "flute_E4_v1.ogg",
+  "flute_E4_v2.ogg",
+  "flute_E5_v1.ogg",
+  "flute_E5_v2.ogg",
+  "index.js",
+  "zones.json",
+  "presets.json"
+ ],
+ "tags": [
+  "flute",
+  "woodwind",
+  "orchestral",
+  "lead",
+  "sustain"
+ ],
+ "legato": true,
+ "defaults": {
+  "human": 0.15,
+  "glide": 0.04
+ }
+}

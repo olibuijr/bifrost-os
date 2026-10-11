@@ -1,0 +1,592 @@
+{
+ "id": "rhodes",
+ "name": "Rhodes",
+ "desc": "Fender Rhodes Mark II stage electric piano (tine EP), 3 velocity layers: soft = round and mellow, medium = classic bell-like tine, hard = barky/overdriven. Range E1-E7 (MIDI 28-100), best C2-C6. Neo-soul, R&B, jazz, lo-fi hip-hop, gospel and funk chords (7ths/9ths), soft ballads; natural decay.",
+ "family": "keys",
+ "license": "CC-BY-4.0 (+ MIT for 3 gap-fill notes)",
+ "source": "https://freesound.org/people/tim.kahn/packs/3957/ (C_S Fender Rhodes Mark II); MIDI 65-84 from FluidR3_GM.sf2 \"Rhodes EP\" (http://deb.debian.org/debian/pool/main/f/fluid-soundfont/)",
+ "attribution": "\"C_S Fender Rhodes Mark II\" by tim.kahn (https://freesound.org/people/tim.kahn/packs/3957/), licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); modified. Notes G4-G6 (MIDI 67/72/79 roots) from Fluid R3 GM SoundFont by Frank Wen, MIT license.",
+ "attack": 0.002,
+ "release": 0.3,
+ "range": [
+  28,
+  100
+ ],
+ "velXfade": 0.08,
+ "releaseNoise": {
+  "gain": 0.03,
+  "tone": 1200
+ },
+ "releaseKeytrack": true,
+ "pedalRelease": 0.4,
+ "rrNeighbor": true,
+ "zones": [
+  {
+   "file": "E1_p.ogg",
+   "root": 28,
+   "lo": 28,
+   "hi": 29,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "E1_mf.ogg",
+   "root": 28,
+   "lo": 28,
+   "hi": 29,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "E1_f.ogg",
+   "root": 28,
+   "lo": 28,
+   "hi": 29,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G1_p.ogg",
+   "root": 31,
+   "lo": 30,
+   "hi": 32,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "G1_mf.ogg",
+   "root": 31,
+   "lo": 30,
+   "hi": 32,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "G1_f.ogg",
+   "root": 31,
+   "lo": 30,
+   "hi": 32,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "As1_p.ogg",
+   "root": 34,
+   "lo": 33,
+   "hi": 35,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "As1_mf.ogg",
+   "root": 34,
+   "lo": 33,
+   "hi": 35,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "As1_f.ogg",
+   "root": 34,
+   "lo": 33,
+   "hi": 35,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Cs2_p.ogg",
+   "root": 37,
+   "lo": 36,
+   "hi": 38,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "Cs2_mf.ogg",
+   "root": 37,
+   "lo": 36,
+   "hi": 38,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "Cs2_f.ogg",
+   "root": 37,
+   "lo": 36,
+   "hi": 38,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E2_p.ogg",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "E2_mf.ogg",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "E2_f.ogg",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G2_p.ogg",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "G2_mf.ogg",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "G2_f.ogg",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "As2_p.ogg",
+   "root": 46,
+   "lo": 45,
+   "hi": 47,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "As2_mf.ogg",
+   "root": 46,
+   "lo": 45,
+   "hi": 47,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "As2_f.ogg",
+   "root": 46,
+   "lo": 45,
+   "hi": 47,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Cs3_p.ogg",
+   "root": 49,
+   "lo": 48,
+   "hi": 50,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "Cs3_mf.ogg",
+   "root": 49,
+   "lo": 48,
+   "hi": 50,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "Cs3_f.ogg",
+   "root": 49,
+   "lo": 48,
+   "hi": 50,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E3_p.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "E3_mf.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "E3_f.ogg",
+   "root": 52,
+   "lo": 51,
+   "hi": 53,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G3_p.ogg",
+   "root": 55,
+   "lo": 54,
+   "hi": 56,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "G3_mf.ogg",
+   "root": 55,
+   "lo": 54,
+   "hi": 56,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "G3_f.ogg",
+   "root": 55,
+   "lo": 54,
+   "hi": 56,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "As3_p.ogg",
+   "root": 58,
+   "lo": 57,
+   "hi": 59,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "As3_mf.ogg",
+   "root": 58,
+   "lo": 57,
+   "hi": 59,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "As3_f.ogg",
+   "root": 58,
+   "lo": 57,
+   "hi": 59,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Cs4_p.ogg",
+   "root": 61,
+   "lo": 60,
+   "hi": 62,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "Cs4_mf.ogg",
+   "root": 61,
+   "lo": 60,
+   "hi": 62,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "Cs4_f.ogg",
+   "root": 61,
+   "lo": 60,
+   "hi": 62,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "E4_p.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "E4_mf.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "E4_f.ogg",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G4_p.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "G4_mf.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "G4_f.ogg",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C5_p.ogg",
+   "root": 72,
+   "lo": 70,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "C5_mf.ogg",
+   "root": 72,
+   "lo": 70,
+   "hi": 75,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "C5_f.ogg",
+   "root": 72,
+   "lo": 70,
+   "hi": 75,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "G5_p.ogg",
+   "root": 79,
+   "lo": 76,
+   "hi": 82,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "G5_mf.ogg",
+   "root": 79,
+   "lo": 76,
+   "hi": 82,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "G5_f.ogg",
+   "root": 79,
+   "lo": 76,
+   "hi": 82,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "D6_p.ogg",
+   "root": 86,
+   "lo": 83,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "D6_mf.ogg",
+   "root": 86,
+   "lo": 83,
+   "hi": 87,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "D6_f.ogg",
+   "root": 86,
+   "lo": 83,
+   "hi": 87,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "F6_p.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 90,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "F6_mf.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 90,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "F6_f.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 90,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Gs6_p.ogg",
+   "root": 92,
+   "lo": 91,
+   "hi": 93,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "Gs6_mf.ogg",
+   "root": 92,
+   "lo": 91,
+   "hi": 93,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "Gs6_f.ogg",
+   "root": 92,
+   "lo": 91,
+   "hi": 93,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "B6_p.ogg",
+   "root": 95,
+   "lo": 94,
+   "hi": 96,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "B6_mf.ogg",
+   "root": 95,
+   "lo": 94,
+   "hi": 96,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "B6_f.ogg",
+   "root": 95,
+   "lo": 94,
+   "hi": 96,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "D7_p.ogg",
+   "root": 98,
+   "lo": 97,
+   "hi": 100,
+   "vlo": 0.0,
+   "vhi": 0.4,
+   "gain": 0.396
+  },
+  {
+   "file": "D7_mf.ogg",
+   "root": 98,
+   "lo": 97,
+   "hi": 100,
+   "vlo": 0.4,
+   "vhi": 0.75,
+   "gain": 0.676
+  },
+  {
+   "file": "D7_f.ogg",
+   "root": 98,
+   "lo": 97,
+   "hi": 100,
+   "vlo": 0.75,
+   "vhi": 1.0,
+   "gain": 1.0
+  }
+ ]
+}

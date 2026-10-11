@@ -1,0 +1,177 @@
+[
+ {
+  "name": "E-Piano",
+  "params": {
+   "ratio": 1,
+   "index": 2.5,
+   "idxDecay": 0.6,
+   "idxSus": 0.1,
+   "feedback": 0,
+   "attack": 0.002,
+   "decay": 1.6,
+   "sustain": 0.2,
+   "release": 0.5,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Bell",
+  "params": {
+   "ratio": 3.5,
+   "fine": 7,
+   "index": 5,
+   "idxDecay": 1.5,
+   "idxSus": 0.15,
+   "feedback": 0.1,
+   "attack": 0.001,
+   "decay": 2.8,
+   "sustain": 0,
+   "release": 2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "FM Bass",
+  "params": {
+   "ratio": 1,
+   "index": 4,
+   "idxDecay": 0.15,
+   "idxSus": 0.25,
+   "feedback": 0.3,
+   "octave": -1,
+   "attack": 0.001,
+   "decay": 0.4,
+   "sustain": 0.5,
+   "release": 0.1,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Glass Pad",
+  "params": {
+   "ratio": 2,
+   "fine": 4,
+   "index": 1.5,
+   "idxDecay": 3,
+   "idxSus": 0.5,
+   "feedback": 0.05,
+   "attack": 1.2,
+   "decay": 2,
+   "sustain": 0.8,
+   "release": 2.5,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Metal Pluck",
+  "params": {
+   "ratio": 7,
+   "index": 8,
+   "idxDecay": 0.08,
+   "idxSus": 0,
+   "feedback": 0.4,
+   "attack": 0.001,
+   "decay": 0.35,
+   "sustain": 0,
+   "release": 0.2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "DX E-Piano",
+  "params": {
+   "algo": 2,
+   "ratio": 1,
+   "index": 1.6,
+   "idxDecay": 0.9,
+   "idxSus": 0.1,
+   "ratio2": 14,
+   "index2": 1.2,
+   "idx2Decay": 0.05,
+   "velIdx": 0.8,
+   "keyScale": 0.5,
+   "attack": 0.002,
+   "decay": 2,
+   "sustain": 0.15,
+   "release": 0.5,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Tine Bell EP",
+  "params": {
+   "algo": 2,
+   "ratio": 1,
+   "index": 2.4,
+   "idxDecay": 0.6,
+   "idxSus": 0.15,
+   "ratio2": 7,
+   "index2": 2.5,
+   "idx2Decay": 0.12,
+   "velIdx": 0.7,
+   "keyScale": 0.4,
+   "attack": 0.002,
+   "decay": 2.4,
+   "sustain": 0.1,
+   "release": 0.8,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Marimba",
+  "params": {
+   "algo": 1,
+   "ratio": 4,
+   "index": 1.2,
+   "idxDecay": 0.06,
+   "idxSus": 0,
+   "ratio2": 10,
+   "index2": 0.8,
+   "idx2Decay": 0.02,
+   "velIdx": 0.6,
+   "keyScale": 0.7,
+   "attack": 0.002,
+   "decay": 0.35,
+   "sustain": 0,
+   "release": 0.2,
+   "gain": 0.65
+  }
+ },
+ {
+  "name": "FM Lead",
+  "params": {
+   "algo": 1,
+   "ratio": 1,
+   "index": 2.2,
+   "idxDecay": 0.5,
+   "idxSus": 0.6,
+   "ratio2": 2,
+   "index2": 0.8,
+   "idx2Decay": 0.4,
+   "feedback": 0.15,
+   "velIdx": 0.5,
+   "attack": 0.005,
+   "decay": 0.6,
+   "sustain": 0.8,
+   "release": 0.25,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Log Drum",
+  "params": {
+   "algo": 0,
+   "ratio": 1.5,
+   "index": 3.5,
+   "idxDecay": 0.05,
+   "idxSus": 0,
+   "octave": -1,
+   "velIdx": 0.7,
+   "attack": 0.002,
+   "decay": 0.35,
+   "sustain": 0,
+   "release": 0.15,
+   "gain": 0.7
+  }
+ }
+]

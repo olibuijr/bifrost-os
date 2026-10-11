@@ -1,0 +1,31 @@
+#!/usr/bin/python3
+"""Export the compositor's actual XWayland environment for BifrOSt launchers."""
+import json, os, subprocess
+from pathlib import Path
+runtime = Path(os.environ['XDG_RUNTIME_DIR'])
+keys = ('XDG_RUNTIME_DIR','WAYLAND_DISPLAY','DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_TYPE','MOZ_ENABLE_WAYLAND','QT_QPA_PLATFORM','GDK_BACKEND','XCURSOR_THEME','XCURSOR_SIZE')
+# Any mode change makes the monitor retrain its link (a black gap), and the firmware always starts in the preferred
+# mode, so boot keeps it. The fastest refresh at native resolution is opt-in: refresh=max in /etc/bifrost/display.conf.
+def wants_max():
+    try:
+        return 'refresh=max' in Path('/etc/bifrost/display.conf').read_text().split()
+    except OSError:
+        return False
+try:
+    if not wants_max(): raise StopIteration('keeping the firmware mode')
+    outputs = json.loads(subprocess.check_output(['wlr-randr','--json'], text=True))
+    for output in outputs:
+        native = next((m for m in output['modes'] if m.get('preferred')), None)
+        if native:
+            modes = [m for m in output['modes'] if (m['width'],m['height']) == (native['width'],native['height'])]
+            best = max(modes, key=lambda m:m['refresh'])
+            mode = f"{best['width']}x{best['height']}@{best['refresh']:.6f}Hz"
+            if (best['width'],best['height'],round(best['refresh'],3)) == next(((m['width'],m['height'],round(m['refresh'],3)) for m in output['modes'] if m.get('current')), None): continue
+            subprocess.run(['wlr-randr','--output',output['name'],'--mode',mode], check=True)
+except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as e:
+    print(f'BifrOSt: preferred output mode retained: {e}', flush=True)
+
+tmp = runtime / 'session.json.tmp'
+tmp.write_text(json.dumps({k:os.environ[k] for k in keys if k in os.environ}))
+tmp.chmod(0o600)
+tmp.replace(runtime / 'session.json')

@@ -1,0 +1,13 @@
+#!/usr/bin/ash
+# Late hook: mount every fstab entry below / under /new_root now. Done by systemd instead, these mounts wait out
+# its mount-event rate limit (~0.8 s per boot, tools/boot-bench.py). A failure leaves the entry to systemd.
+run_latehook() {
+    [ -r /new_root/etc/fstab ] || return 0
+    while read -r src dir type opts _; do
+        case "$src" in ''|\#*) continue ;; esac
+        [ "$dir" = / ] && continue
+        case "$type" in btrfs|vfat) ;; *) continue ;; esac
+        case "$opts" in *noauto*) continue ;; esac
+        mount -t "$type" -o "$opts" "$src" "/new_root$dir" 2>/dev/null || true
+    done < /new_root/etc/fstab
+}

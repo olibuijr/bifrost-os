@@ -1,0 +1,15 @@
+{
+  "id": "supersaw",
+  "name": "Hyper",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "supersaw",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "JP-8000 style supersaw / mini-wavetable lead: up to 9 detuned voices with mix and stereo spread, shape (Saw, Bright, Hollow, Vox), lowpass with its own filter envelope, keytrack and delayed vibrato. Trance/EDM/future-bass leads, big chords and stabs",
+  "family": "synth",
+  "category": "synth",
+  "tags": ["synth", "supersaw", "lead", "trance", "edm", "future bass"],
+  "entry": "index.js",
+  "files": ["index.js", "presets.json"]
+}

@@ -1,0 +1,11 @@
+id = "is.olibuijr.freeform.desktop"
+name = "Freeform"
+version = "1.2.2"
+exec = "bifrost-freeform"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Finger drawing canvas with pen, marker, eraser and colours."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"

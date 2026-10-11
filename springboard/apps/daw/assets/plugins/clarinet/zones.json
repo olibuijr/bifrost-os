@@ -1,0 +1,253 @@
+{
+ "id": "clarinet",
+ "name": "Clarinet",
+ "desc": "Bb clarinet, sustained, 2 dynamics. Warm woody low (chalumeau), clear bright top. Range D3-G6. Lyrical melodies, jazzy lines, soft inner harmonies.",
+ "family": "woodwind",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Woodwinds/Clarinet/susLong",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.03,
+ "release": 0.2,
+ "range": [
+  50,
+  91
+ ],
+ "softAttack": 0.8,
+ "autoLoop": true,
+ "minLoop": 0.05,
+ "zones": [
+  {
+   "file": "clarinet_D2_v1.ogg",
+   "root": 50,
+   "lo": 50,
+   "hi": 51,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.832766,
+   "loopEnd": 2.383832,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_F2_v1.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.69322,
+   "loopEnd": 2.25585,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_As2_v1.ogg",
+   "root": 58,
+   "lo": 56,
+   "hi": 60,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.622313,
+   "loopEnd": 2.197188,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_D3_v1.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.624195,
+   "loopEnd": 2.199365,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_F3_v1.ogg",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.022812,
+   "loopEnd": 2.620703,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_As3_v1.ogg",
+   "root": 70,
+   "lo": 68,
+   "hi": 72,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.867324,
+   "loopEnd": 2.465465,
+   "gain": 0.6,
+   "tune": -5
+  },
+  {
+   "file": "clarinet_D4_v1.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.640272,
+   "loopEnd": 2.234966,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_F4_v1.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.745351,
+   "loopEnd": 2.335873,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_As4_v1.ogg",
+   "root": 82,
+   "lo": 80,
+   "hi": 84,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.022857,
+   "loopEnd": 2.623469,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_D5_v1.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.023243,
+   "loopEnd": 2.621859,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_Fs5_v1.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.814649,
+   "loopEnd": 2.414603,
+   "gain": 0.6
+  },
+  {
+   "file": "clarinet_D2_v2.ogg",
+   "root": 50,
+   "lo": 50,
+   "hi": 51,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.814444,
+   "loopEnd": 2.404195,
+   "tune": -5
+  },
+  {
+   "file": "clarinet_F2_v2.ogg",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.023061,
+   "loopEnd": 2.617234
+  },
+  {
+   "file": "clarinet_As2_v2.ogg",
+   "root": 58,
+   "lo": 56,
+   "hi": 60,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.797483,
+   "loopEnd": 2.375102
+  },
+  {
+   "file": "clarinet_D3_v2.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.021701,
+   "loopEnd": 2.622426
+  },
+  {
+   "file": "clarinet_F3_v2.ogg",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.622608,
+   "loopEnd": 2.205964
+  },
+  {
+   "file": "clarinet_As3_v2.ogg",
+   "root": 70,
+   "lo": 68,
+   "hi": 72,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.622766,
+   "loopEnd": 2.213379
+  },
+  {
+   "file": "clarinet_D4_v2.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.831927,
+   "loopEnd": 2.426916
+  },
+  {
+   "file": "clarinet_F4_v2.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.866825,
+   "loopEnd": 2.465805
+  },
+  {
+   "file": "clarinet_As4_v2.ogg",
+   "root": 82,
+   "lo": 80,
+   "hi": 84,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.919002,
+   "loopEnd": 2.513832
+  },
+  {
+   "file": "clarinet_D5_v2.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.81483,
+   "loopEnd": 2.413923
+  },
+  {
+   "file": "clarinet_Fs5_v2.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.623311,
+   "loopEnd": 2.222993
+  }
+ ]
+}

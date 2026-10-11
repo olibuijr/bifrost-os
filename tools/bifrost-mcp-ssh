@@ -1,0 +1,17 @@
+#!/bin/bash
+# Claude Code stdio launcher for the BifrOSt MCP server on Midget: finds the reachable address
+# (VLAN 20, lab NIC, Wi-Fi; MIDGET_HOST overrides) and runs bifrost-mcp over one ssh channel: the packaged
+# /usr/bin/bifrost-mcp, or a newer dev build from tools/mcp-push.sh in /usr/local/bin.
+here=$(dirname "$(readlink -f "$0")")
+host=${MIDGET_HOST:-}
+if [[ -z $host ]]; then
+  for wait in 1 2 3; do
+    for h in 192.168.20.140 10.99.0.200 192.168.1.187; do
+      if timeout $wait bash -c "exec 3<>/dev/tcp/$h/22" 2>/dev/null; then host=$h; break 2; fi
+    done
+  done
+fi
+[[ -n $host ]] || { echo "midget unreachable" >&2; exit 1; }
+exec ssh -T -i "$here/../out/lab/id_ed25519" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=3 -o ServerAliveInterval=15 -o Compression=no \
+  -o IPQoS=lowdelay "root@$host" "p=${BIFROST_MCP:-/usr/bin/bifrost-mcp}; [ -z \"$BIFROST_MCP\" ] && [ /usr/local/bin/bifrost-mcp -nt \$p ] && p=/usr/local/bin/bifrost-mcp; exec \$p$(printf " %q" "$@")"

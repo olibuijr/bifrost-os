@@ -1,0 +1,50 @@
+[
+ {
+  "name": "Bossa",
+  "params": {
+   "human": 0.35,
+   "velcurve": 1.3,
+   "tone": 8000,
+   "release": 0.8
+  },
+  "tags": [
+   "bossa",
+   "jazz"
+  ]
+ },
+ {
+  "name": "Fingerstyle",
+  "params": {
+   "human": 0.3,
+   "keytrack": 0.2,
+   "stereo": 0.2
+  },
+  "tags": [
+   "fingerstyle",
+   "folk"
+  ]
+ },
+ {
+  "name": "Lo-fi Guitar",
+  "params": {
+   "tone": 3000,
+   "human": 0.4,
+   "detune": 6
+  },
+  "tags": [
+   "lofi",
+   "hiphop"
+  ]
+ },
+ {
+  "name": "Classical",
+  "params": {
+   "velcurve": 1.6,
+   "release": 1.4,
+   "human": 0.2
+  },
+  "tags": [
+   "classical"
+  ]
+ }
+]

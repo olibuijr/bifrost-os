@@ -1,0 +1,23 @@
+{
+  "id": "tapedelay",
+  "name": "Tape Delay",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "tapedelay",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Warm ping-pong tape echo, time in 16th steps, wow/flutter, saturated darkening repeats",
+  "category": "delay",
+  "tags": [
+    "delay",
+    "echo",
+    "tape",
+    "ping-pong",
+    "dub"
+  ],
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ]
+}

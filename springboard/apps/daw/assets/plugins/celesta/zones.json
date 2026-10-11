@@ -1,0 +1,161 @@
+{
+ "id": "celesta",
+ "name": "Celesta",
+ "desc": "Celesta (keyboard glockenspiel, hammered steel plates): soft, sweet music-box-like bell tone, 2 velocity layers. Range F#3-C8 (MIDI 54-108, best C4-C7). Lo-fi/hip-hop hooks, lullabies, fairy-tale and film cues, Christmas, doubling piano melodies.",
+ "family": "mallets",
+ "license": "MIT",
+ "source": "FluidR3_GM.sf2 \"Celesta\" (bank 0, program 8), Debian package fluid-soundfont-gm 3.1-6 (http://deb.debian.org/debian/pool/main/f/fluid-soundfont/)",
+ "attribution": "Celesta samples from the Fluid R3 GM SoundFont by Frank Wen (2000-2002, 2008) and Toby Smithe (2008), MIT license.",
+ "attack": 0.002,
+ "release": 0.4,
+ "range": [
+  48,
+  108
+ ],
+ "zones": [
+  {
+   "file": "Fs3_p.ogg",
+   "root": 54,
+   "lo": 48,
+   "hi": 57,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "Fs3_f.ogg",
+   "root": 54,
+   "lo": 48,
+   "hi": 57,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C4_p.ogg",
+   "root": 60,
+   "lo": 58,
+   "hi": 63,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "C4_f.ogg",
+   "root": 60,
+   "lo": 58,
+   "hi": 63,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs4_p.ogg",
+   "root": 66,
+   "lo": 64,
+   "hi": 69,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "Fs4_f.ogg",
+   "root": 66,
+   "lo": 64,
+   "hi": 69,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C5_p.ogg",
+   "root": 72,
+   "lo": 70,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "C5_f.ogg",
+   "root": 72,
+   "lo": 70,
+   "hi": 75,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs5_p.ogg",
+   "root": 78,
+   "lo": 76,
+   "hi": 81,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "Fs5_f.ogg",
+   "root": 78,
+   "lo": 76,
+   "hi": 81,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C6_p.ogg",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "C6_f.ogg",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "Fs6_p.ogg",
+   "root": 90,
+   "lo": 88,
+   "hi": 93,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "Fs6_f.ogg",
+   "root": 90,
+   "lo": 88,
+   "hi": 93,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  },
+  {
+   "file": "C7_p.ogg",
+   "root": 96,
+   "lo": 94,
+   "hi": 108,
+   "vlo": 0.0,
+   "vhi": 0.5,
+   "gain": 0.478
+  },
+  {
+   "file": "C7_f.ogg",
+   "root": 96,
+   "lo": 94,
+   "hi": 108,
+   "vlo": 0.5,
+   "vhi": 1.0,
+   "gain": 1.0
+  }
+ ]
+}

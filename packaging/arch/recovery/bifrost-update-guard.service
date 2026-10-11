@@ -1,0 +1,13 @@
+[Unit]
+Description=BifrOSt independent update probation and rollback
+After=local-fs.target
+ConditionPathExists=/var/lib/bifrost-recovery/state
+
+[Service]
+Type=simple
+ExecStart=/var/lib/bifrost-recovery/engine watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

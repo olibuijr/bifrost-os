@@ -1,0 +1,133 @@
+[
+ {
+  "name": "Warm Haze",
+  "params": {
+   "voices": 7,
+   "detune": 18,
+   "spread": 0.8,
+   "cutoff": 1600,
+   "reso": 1,
+   "lfoRate": 0.12,
+   "lfoAmt": 0.3,
+   "attack": 1.2,
+   "release": 2.5,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Bright Strings",
+  "params": {
+   "voices": 5,
+   "detune": 26,
+   "spread": 1,
+   "cutoff": 5000,
+   "reso": 0.5,
+   "lfoRate": 0.3,
+   "lfoAmt": 0.15,
+   "attack": 0.4,
+   "release": 1.2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Dark Drone",
+  "params": {
+   "voices": 7,
+   "detune": 40,
+   "spread": 0.6,
+   "octave": -1,
+   "cutoff": 500,
+   "reso": 4,
+   "lfoRate": 0.05,
+   "lfoAmt": 0.6,
+   "attack": 4,
+   "release": 6,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Sweep",
+  "params": {
+   "voices": 6,
+   "detune": 30,
+   "spread": 0.9,
+   "cutoff": 1200,
+   "reso": 8,
+   "lfoRate": 0.4,
+   "lfoAmt": 0.8,
+   "attack": 0.8,
+   "release": 2,
+   "gain": 0.5
+  }
+ },
+ {
+  "name": "Lo-fi Keys Pad",
+  "params": {
+   "voices": 3,
+   "detune": 12,
+   "spread": 0.5,
+   "cutoff": 1400,
+   "reso": 1,
+   "lfoRate": 0.3,
+   "lfoAmt": 0.2,
+   "attack": 0.02,
+   "decay": 1.5,
+   "sustain": 0.5,
+   "release": 0.8,
+   "shape": 1,
+   "air": 0.1,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Supersaw Swell",
+  "params": {
+   "voices": 7,
+   "detune": 26,
+   "spread": 0.9,
+   "cutoff": 3500,
+   "reso": 2,
+   "lfoAmt": 0.1,
+   "attack": 1.5,
+   "release": 2,
+   "fEnv": 0.8,
+   "fAtk": 3,
+   "gain": 0.55
+  }
+ },
+ {
+  "name": "Pluck Pad",
+  "params": {
+   "voices": 5,
+   "detune": 16,
+   "spread": 0.8,
+   "cutoff": 1600,
+   "reso": 3,
+   "lfoAmt": 0.15,
+   "attack": 0.01,
+   "decay": 0.5,
+   "sustain": 0.25,
+   "release": 1.2,
+   "fEnv": -0.7,
+   "fAtk": 0.4,
+   "gain": 0.6
+  }
+ },
+ {
+  "name": "Airy Choir-ish",
+  "params": {
+   "voices": 5,
+   "detune": 14,
+   "spread": 0.9,
+   "cutoff": 1800,
+   "reso": 4,
+   "lfoRate": 0.2,
+   "lfoAmt": 0.3,
+   "attack": 1.2,
+   "release": 2.5,
+   "shape": 1,
+   "air": 0.5,
+   "gain": 0.55
+  }
+ }
+]

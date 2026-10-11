@@ -1,0 +1,7 @@
+[
+ { "name": "Master glue 2:1", "params": { "threshold": -14, "ratio": 2, "attack": 0.03, "release": 0.3, "makeup": 1.5, "mix": 1 } },
+ { "name": "Drum bus punch", "params": { "threshold": -18, "ratio": 4, "attack": 0.02, "release": 0.12, "makeup": 3, "mix": 1 } },
+ { "name": "Parallel squash", "params": { "threshold": -32, "ratio": 10, "attack": 0.002, "release": 0.08, "makeup": 8, "mix": 0.35 } },
+ { "name": "Vocal level", "params": { "threshold": -22, "ratio": 3, "attack": 0.008, "release": 0.25, "makeup": 4, "mix": 1 } },
+ { "name": "Bass control", "params": { "threshold": -20, "ratio": 4, "attack": 0.01, "release": 0.15, "makeup": 3, "mix": 1 } }
+]

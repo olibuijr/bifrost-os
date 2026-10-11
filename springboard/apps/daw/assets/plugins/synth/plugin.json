@@ -1,0 +1,17 @@
+{
+  "id": "synth",
+  "name": "Pulse",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "synth",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Polyphonic subtractive synth (bass, leads, pads, keys)",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

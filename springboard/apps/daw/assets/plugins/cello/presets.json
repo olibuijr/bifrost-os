@@ -1,0 +1,125 @@
+[
+ {
+  "name": "Soft Pad",
+  "params": {
+   "attack": 5,
+   "release": 4,
+   "tone": 3500,
+   "vibrato": 6,
+   "velocity": 0.4,
+   "stereo": 0.25
+  },
+  "tags": [
+   "pad",
+   "slow"
+  ]
+ },
+ {
+  "name": "Expressive",
+  "params": {
+   "vibrato": 25,
+   "rate": 5.2,
+   "velocity": 0.9
+  },
+  "tags": [
+   "vibrato",
+   "lead"
+  ]
+ },
+ {
+  "name": "Staccato-ish",
+  "params": {
+   "attack": 0.3,
+   "release": 0.2,
+   "velocity": 0.9
+  },
+  "tags": [
+   "short"
+  ]
+ },
+ {
+  "name": "Dark",
+  "params": {
+   "tone": 1200,
+   "release": 1.5
+  },
+  "tags": [
+   "dark"
+  ]
+ },
+ {
+  "name": "Bright",
+  "params": {
+   "tone": 20000,
+   "velocity": 1
+  },
+  "tags": [
+   "bright"
+  ]
+ },
+ {
+  "name": "Staccato",
+  "params": {
+   "artic": 1,
+   "velocity": 0.9,
+   "human": 0.15
+  },
+  "tags": [
+   "short",
+   "staccato"
+  ]
+ },
+ {
+  "name": "Pizzicato",
+  "params": {
+   "artic": 2,
+   "human": 0.25,
+   "stereo": 0.25
+  },
+  "tags": [
+   "pizzicato",
+   "plucked",
+   "hiphop"
+  ]
+ },
+ {
+  "name": "Tremolo",
+  "params": {
+   "artic": 3,
+   "vibrato": 0,
+   "stereo": 0.3
+  },
+  "tags": [
+   "tremolo",
+   "tension",
+   "film"
+  ]
+ },
+ {
+  "name": "Marcato",
+  "params": {
+   "artic": 4,
+   "velocity": 0.9
+  },
+  "tags": [
+   "accent",
+   "marcato",
+   "stabs"
+  ]
+ },
+ {
+  "name": "Legato Solo",
+  "params": {
+   "glide": 0.04,
+   "legato": 1,
+   "vibrato": 14,
+   "human": 0.15,
+   "velocity": 0.85
+  },
+  "tags": [
+   "legato",
+   "solo",
+   "lead"
+  ]
+ }
+]

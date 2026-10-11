@@ -1,0 +1,1418 @@
+# BifrOSt shared application controls
+
+`springboard/ui` is the independent `bifrost-ui` Rust crate. It has no shell,
+renderer, Linux, Wayland or third-party dependencies. Its first release provides:
+
+- Semantic controls: stable IDs, roles, labels, values, bounds and enabled state.
+- Keyboard focus traversal and press/release activation respecting disabled controls.
+- A Unicode-safe single-line editor with caret, selection, deletion and clipboard commands.
+- Shared Cut/Copy/Paste/Select All command IDs and availability.
+
+The SDK reexports it as `bifrost_app::controls`. `App::controls` exposes control
+metadata and `App::commands` exposes actions available in the current focus.
+`Input::Command` and `Input::Activate` deliver semantic actions. Metadata and
+command availability are sent only when changed. The wire protocol bounds control
+packets to 16 KiB and 128 nodes; invalid roles/geometry are rejected. New tags are
+additive: older SDK applications retain their existing behavior and expose no
+commands. They are never sent unsupported commands.
+
+The shell stores control metadata alongside the app host. `bifrost pc midget state`
+reports each app's node count and command bitmask. The desktop Edit menu enables
+only commands the focused SDK app advertises, and dispatches them over its socket.
+Native Linux applications retain their existing command path.
+
+`bifrost_app::widgets::text_field` paints the editor using shared SF UI, system
+colors, selected text, caret and focus indication. Files 1.0.4 adopts this field
+and semantic Back/Forward/View/Search controls. Tab traverses enabled controls;
+Enter activates a focused button. Left/Right/Home/End/Delete edit search text.
+Cut/Copy/Paste/Select All are available through the desktop Edit menu.
+
+## Golden Gate kit (batch 1, system 0.4.84, Files 1.13.0)
+
+Plan and progress: `docs/golden-gate-sdk-adoption.md`. Every widget below follows Light and Dark (`Pair` tokens resolved
+with `.now()`); `bifrost pc gallery [DIR]` (the `preview_sdk_gallery` test) renders them all in both schemes.
+
+| API | Apple counterpart | Notes |
+|---|---|---|
+| `widgets::toolbar_band(s, ui, bounds)` + `widgets::toolbar(s, ui, bounds, &Toolbar, pressed)` | `NSToolbar` in a unified window | Glyph buttons (`ToolbarItem::icon(id, label, "symbol")`) in light glass capsules; `in_group(g)` joins buttons into one capsule (`NSToolbarItemGroup`); `selected(true)` marks a segment; `ToolbarItem::custom(id, label, width)` reserves a slot the app draws (title, search). `Toolbar::layout_with` keeps a group whole when it overflows behind `»`. Returns `ToolbarLayout` with `hit` and `rect_of`. **Breaking:** `toolbar` now takes a `Rect`, not `(&Layout, top)`; no app used the old form. |
+| `widgets::source_list` with `SidebarItem::row(..).with_symbol("house")` | Source-list `NSOutlineView` | Accent glyph per row, neutral selection plate with a bold label (Finder, Notes, Reminders references), 9 pt plate radius (`prefs_layout::m::SELECTION_RADIUS`). `SourceList::set_selected(None)` when the shown place is not in the list. |
+| `widgets::search_field` + `controls::search::{layout, hits_clear}` | `NSSearchField` | Capsule, magnifier, placeholder, clear button only with text, focus ring, white selected text on the selection. |
+| `widgets::path_bar` + `controls::pathbar::{layout, hit}` | `NSPathControl`, Finder's path bar | Middle labels shrink to their glyph first, then the first, then the last label is cut. |
+| `glyphs::glyph(s, ui, "name", rect, colour)`, `glyphs::NAMES` | `NSImage(systemSymbolName:)` | 28 line glyphs named after SF Symbols, drawn from lines and arcs; no symbol font is needed (the device has none). Unknown names draw nothing and return false. |
+| `widgets::capsule` | Liquid Glass button group plate | Soft ring, plate, one-pixel edge. |
+| `controls::split::SplitView::toggle` | `NSSplitViewController.toggleSidebar(_:)` | Files binds it to the sidebar button and ⌃⌘S. |
+| Manifest `window = "full-size"`; `layout::UNIFIED_BAR_PT`, `layout::traffic_lights_trailing()` | `NSWindowStyleMaskFullSizeContentView` | No title row. The shell draws the traffic lights at the Settings positions over the app; the top 52 pt band moves the window except over the lights and the controls the app publishes with `App::controls` (so publish every toolbar button). Needs system 0.4.84 (`min_shell`). |
+
+Moving an app to the kit:
+
+1. Replace fixed dark tokens (`WHITE` text on neutral fills, `SECONDARY`, `FILL`, `SIDEBAR_FILL`, `SEPARATOR`, ...) with
+   the `Pair`s (`LABEL`, `LABEL_2`, `LABEL_3`, `DETAIL_BG`, `CARD_BG`, `SIDEBAR_BG`, `SEPARATOR_C`, `FIELD_BG`) and `.now()`.
+   `WHITE` stays right for text on the accent.
+2. Draw the sidebar with `source_list` (symbols per row) and hit-test with `SourceList::hit`.
+3. Build the toolbar as a `Toolbar`, draw it with `toolbar_band` + `toolbar`, hit-test with `ToolbarLayout::hit`, and
+   publish every visible button as a control (`Node` with the same rectangle).
+4. Use `search_field` for search and `path_bar` for a location footer.
+5. Add `window = "full-size"` and `min_shell = "0.4.84"` to the manifest; keep the leading 87 pt of the top band free
+   for the traffic lights (`traffic_lights_trailing()`).
+6. Check with `bifrost pc adoption` (fixed colours left, widgets used, full-size) and a host preview in both schemes:
+   `bifrost pc smoke APP --sizes 1200x780 --scale 1.5625` and the same with `--light`. `bifrost pc gallery` renders
+   every kit widget after an SDK change.
+7. On Midget, press toolbar buttons with `bifrost pc midget tap-window "External(N)" X Y` (window-local pixels from the
+   screenshot; a full-size window has no title bar to add).
+
+Golden Gate parity round 1 (`docs/golden-gate-parity-audit.md`, Files 1.14.0): toolbar capsules are 36 pt
+(`CAPSULE_PT`), toolbar and sidebar glyphs 20 pt. Additions:
+
+| API | Apple counterpart | Notes |
+|---|---|---|
+| `SidebarItem::row(..).with_dot(colour)` | Finder sidebar Tags (`NSOutlineView` row with a tag colour image) | 12 pt filled dot in the glyph's place. |
+| `widgets::folder_icon(s, ui, rect, emblem)` | Finder's folder icon (`NSWorkspace.icon(forFile:)`) | Drawn at any size: back tab, paper edge, gradient body, embossed symbol (`Some("doc")`). Same art in Light and Dark. Apple uses bitmap icon sets; ours is procedural and has no custom folder icons yet. |
+| `widgets::search_button(s, ui, origin, pressed)` | Golden Gate toolbar search item (collapsed `NSSearchToolbarItem`) | Round 36 pt glass capsule with a magnifier; the app swaps it for `search_field` when clicked and back on Esc or empty blur. |
+
+Apple parity gaps recorded in batch 1:
+
+- **App menu items:** an app cannot add items to the menu bar yet, so View > Show/Hide Sidebar is the ⌃⌘S chord and
+  the toolbar button only. Needs a protocol message for app menus.
+- **Symbols:** our glyphs are a fixed set of drawings (56 after kit gaps round 2), not the SF Symbols catalogue, and have one weight. Asking for
+  an unknown name draws nothing.
+- **Search field:** no recent-searches menu and no search tokens (`NSSearchField.recentSearches`, `NSSearchToken`).
+- **Path bar:** segments open their folder; there is no per-segment context menu or drag.
+- **Sort:** the Finder group/sort pull-down is a glyph button that cycles the order; a pull-down menu from a toolbar
+  button needs the same app-menu message.
+
+Kit gaps round 2 (found by the app agents moving apps to the kit; additive, existing calls unchanged):
+
+| API | Apple counterpart | Notes |
+|---|---|---|
+| `glyphs::NAMES` now 56: `chevron.down`, `backward.fill`, `forward.fill`, `play.fill`, `pause.fill`, `gobackward.15`, `goforward.30`, `person`, `person.crop.circle`, `star`, `star.fill`, `envelope`, `phone`, `bookmark`, `textformat`, `pencil`, `square.and.pencil`, `antenna.radiowaves.left.and.right`, `mic`, `music.note.list`, `opticaldisc`, `radio`, `calculator`, `cloud.sun`, `ellipsis.circle`, `info.circle`, `flag`, `calendar` | `NSImage(systemSymbolName:)` | Same procedural line style as the first 28 (filled ones use `icons::polygon`); `gobackward.15`/`goforward.30` draw their numerals with the UI font. Still one weight and no hierarchical/palette rendering. |
+| `widgets::toolbar_layout(ui, bounds, &Toolbar) -> ToolbarLayout` | `NSToolbarItem` frames (`view.frame` of each item) | The exact widths `toolbar` uses (`toolbar` calls it). Apps hit-test without copying the width rule. |
+| `ToolbarItem::centered()` | `NSToolbar.centeredItemIdentifiers` | Centred items leave the flow; the rest is laid out around a hole at the first flexible space and the centred run sits mid-bar, pushed aside only as far as its neighbours need. A centred group stays one capsule. |
+| `ToolbarItem::menu(id, label, symbol)` + `ToolbarLayout::menu_anchor(id, gap)` | `NSMenuToolbarItem` (pull-down toolbar button) | Drawn with a trailing chevron (`TOOLBAR_MENU_CHEVRON_PT` wider). On click the app draws `widgets::menu` at `menu_anchor`. The menu is still drawn inside the app window: an app menu cannot leave its window yet. |
+| `SidebarItem::with_subtitle`, `with_trailing`, `with_avatar(initials, colour)`; `SourceList::two_line_h` | `NSTableCellView` in a source list (two-line rows, trailing text field, image view) | Subtitle rows are `two_line_h` (`row_h + 16`) tall; trailing text sits before the count; the avatar is a monogram disc. Apple shows a photo: draw it yourself over the leading 24 pt of the row. |
+| `SidebarItem::section(id, label, collapsed)`, `SourceList::{hit_section, toggle_section, set_collapsed, is_visible}` | `NSOutlineView` group rows with disclosure (`isItemExpanded`) | The app owns the state. Rows under a collapsed section have zero height, do not hit, and are skipped by the arrows. The chevron always shows (no hover on touch). |
+| `widgets::player(s, ui, bounds, &Player, pressed) -> PlayerLayout`, `PlayerLayout::new`, `PLAYER_PT` | Music/Podcasts mini player (`MPNowPlayingInfoCenter` data, `MPRemoteCommandCenter` buttons) | Glass capsule: artwork slot (the app draws into `artwork`), title and subtitle, progress line (`progress` rect for seeking), skip buttons from `skips` (`backward.fill`/`forward.fill` or `gobackward.15`/`goforward.30`), play/pause. |
+| `widgets::pane(s, ui, rect) -> Surface`, `widgets::pane_origin_px` | `NSSplitViewController` child view | A clipped sub-surface whose origin is the pane's top-left, so a detail pane draws as its own view. Damage stays in full-surface pixels (add `pane_origin_px`). |
+| Manifest `window_size = "WxH"` / `"fixed:WxH"`, `min_size = "WxH"`, `max_size = "WxH"` (points, content size); `apphost::Manifest::size_limits` | `NSWindow.contentMinSize` / `contentMaxSize`, a window without `NSWindowStyleMaskResizable` | The shell opens the window at `window_size`, clamps edge resizing to min/max, and a `fixed:` window has no resize edges and does not zoom. Not yet applied to native Wayland windows' own resize requests. |
+| `glyphs::NAMES` now 59: `checklist`, `arrow.clockwise`, `newspaper` | `NSImage(systemSymbolName:)` | Same line style. |
+| `MenuItem::destructive(true)` | `UIMenuElement.Attributes.destructive` (red Delete items) | `widgets::menu` draws the title in `DESTRUCTIVE` (systemRed) unless highlighted or disabled. |
+| `widgets::popover(s, ui, anchor, size, bounds, preferred_edge) -> Rect` | `NSPopover.show(relativeTo:of:preferredEdge:)` | Popover material panel with a hairline and an arrow at the anchor; flips via `split::place_popover`. Returns the content rect. The arrow is the material's opaque colour (no blur under it); the app handles transient dismissal. |
+| `Pair::tinted(accent)`, `Pair::tinted_by(accent, dark, light)` | A calendar colour's fill (`NSColor` with alpha over the window background) | Opaque fill: 18% accent over white in Light, 32% over dark grey in Dark. For calendar event blocks and list colour plates. |
+| `controls::calendar::MiniMonth::new(bounds, y, m, first_weekday)` + `widgets::mini_month(...)` | `NSDatePicker` graphical style (Calendar sidebar month) | Title row with previous/next, weekday initials, always 6 week rows; today red, selection a neutral plate, `marked` days get a dot. `hit_day`, `prev`, `next` for clicks. |
+| `controls::collection::CardGrid` (`columns`, `frames`, `content_height`, `hit`, `with_hero`, `with_max_columns`) | `NSCollectionViewCompositionalLayout` (adaptive columns, a full-width group first) | News Top Stories: a hero card, then columns no narrower than `min_item_w`. Fixed row height; no self-sizing cells yet. |
+| Shell `TextField` / `TextArea` text follows Light and Dark | `NSTextField`/`NSTextView` `textColor = .labelColor` | Text rendered white is drawn with `blit_colored(LABEL.now())`, so an appearance switch needs no rebuild and undo survives. Spotlight's field is fixed by this. Placeholder grey, caret and selection blue already read in both schemes. `TextArea` keeps its `color` parameter (the `NSTextView.textColor` equivalent): pass `WHITE` to follow the label colour, any other colour is drawn as is. |
+
+`widgets::text_field` already covers single-line editors in both schemes (plate, text, placeholder, selection with
+white selected text, caret; all `Pair::now()`), so apps on the legacy shell `TextField` drawing can move to it as is.
+There is still no multi-line `text_view` widget in the SDK (`NSTextView`); none was added this round.
+
+Round 26 (Files 1.12.1): `widgets::text_field` follows Light and Dark. The plate is `FIELD_BG`, text `LABEL`,
+placeholder `LABEL_2`, the selection `SELECTION` with white selected characters (`Pair::now()`). Apple parity: the
+NSSearchField look is a light capsule in light mode and a dark one in dark mode. Shell and apps that draw their own
+fields still use fixed colours.
+
+`bifrost_app::widgets::material(s, ui, bounds, radius, Material::…)` draws a system material
+(`Sidebar`, `Titlebar`, `Popover`, `Hud`), the counterpart of `NSVisualEffectView.Material`. An app
+cannot see the desktop through its window, so the material blurs the app's own content behind the
+rectangle (draw the scrolling content first, then the material over it) and tints it. Reduce
+Transparency turns it into the opaque `Material::solid()` colour. It is built on `Surface::glass_rrect`.
+
+`Ctx::set_badge(label)` sets the app's dock badge, the counterpart of `NSDockTile.badgeLabel`: a short
+label (control characters removed, at most four characters, empty clears it) shown as a red capsule on
+the dock icon. The app needs the `notifications` permission; an older shell rejects the message, so apps
+that use it set `min_shell = "0.4.60"`. Reminders uses it for the number of reminders due today or overdue.
+
+The current drawing adapter still uses the existing shell drawing toolkit, and
+Files still uses shell filesystem utilities. Extracting those dependencies is
+separate work. This release establishes semantic controls and command transport;
+it does not implement an AT-SPI screen-reader bridge, a complete layout engine,
+IME preedit, undo history, shift-selection, or migrate every existing application.
+Avoid claiming those capabilities or measured CPU/RAM savings.
+
+Build/test the core with `cargo test --manifest-path springboard/ui/Cargo.toml`.
+Publish shell through `bifrost pc publish`, then Files through
+`bifrost pc app publish files`. Install shell before Files (minimum shell 0.4.17).
+
+Verified on Midget: shell 0.4.18 and Files 1.0.4 installed, semantic controls
+received, search filtered, and Edit Select All/Copy/Cut/Paste completed.
+Core/protocol/Files/shell focused tests passed. Captures live in
+`~/Pictures/tab/bifrost-ui-final.png` and `bifrost-ui-menu-verified.png`.
+
+## UIKit and AppKit counterparts (`bifrost-ui`, pure models with tests)
+
+Layout (`geometry`, `stack`, `split`): `EdgeInsets` (UIEdgeInsets); `Rect::inset`, `divide` (CGRectDivide),
+`intersection`, `union`, `centered`; `stack` (UIStackView / NSStackView: fixed and flexible items, spacing,
+shortfall shrinks flexible items first and nothing leaves the bounds); `grid` and `adaptive_columns`
+(NSGridView, compositional layout); `SplitView` (NSSplitView: draggable divider, both minimums, collapse);
+`place_popover` (NSPopover: preferred edge, flips when it does not fit, stays on screen); `visible_rows`
+(UITableView cell reuse window with overscan).
+
+Controls (`values`): `Segmented`, `Stepper`, `Slider`, `PageControl`, `Progress` (NSSegmentedControl,
+NSStepper, NSSlider, UIPageControl, NSProgressIndicator). They hold state and map pointer positions to values;
+drawing stays in the renderer adapter.
+
+Navigation and presentation (`nav`): `NavigationStack` (back title is the previous screen's title, the root
+cannot be popped), `Toolbar` (validation like `validateToolbarItem:`, flexible space, overflow menu when narrow),
+`Alert` (default action answers Return, cancel answers Escape, macOS button order).
+
+Behaviour: `ResponderChain` (an action goes to the first responder that handles it, menu items are enabled by
+the same walk), `UndoManager` (grouping, bounded history, redo cleared by a new action), `KeyCombo` and
+`Shortcuts` (parse "cmd+shift+z", show "⇧⌘Z", refuse two owners of one combination), `anim` (Bézier curves,
+springs with a damping ratio, retargeting without a jump).
+
+Foundation and UIKit kits (round 7): `diff` (`NSDiffableDataSourceSnapshot`), `cache` (`NSCache`, cost-limited LRU),
+`fuzzy` (match with highlight positions), `format` (byte counts, positional durations, relative times, grouped
+numbers), `gesture` (`Tap`, `LongPress`, `Pan` with velocity), `focus` (key-view loop and arrow focus), `uttype`
+(`UTType` conformance), `textfit` (truncation modes, word wrap, any font through a measure closure), `observe`
+(`Observable<T>`), `calendar` (Gregorian arithmetic and month grids). Costs are in `docs/perf-history.jsonl`
+(`ui_diff_*`, `ui_cache_*`, `ui_fuzzy_*`, `ui_textfit_*`, `ui_calendar_*`, `ui_focus_*`).
+
+Round 8: `dockdrag` (`slot_at`, `preview_order`, `Slide`: eased per-icon offsets for reordering a row of icons, used by the
+Dock) and `menu` (`NSMenu` / `NSPopUpButton`: `Menu`, `MenuItem`, keyboard stepping, type-to-select, hit testing,
+`popup_origin`). The SDK draws them with `widgets::popup_button` and `widgets::menu`.
+
+The SDK reexports the crate as `bifrost_app::controls`. None of these are wired into the shell or the apps yet:
+this release adds the models, tested on the host (`cargo test -p bifrost-ui`, 114 tests).
+
+### Semantic control roles (system 0.4.85 groundwork)
+
+`bifrost-ui::Role` and the app-control wire protocol retain the original values (`Button=0`, `TextField=1`, `List=2`,
+`Row=3`) and append `Toggle`, `Checkbox`, `Slider`, `SegmentedControl`, `StaticText`, `MenuItem`, and `Window`.
+The agent map names them `toggle`, `checkbox`, `slider`, `segmented-control`, `text`, `menu-item`, and `window`.
+Focusable roles now include the interactive types. This gives SDK widgets and apps a semantic vocabulary that matches
+the controls they draw; hierarchy, `ax set` and the AT-SPI bridge follow in "Accessibility bridge (AT-SPI2)".
+
+### Accessibility bridge (AT-SPI2)
+
+Screen readers (Orca) read BifrOSt apps through the AT-SPI2 bus. Three layers:
+
+- **Wire** (`springboard/proto`). `Node` is unchanged (id, role, label, value, bounds, enabled), so every app compiles as
+  before. Hierarchy and state ride in a sidecar, `ToShell::ControlsTree(Vec<NodeExt>)` (tag `0x117`, at most 128 entries):
+  `NodeExt { id, parent: Option<u64>, focused, checked: Option<bool> }`, each 17 bytes (id lo/hi, parent lo/hi, flags:
+  bit0 has parent, bit1 focused, bit2 checkable, bit3 checked). An app that never sends it, or a node without an entry, is a
+  direct child of the window, so old apps read as a flat list. The shell drops parents that are missing, self or cyclic
+  (`atspi::model::build`). The other direction is `ToApp::AxSet { id, action }` (tag `18`) with `AxAction::{Press,
+  SetValue(String), Focus}`.
+- **SDK** (`bifrost_app::App`). `controls_tree(&self, ctx)` (default empty, sent only on change) and
+  `ax_set(&mut self, ctx, id, action)`. The default maps `Press` onto `Input::Activate(id)` (the same path as a tap on
+  the control) and ignores `SetValue` and `Focus`; apps with editable nodes override it.
+- **Shell** (`src/shell/atspi/`). `model.rs` is pure and always built: role map (Button=PUSH_BUTTON, TextField=ENTRY,
+  List=LIST, Row=LIST_ITEM, Toggle=TOGGLE_BUTTON, Checkbox=CHECK_BOX, Slider=SLIDER, SegmentedControl=PAGE_TAB_LIST,
+  StaticText=LABEL, MenuItem=MENU_ITEM, Window=FRAME), state bits, object paths
+  (`/org/a11y/atspi/accessible/root[/app<slot>[/n<id>]]`). `bridge.rs` (cargo feature `atspi`, `dep:zbus`, already vendored
+  for the portal and the desktop build) asks `org.a11y.Bus.GetAddress` on the session bus, connects to the a11y bus,
+  exports `Accessible`, `Component` (extents, hit test, grab focus), `Action` (one action, `press`), `Value` (sliders),
+  `Text` and `EditableText` (text fields) per node, and registers the root with `org.a11y.atspi.Socket.Embed`. It emits
+  `StateChanged` (focused, enabled, checked), `Focus`, `PropertyChange(accessible-value)` and `ChildrenChanged`. The
+  tree is published from `ext_tick` at most four times a second and only when it changed; the connection is made on a
+  helper thread; with no `org.a11y.Bus` the bridge turns itself off. Screen reader requests queue to the shell thread
+  and leave as `ToApp::AxSet`. No hand-written D-Bus marshalling was needed because zbus is available offline.
+
+Parity gaps against `NSAccessibility` (recorded, not hidden):
+
+- No app emits `controls_tree` yet, so every app is a flat list under its frame until its `controls()` code adds parents.
+- Shell chrome (menu bar, dock, Spotlight, Settings pages) is not in the AT-SPI tree; it exists only in the agent
+  element map (`bifrost_ui::ax::Map`).
+- Extents are window-local points for both coordinate types: the bridge is not told window positions or the scale.
+- No `accessibilityLabel` vs `accessibilityTitle` vs help split, no `AXSelectedText`/`AXVisibleCharacterRange`,
+  no text-range or caret events, no live-region announcements (`NSAccessibilityAnnouncementRequested`), no custom
+  actions beyond press, no `AXRelations` (title-for, labelled-by), no rotor equivalent.
+- `Value` is parsed from the node's value text ("0.4", "40%"); a typed min/max/step needs a node field.
+- `SetValue` and `Focus` only reach apps that override `ax_set`; sliders and text fields in the shared kit do not yet.
+- Rows are not selectable (`Selection` interface) and lists are not `Table`s.
+- Untested on a live Orca: unit tests cover the wire round trips and role/state/path mapping only.
+
+### Remaining Apple-style SDK roadmap
+
+Priority order based on existing app needs and current implementation seams:
+
+1. (Done, see "App-published menus") Wire app-owned `NSMenu` items and validation into the desktop bar; before, only shell menus and app context menus crossed
+   the protocol.
+2. Add drawable Golden Gate adapters for standard controls already modeled in `bifrost-ui::values` (`NSSwitch`,
+   `NSSegmentedControl`, `NSSlider`, `NSStepper`, `NSProgressIndicator`) plus grouped form rows, and record the matching
+   semantic nodes automatically.
+3. Accessibility (`NSAccessibility`): parent/child relations (`ToShell::ControlsTree`), `ax set` (`ToApp::AxSet`) and
+   the Linux AT-SPI2 bridge are in (feature `atspi`, see "Accessibility bridge (AT-SPI2)"). Still open: window actions,
+   shell chrome in the tree, text ranges, live regions and apps that emit the tree (none do yet).
+4. Add typed App Intents (`AppIntent`, `AppEntity`, `AppShortcut`) alongside app-control RPC methods.
+5. (5a-5c done, see "User notifications", "Share sheet" and "Typed drag and drop") Add the brokered share sheet (`NSSharingServicePicker`), actionable/reply notifications (`UNUserNotificationCenter`),
+   and typed drag and drop (`NSDraggingDestination`/`NSDraggingSource`) using `uttype`.
+6. Permissioned Keychain-style secret storage: done (see "Keychain" below); secrets must not be stored in app-readable defaults files.
+7. Complete the text input contract (`UITextInput`/`NSTextView`) with marked text, selection/composition, return-key
+   variants and input accessories.
+8. Complete document panels with multiple selection, folder selection, places, recent locations, tags and New Folder.
+
+These are staged API and protocol changes, not claims that the Apple counterparts are already implemented. The shared
+kit also needs adoption beyond Files; current baseline is in `docs/golden-gate-sdk-adoption.md`.
+
+## NSColor semantic colours (`ui::system`, SDK `bifrost_app::kit::colors`)
+
+Apple parity: AppKit apps never pick a dark or light value; they ask for `NSColor.windowBackgroundColor`,
+`labelColor` and so on, which resolve against `NSAppearance` at draw time. Ours are `Pair`s in
+`render/src/ui.rs` `mod system`; call `.now()` while drawing. A plain constant (`BLACK`, `CELL`, `WHITE`,
+a literal `pack(...)`) never follows Light/Dark: do not use one for a window or content background.
+The guard test `appearance_guard::window_and_content_fills_follow_light_dark` fails on `fill_rect`/`fill_rrect`
+with `BLACK` or `CELL` in `src/shell` and `apps/*/src` unless the file is in its allowlist (video, viewfinders,
+swatches, letterbox, blur bases, plus the legacy gaps below).
+
+| AppKit `NSColor` | `ui::system` | Existing pair |
+|---|---|---|
+| windowBackgroundColor, controlBackgroundColor, textBackgroundColor | `WINDOW_BACKGROUND`, `CONTROL_BACKGROUND`, `TEXT_BACKGROUND` | `DETAIL_BG` |
+| underPageBackgroundColor | `UNDER_PAGE_BACKGROUND` | `SIDEBAR_BG` |
+| labelColor, textColor | `LABEL`, `TEXT` | `LABEL` |
+| secondaryLabelColor | `SECONDARY_LABEL` | `LABEL_2` |
+| tertiaryLabelColor, placeholderTextColor | `TERTIARY_LABEL`, `PLACEHOLDER_TEXT` | `LABEL_3` |
+| quaternaryLabelColor | `QUATERNARY_LABEL` | new |
+| separatorColor | `SEPARATOR` | `SEPARATOR_C` |
+| gridColor | `GRID` | new |
+| selectedContentBackgroundColor | `SELECTED_CONTENT_BACKGROUND` | `SELECTION` |
+| unemphasizedSelectedContentBackgroundColor | `UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND` | `SIDEBAR_PLATE` |
+| controlAccentColor, linkColor | `CONTROL_ACCENT`, `LINK` | new (Dark 10,132,255; Light 0,122,255) |
+| systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
+
+Gaps (Apple parity rule):
+- The user-chosen accent does not yet feed `CONTROL_ACCENT`; it is fixed systemBlue (the accent is published to the portal separately).
+- `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
+- Other `NSColor` names (`windowFrameColor`, `findHighlightColor`, `shadowColor`, ...) are not provided.
+- The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.
+- Still dark-only (allowlisted in the guard): Browser chrome, Clock full-screen, the power alert, `apps/remote`.
+  Fixed in 0.4.100 work: the built-in App Store (all backgrounds, text, separators, tab bar) and it now redraws during the Light/Dark fade.
+
+## Appearance for external apps (third-party Wayland, GTK, Qt)
+
+On macOS an app follows Light/Dark without opting in. Third-party Linux apps follow it only through standard channels:
+- `org.freedesktop.portal.Settings`, namespace `org.freedesktop.appearance`: `color-scheme` (u: 0 no preference, 1 dark, 2 light)
+  and `accent-color` ((ddd), 0..1). Apps (GTK 4/libadwaita, Qt 6.5+, Firefox, Chromium, Electron) read it and subscribe to
+  `SettingChanged`. This is served by `bifrost-portal` (see "Native apps follow the appearance"), so the channel exists.
+- Env hints for toolkits that do not use the portal at launch: `GTK_THEME=Adwaita:dark` (or `:light`), `QT_QPA_PLATFORMTHEME`
+  and `QT_STYLE_OVERRIDE`, `COLOR_SCHEME_PREFERENCE`-style variables for some apps. These are read once at start.
+- Gaps: the launcher does not yet set these env hints per scheme, so GTK3 and older Qt apps stay on their default until
+  restarted with them; `contrast` ignores Increase Contrast; `xdg-desktop-portal` frontends (file chooser, screenshot)
+  are not implemented; a `gsettings`/dconf `color-scheme` mirror for GTK apps that ignore the portal is not written.
+  Not implemented in this change.
+
+## One stylesheet for apps
+
+Apps take text sizes from the `MAC_*_PT` and `DISPLAY_*_PT` tokens, spacing from `SPACE_*` (4-pt grid), and the
+top inset from `layout::top_inset()` (the shell's safe area; 0 on the desktop). `tools/check-app-consistency.py
+--ratchet` fails when an app gains a literal size, on-grid spacing literal or status-bar inset;
+`tools/fix-type-scale.py`, `fix-spacing.py` and `fix-status-inset.py` rewrite them. Bifrost scales to any screen,
+so layouts derive from `layout::Layout` (window size in points) and never from a fixed resolution.
+
+## Menus in the shell (AppKit `NSMenu`, 0.4.68)
+
+The desktop bar menus use the kits instead of private code: `keys::KeyCombo` is the key equivalent shown in the
+right column (`MENU_KEYS` in `shell/desktop_bar.rs`, conflict-checked by `keys::Shortcuts` in a test), `menu::Menu`
+does type-to-select, and `menu_spans` is the one row-geometry function (rows 36 pt, separators 9 pt). Menus size to
+their content (at least 264 pt; the width is cached per row set), long titles are cut with `ui.fit`, and Reduce
+Transparency draws them opaque (`DESKTOP_MENU_SOLID`). Keys with a menu open: Up/Down, Left/Right, Return, Esc,
+letters. Cmd+, opens Settings.
+
+### App-published menus (`NSApp.mainMenu`, roadmap item 1)
+
+An SDK app overrides `App::main_menu(&self, ctx) -> Vec<AppMenu>` (`AppMenu { title, items: Vec<AppMenuItem> }`;
+`AppMenuItem::new(id, title).key("cmd+n").enabled(..).checked(..)`, `::separator()`, `::submenu(title)` followed by its
+children at `.depth(1)`). The runtime calls it after every event and frame and sends `ToShell::AppMenus` (tag 0x117)
+only when the result differs, so recomputing enabled and checked state there is `validateMenuItem:`. The desktop bar
+shows the menus of the app in front right after its name menu, opens them with the same menu drawing, and sends the
+chosen item back as `ToApp::MenuAction(id)` (tag 18), delivered to `App::menu_action(&mut self, ctx, id) -> bool`.
+Key equivalents (`KeyCombo::parse` notation) of enabled items are matched in the shell before a chord reaches the
+app (`performKeyEquivalent:`); the app gets `MenuAction` instead of the key. Limits: 8 menus, 48 items each, titles cut
+to 64 characters, and the whole message fits one 16 KiB packet (extra items and menus are dropped, never split).
+Gaps against AppKit, recorded: submenus are drawn flat (a header row with indented children, not a flyout), a checked
+item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate
+(Option) items or `NSMenuDelegate.menuNeedsUpdate` before opening; state is pushed on change instead. Menu items with
+a modifier-less key equivalent are ignored by the chord path.
+
+## Uniform type identifiers (`UniformTypeIdentifiers`, 0.4.69)
+
+`uttype` is now the one table of file types: 58 types with identifier, parents, extensions, MIME type and
+`localizedDescription` ("PNG image", "Rust Source"). API: `type_for_extension`, `type_for_mime`, `extensions`,
+`description`, `preferred_extension`, `mime`, `conforms`. Lookups use a once-built FNV index.
+Files derives its coarse `Kind` from conformance (`fs::kind_of`) and shows `fs::kind_description` in the info sheet and
+for Sort by Kind, as Finder's Kind column does. Only PNG and JPEG count as Image there (the viewer's decoders); other
+images still say "GIF image" and so on. Apps reach all of it as `bifrost_app::controls::uttype` (guarded by
+`sdk/tests/kits.rs`). Benchmark: `ui_uttype_lookup_10k_names`.
+
+## Data detectors (`NSDataDetector`, 0.4.71 in progress)
+
+`detect` finds links, dates, street addresses and phone numbers in plain text, the `NSTextCheckingType` subset Bifrost uses. `find(text,
+kinds) -> Vec<Match { kind, range }>` returns byte ranges (always char boundaries), sorted, without overlaps. Priority
+when ranges collide: link, then date, then address, then phone, so "2026-10-09" is a date, not a phone number.
+
+- Link: `http://`, `https://` and `www.`, at a word boundary. It stops at whitespace or a quote or bracket; sentence
+  punctuation and unbalanced `)`/`]` are not part of it. The host needs a dot.
+- Date: `yyyy-mm-dd` or `d.m.yyyy`, real calendar dates only (leap years checked, years from 1000).
+- Address: a street name with a house number, English or Icelandic: "Laugavegur 12", "Hverfisgötu 4a", "Main Street 12",
+  "12 Main Street". A bare street name is not an address, and a lower-case word is not a name.
+- Phone: 7 to 15 digits (E.164), an optional leading `+`, and at least one separator (space, dash, brackets). A bare
+  digit run is an id or a version, so it is not reported.
+- Not yet: `transitInformation` (needs transit data Bifrost does not have), city and postcode after the street,
+  locale-specific month names. Apple's type list is date, address, link, phoneNumber, transitInformation.
+
+Apps reach it as `bifrost_app::controls::detect` (guarded by `sdk/tests/kits.rs`). Benchmark:
+`ui_detect_scan_100kb` (8.07 ms for 100 KB of mixed text, median of 21 runs, Titan, `fast` profile). The corpus
+gained addresses this round, so 2.97 ms (round 15) is not comparable. `addresses` allocates per token; it is the next
+candidate to optimise.
+Consumer: Notes. `TextArea::set_detect_links(true)` (opt-in; Contacts is unchanged) underlines links in the tint and
+`link_at` reports the one under a point. A tap on a link queues it (`Notes::take_link`) and `main.rs` sends
+`Ctx::open_url`; the caret does not move. Decision: a tap opens the link (as in Apple Notes' reading view), so editing
+a link means tapping beside it. Not verified on Midget yet (no screenshot).
+
+## App preferences, pasteboard and appearance (SDK, 0.4.72 development)
+
+Apple parity for the three most-used system services an app reaches for. All are on `Ctx` (the SDK's one import, `bifrost_app`):
+
+- **`UserDefaults`** (`NSUserDefaults.standard`): `ctx.defaults()` reads and `ctx.defaults_mut()` writes typed values
+  (`string`, `bool`, `int`, `double`, `data`; `set_*`, `remove`, `contains`, `keys`). A missing or mistyped key reads as
+  the zero value, as in Foundation. Each change is written at once to `<app data>/defaults.txt` with an atomic replace.
+  The format is one `kind<TAB>key<TAB>value` line per key, with escapes. Decision: a synchronous write, because the
+  store is small and an app that quits right after a change must keep it. Round trip checked with a scratch test
+  (escaped keys and values, all five types, removal); no test file is kept in the repo.
+- **Pasteboard** (`NSPasteboard.general` strings): `ctx.pasteboard_string()` and `ctx.set_pasteboard_string(text)`. The
+  shell's protocol already carried the clipboard text; this exposes it. Decision: only plain text, because the protocol
+  sends text (`SetClipboard`). Gap: pasteboard types, images, the change count, and private named pasteboards.
+- **Appearance** (`NSWorkspace` accessibility display options): `ctx.appearance()` returns text scale, display zoom,
+  touch hold time, bold text, Reduce Motion, Increase Contrast, Reduce Transparency and button shapes. Read it when
+  `configure` runs; the shell sends changes as `ToApp::Appearance`.
+
+Done since:
+the Keychain, the share sheet, notification actions and typed drag and drop are done (see their sections). The app loop's timers are the
+`tick`/`next_wake` pair on `App`, which already matches `Timer` and `DispatchQueue.asyncAfter`.
+
+## Keychain (`SecItem*`, `kSecClassGenericPassword`)
+
+Secrets an app must not keep in `defaults.txt` or anywhere in its own (app-readable) data directory. `bifrost_app::keychain`:
+`add`, `get`, `update`, `delete`, each `(ctx, service, account[, secret])`.
+
+- **Asynchronous**, like the document panels: each call returns a request id and the answer arrives in
+  `App::keychain(ctx, keychain::Reply { request, result: Result<Vec<u8>, keychain::Error> })`. Decision: the app loop is
+  single-threaded and the shell owns the store, so a blocking call would stall frames; Apple's calls are synchronous.
+- **Errors mirror Apple's**: `DuplicateItem` (errSecDuplicateItem -25299, `add` on an existing item), `ItemNotFound`
+  (errSecItemNotFound -25300, `get`/`update`/`delete` on a missing one), `Param` (errSecParam -50), `NotPermitted`,
+  `Io`. `Error::code()` gives the `OSStatus`.
+- **Permission**: the manifest needs `permissions = ["keychain"]` (`app_policy.rs`, `tools/aap.py`); without it every
+  call answers `NotPermitted`. It binds nothing else.
+- **Identity**: the shell stores items under the app id it launched (`AppHost::id`); the wire message carries no id, so an
+  app cannot read or write another app's items.
+- **Broker, not a daemon**: `ToShell::Keychain` / `ToApp::KeychainReply` on the existing app channel (`proto/src/lib.rs`),
+  handled in `src/shell/apphost.rs`, store in `src/keychain.rs`. The shell runs as root.
+- **At rest**: `<root>/keychain/<app id>.kc` (directory 0700, files 0600, atomic replace). The file is
+  `BKC1 | nonce | ChaCha20(items) | HMAC-SHA256` (encrypt then MAC, per-write random nonce); per-app subkeys come from
+  a random 32-byte master key in `<root>/keychain/.master` (0600), created on first use. Limits: names 255 bytes, secrets
+  8 KiB, 256 items per app.
+- **Limitation, explicit**: the master key sits on the same disk as the items. This keeps secrets from apps, other users
+  and backups of app data; it does not protect against root or an attacker holding the whole disk. There is no
+  TPM or login-password key source yet; `Store::with_master` is where one plugs in.
+- Tests (written, not yet run): `src/keychain.rs` (HMAC vector, round trip, duplicate/not-found, per-app isolation,
+  tamper detection, modes), `proto` `keychain_messages_round_trip`, `sdk/src/keychain.rs`.
+
+Parity gaps, not matched yet: no `kSecAttrAccessGroup` (apps cannot share items; each app sees only its own), no
+biometric or user-presence access control (`SecAccessControl`, Touch ID), no `kSecAttrAccessible` classes (items are
+available whenever the shell runs), only `kSecClassGenericPassword` (no internet passwords, keys or certificates), no
+attributes beyond service and account (labels, comments, dates), no `kSecMatchLimitAll` listing, no iCloud sync, and
+`update` replaces the value only (no attribute update).
+
+## User notifications (`UNUserNotificationCenter`, roadmap item 5a)
+
+`bifrost_app::usernotif` (SDK) over `ToShell::Notify*` (tags 0x140 to 0x143) and `ToApp::Notification*` (tags 50 to 52); types in
+`proto/src/rich.rs`, shell state in `src/shell/usernotif.rs`.
+
+- **Categories**: `set_categories(ctx, &[NotifCategory])` (`setNotificationCategories`). An action is a button, a destructive
+  button (`.destructive`), a foreground action (`.foreground`) or a text-reply input (`UNTextInputNotificationAction`, with
+  `button_title` and `placeholder`). Up to 16 categories of 10 actions.
+- **Requests**: `add(ctx, Request::new(id, title).subtitle().body().thread().category().after_ms().badge())` returns a request id;
+  `App::notification` gets `Event::Status` (`Ok`, `NotPermitted`, `Param` for an empty id or content or an unknown category, `Full`
+  past 64 pending). The same identifier replaces the earlier pending or delivered notification. Needs the `notifications` permission.
+- **Delivery**: through the normal shell notification UI (banner, lock screen, Notification Center, Focus rules). The subtitle is
+  shown above the body. `after_ms` is a `UNTimeIntervalNotificationTrigger`; due requests are delivered from the shell tick.
+- **Remove and query**: `remove_delivered`, `remove_pending` (no ids = all), `delivered`, `pending` (answered as `Event::List`).
+  Delivered requests the user cleared from Notification Center drop out of the list.
+- **Responses**: `Event::Response { id, action, text, thread, category }` (`didReceive`). Opening the app from its newest notification
+  answers `NOTIF_DEFAULT_ACTION`; the shell answers an action button through `Shell::usernotif_respond`, which refuses an action the
+  category does not have and only passes `text` to a text-input action. If the app is not running the shell starts it and delivers
+  the response as soon as it is up (up to 32 are held).
+- **Dock badge** (`NSDockTile.badgeLabel`): `Request::badge(n)` sets it (0 clears); `Ctx::set_badge` still sets any short label.
+
+Gaps (not matched yet): action buttons, the destructive colour and the reply field are not drawn on banners or in Notification Center
+(the model and the response path are done; only the drawing and hit testing remain), so only the default action is reachable by tap;
+`NOTIF_DISMISS_ACTION` is defined but never sent (`customDismissAction`); a tap answers for the app's newest notification, not the one
+tapped (the banner and center rows do not carry the request id); delivered requests and categories are not persisted across a shell
+restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, calendar or location triggers, repeating triggers,
+`willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
+
+## Share sheet (`NSSharingServicePicker`, roadmap item 5b)
+
+`bifrost_app::share` (SDK) over `ToShell::Share` (0x144) and `ToApp::ShareDone` (53); shell side `src/shell/sharing.rs`.
+
+- **Asking**: `share::show_picker(ctx, &[Payload::Text | Url | File { grant, name }], anchor)` where `anchor` is the rect of the
+  button in window points (`NSSharingServicePicker.show(relativeTo:)`, preferred edge below). At most 8 items. A file is named by
+  the document grant the app already holds (`open_document` and friends), never by a path.
+- **Targets**: the shell shows a menu under the anchor with every installed non-system app other than the sender whose manifest
+  accepts *every* item, sorted by name, then **Copy**. Acceptance is `uttype::conforms(item type, handled type)` over `handles`
+  (`public.png:owner`), a web URL by `schemes`, a `file://` URL by its extension's type. Text is `public.utf8-plain-text`, which
+  now exists in `uttype` with `public.url` and `public.file-url`.
+- **Receiving**: a URL arrives as `ToApp::Open { url }` (`Input::Open`). Text arrives as an `Open` with a `data:text/plain` URL
+  that `share::text_from_url` decodes. A file arrives as a `DocGranted` (a `DocBatch` first for several) whose `request` has
+  `share::INBOUND` (bit 31) set, with a fresh **read-only** grant the broker made from the sender's grant
+  (`Broker::transfer`), so the receiver never learns the sender's path and the sender's write access is not passed on.
+  The target window comes forward (`desk_open`); it is started if it was not running.
+- **Result**: `App::share_done(request, Some(app id | "copy"))`, or `None` when the menu was dismissed. Copy puts text and URLs
+  on the clipboard, one per line, and a file as its name.
+
+Gaps (not matched yet): only apps declaring `handles`/`schemes` appear (macOS also offers system services such as Mail, Messages,
+AirDrop, Add to Reading List and Notes); there is no per-item `NSSharingService` object (`canPerform(withItems:)`,
+`perform(withItems:)`, `delegate` callbacks, `sharingServicePicker(_:sharingServicesForItems:proposedSharingServices:)`), no
+`NSItemProvider` / rich items (images as data, attributed strings, several representations), no preferred edge, no share-sheet
+extensions installed by apps, the menu is a plain context menu (no icons, no "More..."), and Copy of a file copies only its name.
+
+## Typed drag and drop (`NSDraggingSource` / `NSDraggingDestination`, roadmap item 5c)
+
+`bifrost_app::dnd` (SDK) over `ToShell::Drag*` (0x145 to 0x149) and `ToApp::DragDest` / `DragEnded` (54, 55); shell side
+`src/shell/dnd.rs` (the pure state machine `Session` plus `Shell::dnd_*`).
+
+- **Destination**: `dnd::register_types(ctx, &["public.image", "public.text"])` (`registerForDraggedTypes`). A window takes a
+  session when some type of some item conforms to a registered type (`uttype::conforms`, so `public.image` takes PNG and JPEG
+  and `public.data` takes everything). Windows that did not register never hear about a drag. `App::drag` gets
+  `Event::Dest { session, phase, x, y, allowed, items }` with `Entered`, `Updated`, `Exited` and `Perform`; `x`, `y` are
+  window pixels, the space of `Touch`. Answer `Entered` and `Updated` with `dnd::reply(op)`, one of `dragop::COPY | LINK | MOVE`
+  (0 refuses); a reply the source did not allow counts as 0. The operation resets when the pointer enters another window.
+- **Source**: `dnd::begin(ctx, allowed, items, preview)` (`beginDraggingSession`) with `DragItem { types, payload }`
+  (`Payload::Text | Url | File { grant, name }`; `DragItem::new` offers an item as its natural type) and a preview from
+  `dnd::preview_from_rgba` (nearest-sampled to at most 32 x 32). The session id has bit 31 set. While it runs the shell owns the pointer
+  (the source gets no more touches) and draws the preview under it. `Event::Ended { op }` closes it (`op` 0: nobody took the drop;
+  also the immediate answer when the shell refuses: another session runs, the app is not in front, no items).
+- **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
+  **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
+  then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.
+  The destination answers `dnd::performed(accepted)` and the source gets `Ended` with the agreed operation, or 0 when refused.
+  Text and URLs travel inline (512 characters at most).
+- **Cleanup**: an app that exits loses its registration and abandons a session it takes part in. Wire sizes are capped (8 items,
+  4 types of 128 bytes per item) so every packet fits `MAX_PACKET`; a full packet is asserted in the proto tests.
+
+Gaps (not matched yet): destinations are app windows only; the desktop background, the Dock (drop a file on an icon to open it)
+and Files' own desktop icons are not destinations, and shell chrome (Spotlight, menus) cannot be dragged from. No Escape to
+cancel, no modifier keys choosing copy / move / link (the destination decides), no spring-loaded folders, no auto-scroll, no
+slide-back animation, one drag image (no per-item image components, no `draggingFormation`, no image swap on `Entered`).
+`NSPasteboardItem` data providers are not modelled: an item is one payload offered as several type names, and promised files
+(`NSFilePromiseProvider`) and image or rich-text data have no payload kind yet. Drags between an SDK window and a native Wayland
+or X11 window (the `text/uri-list` portal) are not bridged. The preview is drawn only where the shell composites on the CPU
+path; on the retained GPU window path it may not show until the next full repaint.
+
+## Open and save panels (`NSOpenPanel` / `NSSavePanel`, 0.4.81)
+
+An app with the `documents` permission asks the shell for a file; the shell shows the panel and hands back an open file,
+never a path (design and security model: `docs/file-portal-design.md`).
+
+| Apple | Bifrost |
+|---|---|
+| `NSOpenPanel.begin(completionHandler:)` | `ctx.open_document(mode, title, filters) -> request` (one file) or `ctx.open_panel(&OpenOptions)`; the answer is `App::document(ctx, DocumentEvent::Opened(doc))` |
+| `allowedContentTypes` | `filters`: UTIs (`"public.text"`, conformance through `uttype`) or extensions; other files are dimmed |
+| `NSSavePanel` + write | `ctx.save_document(name, filters)` -> `SaveTo(doc)`: write `doc.file`, then `ctx.commit_document(request)` -> `Saved(doc)` |
+| `.cancel` response | `Failed { code: Cancelled }`; refusals are `Denied`, `NotFound`, `Stale`, `Unsupported` |
+| security-scoped bookmark | `doc.grant` with `ctx.reopen_document(grant)` / `release_document(grant)`; `Stale` when the file was replaced |
+
+Panel options (`NSOpenPanel`, wire `ToShell::DocOpenEx` with `proto::docopt` bits; `DocOpen` and every existing caller are unchanged):
+
+| Apple | Bifrost |
+|---|---|
+| `allowsMultipleSelection` | `OpenOptions::multiple`; the answer is `DocumentEvent::OpenedMany { request, docs }` (`NSOpenPanel.urls`), always, even for one file. On the wire: `ToApp::DocBatch { count }` then `count` `DocGranted` (at most 256) |
+| `canChooseFiles` / `canChooseDirectories` | `OpenOptions::files` / `directories`; a chosen folder is granted as its read-only directory descriptor and `reopen_document` reopens it. Files are dimmed in a folders-only panel; with no selection a folders panel chooses the folder shown |
+| `canCreateDirectories` | `OpenOptions::create_directories` (a save panel always has it): the New Folder button opens a name field (`untitled folder`), Return makes the folder as the account and selects it, Esc or Cancel closes the field |
+| `allowedContentTypes` | `OpenOptions::filters`, matched by `uttype::conforms` or extension |
+| sidebar | Recents (the app's recent grants, newest first, gone files left out), Home, and Desktop, Documents, Downloads when they exist; the active place has a 9 pt plate |
+| last folder used | the shell remembers each app's last folder; the next panel starts there, else Documents |
+
+`ctx.open_panel(&OpenOptions { multiple: true, directories: true, ..Default::default() })` shows it. Code: `src/shell/docpanel.rs`
+(`Panel`, `Options`, `Broker::finish_many`), `src/bare/docbroker.rs` (`open_dir`, `open_any`, `make_dir`), `sdk/src/runtime.rs`.
+
+The panel follows the macOS panels: it lists alphabetically, Return or a double click is the default button (a double click
+opens a folder), Esc cancels, Left goes up, a click on a file in a save panel copies its name. Not matched yet:
+Shift/Cmd-click ranges (no modifier keys reach the panel, so in a multiple-selection panel a click toggles a row), tags and the
+tags sidebar, iCloud Drive, mounted volumes and other users' folders (the panel is confined to the account's home, so the
+sidebar has no Volumes section), `allowsOtherFileTypes`, the file-type popup (`accessoryView`), previews, and a
+column or icon view. First user: Notes 1.6.0 (Export, Import with Cmd+O).
+
+## Documents (`NSDocument` / `NSDocumentController`)
+
+`bifrost_app::document` (code `springboard/sdk/src/document.rs`) is the document layer on top of the open and save panels
+and the docbroker grants. The app implements `Document` (`read(bytes, uttype)`, `write(uttype) -> bytes`, `untitled()`,
+`readable_types()`, `default_type()`) and owns a `DocumentController<D>`; the controller talks to the shell through
+`DocumentHost` (implemented for `Ctx`, so it is testable without a shell).
+
+| Apple | Bifrost |
+|---|---|
+| `NSDocumentController` | `DocumentController`: `new_document`, `open_panel` (several files), `open_recent`, `recents`, `clear_recents`, `ids`, `get`, `get_mut`, `active`, `has_unsaved` |
+| untitled names | `display_name`: "Untitled", "Untitled 2" (the smallest free number) |
+| `isDocumentEdited`, `updateChangeCount` | `is_edited`; `note_change(id, undo.change_count())` (new `bifrost_ui::undo::ChangeCount`: equal when the content is equal, so undoing back to the saved state clears it) or `mark_edited(id)` |
+| window dirty dot, "Edited" title | new wire `ToShell::DocumentState { title, edited, represented }` (tag 0x180, `Ctx::set_document_state`, sent by `sync`/`tick`/`handle` when it changes). The desk draws a dark dot in the close light and "- Edited" after the title; `AppHost::doc_title/doc_edited/doc_file` hold it |
+| `save(_:)` | `save`: in place for a saved document, the save panel for an untitled one |
+| `saveAs`, `moveTo`, `rename` | `save_as`, `move_to`, `rename`, through the save panel; the document then lives at the chosen file (old grant released, `Notice::Saved(id, op)`) |
+| `duplicate` | `duplicate`: a new edited untitled copy (write, then read) |
+| `revert(toContentsOf:)` | `revert`: reopens the grant and replaces the model; `Notice::Reverted` (reset your undo manager) |
+| `autosavesInPlace` | `tick(host, t)` after `autosave_delay` (5 s) from the first unsaved change, and `suspend`. Saved documents save in place through new `ToShell::DocSaveGrant` (tag 0x181, `Ctx::save_document_in_place`): the shell makes a temporary file next to the original, the app writes it, `commit_document` renames it over the file (crash-safe) and the grant keeps its id. A failing autosave is not retried until the next change |
+| autosave of Untitled / `restoreWindow` | untitled documents are written to `<data_dir>/autosave/untitled-N.autosave` (temp + rename); `restore` reopens them at launch as edited documents with their old number |
+| `canClose(withDelegate:)` | `close`: a clean document closes; an edited one raises `alert()`, a `nav::Alert` with Save (default), Cancel, Don't Save (macOS order via `button_order`); the app shows it and calls `answer_alert(choice)` with `alert::SAVE`, `CANCEL` or `DONT_SAVE`. Save then closes after the commit |
+| File menu | `file_menu() -> AppMenu` (New, Open..., Open Recent with Clear Menu, Close, Save, Save As..., Duplicate, Rename..., Move To..., Revert To Saved, enabled for the active document) and `menu_action(host, id)`; ids in `document::item`, `is_menu_id` |
+| recent documents | the grants the panel already keeps (the panel's Recents place lists them); the controller keeps its own ordered list (10, newest first) in the app defaults key `document.recents` and releases grants that leave it. A recent whose file is gone or replaced is dropped |
+
+Wiring: `App::document` calls `controller.handle(ctx, ev)` (`None` = not the controller's request), `main_menu` returns
+`controller.file_menu()`, `menu_action` forwards ids for which `is_menu_id` is true, `tick`/`next_wake`/`suspend` forward, and after
+each edit the app calls `note_change`. `handle` answers with `Notice` values (`Created`, `Opened`, `Saved`, `Reverted`, `Closed`, `Failed`).
+
+Gaps (not matched yet): no versions browser (`Revert To > Browse All Versions`, no version history at all), no iCloud documents,
+no `NSFileCoordinator` or file-presenter watching (an external change to an open file is noticed only as `Stale` on the next
+save), no document packages, no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
+and Move To copy to the new name and leave the old file in place, because the broker has no rename or delete request yet;
+Open requests write access, so a read-only file does not open. Untitled documents are autosaved as private copies, not into a
+Documents folder as autosave-in-place does on macOS. First user: none yet.
+
+## On-screen keyboard API (`UIKeyInput`, `UIReturnKeyType`, 0.4.77)
+The keyboard becomes a system app (`docs/keyboard-system-app.md`). The SDK API exists first: `App::keyboard_config`,
+`Ctx::keyboard_insert_text / keyboard_delete_backward / keyboard_height`, wire types `KeyboardConfig`, `ReturnKey`,
+`KeyboardLayout`, `KeyboardOut`. Marked text, selection, the full `UIReturnKeyType` set and `inputAccessoryView` are now on the wire: see "Text input client" below.
+
+## Text input client (`NSTextInputClient`, `UITextInput`, `UITextInputTraits`)
+
+Apple parity: an IME composes in the field (marked text), the candidate window follows the caret, and predictive text sees
+the text around it. Ours has a wire part and an editing model.
+
+Wire (ToApp 60 to 63, ToShell 0x150 to 0x153; `springboard/proto/src/lib.rs`, SDK `Ctx` and `App::text_input`):
+
+| Apple | BifrOSt |
+|---|---|
+| `setMarkedText:selectedRange:replacementRange:` | `ToApp::SetMarkedText { text, sel_start, sel_len }` (60): from Wayland `text-input-v3` `preedit_string` + `cursor_begin/end` or the keyboard app |
+| `unmarkText` | `ToApp::UnmarkText { commit }` (61): commit keeps the text, otherwise the composition is dropped |
+| `deleteSurroundingText` (text-input-v3) | `ToApp::DeleteSurrounding { before, after }` (62), bytes |
+| `inputAccessoryView` button | `ToApp::AccessoryAction(id)` (63); the row is `ctx.input_accessory(Vec<AccessoryItem>)` (0x153, at most 8) |
+| `selectedTextRange`, `markedTextRange`, `textInRange:` | `ctx.text_state(TextState { text, cursor, anchor, marked })` (0x150): a window of at most 4000 bytes around the caret, UTF-8 byte offsets |
+| `firstRectForCharacterRange:` / `caretRect(for:)` | `ctx.caret_rect(x, y, w, h)` (0x151), window points |
+| `UIReturnKeyType` (all 12), `UIKeyboardType`, auto-correct, secure entry | `ctx.input_traits(InputTraits { return_key: ReturnKeyType, content: TextContentKind, flags: tiflags::* })` (0x152); `ReturnKeyType::basic()` is the nearest `ReturnKey` label the keyboard app can show today |
+| `hasMarkedText` | `TextBuffer::has_marked_text` |
+
+Offsets are UTF-8 bytes (Wayland's unit); `text::byte_to_utf16` and `utf16_to_byte` convert to `NSRange`. The decoders reject
+a selection that cuts a character, a marked range outside the text and a non-finite caret rectangle.
+
+Model (`springboard/ui/src/text.rs`, `bifrost_ui::text`, no dependencies):
+
+- `TextBuffer`: text, selection (`anchor`, `caret`), marked range. Movement by grapheme (`move_char`, collapses a
+  selection like AppKit), word (`move_word`), line (`move_line`), document and vertical (`move_vertical`, keeps the column).
+  Editing: `insert_text` (replaces the marked text or the selection), `delete_backward / forward`, `delete_word_backward
+  / forward`, `delete_to_line_start`, `kill_line` (ctrl-K, into a kill buffer), `yank`, `transpose`, `open_line`,
+  `delete_surrounding`. IME: `set_marked_text(text, sel_start, sel_len, replacement)`, `unmark_text(commit)`,
+  `cancel_marked`. Every edit returns an `Edit` that `revert` / `reapply` undo and redo.
+- `TextEditor`: a buffer plus an `UndoManager`. Typing is coalesced into one step until the caret moves, a newline is
+  typed or another edit happens; a whole composition is one step when it commits; `delete_surrounding` is one step.
+  `perform(EditCommand, extend)` and `handle_key(KeyCombo)` use `text::binding`: the emacs set every Cocoa field has
+  (ctrl-A / E line start / end, F / B / N / P, D, H, K, Y, T, O), option-arrows by word, cmd-arrows by line / document,
+  option-backspace, cmd-backspace, cmd-A / Z / shift-Z.
+- A view feeds the shell: after each change `ctx.text_state(...)` from `TextBuffer::surrounding(4000)`, and
+  `ctx.caret_rect(...)` from its own layout (the model has no geometry).
+
+Gaps, decided:
+
+- Done: SDK `view::TextField` is backed by `TextEditor` (emacs and macOS bindings by `text::binding`, click and drag
+  placement from the caret marks `draw` records, marked text drawn underlined, the IME clause heavier). While first
+  responder it implements `View::text_input_info` / `apply_text_input`; `ViewApp::sync_text_input` (run after `event`,
+  `text_input`, `draw`) sends `TextState`, `CaretRect` and `InputTraits` only when they changed, and an empty
+  `TextState` when focus leaves text. An app forwards `App::text_input` to `ViewApp::text_input`. Traits are set with
+  `TextField::with_traits`. The shell stores state, caret (`AppHost::text_state/caret_rect/input_traits`), feeds
+  `ReturnKeyType::basic()` to the keyboard app, and forwards keyboard-app composition (`KeyboardOut::Preedit` /
+  `Unmark`, sub-codes 8 and 9 of the existing tag) as `SetMarkedText` / `UnmarkText`. `textinput::popup_origin` places
+  a candidate popup from the caret (`Shell::ext_caret_screen`).
+- No Wayland side: the shell is a Wayland client of the host compositor and serves no `wl_seat`, so `zwp_text_input_v3`
+  / `input_method` for third-party Wayland clients has nothing to attach to; the mapping is written down in
+  `src/shell/textinput.rs`. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
+  keys, or use secure/content traits; nothing draws a candidate popup yet (only the placement helper exists).
+  `AccessoryItem`s are stored in the host (`AppHost::accessory`) but not drawn; `AccessoryAction` is not sent.
+- Only `view::TextField` is a text input client; other SDK text widgets (`widgets::text_field` over
+  `bifrost_ui::TextField`, apps with their own fields) do not use `TextBuffer`, and the field does not mask secure
+  entry or handle double-click word selection (pointer events carry no click count).
+- Grapheme clusters are approximated without the Unicode tables: combining marks, variation selectors, emoji modifiers,
+  ZWJ sequences, flags, CRLF and Hangul jamo are right; Indic conjuncts, precomposed Hangul LV / LVT with trailing jamo
+  and rarer scripts can split. Word boundaries are alphanumeric runs, not UAX #29 (no dictionary segmentation for CJK).
+- `move_vertical` works on paragraphs; a soft-wrapped view must move by its own visual lines.
+- A `replacementRange` is honoured only when nothing is marked yet; `attributedSubstring`, marked-text attributes
+  (underline styles) and `selectedRange` inside the field's surrounding window beyond 4000 bytes are not carried.
+- Not matched: `NSTextInputContext` input source switching, `characterIndexForPoint:`, `UITextInteraction` handles,
+  dictation, `UITextInputDelegate` (`selectionWillChange`) and bidirectional caret movement (movement is logical).
+
+## Native apps follow the appearance (`NSApp.effectiveAppearance`, freedesktop Settings portal)
+
+Apple parity: every AppKit app sees `NSApp.effectiveAppearance` and the accent without asking. Native Linux apps
+(GTK, Qt, Firefox, Servo via winit/egui) get the same through the standard `org.freedesktop.portal.Settings`
+interface, served by our own `bifrost-portal` (no xdg-desktop-portal or GNOME stack).
+
+- The shell (`Shell::appearance_tick`) writes `$XDG_RUNTIME_DIR/bifrost-appearance` (runtime dir from
+  `/run/bifrost/user/session.json`) atomically, only when the effective scheme (Auto resolved) or accent changes,
+  and once at startup; chowned to the account when the shell runs as root. Format: `color-scheme=1|2`
+  (1 dark, 2 light) and `accent=R G B` (0..1). Code: `springboard/src/appearance_portal.rs`.
+- `bifrost-portal` (`springboard/src/bin/portal.rs`) owns `org.freedesktop.portal.Desktop` at
+  `/org/freedesktop/portal/desktop`, Settings version 2: `ReadAll`, `Read` (deprecated, double variant),
+  `ReadOne`, and `SettingChanged`. Namespace `org.freedesktop.appearance`: `color-scheme` (u), `accent-color`
+  ((ddd)), `contrast` (u, always 0). Other keys return `org.freedesktop.portal.Error.NotFound`. It polls the
+  file every 500 ms. D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
+- Session bus: `packaging/arch/wayland/session` starts `dbus-daemon --session` as the account at
+  `$XDG_RUNTIME_DIR/bus` (exported as `DBUS_SESSION_BUS_ADDRESS`, so `session.json` and `bifrost-apps` carry it);
+  labwc `autostart` starts `bifrost-portal`. The native-app sandbox (`bare/app_policy.rs`) binds that socket and sets
+  the variable. Launch-time env such as `GTK_THEME` cannot follow later switches, so the portal is the only live path.
+- Not yet matched: `contrast` does not follow Increase Contrast, and Auto switches reach apps up to 500 ms late.
+
+## Window vibrancy (`NSVisualEffectView`: material, blendingMode, state)
+
+Apple parity: a Finder-style source list and a unified toolbar are translucent and show the blurred desktop, and
+the windows behind the window. Ours, end to end:
+
+- SDK: `widgets::visual_effect(s, ui, bounds, radius, Material, Blending, State)` is `NSVisualEffectView`.
+  `Material` has every current `NSVisualEffectView.Material` case (`Sidebar`, `Titlebar`, `HeaderView`, `Menu`,
+  `Popover`, `Sheet`, `Hud` = `.hudWindow`, `FullScreenUi`, `ToolTip`, `Selection`, `WindowBackground`,
+  `ContentBackground`, `UnderWindowBackground`, `UnderPageBackground`; `Material::ALL`), each with `tint()`,
+  `solid()` (Reduce Transparency), `blur_pt()` and `kind()`. `Blending::BehindWindow` (default) writes the
+  premultiplied tint inside the rounded rect (corners anti-aliased against the content) and declares the region to
+  the shell; `Blending::WithinWindow` blurs the app's own pixels (`widgets::material`). `State` is
+  `NSVisualEffectView.State` (`FollowsWindowActiveState` default, `Active`, `Inactive`). Where the shell offers no
+  vibrancy (CPU path, older shell, Reduce Transparency) a behind-window effect draws `solid()`.
+  `source_list` and `toolbar_band` use it for `.sidebar` and `.titlebar`.
+- Protocol: `ToShell::Materials(Vec<Material>)` (`kind: MaterialKind` (14 cases), `rect` in window points, `radius`,
+  `state: MaterialState`; the state rides in the top two bits of the kind byte), at most `MAX_MATERIALS` (16), sent
+  only when the list changes. Shell to app: `appearance::VIBRANCY` (GPU presenter, no Reduce Transparency) and
+  `appearance::MATERIALS` (the shell decodes every kind and state). Without `MATERIALS` the SDK sends
+  `MaterialKind::legacy()` kinds (`Sidebar`, else `Titlebar`) with the default state, which every shell decodes.
+- Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a
+  `glass::Kind` (`Sidebar`, `Titlebar` for title bar and header, `Content` for the background materials, `Menu` for
+  the floating ones) and the fixed state, and adds the Settings sidebar column.
+- Presenter (`src/gpu/wl.rs`): the front window's materials blur a backdrop of the wallpaper and the windows under
+  it (`Presenter::under`, rebuilt at most 30 Hz when a lower window changes, not when the front window itself
+  repaints). A material that follows the active state is an opaque plate (`glass::Kind::inactive`) while its
+  window is inactive. Saturation follows the scheme (1.8 light, 1.7 dark, `glass::saturation`: Apple's
+  image-effects sample uses `saturationDeltaFactor` 1.8; a cross-platform toolkit fits 2.0 / 1.7 to the simulator).
+  Window backgrounds have no specular rim; menus and the shell's chrome do. A per-pixel dither hides banding.
+- Increase Contrast turns Reduce Transparency on and locks its switch, as macOS does
+  (`appearance::reduce_transparency`).
+- Vibrant labels (`NSAppearance.vibrantDark/Light` text): `widgets::Vibrant` (`Label`, `Secondary`, `Tertiary`,
+  `Quaternary`; strengths are the label colours' alphas, 0.85 / 0.55 (0.50 light) / 0.25 (0.26) / 0.10) and
+  `widgets::blit_vibrant(s, img, x, y, level)` blend white-rendered text into the material: plus-lighter in Dark
+  (light is added), plus-darker in Light (light is removed), alpha untouched. The compositor's premultiplied blend
+  then gives backdrop + label (Dark) or backdrop + label - 1 (Light), the published definitions of the two blend
+  modes. `widgets::vibrant_text()` says when to use it (vibrancy on, no Reduce Transparency). `source_list` draws
+  labels, headers, counts and subtitles this way off the selection plate (the plate is opaque, so its text is plain).
+  Apple's exact per-level vibrant values are private; the strengths above are the documented label alphas.
+- Backdrops: every window whose materials look active (focused, or `State::Active`) gets its own backdrop of the
+  windows under it; a rebuild the 30 Hz cap skipped wakes the main loop when due (`Presenter::retry_in_ms`).
+- Not matched yet: `isEmphasized`, `maskImage`, and vibrant fills (`vibrancy-fill` levels) as separate API; the
+  within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
+  under a within-window material).
+
+## Web view (`WKWebView`, `WKProcessPool`, `WKNavigationDelegate`; Browser 0.3.0)
+
+`bifrost_app::webview` puts web content in an SDK app. Like WebKit, pages run out of process: a `WebProcessPool`
+spawns the engine `bifrost-webview` (Servo 0.7.0 embedded with libservo and a software GL context, source in
+`springboard/apps/browser/engine/`, built by `tools/build-webview-engine.sh`) and holds any number of web views
+(`WebViewId`), one shown in a rectangle of the window.
+
+| Apple | BifrOSt |
+|---|---|
+| `WKWebView init` + `loadRequest:` | `pool.create(url)`, `pool.load(id, url)` |
+| `goBack` / `goForward` / `reload` / `stopLoading` | `go_back`, `go_forward`, `reload`, `stop_loading` |
+| `title`, `URL`, `isLoading`, `estimatedProgress`, `canGoBack`, `canGoForward` | `pool.state(id)` (`WebViewState`) |
+| `WKNavigationDelegate` start / commit / finish | `WebViewEvent::LoadStarted`, `LoadCommitted`, `LoadFinished` from `pool.poll()` |
+| Develop > Reload From Origin | `pool.reload_ignoring_cache(id)` (gap: Servo 0.7.0 has no cache flag, plain reload) |
+| `customUserAgent` | `pool.set_user_agent(Option<&str>)` (gap: Servo reads the UA at start-up only, not applied yet) |
+| Responsive Design Mode | `pool.set_viewport_override(area, w, h, dpr)` letterboxes the view |
+| `WKUIDelegate createWebViewWith`, `webViewDidClose` | `WebViewEvent::CreateWebView`, `Closed` |
+| `webViewWebContentProcessDidTerminate` | `WebViewEvent::ContentProcessTerminated`, `EngineExited` |
+| view frame | `pool.set_frame(x, y, w, h, scale)` (window pixels) |
+| appearance (`prefers-color-scheme`) | `pool.set_dark` |
+
+Drawing: each frame the engine presents is copied once into shared memory (the `Surface` pixel format) and
+`pool.draw(surface)` blits it. Zero-copy (a Wayland subsurface or dma-buf from a GPU context) is the follow-up.
+Input: `pool.touch` (the desktop pointer arrives as a finger, so drags scroll and taps click, as on iOS),
+`pool.key` (text, named keys and Ctrl/Cmd chords). The event loop wakes on the engine through the new
+`App::wake_fd` (the runtime polls it with the shell channel); call `poll` from `tick`. `url_for_input` is Safari's
+smart address field (URL, bare host or web search).
+
+Not matched yet: `stopLoading` is a no-op (Servo 0.7.0 cannot cancel a load); no hover, text selection by drag,
+context menus, `<select>`/alert/file panels, `evaluateJavaScript`, `WKUserContentController`, find-in-page or
+snapshots. The engine renders in software (llvmpipe) because SDK apps get no `/dev/dri`.
+
+### Find, zoom, session (Browser, round D2)
+
+- `WebProcessPool::set_zoom` is `WKWebView.pageZoom` (clamped 30% to 500%). The Browser steps 25% with Cmd+Plus, Cmd+Minus, Cmd+0 and remembers the factor per origin in `~/.local/share/bifrost-browser/session.txt`.
+- `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine injects script (`innerText` count plus `window.find`, case-insensitive, wrapping). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
+- Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL).
+
+### Developer tools (`webview_dev`, Browser round 53)
+
+`bifrost_app::webview_dev` extends `WebProcessPool` for Safari-style developer tooling (`WKWebView.evaluateJavaScript`
+with a completion handler, `takeSnapshot(with:)`, `WKUserScript`). The base pool is untouched apart from three hooks
+(`dev ...` lines are kept apart from `WebViewEvent`s, `send_raw`, `device_scale`). Requests carry a caller-chosen token
+and the answer repeats it:
+
+| Apple | BifrOSt |
+|---|---|
+| `evaluateJavaScript:completionHandler:` | `pool.dev_eval(id, token, js)` then `DevEvent::Eval { token, result: Ok(EvalValue { ty, json }) / Err(message) }` from `pool.dev_events()`; errors carry the thrown message with file and line |
+| `takeSnapshotWithConfiguration:` | `pool.dev_screenshot(id, token, &ShotMode::View / Rect / Full, max_pixels, path)` writes a PNG, answered by `DevEvent::Shot` |
+| `WKUserScript` at document start | `pool.dev_collector(js)` (used for the Browser's network log) |
+| synthesized input | `dev_pointer`, `dev_wheel`, `dev_text`, `dev_key`, `dev_chord` in page CSS pixels |
+
+Gaps: Servo 0.7.0's `evaluate_javascript` does not await promises; `take_screenshot` reads the rendering context, so
+`Full` resizes it for a moment; there are no request hooks, so the network log is injected script (see the Browser
+README, "Web Inspector"); `scale` of a snapshot and right or middle clicks are not supported.
+
+The control socket got async replies for this (`bifrost_app::control`): an `App::rpc` handler returns
+`Err(RpcError::pending(token, timeout_ms))` (`control::new_token()`), keeps the token, and later calls
+`control::complete(token, result)` from any thread; the SDK holds the connection (64 at most) and answers on the next
+loop pass, or with -32000 after the timeout (60 s at most). `RpcError::with_reason` adds `error.data.reason`. The event
+loop polls every 50 ms while a call is pending. The Browser's methods are in `apps/browser/README.md`.
+
+## Retained views (NSView / NSResponder / NSViewController)
+
+`bifrost_app::view` (`springboard/sdk/src/view/`) is an optional retained layer over the immediate-mode `App` trait.
+Existing apps are untouched; an app opts in by holding a `ViewApp<S>` and delegating `configure`, `event`, `controls`,
+`commands` and `draw` to it (see the doc example on `ViewApp`). It reuses the bifrost-ui models instead of duplicating
+them: `Responder` (`responder.rs`), `UndoManager` (`undo.rs`), `focus::next` (`focus.rs`), `values::Slider` and
+`values::Segmented`, `stack::stack`, `Rect`, and `Node`/`Role` (`ax.rs`).
+
+| Apple | BifrOSt |
+|---|---|
+| `NSView` (`frame`, `setFrameSize`, `needsDisplay`, `isHidden`, `hitTest:`, `intrinsicContentSize`) | `View` trait with a `ViewBase` (`frame`, `dirty`, `hidden`, `enabled`, `focused`); `set_frame`, `layout`, `draw`, `hit_test`, `intrinsic`, `needs_display` |
+| `subviews` | `children()` / `children_mut()` (`Vec<Box<dyn View>>`) |
+| `NSResponder` (`acceptsFirstResponder`, `mouseDown:`, `keyDown:`, `doCommandBySelector:`, `validateMenuItem:`) | `accepts_first_responder`, `handle(&ViewEvent)`, `perform(action) -> bool`, `validate(action) -> Option<bool>` (same shape as `Responder`) |
+| `NSWindow` (`firstResponder`, `makeFirstResponder:`, `keyViewLoop`, `undoManager`) | `Window<S>` (alias `ViewTree`): `first_responder`, `make_first_responder`, `key_view_loop`, `tab`, `undo: UndoManager<S>` |
+| `NSControl.sendAction:to:from:` (nil target) | `ViewBase::send_action(&str)`; the window sends it sender, ancestors, window (Undo, Redo), then the model `S: Responder` |
+| Edit menu / key equivalents | `Window::send(action, &mut S)` from the first responder, `is_enabled(action, &S)`, `commands(&S)`; `action_for(Command)` gives `cut copy paste selectAll undo redo` |
+| `NSViewController` (`loadView`, `viewDidLoad`, `viewDidLayout`) | `ViewController` + `ControllerHost` (puts the controller in the responder chain above its view) |
+| `NSStackView` | `Stack` (`vstack` / `hstack`, `spacing`, `insets`, `Align`) over `stack::stack`; children with an `intrinsic` length keep it, others share the spare space |
+| `NSTextField` label, `NSButton`, `NSSwitch`, `NSSlider`, `NSSegmentedControl` | `Label`, `Button`, `Switch`, `Slider`, `Segmented` (models from `values.rs`) |
+| accessibility hierarchy | `View::ax_node`; `Window::ax_nodes()` (tree order, for `App::controls`) and `ax_tree()` (adds depth and parent id) |
+| `setNeedsDisplayInRect:` / dirty rects | `Window::draw` returns the merged `Damage` of dirty views |
+| `NSButton` checkbox, `NSStepper`, `NSProgressIndicator`, editable `NSTextField`, `NSPopUpButton` | `Checkbox`, `Stepper` (`values::Stepper`), `ProgressIndicator` (`bar`, `indeterminate_bar`, `spinner`; animated by `Window::tick(t)`), `TextField` (`bifrost_ui::TextField` model, `cut copy paste selectAll undo redo` via `perform`/`validate`), `PopUpButton` (`menu::Menu` + `widgets::popup_button`/`menu`, menu drawn as an overlay) |
+| inset grouped `List` / `Form` | `Section` (13 pt card, `m::CARD_RADIUS`, hairline separators, footnote header and footer) inside `Form` (`m::DETAIL_MARGIN` inset, stacked sections) |
+| `NSAccessibility` bridge | `ViewApp::controls_tree()` (parent, focused, checked from `Window::ax_ext`), `ViewApp::ax_set(id, AxAction)`: Press sends Return to the view, SetValue calls `View::ax_set_value` (Checkbox/Switch "on"/"off", Slider/Stepper number, TextField text, PopUpButton item title), Focus is `make_first_responder` |
+| `NSResponder.resignFirstResponder` | `View::resign_first_responder() -> bool` (false refuses) and `did_resign_first_responder()`; `Window::make_first_responder` asks the old responder first and notifies it after the change. A pointer Down on a view that takes no focus, or on empty background, resigns the current responder (`makeFirstResponder(nil)`); a refusing responder keeps the focus. `PopUpButton` closes its menu on resign |
+| `NSScrollView` / `NSClipView` (`documentView`, `scroll(to:)`) | `ScrollView::new(document)`, `content_offset()`, `max_offset()`, `scroll_to(y)` (clamped), `document_view::<T>()`. `View::child_offset()` and `clips_children()` let any container scroll its children: draw, hit test, overlay pick, focus geometry and pointer events (converted to content coordinates for `handle`) all apply the accumulated offset. Dragging pans through `bifrost_ui::scroll::Scroller` (slop, fling, rubber band; `tick` drives it), a thin overlay knob (`LABEL_2`) shows while moving |
+| `NSMenu` / `validateMenuItem:` | `ViewApp::set_menus(Vec<(String, Vec<MenuEntry>)>)` (`MenuEntry::edit_menu()` is the standard Edit menu); `main_menu()` sets each item's `enabled` from `Window::is_enabled(action)`; `menu_action(id)` calls `Window::send` from the first responder. Ids are 1.. over non-separator items in order |
+
+Behaviour. Frames are in window points (no per-view bounds, flipping or transform), so `draw` needs no origin. A view's
+`draw` paints only itself; the window paints parents first. Pointer events go to the deepest visible view under the
+pointer, which becomes first responder if it accepts, and bubble to ancestors until one returns true; Move, Up and
+Cancel then go to the view that took the Down (implicit grab). Keys go to the first responder and outwards; unhandled
+Tab (`Code(9)`) and Shift-Tab (chord on evdev key 15) walk the key-view loop in reading order. Touch positions are
+converted from pixels with `Ctx::ui.s`. After `layout` the whole window repaints; afterwards each dirty view's frame is
+cleared to `DETAIL_BG` and the view and its subtree are drawn again, so siblings must not overlap and a view that
+paints its own backdrop must be marked dirty as a whole. Read a control's value after an action with
+`window.view::<Switch>(id)` and `take_sent()`.
+
+Clipping and dirty rectangles. `Surface` has no clip rectangle, so partial redraw is made safe differently: a dirty view
+clears its own frame to `DETAIL_BG` and repaints its subtree, except that a view with `opaque_backdrop()` (`Section`)
+is repainted whole when any descendant is dirty (the nearest opaque ancestor), so a toggled row never leaves a hole in
+its card. A view that paints outside its frame (`dirty_rect()` differs from `frame()`, an open or just-closed pop-up
+menu) forces a full repaint, and `draw_overlay` runs after the tree so menus are on top; an open overlay also wins the
+hit test. Spinners and indeterminate bars call `set_needs_display` from `View::tick(t)`; the app calls
+`ViewApp::draw_at(ctx, s, t)` from `App::draw` (or `Window::tick` then `Window::draw`).
+
+Text field notes. The field owns its undo history (the `bifrost_ui::TextField` snapshots, grouped typing, 100 levels)
+like `NSTextView.undoManager`; "undo"/"redo" reach the window's `UndoManager<S>` only when the field has nothing to
+undo. Not done: caret placement and drag selection by pointer (a click only focuses), word and line movement, secure
+entry, formatters. A pop-up menu closes by choosing, Escape, Tab, clicking the button again or clicking elsewhere
+(`did_resign_first_responder`). `ProgressIndicator` has no accessibility role of its own (`Role` has no
+progress case), so it is reported as static text with its percentage.
+
+Apple parity gaps (recorded per the standing rule): no Auto Layout (constraints, priorities, `layoutSubtreeIfNeeded`
+passes); layout is a top-down `layout(ui, bounds)` with `Stack` and `intrinsic`, and no content hugging or compression
+resistance. No layer-backed views (animation: see "Animation (Core Animation parity)"), so no `wantsLayer`, shadows, masks or `NSAnimationContext`
+
+Apple parity gaps (recorded per the standing rule): Auto Layout is opt-in, see "Auto Layout (constraints)"; the default layout is the top-down
+`layout(ui, bounds)` with `Stack` and `intrinsic`. No layer-backed views, so no implicit animation, `wantsLayer`, shadows, masks or `NSAnimationContext`
+(use `bifrost_ui::anim` by hand and mark the view dirty each frame). `ScrollView` is vertical only and a view has no
+`bounds` origin or transform (scrolling shifts frames while drawing). `Surface` still has no clip rectangle: `ScrollView`
+confines its children to its frame by rows (`Surface::rows`) and relies on the document being as wide as the view, so
+horizontal scrolling and horizontal clipping are not done. Scroll wheel and trackpad scrolling are not available: the proto's
+input is only `TouchKind` Down, Move, Up and Cancel, so a `ToApp` wheel variant is needed (also for hover and tracking
+areas, which stay missing). `ViewEvent` has no timestamp, so drag velocity uses the frame time of the last `Window::tick`
+(a fling needs ticks between the Moves). A document child that handles Down (a button) takes the grab, so a drag that
+starts on it does not pan. No tracking areas or hover, no `nextKeyView` overrides (the loop is geometric), no
+drag and drop, no `NSTextView`-style first responder for text (use `text_field` inside a custom view), and the
+accessibility `Node` is flat, so nesting is reported only by `ax_tree()`.
+
+## Animation (Core Animation parity)
+
+Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springboard/ui/src/anim.rs`.
+
+- `ViewBase` gained `opacity` (`alphaValue`, default 1) and `background: Option<u32>` (premultiplied `layer.backgroundColor`, painted by the window under the view). With `frame` these are the animatable properties (`Prop`: X, Y, Width, Height, Opacity, Background).
+- `Window::animate(Timing, |w| ...)` (`UIView.animate`, `CATransaction`): the window diffs frame, opacity and background of every view before and after the closure and interpolates each change from the value on screen. Anything that sets them animates, `layout` included. `Timing::DEFAULT` is 0.25 s ease-in-out (the `CATransaction` default); `Timing::new(secs, Curve)`; `Timing::spring(damping_ratio, response)` (`CASpringAnimation`, lasts until settled).
+- `Window::transaction(Transaction::new(timing).completion(|finished| ..).action("name"), |w| ..)` (`NSAnimationContext.runAnimationGroup`): the completion runs once after the last track, `finished` false when it was replaced or interrupted. The action is queued only when finished; `ViewApp::draw_at` sends it down the responder chain (`flush_animation_actions`). A transaction that changes nothing completes on the next tick.
+- `Window::disable_actions(|w| ..)` (`setDisableActions`) applies at once and cancels running tracks of the touched properties; inside an `animate` the outer transaction does not animate those changes.
+- Retargeting: a new change on a running property starts from the value shown now (no jump). Setting a property outside any transaction while it animates cancels the track and takes the value.
+- Clock: tracks start at the first `Window::tick` after creation, so an animation started in an event handler never begins in the past. `Window::next_wake(t_seconds)` returns `Some(t + 1/60)` while anything animates and `None` when idle; `ViewApp::next_wake(t_ms)` does the same in milliseconds for `App::next_wake`. `Window::is_animating`, `target_frame(id)` (model value) and `animation_damage()` (union of old and new rects since the last draw) help apps and tests.
+- Damage: opacity and background only dirty the view; a moving or resizing frame schedules a full repaint, because `Surface` has no clip and the vacated area must be cleared (cost: one window repaint per frame while a frame animates).
+- Opacity below 1 is group opacity: the window saves the pixels under the frame, draws the view and its subtree normally, then blends back (`scale(saved, 255-a) + scale(drawn, a)`). Cost per faded view: one copy and one blend of its frame, no full layer. It assumes the view paints opaquely over its backdrop. Opacity 0 skips drawing.
+- Reduce Motion (`appearance::reduce_motion`, override with `Window::set_reduce_motion`): frame changes are instant, opacity and background cross-fade over 0.12 s.
+- Units: `Window::tick`, `Timing` and `next_wake` are seconds; `ViewApp::next_wake` is milliseconds like `App`.
+
+Gaps, decided: no key-path or `CAAnimation` objects (typed properties only); no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); no keyframe, group or additive animations; no `beginTime`/`repeatCount`/`autoreverses`; springs retarget by position only (anim.rs keeps no velocity, so a retargeted spring does not carry momentum); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
+
+
+## Auto Layout (constraints)
+
+Apple reference: `NSLayoutConstraint`, `NSLayoutAnchor`, `NSLayoutGuide`, `intrinsicContentSize`, content hugging and
+compression resistance, `NSStackView.Distribution`. Two layers:
+
+- `bifrost_ui::constraint` (pure, no dependencies): an incremental Cassowary solver. `Solver::var()`, linear `Expr`
+  (`+`, `-`, `* f64`), `Solver::add(expr, Rel::{Le,Eq,Ge}, Strength) -> ConstraintId` meaning `expr rel 0`,
+  `remove(id)`, `add_edit(var, strength)` + `suggest(var, value)` (incremental re-solve, the window resize path),
+  `value(var)`. `Strength::{REQUIRED, STRONG, MEDIUM, WEAK}` or `Strength::from_priority(1..=1000)` (`UILayoutPriority`;
+  1000 is required, 999 and below always lose to required). A weighted sum of violations is minimised, so a higher
+  priority wins a conflict. A required constraint that conflicts with earlier required ones returns
+  `SolverError::Unsatisfiable(id)` and leaves the solver unchanged.
+- SDK `bifrost_app::view` (sdk/src/view/autolayout.rs): `anchors(view_id).leading()/trailing()/top()/bottom()/width()/
+  height()/center_x()/center_y()` give an `Attr`; `Spec::eq/le/ge(a, b).multiplier(m).constant(c).priority(p)` is
+  `a rel m * b + c`, `Spec::fixed(a, rel, c)` has no second attribute. `Constraints` collects them with helpers `fill`,
+  `center`, `size`, `equal_widths`, `chain_h`, `chain_v`, `guide()` (an `NSLayoutGuide`), `hugging(id, axis, p)` and
+  `compression(id, axis, p)`. `Window::constrain(cs)` adds them, `remove_constraints()` clears, and `Window::layout`
+  solves after the normal top-down pass. Built-in guides: `Item::Window`, `Item::SafeArea` (below
+  `layout::top_inset()`), `Item::Margins` (inset by `prefs_layout::m::DETAIL_MARGIN`).
+- Intrinsic size: a constrained view adds `w <= intrinsic` at its hugging priority (`View::hugging(axis)`, default 250)
+  and `w >= intrinsic` at its compression resistance (`View::compression(axis)`, default 750), per axis, when the
+  intrinsic length is above 0. Its current frame is a priority-1 preference, so an axis nothing constrains stays where
+  the manual layout put it. Views no constraint mentions are untouched.
+- `Stack` gains `distribution` (`Fill`, `FillEqually`, `FillProportionally`, `EqualSpacing`, `EqualCentering`; pure
+  `bifrost_ui::stack::distribute`) and `Align::Trailing` (`TOP` and `BOTTOM` for horizontal stacks). In `Fill`, when every
+  child has an intrinsic length, the children with a strictly lower hugging priority than the rest stretch (ties keep
+  intrinsic sizes).
+- Bench: `bench_ui_constraint_solve_200_views`, `bench_ui_constraint_resize_x100` (`tools/bench.py`).
+
+Gaps (recorded per the Apple parity rule): no visual format language (`constraints(withVisualFormat:)`), no ambiguity
+debugging (`hasAmbiguousLayout`, `exerciseAmbiguityInLayout`, the constraint-breaking log and the debug view UI;
+conflicting required constraints are only listed in `Window::broken_constraints`), no `activate`/`isActive` toggling of
+single constraints after the fact (rebuild with `remove_constraints` then `constrain`), no `NSLayoutConstraint.constant`
+animation, no baseline anchors, no `systemSpacing(after:)`, no `NSStackView` gravity areas, `detachesHiddenViews` or
+custom spacing per view, no baseline alignment, no `NSLayoutGuide` owned by a view (guides are window-wide), no
+per-view `translatesAutoresizingMaskIntoConstraints` (all frames are window coordinates), and no `updateConstraints` /
+`setNeedsLayout` pass: constraints are re-solved on every `Window::layout`, which is also where a resize arrives. The
+solver is re-created per layout (an edit-variable resize through `suggest` is available on `Solver` but the window does not
+keep a persistent solver yet). `Fill` shrinks stretchable children first and does not rank compression resistance among
+fixed children (use constraints for that). Not compiled or run when written; the lead verifies the tests.
+
+## App Intents (`AppIntent`, `AppEntity`, `EntityQuery`, `AppShortcutsProvider`)
+
+SDK module `bifrost_app::intents`, built on the control socket (`App::rpc`), so nothing new crosses the shell protocol.
+
+| Apple | Ours |
+|---|---|
+| `AppIntent` (`title`, `description`, `@Parameter`) | `Intent::new(id, title, description).param(Param::new(name, title, ParamType::..))`, `.shortcut()` |
+| Parameter types | `ParamType::{String, Int, Bool, Date (ISO 8601 text), Url, Entity("Type")}`, `Param::optional()` |
+| `AppEntity` | `Entity::new(type, id, title).subtitle(..)` |
+| `EntityQuery`, `suggestedEntities`, `entities(for:)`, `entities(matching:)` | `EntityQuery::{Suggested, Ids, String}` |
+| `perform()` returning `IntentResult` (`ProvidesValue` + `ProvidesDialog`) | `IntentResult::value(json).with_dialog("..")` |
+| `AppShortcutsProvider` | `[[intent]]` tables in `manifest.toml` with `shortcut = true` |
+
+Wire format (JSON-RPC over the app's control socket): `intent.list`; `intent.<id>` with an object of parameters, reply
+`{"value": .., "dialog": ".."}`; `entity.query` with `{"type": "Note", "string": "milk"}` (or `"ids": [..]`, or neither for
+suggested), reply a list of `{id, type, title, subtitle?}`. The SDK validates parameters against the declaration (missing
+required, wrong type, unknown name give `INVALID_PARAMS`) before the app sees them. Try it:
+`bifrost pc control call APP intent.list` and `bifrost pc control call APP intent.new-note '{"text":"milk"}'`.
+
+Adopting it in an app (three steps):
+
+1. Implement `App::intents()` (the declarations), `App::perform_intent(ctx, data_dir, id, params)` (match on `id`; read
+   parameters with `intents::str_param` or `params.get`; return `IntentResult`) and, for entity parameters,
+   `App::entities(data_dir, type, &EntityQuery)`. Data-only intents can work from `data_dir` without a `Ctx`.
+2. Copy `Intent::manifest_toml()` of each intent that should appear in Spotlight into `manifest.toml` (a unit test that
+   compares `intents()` with the parsed manifest keeps them in step). Keys: `id`, `title`, `description`, `shortcut`,
+   `params = ["name:type", "other:date?"]` (`?` marks optional; `entity(Type)` for entities). An `[[intent]]` table ends at
+   the next `[...]` header, so put app-level keys above it.
+3. Add the intent to the app's changelog and its `rpc` documentation.
+
+The shell parses `[[intent]]` (`apphost::Manifest::intents`, `shell/intents.rs`). Spotlight's "Shortcuts" section lists
+intents with `shortcut = true` and no required parameter, matched on title and app name without launching the app.
+Choosing one opens the app, then calls `intent.<id>` on `$XDG_RUNTIME_DIR/bifrost/apps/<app id>.sock`, retrying for up to
+8 s while the app starts.
+
+Gaps (Apple behaviour not matched yet):
+
+- No Siri or voice: `dialog` is returned to the caller but Spotlight neither shows nor speaks it (it is logged on failure).
+- No parameter resolution UI: Spotlight runs only parameterless shortcuts. Required parameters, disambiguation
+  (`needsValueError`, `requestDisambiguation`) and confirmation (`requestConfirmation`) are not modelled; callers pass JSON.
+- `entity.query` is for callers and scripts; nothing in the shell shows entity pickers yet. `IndexedEntity` (Spotlight
+  indexing of entities), `OpenIntent`, intent donation and `ParameterSummary` are not implemented.
+- The Shortcuts app (`shortcuts-desktop`) does not list or run intents yet; it could read `intent.list` of running apps and
+  the manifests of installed ones and offer them as actions, passing results between steps as the `value` JSON.
+- Intents are served on the control socket, so the app must be running; the shell launches it first.
+- `Date` is validated as ISO 8601 text only; no natural-language dates, durations, measurements or file parameters.
+drag and drop, no multi-line text view, and the
+accessibility `Node` is flat, so nesting is reported by `ax_tree()` and sent as `NodeExt` parents.
+
+## Assistant (`springboard/apps/assistant-desktop`)
+
+A chat client for the Anthropic Messages API, built on the kit only (`source_list`, `toolbar`, system `Pair` colours with `.now()`).
+
+- Streaming: `POST https://api.anthropic.com/v1/messages` with `stream: true` on a background thread, through `bifrost_app::url::URLSession::bytes` (rustls + graviola underneath). `api::SseParser` reads `content_block_delta` / `text_delta`, `error` and `message_stop`.
+- The API key is kept with the SDK keychain (`bifrost_app::keychain`, permission `keychain`); conversations and the model are JSON in the data dir.
+- Apple parity gaps, decided here: the composer is an end-of-text editor (no caret movement, selection or drag; `TextArea` is built around notes layout); there is no monospace face in the shell, so code blocks use the system font on a secondary-fill plate; Shift+Return depends on the shell delivering a newline as `KeyInput::Text`, because `KeyInput::Code(13)` carries no modifiers.
+
+## URLSession (`bifrost_app::url`)
+
+Code `springboard/sdk/src/url.rs`, contract test `sdk/tests/url.rs` (local `TcpListener` server). Transport is the shell's
+rustls/graviola stack (`springboard::deildu::http::Tls`); plain `http://` works too. Work runs on a `UserInitiated`
+global queue; completions run on `DispatchQueue::main`.
+
+| Apple | Here |
+|---|---|
+| `URLSession.shared` | `URLSession::shared()` (16 MiB memory `URLCache`) |
+| `URLRequest` (`url`, `httpMethod`, headers, `httpBody`, `timeoutInterval`) | `URLRequest { url, method, headers, body, timeout }`, `new`, `post`, `set_header` |
+| `dataTask(with:completionHandler:)` | `data_task(req, completion)`, completion gets `Result<(HTTPURLResponse, Vec<u8>), URLError>`; non-2xx is a response, not an error |
+| `downloadTask(with:)` + progress | `download_task(req, dest, progress, completion)`: writes `dest.part`, renames on 2xx |
+| `URLSession.bytes(for:)` | `bytes(req, cancel, on_response, on_chunk)`: blocking, streaming (the assistant's SSE) |
+| `URLSessionTask.cancel()` | `URLSessionTask::cancel()` |
+| `URLCache` | `URLCache::new(capacity)`: GET 200 by URL; `Cache-Control: max-age` serves without a request, `ETag` revalidates with `If-None-Match` and a 304 serves the cached body; `no-store` and `no-cache` respected |
+
+Gaps, decided here: no `URLSessionConfiguration`, delegates, background sessions, upload tasks or HTTP/2; no disk cache
+(`URLCache` is memory only); no cookie storage or `URLCredential`s (the Deildu `Client` keeps its own jar); no
+`Vary`, `Expires` or `Age` handling; one connection per request (`Connection: close`); `URLError` has the few codes
+used here. The assistant app moved onto `URLSession::bytes`.
+
+## Unified Logging (`os.Logger`, `OSLogStore`, `log` CLI; milestone `docs/milestone-unified-logging.md`, Phase 1)
+
+Code: `springboard/core/src/log.rs` (shared with the shell, which cannot depend on the SDK), re-exported as
+`bifrost_app::log`. CLI: `bifrost-log` (`sdk/src/bin/bifrost-log.rs`, packaged to `/usr/bin` by the PKGBUILD).
+
+```rust
+let log = bifrost_app::log::Logger::new("is.olibuijr.notes", "sync");
+log.notice("synced");
+log.error(format!("cannot open {}", bifrost_app::log::private(path.display())));   // stored as "cannot open <private>"
+```
+
+Manifest: `[[log.subsystem]] id, categories = [...], level = "notice"`. The installer rebuilds
+`/var/lib/bifrost/log/registry.toml`; `/etc/bifrost/log.toml` overrides it (`bifrost-log config --subsystem X --level debug
+--private on`). A `Logger` re-checks both files' mtime at most once a second, so a disabled message costs one atomic compare.
+
+| Apple | BifrOSt |
+|---|---|
+| `Logger(subsystem:category:)` | `Logger::new(subsystem, category)` |
+| `.debug .info .notice .error .fault` | same names; syslog priority 7, 6, 5, 3, 2 |
+| `<private>` / `privacy: .public` | `private(v)` is `<private>` unless the subsystem has `private = true` |
+| logd | journald (native socket datagram; multi-line values use the binary length form); stderr when the socket is unreachable |
+| `log config --subsystem X --mode level:debug` | `bifrost-log config --subsystem X --level debug` |
+| `log show --predicate ... --last 1h` / `log stream` | `bifrost-log show|stream` (`--predicate 'subsystem == "x" AND level >= error AND message CONTAINS "y"'`, `--last`, `--limit`) |
+| `OSLogStore(scope: .currentProcessIdentifier)` | `LogStore::current_process()` (in-process ring of 2000 entries, works in the sandbox) |
+| `OSLogStore.local()` + entitlement | `LogStore::local()`: `kind = "system-app"` and `entitlements = ["log-store"]`; the shell (`Policy::with_entitlements`) then mounts `/var/log/journal` and `/run/log/journal` read-only and sets `BIFROST_ENTITLEMENTS`. Other apps get `PermissionDenied` and have no journal mount. `LogStore::system()` is for unsandboxed tools |
+| `OSLogEntryLog` | `LogEntry { date, process, pid, subsystem, category, level, message }`; `Query` (subsystem, category, process, min/exact level, contains, last, limit); `LogStore::entries(&Query)`, `LogStore::stream(&Query, FnMut(LogEntry) -> bool)` (blocking, use a thread) |
+
+Gaps, stated explicitly: no info-in-memory-only tier (info is written when the level allows it); no `OSSignposter`
+(Phase 3); no format specifiers or per-argument `.public`/`.private(mask:)` (the whole value is marked); no
+`OSLogStore.getEntries(at: position)` or persistent position tokens; the journal reader shells out to `journalctl` and the
+predicate language is a subset (`==`, `>=`, `CONTAINS`, joined by `AND`); `private` is per subsystem, not per value.
+Apps in the bwrap sandbox reach `/run/systemd/journal/socket` through a read-only bind added to every app (`app_policy.rs`;
+the datagram socket is world-writable). Unverified: the app account reading journal files needs `systemd-journal` group
+access (`drop_identity` copies the account's supplementary groups); if that is not the case on Midget, Phase 2 adds a shell
+broker over the app protocol (reserve ToApp/ToShell tags by the per-feature range rule from HANDOFF round 39 first).
+
+### Subsystem ownership (security, 0.5.7)
+
+Apple ties a log subsystem to the process that writes it. Here the registry records the `owner` of each
+subsystem (the id of the package whose manifest declared it; the first package wins, a second one cannot take it
+over). Readers (`LogStore`, `bifrost-log`, Console) check journald's `_EXE`, which the kernel sets and the app
+cannot change. An entry from a store app (`/var/lib/springboard/apps/<id>/…`) under a subsystem another app owns,
+or under `is.olibuijr.springboard`, keeps its message, loses the subsystem and category, and is marked
+`[claimed subsystem …]`. System binaries may use any subsystem. `bifrost_core::log::may_log_as` is the rule.
+Gap: apps still write the datagram themselves, so the check is on read; Console reads the registry once at launch.
+
+## File system events (`FSEventStream`, `NSFilePresenter` gap)
+
+`bifrost_app::fsevents::FSEventStream::new(paths, latency, flags)` watches folders recursively over inotify (new
+subfolders are added as they appear) with `start()` / `stop()`; drop stops. Events are `FSEvent { path, flags }` with
+`CREATED | REMOVED | RENAMED | MODIFIED | ITEM_IS_DIR | MUST_SCAN_SUB_DIRS`, coalesced per path over `latency`.
+There is no thread and no timer: return `stream.fd()` from `App::wake_fd`, call `stream.poll(Instant::now())` from
+`tick` (events arrive on the main thread) and `next_deadline()` from `next_wake` while a batch matures.
+`NO_DEFER` delivers the first event after a quiet period immediately; `FILE_EVENTS` is accepted (events are always
+per file). Queue overflow reports `MUST_SCAN_SUB_DIRS` on the roots. Gaps: no event ids or `sinceWhen` history, no
+rename pairing (both halves are `RENAMED`), and no `NSFilePresenter` coordination yet. Files uses it (its own
+inotify FFI is gone); Notes, DAW and Music still poll and should migrate.
+
+`FSEventStreamFlags::SHALLOW` is a BifrOSt extension with no Apple counterpart: it watches only the roots, not their
+subfolders. Apple's FSEvents is recursive for free because the kernel journals every volume; over inotify a recursive
+stream walks the whole tree when it starts, so Files watches the open folder with `SHALLOW` (Computer `/` and the home
+folder open without a full-tree walk). Test: `fsevents::tests::shallow_watches_only_the_roots`.
+
+## Dispatch (GCD parity)
+
+`bifrost_app::dispatch` is Grand Central Dispatch: one lazily started process-wide pool (per-QoS lanes; all lanes together run at most
+`available_parallelism` jobs, higher QoS first, a lane borrowing the width higher lanes leave idle, Background always
+keeping one slot when it has work), threads named `dispatch-<qos>`, idle workers blocked on a `Condvar` (they exit after 30 s
+idle; nothing spins). Utility and Background threads call `springboard::gfx::affinity::background_thread()` (nice +10).
+Closures are `FnOnce() + Send + 'static`; a panic is caught and logged.
+
+| Apple | BifrOSt |
+|---|---|
+| `DispatchQueue.main` | `DispatchQueue::main()`: runs on the app loop thread. `async_` pushes and writes an eventfd; the runtime loop polls it, drains the queue before `tick` and draw, and marks a frame needed |
+| `DispatchQueue.global(qos:)` | `DispatchQueue::global(Qos)`, concurrent |
+| `DispatchQueue(label:)` | `DispatchQueue::serial(label)` / `serial_qos(label, qos)`, FIFO |
+| `async` / `asyncAfter` / `sync` | `async_(f)` / `async_after(Duration, f)` / `sync(f) -> T` (concurrent queues run it on the caller; `main().sync` from the main thread panics; a serial queue syncing onto itself deadlocks, as in GCD) |
+| `DispatchGroup` | `DispatchGroup::{enter, leave, notify(&queue, f), wait(Option<Duration>) -> bool}`, `queue.async_group(&g, f)` |
+| `DispatchWorkItem` | `DispatchWorkItem::{new, cancel, is_cancelled, perform, wait}`, `queue.async_item(&item)`; cancel stops an item that has not started |
+| `DispatchQoS` | `Qos::{UserInteractive, UserInitiated, Utility, Background}` |
+
+Gaps (stated, not skipped): no `DispatchSource` (timers, fd or signal sources), no barriers (`.barrier`), no
+`concurrentPerform`, no target queues, no `DispatchSemaphore` (use `std::sync` or a group), no QoS inheritance. The width cap
+is on running jobs; blocked lane threads may exist beyond it (they hold no work). Priority is lane order plus nice; a
+running low-QoS job is never preempted.
+
+Updating UI from a worker: the main-queue closure is `FnOnce() + Send`; it gets no `&mut App`. Pattern: the worker
+computes, then `DispatchQueue::main().async_(move || *result.lock().unwrap() = Some(v))` into an `Arc<Mutex<_>>` (or an
+`mpsc` sender) the app owns; the main-queue wake makes the loop mark a frame, and `App::tick` reads the slot.
+
+Migrating `thread::spawn`:
+- Fire-and-forget background work (scans, fetches, photo loads): `DispatchQueue::global(Qos::Utility).async_(f)` replaces
+  `thread::spawn` plus a manual `affinity::background_thread()` call.
+- Work that must not interleave (one file, one database): a `DispatchQueue::serial("com.app.store")` instead of a thread
+  with a channel loop.
+- Join patterns (`handle.join()`): a `DispatchGroup` with `async_group` and `wait`.
+- Delayed or repeating `thread::sleep` loops: `async_after`, re-armed by the closure; do not park a thread to sleep.
+- Keep a long-lived thread only for a blocking loop that owns a descriptor (accept loops, a media decoder).
+
+## Cache (NSCache parity)
+
+`bifrost_app::cache::Cache<K, V>` (code `springboard/render/src/purgeable.rs`): a cost-bounded LRU that gives memory
+back under pressure. `V: Clone` (store `Arc<T>` for large values); a hit returns a clone and becomes most recent.
+
+| Apple | Here |
+|---|---|
+| `NSCache.countLimit` / `totalCostLimit` | `new(count_limit, total_cost_limit)`, `set_count_limit`, `set_total_cost_limit` (0 = unlimited) |
+| `setObject(_:forKey:cost:)` / `object(forKey:)` | `set(k, v, cost)` / `get(&k)` |
+| `removeObject(forKey:)` / `removeAllObjects()` | `remove(&k)` / `remove_all()` |
+| Eviction on memory warning (`NSPurgeableData`, `didReceiveMemoryWarning`) | one lazily started `cache-pressure` thread blocks in `poll()` on a PSI trigger (`/proc/pressure/memory`, `some 150000 2000000`, POLLPRI); on pressure every live cache drops half its cost, oldest first (`purge_all(0.5)`) |
+
+`purge(fraction)` is the hook the watcher calls; `purge_all(fraction)` reaches every registered cache. Without PSI (old
+kernel, no permission) no thread is started and the caches are plain LRUs. Moved onto it: the glyph coverage cache
+(`render/src/font.rs`, 4 MiB cost) and the emoji image cache (`render/src/emoji.rs`, 256 entries, cost in bytes).
+
+Gaps: no `NSCacheDelegate.willEvictObject`, no `evictsObjectsWithDiscardedContent`/`NSDiscardableContent` begin/end
+access counting, no per-entry purge priority; the unprivileged PSI window must be a multiple of 2 s, so the trigger is
+2 s, not the 1 s of the spec. `TextCache` (a `&mut` borrow API) and app-local image caches are not moved yet.
+
+## Testing kit (XCTest parity)
+
+`Ctx::testing(ui, cfg)` builds a context with no shell (memory-only defaults); `ctx.take_sent()` returns what the
+app queued for the shell (`ToShell` messages), so SDK calls such as `open_url`, `notify` and `set_badge` are tested
+directly. `UserDefaults::register([(key, Value)])` matches `register(defaults:)`: fallbacks read when a key has no
+stored value, never written to disk; `contains` ignores them, like the persistent domain.
+
+Gap: apps had no way to drive their own UI in a test short of a running shell and Midget. Apple has XCTest and
+XCUITest (`XCUIApplication`, `XCUIElement`, `XCTAssert*`). Decision: `bifrost_app::testing` is a thin headless layer over
+the existing view `Window`, its responder chain and the accessibility tree (`ax_nodes`, `ax_press`, `ax_set_value`), so a
+plain `cargo test` exercises real hit testing, focus and key handling.
+
+| Apple | BifrOSt |
+|---|---|
+| `XCUIApplication()` | `TestWindow::new(root, model, w, h)` (loads `assets/SFUI.ttf`, scale 1); `.model` is yours to assert on |
+| `app.buttons["Save"]` | `win.element(Role::Button, "Save") -> Option<Element>` (role and label match) |
+| `element.tap()` | `Element::click()` (centre of the frame through the hit test), `TestWindow::click(x, y)` |
+| `AXPress` | `Element::press()` |
+| `typeText` / key events | `TestWindow::type_text(&str)`, `TestWindow::key(KeyInput)` (to the first responder) |
+| `element.value`, `.frame`, `.exists`, `.isEnabled` | `.value()`, `.frame()`, `.exists()`, `.is_enabled()`; `win.exists(role, label)` |
+| setting `AXValue` | `Element::set_value(&str)` |
+| `XCTAssertTrue(el.exists)` | `assert_element!(win, Role::Button, "Save")` |
+| window resize | `TestWindow::resize(w, h)` |
+| `XCTAttachment(screenshot:)` | `TestWindow::draw() -> Vec<u32>` (packed pixels; compare or write out) |
+
+Example: `springboard/sdk/tests/testing.rs`. Gaps, stated explicitly: no `XCTestCase` lifecycle or `measure {}` (use
+`#[test]` and `tools/bench.py`); no `XCUIElementQuery` chaining, `descendants` or predicates (first match by role and
+label only); no wait-for-existence or `XCTestExpectation` (the window is synchronous; call `Window::tick` for
+animations); no gestures beyond click and keys (no drag, scroll or multi-touch); `Element` is a snapshot, so query again
+after a change to read a new value; the harness drives one window, not the shell, menus or other processes (use
+`bifrost pc control` or the MCP tools for those).
+
+## Attributed strings and rich text (Foundation / AppKit parity)
+
+`bifrost_app::attributed` mirrors `NSAttributedString` / `NSMutableAttributedString` and `NSTextView` rich mode.
+
+- `AttributedString`: merged runs of `Attrs` (bold, italic, `SizeClass`, `ColorToken`, underline, strikethrough, link).
+  `attributes_at`, `substring`, `replace_characters` (new text inherits the preceding character's attributes, as typing does),
+  `replace_attributed`, `add_attribute`, `remove_attribute`, `enumerate_attribute` (maximal ranges per key), `append`.
+- Sizes are the `MAC_*_PT` text styles (`SizeClass`), colours are named tokens resolved with `Pair::now()` (Light and Dark);
+  no literal sizes or colours.
+- RTF (`to_rtf`/`from_rtf`): `\b \i \ul \strike \fsN`, colour table, hyperlink fields, `\par`, `\'hh`, `\uN` incl. surrogates.
+  HTML (`to_html`/`from_html`): `b strong i em u s del a h1-h3 small br p`, colour as `span data-color`, entities.
+- `RichTextView`: `RichText` (content, selection, typing attributes) with `insert_text`, `delete_backward`, `toggle(Trait)`,
+  `key_command(char, shift)` for Cmd+B/I/U and Cmd+Z / Cmd+Shift+Z, every edit one step on an `UndoManager`. `draw` renders
+  wrapped styled runs into a `Surface`.
+- Contract tests live in `sdk/src/attributed.rs` (pure model, no shell calls, so no `Ctx::testing`/`take_sent`).
+
+Gaps (not matched yet): ranges are characters, not UTF-16 units; italic is stored and exported but drawn upright (no italic
+face in the system font); `Caption` and `Footnote` share 10 pt so Caption reads back as Footnote from RTF; no arbitrary RGB
+colours, fonts, paragraph styles, attachments, lists or tables; no caret/mouse hit-testing in `draw` yet, so the Notes
+adoption is deferred. The `TextArea` control stays plain text.
+
+## Sudden termination (ProcessInfo parity)
+
+`ctx.enable_sudden_termination()` / `ctx.disable_sudden_termination()` mirror `ProcessInfo`. Counted like Apple's: an app
+starts disabled (count 1) and opts in with one `enable`; pairs of `disable`/`enable` bracket work that must finish. The
+state goes to the shell (`ToShell::SuddenTermination { enabled }`, tag 0x160) only when it flips. Counter:
+`bifrost_app::process_info::SuddenTermination`.
+
+Shell: a suddenly terminable app is SIGKILLed at once on close, logout, shutdown and restart. Any other app gets `Quit`
+and 1.5 s (`QUIT_GRACE_MS`) to save and exit, tracked as a pending kill (`Shell::dying`, reaped in `ext_tick`, included
+in `next_wake`), so the UI thread never waits. `Shell::stop_apps` does the same for every app at shutdown with one shared
+deadline. The decision is the pure `apphost::quit_plan`. First-party opt-ins: Calculator, Console, Weather.
+
+Gap: Apple also disables termination automatically while a document save is in flight; ours does not yet (apps with
+documents simply never enable it, so a save is always followed by a Quit round trip).
+
+## Codable (Foundation parity)
+
+`bifrost_app::coding`: `JSONEncoder` (`pretty_printed`, `sorted_keys`, `date_encoding_strategy` seconds or ISO 8601),
+`JSONDecoder`, `PropertyListEncoder`/`PropertyListDecoder` (XML plist), traits `Encodable`/`Decodable` over a `Value`
+tree, impls for integers, floats, bool, `String`, `Date`, `Option`, `Vec`, `HashMap`/`BTreeMap<String, _>`. Plain structs
+use `codable!(Name { field: Type, .. })` (macro_rules, no proc-macro). serde is in the lockfile only through other
+crates, so it is not used: the SDK stays lean and offline-buildable. `Option` fields are omitted when `None` and
+decode as `None` when missing. The Assistant's `model.rs` uses it. Gaps: no `CodingKeys` renaming (hand-write the impl,
+see `Message` in the Assistant), no binary plist, no key/date/data strategies beyond those above, `Data` unsupported.
+Tests: `sdk/tests/foundation.rs`.
+
+## NotificationCenter (Foundation parity)
+
+`NotificationCenter::default()`: `add_observer(name, object: Option<u64>, f) -> ObserverToken` (drop removes),
+`post(name, object, user_info)`. Observers run on the main thread: a main-thread post delivers synchronously, any other
+thread queues on `DispatchQueue::main()`. `user_info` is
+`HashMap<String, String>` (not `Any`) so posts can cross threads. Tests: `sdk/tests/foundation.rs`.
+
+## DistributedNotificationCenter (Foundation parity)
+
+`DistributedNotificationCenter.add_observer(name, f)` and `post_with(ctx, name, user_info)`. A post is delivered to the
+sender's own observers at once and sent as `ToShell::DistPost` (tag 0x1d0); the shell forwards it as
+`ToApp::DistNotify` (tag 0x1d1) to every other running app, whose runtime delivers it to observers on the main thread.
+Names are a separate namespace from `NotificationCenter`. Apple decision: the broadcast model and string-keyed
+`userInfo` match; the shell relays to all running apps and the SDK filters by observer name (no per-name subscription
+table). Gaps: `user_info` is string to string, at most 32 entries and 1024 characters a value (a post over the caps is
+truncated on encode); no `suspensionBehavior` (an app that is not running misses the post, like `.drop`); no
+`deliverImmediately` flag; plain `post` (no ctx) stays process-local. Tests: `notification::tests`, `runtime::tests`
+(`distributed_post_goes_to_the_shell_and_local_observers`), proto round trips in `rich.rs`.
+
+## NSFileCoordinator and NSFilePresenter (Foundation parity)
+
+`bifrost_app::file_coordination`: `NSFileCoordinator.coordinate_reading(path, f)` (shared) and
+`coordinate_writing(path, f)` (exclusive) run `f` under a bounded advisory `flock` (5 s, then `Timeout`) on the
+item's parent directory, so renames cannot slip past the lock. `NSFileCoordinator::add_presenter(Box<dyn FilePresenter>)`
+registers a presenter (token drop removes it) with `presented_item_url`, `presented_item_did_change` and
+`accommodate_deletion`. The change feed is the app's `fsevents::FSEventStream`: pass each `poll()` batch to
+`file_coordination::deliver_events`. A path just written through `coordinate_writing` is not reported back to this
+process once. Gaps: no relinquish or `savePresentedItemChanges` negotiation, no will-move callbacks (a rename is a
+change on both paths), no versions or iCloud coordination, advisory only (uncoordinated processes are not blocked),
+presenters only learn of changes inside folders the app's `FSEventStream` watches. Tests: `file_coordination::tests`.
+
+## Host statistics and ProcessInfo (Foundation/Mach parity)
+
+One implementation, `bifrost_core::host` (re-exported as `bifrost_app::host`), serves the shell and the SDK. Every call
+is one `open` + `read` of a procfs file into a buffer the `HostSampler` reuses; there is no sampler thread and no cache:
+the caller picks the cadence, as on macOS where `host_statistics64` is a cheap Mach call.
+
+| Apple | BifrOSt | Source and mapping |
+|---|---|---|
+| `host_statistics64(HOST_CPU_LOAD_INFO)` -> `cpu_ticks[user,system,idle,nice]` | `HostSampler::host_cpu_load_info() -> HostCpuLoadInfo` | `/proc/stat` aggregate. system = system+irq+softirq+steal, idle = idle+iowait |
+| `host_processor_info(PROCESSOR_CPU_LOAD_INFO)` | `HostSampler::processor_info()` | the `cpuN` lines of the same read |
+| Activity Monitor CPU % | `HostCpuLoadInfo::usage_percent(prev, now)` | busy share of the tick delta |
+| `host_statistics64(HOST_VM_INFO64)` -> `vm_statistics64` | `HostSampler::memory() -> MemorySample { vm: VmStatistics64, .. }` | free=MemFree, active=Active, inactive=Inactive, wire=Unevictable+KernelStack+PageTables+SUnreclaim, compressor=Zswap or zram `mm_stat` mem_used_total, external=Cached, pageins/pageouts=vmstat pgpgin/pgpgout (KiB to pages), speculative=0 |
+| `vm_kernel_page_size` | `host::vm_kernel_page_size()` | `sysconf(_SC_PAGESIZE)` |
+| `task_info(TASK_VM_INFO).phys_footprint` | `HostSampler::task_vm_info()` | `/proc/self/smaps_rollup` `Pss_Anon + Pss_Shmem` (memory the process is charged for, no clean file mappings, like the footprint); falls back to `Private_Dirty` |
+| `os_proc_available_memory` | `HostSampler::os_proc_available_memory()` | own cgroup `memory.max - memory.current` when limited (capped by MemAvailable), else MemAvailable |
+| `ProcessInfo.physicalMemory / processorCount / activeProcessorCount / systemUptime` | `ProcessInfo::physical_memory() / processor_count() / active_processor_count() / system_uptime()` | meminfo MemTotal, `sysconf`, `/proc/uptime` |
+| `ProcessInfo.thermalState` | `ProcessInfo::thermal_state() -> ThermalState` | worst `/sys/class/thermal/thermal_zone*`: `passive` trip = Fair, `hot` = Serious, 5 C under `critical` = Critical; zones with no trips: 75/85/95 C |
+| `thermalStateDidChangeNotification` | `ProcessInfo::observe_thermal_state(queue, handler)` | runs on the given queue (pass `DispatchQueue::main()`) |
+| `isLowPowerModeEnabled`, `powerStateDidChangeNotification` | `ProcessInfo::is_low_power_mode_enabled()`, `observe_low_power_mode` | the shell writes its Low Power Mode setting to `/run/bifrost/power-state` when it changes |
+| `beginActivity(options:reason:)` / `endActivity` | `ctx.begin_activity(ActivityOptions, reason) -> Activity`, `ctx.end_activity(a)` | `ToShell::Activity { options }` (0x161), sent when the union of live options changes. User-initiated or latency-critical: the shell does not suspend the app when it leaves the foreground |
+| `DispatchSource.makeMemoryPressureSource` | `DispatchSource::memory_pressure(&queue, handler)` | shared PSI watcher in `render/src/purgeable.rs`: warning = 150 ms "some" stall, critical = 100 ms "full" stall in 2 s; `Normal` after 4 quiet seconds. The `Cache` purge uses the same thread |
+| timer leeway / `Timer.tolerance` | `DispatchQueue::async_after_leeway(delay, leeway, f)` | fires in `[delay, delay+leeway]`; the one timer thread wakes at the earliest allowed time of all pending timers and fires every timer already due |
+
+Notifications are not pushed by the kernel: only when someone subscribes, one dispatch timer re-reads every 10 s with 5 s
+leeway (so it coalesces with other timers), and stops when nobody is subscribed.
+
+### Menu extras (CPU, RAM)
+
+Both stay enabled by default. The shell reads `host` at a deadline on its main loop (`Shell::metrics_tick`, scheduled by
+`next_wake`): every 2 s with 10 % tolerance, 1 s while a CPU or RAM menu is open (Activity Monitor "Very often").
+The deadline snaps to the next whole second when that is within the tolerance and joins any wake already planned in its
+window (`desktop_metrics::deadline`, `coalesce`). Nothing is read or scheduled while the screen is off, the shell is
+locked, the desktop is not active, or no readout or menu is showing; the CPU baseline is dropped on resume. The bar
+repaints only when the shown text changes. RAM % is macOS's "Memory Used": (active + wired + compressed) / physical
+memory, not total - available (which would count reclaimable cache as free; Linux `Active` still includes some
+file-backed pages, so the number runs above macOS on cache-heavy loads).
+
+Tests: parsing fixtures and deltas in `core/src/host.rs`, the schedule in `src/shell/desktop_metrics.rs`, counters and
+activities in `sdk/src/process_info.rs`.
+
+Gaps: no per-process energy impact; thermal and Low Power notifications poll every 10 s (not event driven) and the shell
+does not yet broadcast them; memory pressure handlers cannot be cancelled; `vm_statistics64` has no purgeable, throttled
+or zero-fill counters; `Active` includes file-backed pages (no `Active(anon)` split); activities only prevent
+suspension, not CPU throttling or system sleep (`IDLE_SYSTEM_SLEEP_DISABLED` is recorded but not acted on).
+
+### Pinned clock and seed (deterministic snapshots)
+
+Gap: an app that read the wall clock, the system zone, a random seed, the journal or the network drew a different frame
+on every run, so Books, Console, Games and Weather carried `KNOWN_GAPS = ["snapshot"]`. XCTest has no single equivalent
+(apps inject a `Clock` or seed themselves); decision: the SDK owns the pin.
+
+| API (`bifrost_app::testing`) | Meaning |
+|---|---|
+| `pin()` | Sets `BIFROST_TEST_PIN=1` for this process and the app binaries it spawns. `tools/templates/app-compliance.rs` calls it before `AppHost::spawn`. |
+| `pinned()` | True when the pin is on. Apps branch on it only to swap an external source for a fixture. |
+| `unix_secs()` / `system_time()` | The wall clock; `PINNED_UNIX_SECS` (2025-10-10 12:00:00 UTC) when pinned. Use instead of `SystemTime::now()`. |
+| `seed()` | A non-zero RNG seed from the clock; `PINNED_SEED` when pinned. Use for xorshift and shuffles. |
+
+Under the pin, Games deals from `PINNED_SEED`, Console shows a fixed three-row journal in UTC with no follow and no
+`/var/log` files, Weather uses an offline fetcher, and Books scans its own empty data dir instead of `$HOME`. Monotonic
+`now_ms()` (animation time) is not pinned. The four apps' goldens were regenerated once with `BIFROST_BLESS=1` in 0.5.10, and their
+`KNOWN_GAPS` lists are empty again.
+
+### NSPasteboard rich types (Apple parity)
+
+`bifrost_app::pasteboard::NSPasteboard::general()` mirrors `NSPasteboard.general`: `clear_contents(ctx) -> change_count`,
+`set_data(ctx, bytes, uti)`, `set_string`, `data(uti)`, `string()`, `types()`, `change_count()` and `write_objects(ctx, urls)`
+(`public.file-url`). Types are UTType ids (`public.utf8-plain-text`, `public.html`, `public.rtf`, `public.png`,
+`public.file-url`); `springboard::shell::pasteboard::mime_for` maps them to MIME (`text/plain;charset=utf-8`, `text/html`,
+`text/rtf`, `image/png`, `text/uri-list`). Wire: `ToShell::PasteboardSet` (0x190) and `ToApp::Pasteboard` (0x190), at most
+16 items. `Ctx::pasteboard_string` / `set_pasteboard_string` keep working. Gap: the shell publishes only the text-like type
+(plain text, else file URLs, else HTML) to the Wayland selection; other types stay inside BifrOSt until the presenter offers
+multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes out through `wl-copy --type`). The shell pushes `ToApp::Pasteboard` with the bytes to every other connected app.
+
+## Printing (NSPrintInfo / NSPrintOperation parity)
+
+`bifrost_app::print` (`springboard/sdk/src/print.rs`): `PrintInfo` (paper size, orientation, margins, copies, page range;
+`paper_size()` and `imageable()` as `paperSize` and `imageablePageBounds`), `printers()` (CUPS via `lpstat -p -d`),
+`available()`, and `PrintOperation::new(file).with_info(..).to(Destination::Printer(name) | Destination::Pdf(path)).run()`,
+which submits with `lp` (info mapped to `-n`, `media=`, `landscape`, `page-*`, `-P`) or, for Save as PDF, copies the
+document. Contract tests are unit tests in the module (argument mapping, lpstat parsing, PDF copy); no call goes to the
+shell, so there is no `take_sent` test and no proto tag was used.
+
+Decisions and gaps:
+- No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay
+  reserved for it). Apps choose printer and options with their own controls and call `run`.
+- Only file documents (PDF or what `lp` accepts); there is no `NSView` pagination (`knowsPageRange`, `draw(page)`) yet.
+- If CUPS is absent from the image, `printers()` is empty, `available()` is false, `run` returns `PrintError::NoCups`, and
+  Save as PDF still works. Whether the Midget image ships CUPS is unchecked.
+- Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and
+  pdfcraft are upstream packages with no source here, so they are not wired.
+
+## Locale and localization (Foundation parity)
+
+`bifrost_app::locale` mirrors Foundation: `Locale::current()` (`LC_ALL`, `LC_MESSAGES`, `LANG`; the shell's region
+preference arrives as `BIFROST_REGION` and replaces the region), `NumberFormatter` (decimal, percent, currency, grouping,
+fraction digits), `DateFormatter` (`date_style`/`time_style`, `set_date_format`, `set_localized_date_format_from_template`),
+`relative_date_time` (`RelativeDateTimeFormatter`), `byte_count` (`ByteCountFormatter`), `Measurement`/`Unit`/`measurement`
+(length, mass, temperature) and `list` (`ListFormatter`). `NSLocalizedString` is `localized!("key", "comment")`: `Bundle::load(dir, &locale)`
+reads `<app>/<lang>.lproj/Localizable.strings` (comments, escapes) with `en` then the key itself as fallback; call
+`set_main_bundle` once at launch. Built-in data covers `en` and `is`; other languages format as `en`. Contract tests live in the module.
+
+Gaps: no other languages, no `.stringsdict` plural rules, no time-zone database (`tz_offset` is explicit seconds),
+Gregorian calendar only, no unit-system auto-conversion in the measurement formatter, no binary `ByteCountFormatter`
+style. The shell does not yet publish a region key itself, so `BIFROST_REGION` is read only if set. `bifrost_ui::format`
+stays English-only for shell code and its callers are not migrated: the shell has no `Locale` plumbing yet, so moving
+them would change nothing visible.
+
+## Login items and menu-bar extras (ServiceManagement and NSStatusItem parity)
+
+Modules `bifrost_app::service_management` and `bifrost_app::status_item`; wire tags `0x1b0..=0x1bf` (`proto/src/extras.rs`);
+shell side `src/shell/extras.rs`, the bar in `desktop_bar.rs`, the page in `pages.rs`.
+
+**SMAppService.** `SMAppService::main_app()` gives `register(ctx)`, `unregister(ctx)`, `refresh(ctx)` and `status()`.
+The shell keeps the login-items list in the `login.items` pref (comma separated app ids), starts those apps once per
+session when the desktop is up and unlocked, and lists them in Settings > General > Login Items, where choosing a row
+removes it. `status()` is synchronous like Apple's and returns the last status the shell reported (it reports once at app
+start and after each call); the call results also arrive in `App::login_item_status(ctx, request, status)`.
+Apple parity decisions: the status enum has all four cases (`NotRegistered`, `Enabled`, `RequiresApproval`, `NotFound`).
+Gaps that cannot be matched yet: `SMAppService.loginItem(identifier:)`, `.agent(plistName:)` and `.daemon(plistName:)` do
+not exist (BifrOSt apps have no embedded helpers, launch agents or daemons), `RequiresApproval` is never produced
+(there is no approval step), and `openSystemSettingsLoginItems()` is not provided (the shell page opens from Settings).
+
+**NSStatusItem.** `StatusBar::system().status_item(StatusItemLength::Variable)` returns a `StatusItem` with
+`set_title`, `set_symbol`, `set_menu(&[MenuItem])`, `set_visible` and `remove`; every setter sends the whole item. A
+`MenuItem` is `MenuItem::new(id, title)` with `.enabled(bool)`, `.checked(bool)` and `MenuItem::separator()`. The shell
+draws the title in the menu bar's extras area, left of the system extras (an empty title shows the app's initial), opens
+the menu as a bar menu and sends the choice back as `App::status_item_action(ctx, item, id)`. An app may hold 4 items
+and a menu 32 entries; titles are cut at 64 characters; the items go when the app quits.
+Apple parity decisions: items need no permission (the menu bar is the user's to arrange); one-level menus only.
+Gaps that cannot be matched yet: `symbol` is carried but not drawn (the bar has no symbol renderer for app-named
+symbols; the title or the app initial is drawn), `StatusItemLength::Square` is drawn as `Variable`, there are no
+submenus, key equivalents or custom `NSView` buttons, no `button.action` for a plain click (a click always opens the
+menu), and the user cannot reorder or hide a third-party extra in Settings > Menu Bar yet.
+
+Contract tests: `service_management::tests`, `status_item::tests` (with `Ctx::testing` and `take_sent`),
+`proto::extras::tests` (round trips and limits) and `shell::extras::tests` (registry).
+
+## Core Spotlight (`CSSearchableIndex`, `bifrost_app::spotlight`)
+
+Apple's CoreSpotlight lets an app index its own content so system search finds it without launching the app. Ours:
+
+- `CSSearchableItemAttributeSet::new(title).content_description(..).keywords(..).thumbnail_path(..).content_url(..)`,
+  `CSSearchableItem::new(unique_identifier, domain_identifier, attributes)`.
+- `CSSearchableIndex::default_index()` with `index_searchable_items(ctx, &items)`, `delete_searchable_items(ctx, &ids)`,
+  `delete_searchable_items_with_domain_identifiers(ctx, &domains)` and `delete_all_searchable_items(ctx)`. Indexing an
+  existing identifier replaces the item. Calls are fire-and-forget messages to the shell (no completion handler:
+  `ToShell::SpotlightIndex` 0x1c0, `SpotlightDelete` 0x1c1; a message carries at most 8 items, the SDK splits larger calls).
+- The shell keeps the index per app in `<data>/spotlight-index/<app id>.json`, bounded to 1000 items per app (oldest
+  dropped first) and 64 apps, with long text cut by the wire codec. The Spotlight panel lists matches in a Documents
+  section (title match before keyword before description match).
+- Opening a result starts the app and sends `ToApp::ContinueActivity` (0x1c2). The app implements
+  `App::continue_activity(ctx, UserActivity)`; `activity_type == spotlight::ACTION_TYPE` (`CSSearchableItemActionType`,
+  `"com.apple.corespotlightitem"`) and `unique_identifier` is the item's (`CSSearchableItemActivityIdentifier`). The message
+  may arrive before the first `configure`; the runtime holds it until the app has a context.
+- Adopted in Notes 1.8.6: every note outside Recently Deleted is indexed (title, first lines, folder as keyword) and
+  `continue_activity` opens it with `Notes::show_note`.
+
+Tests: `bifrost_proto::spotlight` (wire round trip, packet bound), `bifrost_app::spotlight` (`Ctx::testing` + `take_sent`),
+`springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
+
+Gaps, decided and recorded: no `CSSearchQuery` (an app searching its own index; apps search their own data), no
+`CSSearchableIndexDelegate` re-index requests, no `expirationDate`, `rankingHint` or per-attribute `CSSearchableItemAttributeSet`
+types beyond the five above, no completion handler or error for index calls, and the panel does not draw the thumbnail yet
+(it is stored with the item). Items of an app are searched only while it is installed; they are not removed on uninstall.
+
+## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
+
+Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifrost_app::controls::table`, `controls::panels`). Pure models with unit tests.
+
+- **Sortable columns.** `SortDescriptor` (key, ascending), `Column` (`sort_key` = `sortDescriptorPrototype`), `TableColumns::click_header` (first click ascending, second descending; the key becomes primary, earlier keys stay secondary), `indicator(i)` for the header arrow, `sort_rows` (stable multi-key sort). Resize (`resize`, divider grab zone `RESIZE_GRAB`, min and max width), reorder (`reorder`, `drop_index`), and `save`/`restore` for `autosaveName`.
+- **Font panel.** `FontPanel`: family, style, size (1 to 288, list `FONT_SIZES`), `on_change` as the `NSFontManager` target action. Families come from the fonts the renderer has, supplied by the caller.
+- **Color panel.** `ColorPanel`: RGB, HSB wheel hit-test (`wheel_pick`), hex field (`parse_hex`), alpha, `on_change`. Named system colours are the `render::ui::SYSTEM_*` tokens.
+- **Gaps.** No drawing yet: the shell does not render the two panels or a clickable header row, and Files was not adopted (it keeps its toolbar sort). Column hiding (header context menu), `NSColorPanel` crayons/sliders modes and eyedropper, font collections and typography effects are not matched. Sort descriptors compare through a caller closure (no key-path reflection). Contract tests are model-level (`Ctx::testing` not needed: nothing is sent to the shell yet).
+
+## Quick Look (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`)
+
+Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types `springboard/proto/src/quicklook.rs` (tags 0x1e0 `ToShell::Preview`, 0x1e1 `ToShell::PreviewClose`).
+
+- **Panel.** `PreviewPanel`: `set_items` (`dataSource`, at most 16 items per message, URL cut to 256 bytes, title to 96), `current_preview_item_index` (always clamped), `step` (arrows, no wrap), `reload_data`, `make_key_and_order_front`, `close`, `toggle` (Space). `PreviewItem` is `previewItemURL` + `previewItemTitle`.
+- **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
+- **Gaps.** The shell does not draw the floating panel yet (the message is decoded and ignored), and no app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
+||||||| 4f167d99
+
+## Spell checking (`NSSpellChecker`, `NSTextCheckingResult`)
+
+`bifrost_app::spellcheck`: `words(text)` tokenizer (byte ranges, keeps inner apostrophes), `Dictionary` trait (hunspell or other backends plug in), `WordList` (in-memory, edit-distance-1 suggestions), `SpellChecker` with `check_spelling`, `correction`, `guesses`, `learn_word`/`unlearn_word` (persisted in `UserDefaults` key `NSSpellChecker.learnedWords`), `ignore_word` (checker lifetime), `available_languages`, `automatically_corrects_spelling` (flag only), and `CheckingType`/`CheckingTypes` (OptionSet) with `CheckingResult`.
+Gaps: no grammar checking (no data); `check` yields spelling only, link/date/address/phone stay in `controls::detect` and are not merged; ignore is not scoped by document tag; no bundled dictionary; no app adopts it yet (Notes and Wordcraft are next).
+||||||| 4f167d99
+
+## Observable values (Combine / Observation parity, `bifrost_app::observable`)
+
+`Observable<T>` mirrors `CurrentValueSubject` / `@Published`: `get`, `set`, `update` (one notification per change), `sink` (delivers the current value, then changes), `subscribe` (changes only), `map`, `remove_duplicates`, `set_if_changed`. `Subscription` is `AnyCancellable`: dropping it cancels; `Subscription::store(&mut Cancellables)` is `store(in:)`. Pure and single-threaded (`Rc`), no shell dependency.
+
+Gaps: no `ObservableObject.objectWillChange` aggregate (use one `Observable` per property or a struct value); no `withObservationTracking` automatic dependency capture; no Send/threaded publishers, schedulers, `debounce` or `combineLatest`; a `set` from inside a callback of the same observable updates the value but notifies no one (the subscriber list is checked out while callbacks run). App adoption (reminders-desktop `store.rs`, podcasts) is deferred: those stores are file based, not observable state.
+
+### WebProcessPool crash recovery (browser S1)
+Safari parity: `webViewWebContentProcessDidTerminate` maps to `ContentProcessTerminated` (the browser shows "This webpage was reloaded because a problem occurred", then reloads). `EngineExited` is also raised on read errors; the browser restores tabs and restarts the engine (max 3 per minute). `close` ignores unknown ids. WebKit has no equivalent of a whole-engine restart; this is a Bifrost addition.
+
+## Browser history, bookmarks and address suggestions (SDK gaps)
+
+The browser keeps history (capped at 5000, deduped, frecency ranked) and bookmarks in `~/.local/share/bifrost-browser/*.tsv`
+and shows Safari-style Top Hits under the address field. Gaps against AppKit/Safari, decided for now:
+- No menu-bar API for app-defined History and Bookmarks menus (Safari: `NSMenu` items). Cmd+D toggles a bookmark and Cmd+Y opens
+  the address field with bookmarks listed; a menu and a full History window wait for the SDK menu API.
+- No popup list control (`NSPopUpButton`/`NSTableView` popover for the suggestion list); the browser draws the dropdown itself with
+  `CARD_BG`, `SEPARATOR_C` and `TINT`.
+- No Start Page and favourites grid yet (needs the engine to serve a page). The private-mode flag exists in the store but is not wired.
+- Unit tests live in `suggest.rs` (a binary crate cannot be imported from `tests/compliance.rs`).
+
+## Golden Gate kit: sheets and small controls (round 58)
+
+- `bifrost_ui::sheet`: `Sheet::new` / `Sheet::alert`, `layout(parent, titlebar_h, progress)`, `hit`, `key` (Return = default button, Escape = cancel button, all keys consumed while shown), `segments` / `segment_hit` / `segment_key`, `stepper_*`, `focus_ring_rect`. Drawing: `widgets::sheet`, `segmented`, `stepper`, `focus_ring`, `popover` (arrow on the Popover material).
+- A sheet slides from the title bar (`motion::Kind::SheetSlide`; progress is 1 at once under Reduce Motion), dims the parent (28% black) and swallows clicks on it (`Hit::Blocked`).
+- Metrics: segmented 24 pt, stepper 13 x 22 pt, pop-up button 22 pt, focus ring 3 pt, sheet radius 10 pt, alert width 260 pt.
+- Gaps: sheet buttons size by character count (no text measuring); the top corners of the panel are hidden by extending it upward inside the parent, not clipped.

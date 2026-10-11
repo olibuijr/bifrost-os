@@ -1,0 +1,17 @@
+{
+  "id": "tremolo",
+  "name": "Tremolo",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "tremolo",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Tempo-synced tremolo/autopan; rate = LFO period in 16th steps",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

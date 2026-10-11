@@ -1,0 +1,399 @@
+//! Line glyphs named after the system symbol set (`NativeImage(systemSymbolName:)`), drawn from lines, arcs and discs so they scale
+//! to any size and need no symbol font (the device has none). Toolbars, source lists, search and path bars take a
+//! symbol name; `glyph` draws it.
+use crate::kit::ui::FIELD_BG;
+use crate::kit::{Surface, Ui};
+use bifrost_ui::Rect;
+use springboard::shell::icons::{arc, disc, line, polygon, ring};
+use std::f32::consts::PI;
+
+/// Every name `glyph` draws, for galleries and tests.
+pub const NAMES: [&str; 59] = [
+    "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
+    "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
+    "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
+    "music.note", "film", "photo", "ellipsis", "square.and.arrow.up", "plus", "globe", "arrow.up.arrow.down",
+    "chevron.down", "backward.fill", "forward.fill", "play.fill", "pause.fill", "gobackward.15", "goforward.30",
+    "person", "person.crop.circle", "star", "star.fill", "envelope", "phone", "bookmark", "textformat", "pencil",
+    "square.and.pencil", "antenna.radiowaves.left.and.right", "mic", "music.note.list", "opticaldisc", "radio",
+    "calculator", "cloud.sun", "ellipsis.circle", "info.circle", "flag", "calendar",
+    "arrow.clockwise", "xmark", "rectangle.grid.1x2",
+];
+
+/// True when `name` has a drawing.
+pub fn has(name: &str) -> bool {
+    NAMES.contains(&name)
+}
+
+/// Draws symbol `name` centred in `bounds` (points) in `color`; false when the name is unknown (nothing drawn).
+pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> bool {
+    if !has(name) {
+        return false;
+    }
+    let side = ui.pt(bounds.w.min(bounds.h));
+    let (x0, y0) = (ui.pt(bounds.x) + (ui.pt(bounds.w) - side) / 2.0, ui.pt(bounds.y) + (ui.pt(bounds.h) - side) / 2.0);
+    let t = (side * 0.085).max(1.2);
+    let p = |u: f32, v: f32| (x0 + u * side, y0 + v * side);
+    let poly = |s: &mut Surface, pts: &[(f32, f32)], closed: bool| {
+        for w in pts.windows(2) {
+            line(s, p(w[0].0, w[0].1), p(w[1].0, w[1].1), t, color);
+        }
+        if closed && pts.len() > 2 {
+            let (a, b) = (pts[pts.len() - 1], pts[0]);
+            line(s, p(a.0, a.1), p(b.0, b.1), t, color);
+        }
+    };
+    let rbox = |s: &mut Surface, u: f32, v: f32, w: f32, h: f32, r: f32| {
+        s.stroke_rrect(x0 + u * side, y0 + v * side, w * side, h * side, r * side, t, color);
+    };
+    let dot = |s: &mut Surface, u: f32, v: f32, r: f32| disc(s, x0 + u * side, y0 + v * side, r * side, color);
+    let circle = |s: &mut Surface, u: f32, v: f32, r: f32| ring(s, x0 + u * side, y0 + v * side, r * side, t, color);
+    let fill = |s: &mut Surface, pts: &[(f32, f32)]| {
+        let v: Vec<(f32, f32)> = pts.iter().map(|&(u, v)| p(u, v)).collect();
+        polygon(s, &v, color);
+    };
+    let bar = |s: &mut Surface, u: f32, v: f32, w: f32, h: f32| s.fill_rrect(x0 + u * side, y0 + v * side, w * side, h * side, w * side / 2.0, color);
+    let arcd = |s: &mut Surface, u: f32, v: f32, r: f32, a0: f32, a1: f32| arc(s, x0 + u * side, y0 + v * side, r * side, t, a0, a1, color);
+    // a five-point star around (0.5, 0.53)
+    let star: Vec<(f32, f32)> = (0..10)
+        .map(|k| {
+            let a = -PI / 2.0 + k as f32 * PI / 5.0;
+            let r = if k % 2 == 0 { 0.44 } else { 0.18 };
+            (0.5 + r * a.cos(), 0.53 + r * a.sin())
+        })
+        .collect();
+    let numeral = |s: &mut Surface, text: &str| {
+        let img = ui.text(text, (side * 0.3 / ui.pt(1.0)).max(5.0), crate::kit::Weight::Semibold, color);
+        let (cx, cy) = p(0.5, 0.54);
+        s.blit(&img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2, 255, 255);
+    };
+    let folder = [(0.08, 0.22), (0.38, 0.22), (0.46, 0.32), (0.92, 0.32), (0.92, 0.80), (0.08, 0.80)];
+    match name {
+        "chevron.left" => poly(s, &[(0.62, 0.18), (0.34, 0.5), (0.62, 0.82)], false),
+        "chevron.right" => poly(s, &[(0.38, 0.18), (0.66, 0.5), (0.38, 0.82)], false),
+        "sidebar.left" => {
+            rbox(s, 0.06, 0.18, 0.88, 0.64, 0.12);
+            poly(s, &[(0.38, 0.18), (0.38, 0.82)], false);
+            poly(s, &[(0.15, 0.33), (0.28, 0.33)], false);
+            poly(s, &[(0.15, 0.45), (0.28, 0.45)], false);
+        }
+        "square.grid.2x2" => {
+            for (u, v) in [(0.1, 0.1), (0.56, 0.1), (0.1, 0.56), (0.56, 0.56)] {
+                rbox(s, u, v, 0.34, 0.34, 0.08);
+            }
+        }
+        "list.bullet" => {
+            for v in [0.26, 0.5, 0.74] {
+                dot(s, 0.16, v, 0.06);
+                poly(s, &[(0.34, v), (0.9, v)], false);
+            }
+        }
+        "rectangle.split.3x1" => {
+            rbox(s, 0.06, 0.2, 0.88, 0.6, 0.1);
+            poly(s, &[(0.36, 0.2), (0.36, 0.8)], false);
+            poly(s, &[(0.64, 0.2), (0.64, 0.8)], false);
+        }
+        // Files's gallery view: a large preview over a strip of thumbnails
+        "rectangle.grid.1x2" => {
+            rbox(s, 0.1, 0.12, 0.8, 0.5, 0.08);
+            for u in [0.1, 0.38, 0.66] {
+                rbox(s, u, 0.7, 0.24, 0.18, 0.05);
+            }
+        }
+        "magnifyingglass" => {
+            circle(s, 0.42, 0.42, 0.27);
+            poly(s, &[(0.62, 0.62), (0.86, 0.86)], false);
+        }
+        "xmark.circle.fill" => {
+            dot(s, 0.5, 0.5, 0.48);
+            let knock = FIELD_BG.now();
+            line(s, p(0.34, 0.34), p(0.66, 0.66), t, knock);
+            line(s, p(0.66, 0.34), p(0.34, 0.66), t, knock);
+        }
+        "folder" => poly(s, &folder, true),
+        "folder.badge.plus" => {
+            poly(s, &folder, true);
+            poly(s, &[(0.5, 0.44), (0.5, 0.70)], false);
+            poly(s, &[(0.37, 0.57), (0.63, 0.57)], false);
+        }
+        "checkmark.circle" => {
+            circle(s, 0.5, 0.5, 0.4);
+            poly(s, &[(0.32, 0.52), (0.45, 0.65), (0.68, 0.38)], false);
+        }
+        "clock" => {
+            circle(s, 0.5, 0.5, 0.4);
+            poly(s, &[(0.5, 0.28), (0.5, 0.5), (0.65, 0.59)], false);
+        }
+        "menubar.dock.rectangle" => {
+            rbox(s, 0.06, 0.16, 0.88, 0.68, 0.1);
+            poly(s, &[(0.28, 0.7), (0.72, 0.7)], false);
+        }
+        "doc" => {
+            poly(s, &[(0.24, 0.08), (0.6, 0.08), (0.78, 0.26), (0.78, 0.92), (0.24, 0.92)], true);
+            poly(s, &[(0.6, 0.08), (0.6, 0.26), (0.78, 0.26)], false);
+        }
+        "arrow.down.circle" => {
+            circle(s, 0.5, 0.5, 0.4);
+            poly(s, &[(0.5, 0.28), (0.5, 0.7)], false);
+            poly(s, &[(0.35, 0.55), (0.5, 0.7), (0.65, 0.55)], false);
+        }
+        "house" => {
+            poly(s, &[(0.1, 0.5), (0.5, 0.14), (0.9, 0.5)], false);
+            poly(s, &[(0.22, 0.4), (0.22, 0.86), (0.78, 0.86), (0.78, 0.4)], false);
+            poly(s, &[(0.42, 0.86), (0.42, 0.62), (0.58, 0.62), (0.58, 0.86)], false);
+        }
+        "desktopcomputer" => {
+            rbox(s, 0.08, 0.14, 0.84, 0.56, 0.08);
+            poly(s, &[(0.5, 0.7), (0.5, 0.84)], false);
+            poly(s, &[(0.32, 0.86), (0.68, 0.86)], false);
+        }
+        "internaldrive" => {
+            rbox(s, 0.06, 0.3, 0.88, 0.42, 0.1);
+            dot(s, 0.78, 0.51, 0.05);
+        }
+        "trash" => {
+            poly(s, &[(0.14, 0.24), (0.86, 0.24)], false);
+            poly(s, &[(0.38, 0.24), (0.38, 0.12), (0.62, 0.12), (0.62, 0.24)], false);
+            poly(s, &[(0.24, 0.3), (0.3, 0.88), (0.7, 0.88), (0.76, 0.3)], false);
+        }
+        "tag" => {
+            poly(s, &[(0.1, 0.14), (0.5, 0.14), (0.9, 0.54), (0.54, 0.9), (0.1, 0.48)], true);
+            circle(s, 0.3, 0.34, 0.05);
+        }
+        "music.note" => {
+            dot(s, 0.36, 0.76, 0.13);
+            poly(s, &[(0.47, 0.76), (0.47, 0.14), (0.78, 0.24)], false);
+        }
+        "film" => {
+            rbox(s, 0.08, 0.16, 0.84, 0.68, 0.08);
+            poly(s, &[(0.28, 0.16), (0.28, 0.84)], false);
+            poly(s, &[(0.72, 0.16), (0.72, 0.84)], false);
+        }
+        "photo" => {
+            rbox(s, 0.06, 0.16, 0.88, 0.68, 0.1);
+            poly(s, &[(0.14, 0.76), (0.4, 0.48), (0.58, 0.66), (0.7, 0.55), (0.86, 0.72)], false);
+            dot(s, 0.7, 0.34, 0.07);
+        }
+        "ellipsis" => {
+            for u in [0.22, 0.5, 0.78] {
+                dot(s, u, 0.5, 0.075);
+            }
+        }
+        "square.and.arrow.up" => {
+            poly(s, &[(0.32, 0.42), (0.22, 0.42), (0.22, 0.9), (0.78, 0.9), (0.78, 0.42), (0.68, 0.42)], false);
+            poly(s, &[(0.5, 0.64), (0.5, 0.1)], false);
+            poly(s, &[(0.36, 0.24), (0.5, 0.1), (0.64, 0.24)], false);
+        }
+        "arrow.clockwise" => {
+            arcd(s, 0.5, 0.54, 0.38, 0.0, PI);
+            arcd(s, 0.5, 0.54, 0.38, -PI, -PI / 2.0);
+            poly(s, &[(0.4, 0.06), (0.51, 0.16), (0.4, 0.26)], false);
+        }
+        "xmark" => {
+            poly(s, &[(0.24, 0.24), (0.76, 0.76)], false);
+            poly(s, &[(0.76, 0.24), (0.24, 0.76)], false);
+        }
+        "plus" => {
+            poly(s, &[(0.5, 0.16), (0.5, 0.84)], false);
+            poly(s, &[(0.16, 0.5), (0.84, 0.5)], false);
+        }
+        "globe" => {
+            circle(s, 0.5, 0.5, 0.42);
+            circle(s, 0.5, 0.5, 0.2);
+            poly(s, &[(0.08, 0.5), (0.92, 0.5)], false);
+            poly(s, &[(0.5, 0.08), (0.5, 0.92)], false);
+        }
+        "arrow.up.arrow.down" => {
+            poly(s, &[(0.32, 0.84), (0.32, 0.16)], false);
+            poly(s, &[(0.18, 0.3), (0.32, 0.16), (0.46, 0.3)], false);
+            poly(s, &[(0.68, 0.16), (0.68, 0.84)], false);
+            poly(s, &[(0.54, 0.7), (0.68, 0.84), (0.82, 0.7)], false);
+        }
+        "chevron.down" => poly(s, &[(0.18, 0.36), (0.5, 0.66), (0.82, 0.36)], false),
+        "backward.fill" => {
+            fill(s, &[(0.5, 0.24), (0.5, 0.76), (0.08, 0.5)]);
+            fill(s, &[(0.92, 0.24), (0.92, 0.76), (0.5, 0.5)]);
+        }
+        "forward.fill" => {
+            fill(s, &[(0.5, 0.24), (0.5, 0.76), (0.92, 0.5)]);
+            fill(s, &[(0.08, 0.24), (0.08, 0.76), (0.5, 0.5)]);
+        }
+        "play.fill" => fill(s, &[(0.24, 0.12), (0.24, 0.88), (0.88, 0.5)]),
+        "pause.fill" => {
+            bar(s, 0.24, 0.14, 0.17, 0.72);
+            bar(s, 0.59, 0.14, 0.17, 0.72);
+        }
+        "gobackward.15" => {
+            arcd(s, 0.5, 0.52, 0.4, -PI / 2.0, PI);
+            poly(s, &[(0.6, 0.02), (0.49, 0.12), (0.6, 0.22)], false);
+            numeral(s, "15");
+        }
+        "goforward.30" => {
+            arcd(s, 0.5, 0.52, 0.4, 0.0, PI);
+            arcd(s, 0.5, 0.52, 0.4, -PI, -PI / 2.0);
+            poly(s, &[(0.4, 0.02), (0.51, 0.12), (0.4, 0.22)], false);
+            numeral(s, "30");
+        }
+        "person" => {
+            circle(s, 0.5, 0.3, 0.17);
+            arcd(s, 0.5, 0.9, 0.34, -PI, 0.0);
+            poly(s, &[(0.16, 0.9), (0.84, 0.9)], false);
+        }
+        "person.crop.circle" => {
+            circle(s, 0.5, 0.5, 0.44);
+            circle(s, 0.5, 0.4, 0.14);
+            arcd(s, 0.5, 0.88, 0.26, -PI * 0.86, -PI * 0.14);
+        }
+        "star" => poly(s, &star, true),
+        "star.fill" => fill(s, &star),
+        "envelope" => {
+            rbox(s, 0.06, 0.2, 0.88, 0.6, 0.08);
+            poly(s, &[(0.1, 0.26), (0.5, 0.56), (0.9, 0.26)], false);
+        }
+        "phone" => poly(
+            s,
+            &[(0.2, 0.1), (0.34, 0.1), (0.42, 0.3), (0.32, 0.4), (0.6, 0.68), (0.7, 0.58), (0.9, 0.66), (0.9, 0.8), (0.78, 0.9), (0.5, 0.8), (0.2, 0.5), (0.1, 0.22)],
+            true,
+        ),
+        "bookmark" => poly(s, &[(0.24, 0.08), (0.76, 0.08), (0.76, 0.92), (0.5, 0.7), (0.24, 0.92)], true),
+        "textformat" => {
+            poly(s, &[(0.04, 0.82), (0.28, 0.18), (0.52, 0.82)], false);
+            poly(s, &[(0.13, 0.6), (0.43, 0.6)], false);
+            circle(s, 0.73, 0.68, 0.13);
+            poly(s, &[(0.88, 0.48), (0.88, 0.82)], false);
+        }
+        "pencil" => {
+            poly(s, &[(0.7, 0.1), (0.9, 0.3), (0.34, 0.86), (0.1, 0.9), (0.14, 0.66)], true);
+            poly(s, &[(0.6, 0.2), (0.8, 0.4)], false);
+        }
+        "square.and.pencil" => {
+            poly(s, &[(0.5, 0.16), (0.14, 0.16), (0.14, 0.88), (0.86, 0.88), (0.86, 0.52)], false);
+            poly(s, &[(0.8, 0.06), (0.94, 0.2), (0.56, 0.58), (0.38, 0.62), (0.42, 0.44)], true);
+        }
+        "antenna.radiowaves.left.and.right" => {
+            dot(s, 0.5, 0.42, 0.07);
+            poly(s, &[(0.5, 0.48), (0.5, 0.92)], false);
+            for r in [0.2, 0.36] {
+                arcd(s, 0.5, 0.42, r, -PI / 4.0, PI / 4.0);
+                arcd(s, 0.5, 0.42, r, PI * 0.75, PI);
+                arcd(s, 0.5, 0.42, r, -PI, -PI * 0.75);
+            }
+        }
+        "mic" => {
+            rbox(s, 0.36, 0.06, 0.28, 0.5, 0.14);
+            arcd(s, 0.5, 0.4, 0.26, 0.0, PI);
+            poly(s, &[(0.5, 0.66), (0.5, 0.88)], false);
+            poly(s, &[(0.36, 0.9), (0.64, 0.9)], false);
+        }
+        "music.note.list" => {
+            poly(s, &[(0.06, 0.2), (0.5, 0.2)], false);
+            poly(s, &[(0.06, 0.4), (0.5, 0.4)], false);
+            poly(s, &[(0.06, 0.6), (0.36, 0.6)], false);
+            dot(s, 0.56, 0.8, 0.11);
+            poly(s, &[(0.66, 0.8), (0.66, 0.16), (0.92, 0.24)], false);
+        }
+        "opticaldisc" => {
+            circle(s, 0.5, 0.5, 0.42);
+            circle(s, 0.5, 0.5, 0.1);
+            arcd(s, 0.5, 0.5, 0.27, -PI * 0.9, -PI * 0.6);
+        }
+        "radio" => {
+            rbox(s, 0.06, 0.34, 0.88, 0.54, 0.08);
+            poly(s, &[(0.2, 0.34), (0.72, 0.1)], false);
+            circle(s, 0.32, 0.61, 0.13);
+            for v in [0.5, 0.61, 0.72] {
+                poly(s, &[(0.58, v), (0.82, v)], false);
+            }
+        }
+        "calculator" => {
+            rbox(s, 0.18, 0.06, 0.64, 0.88, 0.1);
+            rbox(s, 0.28, 0.16, 0.44, 0.18, 0.03);
+            for v in [0.5, 0.65, 0.8] {
+                for u in [0.34, 0.5, 0.66] {
+                    dot(s, u, v, 0.045);
+                }
+            }
+        }
+        "cloud.sun" => {
+            circle(s, 0.32, 0.32, 0.13);
+            for k in 0..5 {
+                let a = PI * 0.75 + k as f32 * PI * 0.25;
+                let (c, sn) = (a.cos(), a.sin());
+                poly(s, &[(0.32 + 0.19 * c, 0.32 + 0.19 * sn), (0.32 + 0.27 * c, 0.32 + 0.27 * sn)], false);
+            }
+            arcd(s, 0.6, 0.6, 0.2, -PI, 0.0);
+            arcd(s, 0.36, 0.74, 0.12, PI / 2.0, PI);
+            arcd(s, 0.36, 0.74, 0.12, -PI, -PI / 2.0);
+            arcd(s, 0.82, 0.74, 0.12, -PI / 2.0, PI / 2.0);
+            poly(s, &[(0.36, 0.86), (0.82, 0.86)], false);
+        }
+        "ellipsis.circle" => {
+            circle(s, 0.5, 0.5, 0.42);
+            for u in [0.3, 0.5, 0.7] {
+                dot(s, u, 0.5, 0.05);
+            }
+        }
+        "info.circle" => {
+            circle(s, 0.5, 0.5, 0.42);
+            dot(s, 0.5, 0.3, 0.05);
+            poly(s, &[(0.5, 0.44), (0.5, 0.72)], false);
+        }
+        "flag" => {
+            poly(s, &[(0.2, 0.08), (0.2, 0.92)], false);
+            poly(s, &[(0.2, 0.12), (0.84, 0.12), (0.7, 0.32), (0.84, 0.52), (0.2, 0.52)], true);
+        }
+        "calendar" => {
+            rbox(s, 0.08, 0.14, 0.84, 0.76, 0.1);
+            poly(s, &[(0.08, 0.36), (0.92, 0.36)], false);
+            poly(s, &[(0.3, 0.06), (0.3, 0.2)], false);
+            poly(s, &[(0.7, 0.06), (0.7, 0.2)], false);
+            for v in [0.52, 0.7] {
+                for u in [0.3, 0.5, 0.7] {
+                    dot(s, u, v, 0.04);
+                }
+            }
+        }
+        "checklist" => {
+            for v in [0.22, 0.5, 0.78] {
+                poly(s, &[(0.08, v), (0.16, v + 0.07), (0.3, v - 0.08)], false);
+                poly(s, &[(0.42, v), (0.92, v)], false);
+            }
+        }
+        "arrow.clockwise" => {
+            arcd(s, 0.5, 0.54, 0.36, -PI, -PI / 2.0 + 0.25);
+            arcd(s, 0.5, 0.54, 0.36, 0.0, PI);
+            arcd(s, 0.5, 0.54, 0.36, -PI / 2.0 + 0.25, -0.35);
+            poly(s, &[(0.62, 0.06), (0.74, 0.22), (0.56, 0.3)], false);
+        }
+        "newspaper" => {
+            rbox(s, 0.16, 0.14, 0.76, 0.72, 0.08);
+            poly(s, &[(0.16, 0.36), (0.06, 0.36), (0.06, 0.78), (0.14, 0.86)], false);
+            rbox(s, 0.28, 0.26, 0.24, 0.2, 0.02);
+            poly(s, &[(0.6, 0.3), (0.8, 0.3)], false);
+            poly(s, &[(0.6, 0.42), (0.8, 0.42)], false);
+            poly(s, &[(0.28, 0.58), (0.8, 0.58)], false);
+            poly(s, &[(0.28, 0.72), (0.8, 0.72)], false);
+        }
+        _ => return false,
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_named_glyph_draws_ink_and_unknown_names_draw_nothing() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(crate::kit::Font::parse(data).unwrap(), 2.0);
+        for name in NAMES {
+            let mut px = vec![0u32; 48 * 48];
+            assert!(glyph(&mut Surface { w: 48, h: 48, stride: 48, px: &mut px, y0: 0 }, &ui, name, Rect { x: 2.0, y: 2.0, w: 20.0, h: 20.0 }, crate::kit::pack(255, 255, 255, 255)), "{name}");
+            assert!(px.iter().filter(|p| **p != 0).count() > 20, "{name} left ink");
+        }
+        let mut px = vec![0u32; 48 * 48];
+        assert!(!glyph(&mut Surface { w: 48, h: 48, stride: 48, px: &mut px, y0: 0 }, &ui, "no.such.symbol", Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, 0xffff_ffff));
+        assert!(px.iter().all(|p| *p == 0));
+    }
+}

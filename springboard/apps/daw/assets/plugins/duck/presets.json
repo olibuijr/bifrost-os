@@ -1,0 +1,47 @@
+[
+ {
+  "name": "Quarter Pump",
+  "params": {
+   "amount": 0.7,
+   "release": 0.5,
+   "curve": 1.5,
+   "rate": 4
+  }
+ },
+ {
+  "name": "Heavy EDM",
+  "params": {
+   "amount": 1,
+   "release": 0.7,
+   "curve": 2.5,
+   "rate": 4
+  }
+ },
+ {
+  "name": "Eighth Gate",
+  "params": {
+   "amount": 0.8,
+   "release": 0.3,
+   "curve": 1,
+   "rate": 2
+  }
+ },
+ {
+  "name": "Gentle",
+  "params": {
+   "amount": 0.35,
+   "release": 0.5,
+   "curve": 1,
+   "rate": 4
+  }
+ },
+ {
+  "name": "Half Swell",
+  "params": {
+   "amount": 0.8,
+   "release": 0.9,
+   "curve": 3,
+   "rate": 8
+  }
+ }
+]

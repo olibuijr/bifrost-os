@@ -1,0 +1,7 @@
+[Unit]
+Description=BifrOSt system rollback (started by Settings > Software Update)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/var/lib/bifrost-recovery/engine rollback

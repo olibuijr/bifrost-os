@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>BifrOSt Remote</title><link rel="stylesheet" href="/viewer.css"></head>
+<body><main id="viewer">
+<header id="toolbar"><div class="identity"><span class="indicator" id="indicator"></span><strong>Remote</strong><span id="status" role="status">Connecting…</span></div><nav aria-label="Remote desktop controls">
+<button id="fit" title="Fit the whole desktop">Fit</button><button id="minus" aria-label="Zoom out">−</button><button id="actual" title="Show desktop at actual size">100%</button><button id="plus" aria-label="Zoom in">+</button>
+<select id="mode" aria-label="Interaction mode"><option value="control">Control</option><option value="pan">Pan</option><option value="view">View only</option></select>
+<button id="keyboard" title="Type on the remote desktop">Keyboard</button><button id="clipboard" title="Share text with the desktop">Clipboard</button><button id="fullscreen">Fullscreen</button><button id="disconnect">Disconnect</button>
+</nav></header>
+<div id="screen" aria-label="Remote desktop"></div>
+<div id="overlay"><section><h1 id="overlay-title">Connecting</h1><p id="overlay-message">Opening your BifrOSt desktop…</p><button id="reconnect" hidden>Reconnect</button><a id="login" href="/" hidden>Sign in again</a></section></div>
+<div id="toast" role="status" hidden></div>
+<dialog id="clipboard-dialog"><h2>Clipboard</h2><p>Send text to the desktop, or copy text received from it.</p><textarea id="clipboard-text" aria-label="Clipboard text" placeholder="Text to share" rows="6"></textarea><div class="actions"><button id="clipboard-close">Done</button><button id="clipboard-send">Send to desktop</button></div></dialog>
+<div id="keyboard-panel" hidden><label for="keyboard-input">Type on desktop</label><input id="keyboard-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tap here to type"><button id="send-tab">Tab</button><button id="send-escape">Esc</button><button id="keyboard-close" aria-label="Close keyboard">×</button></div>
+</main><script type="module" src="/viewer.js"></script></body></html>

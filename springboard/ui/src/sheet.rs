@@ -1,0 +1,298 @@
+//! Sheets, alert sheets and the small controls that sit in them (`NativeWindow.beginSheet`, `NativeAlert`,
+//! `NativeSegmentedControl`, `NativeStepper`): renderer-independent layout, hit-testing and key mapping.
+//! A sheet hangs from the title bar of its parent window, dims and blocks it, maps Return to the default
+//! button and Escape to the cancel button. `progress` (0..1) is the slide, driven by the caller from
+//! `motion::Kind::SheetSlide` (with Reduce Motion the duration is 0, so progress is 1 at once).
+use crate::geometry::Edge;
+use crate::keys::Key;
+use crate::Rect;
+
+/// Role of a sheet button; decides the key it answers to and its look.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonRole {
+    /// Answers Return; filled with the accent.
+    Default,
+    /// Answers Escape.
+    Cancel,
+    Normal,
+    /// Like `Normal`, drawn in the destructive colour.
+    Destructive,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SheetButton {
+    pub id: u32,
+    pub title: String,
+    pub role: ButtonRole,
+}
+
+impl SheetButton {
+    pub fn new(id: u32, title: &str, role: ButtonRole) -> Self {
+        SheetButton { id, title: title.to_string(), role }
+    }
+}
+
+/// Button height and gap in points (regular push button).
+pub const BUTTON_H_PT: f32 = 22.0;
+pub const BUTTON_GAP_PT: f32 = 12.0;
+pub const SHEET_PAD_PT: f32 = 20.0;
+pub const SHEET_RADIUS_PT: f32 = 10.0;
+/// Alert sheet width in points.
+pub const ALERT_W_PT: f32 = 260.0;
+const CHARS_PER_LINE: usize = 34;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sheet {
+    pub title: String,
+    pub message: String,
+    pub buttons: Vec<SheetButton>,
+    /// Panel size in points; for an alert it is computed from the text.
+    pub size: (f32, f32),
+    pub alert: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SheetLayout {
+    /// The dimmed, blocking area: the whole parent window.
+    pub scrim: Rect,
+    pub panel: Rect,
+    /// Buttons right-aligned in a row; the first button is the rightmost.
+    pub buttons: Vec<(u32, Rect)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hit {
+    Button(u32),
+    Panel,
+    /// The dimmed parent: the click is swallowed.
+    Blocked,
+    /// Outside the parent window altogether.
+    Outside,
+}
+
+impl Sheet {
+    /// A free-form sheet of the given size with a row of buttons at the bottom.
+    pub fn new(title: &str, size: (f32, f32), buttons: Vec<SheetButton>) -> Self {
+        Sheet { title: title.to_string(), message: String::new(), buttons, size, alert: false }
+    }
+
+    /// An alert sheet: title, informative text and buttons; height follows the text.
+    pub fn alert(title: &str, message: &str, buttons: Vec<SheetButton>) -> Self {
+        let lines = message.split('\n').map(|l| l.chars().count().div_ceil(CHARS_PER_LINE).max(1)).sum::<usize>();
+        let msg_h = if message.is_empty() { 0.0 } else { lines as f32 * 15.0 + 8.0 };
+        let h = SHEET_PAD_PT * 2.0 + 18.0 + msg_h + 16.0 + BUTTON_H_PT;
+        Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true }
+    }
+
+    pub fn default_button(&self) -> Option<u32> {
+        self.buttons.iter().find(|b| b.role == ButtonRole::Default).map(|b| b.id)
+    }
+
+    pub fn cancel_button(&self) -> Option<u32> {
+        self.buttons.iter().find(|b| b.role == ButtonRole::Cancel).map(|b| b.id)
+    }
+
+    /// Return activates the default button, Escape the cancel button (a sheet with none ignores Escape). The sheet
+    /// consumes every key while shown (`true` in the second field), so nothing reaches the blocked parent.
+    pub fn key(&self, key: Key) -> (Option<u32>, bool) {
+        match key {
+            Key::Return => (self.default_button(), true),
+            Key::Escape => (self.cancel_button(), true),
+            _ => (None, true),
+        }
+    }
+
+    /// Layout inside `parent` (the window rectangle, points), whose title bar is `titlebar_h` tall. At `progress` 0 the
+    /// panel is fully above the title bar's bottom edge; at 1 it hangs from it, centred horizontally.
+    pub fn layout(&self, parent: Rect, titlebar_h: f32, progress: f32) -> SheetLayout {
+        let p = progress.clamp(0.0, 1.0);
+        let w = self.size.0.min(parent.w);
+        let h = self.size.1.min((parent.h - titlebar_h).max(0.0));
+        let rest_y = parent.y + titlebar_h;
+        let panel = Rect { x: parent.x + (parent.w - w) / 2.0, y: rest_y - h * (1.0 - p), w, h };
+        let mut x = panel.right() - SHEET_PAD_PT;
+        let y = panel.bottom() - SHEET_PAD_PT - BUTTON_H_PT;
+        let mut buttons = Vec::new();
+        for b in &self.buttons {
+            let bw = (b.title.chars().count() as f32 * 7.0 + 28.0).max(68.0);
+            x -= bw;
+            buttons.push((b.id, Rect { x, y, w: bw, h: BUTTON_H_PT }));
+            x -= BUTTON_GAP_PT;
+        }
+        SheetLayout { scrim: parent, panel, buttons }
+    }
+
+    pub fn hit(&self, parent: Rect, titlebar_h: f32, progress: f32, x: f32, y: f32) -> Hit {
+        if !parent.contains(x, y) {
+            return Hit::Outside;
+        }
+        let l = self.layout(parent, titlebar_h, progress);
+        if let Some((id, _)) = l.buttons.iter().find(|(_, r)| r.contains(x, y)) {
+            return Hit::Button(*id);
+        }
+        if l.panel.contains(x, y) {
+            Hit::Panel
+        } else {
+            Hit::Blocked
+        }
+    }
+}
+
+/// Segmented control metrics, in points (regular size).
+pub const SEGMENT_H_PT: f32 = 24.0;
+pub const SEGMENT_MIN_W_PT: f32 = 48.0;
+
+/// Segment rectangles of `n` equal segments inside `bounds` (height is the control height, centred).
+pub fn segments(bounds: Rect, n: usize) -> Vec<Rect> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let h = SEGMENT_H_PT;
+    let y = bounds.y + (bounds.h - h) / 2.0;
+    let w = (bounds.w / n as f32).max(SEGMENT_MIN_W_PT);
+    (0..n).map(|i| Rect { x: bounds.x + w * i as f32, y, w, h }).collect()
+}
+
+pub fn segment_hit(bounds: Rect, n: usize, x: f32, y: f32) -> Option<usize> {
+    segments(bounds, n).iter().position(|r| r.contains(x, y))
+}
+
+/// Left/Right move the selection by one, without wrapping.
+pub fn segment_key(selected: usize, n: usize, key: Key) -> usize {
+    match key {
+        Key::Left => selected.saturating_sub(1),
+        Key::Right => (selected + 1).min(n.saturating_sub(1)),
+        _ => selected,
+    }
+}
+
+/// Stepper metrics in points: 13 wide, 22 tall, two halves.
+pub const STEPPER_W_PT: f32 = 13.0;
+pub const STEPPER_H_PT: f32 = 22.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepperPart {
+    Up,
+    Down,
+}
+
+/// The stepper's rectangle with its top-left at `origin`.
+pub fn stepper_rect(origin: (f32, f32)) -> Rect {
+    Rect { x: origin.0, y: origin.1, w: STEPPER_W_PT, h: STEPPER_H_PT }
+}
+
+pub fn stepper_hit(origin: (f32, f32), x: f32, y: f32) -> Option<StepperPart> {
+    let r = stepper_rect(origin);
+    if !r.contains(x, y) {
+        return None;
+    }
+    Some(if y < r.y + r.h / 2.0 { StepperPart::Up } else { StepperPart::Down })
+}
+
+/// Applies one step to `value` within `min..=max`; returns the new value.
+pub fn stepper_apply(value: f64, part: StepperPart, step: f64, min: f64, max: f64) -> f64 {
+    let v = match part {
+        StepperPart::Up => value + step,
+        StepperPart::Down => value - step,
+    };
+    v.clamp(min, max)
+}
+
+/// Keyboard focus ring: 3 pt wide, drawn outside the control, radius grows by the same amount.
+pub const FOCUS_RING_PT: f32 = 3.0;
+
+/// The ring's outer rectangle and radius for a control of `bounds` and `radius`.
+pub fn focus_ring_rect(bounds: Rect, radius: f32) -> (Rect, f32) {
+    let g = FOCUS_RING_PT;
+    (Rect { x: bounds.x - g, y: bounds.y - g, w: bounds.w + g * 2.0, h: bounds.h + g * 2.0 }, radius + g)
+}
+
+/// The anchor edge a popover's arrow touches, given the edge of the anchor the panel opened on.
+pub fn arrow_edge(panel_edge: Edge) -> Edge {
+    panel_edge.opposite()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn alert() -> Sheet {
+        Sheet::alert("Delete file?", "This cannot be undone.", vec![SheetButton::new(1, "Delete", ButtonRole::Default), SheetButton::new(2, "Cancel", ButtonRole::Cancel)])
+    }
+
+    #[test]
+    fn return_maps_to_default_and_escape_to_cancel_and_all_keys_are_consumed() {
+        let s = alert();
+        assert_eq!(s.key(Key::Return), (Some(1), true));
+        assert_eq!(s.key(Key::Escape), (Some(2), true));
+        assert_eq!(s.key(Key::Char('a')), (None, true));
+        let only_default = Sheet::new("t", (300.0, 100.0), vec![SheetButton::new(9, "OK", ButtonRole::Default)]);
+        assert_eq!(only_default.key(Key::Escape), (None, true));
+    }
+
+    #[test]
+    fn the_panel_slides_down_from_the_title_bar_and_stays_centred() {
+        let s = alert();
+        let parent = Rect { x: 100.0, y: 50.0, w: 600.0, h: 400.0 };
+        let (a, b) = (s.layout(parent, 28.0, 0.0), s.layout(parent, 28.0, 1.0));
+        assert_eq!(a.panel.bottom(), 78.0);
+        assert_eq!(b.panel.y, 78.0);
+        assert_eq!(b.panel.x + b.panel.w / 2.0, 400.0);
+        assert_eq!(s.layout(parent, 28.0, 7.0), b, "progress clamps");
+    }
+
+    #[test]
+    fn the_sheet_blocks_the_parent_and_hits_buttons() {
+        let s = alert();
+        let parent = Rect { x: 0.0, y: 0.0, w: 600.0, h: 400.0 };
+        let l = s.layout(parent, 28.0, 1.0);
+        let (id, r) = l.buttons[0];
+        assert_eq!(id, 1);
+        assert!(l.buttons[1].1.right() < r.x, "second button sits to the left of the first");
+        assert_eq!(s.hit(parent, 28.0, 1.0, r.x + 2.0, r.y + 2.0), Hit::Button(1));
+        assert_eq!(s.hit(parent, 28.0, 1.0, 10.0, 300.0), Hit::Blocked);
+        assert_eq!(s.hit(parent, 28.0, 1.0, l.panel.x + 5.0, l.panel.y + 5.0), Hit::Panel);
+        assert_eq!(s.hit(parent, 28.0, 1.0, 900.0, 10.0), Hit::Outside);
+    }
+
+    #[test]
+    fn alert_height_follows_the_message_and_fits_small_parents() {
+        let short = Sheet::alert("T", "x", vec![]);
+        let long = Sheet::alert("T", &"word ".repeat(40), vec![]);
+        assert!(long.size.1 > short.size.1);
+        let tiny = Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 };
+        let l = long.layout(tiny, 28.0, 1.0);
+        assert!(l.panel.w <= 200.0 && l.panel.h <= 72.0);
+    }
+
+    #[test]
+    fn segments_tile_the_bounds_and_arrow_keys_clamp() {
+        let b = Rect { x: 10.0, y: 10.0, w: 300.0, h: 24.0 };
+        let s = segments(b, 3);
+        assert_eq!(s.len(), 3);
+        assert_eq!(s[1].x, 110.0);
+        assert_eq!(segment_hit(b, 3, 215.0, 20.0), Some(2));
+        assert_eq!(segment_hit(b, 3, 5.0, 20.0), None);
+        assert_eq!(segment_key(0, 3, Key::Left), 0);
+        assert_eq!(segment_key(2, 3, Key::Right), 2);
+        assert_eq!(segment_key(1, 3, Key::Right), 2);
+        assert!(segments(b, 0).is_empty());
+    }
+
+    #[test]
+    fn stepper_halves_step_and_clamp() {
+        let o = (0.0, 0.0);
+        assert_eq!(stepper_hit(o, 5.0, 3.0), Some(StepperPart::Up));
+        assert_eq!(stepper_hit(o, 5.0, 18.0), Some(StepperPart::Down));
+        assert_eq!(stepper_hit(o, 20.0, 3.0), None);
+        assert_eq!(stepper_apply(9.0, StepperPart::Up, 2.0, 0.0, 10.0), 10.0);
+        assert_eq!(stepper_apply(1.0, StepperPart::Down, 2.0, 0.0, 10.0), 0.0);
+    }
+
+    #[test]
+    fn the_focus_ring_surrounds_the_control() {
+        let (r, rad) = focus_ring_rect(Rect { x: 10.0, y: 10.0, w: 100.0, h: 22.0 }, 6.0);
+        assert_eq!((r.x, r.w, rad), (7.0, 106.0, 9.0));
+        assert_eq!(arrow_edge(Edge::Top), Edge::Bottom);
+    }
+}

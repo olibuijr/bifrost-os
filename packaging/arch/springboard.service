@@ -1,0 +1,38 @@
+[Unit]
+Description=BifrOSt Wayland desktop on tty1
+# Early start: the initrd (bifrost-mounts hook) already mounted the subvolumes the desktop uses, so it does not wait
+# for sysinit/basic.target. RequiresMountsFor still covers an initrd without the hook.
+DefaultDependencies=no
+After=systemd-udevd.service systemd-udev-trigger.service systemd-tmpfiles-setup-dev.service seatd.service
+Wants=seatd.service
+RequiresMountsFor=/var/lib/springboard /home /var/log
+Before=shutdown.target
+Conflicts=shutdown.target
+# Conflicts= stops getty@tty1 if it runs; getty@tty1 is masked on the PC so no login prompt is ever drawn.
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+Environment=SPRINGBOARD_PLATFORM=desktop
+Environment=RUST_BACKTRACE=1
+# Runs as root: DRM master and the evdev nodes then need no seatd/logind session or group setup.
+ExecStartPre=/usr/lib/springboard/seed-data
+ExecStart=/usr/bin/bifrost-bootweave run
+# on stop (shutdown/reboot) park the console on an empty VT so the Linux text never shows
+ExecStopPost=-/usr/bin/sh -c 'chvt 12 2>/dev/null || printf "\\033[?25l\\033[2J" >/dev/tty1'
+# Real-time limits for the shell and every app it starts (rlimits survive the bwrap uid switch):
+# the audio writer asks for SCHED_FIFO 2 (B3), and the nice fallback needs RLIMIT_NICE down to -16.
+LimitRTPRIO=10
+LimitMEMLOCK=infinity
+LimitNICE=-16
+Restart=on-failure
+RestartSec=2
+StandardInput=tty-force
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

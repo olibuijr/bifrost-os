@@ -1,0 +1,17 @@
+{
+  "id": "comp",
+  "name": "Comp",
+  "version": "1.0.0",
+  "kind": "effect",
+  "type": "comp",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Compressor",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

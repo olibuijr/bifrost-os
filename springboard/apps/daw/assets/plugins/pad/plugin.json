@@ -1,0 +1,17 @@
+{
+  "id": "pad",
+  "name": "Haze",
+  "version": "1.0.0",
+  "kind": "instrument",
+  "type": "pad",
+  "author": "DAW",
+  "license": "MIT",
+  "desc": "Lush supersaw/strings pad with wide stereo and slow filter motion. For sustained chords, ambient beds, trance/synthwave pads. Long attack & release by default — use long notes",
+  "core": true,
+  "entry": "index.js",
+  "files": [
+    "index.js",
+    "presets.json"
+  ],
+  "tags": []
+}

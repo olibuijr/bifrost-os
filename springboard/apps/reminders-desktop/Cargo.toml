@@ -1,0 +1,13 @@
+[package]
+name = "bifrost-reminders"
+version = "1.9.4"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-proto = { path = "../../proto" }
+bifrost-core = { path = "../../core" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

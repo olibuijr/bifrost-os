@@ -1,0 +1,12 @@
+[package]
+name = "bifrost-clock"
+version = "1.2.3"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-proto = { path = "../../proto" }
+springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

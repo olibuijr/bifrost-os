@@ -1,0 +1,1585 @@
+    use super::*;
+    use crate::font::Font;
+
+    pub fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let mut ui = Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
+        ui.symbols = crate::symbols::Symbols::load(concat!(env!("CARGO_MANIFEST_DIR"), "/assets"));
+        ui
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shell() -> Shell {
+        shell_sized(1200, 1920)
+    }
+
+    /// A shell in desktop mode (menu bar, dock, windows).
+    #[allow(dead_code)]
+    pub(crate) fn desktop_shell() -> Shell {
+        build(1200, 1920, true)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn shell_sized(w: usize, h: usize) -> Shell {
+        build(w, h, false)
+    }
+
+    fn build(w: usize, h: usize, desktop: bool) -> Shell {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let px: &'static [u32] = Box::leak(vec![rgba(20, 20, 30, 255); w * h].into_boxed_slice());
+        let wp = View { w, h, px };
+        let info = Info { hour: 9, min: 41, wday: 2, mday: 6, mon: 0, battery: 80, brightness: 0.5, ..Info::default() };
+        let mono: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let mut sh = Shell::new(w as i32, h as i32, Font::parse(data).unwrap(), mono, wp, |_, _| None, info);
+        // `Shell::new` starts in desktop mode; the default test shell is the bifrost presentation (no desk) that most
+        // tests were written for. Tests of the desktop use `desktop_shell()`.
+        if !desktop {
+            sh.desk = None;
+        }
+        sh
+    }
+
+    #[test]
+    fn unlock_releases_the_lock_wallpaper_buffers() {
+        let mut sh = desktop_shell();
+        let px: &'static [u32] = Box::leak(vec![rgba(1, 2, 3, 255); 64 * 64].into_boxed_slice());
+        sh.wpx.lock = Some(View { w: 64, h: 64, px });
+        sh.wpx.dim = true;
+        sh.screen = Screen::Lock;
+        sh.lazy_wallpapers();
+        assert!(sh.fit_lock.is_some() || sh.wpx.lock_dim.is_some(), "lock buffers are built while locked");
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.pager.jump_to(0);
+        sh.lazy_wallpapers();
+        assert!(sh.fit_lock.is_none() && sh.wpx.lock_dim.is_none() && sh.wpx.home_dim.is_none());
+        assert!(sh.take_heap_trim_due(), "unlock asks the loop for an allocator trim");
+        assert!(!sh.take_heap_trim_due());
+    }
+
+    #[test]
+    fn the_desktop_never_raises_the_on_screen_keyboard() {
+        // Grey boxes along the bottom of app windows (0.4.58-0.4.62) were this keyboard's top row: bringing an app
+        // with a focused text field to the front raised it on the desktop.
+        let mut sh=shell();
+        sh.set_keyboard(true,1000.);
+        assert!(sh.keyboard.shown(),"the bifrost still gets its keyboard");
+        sh.set_keyboard(false,1100.);
+        sh.desk=Some(desk::Desk::new());
+        sh.set_keyboard(true,1200.);
+        assert!(!sh.keyboard.shown(),"a desktop has a hardware keyboard");
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn shared_ui_desktop_menu_precedes_drawer_and_dispatches_sdk_commands() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (nx,nw)=sh.menu_buttons().into_iter().find(|b|b.0==desktop_bar::Menu::Network).map(|b|(b.1,b.2)).expect("network button");
+        let centre=nx+nw/2.;
+        sh.event(Event::Down(centre,10.),1000.);sh.event(Event::Up(centre,10.),1001.);
+        assert!(sh.desktop_menu==Some(desktop_bar::Menu::Network));assert!(!sh.center_active());
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.commands=bifrost_proto::Commands(63);sh.ext.push(Some(host));sh.screen=Screen::App(AppId::External(0));sh.desktop_menu=Some(desktop_bar::Menu::Edit);
+        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();let rows=sh.menu_rows(desktop_bar::Menu::Edit);let (spans,_)=desktop_bar::menu_spans(&rows);
+        let i=rows.iter().position(|r|r.text=="Select All").expect("Select All row");let (top,h)=spans[i];let row=y as f32+sh.ui.pt(top+h/2.);
+        sh.event(Event::Down(x as f32+12.,row),1002.);sh.event(Event::Up(x as f32+12.,row),1003.);
+        let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing command")};
+        assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::Command(bifrost_proto::Command::SelectAll)));
+    }
+
+    /// The menu bar follows the Golden Gate order (App, File, Edit, View, Window, Help). Window lists every open window by name, with
+    /// the front one checked, and choosing a row brings that window forward.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn desktop_menu_bar_follows_the_golden_gate_order_and_the_window_menu_focuses_a_window() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|!matches!(m,desktop_bar::Menu::Cpu|desktop_bar::Menu::Memory|desktop_bar::Menu::Network|desktop_bar::Menu::Power|desktop_bar::Menu::ControlCenter)).collect();
+        assert_eq!(order,vec![desktop_bar::Menu::System,desktop_bar::Menu::App,desktop_bar::Menu::File,desktop_bar::Menu::Edit,desktop_bar::Menu::View,desktop_bar::Menu::Window,desktop_bar::Menu::Help]);
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        let rows=sh.menu_row_texts(desktop_bar::Menu::Window);
+        assert!(rows.iter().any(|t|t=="\u{2713} Settings"),"front window checked: {rows:?}");
+        let name=apps().iter().find(|a|a.id==AppId::Terminal).unwrap().name;
+        let idx=rows.iter().position(|t|t.ends_with(name)).unwrap_or_else(||panic!("{name} listed: {rows:?}"));
+        sh.desktop_menu=Some(desktop_bar::Menu::Window);
+        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();let row=y as f32+sh.ui.pt(sh.row_top_pt(desktop_bar::Menu::Window,idx)+18.);
+        sh.event(Event::Down(x as f32+12.,row),1.);sh.event(Event::Up(x as f32+12.,row),2.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Terminal));
+    }
+
+    /// Window > Zoom acts on the front visible window, not on a minimized one that still sits last in the stack.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn window_zoom_skips_minimized_windows() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        sh.desk_window_close_or_minimize(true);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Terminal));
+        sh.run_menu_action(desktop_bar::Action::Zoom,1.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.wins[d.index_of(AppId::Terminal).unwrap()].maximized,"the visible window zooms");
+        assert!(!d.wins[d.index_of(AppId::Settings).unwrap()].maximized,"the minimized one does not");
+    }
+
+    /// Keyboard operation of the menu bar (CTL-04): arrows skip label rows and wrap, Left/Right switch menus,
+    /// Return chooses, Esc closes; the pointer highlights the row under it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn desktop_menus_work_from_the_keyboard_and_highlight_under_the_pointer() {
+        use desktop_bar::Menu;
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);
+        sh.desktop_menu=Some(Menu::Window);
+        let rows=sh.menu_row_texts(Menu::Window);
+        let first=sh.menu_step(Menu::Window,1).unwrap();
+        sh.hw_menu_key(108,true,1.);assert_eq!(sh.menu_row_of(Menu::Window),Some(first),"Down selects the first actionable row of {rows:?}");
+        sh.hw_menu_key(103,true,1.);assert_ne!(sh.menu_row_of(Menu::Window),Some(first),"Up wraps to the last actionable row");
+        sh.hw_menu_key(106,true,1.);assert_eq!(sh.desktop_menu,Some(Menu::Help),"Right moves to the next menu");
+        sh.hw_menu_key(106,true,1.);assert_eq!(sh.desktop_menu,Some(Menu::System),"and wraps to the system menu");
+        assert!(sh.hw_menu_key(65,false,1.).is_some_and(|f|f.is_empty()),"a release is swallowed");
+        sh.hw_menu_key(1,true,1.);assert_eq!(sh.desktop_menu,None,"Esc closes");
+        assert!(sh.hw_menu_key(108,true,1.).is_none(),"with no menu the key is not taken");
+        // Return runs the highlighted row: Window > Minimize hides the front window
+        sh.desktop_menu=Some(Menu::Window);sh.hw_menu_key(108,true,2.);sh.hw_menu_key(28,true,2.);
+        assert_eq!(sh.desktop_menu,None);
+        assert!(sh.desk.as_ref().unwrap().front().is_none(),"Return chose Minimize");
+        // the pointer highlights, and a bar title switches the open menu
+        sh.desktop_menu=Some(Menu::Edit);
+        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();
+        sh.desktop_menu_hover(x as f32+12.,y as f32+sh.ui.pt(sh.row_top_pt(Menu::Edit,0)+18.));
+        assert!(sh.desktop_menu_row.is_none(),"a label row is not highlighted");
+        let (_,hx,hw,_)=sh.menu_buttons().into_iter().find(|b|b.0==Menu::Help).unwrap();
+        sh.desktop_menu_hover(hx+hw/2.,2.);assert_eq!(sh.desktop_menu,Some(Menu::Help));
+    }
+
+    /// Menus group their items with separators (HIG "The menu bar"): they are short, not selectable and never run.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn menu_separators_are_short_and_skipped_by_the_keyboard() {
+        use desktop_bar::Menu;
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        let rows=sh.menu_row_texts(Menu::App);
+        assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),2,"About | Settings | Quit: {rows:?}");
+        sh.desktop_menu=Some(Menu::App);
+        let (_,_,_,h)=sh.desktop_popup_rect().unwrap();
+        assert!((h as f32)<sh.ui.pt(8.+36.*rows.len() as f32),"separators are shorter than rows");
+        sh.hw_menu_key(108,true,1.);sh.hw_menu_key(108,true,1.);
+        assert_eq!(sh.menu_row_of(Menu::App),Some(2),"Down from About skips the separator to Settings");
+        assert!(sh.menu_row_texts(Menu::Edit)[2].is_empty(),"Edit: Undo, Redo | Cut ...");
+    }
+
+    /// Native Linux windows are listed in the Window menu (the front one checked); choosing one activates it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn window_menu_lists_native_linux_windows_and_activates_them() {
+        use desktop_bar::Menu;
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.notes".into(),active:true,maximized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false}];
+        let rows=sh.menu_row_texts(Menu::Window);
+        assert!(rows.contains(&"\u{2713} Notes".to_string())&&rows.contains(&"  x.plain".to_string()),"{rows:?}");
+        sh.desktop_menu=Some(Menu::Window);
+        let i=rows.iter().position(|t|t.ends_with("x.plain")).unwrap();sh.desktop_menu_row=Some((Menu::Window,i));
+        let fx=sh.desktop_menu_key(28,1.).unwrap();
+        assert!(fx.iter().any(|e|matches!(e,Effect::ActivateForeign(8))),"Return activates window 8");
+    }
+
+    /// `NativeMenuItem.keyEquivalent`: the shell's key table parses, has no conflicts (Close/Minimize share a command name only
+    /// where the menus do), and the menus show it in Golden Gate notation, widening the menu when a title and key would touch.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn menu_key_equivalents_parse_and_do_not_conflict_and_show_in_menus() {
+        use desktop_bar::Menu;
+        let mut reg=bifrost_ui::keys::Shortcuts::default();
+        for (i,(name,combo)) in desktop_bar::MENU_KEYS.iter().enumerate() {
+            let c=bifrost_ui::keys::KeyCombo::parse(combo).unwrap_or_else(||panic!("{name}: {combo} parses"));
+            // Minimize and Minimize Window are the same command in two menus
+            let id=if *name=="Minimize Window"{1}else{i as u32};
+            reg.bind(c,id).unwrap_or_else(|e|panic!("{name}: {combo} conflicts with {e:?}"));
+        }
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        let keys=|m:Menu|sh.menu_row_keys(m);
+        assert!(keys(Menu::Edit).contains(&"\u{21E7}\u{2318}Z".to_string()),"Redo shows shift-command-Z: {:?}",keys(Menu::Edit));
+        assert!(keys(Menu::File).contains(&"\u{2318}W".to_string()));
+        assert!(keys(Menu::App).contains(&"\u{2318}Q".to_string()));
+        sh.desktop_menu=Some(Menu::Edit);
+        let (_,_,w,_)=sh.desktop_popup_rect().unwrap();
+        assert!(w as f32>=sh.ui.pt(264.),"menus are at least 264 pt wide");
+    }
+
+    /// A very long window title is cut to the menu (it never makes the Window menu run off the screen).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn long_window_titles_are_truncated_in_the_window_menu() {
+        use desktop_bar::Menu;
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        let title="A very long document title ".repeat(20);
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:false,maximized:false}];
+        let rows=sh.menu_row_texts(Menu::Window);
+        let row=rows.last().unwrap();
+        assert!(row.chars().count()<title.chars().count()/2,"cut: {row}");
+        sh.desktop_menu=Some(Menu::Window);
+        let (_,_,w,_)=sh.desktop_popup_rect().unwrap();
+        assert!((w as f32)<sh.ui.pt(400.),"menu width stays reasonable: {w}");
+    }
+
+    /// Type-to-select in an open bar menu (`NativeMenu`): letters jump to a title, a repeated letter cycles, Esc closes.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn typing_in_an_open_menu_selects_by_title() {
+        use desktop_bar::Menu;
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desktop_menu=Some(Menu::App);
+        sh.hw_menu_key(31,true,1.); // s: Settings…
+        let rows=sh.menu_row_texts(Menu::App);
+        assert_eq!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()),Some("Settings\u{2026}".to_string()));
+        sh.hw_menu_key(30,true,3.); // a, after the type-ahead pause: About
+        assert!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()).is_some_and(|t|t.starts_with("About")));
+        assert_eq!(sh.desktop_menu,Some(Menu::App),"typing keeps the menu open");
+    }
+
+    /// Cmd+, opens Settings from the keyboard (the App menu's Settings\u{2026} key equivalent).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn command_comma_opens_settings() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        assert!(sh.desk.as_ref().unwrap().front().is_none());
+        sh.hw_shortcut(hwkeys::Shortcut::Settings,1.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
+        assert!(sh.menu_row_keys(desktop_bar::Menu::App).contains(&"\u{2318},".to_string()));
+    }
+
+    /// The status items sit right beside the clock whatever its width or the screen size (no fixed reserve), and the
+    /// CPU and RAM readouts give way when the bar is too narrow for them.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn desktop_status_items_follow_the_measured_clock_on_any_width() {
+        for w in [640, 1280, 1920, 3440] {
+            let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.w=w;
+            for (hour,min) in [(3,7),(23,59)] {
+                sh.info.hour=hour;sh.info.min=min;
+                let items=sh.menu_buttons();
+                let power=items.iter().find(|b|b.0==desktop_bar::Menu::ControlCenter);
+                if w>=1280 {assert!(power.is_some(),"width {w}: the Control Center extra must fit");}
+                if let Some((_,x,wd,_))=power {
+                    let clock_left=w as f32-sh.ui.pt(16.)-sh.ui.measure(&sh.clock_text(),12.,Weight::Medium);
+                    let gap=clock_left-(x+wd);
+                    assert!(gap>=0.0&&gap<=sh.ui.pt(12.),"width {w}: {gap}px between Control Center and the clock");
+                }
+                let first_status=items.iter().filter(|b|!matches!(b.0,desktop_bar::Menu::System|desktop_bar::Menu::App|desktop_bar::Menu::File|desktop_bar::Menu::Edit|desktop_bar::Menu::View|desktop_bar::Menu::Window|desktop_bar::Menu::Help)).map(|b|b.1).fold(f32::MAX,f32::min);// MAX when none fit
+                let menus_end=items.iter().filter(|b|matches!(b.0,desktop_bar::Menu::System|desktop_bar::Menu::App|desktop_bar::Menu::File|desktop_bar::Menu::Edit|desktop_bar::Menu::View|desktop_bar::Menu::Window|desktop_bar::Menu::Help)).map(|b|b.1+b.2).fold(0.0,f32::max);
+                assert!(first_status>=menus_end,"width {w}: status items overlap the app menus ({first_status} < {menus_end})");
+            }
+        }
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn review_desktop_network_menu_opens_real_settings() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desktop_menu=Some(desktop_bar::Menu::Network);
+        let (x,y,w,h)=sh.desktop_popup_rect().unwrap();
+        sh.desktop_bar_event(Event::Up((x+w/2) as f32,(y+h-12) as f32),1000.);
+        assert_eq!(sh.screen,Screen::App(AppId::Settings));assert!(sh.desktop_menu.is_none());
+        assert_eq!(sh.settings.as_ref().unwrap().page(),pages::PageId::Network);
+    }
+
+    /// Desktop frame cost at 1920x1080 with two windows open. Run through `tools/bench.py`.
+    #[test]
+    #[ignore]
+    fn bench_desktop_frame() {
+        let (w, h) = (1920usize, 1080usize);
+        let mut sh = shell_sized(w, h);
+        sh.desk = Some(desk::Desk::new());
+        unlock(&mut sh);
+        sh.desk_open(AppId::Settings, 0.);
+        sh.desk_open(apps()[1].id, 0.);
+        settle(&mut sh, 0.0);
+        let mut buf = vec![0u32; w * h];
+        let mut run = |sh: &mut Shell, runs: usize, dirty: bool| {
+            for t in 0..3 { sh.dirty = true; sh.draw(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, 1e9 + t as f64); }
+            let t0 = std::time::Instant::now();
+            for t in 0..runs {
+                if dirty { sh.dirty = true; }
+                sh.draw(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, 1e9 + 10.0 + t as f64 * 16.0);
+            }
+            t0.elapsed().as_secs_f64() * 1000.0 / runs as f64
+        };
+        println!("BENCH desktop_frame_dirty_1080p {:.3} ms", run(&mut sh, 30, true));
+        println!("BENCH desktop_frame_idle_1080p {:.3} ms", run(&mut sh, 30, false));
+    }
+
+    #[test]
+    fn soft_shadow_surrounds_the_shape_and_leaves_its_inside_clear() {
+        let ui = ui();
+        let (w, h) = (300usize, 160usize);
+        for _ in 0..2 { // second pass draws from the cache
+            let mut buf = vec![0u32; w * h];
+            super::desk::soft_shadow(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, &ui, 80.0, 50.0, 140.0, 40.0, ui.pt(8.0));
+            assert_eq!(buf[70 * w + 150], 0, "inside the shape stays transparent");
+            assert!(buf[(50 + 40 + 4) * w + 150] >> 24 > 0, "below the shape is shaded");
+            assert_eq!(buf[10 * w + 10], 0, "far away is untouched");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn bench_chrome_text() {
+        let ui = ui();
+        let labels = ["BifrOSt", "File", "Edit", "Help", "CPU 3%", "RAM 6%", "Fri 9 Oct  1:52", "Settings", "Close Window", "Minimize Window", "Maximize / Restore Window"];
+        let time = |runs: usize, f: &mut dyn FnMut()| {
+            f();
+            let t0 = std::time::Instant::now();
+            for _ in 0..runs { f(); }
+            t0.elapsed().as_secs_f64() * 1000.0 / runs as f64
+        };
+        let fresh = time(200, &mut || { for l in labels { std::hint::black_box(ui.text(l, 13.0, Weight::Regular, WHITE)); } });
+        println!("BENCH chrome_text_uncached_11 {:.3} ms", fresh);
+        let mut cache = bifrost_render::cache::TextCache::default();
+        let cached = time(200, &mut || { for l in labels { std::hint::black_box(cache.get(&ui, l, 13.0, Weight::Regular, WHITE)); } });
+        println!("BENCH chrome_text_cached_11 {:.3} ms", cached);
+    }
+
+    #[test]
+    #[ignore]
+    fn bench_chrome_effects() {
+        let ui = ui();
+        let (w, h) = (1920usize, 1080usize);
+        let mut buf = vec![0u32; w * h];
+        let time = |runs: usize, f: &mut dyn FnMut()| {
+            f();
+            let t0 = std::time::Instant::now();
+            for _ in 0..runs { f(); }
+            t0.elapsed().as_secs_f64() * 1000.0 / runs as f64
+        };
+        let mut s = Surface { w, h, stride: w, px: &mut buf, y0: 0 };
+        let dock = time(200, &mut || super::desk::soft_shadow(&mut s, &ui, 400.0, 960.0, 1100.0, 90.0, ui.pt(18.0)));
+        println!("BENCH dock_shadow_1080p {:.3} ms", dock);
+        let menu = time(200, &mut || super::desk::soft_shadow(&mut s, &ui, 100.0, 30.0, 264.0, 150.0, ui.pt(8.0)));
+        println!("BENCH menu_shadow_1080p {:.3} ms", menu);
+        let dim = time(100, &mut || super::desk::dim_rect(s.px, w, 200, 100, 1000, 700, super::desk::BACKGROUND_DIM));
+        println!("BENCH window_dim_800x600 {:.3} ms", dim);
+    }
+
+    /// Cost of an open menu: hover hit-testing and a keyboard step (each rebuilds the rows) and the popup draw.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    #[ignore]
+    fn bench_menu_popup() {
+        use desktop_bar::Menu;
+        let mut sh=shell_sized(1920,1080);sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desktop_menu=Some(Menu::Window);
+        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();
+        let time=|runs:usize,f:&mut dyn FnMut()|{f();let t0=std::time::Instant::now();for _ in 0..runs{f();}t0.elapsed().as_secs_f64()*1000.0/runs as f64};
+        let hover=time(2000,&mut ||{sh.desktop_menu_hover(x as f32+12.,y as f32+sh.ui.pt(60.));sh.desktop_menu_hover(x as f32+12.,y as f32+sh.ui.pt(100.));});
+        println!("BENCH menu_hover_2moves {:.4} ms",hover);
+        sh.desktop_menu_row=None;let key=time(2000,&mut ||{sh.hw_menu_key(108,true,1.);});
+        assert!(sh.menu_row_of(Menu::Window).is_some(),"the key bench selects rows");sh.desktop_menu_row=None;sh.hw_menu_key(108,true,1.);let a=sh.menu_row_of(Menu::Window);sh.hw_menu_key(108,true,1.);assert_ne!(a,sh.menu_row_of(Menu::Window));
+        println!("BENCH menu_key_step {:.4} ms",key);
+        let (w,h)=(1920usize,1080usize);let mut buf=vec![0u32;w*h];
+        let draw=time(100,&mut ||{let mut s=Surface{w,h,stride:w,px:&mut buf,y0:0};sh.draw_desktop_popup(&mut s);});
+        println!("BENCH menu_popup_draw_cpu {:.3} ms",draw);
+    }
+
+    /// Developer preview: `PREVIEW_DIR=/tmp cargo test preview_settings -- --ignored` writes settings-dark.png and settings-light.png.
+    #[test]
+    #[ignore]
+    fn preview_settings() {
+        let Some(dir)=std::env::var_os("PREVIEW_DIR") else {return};
+        let pages=std::env::var("PREVIEW_PAGES").unwrap_or_else(|_|"General".into());
+        for (name,light) in [("dark",false),("light",true)].into_iter().filter(|(n,_)|std::env::var("PREVIEW_ONLY").map_or(true,|o|o==*n)) {
+            for (n,page) in pages.split(',').enumerate() {
+                bifrost_render::appearance::jump_to(light);
+                let mut sh=shell_sized(1800,1100);sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+                {let mut info=sh.info.clone();info.display_mode=Some((2560,1440,165));sh.set_info(info);}
+                sh.desk_open(AppId::Settings,0.);
+                let (w,h)=(sh.w as usize,sh.h as usize);let mut img=Image::new(w,h);
+                sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},0.);
+                if let Some(mut st)=sh.settings.take(){st.preview_open(&sh.ui,page,10.);sh.settings=Some(st);}
+                for k in 0..30 {sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},1000.+k as f64*100.);}
+                std::fs::write(std::path::Path::new(&dir).join(format!("settings-{name}-{n}.png")),crate::shell::screenshot::encode(&img)).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
+        sh.desk_cycle_window();
+        assert_eq!(sh.desk.as_ref().unwrap().cmdtab.as_ref().map(|c|c.1),Some(1));
+        let (w,h)=(sh.w as usize,sh.h as usize);let mut buf=vec![0u32;w*h];
+        sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut buf,y0:0},2.);
+        sh.cmdtab_release(3.);
+        assert!(sh.desk.as_ref().unwrap().cmdtab.is_none());
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
+    }
+
+    #[test]
+    fn pointer_over_traffic_lights_sets_hover() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Files,0.);
+        let m=sh.desk_metrics();
+        let r=sh.desk.as_ref().unwrap().wins[0].r;
+        let (x,y)=((r.x+m.light_x+m.light/2) as f32,(r.y+m.title/2) as f32);
+        sh.desktop_pointer(x,y,false,1.);
+        assert_eq!(sh.desk.as_ref().unwrap().lights_hover,Some(sh.desk.as_ref().unwrap().wins[0].app));
+        sh.desktop_pointer(x,(r.y+m.title+40) as f32,false,2.);
+        assert_eq!(sh.desk.as_ref().unwrap().lights_hover,None);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn status_items_sit_close_to_the_clock_and_never_overlap() {
+        let mut sh = shell();
+        sh.desk = Some(desk::Desk::new());
+        sh.screen = Screen::Home;
+        let b = sh.menu_buttons();
+        let status: Vec<_> = b.iter().filter(|(m, ..)| matches!(m, desktop_bar::Menu::Power | desktop_bar::Menu::Network | desktop_bar::Menu::ControlCenter)).collect();
+        assert!(!status.is_empty());
+        let clock = sh.ui.measure(&sh.clock_text(), 12., Weight::Medium);
+        let clock_left = sh.w as f32 - sh.ui.pt(16.) - clock;
+        let power = status.iter().find(|(m, ..)| *m == desktop_bar::Menu::ControlCenter).unwrap();
+        let gap = clock_left - (power.1 + power.2);
+        assert!(gap >= 0.0 && gap <= sh.ui.pt(4.), "Control Center ends {gap} px before the clock");
+        for w in status.windows(2) {
+            assert!(w[0].1 + w[0].2 <= w[1].1 + 0.01, "status items overlap");
+        }
+    }
+
+    #[allow(dead_code)]
+    fn dock_centre(sh: &Shell, app: AppId) -> (f32, f32) {
+        let m = sh.desk_metrics();
+        let (list, _, icons) = sh.desk_dock(&m);
+        let k = list.iter().position(|&i| i < apps().len() && apps()[i].id == app).expect("app in the dock");
+        ((icons[k].x + icons[k].w / 2) as f32, (icons[k].y + icons[k].h / 2) as f32)
+    }
+
+    #[test]
+    fn pressing_a_dock_icon_focuses_its_window_at_once_and_a_second_click_keeps_it() {
+        let mut sh = shell();
+        sh.desk = Some(desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let other = apps().iter().map(|a| a.id).find(|&a| a != AppId::Settings && a != AppId::Files && a != AppId::Browser).unwrap();
+        sh.desk_open(AppId::Settings, 0.);
+        sh.desk_open(other, 1.);
+        assert_eq!(sh.screen, Screen::App(other));
+        let (x, y) = dock_centre(&sh, AppId::Settings);
+        sh.desk_event(Event::Down(x, y), 10.); // the press alone brings Settings forward
+        assert_eq!(sh.screen, Screen::App(AppId::Settings));
+        sh.desk_event(Event::Up(x, y), 20.);
+        let w = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == AppId::Settings).unwrap();
+        assert!(!w.minimized, "clicking the frontmost app's icon must not minimize it");
+        assert_eq!(sh.screen, Screen::App(AppId::Settings));
+    }
+
+    #[test]
+    fn dragging_a_dock_icon_slides_its_neighbours_and_dropping_reorders_after_the_target() {
+        let mut sh = shell();
+        sh.desk = Some(desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        let (list, _, icons) = sh.desk_dock(&m);
+        let (a, b) = (icons[0], icons[2]);
+        let (ax, ay) = ((a.x + a.w / 2) as f32, (a.y + a.h / 2) as f32);
+        let (bx, by) = ((b.x + b.w / 2) as f32, (b.y + b.h / 2) as f32);
+        sh.desk_event(Event::Down(ax, ay), 0.);
+        sh.desk_event(Event::Move(bx, by), 16.);
+        let slide = sh.desk.as_ref().unwrap().dock_slide.borrow();
+        assert!(slide.active(0.016), "neighbours start sliding");
+        assert!(slide.offset(1, 10.0).0 < 0.0, "the icon between moves left to fill the gap");
+        drop(slide);
+        sh.desk_event(Event::Up(bx, by), 32.);
+        assert!(!sh.desk.as_ref().unwrap().dock_slide.borrow().active(10.0), "motion state is cleared on drop");
+        let pinned = &sh.desk.as_ref().unwrap().dock_preferences.pinned;
+        let key = |i: usize| sh.dock_app_key(list[i]).unwrap();
+        let (p0, p2) = (pinned.iter().position(|s| *s == key(0)), pinned.iter().position(|s| *s == key(2)));
+        assert!(p0 > p2 && p0.is_some(), "dragged forward, it lands after the target: {pinned:?}");
+    }
+
+    #[test]
+    fn the_performance_hud_draws_on_the_desktop() {
+        let mut sh = shell();
+        sh.desk = Some(desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut off = vec![0u32; w * h];
+        sh.draw_desk(&mut Surface { w, h, stride: w, px: &mut off, y0: 0 }, 1.0);
+        sh.perf.enabled = true;
+        let mut on = vec![0u32; w * h];
+        sh.draw_desk(&mut Surface { w, h, stride: w, px: &mut on, y0: 0 }, 1.0);
+        assert!(sh.perf_drawn);
+        let (x, y, pw, ph) = sh.perf_rect();
+        let (cx, cy) = ((x + pw / 2.0) as usize, (y + ph / 2.0) as usize);
+        assert_ne!(on[cy * w + cx], off[cy * w + cx], "the HUD box is painted");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn review_identical_foreign_windows_do_not_dirty_desktop() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.dirty=false;
+        sh.wayland_foreign_windows(vec![]);assert!(!sh.dirty);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn review_performance_overlay_repaints_only_its_desktop_band() {
+        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
+        let mut pixels=vec![0;sh.w as usize*sh.h as usize];
+        let (w,h)=(sh.w as usize,sh.h as usize);
+        sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0});
+        sh.draw_perf(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0});
+        sh.perf.fps=60.;let mut expected=pixels.clone();
+        sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut expected,y0:0});
+        sh.draw_perf(&mut Surface{w,h,stride:w,px:&mut expected,y0:0});
+        sh.perf_only=true;
+        let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
+        assert!(!damage.is_all());assert!(damage.pixels()<w*h/10);
+        assert!(pixels==expected,"partial HUD repaint differs from full desktop");
+        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
+    }
+
+    #[cfg(test)]
+    pub(crate) fn swipe(sh: &mut Shell, x: f32, y0: f32, y1: f32, t: f64) -> Vec<Effect> {
+        let mut fx = sh.event(Event::Down(x, y0), t);
+        for i in 1..=10 {
+            fx.extend(sh.event(Event::Move(x, y0 + (y1 - y0) * i as f32 / 10.0), t + i as f64 * 10.0));
+        }
+        fx.extend(sh.event(Event::Up(x, y1), t + 110.0));
+        fx
+    }
+
+    #[cfg(test)]
+    pub(crate) fn settle(sh: &mut Shell, t: f64) {
+        sh.tick(t + 1000.0);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn unlock(sh: &mut Shell) {
+        swipe(sh, 600.0, 1800.0, 900.0, 0.0);
+        settle(sh, 200.0);
+    }
+
+    /// A horizontal swipe at height `y` from `x0` to `x1`.
+    #[cfg(test)]
+    pub(crate) fn hswipe(sh: &mut Shell, y: f32, x0: f32, x1: f32, t: f64) {
+        sh.event(Event::Down(x0, y), t);
+        for i in 1..=10 {
+            sh.event(Event::Move(x0 + (x1 - x0) * i as f32 / 10.0, y), t + i as f64 * 10.0);
+        }
+        sh.event(Event::Up(x1, y), t + 110.0);
+    }
+
+    #[test]
+    fn swipe_right_from_the_first_page_opens_the_today_view_which_refreshes_and_edits() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell, t: f64| sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t).clone();
+        draw(&mut sh, 2500.0);
+        hswipe(&mut sh, 900.0, 100.0, 1000.0, 3000.0);
+        assert!(sh.needs_frame());
+        assert!(draw(&mut sh, 3120.0).is_all(), "the sliding page frosts the whole frame");
+        settle(&mut sh, 3110.0);
+        assert!(sh.pager.leading());
+        assert!(sh.describe().contains("today=true"));
+        draw(&mut sh, 4200.0);
+        assert!(draw(&mut sh, 4216.0).is_empty(), "settled page draws nothing new");
+        // information changes re-render the tiles and repaint the page
+        let g = sh.today.gen();
+        let mut next = sh.info.clone();
+        next.battery -= 5;
+        sh.set_info(next);
+        sh.tick(4300.0);
+        assert!(sh.today.gen() > g, "battery change refreshed the widgets");
+        assert!(draw(&mut sh, 4300.0).is_all());
+        // and so does the next minute
+        let g = sh.today.gen();
+        sh.set_wall(1_000_000, 0, 4300.0);
+        sh.tick(4300.0 + 60_000.0);
+        assert!(sh.today.gen() > g, "a minute later the clocks move");
+        // taps: the search bar reaches the (stub) Search hook, Edit enters edit mode
+        let sr = sh.today.search_rect();
+        tap(&mut sh, sr.x as f32 + 50.0, sr.y as f32 + 10.0, 70_000.0);
+        assert_eq!(sh.screen, Screen::Home);
+        let er = sh.today.edit_rect();
+        tap(&mut sh, er.x as f32 + er.w as f32 / 2.0, er.y as f32 + er.h as f32 / 2.0, 71_000.0);
+        assert!(sh.today.editing());
+        assert!(sh.describe().contains("today_editing=true"));
+        // a vertical drag on the page never turns the pager
+        swipe(&mut sh, 600.0, 1200.0, 900.0, 72_000.0);
+        settle(&mut sh, 72_110.0);
+        assert!(sh.pager.leading());
+        // swipe left: back to the first page, edit mode ends
+        hswipe(&mut sh, 900.0, 1000.0, 100.0, 73_000.0);
+        settle(&mut sh, 73_110.0);
+        assert!(!sh.pager.leading() && sh.pager.page() == 0);
+        assert!(!sh.today.editing(), "leaving the page ends editing");
+        assert!(sh.describe().contains("today=false"));
+    }
+
+    #[test]
+    fn today_view_opens_deildu_on_the_remembered_title() {
+        use crate::deildu::http::tests::Fake;
+        let mut sh = shell();
+        sh.deildu_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-today-deildu").into();
+        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
+        sh.deildu_transport = Fake::new(vec![]);
+        unlock(&mut sh);
+        sh.today.note_played(&Played { id: "12".into(), title: "Film".into(), url: "https://www.deildu.net/details.php?id=12".into() });
+        sh.tick(2500.0);
+        hswipe(&mut sh, 900.0, 100.0, 1000.0, 3000.0);
+        settle(&mut sh, 3110.0);
+        let r = sh.today.placed().iter().find(|p| p.kind == widgets::Kind::Deildu).unwrap().rect;
+        tap(&mut sh, r.x as f32 + r.w as f32 / 2.0, r.y as f32 + r.h as f32 / 2.0, 5000.0);
+        settle(&mut sh, 5030.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Deildu));
+        assert!(sh.describe().contains("deildu_screen=detail"), "{}", sh.describe());
+        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
+    }
+
+    #[test]
+    fn lock_screen_swipes_right_into_the_today_view_and_still_unlocks() {
+        let mut sh = shell();
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell, t: f64| sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t).clone();
+        draw(&mut sh, 0.0);
+        hswipe(&mut sh, 900.0, 100.0, 1000.0, 1000.0);
+        assert!(draw(&mut sh, 1050.0).is_all());
+        settle(&mut sh, 1110.0);
+        assert!(sh.is_locked() && sh.lock_pager.leading());
+        assert!(sh.describe().contains("today=true"));
+        draw(&mut sh, 2200.0);
+        assert!(draw(&mut sh, 2216.0).is_empty());
+        // on the page a vertical drag scrolls instead of unlocking
+        swipe(&mut sh, 600.0, 1800.0, 900.0, 3000.0);
+        settle(&mut sh, 3110.0);
+        assert!(sh.is_locked());
+        // the Deildu tile does nothing on the lock screen
+        sh.today.note_played(&Played { id: "1".into(), title: "T".into(), url: String::new() });
+        sh.tick(3200.0);
+        let r = sh.today.placed().iter().find(|p| p.kind == widgets::Kind::Deildu).unwrap().rect;
+        tap(&mut sh, r.x as f32 + 20.0, r.y as f32 + 20.0, 3300.0);
+        settle(&mut sh, 3330.0);
+        assert!(sh.is_locked());
+        // back to the lock screen, then unlock as usual; the home pager starts on page 0
+        hswipe(&mut sh, 900.0, 1000.0, 100.0, 4000.0);
+        settle(&mut sh, 4110.0);
+        assert!(!sh.lock_pager.leading());
+        unlock(&mut sh);
+        assert_eq!(sh.screen, Screen::Home);
+        assert!(!sh.pager.leading() && !sh.lock_pager.leading());
+        // sleeping drops the page
+        hswipe(&mut sh, 900.0, 100.0, 1000.0, 6000.0);
+        settle(&mut sh, 6110.0);
+        assert!(sh.pager.leading());
+        sh.event(Event::Power, 7000.0);
+        assert!(!sh.pager.leading() && sh.is_locked());
+    }
+
+    #[test]
+    fn starts_locked_and_swipe_up_unlocks() {
+        let mut sh = shell();
+        assert!(sh.is_locked());
+        swipe(&mut sh, 600.0, 1800.0, 1750.0, 0.0);
+        settle(&mut sh, 200.0);
+        assert!(sh.is_locked(), "a short swipe springs back");
+        unlock(&mut sh);
+        assert_eq!(sh.screen, Screen::Home);
+    }
+
+    #[test]
+    fn tapping_a_dock_icon_opens_the_app_and_swipe_up_goes_home() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        let r = sh.layout.dock_icons[0];
+        let (x, y) = (r.x as f32 + 10.0, r.y as f32 + 10.0);
+        sh.event(Event::Down(x, y), 5000.0);
+        sh.event(Event::Up(x, y), 5050.0);
+        settle(&mut sh, 5050.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Settings));
+        swipe(&mut sh, 600.0, 1915.0, 1500.0, 8000.0);
+        settle(&mut sh, 8200.0);
+        assert_eq!(sh.screen, Screen::Home);
+    }
+
+    /// Taps the Settings row labelled `label` and lets the page slide in.
+    #[cfg(test)]
+    fn tap_settings_row(sh: &mut Shell, label: &str, t: f64) -> Vec<Effect> {
+        let st = sh.settings.as_ref().unwrap();
+        // root rows sit in the sidebar of the bifrost split layout
+        let (x, y) = st.row_centre(&sh.ui, label).or_else(|| st.sidebar_centre(&sh.ui, label)).unwrap_or_else(|| panic!("no row {label}"));
+        let mut fx = sh.event(Event::Down(x, y), t);
+        fx.extend(sh.event(Event::Up(x, y), t + 20.0));
+        sh.tick(t + 1000.0);
+        fx
+    }
+
+    #[test]
+    fn brightness_slider_emits_effect() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.open(AppId::Settings, 3000.0);
+        settle(&mut sh, 3000.0);
+        tap_settings_row(&mut sh, "Display & Brightness", 5000.0);
+        let st = sh.settings.as_ref().unwrap();
+        let (tx, ty, tw) = st.list().unwrap().track(&sh.ui, 0, 0);
+        let tx = tx + st.pane_x();
+        let fx = sh.event(Event::Down(tx + tw * 0.25, ty), 9000.0);
+        assert_eq!(fx, vec![Effect::Brightness(0.25)]);
+        let fx = sh.event(Event::Move(tx + tw * 0.75, ty + 300.0), 9010.0);
+        assert_eq!(fx, vec![Effect::Brightness(0.75)]);
+        assert_eq!(sh.info.brightness, 0.75);
+        sh.event(Event::Up(tx + tw * 0.75, ty), 9020.0);
+        assert!(sh.event(Event::Move(tx, ty + 600.0), 9030.0).is_empty());
+    }
+
+    #[test]
+    fn settings_keeps_its_page_across_info_refreshes() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.open(AppId::Settings, 3000.0);
+        settle(&mut sh, 3000.0);
+        assert_eq!(tap_settings_row(&mut sh, "Wi-Fi", 9000.0), vec![Effect::Wifi(WifiAction::Scan)]);
+        let mut next = sh.info.clone();
+        next.min += 1;
+        next.networks = vec![Network { ssid: "Cafe".into(), bars: 2, secure: false, saved: false }];
+        sh.set_info(next);
+        assert_eq!(sh.settings.as_ref().unwrap().page(), pages::PageId::Wifi);
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1e9);
+    }
+
+    #[test]
+    fn settings_options_reach_the_shell() {
+        let mut sh = shell();
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-options");
+        let _ = std::fs::remove_dir_all(dir);
+        let fx = sh.set_data_dir(dir, 0.0);
+        assert!(fx.contains(&Effect::AutoLock(0)), "{fx:?}");
+        unlock(&mut sh);
+        sh.open(AppId::Settings, 3000.0);
+        settle(&mut sh, 3000.0);
+        tap_settings_row(&mut sh, "Display & Brightness", 5000.0);
+        tap_settings_row(&mut sh, "Auto-Lock", 6000.0);
+        assert_eq!(tap_settings_row(&mut sh, "Never", 7000.0), vec![Effect::AutoLock(0)]);
+        assert_eq!(sh.idle_off_ms, 0.0);
+        sh.event(Event::Down(600.0, 5.0), 8000.0);
+        sh.event(Event::Up(600.0, 5.0), 8001.0);
+        assert!(sh.tick(8001.0 + 1e7).is_empty(), "Never means never");
+        assert_eq!(Prefs::load(format!("{dir}/settings.ini")).get("auto_lock_ms"), Some("0"));
+        // back to Display: the text size slider rescales the Ui
+        let (x, y) = (sh.settings.as_ref().unwrap().pane_x() + sh.ui.pt(40.0), sh.ui.pt(42.0));
+        sh.event(Event::Down(x, y), 9000.0);
+        sh.event(Event::Up(x, y), 9020.0);
+        sh.tick(10_000.0);
+        let st = sh.settings.as_ref().unwrap();
+        let (g, i) = st.list().unwrap().find("Bold Text").map(|(g, i)| (g, i - 1)).unwrap();
+        let (tx, ty, tw) = st.list().unwrap().track(&sh.ui, g, i);
+        let tx = tx + st.pane_x();
+        sh.event(Event::Down(tx + tw, ty), 11_000.0);
+        sh.event(Event::Up(tx + tw, ty), 11_050.0);
+        assert_eq!(sh.ui.text_scale, ui::TEXT_SCALE_MAX);
+        tap_settings_row(&mut sh, "Bold Text", 12_000.0);
+        assert!(sh.ui.bold);
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 13_000.0);
+        // a fresh shell reads the same options back from the file
+        let mut again = shell();
+        again.set_data_dir(dir, 0.0);
+        assert_eq!(again.ui.text_scale, ui::TEXT_SCALE_MAX);
+        assert!(again.ui.bold && again.idle_off_ms == 0.0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn power_toggles_screen_and_relocks() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        assert_eq!(sh.event(Event::Power, 1.0), vec![Effect::ScreenOff]);
+        assert!(!sh.screen_on() && sh.is_locked());
+        assert!(!sh.needs_frame());
+        assert_eq!(sh.event(Event::Power, 2.0), vec![Effect::ScreenOn]);
+        assert!(sh.needs_frame());
+    }
+
+    #[test]
+    fn tap_or_wake_request_turns_the_dark_screen_on() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.event(Event::Power, 1.0);
+        assert!(!sh.screen_on());
+        // a slow press is not a tap
+        sh.event(Event::Down(100.0, 100.0), 10.0);
+        assert!(sh.event(Event::Up(100.0, 100.0), 600.0).is_empty());
+        // a drag is not a tap
+        sh.event(Event::Down(100.0, 100.0), 700.0);
+        sh.event(Event::Move(300.0, 100.0), 750.0);
+        assert!(sh.event(Event::Up(300.0, 100.0), 800.0).is_empty());
+        assert!(!sh.screen_on());
+        sh.event(Event::Down(100.0, 100.0), 900.0);
+        assert_eq!(sh.event(Event::Up(105.0, 98.0), 1000.0), vec![Effect::ScreenOn]);
+        assert!(sh.screen_on() && sh.is_locked());
+        // Wake never turns the screen off
+        assert!(sh.event(Event::Wake, 1100.0).is_empty());
+        assert!(sh.screen_on());
+        sh.event(Event::Power, 1200.0);
+        assert_eq!(sh.event(Event::Wake, 1300.0), vec![Effect::ScreenOn]);
+    }
+
+    #[test]
+    fn idle_turns_screen_off() {
+        let mut sh = shell();
+        sh.idle_off_ms = 120_000.0; // the default is Never
+        sh.event(Event::Down(1.0, 1.0), 1000.0);
+        sh.event(Event::Up(1.0, 1.0), 1001.0);
+        assert!(sh.tick(60_000.0).is_empty());
+        assert_eq!(sh.tick(1001.0 + sh.idle_off_ms + 1.0), vec![Effect::ScreenOff]);
+    }
+
+    #[test]
+    fn draws_every_screen() {
+        let mut sh = shell();
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell| {
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1e9);
+        };
+        draw(&mut sh);
+        unlock(&mut sh);
+        draw(&mut sh);
+        sh.term_cmd = &["/bin/sh"];
+        sh.deildu_transport = crate::deildu::http::tests::Fake::new(vec![]);
+        sh.deildu_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-draws").into();
+        sh.data_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-draws").into();
+        sh.photo_dirs = vec![sh.data_dir.join("Pictures")];
+        for app in apps().iter().map(|a| a.id) {
+        sh.files_locations = vec![files::fs::Location { name: "Tmp", path: concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-draws/files").into(), glyph: files::fs::Glyph::Computer }];
+            sh.open(app, 0.0);
+            settle(&mut sh, 0.0);
+            draw(&mut sh);
+            sh.go_home(0.0);
+            settle(&mut sh, 0.0);
+        }
+    }
+
+    #[test]
+    fn new_apps_launch_from_icons_and_resume_from_switcher() {
+        let mut sh = shell();
+        sh.data_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-new-apps"));
+        sh.set_wall(1_791_072_000, 0, 0.0);
+        sh.act(Action::OpenCalendar, 0.0);
+        assert!(sh.is_locked());
+        unlock(&mut sh);
+        let mut pixels = vec![0u32; 1200 * 1920];
+        for (i, app) in [AppId::Browser].into_iter().enumerate() {
+            let t = 3000.0 + i as f64 * 5000.0;
+            let r = sh.icon_rect(app);
+            let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+            sh.event(Event::Down(x, y), t);
+            sh.event(Event::Up(x, y), t + 40.0);
+            settle(&mut sh, t + 40.0);
+            assert_eq!(sh.screen, Screen::App(app), "home icon launches {app:?}");
+            assert!(sh.describe().contains(&format!("screen=app:{}", format!("{app:?}").to_lowercase())));
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut pixels, y0: 0 }, t + 1100.0);
+            sh.go_home(t + 1200.0);
+            settle(&mut sh, t + 1200.0);
+            assert!(sh.switcher.apps().contains(&app), "{app:?} has a switcher card");
+            sh.open(app, t + 2300.0);
+            settle(&mut sh, t + 2300.0);
+            assert_eq!(sh.screen, Screen::App(app));
+            sh.go_home(t + 3400.0);
+            settle(&mut sh, t + 3400.0);
+            sh.close_app(app);
+            assert!(!sh.switcher.apps().contains(&app));
+        }
+        assert!(sh.browser.is_none());
+    }
+
+    #[test]
+    fn quicksearch_finds_the_new_apps() {
+        for (name, app) in [("Browser", AppId::Browser)] {
+            let groups = quicksearch::results(name, &[]);
+            assert_eq!(groups[0].hits.first(), Some(&quicksearch::Hit::App(app)));
+        }
+    }
+
+    #[test]
+    fn assistive_menu_touches_do_not_reach_the_open_app() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.open(AppId::Files, 3000.0);
+        settle(&mut sh, 3000.0);
+        sh.prefs.set("assistive_touch", "1").unwrap();
+        sh.apply_options();
+        let (x, y, w, h) = sh.assistive_touch.button_rect(&sh.ui, sh.w, sh.h);
+        tap(&mut sh, x + w / 2.0, y + h / 2.0, 5000.0);
+        assert!(sh.assistive_touch.shown());
+        assert_eq!(sh.screen, Screen::App(AppId::Files));
+        let (x, y, w, h) = assistive_touch::AssistiveTouch::action_rect(&sh.ui, sh.w, sh.h, assistive_touch::Action::Home);
+        tap(&mut sh, x + w / 2.0, y + h / 2.0, 7000.0);
+        settle(&mut sh, 7000.0);
+        assert!(!sh.assistive_touch.shown());
+        assert_eq!(sh.screen, Screen::Home);
+        assert!(sh.switcher.apps().contains(&AppId::Files));
+    }
+
+    #[test]
+    fn assistive_actions_open_real_shell_screens_and_lock() {
+        use assistive_touch::Action as Assistive;
+        let mut sh = shell();
+        assert!(!sh.assistive_visible(), "the floating control starts disabled");
+        sh.prefs.set("assistive_touch", "1").unwrap();
+        sh.apply_options();
+        assert!(!sh.assistive_visible(), "the floating control stays hidden while locked");
+        unlock(&mut sh);
+        assert!(sh.assistive_visible());
+        sh.assistive_action(Assistive::ControlCenter, 3000.0);
+        settle(&mut sh, 3000.0);
+        assert!(sh.cc_active());
+        sh.assistive_action(Assistive::NotificationCenter, 5000.0);
+        settle(&mut sh, 5000.0);
+        assert!(sh.center_active() && !sh.cc_active());
+        sh.assistive_action(Assistive::Home, 7000.0);
+        assert_eq!(sh.screen, Screen::Home);
+        assert!(!sh.center_active());
+        sh.open(AppId::Files, 8000.0);
+        settle(&mut sh, 8000.0);
+        sh.assistive_action(Assistive::AppSwitcher, 10000.0);
+        settle(&mut sh, 10000.0);
+        assert_eq!(sh.screen, Screen::Switcher);
+        assert!(sh.switcher.apps().contains(&AppId::Files));
+        sh.assistive_action(Assistive::Home, 12000.0);
+        assert_eq!(sh.screen, Screen::Home);
+        assert_eq!(sh.assistive_action(Assistive::Lock, 13000.0), vec![Effect::ScreenOff]);
+        assert!(!sh.screen_on() && sh.is_locked() && !sh.assistive_visible());
+    }
+
+    #[test]
+    fn assistive_overlay_repaints_after_drag_and_disable() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.prefs.set("assistive_touch", "1").unwrap();
+        sh.apply_options();
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell| {
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 3000.0).clone()
+        };
+        assert!(draw(&mut sh).is_all());
+        sh.prefs.set("assistive_touch", "0").unwrap();
+        sh.apply_options();
+        assert!(draw(&mut sh).is_all(), "removing the floating control erases its last frame");
+        assert!(draw(&mut sh).is_empty(), "ordinary damage tracking resumes when disabled");
+    }
+
+    #[test]
+    fn frames_report_only_what_changed() {
+        let mut sh = shell();
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell, t: f64| sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t).clone();
+        assert!(draw(&mut sh, 0.0).is_all(), "first lock frame");
+        assert!(draw(&mut sh, 16.0).is_empty(), "lock screen unchanged");
+        let mut next = sh.info.clone();
+        next.min += 1;
+        sh.set_info(next.clone());
+        assert!(draw(&mut sh, 32.0).is_all(), "the lock clock is part of the whole");
+
+        unlock(&mut sh);
+        assert!(draw(&mut sh, 2000.0).is_all(), "first home frame");
+        assert!(draw(&mut sh, 2016.0).is_empty(), "home unchanged");
+        next.battery -= 1;
+        sh.set_info(next.clone());
+        let d = draw(&mut sh, 2032.0);
+        assert_eq!(d.areas().len(), 1);
+        let a = d.areas()[0];
+        assert_eq!((a.x0, a.y0, a.x1, a.y1), (0, 0, 1200, sh.layout.status_h as usize), "status change redraws the status strip");
+        next.model = "other".into();
+        sh.set_info(next);
+        assert!(draw(&mut sh, 2048.0).is_empty(), "info the status bar does not show changes nothing");
+
+        let r = sh.layout.dock_icons[1];
+        sh.event(Event::Down(r.x as f32 + 5.0, r.y as f32 + 5.0), 5000.0);
+        let d = draw(&mut sh, 5000.0);
+        assert_eq!(d.areas().len(), 1, "pressing an icon dirties that icon: {:?}", d.areas());
+        sh.event(Event::Up(r.x as f32 + 5.0, r.y as f32 + 5.0), 5050.0);
+        sh.tick(5100.0);
+        let d = draw(&mut sh, 5100.0);
+        assert!(!d.is_all() && !d.is_empty(), "the launch card grows from the icon: {:?}", d.areas());
+        settle(&mut sh, 5100.0);
+        assert!(draw(&mut sh, 7000.0).is_all(), "apps repaint in full");
+    }
+
+    #[test]
+        fn set_wallpaper_rebuilds_the_dock_backdrop_once() {
+        let mut sh = shell();
+        let before = sh.dock_bg.clone().unwrap();
+        let px: &'static [u32] = Box::leak(vec![rgba(200, 40, 40, 255); 1200 * 1920].into_boxed_slice());
+        sh.dirty = false;
+        sh.set_wallpaper(View { w: 1200, h: 1920, px });
+        assert!(sh.dirty);
+        let after = sh.dock_bg.clone().unwrap();
+        assert_ne!(before, after);
+        assert!(after.px[after.w * after.h / 2 + after.w / 2] & 0xff > 40, "backdrop takes the new wallpaper's red");
+        assert_eq!(sh.wallpaper().px[0], rgba(200, 40, 40, 255));
+        sh.set_wallpapers(vec![Wallpaper { id: "x".into(), name: "X".into(), thumb: Image::new(160, 256) }]);
+        assert_eq!(sh.wallpapers.len(), 1);
+    }
+
+    #[test]
+    fn info_change_rerenders_only_on_difference() {
+        let mut sh = shell();
+        sh.dirty = false;
+        let same = sh.info.clone();
+        sh.set_info(same);
+        assert!(!sh.dirty);
+        let mut next = sh.info.clone();
+        next.min += 1;
+        sh.set_info(next);
+        assert!(sh.dirty);
+    }
+
+    /// Unlocked shell with the Terminal open running `cmd`.
+    #[cfg(test)]
+    pub(super) fn terminal(cmd: &'static [&'static str]) -> Shell {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.term_cmd = cmd;
+        sh.open(AppId::Terminal, 1000.0);
+        settle(&mut sh, 1000.0);
+        sh
+    }
+
+    #[cfg(test)]
+    fn screen(sh: &Shell) -> String {
+        sh.term.as_ref().map(|t| t.viewport_text()).unwrap_or_default()
+    }
+
+    /// Feeds pty output through the shell until `done` holds (or 5 s pass).
+    #[cfg(test)]
+    pub(super) fn pump_until(sh: &mut Shell, done: impl Fn(&Shell) -> bool) {
+        let start = std::time::Instant::now();
+        while !done(sh) && start.elapsed().as_secs() < 15 {
+            let fds = sh.poll_fds();
+            if crate::bare::sys::wait(&fds, 50).contains(&true) {
+                sh.pump();
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn tap(sh: &mut Shell, x: f32, y: f32, t: f64) {
+        sh.event(Event::Down(x, y), t);
+        sh.event(Event::Up(x, y), t + 30.0);
+    }
+
+    #[cfg(test)]
+    fn tap_key(sh: &mut Shell, label: &str, t: f64) {
+        let (x, y) = sh.keyboard.centre(label).unwrap_or_else(|| panic!("no key {label}"));
+        tap(sh, x, sh.kb_top() + y, t);
+    }
+
+    #[test]
+    fn terminal_sits_in_the_dock_and_deildu_on_the_grid() {
+        let names: Vec<_> = apps()[..IN_DOCK].iter().map(|a| a.name).collect();
+        assert_eq!(names, ["Settings", "Term"]);
+        let term = apps().iter().find(|a| a.id == AppId::Terminal).unwrap();
+        assert_eq!(term.icon, "is.olibuijr.term");
+        let grid: Vec<_> = apps()[IN_DOCK..].iter().map(|a| (a.name, a.icon)).collect();
+        assert_eq!(grid, [("Deildu", "is.olibuijr.deildu"), ("Photos", "bifrost.photos"), ("Files", "bifrost.files"), ("Camera", "bifrost.camera"), ("Browser", "is.olibuijr.browser"), ("WoW", "is.olibuijr.wow"), ("Magnifier", "bifrost.magnifier"), ("App Store", "bifrost.appstore")], "the stock apps that moved to packages are no longer built in");
+    }
+
+    #[test]
+    fn deildu_opens_from_the_grid_pumps_jobs_and_keeps_running_at_home() {
+        use crate::deildu::http::tests::{ok, Fake};
+        let mut sh = shell();
+        sh.deildu_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-deildu").into();
+        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
+        let fake = Fake::new(vec![&ok("<html></html>")]);
+        sh.deildu_transport = fake;
+        unlock(&mut sh);
+        let r = sh.layout.cells[0];
+        tap(&mut sh, r.x as f32 + 10.0, r.y as f32 + 10.0, 5000.0);
+        settle(&mut sh, 5050.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Deildu));
+        assert_eq!(sh.app_poll_fds().len(), 1, "the job pipe is polled");
+        sh.dirty = false;
+        pump_until(&mut sh, |sh| sh.dirty);
+        assert!(sh.dirty, "a finished job repaints the open app");
+        assert!(sh.describe().contains("deildu_items=0"));
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1e9);
+        sh.event(Event::Down(600.0, 900.0), 6000.0);
+        sh.event(Event::Up(600.0, 900.0), 6030.0);
+        swipe(&mut sh, 600.0, 1915.0, 1500.0, 8000.0);
+        settle(&mut sh, 8200.0);
+        assert_eq!(sh.screen, Screen::Home);
+        assert!(sh.deildu.is_some() && sh.app_poll_fds().len() == 1, "still alive at home");
+        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
+    }
+
+    #[test]
+    fn terminal_area_sits_between_status_bar_and_keyboard() {
+        let mut sh = terminal(&["/bin/sh"]);
+        let top = sh.ui.pt(scene::STATUS_PT + terminal::HEADER_PT).round() as i32;
+        assert!(sh.keyboard.shown());
+        assert_eq!(sh.kb_top(), sh.h as f32 - home_zone(&sh.ui) - sh.keyboard.h());
+        assert_eq!(sh.term_area(), (0, top, sh.w, sh.kb_top() as i32 - top));
+        tap_key(&mut sh, "hide", 2000.0);
+        assert!(!sh.keyboard.shown());
+        assert!(sh.needs_frame() && sh.keyboard.animating(), "the keyboard slides out");
+        let bottom = (sh.h as f32 - home_zone(&sh.ui)) as i32;
+        assert_eq!(sh.term_area(), (0, top, sh.w, bottom - top), "the terminal grows at once");
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 2100.0);
+        sh.tick(2300.0);
+        assert!(!sh.keyboard.animating());
+        tap(&mut sh, 600.0, 600.0, 3000.0);
+        assert!(sh.keyboard.shown(), "tapping the terminal brings the keyboard back");
+    }
+
+    #[test]
+    fn key_clicks_follow_the_keyboard_clicks_pref() {
+        let mut sh = shell();
+        sh.set_keyboard(true, 1000.0);
+        sh.tick(3000.0);
+        sh.keyboard.take_clicks();
+        keyboard::fake_click(kb_clicks::Click::Key);
+        assert!(sh.tick(4100.0).contains(&Effect::KeyClick(kb_clicks::Click::Key)), "click asked for while the pref is on");
+        sh.prefs.set("keyboard_clicks", "0").unwrap();
+        keyboard::fake_click(kb_clicks::Click::Key);
+        assert!(!sh.tick(5100.0).iter().any(|e| matches!(e, Effect::KeyClick(_))), "no click when Keyboard Clicks is off");
+    }
+
+    #[test]
+    fn typing_on_the_keyboard_reaches_the_shell() {
+        let mut sh = terminal(&["/bin/sh", "-c", "read x; echo got:$x; read y"]);
+        for (i, k) in ["h", "i", "return"].iter().enumerate() {
+            tap_key(&mut sh, k, 2000.0 + i as f64 * 100.0);
+        }
+        pump_until(&mut sh, |sh| screen(sh).contains("got:hi"));
+        assert!(screen(&sh).contains("got:hi"), "{}", screen(&sh));
+    }
+
+    #[test]
+    fn named_keys_and_backspace_reach_the_shell() {
+        let mut sh = terminal(&["/bin/sh", "-c", "/bin/stty raw -echo; echo ready; /bin/head -c 3 | /bin/od -An -c; read x"]);
+        pump_until(&mut sh, |sh| screen(sh).contains("ready"));
+        for (i, k) in ["esc", "tab", "⌫"].iter().enumerate() {
+            tap_key(&mut sh, k, 2000.0 + i as f64 * 100.0);
+        }
+        pump_until(&mut sh, |sh| screen(sh).contains("177"));
+        let out = screen(&sh);
+        assert!(out.contains("033") && out.contains("\\t") && out.contains("177"), "{out}");
+    }
+
+    #[test]
+    fn keyboard_touches_never_go_home_but_the_zone_below_does() {
+        let mut sh = terminal(&["/bin/sh"]);
+        let kb_y = sh.kb_top() + sh.keyboard.h() - 10.0;
+        swipe(&mut sh, 600.0, kb_y, 200.0, 2000.0);
+        settle(&mut sh, 2200.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal));
+        let zone_y = sh.h as f32 - 5.0;
+        swipe(&mut sh, 600.0, zone_y, 1200.0, 3000.0);
+        settle(&mut sh, 3200.0);
+        assert_eq!(sh.screen, Screen::Home);
+    }
+
+    #[test]
+    fn dragging_the_terminal_scrolls_history_and_typing_returns_live() {
+        let mut sh = terminal(&["/bin/sh", "-c", "i=0; while [ $i -lt 120 ]; do i=$((i+1)); echo line$i; done; read x"]);
+        pump_until(&mut sh, |sh| screen(sh).contains("line120"));
+        swipe(&mut sh, 600.0, 300.0, 1000.0, 2000.0);
+        assert!(!screen(&sh).contains("line120"), "scrolled back");
+        assert!(sh.keyboard.shown());
+        tap_key(&mut sh, "a", 3000.0);
+        assert!(screen(&sh).contains("line120"), "typing jumps back to live");
+    }
+
+    #[test]
+    fn terminal_keeps_running_at_home_and_relaunches_after_exit() {
+        let mut sh = terminal(&["/bin/sh", "-c", "read x; echo bye:$x"]);
+        assert_eq!(sh.app_poll_fds().len(), 1);
+        tap_key(&mut sh, "q", 2000.0);
+        sh.go_home(2100.0);
+        settle(&mut sh, 2100.0);
+        assert_eq!(sh.app_poll_fds().len(), 1, "still running at home");
+        sh.term.as_mut().unwrap().key("Enter");
+        sh.dirty = false;
+        pump_until(&mut sh, |sh| sh.term.is_none());
+        assert!(sh.term.is_none() && sh.app_poll_fds().is_empty(), "exited shell is dropped");
+        assert!(sh.dirty && sh.notify.banner().is_some(), "the exit is announced with a banner");
+        assert_eq!(sh.notify.store().groups()[0].latest().body, "The shell exited.");
+        sh.term_cmd = &["/bin/sh"];
+        sh.open(AppId::Terminal, 5000.0);
+        assert!(sh.term.as_ref().is_some_and(|t| t.alive()), "relaunched on open");
+    }
+
+    // Auto-repeat of a held key belongs to the keyboard app: `holding_backspace_repeats_after_a_delay` in apps/keyboard.
+
+    #[test]
+    fn a_timer_the_clock_app_started_wakes_the_screen_and_the_alert_covers_the_lock_screen() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-service");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("clock.ini").to_string_lossy().into_owned();
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.set_wall(1_000_000, 0, 1000.0);
+        sh.clock.load(&path, 1000.0);
+        // the app writes a one-second timer beside the alarms
+        let mut timers = clock::timer::Timers::default();
+        timers.start("", 1000, 2000.0, 1_000_000_000 + 1000).unwrap();
+        clock::store::write_atomic(&clock::store::sibling(&path, "clock-timers.ini"), &timers.serialize()).unwrap();
+        sh.tick(2000.0);
+        assert_eq!(sh.event(Event::Power, 8100.0), vec![Effect::ScreenOff]);
+        assert!(sh.next_wake(8200.0).is_some(), "wake for the timer even with the screen off");
+        let fx = sh.tick(9100.0);
+        assert!(fx.contains(&Effect::Alarm) && fx.contains(&Effect::ScreenOn), "{fx:?}");
+        assert!(sh.screen_on() && sh.clock.alert().is_some());
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 9200.0);
+        assert!(buf.contains(&clock::ORANGE), "the alert covers the lock screen");
+        let (stop_x, stop_y) = (sh.w as f32 / 2.0, sh.h as f32 - sh.ui.pt(200.0 - 28.0));
+        tap(&mut sh, stop_x, stop_y, 9300.0);
+        assert!(sh.clock.alert().is_none());
+        assert!(sh.is_locked(), "back to the lock screen underneath");
+    }
+
+    /// Unlocked shell with Files open on a temp root holding one text file and a video.
+    #[cfg(test)]
+    fn files_app(tag: &str) -> (Shell, std::path::PathBuf) {
+        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-files")).join(tag);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("Sub")).unwrap();
+        std::fs::write(dir.join("a.txt"), "hi").unwrap();
+        std::fs::write(dir.join("clip.mp4"), "nope").unwrap();
+        let mut sh = shell();
+        sh.term_cmd = &["/bin/sh"];
+        sh.files_locations = vec![files::fs::Location { name: "Tmp", path: dir.clone(), glyph: files::fs::Glyph::Computer }];
+        unlock(&mut sh);
+        sh.open(AppId::Files, 1000.0);
+        settle(&mut sh, 1000.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Files));
+        let first_row = files::pages::LocationsPage::row_top(&sh.ui, 0) + 10.0;
+        tap(&mut sh, 600.0, first_row, 2000.0);
+        settle(&mut sh, 2000.0);
+        pump_until(&mut sh, |sh| sh.files.as_ref().unwrap().describe().contains("files_depth=2") && !sh.dirty_listing());
+        (sh, dir)
+    }
+
+    impl Shell {
+        /// True while the Files listing on top is still loading.
+        #[cfg(test)]
+        fn dirty_listing(&self) -> bool {
+            self.files.as_ref().is_some_and(|f| f.loading())
+        }
+    }
+
+    #[test]
+    fn files_opens_the_terminal_at_a_folder_and_plays_videos() {
+        let (mut sh, dir) = files_app("term");
+        assert_eq!(sh.app_poll_fds().len(), 1, "the job pipe is polled");
+        let row = |k: usize| sh.ui.pt(files::pages::CONTENT_TOP_PT) + (k as f32 + 0.5) * sh.ui.pt(files::pages::ROW_PT);
+        // entries sort: a.txt, clip.mp4, Sub; a file opens the terminal in its folder
+        let y = row(0);
+        sh.event(Event::Down(600.0, y), 3000.0);
+        assert_eq!(sh.next_wake(3000.0), Some(3000.0 + files::LONG_PRESS_MS));
+        sh.tick(3000.0 + files::LONG_PRESS_MS + 1.0);
+        sh.event(Event::Up(600.0, y), 3600.0);
+        let f = sh.files.as_ref().unwrap();
+        assert!(f.describe().contains("files_overlay=menu"));
+        let bottom = sh.h as f32 - home_zone(&sh.ui);
+        let share = f.menu_row(&sh.ui, files::menu::Action::Share, bottom).unwrap();
+        tap(&mut sh, share.0, share.1, 4000.0);
+        let open = sh.files.as_ref().unwrap().menu_row(&sh.ui, files::menu::Action::OpenInTerminal, bottom).unwrap();
+        tap(&mut sh, open.0, open.1, 4500.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal));
+        assert!(sh.term.as_ref().is_some_and(|t| t.alive()));
+        sh.term.as_mut().unwrap().write(b"echo \"${PWD##*/}\"\n");
+        let at_dir = |sh: &Shell| screen(sh).lines().any(|l| l.trim() == "term");
+        pump_until(&mut sh, at_dir);
+        assert!(at_dir(&sh), "{}", screen(&sh));
+        // the Files card was kept and the app still runs
+        assert!(sh.switcher.apps().contains(&AppId::Files));
+        sh.play_file(&dir.join("clip.mp4"));
+        assert_eq!(sh.screen, Screen::App(AppId::Files));
+        assert!(sh.files.as_ref().unwrap().is_playing());
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 5000.0);
+        sh.go_home(6000.0);
+        settle(&mut sh, 6000.0);
+        assert!(sh.files.is_some(), "still alive at home");
+        sh.close_app(AppId::Files);
+        assert!(sh.files.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paste_key_and_long_press_menu_type_the_clipboard_into_the_shell() {
+        let _g = clipboard::tests::exclusive();
+        let mut sh = terminal(&["/bin/sh", "-c", "read x; echo got:$x; read y; echo again:$y; read z"]);
+        clipboard::set_text("abc");
+        tap_key(&mut sh, "paste", 2000.0);
+        tap_key(&mut sh, "return", 2100.0);
+        pump_until(&mut sh, |sh| screen(sh).contains("got:abc"));
+        assert!(screen(&sh).contains("got:abc"), "{}", screen(&sh));
+        // a long press on the grid offers Paste
+        sh.event(Event::Down(300.0, 400.0), 3000.0);
+        assert_eq!(sh.next_wake(3000.0), Some(3000.0 + textfield::LONG_PRESS_MS));
+        sh.dirty = false;
+        sh.tick(3400.0);
+        assert!(sh.dirty, "the fired long press repaints");
+        sh.event(Event::Up(300.0, 400.0), 3450.0);
+        let (mx, my, _, mh) = sh.term_touch.menu().expect("Paste menu").rect();
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 3500.0);
+        assert!(buf.contains(&editmenu::BG), "the menu is drawn over the terminal");
+        tap(&mut sh, mx + 5.0, my + mh / 2.0, 4000.0);
+        tap_key(&mut sh, "return", 4100.0);
+        pump_until(&mut sh, |sh| screen(sh).contains("again:abc"));
+        assert!(screen(&sh).contains("again:abc"), "{}", screen(&sh));
+        assert!(sh.term_touch.menu().is_none(), "typing dismisses the menu");
+    }
+
+    #[test]
+        fn screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos() {
+        let mut sh = shell();
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-shell-shot"));
+        let _ = std::fs::remove_dir_all(&dir);
+        sh.data_dir = dir.clone();
+        sh.photo_dirs = vec![dir.join("Pictures")];
+        sh.set_wall(1_791_073_395, 0, 1000.0);
+        unlock(&mut sh);
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut draw = |sh: &mut Shell, t: f64| {
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t);
+            buf.clone()
+        };
+        draw(&mut sh, 1900.0);
+        assert!(sh.event(Event::Screenshot, 2000.0).is_empty());
+        let path = dir.join("Pictures/Screenshot-20261004-002316.png");
+        assert_eq!(sh.shot.as_ref().map(|o| o.path.clone()), Some(path.clone()));
+        let frame = draw(&mut sh, 2000.0);
+        assert!(frame.iter().all(|&p| p == WHITE), "the flash covers the screen");
+        sh.tick(2300.0);
+        assert!(sh.dirty, "the shrink animates");
+        let start = std::time::Instant::now();
+        while !path.exists() && start.elapsed().as_secs() < 5 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let saved = crate::imgdec::decode(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!((saved.w, saved.h), (1200, 1920));
+        assert_eq!(saved.px[0], frame_pixel(&mut sh), "the file holds the home screen, not the flash");
+        // resting thumbnail: a tap opens the capture in Markup
+        let rest = 2000.0 + screenshot::FLASH_MS + screenshot::SHRINK_MS + 200.0;
+        sh.tick(rest);
+        draw(&mut sh, rest);
+        assert_eq!(sh.next_wake(rest), Some(2000.0 + screenshot::HOLD_MS));
+        let r = sh.shot.as_ref().unwrap().thumb_rect();
+        tap(&mut sh, r.x as f32 + 10.0, r.y as f32 + 10.0, rest + 10.0);
+        settle(&mut sh, rest + 50.0);
+        assert!(sh.shot.is_none());
+        assert!(sh.markup.is_some(), "the thumbnail opens the Markup editor");
+        sh.markup = None;
+        draw(&mut sh, rest + 2000.0);
+        // a second capture while Photos is open joins the library; it ages out on its own
+        sh.event(Event::Screenshot, 9000.0);
+        sh.tick(9000.0 + screenshot::HOLD_MS + screenshot::OUT_MS);
+        assert!(sh.shot.is_none());
+        assert_eq!(sh.photos.as_ref().map(|p| p.photos().len()), Some(2));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The top-left pixel of the shell's current frame.
+    #[cfg(test)]
+    fn frame_pixel(sh: &mut Shell) -> u32 {
+        let mut buf = vec![0u32; 1200 * 1920];
+        let shot = sh.shot.take();
+        sh.drawn = Drawn::Nothing;
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1e9);
+        sh.shot = shot;
+        sh.drawn = Drawn::Nothing;
+        buf[0]
+    }
+
+    #[test]
+    fn exiting_in_the_foreground_goes_home() {
+        let mut sh = terminal(&["/bin/sh", "-c", "echo hi"]);
+        pump_until(&mut sh, |sh| sh.term.is_none());
+        settle(&mut sh, 9000.0);
+        assert_eq!(sh.screen, Screen::Home);
+    }
+
+    #[test]
+    fn output_marks_the_open_terminal_dirty() {
+        let mut sh = terminal(&["/bin/sh", "-c", "read x; echo out; read y"]);
+        sh.term.as_mut().unwrap().key("Enter");
+        sh.dirty = false;
+        pump_until(&mut sh, |sh| screen(sh).contains("out"));
+        assert!(sh.dirty);
+    }
+
+    #[test]
+    fn volume_keys_step_on_the_lock_screen_and_show_the_hud() {
+        let mut sh = shell();
+        sh.set_volume(0.5);
+        assert!(!sh.hud.shown(), "syncing the level shows nothing");
+        assert!(sh.is_locked());
+        assert_eq!(sh.event(Event::VolumeUp, 1000.0), vec![Effect::Volume(9.0 / 16.0)]);
+        assert_eq!(sh.volume(), 9.0 / 16.0);
+        assert!(sh.hud.shown() && sh.hud.visible(1000.0));
+        assert_eq!(sh.hud.level(), 9.0 / 16.0);
+        assert_eq!(sh.event(Event::VolumeDown, 1100.0), vec![Effect::Volume(0.5)]);
+        assert!(sh.describe().contains("volume=0.500\nhud=shown"));
+        assert_eq!(sh.next_wake(1200.0), Some(1100.0 + volume_hud::HOLD_MS), "wake for the fade");
+        let mut buf = vec![0u32; 1200 * 1920];
+        let d = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1200.0).clone();
+        assert!(d.is_all(), "the lock screen's first frame");
+        let (x, y, w, h) = VolumeHud::rect(&sh.ui, sh.w);
+        let inside = buf[(y + h / 2.0) as usize * 1200 + (x + w - sh.ui.pt(20.0)) as usize];
+        assert_ne!(inside, rgba(20, 20, 30, 255), "the HUD covers the wallpaper");
+        let d = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1300.0).clone();
+        assert_eq!(d.areas().len(), 1, "a steady HUD redraws only its box: {:?}", d.areas());
+        let a = d.areas()[0];
+        assert!(a.x0 as f32 <= x && a.x1 as f32 >= x + w && a.y0 as f32 <= y && a.y1 as f32 >= y + h);
+        assert!(sh.tick(1100.0 + volume_hud::HOLD_MS + 100.0).is_empty());
+        assert!(sh.needs_frame(), "fading needs frames");
+        sh.tick(1100.0 + volume_hud::HOLD_MS + volume_hud::FADE_MS + 1.0);
+        assert!(!sh.hud.shown());
+        let d = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 3000.0).clone();
+        assert_eq!(d.areas().len(), 1, "the frame that removes it repaints its box");
+        assert_eq!(buf[(y + h / 2.0) as usize * 1200 + (x + w - sh.ui.pt(20.0)) as usize], rgba(20, 20, 30, 255), "wallpaper is back");
+        assert!(sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 3016.0).is_empty());
+    }
+
+    #[test]
+    fn volume_keys_work_in_apps_and_with_the_screen_off_without_waking_it() {
+        let mut sh = shell();
+        sh.set_volume(1.0);
+        unlock(&mut sh);
+        sh.open(AppId::Files, 3000.0);
+        settle(&mut sh, 3000.0);
+        assert_eq!(sh.event(Event::VolumeUp, 4000.0), vec![Effect::Volume(1.0)], "full stays full");
+        assert_eq!(sh.event(Event::VolumeDown, 4100.0), vec![Effect::Volume(15.0 / 16.0)]);
+        assert!(sh.hud.shown());
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 4100.0);
+        assert_eq!(sh.screen, Screen::App(AppId::Files), "the app keeps the screen");
+        assert_eq!(sh.event(Event::Power, 5000.0), vec![Effect::ScreenOff]);
+        assert!(!sh.hud.shown(), "sleeping drops the HUD");
+        assert_eq!(sh.event(Event::VolumeDown, 6000.0), vec![Effect::Volume(14.0 / 16.0)]);
+        assert!(!sh.screen_on() && !sh.hud.shown(), "no wake, no HUD in the dark");
+        assert!(!sh.needs_frame());
+        assert_eq!(sh.next_wake(6000.0), None);
+        for i in 0..20 {
+            sh.event(Event::VolumeDown, 7000.0 + i as f64);
+        }
+        assert_eq!(sh.volume(), 0.0, "stops at mute");
+        assert_eq!(sh.event(Event::VolumeDown, 8000.0), vec![Effect::Volume(0.0)]);
+    }
+
+    #[test]
+    fn control_center_slider_and_keys_share_one_level() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        swipe(&mut sh, 1100.0, 5.0, 500.0, 1000.0);
+        settle(&mut sh, 1110.0);
+        assert!(sh.cc.is_shown());
+        let (x, y, w, h) = control_center::tile_rect(&sh.ui, sh.w, control_center::Tile::Volume);
+        sh.event(Event::Down(x + w / 2.0, y + h * 0.25), 2000.0);
+        sh.event(Event::Up(x + w / 2.0, y + h * 0.25), 2030.0);
+        assert_eq!(sh.volume(), 0.75);
+        assert_eq!(sh.event(Event::VolumeUp, 3000.0), vec![Effect::Volume(13.0 / 16.0)]);
+        assert!(!sh.hud.shown(), "the sheet's slider moves instead of the HUD");
+        assert_eq!(sh.cc.volume, 13.0 / 16.0);
+        sh.set_volume(0.25);
+        assert_eq!(sh.cc.volume, 0.25);
+    }
+
+    #[test]
+    fn ax_press_walks_a_label_path_in_settings_like_a_tap() {
+        let mut sh = desktop_shell();
+        let map = sh.ax_map(0.0);
+        assert!(map.get("os/settings/general/software-update").is_some());
+        let (address, _) = sh.ax_press("General > Software Update", 1.0).expect("pressed");
+        assert_eq!(address, "os/settings/general/software-update");
+        assert_eq!(sh.settings.as_ref().unwrap().page(), super::pages::PageId::SoftwareUpdate);
+        // a bare name that is unique works, an ambiguous or unknown one says so
+        assert!(sh.ax_press("nonexistent-row", 2.0).unwrap_err().contains("no element"));
+        let err = sh.ax_press("about", 3.0);
+        assert!(err.is_ok() || err.unwrap_err().contains("ambiguous"));
+    }
+
+    // the menu bar exists only on the desktop build; without it `ax_menus` is empty by design
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_os_map_covers_menus_and_apps_and_presses_them() {
+        let mut sh = desktop_shell();
+        let map = sh.ax_map(0.0);
+        assert!(map.get("os/menubar/file").is_some_and(|e| e.role == "menu"));
+        assert!(map.under("os/menubar/edit").any(|e| e.name == "Select All"), "{}", map.listing("os/menubar"));
+        assert!(map.under("os/apps").any(|e| e.name == "Settings"));
+        let (address, _) = sh.ax_press("os/apps/settings", 1.0).expect("opens");
+        assert_eq!(address, "os/apps/settings");
+        assert!(sh.desk.as_ref().unwrap().wins.iter().any(|w| w.app == super::AppId::Settings));
+        assert!(sh.ax_map(2.0).get("os/apps/settings").is_some_and(|e| e.value == "open"));
+    }
+
+    #[test]
+    fn an_alert_is_answered_through_the_map_and_blocks_other_presses() {
+        let mut sh = desktop_shell();
+        sh.ax_press("General > Software Update", 1.0).expect("page");
+        let map = sh.ax_map(2.0);
+        assert!(map.get("os/settings/general/software-update/roll-back-to-previous-system").is_some(), "{}", map.listing("os/settings/general/software-update"));
+        let pressed = sh.ax_press("roll-back-to-previous-system", 3.0).expect("opens the alert");
+        let map = sh.ax_map(4.0);
+        assert!(pressed.0.ends_with("roll-back-to-previous-system"));
+        assert!(map.get("os/settings/alert").is_some_and(|e| e.value == "Roll Back to Previous System?"));
+        assert!(map.get("os/settings/alert/roll-back").is_some_and(|e| e.role == "button"), "the confirm button carries its label");
+        let refused = sh.ax_press("General > About", 5.0).unwrap_err();
+        assert!(refused.contains("alert is open"), "{refused}");
+        sh.ax_press("os/settings/alert/cancel", 6.0).expect("cancel");
+        assert!(sh.ax_map(7.0).get("os/settings/alert").is_none(), "the alert is gone");
+        assert!(sh.ax_press("General > About", 8.0).is_ok(), "presses work again");
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn app_published_menus_follow_the_app_name_and_send_the_chosen_item_back() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META,CHORD_SHIFT};
+        let menus=vec![AppMenu{title:"Note".into(),items:vec![
+            AppMenuItem::new(1,"New Note").key("cmd+n"),AppMenuItem::separator(),
+            AppMenuItem::new(2,"Pin").checked(true),AppMenuItem::new(3,"Lock").enabled(false).key("cmd+shift+l"),
+            AppMenuItem::submenu("Sort By"),AppMenuItem::new(4,"Name").depth(1)]}];
+        assert_eq!(desktop_bar::app_menu_chord(&menus,'n',CHORD_META),Some(1));
+        assert_eq!(desktop_bar::app_menu_chord(&menus,'n',0),None,"the modifier must match");
+        assert_eq!(desktop_bar::app_menu_chord(&menus,'l',CHORD_META|CHORD_SHIFT),None,"a disabled item has no key equivalent");
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        assert!(!sh.menu_buttons().iter().any(|b|matches!(b.0,desktop_bar::Menu::Custom(_))),"no app in front, no app menus");
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=menus;sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|matches!(m,desktop_bar::Menu::App|desktop_bar::Menu::Custom(_)|desktop_bar::Menu::File)).collect();
+        assert_eq!(order,vec![desktop_bar::Menu::App,desktop_bar::Menu::Custom(0),desktop_bar::Menu::File]);
+        let rows=sh.menu_rows(desktop_bar::Menu::Custom(0));
+        assert_eq!(rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["New Note","","\u{2713} Pin","Lock","Sort By","    Name"]);
+        assert_eq!(sh.menu_row_keys(desktop_bar::Menu::Custom(0)),vec!["\u{2318}N".to_string(),"\u{21E7}\u{2318}L".to_string()]);
+        // an app menu titled like a shell menu merges into it (NativeApp.mainMenu owns File on Golden Gate) instead of repeating it
+        sh.ext[0].as_mut().unwrap().app_menus.push(AppMenu{title:"File".into(),items:vec![AppMenuItem::new(9,"Print...").key("cmd+p")]});
+        assert_eq!(sh.menu_buttons().iter().filter(|b|b.3=="File").count(),1,"one File menu");
+        let file:Vec<String>=sh.menu_rows(desktop_bar::Menu::File).iter().map(|r|r.text.clone()).collect();
+        assert_eq!(&file[..2],&["Print...".to_string(),String::new()],"the app's File items lead, then a separator: {file:?}");
+        sh.ext[0].as_mut().unwrap().app_menus.pop();
+        sh.desktop_menu=Some(desktop_bar::Menu::Custom(0));
+        let action=sh.menu_rows(desktop_bar::Menu::Custom(0)).remove(2).action.expect("Pin is enabled");
+        sh.run_menu_action(action,10.);
+        let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing menu action")};
+        assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(2)));
+        assert!(sh.ext_chord(49,CHORD_META),"a key equivalent is consumed as a menu action");
+        let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing key equivalent")};
+        assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(1)));
+    }
+

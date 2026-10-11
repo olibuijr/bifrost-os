@@ -1,0 +1,97 @@
+[
+ {
+  "name": "Soft Neo-Soul",
+  "params": {
+   "tone": 5000,
+   "velocity": 0.55,
+   "release": 1.5,
+   "stereo": 0.25
+  },
+  "tags": [
+   "soft",
+   "neo-soul",
+   "mellow"
+  ]
+ },
+ {
+  "name": "Barky",
+  "params": {
+   "velocity": 0.95,
+   "tone": 20000,
+   "release": 0.8
+  },
+  "tags": [
+   "bark",
+   "funk",
+   "bright"
+  ]
+ },
+ {
+  "name": "Lo-fi Dark",
+  "params": {
+   "tone": 1800,
+   "detune": 12,
+   "velocity": 0.4,
+   "release": 2,
+   "gain": 0.9
+  },
+  "tags": [
+   "lo-fi",
+   "dark",
+   "hip-hop"
+  ]
+ },
+ {
+  "name": "Wobbly Tape",
+  "params": {
+   "tone": 3000,
+   "vibrato": 9,
+   "rate": 3.2,
+   "detune": 6,
+   "velocity": 0.5
+  },
+  "tags": [
+   "lo-fi",
+   "tape",
+   "vintage"
+  ]
+ },
+ {
+  "name": "Bell Tines",
+  "params": {
+   "velocity": 0.7,
+   "stereo": 0.35,
+   "release": 2.5
+  },
+  "tags": [
+   "bell",
+   "ballad"
+  ]
+ },
+ {
+  "name": "Pedal",
+  "params": {
+   "pedal": 1,
+   "human": 0.25
+  },
+  "tags": [
+   "pedal",
+   "sustain"
+  ]
+ },
+ {
+  "name": "Pedal Neo-Soul",
+  "params": {
+   "pedal": 1,
+   "velcurve": 1.3,
+   "human": 0.35,
+   "tone": 7000,
+   "stereo": 0.25
+  },
+  "tags": [
+   "neo-soul",
+   "pedal",
+   "rnb"
+  ]
+ }
+]

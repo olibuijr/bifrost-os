@@ -1,0 +1,210 @@
+{
+ "id": "oboe",
+ "name": "Oboe",
+ "desc": "Oboe, sustained non-vibrato, 2 dynamics. Nasal, plaintive, cutting. Range Bb3-G6. Solo melodies, pastoral themes, doubling strings.",
+ "family": "woodwind",
+ "license": "CC0-1.0",
+ "source": "https://github.com/sgossner/VSCO-2-CE/tree/master/Woodwinds/Oboe/Sus",
+ "attribution": "Versilian Studios VSCO-2 Community Edition (Sam Gossner / Versilian Studios), CC0 1.0",
+ "attack": 0.03,
+ "release": 0.2,
+ "range": [
+  58,
+  91
+ ],
+ "softAttack": 0.8,
+ "autoLoop": true,
+ "minLoop": 0.05,
+ "zones": [
+  {
+   "file": "oboe_As2_v1.ogg",
+   "root": 58,
+   "lo": 58,
+   "hi": 60,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.814649,
+   "loopEnd": 2.416621,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_D3_v1.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.640884,
+   "loopEnd": 2.22381,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_F3_v1.ogg",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.640113,
+   "loopEnd": 2.223492,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_As3_v1.ogg",
+   "root": 70,
+   "lo": 68,
+   "hi": 72,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.023107,
+   "loopEnd": 2.622404,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_D4_v1.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.005624,
+   "loopEnd": 2.594218,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_F4_v1.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 1.023333,
+   "loopEnd": 2.620431,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_As4_v1.ogg",
+   "root": 82,
+   "lo": 80,
+   "hi": 84,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.762245,
+   "loopEnd": 2.356939,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_D5_v1.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.65771,
+   "loopEnd": 2.256508,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_F5_v1.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "vlo": 0.0,
+   "vhi": 0.666,
+   "loopStart": 0.622857,
+   "loopEnd": 2.223016,
+   "gain": 0.6
+  },
+  {
+   "file": "oboe_As2_v2.ogg",
+   "root": 58,
+   "lo": 58,
+   "hi": 60,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.919002,
+   "loopEnd": 2.50034
+  },
+  {
+   "file": "oboe_D3_v2.ogg",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.762404,
+   "loopEnd": 2.360612
+  },
+  {
+   "file": "oboe_F3_v2.ogg",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.936485,
+   "loopEnd": 2.517596
+  },
+  {
+   "file": "oboe_As3_v2.ogg",
+   "root": 70,
+   "lo": 68,
+   "hi": 72,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.95381,
+   "loopEnd": 2.539569
+  },
+  {
+   "file": "oboe_D4_v2.ogg",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.641429,
+   "loopEnd": 2.228186
+  },
+  {
+   "file": "oboe_F4_v2.ogg",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.866735,
+   "loopEnd": 2.462698,
+   "tune": -6
+  },
+  {
+   "file": "oboe_As4_v2.ogg",
+   "root": 82,
+   "lo": 80,
+   "hi": 84,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.831633,
+   "loopEnd": 2.425397
+  },
+  {
+   "file": "oboe_D5_v2.ogg",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 0.953832,
+   "loopEnd": 2.551066
+  },
+  {
+   "file": "oboe_F5_v2.ogg",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "vlo": 0.666,
+   "vhi": 1,
+   "loopStart": 1.006077,
+   "loopEnd": 2.603946
+  }
+ ]
+}

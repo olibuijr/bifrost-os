@@ -1,0 +1,11 @@
+id = "is.olibuijr.contacts.desktop"
+name = "Contacts"
+version = "1.2.3"
+exec = "bifrost-contacts"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Address book with search and contact cards."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"
