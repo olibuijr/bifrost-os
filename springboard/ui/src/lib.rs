@@ -606,6 +606,7 @@ pub mod subscription;
 pub mod entitlement;
 pub mod download;
 pub mod nav_policy;
+pub mod translation;
 #[cfg(test)]
 mod bench;
 

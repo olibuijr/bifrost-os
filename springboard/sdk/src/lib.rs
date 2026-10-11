@@ -69,6 +69,7 @@ pub mod restoration;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
+pub mod translation;
 pub mod notification;
 pub mod workspace;
 pub mod observable;
