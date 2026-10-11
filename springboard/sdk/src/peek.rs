@@ -10,6 +10,9 @@ pub use crate::proto::peek::{PreviewItem, MAX_ITEMS};
 /// Data-based previews and thumbnail requests (`QLPreviewProvider`, `QLPreviewReply`, `QLThumbnailGenerator.Request`):
 /// the pure models in `bifrost_ui::preview`, re-exported for apps. See [`Registry`] and [`ThumbnailRequest`].
 pub use bifrost_ui::preview::{Attachment, Content, ModelError, Registry, Reply, Representation, ThumbnailRequest};
+/// Custom file type thumbnails (`QLThumbnailProvider`, `QLThumbnailReply`), generator errors and progressive
+/// updates: the pure models in `bifrost_ui::thumbnail`. See [`FileThumbnailRequest`] and [`Progressive`].
+pub use bifrost_ui::thumbnail::{FileThumbnailRequest, Progressive, ThumbnailContent, ThumbnailError, ThumbnailReply};
 use crate::proto::ToShell;
 use crate::Ctx;
 
