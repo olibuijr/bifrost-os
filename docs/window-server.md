@@ -57,6 +57,20 @@ would make a root process the server for every untrusted app, so it stays out.
 5. **Switch.** The shell drops its own backdrop blur and requests regions instead; the session script starts
    `bifrost-wm`, with labwc as the fallback until acceptance passes on Midget.
 
+## Boot: one modeset, one fade
+
+`bifrost-wm` keeps the boot policy of `docs/bifrost-boot-design.md`:
+
+- It opens the GPU without resetting connectors and keeps the mode the CRTC already shows (the loader's, or the
+  learned `video=` mode), so the loader's modeset stays the boot's only one, as labwc's `reuseOutputMode` did.
+  Only without an active mode does it pick the native size at its fastest refresh. `BIFROST_WM_MODE=WxH@R` overrides.
+- With `BIFROST_BOOT_FADE` it shows the loader's frame (`bootsplash::paint`, the shell's own file) from its first
+  scanout, holds it until the shell's first desktop frame (`$XDG_RUNTIME_DIR/shell-ready`), then cross-fades over
+  450 ms with the loader's smoothstep, writing the `desktop-first-ui` and `desktop-faded` marks. The compositor owns
+  the screen, so under `bifrost-wm` the shell no longer fades itself.
+- `video-arg` keeps learning the fastest mode for the next boot's command line; it reads the modes from `bifrost-wm`
+  once output management lands (phase 3) instead of `wlr-randr`.
+
 ## Code
 
 `springboard/wm` (crate `bifrost-wm`). Window-management rules (placement, stacking, focus, move and resize

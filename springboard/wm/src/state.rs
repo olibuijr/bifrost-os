@@ -39,6 +39,8 @@ pub struct WmState {
     pub loop_signal: LoopSignal,
     pub wm: Wm,
     next_id: WindowId,
+    /// The DRM backend's frame hook, run on every vblank.
+    pub on_vblank: Option<Box<dyn FnMut(&mut WmState)>>,
     /// Toplevels waiting for their first buffer before `wm` places them.
     pub pending: Vec<Window>,
 
@@ -91,6 +93,7 @@ impl WmState {
             wm: Wm::new(Rect::default()),
             next_id: 1,
             pending: Vec::new(),
+            on_vblank: None,
             compositor_state: CompositorState::new::<WmState>(&dh),
             xdg_shell_state: XdgShellState::new::<WmState>(&dh),
             layer_shell_state: WlrLayerShellState::new::<WmState>(&dh),

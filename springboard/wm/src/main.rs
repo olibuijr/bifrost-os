@@ -1,6 +1,8 @@
-//! `bifrost-wm [--nested | --headless WxH [--screenshot PATH --after MS]] [--socket NAME] [-- COMMAND ARGS...]`
+//! `bifrost-wm [--drm | --nested | --headless WxH [--screenshot PATH --after MS]] [--socket NAME] [-- COMMAND ARGS...]`
 
-use std::{error::Error, process::Command, time::Duration};
+use std::{error::Error, time::Duration};
+
+use bifrost_wm::spawn;
 
 use bifrost_wm::{headless::Compositor, state::WmState};
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
@@ -10,6 +12,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let command: Vec<String> = args.iter().position(|a| a == "--").map(|i| args[i + 1..].to_vec()).unwrap_or_default();
     let socket = flag("--socket");
+
+    #[cfg(feature = "drm")]
+    if args.iter().any(|a| a == "--drm") {
+        return bifrost_wm::drm::run(socket.as_deref(), &command);
+    }
 
     if let Some(size) = flag("--headless") {
         let (w, h) = size.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))).ok_or("--headless WxH")?;
@@ -45,11 +52,3 @@ fn main() -> Result<(), Box<dyn Error>> {
     Err("built without a nested backend; use --headless WxH".into())
 }
 
-/// Starts a client on the compositor's socket.
-fn spawn(command: &[String], socket: &str) {
-    if let Some((prog, rest)) = command.split_first() {
-        if let Err(e) = Command::new(prog).args(rest).env("WAYLAND_DISPLAY", socket).env_remove("DISPLAY").spawn() {
-            eprintln!("bifrost-wm: {prog}: {e}");
-        }
-    }
-}

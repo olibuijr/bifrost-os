@@ -13,7 +13,9 @@ name = "bifrost-wm"
 path = "src/main.rs"
 
 [features]
-default = ["nested"]
+default = ["nested", "drm"]
+# real hardware and the VM: libseat, udev, libinput, GBM and KMS
+drm = ["smithay/backend_drm", "smithay/backend_gbm", "smithay/backend_libinput", "smithay/backend_udev", "smithay/backend_session_libseat"]
 # a window on another Wayland or X11 desktop, for development
 nested = ["smithay/backend_winit"]
 
