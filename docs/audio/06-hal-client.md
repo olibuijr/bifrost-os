@@ -8,6 +8,13 @@ Contract: `docs/audio-architecture.md` ("Client IO", "Real-time threads"). Task:
   and `Conn`: a reader thread (`audio-notify`) that sends replies to the waiting request and handles the unsolicited
   ones itself (`Changed` runs the listeners, `Overload` is counted per IO procedure id). One request in flight at a
   time (a mutex on the reply channel); 5 s reply timeout; a closed socket gives `NoServer`.
+- Oversized packets (task 28): a packet over `MAX_LEN` (or with more than 4 fds) no longer ends the reader. The
+  kernel already dropped the part that did not fit and any fds that came are closed; the reader looks at the first
+  byte (the reply tag): a reply answers the waiting request with `AudioError::Protocol`, a notification (tag 7
+  `Changed`, 8 `Overload`) is only logged, and reading goes on. Tests: `oversized_answer_by_tag`,
+  `a_truncated_packet_is_invalid_data_and_the_next_one_reads_whole`,
+  `an_oversized_reply_is_a_protocol_error_and_the_reader_lives_on` (socket pair; MAX_LEN + 1 and MAX_LEN + 100
+  byte packets, then a normal `Done` goes through).
 - `lib.rs`: `System::{connect, connect_path, from_socket, default_device, devices, get, set, listen, overloads}`,
   `Listener` (drop = unlisten; the server is told only when the last listener of an address goes), `Device::{
   add_io_proc, start, stop, remove_io_proc, io_proc_xruns, get, set}`. `add_io_proc` resolves `buffer_frames == 0`

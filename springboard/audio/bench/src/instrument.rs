@@ -141,14 +141,20 @@ impl BenchMidi {
 
     /// Moves the destination's events stamped at or before `until_ns` into the scheduler. Returns how many.
     pub fn drain_into(&mut self, until_ns: u64, sched: &mut EventScheduler) -> usize {
-        let mut n = 0;
-        for t in self.hub.take_destination(self.destination, until_ns) {
-            if let Some(ev) = to_midi1(&t.packet).and_then(to_unit_event) {
-                sched.push(t.host_ns, ev);
-                n += 1;
-            }
+        let evs = self.take_events(until_ns);
+        for (ns, ev) in &evs {
+            sched.push(*ns, *ev);
         }
-        n
+        evs.len()
+    }
+
+    /// Takes the destination's note events stamped at or before `until_ns` as `(host ns, unit event)`, in order.
+    pub fn take_events(&mut self, until_ns: u64) -> Vec<(u64, MidiEvent)> {
+        self.hub
+            .take_destination(self.destination, until_ns)
+            .into_iter()
+            .filter_map(|t| to_midi1(&t.packet).and_then(to_unit_event).map(|ev| (t.host_ns, ev)))
+            .collect()
     }
 }
 

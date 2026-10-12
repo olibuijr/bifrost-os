@@ -35,13 +35,13 @@ pub struct Run {
 }
 
 /// Busy threads that stop when dropped.
-struct Stress {
+pub struct Stress {
     stop: Arc<AtomicBool>,
     threads: Vec<std::thread::JoinHandle<()>>,
 }
 
 impl Stress {
-    fn start(n: u32) -> Stress {
+    pub fn start(n: u32) -> Stress {
         let stop = Arc::new(AtomicBool::new(false));
         let threads = (0..n)
             .map(|_| {

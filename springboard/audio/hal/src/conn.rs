@@ -71,7 +71,22 @@ pub(crate) fn send_packet(fd: RawFd, data: &[u8], fds: &[RawFd]) -> io::Result<(
     }
 }
 
-/// Receives one packet and the fds that came with it. Ok(None) at end of stream.
+/// The reply tags that are notifications, not answers to a request (`control::encode_reply`: 7 Changed, 8 Overload).
+const NOTIFICATION_TAGS: [u8; 2] = [7, 8];
+
+/// What the reader does with a packet that did not fit its buffer (or whose fds did not fit): SEQPACKET has already
+/// discarded the rest of it, so it is dropped. Its first byte (still in the buffer) is the reply tag: a reply answers
+/// the waiting request with `Protocol`; a notification is only logged. `None` means nobody is waiting on it.
+pub(crate) fn oversized_answer(first_byte: Option<u8>) -> Option<Msg> {
+    match first_byte {
+        Some(t) if NOTIFICATION_TAGS.contains(&t) => None,
+        _ => Some((Reply::Error(AudioError::Protocol), Vec::new())),
+    }
+}
+
+/// Receives one packet and the fds that came with it. Ok(None) at end of stream. A packet longer than `buf` (or
+/// with more fds than fit) is `InvalidData`: its first `buf.len()` bytes are in `buf`, the kernel dropped the rest,
+/// and any fds that did arrive are closed; the socket stays usable for the next packet.
 pub(crate) fn recv_packet(fd: RawFd, buf: &mut [u8]) -> io::Result<Option<(usize, Vec<OwnedFd>)>> {
     let mut iov = libc::iovec { iov_base: buf.as_mut_ptr() as *mut libc::c_void, iov_len: buf.len() };
     // SAFETY: pure size computation.
@@ -133,6 +148,14 @@ impl Conn {
                 loop {
                     let (n, fds) = match recv_packet(s2.as_raw_fd(), &mut buf) {
                         Ok(Some(x)) => x,
+                        Err(e) if e.kind() == io::ErrorKind::InvalidData => {
+                            // too big for MAX_LEN: already truncated and dropped by the kernel; keep reading
+                            eprintln!("[is.olibuijr.audio/hal] dropped an oversized packet (tag {})", buf[0]);
+                            if let Some(m) = oversized_answer(buf.first().copied()) {
+                                let _ = tx.send(m);
+                            }
+                            continue;
+                        }
                         Ok(None) | Err(_) => break,
                     };
                     let reply = match decode_reply(&buf[..n]) {
@@ -306,6 +329,81 @@ mod tests {
         let _srv2 = script(b2, vec![vec![Reply::Done]]);
         let c2 = Conn::new(a2);
         assert!(matches!(c2.request(&ping(), &[]), Ok((Reply::Done, _))));
+    }
+
+    /// A peer that answers each request with the next list of raw packets.
+    fn script_raw(sock: OwnedFd, batches: Vec<Vec<Vec<u8>>>) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            let mut buf = vec![0u8; MAX_LEN];
+            for batch in batches {
+                match recv_packet(sock.as_raw_fd(), &mut buf) {
+                    Ok(Some(_)) => {}
+                    _ => return,
+                }
+                for p in batch {
+                    if send_packet(sock.as_raw_fd(), &p, &[]).is_err() {
+                        return;
+                    }
+                }
+            }
+        })
+    }
+
+    /// `len` bytes that start with reply tag `tag`.
+    fn oversized(tag: u8, len: usize) -> Vec<u8> {
+        let mut p = vec![0u8; len];
+        p[0] = tag;
+        p
+    }
+
+    #[test]
+    fn oversized_answer_by_tag() {
+        // 4 = Objects (a reply): the waiting request gets Protocol
+        assert!(matches!(oversized_answer(Some(4)), Some((Reply::Error(AudioError::Protocol), ref f)) if f.is_empty()));
+        // 7 = Changed and 8 = Overload are notifications: nobody waits on them
+        assert!(oversized_answer(Some(7)).is_none());
+        assert!(oversized_answer(Some(8)).is_none());
+        // nothing read: answer the request rather than leave it to time out
+        assert!(oversized_answer(None).is_some());
+    }
+
+    #[test]
+    fn a_truncated_packet_is_invalid_data_and_the_next_one_reads_whole() {
+        let (a, b) = socket_pair();
+        send_packet(a.as_raw_fd(), &[4, 1, 2, 3, 4, 5, 6, 7, 8, 9], &[]).unwrap();
+        send_packet(a.as_raw_fd(), &[3], &[]).unwrap();
+        let mut buf = [0u8; 4];
+        let e = recv_packet(b.as_raw_fd(), &mut buf).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        // the head of the dropped packet is in the buffer
+        assert_eq!(buf, [4, 1, 2, 3]);
+        // the rest was discarded with it: the next read is the next packet
+        let (n, _) = recv_packet(b.as_raw_fd(), &mut buf).unwrap().unwrap();
+        assert_eq!(&buf[..n], &[3]);
+    }
+
+    #[test]
+    fn an_oversized_reply_is_a_protocol_error_and_the_reader_lives_on() {
+        use bifrost_audio_types::control::encode_reply;
+        let (a, b) = socket_pair();
+        let done = encode_reply(&Reply::Done);
+        let _srv = script_raw(
+            b,
+            vec![
+                // request 1: a reply (Objects) one byte over the limit
+                vec![oversized(4, MAX_LEN + 1)],
+                // request 2: an oversized notification (Changed), then the real reply
+                vec![oversized(7, MAX_LEN + 100), done.clone()],
+                // request 3: a normal reply
+                vec![done],
+            ],
+        );
+        let c = Conn::new(a);
+        assert_eq!(c.request(&ping(), &[]).err(), Some(AudioError::Protocol));
+        assert!(!c.shared.dead.load(Ordering::Acquire));
+        assert!(matches!(c.request(&ping(), &[]), Ok((Reply::Done, _))));
+        assert!(matches!(c.request(&ping(), &[]), Ok((Reply::Done, _))));
+        assert!(!c.shared.dead.load(Ordering::Acquire));
     }
 
     #[test]

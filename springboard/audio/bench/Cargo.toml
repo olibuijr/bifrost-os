@@ -16,6 +16,7 @@ path = "src/main.rs"
 bifrost-audio-types = { path = "../types" }
 bifrost-audio-driver = { path = "../driver" }
 bifrost-audio-alsa = { path = "../alsa" }
+bifrost-audio-hal = { path = "../hal" }
 bifrost-audio-units = { path = "../units" }
 bifrost-midi = { path = "../midi" }
 bifrost-audiod = { path = "../server" }

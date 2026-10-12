@@ -109,6 +109,11 @@ impl EventScheduler {
         EventScheduler::default()
     }
 
+    /// A scheduler that queues `n` events without allocating (for a real-time thread).
+    pub fn with_capacity(n: usize) -> EventScheduler {
+        EventScheduler { pending: VecDeque::with_capacity(n), ..EventScheduler::default() }
+    }
+
     pub fn len(&self) -> usize {
         self.pending.len()
     }

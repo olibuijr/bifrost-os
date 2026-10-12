@@ -10,6 +10,8 @@ pub const USAGE: &str = "usage: bifrost-audio-bench <midi-latency|audio-roundtri
   --device <uid>       exact device uid for the alsa driver (default: the first full-duplex device of the card)
   --interval-ms <ms>   time between notes or impulses (default 20)
   --lead <cycles>      send each note this many cycles before its stamp (default 0: stamp the note when it is sent)
+  --live               run against the running bifrost-audiod through the HAL client (midi-latency, audio-roundtrip,
+                       xrun-sweep); --driver is ignored, --device picks the device uid (default: the default output)
   --json               print the JSON object (the default prints a one-line summary)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +85,8 @@ pub struct Args {
     pub interval_ms: f64,
     pub lead: u32,
     pub json: bool,
+    /// Measure the running server through the HAL instead of the in-process model.
+    pub live: bool,
 }
 
 fn num<T: std::str::FromStr>(flag: &str, v: &str) -> Result<T, String> {
@@ -105,6 +109,7 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
         interval_ms: 20.0,
         lead: 0,
         json: false,
+        live: false,
     };
     let mut i = 0;
     while i < rest.len() {
@@ -116,6 +121,10 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
         };
         if flag == "--json" {
             a.json = inline.map_or(true, |v| v != "false");
+            continue;
+        }
+        if flag == "--live" {
+            a.live = inline.map_or(true, |v| v != "false");
             continue;
         }
         let value = match inline {
@@ -154,6 +163,9 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
     if !(a.interval_ms.is_finite() && a.interval_ms > 0.0) {
         return Err("--interval-ms must be positive".to_string());
     }
+    if a.live && a.cmd == Cmd::MidiThroughput {
+        return Err("midi-throughput has no --live mode (it measures the scheduler, not a device)".to_string());
+    }
     Ok(a)
 }
 
@@ -172,6 +184,18 @@ mod tests {
         assert_eq!((a.driver.clone(), a.rate, a.quantum, a.count), (DriverSpec::Null, 48_000, 64, 100));
         assert_eq!((a.seconds, a.stress, a.lead, a.json), (2.0, 0, 0, false));
         assert_eq!(a.device, None);
+        assert!(!a.live);
+    }
+
+    #[test]
+    fn live_flag() {
+        assert!(parse(&v(&["audio-roundtrip", "--live"])).unwrap().live);
+        assert!(parse(&v(&["xrun-sweep", "--live=true", "--json"])).unwrap().live);
+        assert!(!parse(&v(&["midi-latency", "--live=false"])).unwrap().live);
+        // --live takes no value: the next word is still a flag
+        let a = parse(&v(&["midi-latency", "--live", "--quantum", "32"])).unwrap();
+        assert_eq!((a.live, a.quantum), (true, 32));
+        assert!(parse(&v(&["midi-throughput", "--live"])).is_err());
     }
 
     #[test]

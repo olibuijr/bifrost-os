@@ -3,14 +3,28 @@
 use bifrost_audio_bench::args::{self, Args, Cmd, USAGE};
 use bifrost_audio_bench::json::Report;
 use bifrost_audio_bench::rig::{Rig, RigOptions};
-use bifrost_audio_bench::{midi_latency, roundtrip, sweep, throughput};
+use bifrost_audio_bench::{live, midi_latency, roundtrip, sweep, throughput};
 
 fn rig_options(a: &Args, input: bool) -> RigOptions {
     // The null driver is always on its manual clock; loopback and alsa run in real time.
     RigOptions { driver: a.driver.clone(), rate: a.rate, quantum: a.quantum, device: a.device.clone(), input, manual: false }
 }
 
+/// `--live`: the same benches against the running bifrost-audiod (see `live`).
+fn run_live(a: &Args) -> Result<Report, String> {
+    let dev = live::LiveDevice::connect(a.device.as_deref(), a.rate)?;
+    match a.cmd {
+        Cmd::MidiLatency => live::midi_latency(&dev, &midi_latency::Opts { count: a.count, interval_ms: a.interval_ms, lead: a.lead }, a.quantum),
+        Cmd::AudioRoundtrip => live::roundtrip(&dev, &roundtrip::Opts { count: a.count, interval_ms: a.interval_ms, threshold: 0.25 }, a.quantum),
+        Cmd::XrunSweep => live::sweep(&dev, &sweep::Opts { quanta: sweep::QUANTA.to_vec(), seconds: a.seconds, stress: a.stress }),
+        Cmd::MidiThroughput => Err("midi-throughput has no --live mode".to_string()),
+    }
+}
+
 fn run(a: &Args) -> Result<Report, String> {
+    if a.live {
+        return run_live(a);
+    }
     match a.cmd {
         Cmd::MidiLatency => {
             let mut rig = Rig::open(&rig_options(a, false))?;
