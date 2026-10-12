@@ -5,6 +5,7 @@
 #![no_std]
 extern crate alloc;
 mod boot_policy;
+mod cmdline;
 use alloc::vec::Vec;
 use uefi::boot::{self, LoadImageSource};
 use uefi::prelude::*;
@@ -22,7 +23,6 @@ const CMDLINE_FILES: &[&CStr16] = &[
     cstr16!("\\EFI\\BIFROST\\boot.cfg"),
     cstr16!("\\EFI\\BOOT\\cmdline.txt"),
 ];
-const DEFAULT_CMDLINE: &str = "initrd=\\arch\\boot\\x86_64\\initramfs-linux.img quiet splash";
 
 /// Kernel command line from `\\EFI\\BOOT\\cmdline.txt` next to this loader (written at ISO build time).
 fn read_text(dev: Handle, path: &CStr16) -> Option<alloc::string::String> {
@@ -79,7 +79,7 @@ fn cmdline(dev: Handle) -> alloc::string::String {
     CMDLINE_FILES
         .iter()
         .find_map(|path| cmdline_from(dev, path))
-        .unwrap_or_else(|| DEFAULT_CMDLINE.into())
+        .unwrap_or_else(|| cmdline::DEFAULT_CMDLINE.into())
 }
 
 /// Microseconds since CPU reset from the TSC, the clock systemd's Boot Loader Interface expects.
@@ -176,9 +176,13 @@ fn main() -> Status {
         return Status::LOAD_ERROR;
     };
     drop(li);
+    // Ctrl+V already in the firmware's key queue: this one boot is verbose (support). Never waits for a key.
+    let verbose = verbose_requested();
     let current = cmdline(dev);
+    let current = if verbose { cmdline::verbose(&current) } else { current };
     let marker = read_text(dev, cstr16!("\\EFI\\BIFROST\\pending"));
-    let previous = read_text(dev, cstr16!("\\EFI\\BIFROST\\rollback.txt"));
+    let previous = read_text(dev, cstr16!("\\EFI\\BIFROST\\rollback.txt"))
+        .map(|line| if verbose { cmdline::verbose(&line) } else { line });
     let fallback = match boot_policy::choose(marker.as_deref()) {
         boot_policy::Choice::Current => false,
         boot_policy::Choice::Attempt => !consume_attempt(dev),
@@ -199,6 +203,32 @@ fn main() -> Status {
     }
     status
 }
+/// True when Ctrl+V is among the keystrokes the firmware has already queued. Drains at most 32 keys without waiting.
+/// Firmware reports Ctrl+V either as the control character 0x16 or as `v` with a Control modifier, so both count.
+fn verbose_requested() -> bool {
+    use uefi::proto::console::text::{InputEx, Key};
+    let Ok(h) = boot::get_handle_for_protocol::<InputEx>() else {
+        return false;
+    };
+    let Ok(mut input) = boot::open_protocol_exclusive::<InputEx>(h) else {
+        return false;
+    };
+    for _ in 0..32 {
+        let Ok(Some(data)) = input.read_key() else {
+            break;
+        };
+        // Control bits of the shift state (uefi-raw KeyShiftState: right control 0x04, left control 0x08).
+        let ctrl = data.key_state.key_shift_state.is_some_and(|s| s.bits() & 0x0c != 0);
+        if let Key::Printable(c) = data.key {
+            let c = char::from(c);
+            if c == '\u{16}' || ((c == 'v' || c == 'V') && ctrl) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
     let Ok(dp) = boot::open_protocol_exclusive::<DevicePath>(dev) else {
         return Status::LOAD_ERROR;
