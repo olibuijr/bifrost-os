@@ -176,13 +176,29 @@ pub fn initramfs_hooks(encrypted: bool) -> String {
 /// (`bootweave/efi/src/cmdline.rs`, `DEFAULT_CMDLINE`) and the ISO line (`tools/prepare-mkarchiso.py`) carry it too.
 /// An empty systemd.tty.rows.console= makes PID 1 skip its ANSI size query on /dev/console. Nothing answers
 /// that query behind the boot frame, so PID 1 otherwise waits out its 333 ms reply timeout every boot.
-pub fn cmdline_txt(root_uuid: &str) -> String {
-    cmdline_with(root_uuid, AUDIO_CORE)
+pub fn cmdline_txt(root_uuid: &str, kernel: &str) -> String {
+    cmdline_with(root_uuid, kernel, AUDIO_CORE)
 }
 
-fn cmdline_with(root_uuid: &str, audio_core: Option<&str>) -> String {
+/// The installed kernel package: `linux-rt` (PREEMPT_RT, the default since 2026-10-12, docs/audio-latency.md
+/// "Kernel"), or the stock `linux` when the package source had no linux-rt (see `KERNEL_FALLBACK`).
+pub const KERNEL_RT: &str = "linux-rt";
+pub const KERNEL_FALLBACK: &str = "linux";
+
+/// The kernel for a machine with these GPU packages. `nvidia-open` ships prebuilt modules that match only the stock
+/// `linux` kernel, and NVIDIA's modules refuse to build on PREEMPT_RT by default, so an NVIDIA machine gets `linux`.
+pub fn kernel_for(gpu: &[&str]) -> &'static str {
+    if gpu.contains(&"nvidia-open") { KERNEL_FALLBACK } else { KERNEL_RT }
+}
+
+fn cmdline_with(root_uuid: &str, kernel: &str, audio_core: Option<&str>) -> String {
     let isolate = audio_core.map(|c| format!(" isolcpus={c} nohz_full={c} rcu_nocbs={c}")).unwrap_or_default();
-    format!("initrd=\\initramfs-linux.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
+    format!("initrd=\\initramfs-{kernel}.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
+}
+
+/// The mkinitcpio preset for the installed kernel package: one initramfs, no fallback image.
+pub fn mkinitcpio_preset(kernel: &str) -> String {
+    format!("ALL_config=\"/etc/mkinitcpio.conf\"\nALL_kver=\"/boot/vmlinuz-{kernel}\"\nPRESETS=('default')\ndefault_image=\"/boot/initramfs-{kernel}.img\"\n")
 }
 
 /// Lab autonomy: a panic, an oops or a lockup reboots the machine after 10 s instead of hanging it, so an unattended
@@ -244,7 +260,9 @@ pub const RUNTIME_PACKAGES: &str = include_str!("../../../packaging/arch/runtime
 pub const BASE_PACKAGES: &[&str] = &[
     "btrfs-progs",
     "base",
-    "linux",
+    // linux-rt is the default kernel; the installer retries with `linux` when the source lacks it. No headers
+    // package: nothing on the installed system builds DKMS modules.
+    "linux-rt",
     "linux-firmware",
     "networkmanager",
     "openssh",
@@ -458,8 +476,16 @@ pub fn install(cfg: &Config, progress: &Shared) {
             let _ = std::fs::write("/etc/pacman.conf", conf.replace("ParallelDownloads = 5", "ParallelDownloads = 12"));
         }
         let mut args = vec!["pacstrap", "-K", "/mnt"];
-        args.extend(packages());
-        args.extend(gpu);
+        let mut kernel = kernel_for(&gpu);
+        if kernel == KERNEL_RT && r.cmd(&["pacman", "-Sp", KERNEL_RT]).is_err() {
+            r.log(format!("{KERNEL_RT} is not in the package source; installing the stock {KERNEL_FALLBACK} kernel"));
+            kernel = KERNEL_FALLBACK;
+        } else if kernel != KERNEL_RT {
+            r.log(format!("NVIDIA GPU: installing the stock {KERNEL_FALLBACK} kernel (nvidia-open modules match it only)"));
+        }
+        let pkgs: Vec<&str> = packages().into_iter().map(|p| if p == KERNEL_RT { kernel } else { p }).collect();
+        args.extend(pkgs.iter().copied());
+        args.extend(gpu.iter().copied());
         let watcher = {
             let p = progress.clone();
             std::thread::spawn(move || {
@@ -581,12 +607,12 @@ pub fn install(cfg: &Config, progress: &Shared) {
             std::fs::create_dir_all(sys("/boot/EFI/BOOT")).map_err(|e| e.to_string())?;
             r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/bootweave.efi"), &sys("/boot/EFI/BOOT/BOOTx64.efi")])
         })?;
-        r.write(&sys("/boot/EFI/BOOT/cmdline.txt"), &cmdline_txt(&uuid))?;
+        r.write(&sys("/boot/EFI/BOOT/cmdline.txt"), &cmdline_txt(&uuid, kernel))?;
         // Stable BifrOSt namespace for the native EFI loader. Keep the BOOT
         // copy above because recovery tooling and older USB media still read it.
         std::fs::create_dir_all(sys("/boot/EFI/BIFROST")).map_err(|e| e.to_string())?;
         r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/bootweave.efi"), &sys("/boot/EFI/BIFROST/BOOTx64.efi")])?;
-        r.write(&sys("/boot/EFI/BIFROST/boot.cfg"), &cmdline_txt(&uuid))?;
+        r.write(&sys("/boot/EFI/BIFROST/boot.cfg"), &cmdline_txt(&uuid, kernel))?;
         // The firmware entry names the BifrOSt loader; EFI/BOOT stays as the removable-media fallback.
         let _ = r.cmd(&["efibootmgr", "-c", "-d", dev, "-p", &part_number(&efi), "-L", "BifrOSt", "-l", "\\EFI\\BIFROST\\BOOTx64.efi"]);
         let mc = std::fs::read_to_string(sys("/etc/mkinitcpio.conf")).unwrap_or_default();
@@ -612,8 +638,8 @@ pub fn install(cfg: &Config, progress: &Shared) {
         r.chroot(&["systemctl", "enable", "bifrost-update-guard.service", "springboard.service", "NetworkManager.service", "sshd.service", "seatd.service", "power-profiles-daemon.service", "bifrost-irq-priority.service", "bifrost-mcp.service"])?;
         r.chroot(&["systemctl", "set-default", "graphical.target"])?;
         // one initramfs: the fallback image is a second full build nobody boots on a fresh install
-        r.write(&sys("/etc/mkinitcpio.d/linux.preset"), "ALL_config=\"/etc/mkinitcpio.conf\"\nALL_kver=\"/boot/vmlinuz-linux\"\nPRESETS=('default')\ndefault_image=\"/boot/initramfs-linux.img\"\n")?;
-        r.chroot(&["mkinitcpio", "-p", "linux"])?;
+        r.write(&sys(&format!("/etc/mkinitcpio.d/{kernel}.preset")), &mkinitcpio_preset(kernel))?;
+        r.chroot(&["mkinitcpio", "-p", kernel])?;
         // the unified kernel image (EFI/BIFROST/bifrost.efi); a failure keeps the kernel-plus-initramfs boot line
         let _ = r.chroot(&["bifrost-update-guard", "uki"]);
 
@@ -781,8 +807,8 @@ mod tests {
             assert!(s.lines().any(|l| l == line), "missing {line}");
         }
         assert!(s.ends_with('\n'));
-        assert!(cmdline_txt("abcd").split_whitespace().any(|t| t == "panic=10"), "a panic before sysctl runs also reboots");
-        assert_eq!(cmdline_txt("abcd").split_whitespace().filter(|t| t.starts_with("panic=")).count(), 1);
+        assert!(cmdline_txt("abcd", KERNEL_RT).split_whitespace().any(|t| t == "panic=10"), "a panic before sysctl runs also reboots");
+        assert_eq!(cmdline_txt("abcd", KERNEL_RT).split_whitespace().filter(|t| t.starts_with("panic=")).count(), 1);
     }
 
     fn layout(id: &str) -> Layout {
@@ -830,8 +856,8 @@ mod tests {
         assert_eq!(wayland_keyboard_conf(&layout("us-intl")), "XKB_DEFAULT_LAYOUT=us\nXKB_DEFAULT_VARIANT=intl\n");
         assert_eq!(account_file("Ada Lovelace", "ada"), "full_name=Ada Lovelace\nusername=ada\n");
         assert!(sshd_dropin().contains("PermitRootLogin no"));
-        let c = cmdline_txt("abcd");
-        assert!(c.starts_with("initrd=\\initramfs-linux.img root=UUID=abcd rootflags=subvol=@system rw quiet") && c.ends_with('\n'));
+        let c = cmdline_txt("abcd", KERNEL_RT);
+        assert!(c.starts_with("initrd=\\initramfs-linux-rt.img root=UUID=abcd rootflags=subvol=@system rw quiet") && c.ends_with('\n'));
         assert!(!c.contains("plymouth") && !c.contains(" splash"));
         let enc = initramfs_hooks(true);
         assert_eq!(initramfs_hooks(false), INITRAMFS_HOOKS);
@@ -846,7 +872,10 @@ mod tests {
             assert!(c.split_whitespace().any(|t| t == flag), "missing {flag}");
         }
         assert!(!c.split_whitespace().any(|t| t == "splash" || t == "plymouth"));
-        let iso = cmdline_with("abcd", Some("7"));
+        assert!(cmdline_txt("abcd", KERNEL_FALLBACK).starts_with("initrd=\\initramfs-linux.img "));
+        assert!(mkinitcpio_preset(KERNEL_RT).contains("/boot/vmlinuz-linux-rt") && mkinitcpio_preset(KERNEL_RT).contains("initramfs-linux-rt.img"));
+        assert!(BASE_PACKAGES.contains(&"linux-rt") && !BASE_PACKAGES.contains(&"linux") && BASE_PACKAGES.contains(&"linux-firmware"));
+        let iso = cmdline_with("abcd", KERNEL_FALLBACK, Some("7"));
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
         assert!(irq_priority_unit().contains("chrt -f -p 50") && irq_priority_unit().contains("irq/*xhci*"));
@@ -904,6 +933,9 @@ mod tests {
         assert!(gpu_packages(amd).contains(&"vulkan-radeon") && !gpu_packages(amd).contains(&"nvidia-open"));
         let nv = "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [10de:2216]";
         assert!(gpu_packages(nv).contains(&"nvidia-open") && gpu_packages(nv).contains(&"libva-nvidia-driver"));
+        assert_eq!(kernel_for(&gpu_packages(nv)), KERNEL_FALLBACK, "nvidia-open matches the stock kernel only");
+        assert_eq!(kernel_for(&gpu_packages(amd)), KERNEL_RT);
+        assert_eq!(kernel_for(&gpu_packages(intel)), KERNEL_RT);
         let both = format!("{intel}\n{nv}");
         let p = gpu_packages(&both);
         assert!(p.contains(&"intel-media-driver") && p.contains(&"nvidia-utils"), "hybrid laptops get both stacks");

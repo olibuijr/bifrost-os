@@ -58,7 +58,7 @@ Install order (`plan::install`):
 10. Account: `useradd -m -G wheel,audio,video,input,storage`, sudo for wheel, root locked,
     `/var/lib/springboard/account` (read by `session` for the local account name).
 11. Boot: `bootweave.efi` → `\EFI\BOOT\BOOTx64.efi`, `cmdline.txt` (below), `efibootmgr -c -L BifrOSt`,
-    mkinitcpio preset `linux`.
+    mkinitcpio preset `linux-rt` (`linux` when the fallback below applied).
 12. Services (chroot): mask `getty@tty1`, `plymouth-quit`, `plymouth-quit-wait`; enable
     `bifrost-update-guard`, `springboard`, `bifrost-splash-handoff`, `NetworkManager`, `sshd`, `seatd`,
     `power-profiles-daemon`.
@@ -73,9 +73,16 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
 
 1. UEFI runs `\EFI\BOOT\BOOTx64.efi` (`bootweave.efi`). The NVRAM entry is `BifrOSt`.
 2. `cmdline.txt` (`plan::cmdline_txt`):
-   `initrd=\initramfs-linux.img root=UUID=<root> rootflags=subvol=@system rw quiet splash loglevel=3 rd.udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`
+   `initrd=\initramfs-linux-rt.img root=UUID=<root> rootflags=subvol=@system rw quiet splash loglevel=3 rd.udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`
    (the i915 flags stop Skylake framebuffer-compression stripes).
-3. initramfs (mkinitcpio `linux` preset) mounts `@system` and switches root.
+3. initramfs (mkinitcpio `linux-rt` preset) mounts `@system` and switches root.
+   The installed kernel is `linux-rt` (Arch PREEMPT_RT, default since 2026-10-12, `docs/audio-latency.md` "Kernel"):
+   `/boot/vmlinuz-linux-rt`, `/boot/initramfs-linux-rt.img`. Machines with an NVIDIA GPU get the stock `linux` (`kernel_for`: `nvidia-open` modules match only it, and NVIDIA modules
+   refuse PREEMPT_RT). If `pacman -Sp linux-rt` fails (the package source lacks it) the installer logs it and uses `linux`, writing the `linux` preset and
+   `initramfs-linux.img`, so an install never fails over the kernel. The loader derives the kernel from the `initrd=`
+   name (`initramfs-linux-rt.img` -> `vmlinuz-linux-rt`, anything else -> `vmlinuz-linux`), and the update guard
+   (`packaging/arch/recovery/system.rs`) picks the kernel files, preset and UKI inputs by which image is in `/boot`,
+   so older stock-kernel installs keep working. The live ISO keeps the stock `linux` kernel.
 4. Plymouth starts with theme `bifrost` (`bifrost.script`: logo and bar fade in; `Quit` fades them out).
 5. `bifrost-installer.service` retains the splash frame until the native installer is ready, then releases DRM and owns the card directly.
 6. `springboard.service` (after `plymouth-start`, `seatd`, `systemd-user-sessions`; `Conflicts=getty@tty1`)

@@ -1706,7 +1706,7 @@ fi
 
 
 def cmd_kab(args):
-    """`kab [--seconds N]`: kernel A/B. kbench on the running (stock) kernel, one boot into linux-rt through a create-only
+    """`kab [--seconds N]`: kernel A/B. kbench on the running kernel (stock before 2026-10-12; linux-rt is the installed default now, so boot stock `linux` for a real A/B), one boot into linux-rt through a create-only
     EFI entry plus BootNext, kbench there, both summaries side by side. Stops when the RT kernel did not come up
     (the entry sets panic=10, so a failed boot returns to the disk entry)."""
     seconds = seconds_arg(args)

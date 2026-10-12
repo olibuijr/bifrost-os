@@ -2,6 +2,15 @@
 use super::*;
 const TOP: &str = "/run/bifrost/recovery-root";
 const ESP: &str = "/boot/EFI/BIFROST";
+/// The installed kernel package: `linux-rt` (the default since 2026-10-12) when its image is in /boot, else the
+/// stock `linux` (older installs, or an install whose package source had no linux-rt).
+fn kernel() -> &'static str {
+    if Path::new("/boot/vmlinuz-linux-rt").exists() { "linux-rt" } else { "linux" }
+}
+fn kernel_files() -> [String; 2] {
+    let k = kernel();
+    [format!("vmlinuz-{k}"), format!("initramfs-{k}.img")]
+}
 fn text(program: &str, args: &[&str]) -> io::Result<String> {
     let out = Command::new(program).args(args).output()?;
     if !out.status.success() {
@@ -71,7 +80,7 @@ pub fn prepare() -> io::Result<()> {
     )?;
     fs::create_dir_all(store)?;
     fs::create_dir_all(format!("{ESP}/previous"))?;
-    for file in ["vmlinuz-linux", "initramfs-linux.img"] {
+    for file in kernel_files() {
         copy(
             &Path::new("/boot").join(file),
             &Path::new(ESP).join("previous").join(file),
@@ -162,7 +171,7 @@ pub fn restore() -> io::Result<()> {
         fs::rename(root.join("@system"), root.join(name))?;
     }
     fs::rename(candidate, root.join("@system"))?;
-    for file in ["vmlinuz-linux", "initramfs-linux.img"] {
+    for file in kernel_files() {
         copy(
             &Path::new(ESP).join("previous").join(file),
             &Path::new("/boot").join(file),
@@ -220,7 +229,7 @@ pub fn fallback_line(line: &str) -> String {
             if s.starts_with("uki=") {
                 format!("uki={UKI_PREVIOUS}")
             } else if s.starts_with("initrd=") {
-                "initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img".to_owned()
+                format!("initrd=\\EFI\\BIFROST\\previous\\initramfs-{}.img", if s.ends_with("initramfs-linux-rt.img") { "linux-rt" } else { "linux" })
             } else if s.starts_with("rootflags=") {
                 "rootflags=subvol=@rollback".to_owned()
             } else {
@@ -339,7 +348,7 @@ pub fn record_modules() -> io::Result<bool> {
 /// The initramfs for this machine (rebuilt only when the drop-in changed), then the unified image from it.
 pub fn build_boot_image() -> io::Result<()> {
     if reconcile_modules()? {
-        run("mkinitcpio", &["-p", "linux"])?;
+        run("mkinitcpio", &["-p", kernel()])?;
     }
     build_uki().map(|_| ())
 }
@@ -358,9 +367,9 @@ pub fn build_uki() -> io::Result<bool> {
     microcode.sort();
     let out = esp.join("bifrost.efi");
     let tmp = esp.join("bifrost.efi.new");
-    let mut args: Vec<String> = vec!["build".into(), "--linux=/boot/vmlinuz-linux".into()];
+    let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{}", kernel())];
     args.extend(microcode.iter().map(|m| format!("--initrd={m}")));
-    args.push("--initrd=/boot/initramfs-linux.img".into());
+    args.push(format!("--initrd=/boot/initramfs-{}.img", kernel()));
     args.push(format!("--cmdline={}", cmdline_options(&line)));
     args.push(format!("--output={}", tmp.display()));
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -408,6 +417,7 @@ mod uki_tests {
             "uki=\\EFI\\BIFROST\\bifrost-previous.efi root=UUID=abc rootflags=subvol=@rollback rw quiet loglevel=3 bifrost.recovery=1\n"
         );
         // an install still on the kernel plus initramfs keeps the previous files
+        assert!(fallback_line(&LINE.replace("initramfs-linux", "initramfs-linux-rt")).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux-rt.img "));
         assert!(fallback_line(LINE).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img "));
     }
 
