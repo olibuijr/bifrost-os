@@ -8,6 +8,10 @@
 - Transport commands are checked before they run: Play, Pause, Toggle, Next and Previous are offered only when they can
   act now (Next only with a following song, or with Repeat All; Pause only while playing). Stop and skips are not offered.
 - A system playback command (play, pause, toggle, next, previous) runs the same transport as the buttons do.
+- Control Center's Now Playing tile shows the song or station Music is playing. Its play, pause, next, previous and seek
+  taps now reach Music. The tile is updated when the song or the state changes, and after a seek.
+- Unplugging headphones or a Bluetooth output pauses Music, as the speaker takes over.
+- While the library is being scanned, the Music Dock icon shows a progress bar.
 
 ## 1.2.3
 

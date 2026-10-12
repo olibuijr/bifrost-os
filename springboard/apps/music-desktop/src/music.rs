@@ -16,6 +16,7 @@ pub mod jobs;
 pub mod library;
 pub mod nowplay;
 pub mod playlists;
+pub mod system;
 pub mod upnext;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
@@ -1049,6 +1050,31 @@ impl Music {
         let playing = self.snap.playing;
         let Some(target) = self.now_playing.as_ref().and_then(|s| nowplay::route(s, cmd, playing)) else { return false };
         self.control(target);
+        true
+    }
+
+    /// The app's Now Playing session, as published to Control Center (`app.rs`).
+    pub fn session(&self) -> Option<&bifrost_app::now_playing::MediaSession> {
+        self.now_playing.as_ref()
+    }
+
+    /// Whether the library is still being scanned (the Dock tile shows progress meanwhile).
+    pub fn is_scanning(&self) -> bool {
+        self.scanning
+    }
+
+    /// A seek from Control Center, in milliseconds. False when the session does not allow it now: no song, a station,
+    /// or no length. The position is clamped to the song's length.
+    pub fn remote_seek(&mut self, position_ms: f64) -> bool {
+        let allowed = self.now_playing.as_ref().is_some_and(|s| s.dispatch(bifrost_app::now_playing::RemoteCommand::SeekTo).is_ok());
+        if !allowed || self.is_live() {
+            return false;
+        }
+        let Some(d) = self.snap.duration_ms else { return false };
+        let ms = position_ms.clamp(0., d);
+        self.player.seek_ms(ms);
+        self.snap.position_ms = ms;
+        self.sync_now_playing();
         true
     }
 
