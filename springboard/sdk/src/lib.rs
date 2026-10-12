@@ -203,6 +203,7 @@ pub mod inference;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
+pub mod vpn_configuration;
 pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod pixel_buffer;
