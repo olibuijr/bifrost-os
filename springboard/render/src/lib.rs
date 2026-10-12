@@ -26,6 +26,7 @@ pub mod pixel_layout;
 pub mod bezier;
 pub mod colorlab;
 pub mod colormap;
+pub mod raw_params;
 
 #[cfg(test)]
 mod tests {
