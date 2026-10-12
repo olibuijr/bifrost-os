@@ -2,6 +2,9 @@
 //! (`services/now_playing.rs`): the title and artist, the position, and Previous, Play or Pause, Next rows. A row sends
 //! its remote command to the session's owner, and a row the owner did not enable is greyed out. The menu has no
 //! artwork: the service carries none (see `docs/parity/wire6-menubar-now-playing.md`).
+//!
+//! The extra exists only with the desktop menu bar (`desktop-wayland`), so the module is built only with it.
+#![cfg(feature = "desktop-wayland")]
 use super::services::now_playing::{self, Progress};
 use crate::shell::music::nowplaying::Target as Media;
 use bifrost_ui::media_content::MediaDuration;

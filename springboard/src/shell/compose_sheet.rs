@@ -180,10 +180,6 @@ impl ComposeOverlay {
         }
     }
 
-    pub fn sheet(&self) -> &ComposeSheet {
-        &self.sheet
-    }
-
     /// Post is allowed for a non-empty post within the limit.
     pub fn can_post(&self) -> bool {
         let text = self.sheet.draft().text();

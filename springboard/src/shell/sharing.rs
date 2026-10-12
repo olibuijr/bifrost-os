@@ -197,7 +197,9 @@ impl super::Shell {
         }
     }
 
-    /// The user chose menu item `id` (a `MENU_BASE` id). False when no share is open.
+    /// The user chose menu item `id` (a `MENU_BASE` id). False when no share is open. The menu is the desktop's, so the
+    /// choice exists only with `desktop-wayland`.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn share_choose(&mut self, id: u32, t: f64) -> bool {
         let Some(p) = self.app_share.pending.take() else { return false };
         let Some(target) = id.checked_sub(MENU_BASE).and_then(|i| p.targets.get(i as usize)).cloned() else {
@@ -216,11 +218,13 @@ impl super::Shell {
         true
     }
 
+    #[cfg(feature = "desktop-wayland")]
     fn share_copy(&mut self, p: &Pending) -> bool {
         super::clipboard::set_text(&copy_text(&p.items));
         true
     }
 
+    #[cfg(feature = "desktop-wayland")]
     fn share_deliver(&mut self, p: &Pending, app: &str, t: f64) -> bool {
         let Some(to) = super::apphost::slot_of(app) else { return false };
         let sender = self.ext.get(p.slot as usize).and_then(Option::as_ref).map(|h| h.id.clone());
@@ -239,10 +243,7 @@ impl super::Shell {
         }
         if let (Some(sender), false) = (sender, files.is_empty()) {
             let request = self.app_share.next_inbound();
-            #[cfg(feature = "desktop-wayland")]
             self.inbound_files(&sender, app, to as u8, request, &files);
-            #[cfg(not(feature = "desktop-wayland"))]
-            let _ = (sender, request);
         }
         self.dirty = true;
         true

@@ -81,8 +81,10 @@ pub mod pages;
 mod login_items_page;
 pub mod axmap;
 pub mod power_menu;
+#[cfg(feature = "desktop-wayland")]
 mod compose_sheet;
 mod recent_items;
+#[cfg(feature = "desktop-wayland")]
 mod print_sheet;
 pub mod session;
 pub mod prefs;
@@ -580,8 +582,10 @@ pub struct Shell {
     /// the slide-to-power-off sheet (Power held for a second)
     power_menu: Option<power_menu::PowerMenu>,
     /// the compose post sheet opened from the share menu
+    #[cfg(feature = "desktop-wayland")]
     compose: Option<compose_sheet::ComposeOverlay>,
     /// File > Print…: the print sheet over the captured desktop (see `print_sheet.rs`)
+    #[cfg(feature = "desktop-wayland")]
     print_sheet: Option<print_sheet::PrintSheet>,
     /// the share sheet, the nearby service and the incoming-file prompt
     share: Option<share::Sheet>,
@@ -818,7 +822,9 @@ impl Shell {
             last_input: 0.0,
             corner_start: None,
             power_menu: None,
+            #[cfg(feature = "desktop-wayland")]
             compose: None,
+            #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
             share: None,
             share_svc: None,
@@ -1067,6 +1073,25 @@ impl Shell {
         self.drawn = Drawn::Nothing;
     }
 
+    /// Whether the compose post sheet is up. The share menu opens it, and that menu is the desktop's.
+    #[cfg(feature = "desktop-wayland")]
+    fn compose_showing(&self) -> bool {
+        self.compose.is_some()
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn compose_showing(&self) -> bool {
+        false
+    }
+    /// Whether the print sheet is up. File > Print is the desktop's menu.
+    #[cfg(feature = "desktop-wayland")]
+    fn print_showing(&self) -> bool {
+        self.print_sheet.is_some()
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn print_showing(&self) -> bool {
+        false
+    }
+
     /// Touches for the power sheet and the low-battery alert, which sit on
     /// top of everything: None when neither is up (or for a non-touch event).
     fn modal_event(&mut self, ev: Event) -> Option<Vec<Effect>> {
@@ -1081,6 +1106,7 @@ impl Shell {
             // the first-time notification alert takes every touch until the person answers it
             return self.usernotif_ask_event(ev);
         }
+        #[cfg(feature = "desktop-wayland")]
         if let Some(sheet) = &mut self.compose {
             let outcome = sheet.event(&self.ui, self.w, self.h, ev);
             self.drawn = Drawn::Nothing;
@@ -1107,6 +1133,7 @@ impl Shell {
                 power_menu::Outcome::Idle | power_menu::Outcome::Redraw => vec![],
             });
         }
+        #[cfg(feature = "desktop-wayland")]
         if self.print_sheet.is_some() {
             // the print sheet takes every touch until Cancel or Print
             if let Event::Up(x, y) = ev {
@@ -2180,6 +2207,15 @@ impl Shell {
             return vec![];
         }
         if let Some(fx)=self.overview_event(ev,t) {return fx;}
+        // the Quick Look card takes its pointer in every build, not only with the desktop bar; a locked screen does not
+        let quick_look_took = !self.is_locked() && match ev {
+            Event::Down(x, y) => self.quick_look_pointer(x, y, false),
+            Event::Up(x, y) => self.quick_look_pointer(x, y, true),
+            _ => false,
+        };
+        if quick_look_took {
+            return vec![];
+        }
         #[cfg(feature="desktop-wayland")]
         if let Some(fx)=self.desktop_bar_event(ev,t) {return fx;}
         if let Some(fx) = self.notify_event(ev, t) {
@@ -3062,7 +3098,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.notify.ask.is_some() || self.compose.is_some() || self.print_sheet.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3078,9 +3114,11 @@ impl Shell {
             if let Some(a) = &self.notify.ask {
                 a.draw(s, &self.ui, self.w, self.h);
             }
+            #[cfg(feature = "desktop-wayland")]
             if let Some(c) = &self.compose {
                 c.draw(s, &self.ui, self.w, self.h);
             }
+            #[cfg(feature = "desktop-wayland")]
             if let Some(p) = &self.print_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
@@ -3102,7 +3140,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3123,7 +3161,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3324,7 +3362,7 @@ impl Shell {
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
-            ("compose-sheet", self.compose.is_some()),
+            ("compose-sheet", self.compose_showing()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
             ("clock-alert", self.clock.alert().is_some()),
