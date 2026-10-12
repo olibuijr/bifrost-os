@@ -3740,6 +3740,7 @@ name = "springboard"
 version = "0.5.44"
 dependencies = [
  "bifrost-audio-hal",
+ "bifrost-audio-toolbox",
  "bifrost-audio-types",
  "bifrost-chrome",
  "bifrost-core",

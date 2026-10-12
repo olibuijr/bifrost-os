@@ -39,6 +39,7 @@ mod sbr_tables;
 pub mod source;
 pub mod stream;
 pub mod symfile;
+pub mod system_sound;
 pub mod volume;
 
 #[cfg(target_os = "linux")]
