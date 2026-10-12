@@ -11,3 +11,4 @@ pub mod mixer;
 pub mod hog;
 pub mod latency;
 pub mod quantum;
+pub mod aggregate;
