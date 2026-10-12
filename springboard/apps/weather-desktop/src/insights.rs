@@ -7,7 +7,16 @@ use bifrost_app::controls::chart_marks::{Frame, Interpolation, Plot, line_path};
 use bifrost_app::controls::geo::{Coordinate, DistanceUnits, format_distance};
 use bifrost_app::controls::location_auth::{AuthorizationStatus, LocationError};
 use bifrost_app::controls::mapview::{MapCamera, MapType, MapView};
+use bifrost_app::controls::weather_alert::{WeatherAlert, WeatherAvailability, most_severe};
+use bifrost_app::controls::weather_attribution::WeatherAttribution;
 use springboard::shell::weather::data::{Hour, Units};
+
+/// The data service the forecast comes from, and the page that carries its terms.
+pub const DATA_SERVICE: &str = "Open-Meteo";
+pub const DATA_LEGAL_URL: &str = "https://open-meteo.com/en/terms";
+/// The forecast request asks for no weather alerts and no minute forecast, so the place has neither from this source.
+pub const DATA_HAS_ALERTS: bool = false;
+pub const DATA_HAS_MINUTE: bool = false;
 
 /// Zoom of the map card: at this level about two degrees of the world fit across a 400-point card.
 pub const MAP_ZOOM: f64 = 8.0;
@@ -150,6 +159,30 @@ pub fn location_note(status: AuthorizationStatus, error: Option<LocationError>) 
     }
 }
 
+/// The lines under the forecast cards: the alert availability of the place when its source serves no alerts, then the
+/// data attribution. Each line is plain text; the attribution is the model's own line.
+pub fn footer_lines() -> Vec<String> {
+    let mut lines = Vec::new();
+    let availability = WeatherAvailability::new(DATA_HAS_ALERTS, DATA_HAS_MINUTE);
+    if !availability.has_alerts() {
+        lines.push("Weather alerts are not available for this place from the data service.".to_string());
+    }
+    if let Some(attribution) = WeatherAttribution::new(DATA_SERVICE, Some(DATA_LEGAL_URL), "") {
+        lines.push(attribution.line());
+    }
+    lines
+}
+
+/// The alert banner text for the most serious alert: its event, its region when it has one, and the threat level in
+/// words. None when there are no alerts, so no banner is drawn.
+pub fn alert_banner(alerts: &[WeatherAlert]) -> Option<String> {
+    let alert = most_severe(alerts)?;
+    Some(match &alert.region {
+        Some(region) => format!("{} for {}: {}", alert.summary, region, alert.severity.description()),
+        None => format!("{}: {}", alert.summary, alert.severity.description()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +273,38 @@ mod tests {
     #[test]
     fn map_note_names_the_map_type() {
         assert!(map_note(MapType::Hybrid).starts_with("Hybrid map"));
+    }
+
+    #[test]
+    fn footer_says_alerts_are_unavailable_then_credits_the_service() {
+        let lines = footer_lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "Weather alerts are not available for this place from the data service.");
+        assert_eq!(lines[1], "Weather data from Open-Meteo");
+    }
+
+    #[test]
+    fn alert_banner_is_absent_without_alerts() {
+        assert_eq!(alert_banner(&[]), None);
+    }
+
+    #[test]
+    fn alert_banner_names_the_most_severe_alert_with_its_trimmed_region() {
+        use bifrost_app::controls::weather_alert::Severity;
+        let alerts = vec![
+            WeatherAlert::new("Wind advisory", None, Severity::Moderate, "Met", None),
+            WeatherAlert::new("Flood warning", Some(" South "), Severity::Severe, "Met", None),
+        ];
+        assert_eq!(
+            alert_banner(&alerts).as_deref(),
+            Some("Flood warning for South: Significant threat")
+        );
+    }
+
+    #[test]
+    fn alert_banner_without_region_omits_the_for_clause() {
+        use bifrost_app::controls::weather_alert::Severity;
+        let alerts = vec![WeatherAlert::new("Frost", None, Severity::Minor, "Met", None)];
+        assert_eq!(alert_banner(&alerts).as_deref(), Some("Frost: Minimal or no known threat"));
     }
 }

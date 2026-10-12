@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- The bottom of the forecast says where the data comes from: "Weather data from Open-Meteo", so the source is credited on
+  the screen that shows its numbers.
+- The same footer says plainly when weather alerts are not available for a place. The forecast service sends no
+  alerts, so the app says so instead of implying that there are none.
+- The app has the code for a severe weather banner, which names the most serious alert, its region and its threat
+  level. It is not shown yet, because no alert source is connected.
+
 ## 1.3.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
