@@ -393,6 +393,7 @@ impl DamageHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render_server::material::SATURATION;
     use bifrost_layers::layer::{Border, Shadow};
     use bifrost_layers::{Affine, Layer, LayerId, Point as LPoint, Rect};
 
