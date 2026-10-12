@@ -861,6 +861,8 @@ pub mod filebadge;
 pub mod itemattrs;
 pub mod match_pattern;
 pub mod url_filter;
+pub mod web_history;
+pub mod webpage_usage;
 pub mod call_directory;
 pub mod annotation;
 pub mod ecs;
