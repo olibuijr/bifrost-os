@@ -176,6 +176,6 @@ Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
 - Damage: unchanged. The Vulkan path blurs inside the frame damage; the GLES path re-blurs only when the signature of the
   elements below (id, commit, geometry), the output size or the recipe saturation changes.
 - Budget: `budgeted_blur` lowers the number of dual-Kawase passes until the pyramid (levels written down and up) is at most
-  3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region runs 4 passes, a sidebar all of them.
+  3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region costs about 2.5 M texels at 5 or 6 passes, so the budget only bites on larger outputs or radii.
 - Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client and applies the saturation.
 - Appearance comes from `WmState::material_dark` (`BIFROST_WM_APPEARANCE=light` for Light); no appearance protocol yet.
