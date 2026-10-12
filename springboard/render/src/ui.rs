@@ -87,6 +87,20 @@ pub const MATERIAL_HUD: Pair = Pair::new(pack(12, 12, 14, 170), pack(12, 12, 14,
 pub const MATERIAL_WINDOW: Pair = Pair::new(pack(30, 30, 32, 228), pack(240, 240, 240, 228));
 /// `.selection`: the accent at material strength (straight alpha, as the other `MATERIAL_*`).
 pub const MATERIAL_SELECTION: Pair = Pair::new(pack(14, 100, 196, 200), pack(0, 112, 245, 200));
+/// Remaining `NSVisualEffectView.Material` tints (straight alpha). Derived from the neighbouring measured materials:
+/// the floating ones (menu, sheet, tool tip) sit between popover and title bar, the backgrounds between window and
+/// title bar. Not yet measured against a reference capture.
+pub const MATERIAL_MENU: Pair = Pair::new(pack(30, 30, 32, 226), pack(246, 246, 246, 230));
+pub const MATERIAL_SHEET: Pair = Pair::new(pack(32, 32, 35, 232), pack(246, 246, 246, 234));
+pub const MATERIAL_TOOLTIP: Pair = Pair::new(pack(44, 44, 47, 238), pack(250, 250, 250, 240));
+pub const MATERIAL_HEADER: Pair = Pair::new(pack(34, 34, 36, 214), pack(240, 240, 240, 214));
+pub const MATERIAL_CONTENT: Pair = Pair::new(pack(30, 30, 32, 240), pack(255, 255, 255, 240));
+pub const MATERIAL_UNDER_WINDOW: Pair = Pair::new(pack(24, 24, 27, 214), pack(232, 232, 232, 214));
+pub const MATERIAL_UNDER_PAGE: Pair = Pair::new(pack(38, 38, 40, 232), pack(226, 226, 228, 232));
+pub const MATERIAL_FULLSCREEN: Pair = Pair::new(pack(8, 8, 10, 190), pack(8, 8, 10, 190));
+/// `.selection` when `isEmphasized` (the full accent) and when the material looks inactive (neutral grey).
+pub const MATERIAL_SELECTION_EMPHASIZED: Pair = Pair::new(pack(14, 100, 196, 255), pack(0, 112, 245, 255));
+pub const MATERIAL_SELECTION_INACTIVE: Pair = Pair::new(pack(70, 70, 74, 200), pack(200, 200, 204, 200));
 /// The opaque colours of the materials when Reduce Transparency is on.
 pub const MATERIAL_SIDEBAR_SOLID: Pair = Pair::new(pack(20, 20, 22, 255), pack(235, 235, 235, 255));
 pub const MATERIAL_TITLEBAR_SOLID: Pair = Pair::new(pack(28, 28, 30, 255), pack(246, 246, 246, 255));

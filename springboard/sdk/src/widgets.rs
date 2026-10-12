@@ -1,5 +1,5 @@
 //! System-style drawing adapters for renderer-independent BifrOSt controls.
-use crate::kit::ui::{Weight, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
+use crate::kit::ui::{Weight, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
 use crate::kit::{Surface, Ui};
 use crate::kit::rgba;
 use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, RectF};
@@ -72,17 +72,56 @@ impl Material {
 
     /// Premultiplied tint drawn over the blurred backdrop, in the current scheme.
     pub fn tint(self) -> u32 {
+        self.tint_for(false, true)
+    }
+    /// The tint for `emphasized` (`isEmphasized`) and `active` (the resolved `State`): an emphasized selection is the
+    /// full accent, an inactive selection neutral grey; other materials do not change with either.
+    pub fn tint_for(self, emphasized: bool, active: bool) -> u32 {
         use crate::kit::ui::{MATERIAL_SELECTION, MATERIAL_WINDOW};
         let c = match self {
             Material::Sidebar => MATERIAL_SIDEBAR,
-            Material::Titlebar | Material::HeaderView => MATERIAL_TITLEBAR,
-            Material::Popover | Material::Menu | Material::Sheet | Material::ToolTip => MATERIAL_POPOVER,
-            Material::Hud | Material::FullScreenUi => MATERIAL_HUD,
-            Material::WindowBackground | Material::ContentBackground | Material::UnderWindowBackground | Material::UnderPageBackground => MATERIAL_WINDOW,
+            Material::Titlebar => MATERIAL_TITLEBAR,
+            Material::HeaderView => MATERIAL_HEADER,
+            Material::Popover => MATERIAL_POPOVER,
+            Material::Menu => MATERIAL_MENU,
+            Material::Sheet => MATERIAL_SHEET,
+            Material::ToolTip => MATERIAL_TOOLTIP,
+            Material::Hud => MATERIAL_HUD,
+            Material::FullScreenUi => MATERIAL_FULLSCREEN,
+            Material::WindowBackground => MATERIAL_WINDOW,
+            Material::ContentBackground => MATERIAL_CONTENT,
+            Material::UnderWindowBackground => MATERIAL_UNDER_WINDOW,
+            Material::UnderPageBackground => MATERIAL_UNDER_PAGE,
+            Material::Selection if !active => MATERIAL_SELECTION_INACTIVE,
+            Material::Selection if emphasized => MATERIAL_SELECTION_EMPHASIZED,
             Material::Selection => MATERIAL_SELECTION,
         }
         .now();
         rgba((c & 255) as u8, (c >> 8 & 255) as u8, (c >> 16 & 255) as u8, (c >> 24) as u8)
+    }
+    /// The shared window-server model kind of this material.
+    pub fn model_kind(self) -> bifrost_ui::visual_effect::MaterialKind {
+        use bifrost_ui::visual_effect::MaterialKind as K;
+        match self {
+            Material::Sidebar => K::Sidebar,
+            Material::Titlebar => K::Titlebar,
+            Material::Popover => K::Popover,
+            Material::Hud => K::HudWindow,
+            Material::Menu => K::Menu,
+            Material::Sheet => K::Sheet,
+            Material::HeaderView => K::HeaderView,
+            Material::WindowBackground => K::WindowBackground,
+            Material::ContentBackground => K::ContentBackground,
+            Material::UnderWindowBackground => K::UnderWindowBackground,
+            Material::UnderPageBackground => K::UnderPageBackground,
+            Material::FullScreenUi => K::FullScreenUi,
+            Material::ToolTip => K::ToolTip,
+            Material::Selection => K::Selection,
+        }
+    }
+    /// The SDK material for a model kind.
+    pub fn from_model(k: bifrost_ui::visual_effect::MaterialKind) -> Material {
+        Material::ALL.into_iter().find(|m| m.model_kind() == k).unwrap_or(Material::Titlebar)
     }
     /// The opaque colour used when Reduce Transparency is on, in the current scheme.
     pub fn solid(self) -> u32 {
@@ -328,6 +367,30 @@ pub fn visual_effect(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, mat
             }
         }
     }
+}
+
+/// `NativeVisualEffectView` from a shared `MaterialRequest` (kind, blending, state, emphasis, mask). `window_active` is
+/// the window's key state, which `State::FollowsWindowActiveState` follows. Per-corner radii draw as the largest
+/// corner and an alpha mask as its bounding rounded rectangle until the canvas and wire carry them (see
+/// docs/bifrost-ui.md, "Window vibrancy"); emphasis changes the `.selection` tint.
+pub fn visual_effect_request(s: &mut dyn Canvas, ui: &Ui, req: &bifrost_ui::visual_effect::MaterialRequest, window_active: bool) {
+    use bifrost_ui::visual_effect::MaterialState as MS;
+    let mat = Material::from_model(req.kind);
+    let c = req.corners();
+    let radius = c.tl.max(c.tr).max(c.br).max(c.bl);
+    let state = match req.state {
+        MS::FollowsWindowActiveState => State::FollowsWindowActiveState,
+        MS::Active => State::Active,
+        MS::Inactive => State::Inactive,
+    };
+    if mat == Material::Selection && req.for_window_server() && vibrancy() && !crate::kit::appearance::reduce_transparency() {
+        let tint = mat.tint_for(req.emphasized, req.looks_active(window_active));
+        let b = req.rect;
+        s.write_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(radius), tint);
+        return;
+    }
+    let blending = if req.for_window_server() { Blending::BehindWindow } else { Blending::WithinWindow };
+    visual_effect(s, ui, req.rect, radius, mat, blending, state);
 }
 
 /// A root screen's large title (the native toolkit/HIG: large title, bold) on the leading edge of the readable column.
@@ -1866,5 +1929,27 @@ mod canvas_tests {
             other => panic!("expected the separator, got {other:?}"),
         }
         assert!(matches!(r.ops[0], Op::FillRect(..) | Op::Material(..)));
+    }
+}
+
+#[cfg(test)]
+mod visual_effect_model_tests {
+    use super::*;
+    use bifrost_ui::visual_effect::MaterialKind;
+    #[test]
+    fn model_kinds_round_trip_and_cover_the_catalogue() {
+        assert_eq!(Material::ALL.len(), MaterialKind::ALL.len());
+        for m in Material::ALL {
+            assert_eq!(Material::from_model(m.model_kind()), m);
+        }
+    }
+    #[test]
+    fn every_material_has_a_translucent_tint_and_selection_varies_with_state() {
+        for m in Material::ALL {
+            assert!(m.tint_for(false, true) >> 24 > 0);
+        }
+        assert_ne!(Material::Selection.tint_for(true, true), Material::Selection.tint_for(false, true));
+        assert_ne!(Material::Selection.tint_for(false, false), Material::Selection.tint_for(false, true));
+        assert_eq!(Material::Sidebar.tint_for(true, false), Material::Sidebar.tint());
     }
 }
