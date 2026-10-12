@@ -16,3 +16,7 @@ pub use bifrost_core::permission_request::{
     Answer, Availability, Center, Choice, Communication, Error, Question, Response, SignificantAppUpdate, Topic,
     COMMUNICATION_TOPIC, SIGNIFICANT_APP_UPDATE_TOPIC,
 };
+
+/// The button an app puts in its UI to ask a guardian (the model in `bifrost_ui::permission_question`). It sends its
+/// question once, reads the answer back from an `AskCenter`, and reports a [`ButtonState`] for the shell to draw.
+pub use bifrost_ui::permission_question::{ButtonState, PermissionButton};

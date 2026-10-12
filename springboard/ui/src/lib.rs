@@ -706,6 +706,7 @@ pub mod nav_policy;
 pub mod translation;
 pub mod timeline;
 pub mod relevance;
+pub mod guardrail;
 pub mod intent_resolve;
 pub mod intent_vocab;
 pub mod intent_access;
