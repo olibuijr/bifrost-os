@@ -80,7 +80,7 @@ pub fn prepare() -> io::Result<()> {
     )?;
     fs::create_dir_all(store)?;
     fs::create_dir_all(format!("{ESP}/previous"))?;
-    for file in kernel_files() {
+    for file in &kernel_files() {
         copy(
             &Path::new("/boot").join(file),
             &Path::new(ESP).join("previous").join(file),
@@ -171,7 +171,7 @@ pub fn restore() -> io::Result<()> {
         fs::rename(root.join("@system"), root.join(name))?;
     }
     fs::rename(candidate, root.join("@system"))?;
-    for file in kernel_files() {
+    for file in &kernel_files() {
         copy(
             &Path::new(ESP).join("previous").join(file),
             &Path::new("/boot").join(file),
