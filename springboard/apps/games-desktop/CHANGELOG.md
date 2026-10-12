@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.2
 
 - The control socket answers `games.state`: the game, score, best scores, Minesweeper phase, Tic-Tac-Toe marks and the solitaire state, as key=value lines. The describe helpers that were only used by tests now serve it.
