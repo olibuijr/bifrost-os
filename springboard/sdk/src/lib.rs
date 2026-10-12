@@ -247,6 +247,9 @@ pub use bifrost_ui::mic_consent as microphone;
 /// Speech model assets: installed locales, downloads and reservations (`speech_models::AssetInventory`).
 pub use bifrost_ui::speech_assets as speech_models;
 
+/// Speech recognition requests, tasks and authorization (`speech_recognition::Recognizer`, `Request`, `Task`).
+pub use bifrost_ui::recognition_task as speech_recognition;
+
 /// An app. Only `id` and `draw` are required.
 pub trait App {
     /// The reverse-DNS id from the manifest.

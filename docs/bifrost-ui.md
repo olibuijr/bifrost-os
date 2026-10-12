@@ -1492,6 +1492,22 @@ Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types 
 - **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
 - **Gaps.** The shell does not draw the floating panel yet (the message is decoded and ignored), and no app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
 
+## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
+
+`ui::recognition_task`, SDK `bifrost_app::speech_recognition`. Pure models, no I/O.
+
+- Authorization: `AuthorizationStatus` (`NotDetermined`, `Denied`, `Restricted`, `Authorized`) with one answer per
+  device. A second answer is refused and `restrict` overrides any answer, as `authorizationStatus` does.
+- Request: `Request` for a `Source` (`Buffer` for live audio, `Url` for a recorded file), with partial results on by
+  default, `TaskHint`, contextual strings, on-device-only recognition and an interaction identifier.
+- Task: `Recognizer::start` returns a `Task` in `Starting`, refused when not authorized or when on-device recognition
+  is required and not installed. States `Running`, `Finishing`, `Canceling`, `Completed`, as
+  `SFSpeechRecognitionTaskState`. Results reuse `recognition::Transcription` and `Session`.
+- Decisions: the recognizer that produces readings is not in this module. Partial results are dropped by the task when
+  the request turns them off. A canceled task completes with `TaskError::Canceled`.
+- Gaps: no live microphone feed from an app yet (the audio service records WAV only), no on-device model download
+  (see `speech_models`), and no result-level time codes beyond `Transcription::range`. Not tested on Midget.
+
 ## Spell checking (`NSSpellChecker`, `NSTextCheckingResult`)
 
 `bifrost_app::spellcheck`: `words(text)` tokenizer (byte ranges, keeps inner apostrophes), `Dictionary` trait (hunspell or other backends plug in), `WordList` (in-memory, edit-distance-1 suggestions), `SpellChecker` with `check_spelling`, `correction`, `guesses`, `learn_word`/`unlearn_word` (persisted in `UserDefaults` key `NSSpellChecker.learnedWords`), `ignore_word` (checker lifetime), `available_languages`, `automatically_corrects_spelling` (flag only), and `CheckingType`/`CheckingTypes` (OptionSet) with `CheckingResult`.
