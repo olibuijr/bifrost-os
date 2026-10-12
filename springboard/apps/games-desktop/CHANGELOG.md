@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1
+
+- Removed unused hit-test and centre helpers.
+
 ## 1.6.0
 
 - New game: Tic-Tac-Toe. You play X and move first; the computer plays O. It picks its move by searching every reply, so it never misses a win and never gives one away. A game it cannot lose ends in a draw.

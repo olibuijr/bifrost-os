@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1 — 2026-10-12
+
+- Removed the unused procedural icon and the unused state helpers (describe, needs_frame, online).
+
 ## 1.6.0 — 2026-10-12
 
 - Search: a search field sits at the trailing end of the toolbar. Typing filters the list to the headlines that contain the text (ignoring case), in Today, the Reading List and each feed. Escape or the clear button empties it, and "No matching articles" shows when nothing matches. The on-screen keyboard is asked for only while the field has focus.

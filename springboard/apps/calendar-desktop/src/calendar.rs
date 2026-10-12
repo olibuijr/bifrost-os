@@ -323,6 +323,8 @@ impl Calendar {
     fn bottom(&self, ui: &Ui) -> f32 {
         self.h as f32 - home_zone(ui)
     }
+    /// The Title field's frame, for the layout tests.
+    #[cfg(test)]
     fn title_frame(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.field_frame(ui, 0)
     }

@@ -3,7 +3,6 @@
 
 mod alerts;
 mod app;
-mod icon;
 mod model;
 mod quick;
 mod repeat;

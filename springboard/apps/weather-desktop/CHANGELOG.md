@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1 — 2026-10-12
+
+- Removed the unused needs_frame helper (tick already reports when a frame is needed); the state dump is test-only.
+
 ## 1.5.0 — 2026-10-12
 
 - The temperature chart has an area fill under its line, so the warm and cold hours of the day read at a glance.

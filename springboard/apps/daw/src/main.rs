@@ -251,10 +251,6 @@ impl Daw {
         }
     }
 
-    fn scenes(&self) -> Vec<String> {
-        self.project.as_ref().map(|p| p.scenes.iter().map(|s| s.id.clone()).collect()).unwrap_or_default()
-    }
-
     fn layout_session(&self, w: f32, h: f32) -> (f32, f32, f32, f32) {
         let roll_top = h - ROLL_H;
         (MARGIN, HEADER, w - 2.0 * MARGIN, roll_top - HEADER - 8.0)

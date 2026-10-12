@@ -5,12 +5,6 @@
 use super::engine;
 use std::path::{Path, PathBuf};
 
-/// Folders scanned for books.
-/// Where books are looked for: the user's Books and Downloads under `$HOME`.
-pub fn dirs() -> Vec<std::path::PathBuf> {
-    let home = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default());
-    vec![home.join("Books"), home.join("Downloads")]
-}
 const MAX_DEPTH: usize = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -248,9 +242,6 @@ impl Store {
         }
     }
 
-    pub fn forget(&mut self, path: &Path) {
-        self.entries.retain(|e| e.path != path);
-    }
 }
 
 fn parse_pos(s: &str) -> Option<Pos> {

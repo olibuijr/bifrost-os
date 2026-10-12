@@ -24,7 +24,7 @@ use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
-use bifrost_app::webview::{url_for_input, FindDirection, WebProcessPool, WebViewEvent, WebViewId};
+use bifrost_app::webview::{FindDirection, WebProcessPool, WebViewEvent, WebViewId};
 use bifrost_core::json::Json;
 use bifrost_app::control::RpcError;
 mod inspector;

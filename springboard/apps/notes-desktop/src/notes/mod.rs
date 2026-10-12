@@ -458,10 +458,6 @@ impl Notes {
         self.wall = wall;
     }
 
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
-    }
-
     /// Rows `[shown index]` as `(note id, title)`, for tests and inspection.
     pub fn listed(&self) -> Vec<(&str, &str)> {
         self.shown.iter().map(|&i| (self.notes[i].id.as_str(), self.notes[i].title())).collect()
@@ -2942,7 +2938,7 @@ mod tests {
         let ui = ui();
         let dir = scratch("swipe-pin");
         let mut n = seeded(&ui, &dir);
-        let (rx, ry, rw, rh) = n.row_rect(&ui, 0);
+        let (rx, ry, _, rh) = n.row_rect(&ui, 0);
         let y = ry + rh / 2.0;
         let id = n.notes[n.shown[0]].id.clone();
         // half swipe rests open with Pin revealed; tapping it pins the note

@@ -410,7 +410,6 @@ pub fn render(proj: &Project, opts: &RenderOpts) -> Rendered {
     let mut right = vec![0.0f32; total_frames as usize + BLOCK];
     let (mut ni, mut pi, mut ti) = (0usize, 0usize, 0usize);
     let mut li = 0usize;
-    let mut bpm_now = proj.bpm;
     let mut block_start = 0u64;
     while block_start < total_frames {
         let block_end = (block_start + BLOCK as u64).min(total_frames);
@@ -418,7 +417,7 @@ pub fn render(proj: &Project, opts: &RenderOpts) -> Rendered {
 
         // tempo changes starting in this block
         while ti < tempo.len() && tempo[ti].0 < block_end {
-            bpm_now = tempo[ti].1;
+            let bpm_now = tempo[ti].1;
             for tr in tracks.iter_mut() {
                 if let Some(ins) = tr.instrument.as_mut() {
                     ins.tempo(bpm_now, origin);

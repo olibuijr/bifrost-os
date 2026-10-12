@@ -1,12 +1,8 @@
 //! Icon view: a grid of icons with labels and tag dots.
 use crate::*;
 
-/// Icon view: the icon's side, and the cell pitch across and down (Files: the icon plus room for its label).
+/// Icon view: the default icon's side (the cell pitch comes from `grid_w` and `grid_h`, which follow the icon size).
 pub(crate) const GRID_ICON: f32 = 64.;
-
-pub(crate) const GRID_W: f32 = GRID_ICON + 40.;
-
-pub(crate) const GRID_H: f32 = GRID_ICON + 44.;
 
 /// The Files emblem of a special folder in the home folder.
 pub(crate) fn folder_emblem(home: &Path, path: &Path) -> Option<&'static str> {

@@ -93,7 +93,11 @@ impl App for VoiceMemosApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.last_t = t;
-        let needs_frame = self.memos.as_mut().is_some_and(|m| m.tick(&ctx.ui, t));
+        // the wall clock is re-read every tick, so day titles and timestamps follow midnight and time-zone changes
+        let needs_frame = self.memos.as_mut().is_some_and(|m| {
+            m.set_wall(Wall::sample(t));
+            m.tick(&ctx.ui, t)
+        });
         self.flush(ctx);
         needs_frame
     }

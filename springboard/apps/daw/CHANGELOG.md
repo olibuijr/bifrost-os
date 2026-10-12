@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-10-12
+
+- Removed dead code: the unused saturation helper, the unused tremolo sample-rate field, the duplicate choke field on zone voices, the unused scenes accessor, and an unread tempo variable.
+
 ## 0.5.0 — 2026-10-12
 
 - Export CD: the "Export CD" button in the Session header writes the song (or the trimmed part) as a 16-bit WAV at 44.1 kHz, the CD rate. The file is in the song store's exports folder with "-cd" in its name, and the status line shows its path. The 32-bit float "Export" is unchanged. The button is shown when not trimming.

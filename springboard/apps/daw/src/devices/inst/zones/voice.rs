@@ -26,7 +26,6 @@ pub struct Voice {
     pub atk_frames: f32,
     pub peak: f32,
     pub env: f32,
-    pub choke: Option<String>,
     pub filter: Option<[Biquad; 2]>,
     pub pan: (f32, f32),
     pub done: bool,

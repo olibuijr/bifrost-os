@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1
+
+- Removed the unused import and gated the layout test helper to tests.
+
 ## 1.11.0
 
 - Invitees: an event that came from an imported calendar file now lists who was invited, under the notes in its editor, as "Invitees: Ana Lind (Accepted), bo@example.is (Awaiting reply)". Each person's answer is shown: Accepted, Declined, Maybe, Awaiting reply, Delegated, Completed or In progress. Three names are listed, then "and n more". The row cannot be edited: attendance is what the file recorded.

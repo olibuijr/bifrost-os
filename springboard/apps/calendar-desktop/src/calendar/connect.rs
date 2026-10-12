@@ -14,7 +14,7 @@ use super::store::CalendarEvent;
 use super::Date;
 use bifrost_app::controls::timeline::ReloadPolicy;
 use bifrost_app::dock_tile;
-use bifrost_app::notification_schedule::{self, Schedule, Trigger};
+use bifrost_app::notification_schedule::{self, Schedule};
 use bifrost_app::widgets_timeline::{self, Entry};
 use bifrost_app::Ctx;
 use bifrost_core::json::Json;
@@ -220,6 +220,7 @@ impl Connect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::notification_schedule::Trigger;
     use bifrost_app::proto::{Configure, ToShell};
 
     // 2027-01-15 08:00 UTC is day 20833; the events below are on day 20834 (tomorrow) or day 20833 (today).

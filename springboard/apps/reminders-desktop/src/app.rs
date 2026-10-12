@@ -496,9 +496,6 @@ impl Reminders {
             self.refresh_rows();
         }
     }
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
-    }
     /// Whether an editor holds a draft that is not saved yet (a reminder or list being created or changed).
     pub fn has_draft(&self) -> bool {
         matches!(self.screen, Screen::Editor | Screen::ListEditor)
@@ -506,28 +503,6 @@ impl Reminders {
     pub fn keyboard_shown(&self) -> bool {
         self.kb_on
     }
-    pub fn describe(&self) -> String {
-        let label = match self.view {
-            View::Smart(s) => s.label().to_string(),
-            View::List(id) => self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
-            View::Tag(key) => model::tag_name(&self.data.items, key).map_or(String::new(), |n| format!("#{n}")),
-        };
-        let screen = match self.screen {
-            Screen::Items => "list",
-            Screen::Editor => "editor",
-            Screen::ListEditor => "list-editor",
-        };
-        let shown = self.rows.iter().filter(|r| matches!(r, Row::Item { .. })).count();
-        format!(
-            "reminders_screen={screen}\nreminders_filter={label}\nreminders_lists={}\nreminders_count={}\nreminders_shown={shown}\nreminders_completed={}\nreminders_keyboard={}\nreminders_save_error={}\n",
-            self.data.lists.len(),
-            self.data.items.len(),
-            self.data.items.iter().filter(|r| r.completed).count(),
-            self.kb_on,
-            self.error
-        )
-    }
-
     // ---- geometry -------------------------------------------------------
 
     fn top_px(&self, ui: &Ui) -> f32 {

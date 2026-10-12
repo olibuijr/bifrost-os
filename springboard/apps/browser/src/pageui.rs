@@ -36,7 +36,6 @@ pub struct Dialog {
 pub struct PageMenu {
     view: WebViewId,
     token: u32,
-    kind: MenuKind,
     /// Top-left in window pixels.
     origin: (f32, f32),
     width: f32,
@@ -126,7 +125,7 @@ impl PageUi {
                 if *kind == MenuKind::Select {
                     menu.highlighted = menu.items.iter().position(|i| i.checked);
                 }
-                self.menu = Some(PageMenu { view: *id, token: *token, kind: *kind, origin, width, menu, picks });
+                self.menu = Some(PageMenu { view: *id, token: *token, origin, width, menu, picks });
                 true
             }
             WebViewEvent::ControlHidden(id, token) => {

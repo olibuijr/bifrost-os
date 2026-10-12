@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1 — 2026-10-12
+
+- Removed the unused procedural icon and the unused badge drawing, and the state dump for tests that are not built; the app uses its icon.png.
+
 ## 1.13.0 — 2026-10-12
 
 - Tags: a word written as `#tag` in a reminder's title or notes is a tag, such as `#home` or `#Work`. Tags match without case, so `#Home` and `#home` are one tag.

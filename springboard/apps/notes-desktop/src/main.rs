@@ -170,7 +170,9 @@ impl App for NotesApp {
     }
 
     fn rpc_methods(&self) -> Vec<&'static str> {
-        notes::rpc::methods()
+        let mut methods = notes::rpc::methods();
+        methods.push("notes.state");
+        methods
     }
 
     fn restoration_identifier(&self) -> Option<&str> {
@@ -274,6 +276,9 @@ impl App for NotesApp {
     }
 
     fn rpc(&mut self, _ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
+        if method == "notes.state" {
+            return Ok(bifrost_core::json::Json::Str(self.notes.as_ref().map_or_else(String::new, |n| n.describe())));
+        }
         notes::rpc::call(data_dir, method, params)
     }
 

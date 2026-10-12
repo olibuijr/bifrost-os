@@ -3,7 +3,6 @@
 //! pointer shape of each tool), the pasteboard (Copy) and the screens (the export scale).
 
 mod freeform;
-mod icon;
 mod ink;
 mod services;
 mod style;

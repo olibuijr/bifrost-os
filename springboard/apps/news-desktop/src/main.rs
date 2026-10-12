@@ -2,7 +2,6 @@
 
 mod feed;
 mod feed_cache;
-mod icon;
 mod news;
 mod pictures;
 mod reader_size;

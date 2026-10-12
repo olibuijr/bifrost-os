@@ -1,3 +1,7 @@
+## 0.13.1 — 2026-10-12
+
+- Removed unused helpers and fields (control is_idle, page menu kind, preferences full height, perf first_frame_ms); the bench measures startup from outside the app.
+
 ## 0.13.0 — 2026-10-12
 
 - View > Find in Page (Cmd+F) opens the find bar from the menu bar. Find Next (Cmd+G) and Find Previous (Cmd+Shift+G)
