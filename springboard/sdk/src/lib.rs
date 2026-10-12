@@ -112,6 +112,7 @@ pub mod extension;
 pub mod quicksearch;
 pub mod visual_search;
 pub mod data_scanner;
+pub mod image_analysis;
 pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;

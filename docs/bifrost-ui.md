@@ -1901,3 +1901,24 @@ Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `
   speech stay gaps. Verify the audio path on Midget before any row is `parity`.
 
 Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
+
+## Image analysis: subject lifting and Visual Look Up (`bifrost_app::image_analysis`)
+
+Models: `springboard/ui/src/subject_lift.rs` (subjects, hit test, highlight, cutout) and
+`springboard/ui/src/visual_lookup.rs` (`AnalysisTypes`, `look_up`). The SDK re-exports both from
+`springboard/sdk/src/image_analysis.rs`. The shape follows `ImageAnalysisInteraction` (`subjects`,
+`highlightedSubjects`, `analysisTypes`, the Look Up action).
+
+Decisions:
+
+- A subject is an id, an 8-bit alpha mask in image pixels, and its tight bounds. A pixel belongs to the
+  subject at alpha 128 or more (`SUBJECT_THRESHOLD`). A subject with no such pixel is refused.
+- Hit testing is topmost-first: a later subject is on top of an earlier one. Duplicate ids are dropped.
+- A cutout keeps soft edges: alpha = mask alpha times image alpha, cropped to the subject bounds.
+- `look_up` builds a request only when `AnalysisTypes` includes `VISUAL_LOOK_UP`. It returns the id,
+  bounds and cutout. The lookup service itself is not in the repo.
+
+Gaps still open: no segmentation model (the masks come from the caller), no lookup service, no image view
+that draws the subject highlight or the Look Up button, and no text recognition. Matrix rows
+"Subject lifting and background removal" and "Visual Look Up" are `partial` at best until the model runs
+on a device with a segmenter.
