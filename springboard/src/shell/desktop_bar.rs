@@ -182,7 +182,10 @@ impl Shell {
         if menu==Menu::ControlCenter {
             // two toggle capsules, as the Golden Gate Control Center extra
             for dy in [-5.,1.] {s.stroke_rrect(x-8.*p,y+dy*p,16.*p,6.*p,3.*p,1.2*p,ink);}
-            s.fill_rrect(x+2.*p,y-4.*p,4.*p,4.*p,2.*p,ink);s.fill_rrect(x-6.*p,y+2.*p,4.*p,4.*p,2.*p,ink);return;
+            s.fill_rrect(x+2.*p,y-4.*p,4.*p,4.*p,2.*p,ink);s.fill_rrect(x-6.*p,y+2.*p,4.*p,4.*p,2.*p,ink);
+            // the input indicator: an orange dot while any input stream or tap runs (audio policy)
+            if super::sound_page::input_active() {s.fill_rrect(x+6.*p,y-9.*p,5.*p,5.*p,2.5*p,super::ui::SYSTEM_ORANGE);}
+            return;
         }
         if menu==Menu::Power {if self.info.battery_present {s.stroke_rrect(x-9.*p,y-5.*p,17.*p,10.*p,2.*p,p,ink);rect(s,9.,-2.,2.,4.);rect(s,-7.,-3.,13.*self.info.battery as f32/100.,6.);}else{rect(s,-5.,-2.,10.,6.);rect(s,-4.,-7.,2.,5.);rect(s,2.,-7.,2.,5.);rect(s,-1.,4.,2.,5.);}}else if label=="ethernet" {s.stroke_rrect(x-7.*p,y-7.*p,14.*p,10.*p,p,p,ink);rect(s,-1.,3.,2.,4.);rect(s,-9.,6.,18.,2.);for dx in [-9.,-1.,7.] {rect(s,dx,6.,2.,4.);}}else{for i in 0..3 {let w=(16-i*5) as f32;rect(s,-w/2.,-6.+i as f32*4.,w,2.);}rect(s,-1.,6.,2.,2.);}
     }

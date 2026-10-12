@@ -1,83 +1,110 @@
-//! ALSA capture for Voice Memos: finds a capture PCM from /proc/asound/pcm,
-//! routes the microphone through the mixer, records interleaved S16 on a
-//! thread and writes WAV files. The playback side is `alsa.rs` / `speaker.rs`.
+//! Voice Memos capture: reads the default input device of `bifrost-audiod` through an IO
+//! procedure, converts to S16 on the real-time thread into a lock-free ring, and a reader thread
+//! collects the samples for the WAV file. No `/dev/snd`, no libasound, no mixer routing: the
+//! server owns the hardware and the microphone permission.
 //!
-//! Nothing here touches a device until `Recorder::start`, which the app only
-//! calls on an explicit Record tap. Playback of the result goes through the
-//! normal audio player.
+//! Nothing here touches a device until `Recorder::start`, which the app only calls on an
+//! explicit Record tap. Playback of the result goes through the normal audio player.
 
-use super::alsa;
-use super::mixer::Mixer;
-use super::volume::CONTROL_DEVICE;
+use bifrost_audio_hal::{Device, IoContext, IoProcId, IoProcConfig, Role, System};
+use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue, TimeStamp};
 use std::io;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-/// Microphone routing: `(control, value)` mixer writes made, in order, before capture starts
-/// (controls the card lacks are skipped, a refused write does not stop the rest).
-///
-/// Empty means "capture whatever the card routes by default", which is what a desktop sound
-/// server or HDA codec does; a card that needs an input mux switched lists its controls here.
-pub const MIC_ROUTE_ON: &[(&str, &str)] = &[];
-/// Written back after the recording, in order (the inverse of `MIC_ROUTE_ON`).
-pub const MIC_ROUTE_OFF: &[(&str, &str)] = &[];
+/// The client name the recorder says hello with (the recording lives in the player service).
+pub const CLIENT: &str = "is.olibuijr.mediaplayer";
 
-/// What to try, best first: (rate, channels). The first the device accepts is used.
-pub const FORMATS: [(u32, u32); 5] = [(48_000, 2), (48_000, 1), (44_100, 2), (16_000, 1), (8_000, 1)];
+/// A voice memo is mono; the server converts from the device's own channel count.
+pub const CHANNELS: u32 = 1;
 
-/// One line of /proc/asound/pcm.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PcmEntry {
-    pub card: u32,
-    pub device: u32,
-    pub name: String,
-    pub playback: bool,
-    pub capture: bool,
+/// Ring size in samples: about 2.7 s at 48 kHz mono, drained every 20 ms.
+const RING_SAMPLES: usize = 131_072;
+
+/// Single-producer single-consumer ring of S16 samples (atomics, no `unsafe`). The producer is the
+/// IO procedure, the consumer the reader thread.
+pub struct CaptureRing {
+    cells: Box<[AtomicU32]>,
+    head: AtomicU64,
+    tail: AtomicU64,
+    /// samples dropped because the reader fell behind
+    dropped: AtomicU64,
+    /// peak magnitude of the latest push, 0..=32767
+    level: AtomicU32,
 }
 
-impl PcmEntry {
-    /// The device node for capture, e.g. `/dev/snd/pcmC0D2c`.
-    pub fn capture_node(&self) -> String {
-        format!("/dev/snd/pcmC{}D{}c", self.card, self.device)
+impl CaptureRing {
+    pub fn new(samples: usize) -> Arc<CaptureRing> {
+        Arc::new(CaptureRing { cells: (0..samples).map(|_| AtomicU32::new(0)).collect(), head: AtomicU64::new(0), tail: AtomicU64::new(0), dropped: AtomicU64::new(0), level: AtomicU32::new(0) })
+    }
+
+    /// Converts f32 samples (-1..=1) to S16 and queues them; what does not fit is counted as dropped.
+    /// Real-time safe.
+    pub fn push_f32(&self, samples: &[f32]) {
+        let cap = self.cells.len() as u64;
+        let head = self.head.load(Ordering::Relaxed);
+        let room = cap - (head - self.tail.load(Ordering::Acquire)).min(cap);
+        let take = (samples.len() as u64).min(room) as usize;
+        let mut peak = 0u32;
+        for (i, &v) in samples[..take].iter().enumerate() {
+            let q = (v.clamp(-1.0, 1.0) * 32767.0).round() as i16;
+            peak = peak.max(q.unsigned_abs() as u32);
+            self.cells[((head + i as u64) % cap) as usize].store(q as u16 as u32, Ordering::Relaxed);
+        }
+        self.head.store(head + take as u64, Ordering::Release);
+        self.level.store(peak, Ordering::Relaxed);
+        if take < samples.len() {
+            self.dropped.fetch_add((samples.len() - take) as u64, Ordering::Relaxed);
+        }
+    }
+
+    /// Moves everything queued into `out`; returns how many samples.
+    pub fn drain(&self, out: &mut Vec<i16>) -> usize {
+        let cap = self.cells.len() as u64;
+        let tail = self.tail.load(Ordering::Relaxed);
+        let head = self.head.load(Ordering::Acquire);
+        for i in tail..head {
+            out.push(self.cells[(i % cap) as usize].load(Ordering::Relaxed) as u16 as i16);
+        }
+        self.tail.store(head, Ordering::Release);
+        (head - tail) as usize
+    }
+
+    pub fn dropped(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+
+    pub fn level(&self) -> u32 {
+        self.level.load(Ordering::Relaxed)
     }
 }
 
-/// Parses /proc/asound/pcm: `00-02: name : name : playback 1 : capture 1`.
-pub fn parse_pcm_list(text: &str) -> Vec<PcmEntry> {
-    text.lines()
-        .filter_map(|line| {
-            let mut parts = line.split(" : ");
-            let (id, name) = parts.next()?.split_once(": ")?;
-            let (card, device) = id.split_once('-')?;
-            let name = name.trim().to_string();
-            let rest: Vec<&str> = parts.collect();
-            Some(PcmEntry {
-                card: card.trim().parse().ok()?,
-                device: device.trim().parse().ok()?,
-                name,
-                playback: rest.iter().any(|p| p.trim().starts_with("playback")),
-                capture: rest.iter().any(|p| p.trim().starts_with("capture")),
-            })
-        })
-        .collect()
+/// The names of the input devices the audio server offers (the default input only today); empty
+/// when the server is not running or has no input. Opens no stream.
+pub fn discover() -> Vec<String> {
+    let Ok(system) = System::connect(CLIENT) else { return Vec::new() };
+    let Ok(device) = system.default_device(Role::Input) else { return Vec::new() };
+    match device.get(PropertyAddress::global(props::NAME)) {
+        Ok(PropertyValue::String(n)) => vec![n],
+        _ => vec![String::from("default input")],
+    }
 }
 
-/// The capture nodes to try, most likely microphone first: capture-only devices, then the rest;
-/// names that look like HDMI/modem/BT loops go last.
-pub fn capture_candidates(entries: &[PcmEntry]) -> Vec<PcmEntry> {
-    let bad = |e: &PcmEntry| {
-        let n = e.name.to_ascii_lowercase();
-        ["hdmi", "bt", "modem", "voice", "loop", "fm"].iter().any(|w| n.contains(w))
-    };
-    let mut out: Vec<PcmEntry> = entries.iter().filter(|e| e.capture).cloned().collect();
-    out.sort_by_key(|e| (bad(e), e.playback, e.card, e.device));
-    out
-}
-
-/// Capture devices on this machine (reads /proc only; opens nothing).
-pub fn discover() -> Vec<PcmEntry> {
-    capture_candidates(&parse_pcm_list(&std::fs::read_to_string("/proc/asound/pcm").unwrap_or_default()))
+/// The IO procedure's body: the first channel of the first input buffer becomes mono S16.
+/// Real-time safe: no allocation, no locks.
+pub fn capture_cycle(ring: &CaptureRing, input: &BufferList) {
+    if let Some(b) = input.buffers.first() {
+        let n = b.channels.max(1) as usize;
+        if n == 1 {
+            ring.push_f32(&b.data);
+        } else {
+            for frame in b.data.chunks(n) {
+                ring.push_f32(&frame[..1]);
+            }
+        }
+    }
 }
 
 /// Interleaved S16 samples as a canonical 44-byte-header PCM WAV file.
@@ -117,18 +144,21 @@ pub fn wav_duration_ms(header: &[u8], file_len: u64) -> Option<u64> {
 #[derive(Default)]
 struct Shared {
     samples: Vec<i16>,
-    /// peak magnitude of the most recent read, 0..=32768
+    /// peak magnitude of the most recent cycle, 0..=32768
     level: u16,
-    stop: bool,
     error: Option<String>,
 }
 
 /// A recording in progress.
 pub struct Recorder {
     shared: Arc<Mutex<Shared>>,
+    stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    device: Device,
+    proc_id: IoProcId,
     pub rate: u32,
     pub channels: u32,
+    /// the device the recording reads, for logs
     pub node: String,
 }
 
@@ -145,64 +175,63 @@ impl Take {
     }
 }
 
-fn apply(route: &[(&str, &str)]) {
-    if route.is_empty() {
-        return;
-    }
-    let Ok(mixer) = Mixer::open(CONTROL_DEVICE) else { return };
-    let have: Vec<String> = mixer.list().map(|l| l.into_iter().map(|c| c.name).collect()).unwrap_or_default();
-    for &(name, value) in route {
-        if have.iter().any(|h| h == name) {
-            let _ = mixer.set_text(name, &[value]);
-        }
-    }
+fn io_err(what: &str, e: AudioError) -> io::Error {
+    let kind = match e {
+        AudioError::PermissionDenied => io::ErrorKind::PermissionDenied,
+        AudioError::NoServer => io::ErrorKind::NotConnected,
+        AudioError::UnknownObject | AudioError::DeviceGone => io::ErrorKind::NotFound,
+        _ => io::ErrorKind::Other,
+    };
+    io::Error::new(kind, format!("{what}: {e:?}"))
 }
 
 impl Recorder {
-    /// Routes the microphone, opens the first capture PCM and format that work and starts the
-    /// reader thread. Explicit user action only.
+    /// Opens the default input device and starts the reader thread. Explicit user action only.
     pub fn start() -> io::Result<Recorder> {
-        apply(MIC_ROUTE_ON);
-        let mut last = io::Error::new(io::ErrorKind::NotFound, "no capture device");
-        for entry in discover() {
-            let node = entry.capture_node();
-            for (rate, channels) in FORMATS {
-                match alsa::open_capture(&node, rate, channels) {
-                    Ok(cap) => return Ok(Self::spawn(cap, node, rate, channels)),
-                    Err(e) => last = e,
-                }
-            }
+        let system = System::connect(CLIENT).map_err(|e| io_err("connect to the audio server", e))?;
+        let device = system.default_device(Role::Input).map_err(|e| io_err("default input device", e))?;
+        let rate = match device.get(PropertyAddress::global(props::NOMINAL_RATE)) {
+            Ok(PropertyValue::F64(r)) if r >= 1.0 => r.round() as u32,
+            _ => 48_000,
+        };
+        let node = match device.get(PropertyAddress::global(props::NAME)) {
+            Ok(PropertyValue::String(n)) => n,
+            _ => String::from("default input"),
+        };
+        let ring = CaptureRing::new(RING_SAMPLES);
+        let producer = ring.clone();
+        let proc_id = device
+            .add_io_proc(
+                IoProcConfig { input_channels: CHANNELS, output_channels: 0, buffer_frames: 0 },
+                Box::new(move |_ctx: &IoContext, _now: &TimeStamp, input: &BufferList, _input_ts: &TimeStamp, _out: &mut BufferList, _out_ts: &TimeStamp| capture_cycle(&producer, input)),
+            )
+            .map_err(|e| io_err("add the IO procedure", e))?;
+        if let Err(e) = device.start(proc_id) {
+            let _ = device.remove_io_proc(proc_id);
+            return Err(io_err("start the input device", e));
         }
-        apply(MIC_ROUTE_OFF);
-        Err(last)
-    }
-
-    fn spawn(cap: alsa::CaptureFd, node: String, rate: u32, channels: u32) -> Recorder {
         let shared = Arc::new(Mutex::new(Shared::default()));
-        let worker = shared.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let (worker, halt) = (shared.clone(), stop.clone());
         let thread = crate::bare::sys::spawn_named("capture", move || {
-            let mut buf = vec![0i16; cap.period.max(256) as usize * channels as usize];
-            loop {
-                if worker.lock().unwrap().stop {
-                    break;
-                }
-                match alsa::read_capture(cap.fd, channels, &mut buf) {
-                    Ok(0) => std::thread::sleep(Duration::from_millis(5)),
-                    Ok(frames) => {
-                        let got = &buf[..frames * channels as usize];
-                        let mut s = worker.lock().unwrap();
-                        s.level = got.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
-                        s.samples.extend_from_slice(got);
-                    }
-                    Err(e) => {
-                        worker.lock().unwrap().error = Some(e.to_string());
-                        break;
-                    }
+            let mut chunk: Vec<i16> = Vec::with_capacity(4096);
+            while !halt.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(20));
+                chunk.clear();
+                ring.drain(&mut chunk);
+                let mut s = worker.lock().unwrap();
+                s.level = ring.level().min(32768) as u16;
+                s.samples.extend_from_slice(&chunk);
+                if ring.dropped() > 0 && s.error.is_none() {
+                    s.error = Some(format!("{} samples were dropped: the recorder fell behind", ring.dropped()));
                 }
             }
-            alsa::close_capture(cap.fd);
+            chunk.clear();
+            ring.drain(&mut chunk);
+            worker.lock().unwrap().samples.extend_from_slice(&chunk);
         });
-        Recorder { shared, thread: Some(thread), rate, channels, node }
+        eprintln!("audio.capture: recording {node} at {rate} Hz");
+        Ok(Recorder { shared, stop, thread: Some(thread), device, proc_id, rate, channels: CHANNELS, node })
     }
 
     pub fn elapsed_ms(&self) -> u64 {
@@ -220,13 +249,18 @@ impl Recorder {
         self.shared.lock().unwrap().error.clone()
     }
 
-    /// Stops the stream, releases the mic route and returns what was recorded.
-    pub fn stop(mut self) -> Take {
-        self.shared.lock().unwrap().stop = true;
+    fn halt(&mut self) {
+        let _ = self.device.stop(self.proc_id);
+        let _ = self.device.remove_io_proc(self.proc_id);
+        self.stop.store(true, Ordering::Release);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
-        apply(MIC_ROUTE_OFF);
+    }
+
+    /// Stops the stream and returns what was recorded.
+    pub fn stop(mut self) -> Take {
+        self.halt();
         let samples = std::mem::take(&mut self.shared.lock().unwrap().samples);
         Take { rate: self.rate, channels: self.channels, samples }
     }
@@ -235,10 +269,8 @@ impl Recorder {
 impl Drop for Recorder {
     fn drop(&mut self) {
         // dropped without `stop` (app killed): still release the device
-        if let Some(t) = self.thread.take() {
-            self.shared.lock().unwrap().stop = true;
-            let _ = t.join();
-            apply(MIC_ROUTE_OFF);
+        if self.thread.is_some() {
+            self.halt();
         }
     }
 }
@@ -246,23 +278,46 @@ impl Drop for Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const PCM: &str = "00-00: ALC3246 Analog :  : playback 1 : capture 1\n00-03: HDMI 0 :  : playback 1\n00-02: ALC3246 Alt Analog :  : capture 1\n00-04: Loopback :  : capture 1\n";
+    use bifrost_audio_types::Buffer;
 
     #[test]
-    fn proc_pcm_lines_parse() {
-        let e = parse_pcm_list(PCM);
-        assert_eq!(e.len(), 4);
-        assert_eq!((e[0].card, e[0].device, e[0].playback, e[0].capture), (0, 0, true, true));
-        assert!(!e[1].capture);
-        assert_eq!(e[2].capture_node(), "/dev/snd/pcmC0D2c");
+    fn ring_converts_f32_to_s16_with_clamping_and_tracks_the_peak() {
+        let r = CaptureRing::new(8);
+        r.push_f32(&[0.5, -0.5, 2.0, -2.0]);
+        let mut out = Vec::new();
+        assert_eq!(r.drain(&mut out), 4);
+        // 0.5 * 32767 = 16383.5 rounds away from zero to 16384
+        assert_eq!(out, vec![16384, -16384, 32767, -32767]);
+        assert_eq!(r.level(), 32767);
+        assert_eq!(r.drain(&mut out), 0);
     }
 
     #[test]
-    fn candidates_prefer_capture_only_and_demote_loopbacks() {
-        let c = capture_candidates(&parse_pcm_list(PCM));
-        let nodes: Vec<String> = c.iter().map(PcmEntry::capture_node).collect();
-        assert_eq!(nodes, ["/dev/snd/pcmC0D2c", "/dev/snd/pcmC0D0c", "/dev/snd/pcmC0D4c"]);
+    fn ring_drops_and_counts_what_does_not_fit() {
+        let r = CaptureRing::new(4);
+        r.push_f32(&[0.0; 6]);
+        assert_eq!(r.dropped(), 2);
+        let mut out = Vec::new();
+        assert_eq!(r.drain(&mut out), 4);
+        r.push_f32(&[0.25; 3]);
+        assert_eq!(r.drain(&mut out), 3);
+    }
+
+    #[test]
+    fn cycle_takes_the_first_channel_of_an_interleaved_buffer() {
+        let r = CaptureRing::new(8);
+        let input = BufferList { buffers: vec![Buffer { channels: 2, data: vec![0.5, -1.0, 0.25, 1.0] }] };
+        capture_cycle(&r, &input);
+        let mut out = Vec::new();
+        r.drain(&mut out);
+        // 0.25 * 32767 = 8191.75 rounds to 8192
+        assert_eq!(out, vec![16384, 8192]);
+    }
+
+    #[test]
+    fn io_errors_keep_the_permission_kind() {
+        assert_eq!(io_err("x", AudioError::PermissionDenied).kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(io_err("x", AudioError::NoServer).kind(), io::ErrorKind::NotConnected);
     }
 
     #[test]

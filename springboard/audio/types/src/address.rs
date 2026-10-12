@@ -75,3 +75,24 @@ impl PropertyAddress {
         PropertyAddress { selector, scope, element: MAIN_ELEMENT }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fourcc_round_trip() {
+        let c = FourCC::new(b"nsrt");
+        assert_eq!(c.as_u32(), 0x6e737274);
+        assert_eq!(FourCC::from_u32(0x6e737274), c);
+    }
+
+    #[test]
+    fn address_constructors() {
+        let a = PropertyAddress::global(FourCC::new(b"dev#"));
+        assert_eq!((a.scope, a.element), (Scope::Global, MAIN_ELEMENT));
+        let b = PropertyAddress::scoped(FourCC::new(b"stm#"), Scope::Output);
+        assert_eq!(b.scope, Scope::Output);
+        assert_eq!(SYSTEM_OBJECT, ObjectId(1));
+    }
+}

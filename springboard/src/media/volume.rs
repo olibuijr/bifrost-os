@@ -1,10 +1,13 @@
 //! The media volume: sixteen steps, linear in dB over 30 dB, and the software gain the player
-//! applies when the sound card offers no volume control. On a desktop the card's own playback
-//! volume carries the level when it has one (`desktop_control`). Pure apart from `Volume::apply`.
+//! applies when the audio server is not there. The level lives on the object model: the volume
+//! and mute controls of the default output device (`VolumeTarget`, implemented for the HAL
+//! `Device`). Pure apart from `Volume::apply`, which a test drives through a fake target.
 //!
-//! The software gain is the only place the level is applied when there is no card control: a
+//! The software gain is the only place the level is applied when there is no device control: a
 //! player must not scale by its own volume as well, or the two attenuations add up.
 
+use bifrost_audio_types::{props, AudioError, FourCC, PropertyAddress, PropertyValue, Scope};
+use bifrost_audio_types::address::MAIN_ELEMENT;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Volume steps between silence and full.
@@ -19,8 +22,6 @@ pub const STEP_DB: f32 = RANGE_DB / STEPS as f32;
 pub const DEFAULT_LEVEL: f32 = 0.0;
 /// The settings.ini key.
 pub const PREF: &str = "volume";
-/// The card's control device.
-pub const CONTROL_DEVICE: &str = "/dev/snd/controlC0";
 
 /// A volume level, 0 (mute) ..= 1 (full).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -116,46 +117,119 @@ pub fn scale(samples: &mut [i16], gain: f32) {
     }
 }
 
-/// Playback volume controls a desktop sound card may offer, best first.
-pub const DESKTOP_CONTROLS: [&str; 4] = ["Master", "PCM", "Speaker", "Headphone"];
-
-/// The standard ALSA playback volume to drive on a desktop: the first of `DESKTOP_CONTROLS`
-/// that exists as an integer "<name> Playback Volume" with a usable range.
-pub fn desktop_control(controls: &[super::mixer::Control]) -> Option<&super::mixer::Control> {
-    DESKTOP_CONTROLS.iter().find_map(|base| {
-        let name = format!("{base} Playback Volume");
-        controls.iter().find(|c| c.name == name && c.kind == super::mixer::Kind::Int && c.max > c.min)
-    })
+/// Where a volume level is applied: the volume and mute controls of an output device.
+pub trait VolumeTarget {
+    fn set_scalar(&self, scalar: f32) -> Result<(), AudioError>;
+    fn set_mute(&self, mute: bool) -> Result<(), AudioError>;
+    fn scalar(&self) -> Result<f32, AudioError>;
 }
 
-/// The raw value for `level` (0..=1) on a control spanning `min..=max`; linear, and level 0
-/// lands on `min` exactly.
-pub fn range_value(level: f32, min: i64, max: i64) -> i64 {
-    min + (level.clamp(0.0, 1.0) * (max - min) as f32).round() as i64
+fn output_address(selector: FourCC) -> PropertyAddress {
+    PropertyAddress { selector, scope: Scope::Output, element: MAIN_ELEMENT }
 }
 
-#[cfg(target_os = "linux")]
-impl Volume {
-    /// Applies the level: the sound card's own volume carries it when there is a mixer with a
-    /// playback control, else the software gain does (every player applies it).
-    pub fn apply(self, mixer: Option<&super::mixer::Mixer>) -> std::io::Result<Option<i64>> {
-        let hw = mixer.map(|m| self.apply_desktop(m)).transpose();
-        set_software_gain(if matches!(hw, Ok(Some(_))) { 1.0 } else { self.linear() });
-        hw
+impl VolumeTarget for bifrost_audio_hal::Device {
+    fn set_scalar(&self, scalar: f32) -> Result<(), AudioError> {
+        self.set(output_address(props::VOLUME_SCALAR), PropertyValue::F32(scalar))
     }
 
-    fn apply_desktop(self, m: &super::mixer::Mixer) -> std::io::Result<i64> {
-        let controls = m.list()?;
-        let c = desktop_control(&controls).ok_or_else(|| std::io::Error::other("no playback volume control"))?;
-        let v = range_value(if self.muted() { 0.0 } else { self.level }, c.min, c.max);
-        m.set(&c.name, &vec![v; c.count.max(1) as usize])?;
-        Ok(v)
+    fn set_mute(&self, mute: bool) -> Result<(), AudioError> {
+        self.set(output_address(props::MUTE), PropertyValue::Bool(mute))
+    }
+
+    fn scalar(&self) -> Result<f32, AudioError> {
+        match self.get(output_address(props::VOLUME_SCALAR))? {
+            PropertyValue::F32(v) => Ok(v),
+            _ => Err(AudioError::BadValueType),
+        }
+    }
+}
+
+/// The default output device, or None when the audio server is not running.
+pub fn default_output() -> Option<bifrost_audio_hal::Device> {
+    let system = bifrost_audio_hal::System::connect(super::speaker::CLIENT).ok()?;
+    system.default_device(bifrost_audio_hal::Role::Output).ok()
+}
+
+impl Volume {
+    /// Applies the level: the output device's volume and mute controls carry it when the audio
+    /// server is there (returns the scalar set), else the software gain does (every player applies
+    /// it). A refused write falls back to the software gain and reports the error.
+    pub fn apply(self, target: Option<&dyn VolumeTarget>) -> std::io::Result<Option<f32>> {
+        let Some(t) = target else {
+            set_software_gain(self.linear());
+            return Ok(None);
+        };
+        match t.set_scalar(self.level).and_then(|()| t.set_mute(self.muted())) {
+            Ok(()) => {
+                set_software_gain(1.0);
+                Ok(Some(self.level))
+            }
+            Err(e) => {
+                set_software_gain(self.linear());
+                Err(std::io::Error::other(format!("device volume: {e:?}")))
+            }
+        }
+    }
+
+    /// The level the device reports, for syncing the sliders with a change made elsewhere.
+    pub fn from_device(target: &dyn VolumeTarget) -> Option<Volume> {
+        target.scalar().ok().map(Volume::new)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::sync::Mutex;
+
+    /// The software gain is process-wide: tests that set it take turns.
+    static GAIN: Mutex<()> = Mutex::new(());
+
+    struct Fake {
+        calls: RefCell<Vec<String>>,
+        fail: bool,
+        value: f32,
+    }
+
+    impl VolumeTarget for Fake {
+        fn set_scalar(&self, v: f32) -> Result<(), AudioError> {
+            self.calls.borrow_mut().push(format!("scalar {v}"));
+            if self.fail { Err(AudioError::NotSettable) } else { Ok(()) }
+        }
+        fn set_mute(&self, m: bool) -> Result<(), AudioError> {
+            self.calls.borrow_mut().push(format!("mute {m}"));
+            Ok(())
+        }
+        fn scalar(&self) -> Result<f32, AudioError> {
+            Ok(self.value)
+        }
+    }
+
+    #[test]
+    fn apply_sets_the_device_controls_and_leaves_the_software_gain_at_unity() {
+        let _g = GAIN.lock().unwrap();
+        let f = Fake { calls: RefCell::new(vec![]), fail: false, value: 0.25 };
+        assert_eq!(Volume::at_step(8).apply(Some(&f)).unwrap(), Some(0.5));
+        assert_eq!(*f.calls.borrow(), ["scalar 0.5", "mute false"]);
+        assert_eq!(software_gain(), 1.0);
+        assert_eq!(Volume::from_device(&f), Some(Volume::new(0.25)));
+        Volume::at_step(0).apply(Some(&f)).unwrap();
+        assert_eq!(f.calls.borrow()[3], "mute true", "step 0 mutes");
+    }
+
+    #[test]
+    fn apply_falls_back_to_software_gain_without_a_device_or_when_it_refuses() {
+        let _g = GAIN.lock().unwrap();
+        assert_eq!(Volume::at_step(8).apply(None).unwrap(), None);
+        assert!((software_gain() - 0.1778).abs() < 1e-3);
+        set_software_gain(1.0);
+        let f = Fake { calls: RefCell::new(vec![]), fail: true, value: 0.0 };
+        assert!(Volume::at_step(8).apply(Some(&f)).is_err());
+        assert!((software_gain() - 0.1778).abs() < 1e-3);
+        set_software_gain(1.0);
+    }
 
     #[test]
     fn sixteen_even_steps_over_thirty_db_with_mute_at_zero() {
@@ -191,32 +265,6 @@ mod tests {
         assert!(Volume::new(0.56).linear() > 0.2);
         assert_eq!(Volume::at_step(0).linear(), 0.0);
     }
-
-    fn ctl(name: &str, kind: super::super::mixer::Kind, max: i64) -> super::super::mixer::Control {
-        super::super::mixer::Control { numid: 1, name: name.into(), kind, count: 2, min: 0, max, step: 1, items: vec![], values: vec![], db: None }
-    }
-
-    #[test]
-    fn desktop_picks_the_first_existing_playback_volume() {
-        use super::super::mixer::Kind::{Bool, Int};
-        let all = [ctl("Headphone Playback Volume", Int, 87), ctl("PCM Playback Volume", Int, 255), ctl("Master Playback Switch", Bool, 1)];
-        assert_eq!(desktop_control(&all).unwrap().name, "PCM Playback Volume", "PCM outranks Headphone; a switch is no volume");
-        let rev = [ctl("Speaker Playback Volume", Int, 10), ctl("Master Playback Volume", Int, 64)];
-        assert_eq!(desktop_control(&rev).unwrap().name, "Master Playback Volume", "list order does not matter");
-        assert!(desktop_control(&[ctl("Master Playback Volume", Bool, 1), ctl("Mic Capture Volume", Int, 9), ctl("Master Playback Volume", Int, 0)]).is_none());
-        assert!(desktop_control(&[]).is_none());
-    }
-
-    #[test]
-    fn range_value_maps_linearly_onto_the_control() {
-        assert_eq!(range_value(0.0, 0, 87), 0);
-        assert_eq!(range_value(1.0, 0, 87), 87);
-        assert_eq!(range_value(0.5, 0, 100), 50);
-        assert_eq!(range_value(0.5, 10, 20), 15);
-        assert_eq!(range_value(2.0, 0, 87), 87);
-        assert_eq!(range_value(-1.0, 4, 87), 4);
-    }
-
     #[test]
     fn prefs_round_trip_with_a_default() {
         assert_eq!(Volume::from_pref(None), Volume::new(DEFAULT_LEVEL));
@@ -229,6 +277,7 @@ mod tests {
 
     #[test]
     fn software_gain_scales_samples_saturating() {
+        let _g = GAIN.lock().unwrap();
         let mut s = [1000, -1000, i16::MAX, i16::MIN];
         scale(&mut s, 1.0);
         assert_eq!(s, [1000, -1000, i16::MAX, i16::MIN], "unity leaves samples alone");

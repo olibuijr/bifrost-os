@@ -6,8 +6,8 @@
 //! **Video is decoded by libavcodec**, `dlopen`ed: VA-API hardware decode on the DRM render node
 //! when libva reports it, software otherwise (`hwdec::ffmpeg`, `hwdec::vaapi`). The player only
 //! sees the [`VideoDecoder`] trait below; `default_decoder` is the seam where `hwdec::open` is
-//! plugged in. Audio goes out through libasound's "default" PCM (`alsalib`), so PipeWire or
-//! PulseAudio route and mix it. No H.264 decoder is linked into the binary.
+//! plugged in. Audio goes out through an IO procedure on the default device of
+//! `bifrost-audiod` (`speaker`), which routes and mixes it. No H.264 decoder is linked into the binary.
 //!
 //! **Audio is pure Rust**: AAC-LC through `symphonia-codec-aac` (MPL-2.0,
 //! no C), the only codec crate in the tree, resampled to the 48 kHz stereo
@@ -43,8 +43,6 @@ pub mod volume;
 
 #[cfg(target_os = "linux")]
 pub mod alsa;
-#[cfg(target_os = "linux")]
-pub mod alsalib;
 #[cfg(target_os = "linux")]
 pub mod capture;
 #[cfg(target_os = "linux")]

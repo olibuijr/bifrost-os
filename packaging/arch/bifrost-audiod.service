@@ -1,0 +1,34 @@
+[Unit]
+Description=BifrOSt audio server (devices, mixing, clients)
+Documentation=file:///usr/share/doc/bifrost/audio-architecture.md
+After=sound.target systemd-tmpfiles-setup.service systemd-sysusers.service
+Wants=sound.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bifrost-audiod
+User=audio
+Group=audio
+SupplementaryGroups=audio
+# Real-time IO threads (SCHED_FIFO 88, sched_util_min) and locked memory; no other privilege.
+AmbientCapabilities=CAP_SYS_NICE
+CapabilityBoundingSet=CAP_SYS_NICE
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+LimitRTTIME=infinity
+NoNewPrivileges=yes
+# /dev/snd only; /run/bifrost/audio is created by tmpfiles (audio:audio 0755) and holds the control socket.
+DevicePolicy=closed
+DeviceAllow=char-alsa rw
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/bifrost/audio
+Restart=on-failure
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=is.olibuijr.audio
+
+[Install]
+WantedBy=multi-user.target

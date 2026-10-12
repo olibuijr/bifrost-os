@@ -1,4 +1,4 @@
-//! The audio service: the one process that owns the speaker and the microphone. Music, Podcasts,
+//! The media player service (`is.olibuijr.mediaplayer` on the audio server): decodes and plays music and records voice memos as a client of bifrost-audiod. Music, Podcasts,
 //! Voice Memos and the shell talk to it over `BIFROST_SERVICE_SOCK` (frames from
 //! `bifrost_proto::svc::audio`), so closing or updating an app never cuts the sound.
 
@@ -13,7 +13,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// The wire id and socket name stay `is.olibuijr.audio` so the apps (proto::svc::audio) do not change.
 const ID: &str = "is.olibuijr.audio";
+/// What this service is on the audio server: a plain client named `is.olibuijr.mediaplayer`
+/// (`media::speaker::CLIENT`), never a device owner. It opens no `/dev/snd` node.
+const CLIENT: &str = springboard::media::speaker::CLIENT;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct Client {
@@ -191,7 +195,7 @@ fn main() -> std::io::Result<()> {
     let core = Arc::new(Mutex::new(Core { player, recorder: None, muted: true, clients: Vec::new() }));
     let _ = std::fs::remove_file(&sock);
     let listener = UnixListener::bind(&sock)?;
-    eprintln!("audiod {VERSION} listening on {sock}");
+    eprintln!("audio.player: {CLIENT} {VERSION} listening on {sock}");
 
     // pushes state to subscribers when the song, the state or the second changes, and the meter while recording
     let ticker = core.clone();

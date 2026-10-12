@@ -22,6 +22,6 @@ pub use address::{Class, Element, FourCC, ObjectId, PropertyAddress, Scope, SYST
 pub use buffer::{Buffer, BufferList};
 pub use error::AudioError;
 pub use format::{FormatFlags, FormatId, StreamFormat};
-pub use layout::ChannelLayout;
+pub use layout::{ChannelLayout, Label, LayoutError, Tag};
 pub use time::{TimeStamp, TimeStampFlags};
 pub use value::PropertyValue;

@@ -32,6 +32,8 @@ tempfile = { version = "3", optional = true }
 # bifrost-portal: org.freedesktop.portal.Settings on the session bus (blocking API).
 zbus = { version = "5", optional = true }
 bifrost-proto = { path = "proto" }
+bifrost-audio-hal = { path = "audio/hal" }
+bifrost-audio-types = { path = "audio/types" }
 # the chrome model the shell serves to the menu bar, Dock and panels clients (src/shell/chrome_host)
 bifrost-chrome = { path = "chrome" }
 termcore = { package = "iosterm", path = "../../iOSTerm" }
@@ -95,7 +97,7 @@ strip = false
 
 [workspace]
 exclude = ["bootweave/efi"]
-members = ["core", "render", "ui", "proto", "sdk", "bifrostd", "audiod", "netd", "updated", "apps/files", "apps/daw", "apps/browser", "apps/remote", "apps/notes-desktop", "apps/books-desktop", "apps/calculator-desktop", "apps/keyboard", "apps/calendar-desktop", "apps/clock-desktop", "apps/contacts-desktop", "apps/freeform-desktop", "apps/games-desktop", "apps/music-desktop", "apps/news-desktop", "apps/podcasts-desktop", "apps/reminders-desktop", "apps/shortcuts-desktop", "apps/voicememos-desktop", "apps/weather-desktop", "mcp", "apps/assistant-desktop", "apps/console-desktop", "wm", "gpu", "layers", "gfx2d", "chrome", "bootweave/frame", "audio/types", "audio/shm", "audio/driver", "audio/alsa", "audio/server", "audio/hal", "audio/policy", "audio/toolbox", "audio/units", "audio/engine", "audio/midi", "audio/midid", "audio/compat/pulse", "audio/compat/alsa", "audio/compat/jack"]
+members = ["core", "render", "ui", "proto", "sdk", "bifrostd", "audiod", "netd", "updated", "apps/files", "apps/daw", "apps/browser", "apps/remote", "apps/notes-desktop", "apps/books-desktop", "apps/calculator-desktop", "apps/audio-setup-desktop", "apps/keyboard", "apps/calendar-desktop", "apps/clock-desktop", "apps/contacts-desktop", "apps/freeform-desktop", "apps/games-desktop", "apps/music-desktop", "apps/news-desktop", "apps/podcasts-desktop", "apps/reminders-desktop", "apps/shortcuts-desktop", "apps/voicememos-desktop", "apps/weather-desktop", "mcp", "apps/assistant-desktop", "apps/console-desktop", "wm", "gpu", "layers", "gfx2d", "chrome", "bootweave/frame", "audio/types", "audio/shm", "audio/driver", "audio/alsa", "audio/server", "audio/hal", "audio/policy", "audio/toolbox", "audio/units", "audio/engine", "audio/midi", "audio/midid", "audio/compat/pulse", "audio/compat/alsa", "audio/compat/jack"]
 
 [dev-dependencies]
 tempfile = "3"
