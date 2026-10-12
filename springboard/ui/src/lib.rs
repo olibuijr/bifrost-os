@@ -673,6 +673,8 @@ pub mod environment;
 pub mod preferences;
 pub mod call;
 pub mod markup;
+pub mod drawing;
+pub mod lasso;
 pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
