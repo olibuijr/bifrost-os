@@ -373,6 +373,220 @@ impl TrajectoryExpectation {
     }
 }
 
+/// One rubric dimension a judge scores on its own scale, from `min` to `max`. `weight` is its share of the overall
+/// score. A dimension is valid when its name is not blank, its weight is finite and above zero, and `min < max`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScoreDimension {
+    pub name: String,
+    pub weight: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+impl ScoreDimension {
+    pub fn new(name: impl Into<String>, weight: f64, min: f64, max: f64) -> Result<Self, JudgeError> {
+        let dim = ScoreDimension { name: name.into(), weight, min, max };
+        if dim.is_valid() {
+            Ok(dim)
+        } else {
+            Err(JudgeError::InvalidDimension(dim.name))
+        }
+    }
+
+    fn is_valid(&self) -> bool {
+        !self.name.trim().is_empty()
+            && self.weight.is_finite()
+            && self.weight > 0.0
+            && self.min.is_finite()
+            && self.max.is_finite()
+            && self.min < self.max
+    }
+}
+
+/// Why a model judge could not be built.
+#[derive(Clone, Debug, PartialEq)]
+pub enum JudgeError {
+    /// The judge has no dimension to score.
+    NoDimensions,
+    /// A dimension has a blank name, a weight that is not positive, or a scale that is empty.
+    InvalidDimension(String),
+}
+
+/// The text sent to the judge for one dimension. The placeholders are `{input}`, `{expected}`, `{response}`,
+/// `{dimension}`, `{min}` and `{max}`. Filled values are never scanned again, so an input that contains a
+/// placeholder keeps it as text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelJudgePrompt {
+    template: String,
+}
+
+impl ModelJudgePrompt {
+    pub fn new(template: impl Into<String>) -> Self {
+        ModelJudgePrompt { template: template.into() }
+    }
+
+    pub fn render(&self, sample: &Sample, response: &str, dimension: &ScoreDimension) -> String {
+        let values = [
+            ("{input}", sample.input.clone()),
+            ("{expected}", sample.expected.clone().unwrap_or_default()),
+            ("{response}", response.to_string()),
+            ("{dimension}", dimension.name.clone()),
+            ("{min}", dimension.min.to_string()),
+            ("{max}", dimension.max.to_string()),
+        ];
+        fill(&self.template, &values)
+    }
+}
+
+/// One pass over the template: a known placeholder is replaced, anything else is copied as it is.
+fn fill(template: &str, values: &[(&str, String)]) -> String {
+    let mut out = String::new();
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        out.push_str(&rest[..open]);
+        let tail = &rest[open..];
+        match values.iter().find(|(key, _)| tail.starts_with(key)) {
+            Some((key, value)) => {
+                out.push_str(value);
+                rest = &tail[key.len()..];
+            }
+            None => {
+                out.push('{');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The score a judge reply gives `dimension`: the first line `<dimension>: <number>`, with the name matched without
+/// case. The number must be finite and inside the dimension's scale. Any other reply gives None.
+pub fn parse_score(reply: &str, dimension: &ScoreDimension) -> Option<f64> {
+    let key = dimension.name.trim().to_ascii_lowercase();
+    reply.lines().find_map(|line| {
+        let (name, value) = line.trim().split_once(':')?;
+        if name.trim().to_ascii_lowercase() != key {
+            return None;
+        }
+        let v: f64 = value.split_whitespace().next()?.parse().ok()?;
+        (v.is_finite() && v >= dimension.min && v <= dimension.max).then_some(v)
+    })
+}
+
+/// An evaluator that asks a model judge to score each response on every dimension. `judge` gets the rendered prompt
+/// and returns the judge's reply, or an error. The score is the weighted mean of the normalized dimension scores,
+/// from 0.0 (the bottom of every scale) to 1.0 (the top). A judge error or an unreadable reply scores NaN, so check
+/// the metric with `is_nan()` before averaging it.
+pub fn model_judge(
+    name: impl Into<String>,
+    dimensions: Vec<ScoreDimension>,
+    prompt: ModelJudgePrompt,
+    judge: impl Fn(&str) -> Result<String, String> + 'static,
+) -> Result<Evaluator, JudgeError> {
+    if dimensions.is_empty() {
+        return Err(JudgeError::NoDimensions);
+    }
+    if let Some(bad) = dimensions.iter().find(|d| !d.is_valid()) {
+        return Err(JudgeError::InvalidDimension(bad.name.clone()));
+    }
+    let total: f64 = dimensions.iter().map(|d| d.weight).sum();
+    Ok(Evaluator::new(name, move |sample: &Sample, response: &str| {
+        let mut weighted = 0.0;
+        for dim in &dimensions {
+            let reply = match judge(&prompt.render(sample, response, dim)) {
+                Ok(reply) => reply,
+                Err(_) => return f64::NAN,
+            };
+            match parse_score(&reply, dim) {
+                Some(v) => weighted += dim.weight * (v - dim.min) / (dim.max - dim.min),
+                None => return f64::NAN,
+            }
+        }
+        weighted / total
+    }))
+}
+
+#[cfg(test)]
+mod judge_tests {
+    use super::*;
+
+    fn accuracy() -> ScoreDimension {
+        ScoreDimension::new("Accuracy", 3.0, 1.0, 5.0).unwrap()
+    }
+
+    #[test]
+    fn a_reply_gives_the_score_of_the_named_dimension_inside_its_scale() {
+        let dim = accuracy();
+        assert_eq!(parse_score("Accuracy: 4", &dim), Some(4.0));
+        assert_eq!(parse_score("accuracy:   5 , well done", &dim), Some(5.0));
+        assert_eq!(parse_score("Accuracy: 9", &dim), None, "above the scale");
+        assert_eq!(parse_score("Accuracy: 0.5", &dim), None, "below the scale");
+        assert_eq!(parse_score("Accuracy: high", &dim), None);
+        assert_eq!(parse_score("Clarity: 4", &dim), None, "another dimension");
+    }
+
+    #[test]
+    fn the_matching_line_is_found_among_others() {
+        let reply = "Clarity: 3\nReasoning: good\nAccuracy: 2\nAccuracy: 5";
+        assert_eq!(parse_score(reply, &accuracy()), Some(2.0), "the first readable line wins");
+        let skipped = "Accuracy: 9\nAccuracy: 3";
+        assert_eq!(parse_score(skipped, &accuracy()), Some(3.0), "an out of range line is skipped");
+    }
+
+    #[test]
+    fn the_prompt_fills_placeholders_once_and_leaves_filled_text_alone() {
+        let prompt = ModelJudgePrompt::new("Rate {dimension} of {response} for {input} (scale {min} to {max}).");
+        let dim = accuracy();
+        let sample = Sample::new("{max} is a placeholder");
+        let text = prompt.render(&sample, "a reply", &dim);
+        assert_eq!(text, "Rate Accuracy of a reply for {max} is a placeholder (scale 1 to 5).");
+        let unknown = ModelJudgePrompt::new("{other} {expected}").render(&Sample::expecting("q", "gold"), "r", &dim);
+        assert_eq!(unknown, "{other} gold");
+    }
+
+    #[test]
+    fn the_overall_score_is_the_weighted_mean_of_normalized_dimensions() {
+        let dims = vec![accuracy(), ScoreDimension::new("Clarity", 1.0, 0.0, 10.0).unwrap()];
+        let judge = |text: &str| -> Result<String, String> {
+            if text.contains("Rate Accuracy") {
+                Ok("Accuracy: 5".to_string())
+            } else {
+                Ok("Clarity: 5".to_string())
+            }
+        };
+        let ev = model_judge("quality", dims, ModelJudgePrompt::new("Rate {dimension}: {response}"), judge).unwrap();
+        // Accuracy (5 - 1) / 4 = 1.0 with weight 3; Clarity (5 - 0) / 10 = 0.5 with weight 1; (3 + 0.5) / 4.
+        let score = (ev.score)(&Sample::new("q"), "answer");
+        assert!((score - 0.875).abs() < 1e-12, "got {score}");
+        assert_eq!(ev.name(), "quality");
+    }
+
+    #[test]
+    fn a_judge_failure_or_an_unreadable_reply_scores_nan() {
+        let dims = vec![accuracy()];
+        let out_of_scale = model_judge("q", dims.clone(), ModelJudgePrompt::new("{dimension}"), |_| {
+            Ok("Accuracy: 9".to_string())
+        })
+        .unwrap();
+        assert!((out_of_scale.score)(&Sample::new("x"), "y").is_nan());
+        let failing = model_judge("q", dims, ModelJudgePrompt::new("{dimension}"), |_| Err("offline".into())).unwrap();
+        assert!((failing.score)(&Sample::new("x"), "y").is_nan());
+    }
+
+    #[test]
+    fn invalid_dimensions_and_empty_judges_are_refused() {
+        assert_eq!(ScoreDimension::new("  ", 1.0, 0.0, 1.0), Err(JudgeError::InvalidDimension("  ".into())));
+        assert!(ScoreDimension::new("A", 0.0, 0.0, 1.0).is_err(), "weight must be positive");
+        assert!(ScoreDimension::new("A", 1.0, 2.0, 2.0).is_err(), "the scale must not be empty");
+        let none = model_judge("q", vec![], ModelJudgePrompt::new(""), |_| Ok(String::new()));
+        assert!(matches!(none, Err(JudgeError::NoDimensions)));
+        let forged = ScoreDimension { name: "A".into(), weight: -1.0, min: 0.0, max: 1.0 };
+        let bad = model_judge("q", vec![forged], ModelJudgePrompt::new(""), |_| Ok(String::new()));
+        assert!(matches!(bad, Err(JudgeError::InvalidDimension(_))));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

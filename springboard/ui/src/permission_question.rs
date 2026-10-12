@@ -286,6 +286,162 @@ impl AskCenter {
     pub fn answered_count(&self) -> usize {
         self.answered.len()
     }
+
+    /// The answer to one question, if it was given and has not been taken yet. Nothing is removed.
+    pub fn response_for(&self, question_id: u64) -> Option<&PermissionResponse> {
+        self.answered.iter().find(|r| r.question_id == question_id)
+    }
+
+    /// Takes the answer to one question out of the queue. Answers to other questions stay where they are.
+    pub fn take_response(&mut self, question_id: u64) -> Option<PermissionResponse> {
+        let at = self.answered.iter().position(|r| r.question_id == question_id)?;
+        Some(self.answered.remove(at))
+    }
+}
+
+/// What a permission button shows: ready to send, waiting for the guardian, answered with a choice, or expired with
+/// no answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ButtonState {
+    Ready,
+    Waiting,
+    Answered(String),
+    Expired,
+}
+
+/// A button that sends one permission question to a guardian and reads the answer back (`PermissionButton`). The
+/// button sends its question once and then waits: the answer is read from the [`AskCenter`] it sent to. The model
+/// draws nothing; a shell or toolkit shows the label and a control for each [`ButtonState`].
+#[derive(Clone)]
+pub struct PermissionButton<T: QuestionTopic> {
+    question: PermissionQuestion<T>,
+    label: String,
+    sent: bool,
+    outcome: Option<PermissionResponse>,
+}
+
+impl<T: QuestionTopic> PermissionButton<T> {
+    pub fn new(question: PermissionQuestion<T>, label: impl Into<String>) -> Self {
+        PermissionButton { question, label: label.into(), sent: false, outcome: None }
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn question(&self) -> &PermissionQuestion<T> {
+        &self.question
+    }
+
+    /// Sends the question at `now`. A button sends its question once, so a second press is refused, and a question
+    /// that has already expired is refused by the center.
+    pub fn press(&mut self, center: &mut AskCenter, now: u64) -> Result<(), AskError> {
+        if self.sent {
+            return Err(AskError::InvalidQuestion);
+        }
+        center.ask(&self.question, now)?;
+        self.sent = true;
+        Ok(())
+    }
+
+    /// The state at `now`. An answer that this button already collected still reads as answered.
+    pub fn state(&self, center: &AskCenter, now: u64) -> ButtonState {
+        if let Some(outcome) = &self.outcome {
+            return ButtonState::Answered(outcome.choice.clone());
+        }
+        if !self.sent {
+            return ButtonState::Ready;
+        }
+        if let Some(response) = center.response_for(self.question.id()) {
+            return ButtonState::Answered(response.choice.clone());
+        }
+        let still_open = self.question.expires_at().map_or(true, |t| now < t);
+        if still_open && center.is_pending(self.question.id()) {
+            ButtonState::Waiting
+        } else {
+            ButtonState::Expired
+        }
+    }
+
+    /// Takes this button's answer out of the center and keeps it on the button. Returns it once; later calls return
+    /// None, as does a call before any answer has come.
+    pub fn collect(&mut self, center: &mut AskCenter) -> Option<PermissionResponse> {
+        if self.outcome.is_some() {
+            return None;
+        }
+        let response = center.take_response(self.question.id())?;
+        self.outcome = Some(response.clone());
+        Some(response)
+    }
+}
+
+#[cfg(test)]
+mod button_tests {
+    use super::*;
+
+    fn yes_no(id: u64, expires_at: Option<u64>) -> PermissionQuestion<SignificantAppUpdateTopic> {
+        PermissionQuestion::significant_app_update(id, expires_at).with_choices(&["yes", "no"], 0).unwrap()
+    }
+
+    #[test]
+    fn a_button_sends_its_question_once_and_waits() {
+        let mut center = AskCenter::new();
+        let mut button = PermissionButton::new(yes_no(7, None), "Ask a Parent");
+        assert_eq!(button.label(), "Ask a Parent");
+        assert_eq!(button.state(&center, 0), ButtonState::Ready);
+        button.press(&mut center, 0).unwrap();
+        assert!(center.is_pending(7));
+        assert_eq!(button.press(&mut center, 1), Err(AskError::InvalidQuestion), "second press refused");
+        assert_eq!(button.state(&center, 1), ButtonState::Waiting);
+    }
+
+    #[test]
+    fn the_answer_is_read_back_and_collected_once() {
+        let mut center = AskCenter::new();
+        let mut button = PermissionButton::new(yes_no(7, None), "Ask");
+        button.press(&mut center, 0).unwrap();
+        center.answer(7, "no", 10).unwrap();
+        assert_eq!(button.state(&center, 11), ButtonState::Answered("no".to_string()));
+        let got = button.collect(&mut center).unwrap();
+        assert_eq!((got.question_id, got.choice.as_str(), got.answered_at), (7, "no", 10));
+        assert!(button.collect(&mut center).is_none(), "collected once");
+        assert_eq!(button.state(&center, 12), ButtonState::Answered("no".to_string()), "still answered after collecting");
+        assert_eq!(center.answered_count(), 0);
+    }
+
+    #[test]
+    fn a_question_that_expires_unanswered_shows_expired() {
+        let mut center = AskCenter::new();
+        let mut button = PermissionButton::new(yes_no(8, Some(50)), "Ask");
+        button.press(&mut center, 0).unwrap();
+        assert_eq!(button.state(&center, 49), ButtonState::Waiting);
+        assert_eq!(button.state(&center, 50), ButtonState::Expired, "open at the deadline");
+        assert!(button.collect(&mut center).is_none());
+    }
+
+    #[test]
+    fn an_expired_question_is_not_sent() {
+        let mut center = AskCenter::new();
+        let mut button = PermissionButton::new(yes_no(9, Some(5)), "Ask");
+        assert_eq!(button.press(&mut center, 5), Err(AskError::InvalidQuestion));
+        assert_eq!(button.state(&center, 5), ButtonState::Ready, "nothing was sent");
+        assert_eq!(center.pending_count(), 0);
+    }
+
+    #[test]
+    fn collecting_takes_only_this_buttons_answer() {
+        let mut center = AskCenter::new();
+        let mut first = PermissionButton::new(yes_no(1, None), "A");
+        let mut second = PermissionButton::new(yes_no(2, None), "B");
+        first.press(&mut center, 0).unwrap();
+        second.press(&mut center, 0).unwrap();
+        center.answer(2, "yes", 3).unwrap();
+        center.answer(1, "no", 4).unwrap();
+        assert_eq!(first.collect(&mut center).unwrap().choice, "no");
+        assert!(center.response_for(1).is_none());
+        assert_eq!(center.response_for(2).unwrap().choice, "yes", "the other answer stays in the queue");
+        assert_eq!(second.collect(&mut center).unwrap().choice, "yes");
+    }
 }
 
 #[cfg(test)]
