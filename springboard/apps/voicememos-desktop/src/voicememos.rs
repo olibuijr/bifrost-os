@@ -15,6 +15,7 @@ use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m as gg;
 use bifrost_app::controls::recording::Trim;
+use bifrost_app::controls::textview::TextView;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -47,6 +48,14 @@ fn pts(ui: &Ui, (x, y, w, h): (f32, f32, f32, f32)) -> bifrost_app::controls::Re
 const BAR_RENAME: u32 = 1;
 const BAR_DELETE: u32 = 2;
 const BAR_TRIM: u32 = 3;
+const BAR_NOTES: u32 = 4;
+/// Menu item ids of the "Recording" app menu (`main.rs` builds it, `VoiceMemos::menu` runs it).
+pub const MENU_TRIM: u32 = 1;
+pub const MENU_NOTES: u32 = 2;
+pub const MENU_RENAME: u32 = 3;
+pub const MENU_EXPORT: u32 = 4;
+/// Line height of the notes text (points), about 1.3 times the body size.
+const NOTES_LINE_PT: f32 = 17.0;
 /// Corner radius of the rename field card (prefs layout card radius, points).
 const RADIUS: f32 = gg::CARD_RADIUS;
 /// Height of one recording row in the sidebar source list (points, two lines: title and date).
@@ -91,9 +100,18 @@ enum Target {
     Rename,
     Delete,
     Trim,
+    Notes,
+    /// the notes text card (a press places the caret, a drag selects)
+    NotesText,
     Cancel,
     Done,
     List,
+}
+
+/// The notes of a recording open for editing: the sidecar path and the text view over its text.
+struct NotesEdit {
+    path: PathBuf,
+    view: TextView,
 }
 
 struct Editor {
@@ -149,6 +167,9 @@ pub struct VoiceMemos {
     position_ms: f64,
     editor: Option<Editor>,
     trim: Option<TrimEdit>,
+    notes: Option<NotesEdit>,
+    /// a press on the notes card is dragging the selection
+    notes_drag: bool,
     field_touch: bool,
     scroll: Scroller,
     scrolling: bool,
@@ -201,6 +222,8 @@ impl VoiceMemos {
             position_ms: 0.0,
             editor: None,
             trim: None,
+            notes: None,
+            notes_drag: false,
             field_touch: false,
             scroll: Scroller::new(),
             scrolling: false,
@@ -312,6 +335,7 @@ impl VoiceMemos {
         if self.recording {
             self.finish_recording();
         }
+        self.end_notes(true);
         self.editor = None;
         self.trim = None;
         self.audio.pump();
@@ -502,6 +526,9 @@ impl VoiceMemos {
 
     /// Opens the trim of the selected memo, starting with the whole recording. Playback stops first.
     fn begin_trim(&mut self) {
+        if self.notes.is_some() {
+            return;
+        }
         let Some(i) = self.selected else { return };
         let Some(memo) = self.memos.get(i) else { return };
         match Trim::full(memo.duration_ms as f64 / 1000.0) {
@@ -572,6 +599,7 @@ impl VoiceMemos {
         self.end_playback();
         match std::fs::remove_file(&memo.path) {
             Ok(()) => {
+                let _ = std::fs::remove_file(store::notes_path(&memo.path));
                 self.selected = None;
                 self.reload();
             }
@@ -579,8 +607,116 @@ impl VoiceMemos {
         }
     }
 
+    /// True when the menu's recording commands apply: a recording is selected and nothing is being recorded or edited.
+    pub fn has_selection(&self) -> bool {
+        self.selected.is_some() && !self.recording && self.editor.is_none() && self.trim.is_none() && self.notes.is_none()
+    }
+
+    /// Runs a "Recording" menu item. False for an id this app does not declare.
+    pub fn menu(&mut self, ui: &Ui, id: u32) -> bool {
+        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT) {
+            return false;
+        }
+        if self.has_selection() {
+            match id {
+                MENU_TRIM => self.begin_trim(),
+                MENU_NOTES => self.begin_notes(ui),
+                MENU_RENAME => self.begin_rename(ui),
+                _ => self.export_selected(),
+            }
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// Copies the selected recording to the Downloads folder; the original stays.
+    fn export_selected(&mut self) {
+        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
+        let Some(home) = std::env::var_os("HOME") else {
+            self.error = "Cannot export: there is no home folder".into();
+            return;
+        };
+        let dir = PathBuf::from(home).join("Downloads");
+        match store::export_copy(&memo, &dir) {
+            Ok(path) => {
+                self.error.clear();
+                self.notice = format!("Exported to {}", path.display());
+            }
+            Err(e) => self.error = format!("Cannot export: {e}"),
+        }
+    }
+
+    /// Opens the notes of the selected recording in the notes card. Playback stops first.
+    fn begin_notes(&mut self, ui: &Ui) {
+        if self.recording || self.editor.is_some() || self.trim.is_some() {
+            return;
+        }
+        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
+        self.end_playback();
+        self.error.clear();
+        let (width, viewport) = self.notes_metrics(ui);
+        let view = TextView::new(&store::read_notes(&memo.path), width, NOTES_LINE_PT, viewport);
+        self.notes = Some(NotesEdit { path: memo.path.clone(), view });
+    }
+
+    /// Closes the notes. Done saves them next to the recording; Cancel discards the edits.
+    fn end_notes(&mut self, commit: bool) {
+        let Some(edit) = self.notes.take() else { return };
+        if commit {
+            if let Err(e) = store::write_notes(&edit.path, edit.view.text()) {
+                self.error = format!("Cannot save the notes: {e}");
+            }
+        }
+        self.dirty = true;
+    }
+
+    /// Keys in the notes card: typing, Enter for a new line, Backspace, and the arrows.
+    fn notes_key(&mut self, ui: &Ui, out: &Out) {
+        let k = ui.pt(1.0);
+        let measure = |t: &str| ui.measure(t, MAC_BODY_PT, Weight::Regular) / k;
+        let Some(edit) = self.notes.as_mut() else { return };
+        let view = &mut edit.view;
+        match out {
+            Out::Text(text) => {
+                view.insert(text, &measure);
+            }
+            Out::Enter => {
+                view.insert("\n", &measure);
+            }
+            Out::Backspace => {
+                view.delete_backward(&measure);
+            }
+            Out::Named(name) => match *name {
+                "Left" => view.move_horizontal(false, false, &measure),
+                "Right" => view.move_horizontal(true, false, &measure),
+                "Up" => {
+                    view.move_vertical(false, false, &measure);
+                }
+                "Down" => {
+                    view.move_vertical(true, false, &measure);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    /// Puts the notes caret at the point (pixels); `extend` drags the selection from the anchor.
+    fn notes_place(&mut self, ui: &Ui, x: f32, y: f32, extend: bool) {
+        let (b, pad, k) = (self.notes_box(ui), ui.pt(SPACE_M), ui.pt(1.0));
+        let measure = |t: &str| ui.measure(t, MAC_BODY_PT, Weight::Regular) / k;
+        if let Some(edit) = self.notes.as_mut() {
+            let byte = edit.view.hit_test((x - b.0 - pad) / k, (y - b.1 - pad) / k, &measure);
+            edit.view.place_caret(byte, extend);
+            edit.view.scroll_to_caret(&measure);
+        }
+        self.dirty = true;
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
-        if self.editor.is_some() {
+        if self.notes.is_some() {
+            self.notes_key(ui, &out);
+        } else if self.editor.is_some() {
             if matches!(out, Out::Hide | Out::Enter) {
                 self.end_rename(matches!(out, Out::Enter));
             } else if let Some(ed) = &mut self.editor {
@@ -674,6 +810,7 @@ impl VoiceMemos {
         Toolbar::new(vec![
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_TRIM, "Trim").enabled(on),
+            ToolbarItem::button(BAR_NOTES, "Notes").enabled(on),
             ToolbarItem::button(BAR_RENAME, "Rename").enabled(on),
             delete.enabled(on),
         ])
@@ -704,8 +841,8 @@ impl VoiceMemos {
     /// Toolbar buttons as semantic controls (points), so the shell does not drag the window over them.
     pub fn controls(&self, ui: &Ui) -> Vec<Node> {
         let mut nodes = Vec::new();
-        if self.editor.is_some() || self.trim.is_some() {
-            let button = |id: u64, label: &str, r: (f32, f32, f32, f32)| Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds: pts(ui, r), enabled: true };
+        if self.editor.is_some() || self.trim.is_some() || self.notes.is_some() {
+            let button =|id: u64, label: &str, r: (f32, f32, f32, f32)| Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds: pts(ui, r), enabled: true };
             nodes.push(button(CTL_CANCEL, "Cancel", self.cancel_rect(ui)));
             nodes.push(button(CTL_DONE, "Done", self.done_rect(ui)));
             return nodes;
@@ -760,6 +897,15 @@ impl VoiceMemos {
         if y >= self.h as f32 - home_zone(ui) {
             return None;
         }
+        if self.notes.is_some() {
+            if Self::inside(self.cancel_rect(ui), x, y) {
+                return Some(Target::Cancel);
+            }
+            if Self::inside(self.done_rect(ui), x, y) {
+                return Some(Target::Done);
+            }
+            return Self::inside(self.notes_box(ui), x, y).then_some(Target::NotesText);
+        }
         if self.trim.is_some() {
             if Self::inside(self.cancel_rect(ui), x, y) {
                 return Some(Target::Cancel);
@@ -788,6 +934,7 @@ impl VoiceMemos {
         if self.selected.is_some() {
             for (target, r) in [
                 (Target::Trim, self.bar_rect(ui, BAR_TRIM)),
+                (Target::Notes, self.bar_rect(ui, BAR_NOTES)),
                 (Target::Rename, self.rename_rect(ui)),
                 (Target::Delete, self.delete_rect(ui)),
                 (Target::Back, self.transport_rect(ui, 0)),
@@ -870,6 +1017,10 @@ impl VoiceMemos {
             Target::Forward => self.skip(15_000.0),
             Target::Scrub => {}
             Target::Trim => self.begin_trim(),
+            Target::Notes => self.begin_notes(ui),
+            Target::NotesText => {}
+            Target::Cancel if self.notes.is_some() => self.end_notes(false),
+            Target::Done if self.notes.is_some() => self.end_notes(true),
             Target::Rename => self.begin_rename(ui),
             Target::Delete => {
                 if self.confirm_delete {
@@ -907,6 +1058,11 @@ impl VoiceMemos {
                     }
                 }
                 self.pressed = self.hit(ui, x, y);
+                if self.pressed == Some(Target::NotesText) {
+                    self.notes_drag = true;
+                    self.notes_place(ui, x, y, false);
+                    return;
+                }
                 if self.pressed == Some(Target::Scrub) {
                     self.scrub = true;
                     if self.trim.is_some() {
@@ -922,7 +1078,9 @@ impl VoiceMemos {
                 }
             }
             Event::Move(..) => {
-                if self.field_touch {
+                if self.notes_drag {
+                    self.notes_place(ui, x, y, true);
+                } else if self.field_touch {
                     let (frame, w) = (self.field_rect(ui), self.w as f32);
                     if let Some(ed) = &mut self.editor {
                         ed.field.touch(ui, event, frame, w, t);
@@ -947,6 +1105,10 @@ impl VoiceMemos {
             }
             Event::Up(..) => {
                 self.dirty = true;
+                if std::mem::take(&mut self.notes_drag) {
+                    self.pressed = None;
+                    return;
+                }
                 if std::mem::take(&mut self.field_touch) {
                     let (frame, w) = (self.field_rect(ui), self.w as f32);
                     if let Some(ed) = &mut self.editor {
@@ -1060,6 +1222,10 @@ impl VoiceMemos {
             self.draw_trim(s, ui);
             return;
         }
+        if self.notes.is_some() {
+            self.draw_notes(s, ui);
+            return;
+        }
         let (px, pw) = self.pane(ui);
         let m = self.margin(ui);
         let side = self.side_w(ui);
@@ -1153,6 +1319,7 @@ impl VoiceMemos {
         widgets::toolbar_band(s, ui, Rect { x: side / ui.pt(1.0), y: 0.0, w: pw / ui.pt(1.0), h: UNIFIED_BAR_PT });
         let pressed = match self.pressed {
             Some(Target::Trim) => Some(BAR_TRIM),
+            Some(Target::Notes) => Some(BAR_NOTES),
             Some(Target::Rename) => Some(BAR_RENAME),
             Some(Target::Delete) => Some(BAR_DELETE),
             _ => None,
@@ -1199,6 +1366,57 @@ impl VoiceMemos {
         let keep = format!("Keeps {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
         let (px, pw) = self.pane(ui);
         self.centred(s, ui, &keep, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, wave.1 + wave.3 + ui.pt(SPACE_XXL), pw, ui.pt(SPACE_XL)));
+    }
+
+    /// The notes card: the sheet's Cancel and Done, a grey card with the wrapped notes, the selection and the caret.
+    fn draw_notes(&mut self, s: &mut Surface, ui: &Ui) {
+        self.button(s, ui, Target::Cancel, "Cancel", BLUE, self.cancel_rect(ui));
+        self.button(s, ui, Target::Done, "Done", BLUE, self.done_rect(ui));
+        self.centred(s, ui, "Notes", MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
+        let b = self.notes_box(ui);
+        s.fill_rrect(b.0, b.1, b.2, b.3, ui.pt(RADIUS), CARD_BG.now());
+        let (width, viewport) = self.notes_metrics(ui);
+        let (k, pad, lh) = (ui.pt(1.0), ui.pt(SPACE_M), ui.pt(NOTES_LINE_PT));
+        let measure = |t: &str| ui.measure(t, MAC_BODY_PT, Weight::Regular) / k;
+        let Some(edit) = self.notes.as_mut() else { return };
+        edit.view.resize(width, viewport, &measure);
+        let lines = edit.view.lines(&measure);
+        let text = edit.view.text().to_string();
+        let rows: Vec<(usize, String)> = edit.view.visible_lines(&measure).map(|l| (l, text[lines[l].clone()].to_string())).collect();
+        let highlights = edit.view.highlights(&measure);
+        let (cx, cy) = edit.view.caret_point(&measure);
+        let scroll = edit.view.scroll_y();
+        let (ox, oy) = (b.0 + pad, b.1 + pad);
+        // content line n sits at oy + n * line height, less the scroll
+        let y_of = |line: usize| oy + ui.pt(line as f32 * NOTES_LINE_PT - scroll);
+        for h in &highlights {
+            let (x0, w) = (ox + ui.pt(h.x0), ui.pt(h.x1 - h.x0).max(0.0));
+            s.fill_rect(x0.max(0.0) as usize, y_of(h.line).max(0.0) as usize, w as usize, lh as usize, SELECTION.now());
+        }
+        for (line, row) in &rows {
+            if !row.is_empty() {
+                self.text(s, ui, row, MAC_BODY_PT, Weight::Regular, LABEL.now(), ox, y_of(*line));
+            }
+        }
+        let (caret_x, caret_y) = (ox + ui.pt(cx), oy + ui.pt(cy - scroll));
+        if caret_y >= oy && caret_y + lh <= b.1 + b.3 {
+            s.fill_rect(caret_x.max(0.0) as usize, caret_y.max(0.0) as usize, k.max(1.0) as usize, lh as usize, LABEL.now());
+        }
+    }
+
+    /// The notes card below the sheet's buttons, inset from the pane edges (pixels).
+    fn notes_box(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let m = self.margin(ui);
+        let top = ui.pt(UNIFIED_BAR_PT + 68.0);
+        let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_L);
+        (m + ui.pt(SPACE_L), top, self.w as f32 - 2.0 * m - ui.pt(28.0), (bottom - top).max(0.0))
+    }
+
+    /// The text width and visible height of the notes card in points (the text sits inside a margin).
+    fn notes_metrics(&self, ui: &Ui) -> (f32, f32) {
+        let (_, _, w, h) = self.notes_box(ui);
+        let (k, pad) = (ui.pt(1.0), ui.pt(SPACE_M));
+        (((w - 2.0 * pad) / k).max(1.0), ((h - 2.0 * pad) / k).max(0.0))
     }
 
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
@@ -1274,6 +1492,31 @@ mod tests {
         let kept = &app.memos[app.selected.unwrap()];
         assert_eq!(kept.duration_ms, 250);
         assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn notes_save_beside_the_recording_and_the_menu_opens_them() {
+        let (mut app, ui) = app("notes");
+        store::save(&app.dir, "20261012-100000", &springboard::media::capture::wav_bytes(8000, 1, &vec![0; 800]), 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+        assert!(app.has_selection(), "a selected recording enables the menu");
+        assert!(app.menu(&ui, MENU_NOTES));
+        assert!(app.notes.is_some(), "Notes opens the notes card");
+        app.key(&ui, Out::Text("Milk".into()), 0.0);
+        app.key(&ui, Out::Enter, 0.0);
+        app.key(&ui, Out::Text("Eggs".into()), 0.0);
+        app.key(&ui, Out::Backspace, 0.0);
+        app.key(&ui, Out::Text("s".into()), 0.0);
+        app.activate(&ui, Target::Done);
+        assert!(app.notes.is_none());
+        assert_eq!(store::read_notes(&app.memos[0].path), "Milk\nEggs");
+        assert_eq!(app.memos.len(), 1, "the notes file is not listed as a recording");
+        app.menu(&ui, MENU_NOTES);
+        assert_eq!(app.notes.as_ref().unwrap().view.text(), "Milk\nEggs");
+        app.activate(&ui, Target::Cancel);
+        assert!(app.notes.is_none());
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 

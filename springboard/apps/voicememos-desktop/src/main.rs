@@ -9,7 +9,7 @@ mod voicememos;
 use bifrost_app::audio_devices;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::now_playing;
-use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind, KeyInput};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::shell::clock::Wall;
@@ -43,7 +43,9 @@ impl VoiceMemosApp {
                 KeyInput::Code(13) => Out::Enter,
                 KeyInput::Code(9) => Out::Named("Tab"),
                 KeyInput::Code(37) => Out::Named("Left"),
+                KeyInput::Code(38) => Out::Named("Up"),
                 KeyInput::Code(39) => Out::Named("Right"),
+                KeyInput::Code(40) => Out::Named("Down"),
                 _ => return false,
             };
             self.last_t = bifrost_app::proto::sys::now_ms();
@@ -126,6 +128,28 @@ impl App for VoiceMemosApp {
         }
         self.flush(ctx);
         true
+    }
+
+    /// One app menu, "Recording", between App and the shell's File, Edit, View, Window and Help.
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let on = self.memos.as_ref().is_some_and(|m| m.has_selection());
+        vec![AppMenu {
+            title: "Recording".into(),
+            items: vec![
+                AppMenuItem::new(voicememos::MENU_TRIM, "Trim\u{2026}").key("cmd+t").enabled(on),
+                AppMenuItem::new(voicememos::MENU_NOTES, "Notes\u{2026}").key("cmd+shift+n").enabled(on),
+                AppMenuItem::separator(),
+                AppMenuItem::new(voicememos::MENU_RENAME, "Rename\u{2026}").enabled(on),
+                AppMenuItem::new(voicememos::MENU_EXPORT, "Export to Downloads").key("cmd+shift+e").enabled(on),
+            ],
+        }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(m) = &mut self.memos else { return false };
+        let handled = m.menu(&ctx.ui, id);
+        self.flush(ctx);
+        handled
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
