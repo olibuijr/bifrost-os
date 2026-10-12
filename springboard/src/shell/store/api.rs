@@ -4,11 +4,15 @@
 use super::install::{parse_semver, InstalledApp};
 use crate::shell::kinds::Kind;
 use super::json;
+use bifrost_ui::purchase::Price;
 use std::path::Path;
 
 /// The catalogue, below the store host (`net::STORE_BASE`).
 pub const CATALOG_PATH: &str = "/api/v1/apps.json";
 pub const CACHE_PATH: &str = "/var/lib/springboard/store-cache.json";
+
+/// The age ratings the store uses, lowest first.
+pub const AGE_RATINGS: [&str; 5] = ["4+", "9+", "12+", "16+", "18+"];
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct StoreApp {
@@ -27,6 +31,10 @@ pub struct StoreApp {
     pub kind: String,
     /// release notes, newest first (empty for entries the server has no notes for)
     pub changelog: Vec<Release>,
+    /// the price in the store's currency; `None` for a free app (and for an entry that gives no currency)
+    pub price: Option<Price>,
+    /// one of `AGE_RATINGS`, or empty when the entry is unrated or gives an unknown rating
+    pub age_rating: String,
 }
 
 /// One released version and what changed in it.
@@ -72,6 +80,24 @@ impl StoreApp {
         Kind::of(&self.kind) == Kind::System
     }
 
+    /// A paid app: the store's price is above zero. The shell has no way to buy one yet, so it is never installed.
+    pub fn is_paid(&self) -> bool {
+        self.price.as_ref().is_some_and(|p| p.minor > 0)
+    }
+
+    /// "Free" or the price as the customer sees it, e.g. "12.50 EUR".
+    pub fn price_text(&self) -> String {
+        match self.price.as_ref() {
+            Some(p) if self.is_paid() => p.display(),
+            _ => "Free".into(),
+        }
+    }
+
+    /// The age rating, or "-" when the store gives none.
+    pub fn age_text(&self) -> String {
+        if self.age_rating.is_empty() { "-".into() } else { self.age_rating.clone() }
+    }
+
     /// `system`, `system-app` or `service`: installed in the background, never offered a GET or Remove.
     pub fn is_preinstalled(&self) -> bool {
         Kind::of(&self.kind).preinstalled()
@@ -109,9 +135,26 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
             min_shell: a.str_field("min_shell").unwrap_or_else(|| "0.0.0".into()),
             kind: a.str_field("kind").unwrap_or_else(|| "app".into()),
             changelog: parse_changelog(a.get("changelog")),
+            price: parse_price(a),
+            age_rating: age_rating_of(&a.str_field("age_rating").unwrap_or_default()),
         });
     }
     Ok(out)
+}
+
+/// Reads `price` (minor units), `currency` (ISO 4217) and `fraction_digits` (default 2) of a catalogue entry.
+/// Without a currency there is no price to show, so the entry is free.
+fn parse_price(a: &json::Json) -> Option<Price> {
+    let minor = i64::try_from(a.get("price")?.as_u64()?).ok()?;
+    let currency = a.str_field("currency")?;
+    let digits = a.get("fraction_digits").and_then(|d| d.as_u64()).unwrap_or(2) as u32;
+    Some(Price::new(minor, digits, &currency))
+}
+
+/// The rating when it is one of `AGE_RATINGS` (surrounding spaces ignored), else empty.
+pub fn age_rating_of(v: &str) -> String {
+    let v = v.trim();
+    if AGE_RATINGS.contains(&v) { v.to_string() } else { String::new() }
 }
 
 /// Whether the store's version is newer than the installed one.
@@ -187,6 +230,21 @@ mod tests {
         assert_eq!(apps[0].changelog.len(), 2);
         assert_eq!(apps[0].changelog[0], Release { version: "1.1.0".into(), date: "2026-10-05".into(), notes: vec!["Fixed x".into(), "Added y".into()] });
         assert!(apps[0].changelog[1].notes.is_empty() && apps[1].changelog.is_empty());
+    }
+
+    #[test]
+    fn price_and_age_rating_come_from_the_catalogue() {
+        let text = format!(
+            r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","price":1250,"currency":"EUR","age_rating":"12+"}},{{"id":"b","name":"B","version":"1.0.0","sha256":"{SUM}","package":"/q","price":990,"currency":"ISK","fraction_digits":0,"age_rating":"7+"}},{{"id":"c","name":"C","version":"1.0.0","sha256":"{SUM}","package":"/r"}},{{"id":"d","name":"D","version":"1.0.0","sha256":"{SUM}","package":"/s","price":500}}]}}"#
+        );
+        let apps = parse_catalog(&text).unwrap();
+        assert_eq!(apps[0].price, Some(Price::new(1250, 2, "EUR")));
+        assert!(apps[0].is_paid());
+        assert_eq!((apps[0].price_text(), apps[0].age_text()), ("12.50 EUR".to_string(), "12+".to_string()));
+        assert_eq!((apps[1].price_text(), apps[1].age_text()), ("990 ISK".to_string(), "-".to_string()), "7+ is no rating the store uses");
+        assert_eq!((apps[2].is_paid(), apps[2].price_text(), apps[2].age_text()), (false, "Free".to_string(), "-".to_string()));
+        assert!(!apps[3].is_paid(), "a price with no currency is no price");
+        assert_eq!(age_rating_of(" 18+ "), "18+");
     }
 
     #[test]
