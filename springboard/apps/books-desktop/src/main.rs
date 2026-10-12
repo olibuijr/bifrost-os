@@ -14,6 +14,10 @@ const MENU_FIND_PREVIOUS: u32 = 3;
 const MENU_HIGHLIGHT: u32 = 4;
 const MENU_WHOLE_WORDS: u32 = 5;
 const MENU_COPY_QUOTE: u32 = 6;
+const MENU_LOOK_UP: u32 = 7;
+const MENU_TRANSLATE: u32 = 8;
+const MENU_READ_ALOUD: u32 = 9;
+const MENU_STOP_READING: u32 = 10;
 
 /// How the shelf reaches the search index: a book is sent when it is new or changed (see `books::search_index`).
 struct BooksApp {
@@ -44,6 +48,13 @@ impl App for BooksApp {
         let hits = self.books.as_ref().is_some_and(|b| b.has_hits());
         let highlight = self.books.as_ref().and_then(|b| b.match_span());
         let whole = self.books.as_ref().is_some_and(|b| b.whole_words());
+        // Read Aloud toggles: start, then pause and resume; Stop Reading ends it
+        let speaking = self.books.as_ref().and_then(|b| b.speaking());
+        let read_title = match speaking {
+            None => "Read Aloud",
+            Some(false) => "Pause Reading",
+            Some(true) => "Resume Reading",
+        };
         vec![
             AppMenu {
                 title: "File".into(),
@@ -59,6 +70,13 @@ impl App for BooksApp {
                     // the shell owns Edit; copying the match as a quote sits with the match's other actions
                     AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some()),
                     AppMenuItem::separator(),
+                    // Look Up and Translate act on the text the last find went to, like Copy Quote
+                    AppMenuItem::new(MENU_LOOK_UP, "Look Up").enabled(highlight.is_some()),
+                    AppMenuItem::new(MENU_TRANSLATE, "Translate").enabled(highlight.is_some()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_READ_ALOUD, read_title).enabled(open),
+                    AppMenuItem::new(MENU_STOP_READING, "Stop Reading").enabled(speaking.is_some()),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_WHOLE_WORDS, "Match Whole Words").enabled(open).checked(whole),
                 ],
             },
@@ -73,7 +91,7 @@ impl App for BooksApp {
             }
             return false;
         }
-        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS) {
+        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS | MENU_LOOK_UP | MENU_TRANSLATE | MENU_READ_ALOUD | MENU_STOP_READING) {
             let Some(books) = &mut self.books else { return false };
             let t = bifrost_app::proto::sys::now_ms();
             match id {
@@ -82,6 +100,10 @@ impl App for BooksApp {
                 MENU_HIGHLIGHT => {
                     books.toggle_match_highlight();
                 }
+                MENU_LOOK_UP => books.look_up(),
+                MENU_TRANSLATE => books.translate(),
+                MENU_READ_ALOUD => books.read_aloud(t),
+                MENU_STOP_READING => books.stop_reading(),
                 _ => {
                     let on = !books.whole_words();
                     books.set_whole_words(on);

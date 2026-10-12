@@ -7,6 +7,7 @@
 pub use springboard::shell::books::engine;
 pub mod icon;
 pub mod layout;
+pub mod narrate;
 pub mod quote;
 pub mod search_index;
 pub mod store;
@@ -41,6 +42,8 @@ use store::{Pos, Span, Store, Theme, SIZES};
 mod highlight_tests;
 #[cfg(test)]
 mod connect_tests;
+#[cfg(test)]
+mod narrate_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).
@@ -201,6 +204,8 @@ pub(super) struct Reader {
     pub highlight: Option<(usize, usize, usize)>,
     /// pictures scaled for the current layout, by (block, width)
     pub images: HashMap<(usize, u32), Image>,
+    /// the chapter being read aloud (Find menu), if any
+    pub narration: Option<narrate::Narration>,
 }
 
 struct Loading {
@@ -270,6 +275,8 @@ pub struct Books {
     pub(super) library_search: TextField,
     /// Find in book matches whole words only (Find menu); kept for the session
     pub(super) whole_words: bool,
+    /// a one-line result of Look Up or Translate, shown on the page until the next tap
+    pub(super) notice: Option<String>,
 }
 
 impl Books {
@@ -314,6 +321,7 @@ impl Books {
                 f
             },
             whole_words: false,
+            notice: None,
         };
         b.rescan();
         b
@@ -426,6 +434,7 @@ impl Books {
             searched: false,
             highlight: None,
             images: HashMap::new(),
+            narration: None,
         };
         r.search.focused = false;
         self.reader = Some(r);
@@ -553,6 +562,7 @@ impl Books {
     }
 
     fn close_reader(&mut self, t: f64) {
+        self.notice = None;
         self.remember(t);
         self.save_now();
         self.reader = None;
@@ -640,6 +650,98 @@ impl Books {
         let r = self.reader.as_ref()?;
         let (block, offset, len) = r.highlight?;
         quote::quotation(&r.book, Span { block, offset, len })
+    }
+
+    // --- read aloud, look up, translate ---
+
+    /// The word the last find went to and the sentence it sits in (Look Up and Translate work on these).
+    fn match_text(&self) -> Option<(String, String)> {
+        let r = self.reader.as_ref()?;
+        let (block, offset, len) = r.highlight?;
+        let word: String = r.book.blocks.get(block)?.text()?.chars().skip(offset).take(len).collect();
+        let sentence = quote::sentence(&r.book.blocks, Span { block, offset, len }).unwrap_or_else(|| word.clone());
+        Some((word, sentence))
+    }
+
+    /// Find menu: the state of Read Aloud. None when nothing is being read, otherwise whether it is paused.
+    pub fn speaking(&self) -> Option<bool> {
+        self.reader.as_ref()?.narration.as_ref().map(|n| n.is_paused())
+    }
+
+    /// Find menu: reads the chapter aloud from the current page to its end. Pauses or resumes a reading in progress.
+    pub fn read_aloud(&mut self, t: f64) {
+        let Some(r) = &mut self.reader else { return };
+        if let Some(n) = &mut r.narration {
+            if n.is_paused() {
+                n.resume(t);
+            } else {
+                n.pause(t);
+            }
+            self.dirty = true;
+            return;
+        }
+        let pos = r.layout.pos_of(r.page);
+        let starts: Vec<usize> = r.book.toc.iter().map(|e| e.block).collect();
+        let end = narrate::chapter_end(&starts, pos.block, r.book.blocks.len());
+        let mut sentences = Vec::new();
+        for (block, b) in r.book.blocks.iter().enumerate().take(end).skip(pos.block) {
+            let Some(text) = b.text() else { continue };
+            let from = if block == pos.block { pos.offset } else { 0 };
+            sentences.extend(narrate::sentence_spans(text, block, from));
+        }
+        match narrate::Narration::start(sentences, t) {
+            Some(n) => r.narration = Some(n),
+            None => self.notice = Some("Nothing to read from this page to the end of the chapter.".to_string()),
+        }
+        self.dirty = true;
+    }
+
+    /// Find menu: stops reading aloud.
+    pub fn stop_reading(&mut self) {
+        if let Some(r) = &mut self.reader {
+            r.narration = None;
+        }
+        self.dirty = true;
+    }
+
+    /// Find menu: Look Up for the text the last find went to. The result is a notice on the page.
+    pub fn look_up(&mut self) {
+        let Some((word, sentence)) = self.match_text() else { return };
+        let language = bifrost_app::controls::language::dominant_language(&sentence);
+        self.notice = Some(narrate::look_up_notice(&word, language));
+        self.dirty = true;
+    }
+
+    /// Find menu: Translate the sentence the last find went to. The result is a notice on the page.
+    pub fn translate(&mut self) {
+        let Some((_, sentence)) = self.match_text() else { return };
+        let language = bifrost_app::controls::language::dominant_language(&sentence);
+        self.notice = Some(narrate::translate_notice(language));
+        self.dirty = true;
+    }
+
+    /// Moves the reading aloud on once its sentence is due, turning to the page that sentence is on.
+    fn follow_narration(&mut self, t: f64) -> bool {
+        let Some(r) = &mut self.reader else { return false };
+        let Some(n) = &mut r.narration else { return false };
+        let step = n.tick(t);
+        let mut turned = false;
+        match step {
+            narrate::Step::Same => return false,
+            narrate::Step::Done => r.narration = None,
+            narrate::Step::Moved(span) => {
+                let p = r.layout.page_of(Pos { block: span.block, offset: span.offset });
+                if p != r.page {
+                    r.page = p;
+                    turned = true;
+                }
+            }
+        }
+        if turned {
+            self.remember(t);
+        }
+        self.dirty = true;
+        true
     }
 
     /// The shelf as the search index sees it: each book's path, title and author.
@@ -1214,6 +1316,10 @@ impl Books {
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
         self.dirty = true;
+        // a tap dismisses the notice of Look Up or Translate
+        if matches!(ev, Event::Down(..)) {
+            self.notice = None;
+        }
         let (x, y) = match ev {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return,
@@ -1316,9 +1422,10 @@ impl Books {
             self.slide = None;
             self.dirty = true;
         }
+        let narrated = self.follow_narration(t);
         let moving = self.shelf_scroll.tick(t) | self.panel_scroll.tick(t) | self.slide.is_some();
         let blinking = self.screen == Screen::Library && self.library_search.focused;
-        self.dirty |= got || moving || blinking;
+        self.dirty |= got || moving || blinking || narrated;
         self.dirty
     }
 
@@ -1339,6 +1446,9 @@ impl Books {
                     want(w);
                 }
             }
+        }
+        if let Some(w) = self.reader.as_ref().and_then(|r| r.narration.as_ref()).and_then(|n| n.wake()) {
+            want(w);
         }
         if self.screen == Screen::Library && self.library_search.focused {
             if let Some(w) = self.library_search.next_wake(t) {
