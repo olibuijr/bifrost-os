@@ -1,6 +1,6 @@
 id = "is.olibuijr.books.desktop"
 name = "Books"
-version = "1.6.2"
+version = "1.6.3"
 exec = "bifrost-books"
 icon = "icon.png"
 min_shell = "0.4.84"

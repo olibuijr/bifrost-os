@@ -71,7 +71,6 @@ impl Writer {
         }
         self
     }
-    #[cfg(test)]
     pub fn arbitrary(&mut self, v: &[u8]) -> &mut Self {
         self.buf.push(T_ARBITRARY);
         self.buf.extend_from_slice(&(v.len() as u32).to_be_bytes());
@@ -84,7 +83,6 @@ impl Writer {
         self.buf.extend_from_slice(&usec.to_be_bytes());
         self
     }
-    #[cfg(test)]
     pub fn sample_spec(&mut self, format: u8, channels: u8, rate: u32) -> &mut Self {
         self.buf.push(T_SAMPLE_SPEC);
         self.buf.push(format);
@@ -92,7 +90,6 @@ impl Writer {
         self.buf.extend_from_slice(&rate.to_be_bytes());
         self
     }
-    #[cfg(test)]
     pub fn channel_map(&mut self, map: &[u8]) -> &mut Self {
         self.buf.push(T_CHANNEL_MAP);
         self.buf.push(map.len() as u8);

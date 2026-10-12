@@ -1,6 +1,7 @@
 //! Convert mode, driven through the same touch path the shell uses.
 
 use super::*;
+use bifrost_app::kit::Surface;
 
 fn tap(app: &mut Calculator, ui: &Ui, x: f32, y: f32) {
     app.touch(ui, Event::Down(x, y), 0.0);

@@ -392,6 +392,7 @@ impl Books {
         self.screen == Screen::Reader
     }
 
+    #[cfg(test)]
     /// True while the reader hides the status bar and home indicator.
     pub fn fullscreen(&self) -> bool {
         self.screen == Screen::Reader && self.reader.as_ref().is_some_and(|r| !r.chrome && r.panel.is_none())
@@ -404,14 +405,17 @@ impl Books {
         }
     }
 
+    #[cfg(test)]
     pub fn page(&self) -> Option<(usize, usize)> {
         self.reader.as_ref().filter(|_| self.screen == Screen::Reader).map(|r| (r.page, r.layout.pages.len()))
     }
 
+    #[cfg(test)]
     pub fn shelf_titles(&self) -> Vec<&str> {
         self.shelf.iter().map(|c| c.title.as_str()).collect()
     }
 
+    #[cfg(test)]
     pub fn settings(&self) -> store::Settings {
         self.store.settings
     }

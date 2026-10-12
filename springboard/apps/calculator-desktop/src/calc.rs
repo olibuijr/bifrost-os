@@ -283,6 +283,7 @@ impl Calculator {
         self
     }
 
+    #[cfg(test)]
     pub fn display(&self) -> &str {
         self.engine.display()
     }

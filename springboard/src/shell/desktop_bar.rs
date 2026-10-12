@@ -18,6 +18,8 @@ const SYSTEM_MENU_PT:f32=34.;
 #[cfg(feature = "desktop-wayland")]
 fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethernet{1.5}else{1.}}
 
+// Only the desktop-wayland bar builds these; other builds never construct them.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 #[derive(Clone,Copy,PartialEq,Eq,Debug)] pub(super) enum Menu {
     /// the leading system menu (the menu equivalent), drawn as the BifrOSt mark
     System,
@@ -38,6 +40,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Document}
 #[cfg(feature = "desktop-wayland")]
 #[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,Media(bifrost_ui::media_session::RemoteCommand)}
+// Only the desktop-wayland bar reads these fields; other builds never build the menu.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 #[cfg(feature = "desktop-wayland")]
 pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>}

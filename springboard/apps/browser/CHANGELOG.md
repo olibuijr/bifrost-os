@@ -1,3 +1,7 @@
+## 0.13.3
+
+- Build fix: the Develop menu actions (user agent, responsive size and pixel ratio) and the bookmark star now sit in the Browser impl, not the App trait impl, so the shell builds again.
+
 ## 0.13.2
 
 - The address field shows a star at its trailing edge: an outline for a page that is not a bookmark, filled for one. Clicking it adds or removes the bookmark.

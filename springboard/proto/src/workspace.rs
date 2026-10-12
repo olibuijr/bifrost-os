@@ -5,7 +5,7 @@
 //! Files are named by document grants the app already holds (`GrantId`), never by path: the shell resolves the grant
 //! and refuses a grant the app does not own. Every list and string is capped on encode and refused on decode.
 
-use super::{str_, u32_, DecodeError, GrantId, Reader, ToApp, ToShell};
+use super::{str_, u32_, DecodeError, Reader, ToApp, ToShell};
 
 pub const MAX_GRANTS: usize = 16;
 pub const MAX_ARG: usize = 1024;
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn requests_and_replies_round_trip() {
-        let g: GrantId = [3; 16];
+        let g: crate::GrantId = [3; 16];
         let m = ToShell::WorkspaceRequest { request: 9, op: WorkspaceOp::Recycle, grants: vec![g, [4; 16]], arg: "x y".into() };
         assert_eq!(ToShell::decode(&m.encode()), Ok(m));
         let s = ToShell::WorkspaceSubscribe { mask: WorkspaceEventKind::DidWake.bit() };

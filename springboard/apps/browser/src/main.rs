@@ -968,6 +968,34 @@ impl Browser {
         }
         Some(Press::Web)
     }
+
+    /// Develop menu: Responsive Design Mode, its size and pixel ratio, and the user agent preset.
+    fn dev_menu_action(&mut self, ctx: &Ctx, id: u32) {
+        match devmenu::pick(id) {
+            Some(devmenu::Pick::Responsive) => self.dev.toggle_responsive(),
+            Some(devmenu::Pick::UserAgent(i)) => self.set_user_agent(i),
+            Some(devmenu::Pick::Size(i)) => self.dev.preset(i),
+            Some(devmenu::Pick::Dpr(d)) => self.dev.set_dpr(d),
+            None => return,
+        }
+        self.place_web(ctx);
+    }
+
+    /// Develop > User Agent. The engine reads the user agent at start-up, so the choice takes effect on the next start.
+    fn set_user_agent(&mut self, i: usize) {
+        self.dev.set_ua(i);
+        let ua = self.dev.user_agent();
+        self.ctl.ua = ua.map(String::from);
+        if let Some(p) = self.pool.as_mut() {
+            p.set_user_agent(ua);
+        }
+    }
+
+    /// Clicking the address field's star: bookmarks the open page, or removes its bookmark when it has one.
+    fn toggle_bookmark(&mut self) {
+        let Some((url, title)) = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|st| (st.url.clone(), st.title.clone())) else { return };
+        self.store.toggle_bookmark(&url, &title, store::now());
+    }
 }
 
 impl App for Browser {
@@ -1033,34 +1061,6 @@ impl App for Browser {
                 None => false,
             },
         }
-    }
-
-    /// Develop menu: Responsive Design Mode, its size and pixel ratio, and the user agent preset.
-    fn dev_menu_action(&mut self, ctx: &Ctx, id: u32) {
-        match devmenu::pick(id) {
-            Some(devmenu::Pick::Responsive) => self.dev.toggle_responsive(),
-            Some(devmenu::Pick::UserAgent(i)) => self.set_user_agent(i),
-            Some(devmenu::Pick::Size(i)) => self.dev.preset(i),
-            Some(devmenu::Pick::Dpr(d)) => self.dev.set_dpr(d),
-            None => return,
-        }
-        self.place_web(ctx);
-    }
-
-    /// Develop > User Agent. The engine reads the user agent at start-up, so the choice takes effect on the next start.
-    fn set_user_agent(&mut self, i: usize) {
-        self.dev.set_ua(i);
-        let ua = self.dev.user_agent();
-        self.ctl.ua = ua.map(String::from);
-        if let Some(p) = self.pool.as_mut() {
-            p.set_user_agent(ua);
-        }
-    }
-
-    /// Clicking the address field's star: bookmarks the open page, or removes its bookmark when it has one.
-    fn toggle_bookmark(&mut self) {
-        let Some((url, title)) = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|st| (st.url.clone(), st.title.clone())) else { return };
-        self.store.toggle_bookmark(&url, &title, store::now());
     }
 
     fn configure(&mut self, ctx: &Ctx) {

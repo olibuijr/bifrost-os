@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.3
+
+- Build cleanup: the test-only reader and shelf accessors (`page`, `fullscreen`, `shelf_titles`, `settings`) are compiled only for tests, so the normal build has no dead-code warnings.
+
 ## 1.6.2
 
 - The procedural app icon is built only for its tests; the shipped icon is `icon.png`. The state report (`describe`) is built only for its tests too: serving it over the control socket needs a JSON dependency this app does not have yet.
