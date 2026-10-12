@@ -6,7 +6,9 @@ use crate::feed::Item;
 use bifrost_app::controls::language::{dominant_language, Language};
 use bifrost_app::controls::linkmeta::{validate_url, Card, LinkMetadata, LinkView};
 use bifrost_app::controls::reading_list::ReadingList;
+use bifrost_app::controls::translation::LanguageAvailability;
 use bifrost_app::spellcheck::words;
+use bifrost_app::translation::{TranslationError, TranslationMemory, TranslationSession};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -16,6 +18,9 @@ pub const READING_LIMIT: usize = 500;
 pub const WORDS_PER_MINUTE: usize = 200;
 /// The store file, next to the feed cache in the app's data directory.
 const STORE: &str = "reading-list.txt";
+/// The language codes the Translation model covers for News: Icelandic and English. No language pack ships with
+/// BifrOSt yet, so no pair is installed (see `installed`).
+pub const TRANSLATION_LANGUAGES: &[&str] = &["en", "is"];
 
 /// The English name of a recognised language.
 pub fn language_name(language: Language) -> &'static str {
@@ -84,6 +89,39 @@ pub fn link_card(item: &Item) -> Option<Card> {
         video: None,
     };
     Some(LinkView::loaded(metadata).card())
+}
+
+/// The language pairs installed on this PC for News. BifrOSt ships no translation language packs yet, so the
+/// availability is empty and every pair reports `NotInstalled` until a pack is added.
+pub fn installed() -> LanguageAvailability {
+    LanguageAvailability::new(TRANSLATION_LANGUAGES)
+}
+
+/// The source and target codes for an article text. The target is the other of English and Icelandic: an
+/// Icelandic article goes to English, and any other article goes to Icelandic (where its source is unsupported).
+pub fn translation_plan(text: &str) -> Result<(String, String), TranslationError> {
+    if text.trim().is_empty() {
+        return Err(TranslationError::NothingToTranslate);
+    }
+    let language = dominant_language(text).ok_or(TranslationError::UnableToIdentifyLanguage)?;
+    let source = language.code().to_string();
+    let target = String::from(if source == "en" { "is" } else { "en" });
+    Ok((source, target))
+}
+
+/// Translates the title and preview of an article through a `TranslationSession` for its language pair. The session
+/// checks that the pair is installed in `availability` before the engine runs, so the error is the framework's own.
+/// Returns the translated (title, preview).
+pub fn translate_article(
+    item: &Item,
+    availability: &LanguageAvailability,
+    engine: TranslationMemory,
+) -> Result<(String, String), TranslationError> {
+    let (source, target) = translation_plan(&format!("{} {}", item.title, item.body))?;
+    let session = TranslationSession::new(availability, &source, &target, Box::new(engine))?;
+    let title = session.translate(&item.title)?;
+    let body = if item.body.trim().is_empty() { String::new() } else { session.translate(&item.body)? };
+    Ok((title, body))
 }
 
 /// Reads the store. A missing or damaged file gives an empty list.
@@ -199,5 +237,50 @@ mod tests {
     #[test]
     fn a_missing_store_is_an_empty_list() {
         assert!(load_reading_list(Path::new("/nonexistent/bifrost-news-store")).is_empty());
+    }
+
+    #[test]
+    fn translation_plan_picks_the_other_of_english_and_icelandic() {
+        let is = "Þetta er mjög góð frétt og það er ekki hægt að segja annað um það sem gerðist í gær.";
+        let en = "The council met on Monday and the members agreed that the new bridge will open to traffic in the spring.";
+        assert_eq!(translation_plan(is), Ok(("is".to_string(), "en".to_string())));
+        assert_eq!(translation_plan(en), Ok(("en".to_string(), "is".to_string())));
+        assert_eq!(translation_plan("  "), Err(TranslationError::NothingToTranslate));
+        assert_eq!(translation_plan("!!! ..."), Err(TranslationError::UnableToIdentifyLanguage));
+    }
+
+    #[test]
+    fn no_language_pack_is_installed_so_a_translation_reports_not_installed() {
+        let body = "Þetta er mjög góð frétt og það er ekki hægt að segja annað um það sem gerðist í gær.";
+        let item = article("Frétt", "https://www.ruv.is/frett/1", body);
+        let r = translate_article(&item, &installed(), TranslationMemory::new());
+        assert_eq!(r, Err(TranslationError::NotInstalled));
+        assert_eq!(
+            installed().status("is", "en"),
+            bifrost_app::controls::translation::AvailabilityStatus::Supported
+        );
+    }
+
+    #[test]
+    fn an_installed_pair_translates_the_title_and_preview_through_the_engine() {
+        let body = "Þetta er mjög góð frétt og það er ekki hægt að segja annað um það sem gerðist í gær.";
+        let item = article("Frétt", "https://www.ruv.is/frett/1", body);
+        let mut availability = installed();
+        availability.install("is", "en");
+        let mut memory = TranslationMemory::new();
+        memory.insert("is", "en", "Frétt", "News");
+        memory.insert("is", "en", body, "This is very good news.");
+        let (title, preview) = translate_article(&item, &availability, memory).unwrap();
+        assert_eq!(title, "News");
+        assert_eq!(preview, "This is very good news.");
+    }
+
+    #[test]
+    fn a_phrase_missing_from_the_engine_is_an_internal_error() {
+        let body = "Þetta er mjög góð frétt og það er ekki hægt að segja annað um það sem gerðist í gær.";
+        let item = article("Frétt", "https://www.ruv.is/frett/1", body);
+        let mut availability = installed();
+        availability.install("is", "en");
+        assert_eq!(translate_article(&item, &availability, TranslationMemory::new()), Err(TranslationError::InternalError));
     }
 }

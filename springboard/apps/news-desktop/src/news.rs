@@ -16,8 +16,9 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::feed::{self, Item};
 use crate::wire;
-use bifrost_app::kit::ui::{home_zone, CARD_BG, DETAIL_BG, LABEL, LABEL_2, SEPARATOR_C};
+use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
+use bifrost_app::translation::TranslationMemory;
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::music::radio::Fetch;
 use std::collections::{HashMap, HashSet};
@@ -122,6 +123,8 @@ pub struct News {
     online: bool,
     /// the headlines changed since the widget timeline was last sent
     top_changed: bool,
+    /// the result of the last Translate command for the open article (a reason it could not run, or nothing)
+    notice: Option<String>,
 }
 
 /// `c` at the nearest end of the Light/Dark fade: pictures are rounded onto it once per scheme.
@@ -186,6 +189,7 @@ impl News {
             facts: String::new(),
             online: true,
             top_changed: true,
+            notice: None,
         };
         n.rebuild();
         n
@@ -541,7 +545,30 @@ impl News {
         (i < self.list.len()).then_some(Target::Row(i))
     }
 
+    /// Whether an article is open, so the Translate menu item is enabled.
+    pub fn can_translate(&self) -> bool {
+        self.open.is_some()
+    }
+
+    /// Translate command: translates the open article into the other of English and Icelandic. On success the
+    /// article shows the translation; otherwise the notice says why (for example, the language pair is not installed).
+    pub fn translate(&mut self, ui: &Ui) {
+        let Some(item) = self.open.as_ref().map(|(item, ..)| item.clone()) else { return };
+        let width = self.card_w(ui);
+        match wire::translate_article(&item, &wire::installed(), TranslationMemory::new()) {
+            Ok((title, body)) => {
+                let title = ui.wrap(&title, MAC_TITLE1_PT, Weight::Bold, width);
+                let body = ui.wrap(&body, MAC_BODY_PT, Weight::Regular, width);
+                self.open = Some((item, title, body));
+                self.notice = None;
+            }
+            Err(error) => self.notice = Some(format!("{}  {}", error.error_description(), error.failure_reason())),
+        }
+        self.dirty = true;
+    }
+
     fn activate(&mut self, ui: &Ui, target: Target) {
+        self.notice = None;
         match target {
             Target::Back => {
                 self.open = None;
@@ -649,7 +676,7 @@ impl News {
     /// The sidebar and the unified toolbar over the content column.
     fn draw_chrome(&mut self, s: &mut Surface, ui: &Ui) {
         let side = ui.pt(SIDEBAR_W) as usize;
-        s.fill_rect(side, 0, self.w as usize - side.min(self.w as usize), ui.pt(nav_bottom_pt()) as usize, DETAIL_BG.now());
+        s.fill_rect(side, 0, self.w as usize - side.min(self.w as usize), ui.pt(nav_bottom_pt()) as usize, CONTENT_BG.now());
         widgets::source_list(s, ui, self.sidebar_bounds(ui), &self.sidebar(), SIDEBAR_SCROLL, None);
         s.fill_rect(side.saturating_sub(1), 0, 1, self.h as usize, SEPARATOR_C.now());
         let band = Rect { x: SIDEBAR_W, y: 0.0, w: self.w as f32 / ui.pt(1.0) - SIDEBAR_W, h: UNIFIED_BAR_PT };
@@ -724,7 +751,7 @@ impl News {
             self.rows.retain(|&i, _| i >= first && i < first + visible);
         }
         self.list = list;
-        s.fill_rect(0, 0, self.w as usize, top, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, top, CONTENT_BG.now());
         self.draw_chrome(s, ui);
         let title = match self.tab {
             0 => "Today".to_string(),
@@ -744,7 +771,7 @@ impl News {
             let mut c = s.rows(top, bottom);
             let mut y = ui.pt(nav_bottom_pt()) - self.scroll.offset() + ui.pt(SPACE_L);
             let (hw, hh) = self.hero_size(ui);
-            match self.picture(&item, hw, hh, ui.pt(RADIUS) as usize, snap(DETAIL_BG)) {
+            match self.picture(&item, hw, hh, ui.pt(RADIUS) as usize, snap(CONTENT_BG)) {
                 Some(Some(p)) => {
                     c.blit(&p, x.round() as i32, y.round() as i32, 255, 255);
                     y += hh as f32 + ui.pt(SPACE_S);
@@ -769,6 +796,11 @@ impl News {
             let meta = ui.fit(&meta, MAC_FOOTNOTE_PT, self.card_w(ui));
             self.put(&mut c, ui, &meta, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(SPACE_M));
             y += ui.pt(SPACE_HUGE);
+            if let Some(notice) = self.notice.clone() {
+                let line = ui.fit(&notice, MAC_FOOTNOTE_PT, self.card_w(ui));
+                self.put(&mut c, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(LINE / 2.0));
+                y += ui.pt(LINE);
+            }
             for line in &body {
                 if y + ui.pt(LINE) >= top as f32 && y <= bottom as f32 {
                     self.put(&mut c, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), false, x, y + ui.pt(LINE / 2.0));
@@ -787,13 +819,13 @@ impl News {
             }
         }
         self.open = Some((item, title, body));
-        s.fill_rect(0, 0, self.w as usize, top, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, top, CONTENT_BG.now());
         self.draw_chrome(s, ui);
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
         self.dirty = false;
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         if self.open.is_some() {
             self.draw_article(s, ui);
         } else {
