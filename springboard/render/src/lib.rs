@@ -33,6 +33,7 @@ pub mod clip;
 pub mod pattern;
 pub mod function;
 pub mod raw_params;
+pub mod upscale;
 
 #[cfg(test)]
 mod tests {
