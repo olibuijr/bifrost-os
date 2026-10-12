@@ -302,6 +302,8 @@ fn install() -> io::Result<()> {
     }
     run("systemctl", &["start", "bifrost-update-guard.service"])?;
     if let Err(e)=run("pacman",&["-Su","--noconfirm","--overwrite","/usr/bin/springboard,/usr/lib/systemd/system/springboard.service,/usr/lib/springboard/seed-data,/usr/bin/bifrost-update-guard,/usr/lib/systemd/system/bifrost-update-guard.service","springboard-shell"]){if full {system::fallback_reset()?;} else {restore(Path::new("/"),Path::new(STORE))?;}return Err(e);}
+    // the first frame's caches for the new shell, before the reboot (boot-08); best effort, the shell rebuilds on a miss
+    let _ = Command::new("/usr/bin/springboard").arg("--first-frame-cache").status();
     if full {
         system::ready()?;
         println!("System update staged; reboot required for kernel/root probation");

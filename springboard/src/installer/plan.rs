@@ -597,6 +597,13 @@ pub fn install(cfg: &Config, progress: &Shared) {
         r.write(&sys("/etc/mkinitcpio.d/linux.preset"), "ALL_config=\"/etc/mkinitcpio.conf\"\nALL_kver=\"/boot/vmlinuz-linux\"\nPRESETS=('default')\ndefault_image=\"/boot/initramfs-linux.img\"\n")?;
         r.chroot(&["mkinitcpio", "-p", "linux"])?;
 
+        // the first frame's caches for this machine's panel, written into the target before it is unmounted (boot-08)
+        if let (Some((panel, scale)), Some(wp)) = (crate::first_frame_cache::installed_panel(), crate::first_frame_cache::wallpaper_path(LIVE_DIRS[0], &cfg.wallpaper)) {
+            let dir = std::path::Path::new("/mnt").join(crate::first_frame_cache::CACHE_DIR.trim_start_matches('/'));
+            if let Err(e) = crate::first_frame_cache::build_into(&dir, panel, scale, LIVE_DIRS[0], &wp) {
+                r.log(format!("first-frame cache skipped: {e}"));
+            }
+        }
         r.set(3, 98, "Finishing");
         let _ = r.cmd(&["sync"]);
         let _ = r.cmd(&["fuser", "-k", "-m", "/mnt"]);
