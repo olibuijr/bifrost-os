@@ -85,7 +85,8 @@ impl App for RemindersApp {
             }
             None => {
                 self.wall = Wall::sample(bifrost_proto::sys::now_ms());
-                let mut r = app::Reminders::new(&ctx.ui, w, h, ctx.data_dir.join("reminders.tsv"), self.wall);
+                let mut r = app::Reminders::new(&ctx.ui, w, h, ctx.data_dir.join("reminders.tsv"), self.wall)
+                    .with_tips(tip_store(&ctx.data_dir));
                 r.set_top_inset(bifrost_app::layout::Layout::new(&ctx.cfg).top);
                 r.enable_file_export();
                 self.app = Some(r);
@@ -297,6 +298,15 @@ impl App for RemindersApp {
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
+    }
+}
+
+/// The first-use tip state, in the app's data folder. When that file cannot be read the tips live in memory only.
+fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
+    use bifrost_app::controls::tips::{configure, ConfigOption};
+    match configure(&[ConfigOption::DatastorePath(data_dir.join("tips.txt"))]) {
+        Ok(store) => store,
+        Err(_) => configure(&[]).expect("an in-memory tip store always loads"),
     }
 }
 

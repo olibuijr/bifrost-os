@@ -233,3 +233,37 @@ fn export_list_is_a_markdown_checklist_with_subtasks_and_due_days() {
     );
 }
 
+#[test]
+fn first_use_alert_tip_shows_in_details_until_a_due_date_is_set() {
+    let (app, ui, path) = app("alert-tip");
+    let mut app = app.with_tips(bifrost_app::controls::tips::configure(&[]).unwrap());
+    let has_tip = |app: &Reminders| app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Tip);
+    // A new reminder without a date shows the tip under the Due row.
+    app.activate(&ui, Target::New, 0.0);
+    assert!(has_tip(&app));
+    // Setting a date is what the tip asks for: it is dismissed and does not come back when the date is cleared.
+    app.activate(&ui, Target::Due, 1.0);
+    assert!(!has_tip(&app));
+    app.activate(&ui, Target::Due, 2.0);
+    assert!(!has_tip(&app));
+    cleanup(&path);
+}
+
+#[test]
+fn tapping_the_alert_tip_dismisses_it() {
+    let (app, ui, path) = app("alert-tip-tap");
+    let mut app = app.with_tips(bifrost_app::controls::tips::configure(&[]).unwrap());
+    app.activate(&ui, Target::New, 0.0);
+    app.activate(&ui, Target::Tip, 1.0);
+    assert!(!app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Tip));
+    cleanup(&path);
+}
+
+#[test]
+fn without_a_tip_store_the_details_form_has_no_tip_row() {
+    let (mut app, ui, path) = app("alert-tip-none");
+    app.activate(&ui, Target::New, 0.0);
+    assert!(!app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Tip));
+    cleanup(&path);
+}
+

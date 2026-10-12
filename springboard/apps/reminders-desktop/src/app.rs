@@ -23,6 +23,7 @@ use springboard::shell::clock::{
 use springboard::shell::keyboard::Out;
 use springboard::shell::textfield::TextField;
 use bifrost_app::controls::undo::UndoManager;
+use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, TipViewStyle};
 use model::{Data, Group, ListDef, Options, Reminder, Row, Smart, Sort, View};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -34,6 +35,8 @@ const UNDO_MS: f64 = 6000.0;
 /// How many undoable changes the history keeps.
 const UNDO_LIMIT: usize = 50;
 const ITEM_H: f32 = 48.0;
+/// Height in points of the first-use alert tip card in the details form.
+const TIP_H: f32 = 64.0;
 const HEAD_H: f32 = 40.0;
 /// Width of one swipe button, in pt.
 const BTN: f32 = 80.0;
@@ -90,6 +93,8 @@ enum Target {
     Save,
     Field(Field),
     Due,
+    /// The first-use alert tip card (tapping it dismisses the tip).
+    Tip,
     Calendar,
     Month(i32),
     Day(i64),
@@ -129,6 +134,28 @@ struct ListEdit {
 struct UndoBar {
     label: String,
     until: f64,
+}
+
+/// The first-use tip for the alert controls in the details form.
+struct AlertHint;
+
+impl Tip for AlertHint {
+    fn id(&self) -> &str {
+        "is.olibuijr.reminders.tip.alerts"
+    }
+
+    fn title(&self) -> &str {
+        "Get an alert"
+    }
+
+    fn message(&self) -> &str {
+        "Set a due date and a time. The alert still shows when Reminders is closed."
+    }
+}
+
+/// Seconds since the Unix epoch, for the tip's display gap.
+fn now_seconds() -> tips::Seconds {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Puts removed reminders back (undo of a delete or a clear).
@@ -195,6 +222,10 @@ pub struct Reminders {
     collapsed: HashSet<u64>,
     today: i64,
     editor: Option<Editor>,
+    /// First-use tips (`TipView`); `None` keeps the tip hidden, as in tests.
+    tips: Option<Datastore>,
+    /// The tip's `mark_shown` was recorded for this session.
+    tip_marked: bool,
     list_edit: Option<ListEdit>,
     title: TextField,
     title_hint: &'static str,
@@ -257,6 +288,27 @@ fn clean(text: &str) -> String {
 }
 
 impl Reminders {
+    /// Attaches the first-use tip store (its state file lives in the app's data folder).
+    pub fn with_tips(mut self, store: Datastore) -> Self {
+        self.tips = Some(store);
+        self
+    }
+
+    /// The alert tip's sections now. Empty once it was dismissed, or with no store.
+    fn tip_sections(&self, now: tips::Seconds) -> Vec<TipSection> {
+        match &self.tips {
+            Some(store) => TipView::new(&AlertHint, TipViewStyle::Mini).sections(store, now),
+            None => Vec::new(),
+        }
+    }
+
+    /// A tap on the tip, or setting a due date, dismisses it for good.
+    fn dismiss_tip(&mut self) {
+        if let Some(store) = &mut self.tips {
+            let _ = store.invalidate(AlertHint.id());
+        }
+    }
+
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, w: i32, h: i32) {
         self.full_w = w;
@@ -296,6 +348,8 @@ impl Reminders {
             collapsed: HashSet::new(),
             today: local_day(wall.unix, wall.offset),
             editor: None,
+            tips: None,
+            tip_marked: false,
             list_edit: None,
             title: mk_field(ui, "Reminder", model::MAX_TITLE, ""),
             title_hint: "Reminder",
@@ -517,6 +571,9 @@ impl Reminders {
                 add(&mut v, &mut y, Target::Field(Field::Notes), 56.0, 8.0);
                 add(&mut v, &mut y, Target::Field(Field::Url), 56.0, 20.0);
                 add(&mut v, &mut y, Target::Due, 52.0, if e.draft.due.is_some() { 8.0 } else { 20.0 });
+                if e.draft.due.is_none() && !self.tip_sections(now_seconds()).is_empty() {
+                    add(&mut v, &mut y, Target::Tip, TIP_H, 20.0);
+                }
                 if e.draft.due.is_some() {
                     add(&mut v, &mut y, Target::Calendar, 294.0, 8.0);
                     add(&mut v, &mut y, Target::Time, 52.0, 8.0);
@@ -1256,7 +1313,10 @@ impl Reminders {
                     self.save_list(ui, t);
                 }
             }
+            Target::Tip => self.dismiss_tip(),
             Target::Due => {
+                // Setting a date is what the tip asks for, so it does not show again.
+                self.dismiss_tip();
                 let today = self.today;
                 if let Some(e) = &mut self.editor {
                     if e.draft.due.is_some() {
