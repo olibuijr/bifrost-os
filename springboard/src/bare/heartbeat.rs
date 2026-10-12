@@ -142,6 +142,9 @@ pub fn watch(dir: &str) {
                 let secs = ((now - last) / 1e3).round() as u64;
                 crashlog::append(&dir, &format!("ui loop stalled for {secs}s"));
                 crashlog::write_last_exit(&dir, STALL_EXIT, &format!("ui loop stalled for {secs}s"));
+                // a stall is not a start failure: do not let it count toward the crash-loop latch
+                super::takeover::forgive_stall(&dir);
+                eprintln!("springboard: ui loop stalled for {secs}s; exiting");
                 std::process::exit(STALL_EXIT);
             }
             }

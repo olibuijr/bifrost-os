@@ -57,6 +57,21 @@ pub fn current_attempts(raw: &str, age_secs: u64) -> u32 {
     }
 }
 
+/// The attempt counter after a stall exit: one less. A stall means the shell got as far as its UI loop and then
+/// something it waited on (a service that stopped answering) held it, which is not a start failure; counting it let
+/// four stalls latch the shell for 10 minutes and the session ended a second after every start.
+pub fn after_stall(raw: &str) -> u32 {
+    parse_attempts(raw).saturating_sub(1)
+}
+
+/// Takes this start's attempt back after a stall (see `after_stall`).
+pub fn forgive_stall(dir: &str) {
+    let file = format!("{dir}/boot_attempts");
+    if let Ok(raw) = fs::read_to_string(&file) {
+        let _ = fs::write(&file, after_stall(&raw).to_string());
+    }
+}
+
 /// What to do given the failed boots so far.
 pub fn decide(failed: u32) -> Boot {
     if failed >= MAX_FAILED_BOOTS {
@@ -97,6 +112,8 @@ pub fn begin(dir: &str) -> bool {
         Boot::CrashLoop(n) => {
             let why = format!("{n} starts in a row never stayed up {}s: giving up so systemd can show a getty", HEALTHY_AFTER_MS / 1e3);
             log(dir, &format!("{why} (delete {file} to retry sooner)"));
+            // the journal too: the file alone left a restart loop looking like a shell that exits for no reason
+            eprintln!("springboard: takeover: {why} (delete {file} to retry sooner)");
             super::crashlog::write_last_exit(dir, CRASH_LOOP_EXIT, &why);
             std::process::exit(CRASH_LOOP_EXIT);
         }
@@ -141,6 +158,21 @@ mod tests {
         assert_eq!(current_attempts("2", ATTEMPTS_STALE_SECS), 0);
         assert_eq!(decide(current_attempts("3", 5)), Boot::CrashLoop(3));
         assert_eq!(decide(current_attempts("3", 3_600)), Boot::TakeOver(1));
+    }
+
+    #[test]
+    fn a_stall_gives_its_attempt_back() {
+        assert_eq!(after_stall("3\n"), 2);
+        assert_eq!(after_stall("1"), 0);
+        assert_eq!(after_stall("0"), 0);
+        assert_eq!(after_stall("junk"), 0);
+        // four stalls in a row stay below the latch
+        let mut raw = String::from("0");
+        for _ in 0..4 {
+            let started = parse_attempts(&raw) + 1;
+            raw = after_stall(&started.to_string()).to_string();
+        }
+        assert_eq!(decide(parse_attempts(&raw)), Boot::TakeOver(1));
     }
 
     #[test]
