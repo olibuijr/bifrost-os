@@ -2,6 +2,7 @@
 //! hosted through the SDK. The shell draws the keyboard; the app
 //! asks for it with `wants_keyboard` and receives typed keys as `Input::Key`.
 
+mod insights;
 mod services;
 mod weather;
 

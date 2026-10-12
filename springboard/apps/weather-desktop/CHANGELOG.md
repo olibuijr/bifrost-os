@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+- The forecast has a Temperature chart: the hours as a line, with labelled temperatures on the side and the times
+  along the bottom. The chart is in the same card style as the rest of the forecast.
+- The forecast has a Map card for the selected place: a grid of latitude and longitude lines with the place at the
+  centre and a scale bar in km or miles to match the temperature setting. The card says plainly that no map tiles
+  are loaded, so the grid is the only map.
+- Locations ends with a note about location access. Weather uses the places you add and does not read this PC's
+  position; the note says so in plain words, and a failed location request would be explained the same way.
+
 ## 1.2.3
 
 - A Moon tile in the forecast shows the moon's lit share and its phase, such as "Waxing Gibbous", for right now.
