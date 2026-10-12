@@ -127,6 +127,7 @@ pub mod script_syntax;
 pub mod script_export;
 pub mod view;
 pub mod wl;
+pub mod layers;
 pub mod document;
 pub mod markup;
 pub mod log;
