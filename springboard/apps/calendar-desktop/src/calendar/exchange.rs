@@ -95,7 +95,7 @@ impl Calendar {
         store::sort(&mut events);
         store::save(&self.path, &events).map_err(|e| e.to_string())?;
         self.events = events;
-        self.events_gen = self.events_gen.wrapping_add(1);
+        self.changes.post();
         self.dirty = true;
         // Keep what the store cannot hold (rules, alerts) for alerts/export.
         let rp = rich_path(&self.path);

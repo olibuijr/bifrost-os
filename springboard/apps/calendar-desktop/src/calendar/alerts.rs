@@ -32,14 +32,14 @@ pub struct AlertState {
     /// Unix second up to which alerts were already handled.
     last: i64,
     next: Option<i64>,
-    gen: u32,
+    gen: u64,
     offset: i32,
 }
 
 /// What the app should post now; split out so the rule is host-testable.
 /// The calendar is built only when an alert is due, the events changed
 /// (`gen`), the zone changed or the scan window ran out.
-pub fn step(state: &mut AlertState, now: i64, gen: u32, offset: i32, load: impl FnOnce() -> IcsCalendar) -> Vec<Alert> {
+pub fn step(state: &mut AlertState, now: i64, gen: u64, offset: i32, load: impl FnOnce() -> IcsCalendar) -> Vec<Alert> {
     if !state.primed {
         state.primed = true;
         state.refresh = true;
@@ -75,7 +75,7 @@ impl Calendar {
     pub fn take_alerts(&mut self, t: f64) -> Vec<Alert> {
         let (events, path) = (&self.events, &self.path);
         let load = || alert_calendar(events, &exchange::load_rich(&exchange::rich_path(path)));
-        step(&mut self.alerts, self.wall.now(t), self.events_gen, self.wall.offset, load)
+        step(&mut self.alerts, self.wall.now(t), self.changes.generation(), self.wall.offset, load)
     }
 
     /// Monotonic ms of the next alert.

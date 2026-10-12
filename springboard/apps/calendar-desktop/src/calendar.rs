@@ -25,6 +25,7 @@ use bifrost_app::kit::colors;
 use bifrost_app::kit::ui::{CARD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C};
 use bifrost_app::kit::ui::{MAC_TITLE2_PT, MAC_TITLE3_PT};
 use springboard::shell::Event;
+use bifrost_app::controls::calendar_store_changes::StoreChangeHub;
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::Surface;
 use std::path::{Path, PathBuf};
@@ -153,8 +154,8 @@ pub struct Calendar {
     selected: Date,
     view: View,
     events: Vec<CalendarEvent>,
-    /// Bumped whenever `events` is replaced, for caches and the alert state.
-    events_gen: u32,
+    /// Store changes (each save or import posts one), for caches and the alert state.
+    changes: StoreChangeHub,
     alerts: alerts::AlertState,
     editor: Option<Draft>,
     /// Title, Location, Notes.
@@ -233,7 +234,7 @@ impl Calendar {
             selected: today,
             view: View::Month,
             events,
-            events_gen: 0,
+            changes: StoreChangeHub::new(),
             alerts: alerts::AlertState::default(),
             error,
             notice: None,
@@ -564,7 +565,7 @@ impl Calendar {
         match store::save(&self.path, &events) {
             Ok(()) => {
                 self.events = events;
-                self.events_gen = self.events_gen.wrapping_add(1);
+                self.changes.post();
                 self.selected = event.date;
                 self.error = None;
                 self.fit_scroll(ui);
@@ -632,7 +633,7 @@ impl Calendar {
         match store::save(&self.path, &events) {
             Ok(()) => {
                 self.events = events;
-                self.events_gen = self.events_gen.wrapping_add(1);
+                self.changes.post();
                 self.selected = event.date;
                 self.error = None;
                 self.undo = removed.map(|e| (e, t + UNDO_MS));
