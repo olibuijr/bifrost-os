@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-10-12
+
+- Added the app icon (a waveform tile) so the app can be published.
+
 ## 0.1.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
