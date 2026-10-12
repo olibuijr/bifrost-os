@@ -1017,3 +1017,5 @@ pub mod format_readers;
 pub mod export_session;
 pub mod frame_grab;
 pub mod render_synchronizer;
+pub mod indirect_command;
+pub mod counter_sample;

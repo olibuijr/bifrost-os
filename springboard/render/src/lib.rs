@@ -70,3 +70,4 @@ pub mod buffer_pool;
 
 pub mod hdr_frame;
 pub mod imgtile;
+pub mod hdr_transfer;
