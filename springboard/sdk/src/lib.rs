@@ -40,6 +40,7 @@ pub mod widgets;
 pub mod glyphs;
 pub mod defaults;
 pub mod screen_saver_defaults;
+pub mod screen_time;
 pub mod locale;
 pub mod bundle_resources;
 pub mod keychain;
