@@ -408,6 +408,28 @@ struct Slot {
     stale_all: bool,
 }
 
+/// Whether the SDK can bind a layer context on its Wayland connection (`wl::connection`). The direct path needs the
+/// connection to dispatch the `bifrost_layer_*` objects, which it does not yet (todo_left in
+/// `docs/graphics/g2-sdk-direct-runtime.md`). Until it does, the direct path is never entered.
+pub(crate) const LAYER_CONTEXT_WIRED: bool = false;
+
+/// Why the direct path is not taken, in the order the checks run. None means the app may run as a Wayland client.
+/// Connecting is the first side effect (it creates the app's toplevel), so every check that can be made before it is
+/// made here: the switch, the Vulkan device, the compositor's `bifrost_layer_manager_v1`, and the layer context.
+pub(crate) fn direct_fallback_reason(requested: bool, vulkan: bool, layer_manager: bool, context_wired: bool) -> Option<&'static str> {
+    if !requested {
+        Some("BIFROST_DIRECT is not 1")
+    } else if !vulkan {
+        Some("no Vulkan device")
+    } else if !layer_manager {
+        Some("the compositor does not offer bifrost_layer_manager_v1")
+    } else if !context_wired {
+        Some("the connection cannot bind layer contexts yet")
+    } else {
+        None
+    }
+}
+
 /// Runs `app` on the socket the shell passed in `BIFROST_SOCK` until it quits.
 pub fn run<A: App>(app: A) {
     let fd: i32 = std::env::var("BIFROST_SOCK").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| {
@@ -423,6 +445,12 @@ pub fn run<A: App>(app: A) {
 /// `run` on an explicit channel (tests, embedding).
 pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &str) {
     let _ = chan.send(&ToShell::Hello { sdk_version: SDK_VERSION, app_id: app.id().into() }.encode(), &[]);
+    if crate::wl::requested() {
+        // the Vulkan probe and the layer manager are only known after connecting, which this build never does yet
+        if let Some(reason) = direct_fallback_reason(true, false, false, LAYER_CONTEXT_WIRED) {
+            eprintln!("bifrost-app: BIFROST_DIRECT=1, shared-memory path: {reason}");
+        }
+    }
     // an app has no keyboard of its own: its `Keyboard` asks the shell for the system keyboard
     springboard::shell::keyboard::use_app_backend();
     // mapped, not read: every app shares the shell's page-cache copy of the 8 MB font
@@ -1116,5 +1144,46 @@ mod badge_tests {
         assert!(d.event(ToApp::DocBatch { request: 5, count: 3 }, None).is_none());
         assert!(matches!(d.event(ToApp::DocError { request: 5, code: DocErrorCode::Denied }, None), Some(DocumentEvent::Failed { .. })));
         assert!(d.batches.is_empty(), "an error drops the batch");
+    }
+}
+
+#[cfg(test)]
+mod direct_gate_tests {
+    use super::{direct_fallback_reason, LAYER_CONTEXT_WIRED};
+
+    #[test]
+    fn without_the_switch_the_direct_path_is_never_entered() {
+        assert_eq!(direct_fallback_reason(false, true, true, true), Some("BIFROST_DIRECT is not 1"));
+    }
+
+    #[test]
+    fn the_switch_alone_is_not_enough_without_vulkan() {
+        assert_eq!(direct_fallback_reason(true, false, true, true), Some("no Vulkan device"));
+    }
+
+    #[test]
+    fn a_compositor_without_the_layer_manager_falls_back() {
+        assert_eq!(direct_fallback_reason(true, true, false, true), Some("the compositor does not offer bifrost_layer_manager_v1"));
+    }
+
+    #[test]
+    fn an_unwired_connection_falls_back_even_when_everything_else_is_present() {
+        assert_eq!(direct_fallback_reason(true, true, true, false), Some("the connection cannot bind layer contexts yet"));
+    }
+
+    #[test]
+    fn everything_present_takes_the_direct_path() {
+        assert_eq!(direct_fallback_reason(true, true, true, true), None);
+    }
+
+    #[test]
+    fn the_checks_run_in_order_so_the_first_missing_piece_is_named() {
+        assert_eq!(direct_fallback_reason(false, false, false, false), Some("BIFROST_DIRECT is not 1"));
+        assert_eq!(direct_fallback_reason(true, false, false, false), Some("no Vulkan device"));
+    }
+
+    #[test]
+    fn the_layer_context_is_not_wired_yet() {
+        assert!(!LAYER_CONTEXT_WIRED);
     }
 }

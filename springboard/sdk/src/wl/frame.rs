@@ -219,31 +219,49 @@ impl FrameLoop {
         self.pacer.presented(host_time, refresh_ns);
     }
 
-    /// Draws one frame. `draw` is the app's drawing into the window's surface; it returns the damage. When nothing
-    /// changed, the frame is skipped. Otherwise the surface becomes one image op of a display list, which is rendered
-    /// into a backing store from `sink`, bound to the root layer and committed as one transaction.
+    /// Draws one frame into the CPU surface (the app's `draw`). When nothing changed, the frame is skipped. Otherwise the
+    /// surface becomes one image op of a display list, which is presented (see [`FrameLoop::present`]).
     pub fn draw_frame<S: FrameSink>(&mut self, sink: &mut S, draw: impl FnOnce(&mut Surface) -> Damage) -> Result<FrameReport, FrameError> {
         let (w, h) = (self.width, self.height);
         let damage = {
             let mut surface = Surface { w: w as usize, h: h as usize, stride: w as usize, px: &mut self.pixels, y0: 0 };
             draw(&mut surface)
         };
-        if damage.is_empty() && self.created && !self.bounds_dirty {
+        if frame_skipped(damage.is_empty(), self.created, self.bounds_dirty) {
             return Ok(FrameReport { seq: 0, skipped: true, stats: FrameStats::default() });
         }
 
         // The surface's pixels become one image of the list. The list keeps its own copy, so the surface is free again.
         let image = Image { w: w as usize, h: h as usize, px: std::mem::take(&mut self.pixels) };
-        let seq = self.seq + 1;
         let mut list = DisplayList::new(w, h);
-        list.image(ImageRef { id: seq, image: &image }, RectF::new(0.0, 0.0, w as f32, h as f32), 1.0);
+        list.image(ImageRef { id: self.seq + 1, image: &image }, RectF::new(0.0, 0.0, w as f32, h as f32), 1.0);
+        let result = self.present(sink, &list);
         self.pixels = image.px;
+        result
+    }
 
+    /// Draws one frame through the drawing vocabulary (`App::draw_canvas`): the app records into a display list, which
+    /// is rendered on the GPU without a CPU copy. Skipped when nothing changed, as in [`FrameLoop::draw_frame`].
+    pub fn draw_frame_canvas<S: FrameSink>(&mut self, sink: &mut S, draw: impl FnOnce(&mut DisplayList) -> Damage) -> Result<FrameReport, FrameError> {
+        let (w, h) = (self.width, self.height);
+        let mut list = DisplayList::new(w, h);
+        let damage = draw(&mut list);
+        if frame_skipped(damage.is_empty(), self.created, self.bounds_dirty) {
+            return Ok(FrameReport { seq: 0, skipped: true, stats: FrameStats::default() });
+        }
+        self.present(sink, &list)
+    }
+
+    /// Renders `list` into the next backing store from `sink` and commits it as one transaction on the root layer.
+    /// The whole list is rendered: the stores are pooled, so a damage rectangle would show two-frames-old pixels.
+    fn present<S: FrameSink>(&mut self, sink: &mut S, list: &DisplayList) -> Result<FrameReport, FrameError> {
+        let (w, h) = (self.width, self.height);
         let (contents, target) = sink.acquire(w, h)?;
         let mut cb = self.queue.command_buffer()?;
-        let stats = self.renderer.draw(&mut cb, &list, &target, None)?;
+        let stats = self.renderer.draw(&mut cb, list, &target, None)?;
         let work = cb.commit()?;
 
+        let seq = self.seq + 1;
         let size = self.bounds_dirty.then_some((w, h));
         let tx = frame_transaction(seq, self.root, !self.created, size, contents);
         sink.commit(contents, &target, &work, &tx)?;
@@ -254,6 +272,11 @@ impl FrameLoop {
         self.pacer.committed();
         Ok(FrameReport { seq, skipped: false, stats })
     }
+}
+
+/// Whether a frame can be skipped: the app reported no damage, the root layer exists and its size is current.
+pub fn frame_skipped(damage_empty: bool, created: bool, bounds_dirty: bool) -> bool {
+    damage_empty && created && !bounds_dirty
 }
 
 fn pixel_count(width: u32, height: u32) -> usize {
@@ -361,6 +384,18 @@ mod tests {
     #[test]
     fn a_zero_refresh_has_no_pacer() {
         assert!(Pacer::new(0).is_none());
+    }
+
+    #[test]
+    fn a_frame_without_damage_is_skipped_once_the_root_exists() {
+        assert!(frame_skipped(true, true, false));
+        // the first frame always goes out, even with no damage: it creates the root layer
+        assert!(!frame_skipped(true, false, false));
+        // a size change always goes out, even with no damage: the bounds must reach the server
+        assert!(!frame_skipped(true, true, true));
+        // any damage draws
+        assert!(!frame_skipped(false, true, false));
+        assert!(!frame_skipped(false, false, true));
     }
 
     #[test]
