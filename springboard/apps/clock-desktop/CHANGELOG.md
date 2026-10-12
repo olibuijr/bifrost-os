@@ -1,4 +1,8 @@
 # Changelog
+## 1.4.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.4.0 — 2026-10-12
 
 - Stopwatch: a Copy Laps button in the toolbar puts the lap table on the clipboard as plain text (a header line, then
