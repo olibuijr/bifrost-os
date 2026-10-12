@@ -1,6 +1,10 @@
 //! Vectors, 4x4 matrices and unit quaternions for 3D content (`NativeVector3`, `NativeVector4`, `NativeMatrix4`, `NativeQuaternion`).
 //! Plain `f32` values with no allocation. Matrices are column-major: element (row `r`, column `c`) is `m[c * 4 + r]`,
 //! so the translation sits in `m[12..15]` and a point transforms as `M * (x, y, z, 1)`.
+//!
+//! Dense `n x n` systems (`f64`, row-major slices) have their own section at the end: the Cholesky factor
+//! of a symmetric positive definite matrix with its solve, and an LU factorisation with partial pivoting.
+//! Matrix products and softmax already exist as tensor operations in `graph.rs` and `ml_model.rs`.
 
 use std::ops::{Add, Mul, Neg, Sub};
 use std::f32::consts::PI;
@@ -422,11 +426,206 @@ impl Mul for Quaternion {
     }
 }
 
+/// Why a dense factorisation or solve was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DenseError {
+    /// The slice length is not `n * n`, or the right-hand side is not `n` long.
+    Shape,
+    /// A pivot is zero or negative, so the matrix is not symmetric positive definite (Cholesky).
+    NotPositiveDefinite,
+    /// A column has no usable pivot, so the matrix is singular (LU).
+    Singular,
+}
+
+/// Cholesky factorisation of a symmetric positive definite `n x n` matrix `a` (row-major `f64`).
+/// Only the lower triangle of `a` is read. Returns the lower-triangular `L` with `a = L * Lᵀ`,
+/// row-major, with zeros above the diagonal.
+pub fn cholesky(a: &[f64], n: usize) -> Result<Vec<f64>, DenseError> {
+    if a.len() != n * n {
+        return Err(DenseError::Shape);
+    }
+    let mut l = vec![0.0f64; n * n];
+    for j in 0..n {
+        let mut d = a[j * n + j];
+        for k in 0..j {
+            d -= l[j * n + k] * l[j * n + k];
+        }
+        // Written as `!(d > 0.0)` so that a NaN pivot is refused as well.
+        if !(d > 0.0) {
+            return Err(DenseError::NotPositiveDefinite);
+        }
+        let djj = d.sqrt();
+        l[j * n + j] = djj;
+        for i in (j + 1)..n {
+            let mut s = a[i * n + j];
+            for k in 0..j {
+                s -= l[i * n + k] * l[j * n + k];
+            }
+            l[i * n + j] = s / djj;
+        }
+    }
+    Ok(l)
+}
+
+/// Solves `a x = b` from a Cholesky factor `l` (as returned by [`cholesky`]): forward substitution with
+/// `L`, then back substitution with `Lᵀ`.
+pub fn cholesky_solve(l: &[f64], n: usize, b: &[f64]) -> Result<Vec<f64>, DenseError> {
+    if l.len() != n * n || b.len() != n {
+        return Err(DenseError::Shape);
+    }
+    let mut y = vec![0.0f64; n];
+    for i in 0..n {
+        let mut s = b[i];
+        for k in 0..i {
+            s -= l[i * n + k] * y[k];
+        }
+        y[i] = s / l[i * n + i];
+    }
+    let mut x = vec![0.0f64; n];
+    for i in (0..n).rev() {
+        let mut s = y[i];
+        for k in (i + 1)..n {
+            s -= l[k * n + i] * x[k];
+        }
+        x[i] = s / l[i * n + i];
+    }
+    Ok(x)
+}
+
+/// An LU factorisation with partial pivoting, `P a = L U`. `lu` holds the unit lower factor below the
+/// diagonal and the upper factor on and above it, both row-major. `perm[i]` is the row of `a` that is
+/// row `i` of `P a`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Lu {
+    pub n: usize,
+    pub lu: Vec<f64>,
+    pub perm: Vec<usize>,
+}
+
+/// Factors `a` (row-major `n x n`) by Gaussian elimination with partial pivoting. The pivot in each column
+/// is the row with the largest absolute value at or below the diagonal.
+pub fn lu(a: &[f64], n: usize) -> Result<Lu, DenseError> {
+    if a.len() != n * n {
+        return Err(DenseError::Shape);
+    }
+    let mut m = a.to_vec();
+    let mut perm: Vec<usize> = (0..n).collect();
+    for k in 0..n {
+        let mut p = k;
+        let mut best = m[k * n + k].abs();
+        for i in (k + 1)..n {
+            let v = m[i * n + k].abs();
+            if v > best {
+                best = v;
+                p = i;
+            }
+        }
+        if best == 0.0 {
+            return Err(DenseError::Singular);
+        }
+        if p != k {
+            for c in 0..n {
+                m.swap(k * n + c, p * n + c);
+            }
+            perm.swap(k, p);
+        }
+        let pivot = m[k * n + k];
+        for i in (k + 1)..n {
+            let f = m[i * n + k] / pivot;
+            m[i * n + k] = f;
+            for c in (k + 1)..n {
+                m[i * n + c] -= f * m[k * n + c];
+            }
+        }
+    }
+    Ok(Lu { n, lu: m, perm })
+}
+
+impl Lu {
+    /// Solves `a x = b` for the factored `a`: permute `b`, substitute through the unit lower factor,
+    /// then through the upper factor.
+    pub fn solve(&self, b: &[f64]) -> Result<Vec<f64>, DenseError> {
+        let n = self.n;
+        if b.len() != n {
+            return Err(DenseError::Shape);
+        }
+        let mut y: Vec<f64> = self.perm.iter().map(|&r| b[r]).collect();
+        for i in 0..n {
+            for k in 0..i {
+                y[i] -= self.lu[i * n + k] * y[k];
+            }
+        }
+        for i in (0..n).rev() {
+            for k in (i + 1)..n {
+                y[i] -= self.lu[i * n + k] * y[k];
+            }
+            y[i] /= self.lu[i * n + i];
+        }
+        Ok(y)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const EPS: f32 = 1e-4;
+
+    fn close_f64(actual: f64, expected: f64) -> bool {
+        (actual - expected).abs() < 1e-9
+    }
+
+    #[test]
+    fn cholesky_of_a_small_spd_matrix_matches_the_hand_factor() {
+        // [[4, 2], [2, 3]] = L Lᵀ with L = [[2, 0], [1, sqrt(2)]].
+        let l = cholesky(&[4.0, 2.0, 2.0, 3.0], 2).unwrap();
+        assert!(close_f64(l[0], 2.0));
+        assert!(close_f64(l[1], 0.0));
+        assert!(close_f64(l[2], 1.0));
+        assert!(close_f64(l[3], 2.0f64.sqrt()));
+    }
+
+    #[test]
+    fn cholesky_solve_gives_the_hand_solution() {
+        // 4x + 2y = 8 and 2x + 3y = 7 give x = 1.25, y = 1.5.
+        let l = cholesky(&[4.0, 2.0, 2.0, 3.0], 2).unwrap();
+        let x = cholesky_solve(&l, 2, &[8.0, 7.0]).unwrap();
+        assert!(close_f64(x[0], 1.25));
+        assert!(close_f64(x[1], 1.5));
+    }
+
+    #[test]
+    fn cholesky_refuses_a_matrix_that_is_not_positive_definite() {
+        // The eigenvalues of [[1, 2], [2, 1]] are 3 and -1, so the second pivot is -3.
+        assert_eq!(cholesky(&[1.0, 2.0, 2.0, 1.0], 2), Err(DenseError::NotPositiveDefinite));
+    }
+
+    #[test]
+    fn lu_pivots_past_a_zero_diagonal_and_solves_the_swap() {
+        // [[0, 1], [1, 0]] x = [2, 3] gives x = [3, 2]. The first column needs the second row as pivot.
+        let f = lu(&[0.0, 1.0, 1.0, 0.0], 2).unwrap();
+        assert_eq!(f.perm, vec![1, 0]);
+        let x = f.solve(&[2.0, 3.0]).unwrap();
+        assert!(close_f64(x[0], 3.0));
+        assert!(close_f64(x[1], 2.0));
+    }
+
+    #[test]
+    fn lu_solves_a_three_by_three_system() {
+        // Rows [2, 1, 1], [4, -6, 0], [-2, 7, 2] with x = [1, 2, 3] give b = [7, -8, 18].
+        let a = [2.0, 1.0, 1.0, 4.0, -6.0, 0.0, -2.0, 7.0, 2.0];
+        let x = lu(&a, 3).unwrap().solve(&[7.0, -8.0, 18.0]).unwrap();
+        assert!(close_f64(x[0], 1.0));
+        assert!(close_f64(x[1], 2.0));
+        assert!(close_f64(x[2], 3.0));
+    }
+
+    #[test]
+    fn lu_refuses_a_singular_matrix_and_a_bad_shape() {
+        assert_eq!(lu(&[1.0, 2.0, 2.0, 4.0], 2).map(|_| ()), Err(DenseError::Singular));
+        assert_eq!(lu(&[1.0, 2.0, 3.0], 2).map(|_| ()), Err(DenseError::Shape));
+        assert_eq!(cholesky_solve(&[1.0], 1, &[1.0, 2.0]), Err(DenseError::Shape));
+    }
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() < EPS
