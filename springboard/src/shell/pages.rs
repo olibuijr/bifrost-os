@@ -149,6 +149,8 @@ pub enum Toggle {
     CornerSwipe,
     /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
     Permission(Media, usize),
+    /// App Permissions > Location: the app at this index may use location while it is in use
+    Location(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -883,7 +885,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
 /// that have not asked yet show off. `rows` come from `services::privacy_permissions::rows()`, in the order of the
 /// installed apps, so a switch's index is the app's index.
 pub fn permissions_page(rows: &[Row]) -> Spec {
-    let groups = privacy_permissions::MEDIA
+    let mut groups: Vec<Group> = privacy_permissions::MEDIA
         .iter()
         .map(|media| {
             let (header, footer) = match media {
@@ -902,6 +904,16 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             Group::new(items).header(header).footer(footer)
         })
         .collect();
+    // Location (wire `location_status`): on only when the person allowed the app while in use; a restricted app shows off.
+    let location: Vec<Item> = if rows.is_empty() {
+        vec![Item::new("No apps installed")]
+    } else {
+        rows.iter()
+            .enumerate()
+            .map(|(i, r)| Item::new(r.name.as_str()).switch(r.location.is_authorized(), Action::Toggle(Toggle::Location(i))))
+            .collect()
+    };
+    groups.push(Group::new(location).header("LOCATION").footer("Apps that may use your location while you use them. A switch is on only when you allow it."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -1232,9 +1244,13 @@ mod tests {
     #[test]
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default() }];
+        use bifrost_ui::location_auth::AuthorizationStatus;
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 3, "camera, microphone, screen recording");
+        assert_eq!(s.groups.len(), 4, "camera, microphone, screen recording, location");
+        assert_eq!(s.groups[3].header.as_deref(), Some("LOCATION"));
+        assert_eq!(s.groups[3].items[0].accessory, Accessory::Switch(true), "an app the person allowed while in use is on");
+        assert_eq!(s.groups[3].items[0].action, Action::Toggle(Toggle::Location(0)));
         assert_eq!(s.groups[0].header.as_deref(), Some("CAMERA"));
         let row = &s.groups[0].items[0];
         assert_eq!(row.label, "Alpha");

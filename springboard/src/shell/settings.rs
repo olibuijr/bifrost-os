@@ -1965,6 +1965,15 @@ impl Settings {
                 }
                 None => false,
             },
+            Toggle::Location(index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    let id = app.manifest.id.clone();
+                    let allowed = !super::services::privacy_permissions::location_status(&id).is_authorized();
+                    // a restricted app refuses the change; the switch then shows the status that stands
+                    super::services::privacy_permissions::set_location_by_user(&id, allowed).is_authorized()
+                }
+                None => false,
+            },
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),
             Toggle::DockRecents => flip(&mut self.opts.dock_recents),
             Toggle::DockAutohide => {
