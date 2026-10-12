@@ -1036,3 +1036,6 @@ pub mod counter_sample;
 
 pub mod object_push;
 pub mod passkey_display;
+pub mod shader_library;
+pub mod pdf_overlay;
+pub mod pdf_access;
