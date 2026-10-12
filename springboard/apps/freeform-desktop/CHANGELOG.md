@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0
+
+- New Arrange button in the toolbar, beside Copy: with strokes selected, it lines them up in a row from the top-left corner of the selection, wrapping to a new row at the board's right edge. Each stroke keeps its shape, and Undo puts them back.
+- A first-use hint explains Lasso and Arrange the first time Freeform opens. It goes away as soon as you press the board, and it does not come back.
+
 ## 1.3.0 — 2026-10-12
 
 - New Lasso tool: drag a loop around strokes to select them, drag inside the selection to move it, and press Delete to remove it. Delete can be undone.
