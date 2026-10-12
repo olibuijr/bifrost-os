@@ -3,6 +3,7 @@
 //! (`ui.pt`) for drawing. Colours are `Pair` tokens resolved with `.now()`, so Light and Dark both work.
 
 use crate::api::{self, Event, Running};
+use crate::connect::{self, Link};
 use crate::model::{self, Block, Conversation, Message, Span};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -16,6 +17,7 @@ use bifrost_app::kit::{clipboard, colors, Scroller, Surface, TextCache, Ui, Weig
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::{Ctx, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
@@ -55,6 +57,7 @@ const N_COMPOSER: u64 = 20;
 pub const MENU_NEW: u32 = 1;
 pub const MENU_DELETE: u32 = 2;
 pub const MENU_SETTINGS: u32 = 3;
+pub const MENU_COPY: u32 = 4;
 /// evdev V (paste chord)
 const KEY_V: u32 = 47;
 
@@ -260,6 +263,10 @@ pub struct Assistant {
     dirty: bool,
     wake_rx: Option<UnixStream>,
     wake_tx: Option<UnixStream>,
+    /// The network path, asked once at start and then kept up to date by the shell's events.
+    link: Link,
+    /// The pasteboard write of a "Copy Answer", until its reply arrives.
+    copy_req: Option<u32>,
 }
 
 impl Assistant {
@@ -267,6 +274,7 @@ impl Assistant {
         let dir = ctx.data_dir.clone();
         let (tx, rx) = channel();
         let get_req = Some(keychain::get(ctx, model::KEY_SERVICE, model::KEY_ACCOUNT));
+        let link = Link::new(ctx);
         let (wake_rx, wake_tx) = match wake_pair() {
             Some((rx, tx)) => (Some(rx), Some(tx)),
             None => (None, None),
@@ -300,6 +308,8 @@ impl Assistant {
             dirty: true,
             wake_rx,
             wake_tx,
+            link,
+            copy_req: None,
         };
         a.new_chat();
         a
@@ -374,6 +384,12 @@ impl Assistant {
         }
         let text = self.composer.trim().to_string();
         if text.is_empty() {
+            return;
+        }
+        // Offline: keep the composer text and say why, instead of sending a request that cannot leave the machine.
+        if self.link.offline() {
+            self.error = Some(connect::OFFLINE.into());
+            self.dirty = true;
             return;
         }
         let Some(key) = self.key.clone() else {
@@ -652,14 +668,57 @@ impl Assistant {
 
     // input -----------------------------------------------------------------------------------------------------
 
-    pub fn menu(&mut self, id: u32) -> bool {
+    pub fn menu(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
             MENU_NEW => self.new_chat(),
             MENU_DELETE => self.delete_current(),
             MENU_SETTINGS => self.open_sheet(),
+            MENU_COPY => return self.copy_answer(ctx),
             _ => return false,
         }
         true
+    }
+
+    /// The newest answer of the open conversation, once it has finished streaming.
+    fn last_answer(&self) -> Option<&str> {
+        self.current()?.messages.iter().rev().find(|m| !m.user && !m.text.trim().is_empty()).map(|m| m.text.as_str())
+    }
+
+    pub fn can_copy(&self) -> bool {
+        self.streaming.is_none() && self.last_answer().is_some()
+    }
+
+    /// Copies the newest answer to the general pasteboard as HTML and plain text (one user action, one service call).
+    pub fn copy_answer(&mut self, ctx: &Ctx) -> bool {
+        if !self.can_copy() {
+            return false;
+        }
+        let Some(text) = self.last_answer().map(str::to_string) else { return false };
+        self.copy_req = Some(connect::copy_answer(ctx, &text));
+        true
+    }
+
+    /// The reply to a service call the chat made: the copy, or the network path. True when it was one of ours.
+    pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.copy_req == Some(request) {
+            self.copy_req = None;
+            if let Err(e) = result {
+                ctx.log(&format!("copy answer: {e}"));
+            }
+            return true;
+        }
+        if self.link.reply(request, result) {
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    /// A shell event for the chat; true when it changed what is shown (the network path).
+    pub fn service_event(&mut self, service: &str, event: &str, body: &Json) -> bool {
+        let changed = self.link.event(service, event, body);
+        self.dirty |= changed;
+        changed
     }
 
     pub fn paste(&mut self) -> bool {
@@ -836,7 +895,9 @@ impl Assistant {
             let mid = g.top + view_h / 2.0;
             let cx = g.cont_x + g.cont_w / 2.0;
             put_centred(s, &mut self.labels, ui, "How can I help?", MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), cx, mid - ui.pt(10.0));
-            if self.key.is_none() && self.get_req.is_none() {
+            if self.link.offline() {
+                put_centred(s, &mut self.labels, ui, connect::OFFLINE_HINT, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), cx, mid + ui.pt(18.0));
+            } else if self.key.is_none() && self.get_req.is_none() {
                 put_centred(s, &mut self.labels, ui, "Add your API key in Settings to start.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), cx, mid + ui.pt(18.0));
             }
             return;

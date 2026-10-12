@@ -1,5 +1,6 @@
 //! Assistant: a chat client for the Anthropic Messages API, used by the desktop app in `main.rs`.
 pub mod api;
+pub mod connect;
 pub mod model;
 pub mod view;
 

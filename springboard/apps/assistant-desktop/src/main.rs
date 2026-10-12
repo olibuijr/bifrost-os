@@ -50,13 +50,23 @@ impl App for AssistantApp {
                 AppMenuItem::new(view::MENU_NEW, "New Chat").key("cmd+n"),
                 AppMenuItem::new(view::MENU_DELETE, "Delete Chat").key("cmd+backspace").enabled(c.can_delete()),
                 AppMenuItem::separator(),
+                AppMenuItem::new(view::MENU_COPY, "Copy Answer").key("cmd+shift+c").enabled(c.can_copy()),
+                AppMenuItem::separator(),
                 AppMenuItem::new(view::MENU_SETTINGS, "Assistant Settings...").key("cmd+,"),
             ],
         }]
     }
 
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
-        self.chat.as_mut().is_some_and(|c| c.menu(id))
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.chat.as_mut().is_some_and(|c| c.menu(ctx, id))
+    }
+
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        self.chat.as_mut().is_some_and(|c| c.service_reply(ctx, request, result))
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        self.chat.as_mut().is_some_and(|c| c.service_event(service, event, body))
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
