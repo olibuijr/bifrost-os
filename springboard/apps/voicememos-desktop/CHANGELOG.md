@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- Trim a recording: the new Trim button in the toolbar opens a trim view over the waveform. Drag the start or end handle
+  (the nearer one moves where you press). Done saves the kept part as a new recording named "<title> trimmed"; the
+  original is left as it was. Cancel discards the change. Playback stops while you trim.
+- Recordings that are too short to trim say so instead of opening an empty trim.
+- The detail subtitle shows the recording's format: sample rate and channels, for example "8 kHz mono".
+
 ## 1.2.3 — 2026-10-11
 
 - The recordings sidebar is published to accessibility as a list (`Role::List`, "Recordings", with the recording count)
