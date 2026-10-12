@@ -73,7 +73,7 @@ struct State {
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
-    chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>,
+    chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>, chrome_configured:bool,
     slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
     pending: bool, desktop_flip: Option<f64>, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
@@ -493,6 +493,12 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
     pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}transient(self.conn.flush())}
     pub fn inputs(&mut self, out: &mut Vec<Event>) {
         self.trim_idle();
+        // a chrome surface was configured after its frame was queued: attach it now instead of waiting for the next shell
+        // frame (an idle shell made the menu bar and Dock wait out the reveal gate's 4 s ceiling)
+        if std::mem::take(&mut self.state.chrome_configured) {
+            let _ = self.render_chrome();
+            let _ = self.conn.flush();
+        }
         // a backdrop rebuild the 30 Hz cap skipped is due: owe the glass that samples it and ask for a frame
         if self.gpu.as_mut().is_some_and(|g| g.p.retry_now()) {
             self.state.glass_retry = true;
@@ -659,7 +665,7 @@ impl Dispatch<surface::ZwlrLayerSurfaceV1,u32> for State {
             // match the object, not just the id: a chrome surface destroyed and re-created under the same id (an
             // overlay closing and reopening on unlock) can still receive the old surface's configure, and marking the
             // new one configured let it attach a buffer first: "layer_surface has never been configured" (0.5.16)
-            if let Some(w)=s.chrome.get_mut(id).filter(|w|w.layer==*obj){w.configured=true;}},surface::Event::Closed=>s.closed=true,_=>{}}
+            if let Some(w)=s.chrome.get_mut(id).filter(|w|w.layer==*obj){w.configured=true;s.chrome_configured=true;}},surface::Event::Closed=>s.closed=true,_=>{}}
     }
 }
 impl Dispatch<wl_buffer::WlBuffer, ()> for State {

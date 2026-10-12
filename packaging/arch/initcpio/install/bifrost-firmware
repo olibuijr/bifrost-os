@@ -1,0 +1,17 @@
+#!/bin/bash
+# Last hook: prune usr/lib/firmware to the files the drivers requested on the recorded boot
+# (/var/lib/bifrost-recovery/firmware, written by `bifrost-update-guard record-modules` from the kernel log).
+# Without a list nothing is removed. A 35 MB image read at firmware speed was most of the loader's time.
+build() {
+    local list=/var/lib/bifrost-recovery/firmware root="$BUILDROOT/usr/lib/firmware" f rel
+    [[ -s $list && -d $root ]] || return 0
+    while IFS= read -r -d '' f; do
+        rel=${f#"$root"/}
+        rel=${rel%.zst}; rel=${rel%.xz}
+        grep -qxF -- "$rel" "$list" || rm -f -- "$f"
+    done < <(find "$root" \( -type f -o -type l \) -print0)
+    find "$root" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+}
+help() {
+    echo "Removes firmware the recorded boot did not request, keeping the unified image small."
+}

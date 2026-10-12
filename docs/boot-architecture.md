@@ -112,6 +112,38 @@ At install and on every update (`packaging/arch/recovery/system.rs`, the updater
   `drivers/usb/storage` there when such installs matter). The installer's own `MODULES=(btrfs virtio_gpu)` is
   already minimal and unchanged. Unverified until a Midget rebuild: image size and the stage time.
 
+### Smaller image (2026-10-12, branch boot/smaller-faster; unverified until a Midget rebuild)
+
+Measured on Midget 0.6.3: loader 1415 ms for a 35 MB image (budget 300). Causes found in `build_uki`/the drop-in and
+the changes made:
+- Microcode twice and for every CPU: the `microcode` hook embeds an early cpio (6.33 MiB, `autodetect` did not
+  reduce it) and `build_uki` also passed `/boot/*-ucode.img`. Now, with the per-machine drop-in, the `microcode` hook
+  is removed (`HOOKS` filtered in the drop-in) and `build_microcode_cpio` makes one uncompressed early cpio with only
+  this CPU's file (`intel-ucode/<family>-<model>-<stepping>` or `amd-ucode/microcode_amd_famNh.bin`, `bsdtar --format
+  newc`); the full `*-ucode.img` is the fallback if that fails. Without the drop-in, the images are passed only when
+  `HOOKS` has no `microcode` (`hooks_embed_microcode`), never both.
+- Firmware for every GPU generation: `bifrost-update-guard record-modules` now also records the firmware paths in
+  `dmesg` (`firmware_names`) to `/var/lib/bifrost-recovery/firmware`; a change rebuilds the image. The new last hook
+  `bifrost-firmware` (`packaging/arch/initcpio/install/bifrost-firmware`) deletes every other file under
+  `usr/lib/firmware` from the initramfs. No list recorded means nothing is pruned. Expected: i915 firmware for one
+  generation only (a few hundred KB instead of tens of MB).
+- Compression: the drop-in sets `COMPRESSION="zstd"`, `COMPRESSION_OPTIONS=(-19)`: slowest to build, smallest, and
+  decompression speed does not depend on the level. The loader reads at firmware speed, so bytes are the cost.
+Expected size: kernel (~14 MB) plus a ~3 to 5 MB initramfs plus ~0.1 MB microcode, so about 17 to 20 MB; under 15 MB
+needs the kernel itself slimmed (not done). Expected loader time: roughly proportional, about 0.6 s.
+Not done, candidates for the 3.8 s kernel stage and the 1.6 s to bootweave-start: the 35 MB (now smaller) initramfs
+unpack happens in the kernel stage, so the pruning above also shortens it; `bifrost-mounts` and `fsck` were read and
+wait on nothing (mount calls only, no `udevadm settle`); the remaining time needs `systemd-analyze` and
+`initcall_debug` on Midget.
+
+### First frame of the menu bar and Dock
+
+`desktop-ready` from the supervisor is provisional (the wallpaper's commit); the window server's gate waits for the
+menu bar and Dock marks, or its 4 s ceiling. The chrome frames were queued at the first shell frame but attached only
+on a later one, after the compositor's layer-surface configure; an idle shell therefore waited out the ceiling (the
+3.8 s between desktop-ready and desktop-first-ui). `Wayland::inputs` now renders the chrome as soon as a chrome
+surface is configured (`chrome_configured`). Unverified on Midget.
+
 ### i915 eDP probe on desktops (finding, no fix shipped)
 
 Midget logs `[ENCODER:110:DDI A/PHY A] failed to retrieve link info, disabling eDP` and loses about 1.25 s: the
