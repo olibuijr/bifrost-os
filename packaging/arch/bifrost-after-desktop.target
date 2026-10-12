@@ -1,0 +1,6 @@
+[Unit]
+Description=BifrOSt services that are not needed for the first desktop frame
+Documentation=file:///usr/share/doc/bifrost/boot-architecture.md
+# Reached by bifrost-desktop-ready.service once the desktop-ready mark is written. Units WantedBy this target
+# (bifrostd, bifrost-mcp) start after the desktop is on screen, never on the boot path.
+After=springboard.service

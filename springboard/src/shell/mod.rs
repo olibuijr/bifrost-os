@@ -2728,6 +2728,8 @@ impl Shell {
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
+        // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
+        self.audio.arm();
         self.dirty = false;
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);

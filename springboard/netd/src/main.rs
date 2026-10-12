@@ -98,8 +98,8 @@ fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| format!("/var/lib/springboard/run/{ID}.sock"));
     let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
     let core = Arc::new(Mutex::new(Core { wifi: Wifi::start(&dir), subscribers: Vec::new() }));
-    let _ = std::fs::remove_file(&sock);
-    let listener = UnixListener::bind(&sock)?;
+    // socket activation: bifrostd binds the socket and starts this process on the first connection
+    let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("netd {VERSION} listening on {sock}");
 
     // the Wi-Fi thread changes the status on its own (scans, DHCP, signal); push every change

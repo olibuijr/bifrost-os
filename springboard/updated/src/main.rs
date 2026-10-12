@@ -6,7 +6,7 @@ use bifrost_proto::svc;
 use bifrost_proto::svc::update::{Cmd, Evt, Offer, Phase, State};
 use springboard::shell::ota::Ota;
 use springboard::shell::update::{self, State as UpdState};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -139,8 +139,8 @@ fn main() -> std::io::Result<()> {
     if let Some(parent) = std::path::Path::new(&sock).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::remove_file(&sock);
-    let listener = UnixListener::bind(&sock)?;
+    // socket activation: bifrostd binds the socket and starts this process on the first connection
+    let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("updated {VERSION} listening on {sock}");
 
     let ticker = core.clone();
