@@ -101,6 +101,10 @@ pub enum PageId {
     Shortcuts,
     /// Overview (desktop): how windows are grouped and when desktops switch
     Overview,
+    /// Sharing (desktop): the hub for Nearby Share and AirPlay & Handoff
+    Sharing,
+    /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
+    LockScreen,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -498,12 +502,14 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Display & Brightness").icon(Icon::Display).link(PageId::Display),
                     Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
                     Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
+                    Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
                     Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
                     Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
                     Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                    Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
                     Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
                 ]),
@@ -693,8 +699,28 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Nearby => page(
             "Nearby Share",
             false,
-            vec![Group::new(["Receiving Off", "Contacts Only", "Everyone"].iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
+            vec![Group::new(NEARBY_CHOICES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
+        ),
+        PageId::Sharing => page(
+            "Sharing",
+            false,
+            vec![Group::new(vec![
+                Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
+                Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
+            ])
+            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it.")],
+        ),
+        PageId::LockScreen => page(
+            "Lock Screen",
+            false,
+            vec![
+                Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
+                    .footer("A passcode is asked for before the screen opens again after it locks."),
+                Group::new(vec![Item::new("Lock After Inactivity").value(o.auto_lock_label()).link(PageId::AutoLock)]),
+                Group::new(vec![Item::new("Screen Saver").value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver)])
+                    .footer("The screen saver can start after a while without input, and then the lock applies as usual."),
+            ],
         ),
         PageId::AirPlayHandoff => page(
             "AirPlay & Handoff",
@@ -1066,6 +1092,8 @@ pub const MINIMIZE_EFFECTS: [&str; 2] = ["Funnel Effect", "Scale Effect"];
 pub const CORNER_ACTIONS: [&str; 6] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search"];
 pub const CORNER_NAMES: [&str; 4] = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
 pub const SIDEBAR_ICON_SIZES: [&str; 3] = ["Small", "Medium", "Large"];
+/// Nearby Share: who may send to this computer (index is `Options::nearby`).
+pub const NEARBY_CHOICES: [&str; 3] = ["Receiving Off", "Contacts Only", "Everyone"];
 pub const SCROLL_BAR_MODES: [&str; 3] = ["Automatically Based on Mouse or Trackpad", "When Scrolling", "Always"];
 
 pub const DOCK_MAGNIFY_PREF: &str = "dock_magnify";
@@ -1509,6 +1537,29 @@ mod tests {
         info.brightness_supported = true;
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+    }
+
+    #[test]
+    fn sharing_and_lock_screen_are_reachable_from_the_root_and_link_their_controls() {
+        let info = info();
+        let mut opts = Options::default();
+        let root = spec(PageId::Root, &model(&info, &opts));
+        let items: Vec<&Item> = root.groups.iter().flat_map(|g| &g.items).collect();
+        assert!(items.iter().any(|i| i.action == Action::Push(PageId::Sharing)), "Sharing is in the root list");
+        assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
+
+        let sharing = spec(PageId::Sharing, &model(&info, &opts));
+        assert_eq!(sharing.groups[0].items[0].action, Action::Push(PageId::Nearby));
+        assert_eq!(sharing.groups[0].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
+        assert_eq!(sharing.groups[0].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
+        opts.handoff = true;
+        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[0].items[1].value, "Handoff On");
+
+        let lock = spec(PageId::LockScreen, &model(&info, &opts));
+        assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));
+        assert_eq!(lock.groups[1].items[0].action, Action::Push(PageId::AutoLock));
+        assert_eq!(lock.groups[1].items[0].value, opts.auto_lock_label());
+        assert_eq!(lock.groups[2].items[0].action, Action::Push(PageId::ScreenSaver));
     }
 
     #[test]
