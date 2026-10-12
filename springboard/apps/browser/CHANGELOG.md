@@ -5,6 +5,12 @@
 - Clear history from a time: `browser.history` takes `clear_since` (seconds since the epoch) and removes the entries last visited at or after that time, reporting `cleared`. The Settings sheet still clears all history.
 - Under the hood: page-source fetches, site icons, download probes and the download progress redraw run on the shared dispatch queues instead of raw threads and channels. Nothing changes on screen.
 - Style: the page dimming behind sheets, the switch knob and the element-inspector overlay now come from named colour tokens; the overlay uses the app tint. Corner radii and spacing use the shared layout and spacing tokens.
+- Copy a link: Cmd+Shift+C copies the current page: the URL as plain text, and the link with its title as HTML, through the shared pasteboard, so other apps can paste it.
+- Copy an image: Cmd+Shift+K copies the newest finished PNG or JPEG download to the shared pasteboard. Pages' own images are not copied yet (the engine does not report them).
+- Offline: while the network is down, an address you choose shows an "You are offline" page with a Try again link. When the network comes back, the waiting tab loads its address by itself. A tab that you move on from no longer waits.
+- Pointer: the pointer becomes an I-beam over the address field.
+- Dock: the Browser's dock icon shows the download progress while downloads run (an indeterminate bar when a total is unknown) and clears when they finish.
+- Older shells without these services keep working: a refused copy falls back to the plain clipboard, and the network state stays "online".
 
 ## 0.9.0 — 2026-10-11
 
