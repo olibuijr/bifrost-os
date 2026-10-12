@@ -120,6 +120,7 @@ mod desktop_metrics;
 mod desktop_dock;
 pub mod defaultapps;
 pub mod volume_hud;
+pub mod sound_page;
 pub mod datetime_page;
 pub mod diag;
 pub mod diagnostics_page;
