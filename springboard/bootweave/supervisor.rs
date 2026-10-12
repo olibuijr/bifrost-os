@@ -4,8 +4,7 @@
 //! its progress bar on screen in the inherited framebuffer until the window server takes the display (no modeset,
 //! no DRM master: the bar's rows are written to the framebuffer device, which shows what the display already scans).
 //! It is the one owner of the session's lifecycle, and after `desktop-faded` it writes the boot timing record
-//! (`EFI/BIFROST/boot-timing`, the smoothed durations the next boot's bar uses) and the module list the minimal
-//! initramfs is built from (`EFI/BIFROST/boot-modules`).
+//! (`EFI/BIFROST/boot-timing`, the smoothed durations the next boot's bar uses).
 //!
 //! Failures are shown in the boot frame, never as text (docs/boot-architecture.md, "Text-free on every path"):
 //! - a kernel panic record in pstore on this boot shows "Your computer restarted because of a problem" (`crash_notice`);
@@ -25,12 +24,13 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bootweave_frame::render::{bar_rect, render_bar, PixelOrder};
+use bootweave_frame::timing::Handoff;
 use bootweave_frame::{Appearance, BootTiming, Progress, Stage};
+use std::sync::Mutex;
 
 const STATE_DIR: &str = "/run/bifrost/bootweave";
 /// Consecutive quick session failures in this boot (a file, so it survives the service's restarts).
@@ -38,27 +38,31 @@ const FAILURES: &str = "/run/bifrost/bootweave/failures";
 const LOG: &str = "/var/log/bifrost-bootweave.log";
 const SESSION: &str = "/usr/lib/bifrost/session";
 const RUNTIME: &str = "/run/bifrost/user";
-/// The loader's progress hand-off: the encoded `BootTiming` the loader used for this boot (its `loader_ms` is this
-/// boot's measured loader time).
-const HANDOFF: &str = "/run/bifrost/boot-progress";
+/// The loader's progress hand-off: the `BifrostBootProgress` EFI variable (efivarfs: 4 attribute bytes, then the
+/// 32-byte `timing::Handoff` with this boot's measured `loader_ms` at offset 24).
+const HANDOFF: &str = "/sys/firmware/efi/efivars/BifrostBootProgress-d1f0b07c-5b2e-4a8d-9c3f-6e4a2b7d9f10";
+/// The bar position as the window server continues it (contract C3): a `timing::Handoff` record, replaced atomically.
+const PROGRESS: &str = "/run/bifrost/bootweave/progress";
+/// The mark every boot's measurement starts from: the first contract mark, which `run` writes.
+const START_MARK: &str = springboard::bootsplash::CONTRACT_MARKS[0];
+/// The shell's settings (the Appearance choice lives here as `appearance_mode=`).
+const SETTINGS: &str = "/var/lib/springboard/settings.ini";
 /// The ESP's boot timing record (`EFI/BIFROST/boot-timing`), mounted at /boot on installed systems.
 const TIMING_PATH: &str = "/boot/EFI/BIFROST/boot-timing";
-/// The modules this machine loaded, for the minimal initramfs (task 04).
-const MODULES_PATH: &str = "/boot/EFI/BIFROST/boot-modules";
-const PROC_MODULES: &str = "/proc/modules";
 /// The inherited framebuffer (simpledrm or the GPU driver's fbdev emulation) and its sysfs description.
 const FB_DEV: &str = "/dev/fb0";
 const FB_SYSFS: &str = "/sys/class/graphics/fb0";
-/// Frame continuity hook (task 01): when `REQUEST` exists at handover, the framebuffer is copied to `OUT.bgrx` with its
-/// geometry in `OUT.txt`.
-const READBACK_REQUEST: &str = "/run/bifrost/bootweave/readback-request";
-const READBACK_OUT: &str = "/run/bifrost/bootweave/readback";
+/// Frame continuity hook (task 01): when `READBACK_REQUEST` exists (a persistent file, created on the machine under
+/// test), the framebuffer is copied before the first draw (`inherited`) and after it (`bootweave`) in the format
+/// `tools/boot-frames.py` reads: `<stage>.json` (width, height, stride in pixels, order) and `<stage>.raw`.
+const READBACK_REQUEST: &str = "/etc/bifrost/boot-readback";
+const READBACK_DIR: &str = "/run/bifrost/boot-frames";
 /// How often the bar moves, and how long it may run if no window server ever takes the display.
 const BAR_TICK: Duration = Duration::from_millis(33);
 const BAR_CEILING: Duration = Duration::from_secs(60);
 /// How long the record waits for `desktop-faded` before giving up on this boot.
 const RECORD_WAIT: Duration = Duration::from_secs(120);
-/// The boot frame's appearance until the timing record can say (task 06 stores the user's choice there).
+/// The failure screens' appearance (the boot timing record is not read on those paths).
 const APPEARANCE: Appearance = Appearance::Dark;
 /// How long the crash notice stays on the panel before the session takes it over.
 const CRASH_NOTICE_MS: u64 = 3000;
@@ -284,7 +288,10 @@ fn finish(status: Option<ExitStatus>, ran: Duration) -> ! {
     match next {
         Next::Done => std::process::exit(0),
         Next::Retry => std::process::exit(status.and_then(|s| s.code()).filter(|c| *c != 0).unwrap_or(1)),
-        Next::Screen => start_failed(),
+        Next::Screen => {
+            stop_bar();
+            start_failed()
+        }
     }
 }
 
@@ -318,7 +325,7 @@ pub fn mark_ms(marks: &[(String, f64)], event: &str) -> Option<f64> {
 pub struct Measured {
     /// The loader's time for this boot, from the hand-off; `None` when the loader did not report one.
     pub loader_ms: Option<u32>,
-    /// Kernel start (time zero) to Bootweave start: the `supervisor-start` mark.
+    /// Kernel start (time zero) to Bootweave start: the `bootweave-start` mark.
     pub kernel_ms: u32,
     /// Bootweave start to desktop-ready: the `desktop-ready` mark, or `desktop-faded` when that is all there is.
     pub userspace_ms: u32,
@@ -326,7 +333,7 @@ pub struct Measured {
 
 /// Measures this boot from the marks. `None` when the start or the end is missing, or the end is before the start.
 pub fn measure(marks: &[(String, f64)], loader_ms: Option<u32>) -> Option<Measured> {
-    let start = mark_ms(marks, "supervisor-start")?;
+    let start = mark_ms(marks, START_MARK)?;
     let end = mark_ms(marks, "desktop-ready").or_else(|| mark_ms(marks, "desktop-faded"))?;
     if end < start {
         return None;
@@ -350,23 +357,6 @@ pub fn pick_timing(handoff: Option<BootTiming>, prev: Option<BootTiming>) -> Boo
     handoff.or(prev).unwrap_or(BootTiming::DEFAULT)
 }
 
-/// The module names in `/proc/modules`, sorted and unique.
-pub fn module_list(proc_modules: &str) -> Vec<String> {
-    let mut names: Vec<String> = proc_modules
-        .lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .map(str::to_string)
-        .collect();
-    names.sort();
-    names.dedup();
-    names
-}
-
-/// The module list file: one name per line, with a trailing newline (empty for no modules).
-pub fn module_text(names: &[String]) -> String {
-    names.iter().map(|name| format!("{name}\n")).collect()
-}
-
 /// Milliseconds since loader start: the loader's time plus the boot clock (which starts at kernel start).
 pub fn elapsed_ms(loader_ms: u32, boot_ms: f64) -> u32 {
     (loader_ms as f64 + boot_ms.max(0.0)).round() as u32
@@ -379,9 +369,38 @@ pub fn parse_virtual_size(text: &str) -> Option<(u32, u32)> {
     (w > 0 && h > 0).then_some((w, h))
 }
 
-/// The readback's description: width, height, stride (in pixels), and the byte order of the `.bgrx` file.
-pub fn readback_header(width: u32, height: u32, stride_px: usize) -> String {
-    format!("{width} {height} {stride_px} bgrx\n")
+/// The readback's description in the checker's format (`tools/boot-frames.py`, `check_meta`).
+pub fn readback_meta(width: u32, height: u32, stride_px: usize, order: PixelOrder) -> String {
+    let order = if order == PixelOrder::Rgbx { "rgbx" } else { "bgrx" };
+    format!("{{\"width\": {width}, \"height\": {height}, \"stride\": {stride_px}, \"order\": \"{order}\"}}\n")
+}
+
+/// The pixel order from fbdev's channel offsets (bits): red at 0 and blue at 16 is `RedGreenBlueReserved`; anything
+/// else is treated as the usual blue-green-red.
+pub fn order_from(red_offset: u32, blue_offset: u32) -> PixelOrder {
+    if red_offset == 0 && blue_offset == 16 { PixelOrder::Rgbx } else { PixelOrder::Bgrx }
+}
+
+/// The loader's hand-off from the efivarfs file image: 4 attribute bytes, then the 32-byte record.
+pub fn decode_efivar(bytes: &[u8]) -> Option<Handoff> {
+    Handoff::decode(bytes.get(4..)?)
+}
+
+/// The appearance the user chose in Settings (`appearance_mode=` in `settings.ini`). `auto` and anything unknown
+/// return `None`: the timing record's value stands.
+pub fn appearance_from_settings(text: &str) -> Option<Appearance> {
+    let value = text.lines().find_map(|l| l.trim().strip_prefix("appearance_mode="))?;
+    match value.trim() {
+        "light" => Some(Appearance::Light),
+        "dark" => Some(Appearance::Dark),
+        _ => None,
+    }
+}
+
+/// Whether the bar thread keeps drawing: not stopped (the window server has the display, or a failure screen does)
+/// and inside the ceiling.
+pub fn bar_runs(stopped: bool, elapsed: Duration) -> bool {
+    !stopped && elapsed < BAR_CEILING
 }
 
 /// The progress bar for a boot seeded from the loader: the bar stands where the loader left it (its checkpoint) and
@@ -399,9 +418,17 @@ pub fn seed(timing: BootTiming) -> Progress {
 // Files
 // ---------------------------------------------------------------------------------------------------------------
 
-/// A boot timing record (or the loader's hand-off) read from `path`; `None` when missing or not a valid record.
+/// A boot timing record read from `path`; `None` when missing or not a valid record.
 fn read_record(path: &str) -> Option<BootTiming> {
     fs::read(path).ok().and_then(|bytes| BootTiming::decode(&bytes))
+}
+
+/// Replaces `path` through a temporary file in the same directory (a reader sees the old or the new record). No
+/// fsync: this is `/run`, and the bar moves many times a second.
+fn publish(path: &str, bytes: &[u8]) -> io::Result<()> {
+    let tmp = format!("{path}.tmp");
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path)
 }
 
 /// Writes `bytes` to `path` through a temporary file, so a power cut leaves the old file or the new one.
@@ -422,18 +449,6 @@ fn read_u32(path: &str) -> Option<u32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-/// Writes the module list when this boot's modules differ from the file (ESP writes only when needed).
-fn write_module_list() {
-    let Ok(text) = fs::read_to_string(PROC_MODULES) else { return };
-    let wanted = module_text(&module_list(&text));
-    if fs::read_to_string(MODULES_PATH).ok().as_deref() == Some(wanted.as_str()) {
-        return;
-    }
-    if let Err(error) = write_atomic(MODULES_PATH, wanted.as_bytes()) {
-        eprintln!("bifrost-bootweave: cannot write {MODULES_PATH}: {error}");
-    }
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // The bar in the inherited framebuffer
 // ---------------------------------------------------------------------------------------------------------------
@@ -443,6 +458,9 @@ fn write_module_list() {
 struct Bar {
     progress: Progress,
     loader_ms: u32,
+    order: PixelOrder,
+    /// The last bar position published to `PROGRESS`, in thousandths.
+    published: Option<u32>,
     width: u32,
     height: u32,
     /// Bytes per row of the framebuffer.
@@ -452,7 +470,7 @@ struct Bar {
 }
 
 impl Bar {
-    fn open(timing: BootTiming) -> io::Result<Bar> {
+    fn open(timing: BootTiming, loader_ms: u32) -> io::Result<Bar> {
         let text = fs::read_to_string(format!("{FB_SYSFS}/virtual_size"))?;
         let (width, height) = parse_virtual_size(&text).ok_or_else(|| io::Error::other("fb0 has no size"))?;
         let bpp = read_u32(&format!("{FB_SYSFS}/bits_per_pixel")).unwrap_or(32);
@@ -462,9 +480,12 @@ impl Bar {
         let row_bytes = width as usize * 4;
         let fb_stride = read_u32(&format!("{FB_SYSFS}/stride")).map_or(row_bytes, |s| (s as usize).max(row_bytes));
         let fb = OpenOptions::new().read(true).write(true).open(FB_DEV)?;
+        let order = fb_order(&fb);
         Ok(Bar {
             progress: seed(timing),
-            loader_ms: timing.loader_ms,
+            loader_ms,
+            order,
+            published: None,
             width,
             height,
             fb_stride,
@@ -473,14 +494,23 @@ impl Bar {
         })
     }
 
-    /// Moves the bar to where this boot is now (`boot_ms` since kernel start).
+    /// Moves the bar to where this boot is now (`boot_ms` since kernel start), and publishes the position when it
+    /// moved (contract C3).
     fn tick(&mut self, boot_ms: f64) -> io::Result<()> {
         if !self.progress.visible() {
             return Ok(());
         }
-        let shown = self.progress.at(elapsed_ms(self.loader_ms, boot_ms));
+        let elapsed = elapsed_ms(self.loader_ms, boot_ms);
+        let shown = self.progress.at(elapsed);
+        let permille = (shown * 1000.0).round().clamp(0.0, 1000.0) as u32;
+        if self.published != Some(permille) {
+            let record = Handoff { timing: self.progress.timing, loader_ms: self.loader_ms, shown_permille: permille };
+            if publish(PROGRESS, &record.encode()).is_ok() {
+                self.published = Some(permille);
+            }
+        }
         let appearance = self.progress.timing.appearance;
-        render_bar(self.width, self.height, shown, appearance, &mut self.buf, self.width as usize, PixelOrder::Bgrx);
+        render_bar(self.width, self.height, shown, appearance, &mut self.buf, self.width as usize, self.order);
         let (x, y, w, h) = bar_rect(self.width, self.height);
         let mut row = Vec::with_capacity(w as usize * 4);
         for r in y..y + h {
@@ -495,40 +525,83 @@ impl Bar {
         Ok(())
     }
 
-    /// The frame continuity hook: copies the whole framebuffer when a readback was requested.
-    fn readback(&mut self) -> io::Result<()> {
+    /// The frame continuity hook: copies the whole framebuffer as `stage` when a readback was requested.
+    fn readback(&mut self, stage: &str) -> io::Result<()> {
         if !Path::new(READBACK_REQUEST).exists() {
             return Ok(());
         }
         let mut bytes = vec![0u8; self.fb_stride * self.height as usize];
         self.fb.seek(SeekFrom::Start(0))?;
         self.fb.read_exact(&mut bytes)?;
-        write_atomic(&format!("{READBACK_OUT}.bgrx"), &bytes)?;
-        let header = readback_header(self.width, self.height, self.fb_stride / 4);
-        write_atomic(&format!("{READBACK_OUT}.txt"), header.as_bytes())
+        fs::create_dir_all(READBACK_DIR)?;
+        write_atomic(&format!("{READBACK_DIR}/{stage}.raw"), &bytes)?;
+        let meta = readback_meta(self.width, self.height, self.fb_stride / 4, self.order);
+        write_atomic(&format!("{READBACK_DIR}/{stage}.json"), meta.as_bytes())
     }
 }
 
-/// Keeps the bar moving until `stop` is set (the window server has the display), the ceiling passes, or the
-/// framebuffer cannot be drawn; then runs the readback hook.
-fn bar_loop(stop: Arc<AtomicBool>, timing: BootTiming) {
-    let mut bar = match Bar::open(timing) {
+/// The framebuffer's pixel order from `FBIOGET_VSCREENINFO` (red and blue channel offsets); blue-green-red when the
+/// query fails.
+fn fb_order(fb: &File) -> PixelOrder {
+    use std::os::fd::AsRawFd;
+    extern "C" {
+        fn ioctl(fd: i32, request: u64, ...) -> i32;
+    }
+    const FBIOGET_VSCREENINFO: u64 = 0x4600;
+    // struct fb_var_screeninfo is 40 u32 words; red {offset, length, msb_right} starts at word 8, blue at word 14.
+    let mut info = [0u32; 40];
+    // SAFETY: `info` is a writable buffer of 160 bytes, the size of `struct fb_var_screeninfo`, which the ioctl fills.
+    let rc = unsafe { ioctl(fb.as_raw_fd(), FBIOGET_VSCREENINFO, info.as_mut_ptr()) };
+    if rc != 0 { PixelOrder::Bgrx } else { order_from(info[8], info[14]) }
+}
+
+/// Set when the bar must stop drawing: the window server has the display, or a failure screen is about to take it.
+static BAR_STOP: AtomicBool = AtomicBool::new(false);
+/// The bar thread, so `finish` can wait for its last write before a failure screen is drawn.
+static BAR_THREAD: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
+
+/// Stops the bar and waits for it (at most one tick) so nothing draws over the screen that follows.
+fn stop_bar() {
+    BAR_STOP.store(true, Ordering::Relaxed);
+    let handle = BAR_THREAD.lock().ok().and_then(|mut slot| slot.take());
+    if let Some(handle) = handle {
+        let _ = handle.join();
+    }
+}
+
+/// Keeps the bar moving until `BAR_STOP` is set, the ceiling passes, or the framebuffer cannot be drawn; takes the
+/// frame continuity readbacks around the first draw.
+fn bar_loop(timing: BootTiming, loader_ms: u32) {
+    let mut bar = match Bar::open(timing, loader_ms) {
         Ok(bar) => bar,
         Err(error) => {
             eprintln!("bifrost-bootweave: bar not drawn: {error}");
+            mark("display-handoff-start");
             return;
         }
     };
+    if let Err(error) = bar.readback("inherited") {
+        eprintln!("bifrost-bootweave: readback failed: {error}");
+    }
     let started = Instant::now();
-    while !stop.load(Ordering::Relaxed) && started.elapsed() < BAR_CEILING {
+    let mut first = true;
+    while bar_runs(BAR_STOP.load(Ordering::Relaxed), started.elapsed()) {
         if let Err(error) = bar.tick(springboard::bootsplash::boottime_ms()) {
             eprintln!("bifrost-bootweave: bar stopped: {error}");
             break;
         }
+        if first {
+            first = false;
+            // the display handoff starts when the first bar write lands, after the bootweave start mark
+            mark("display-handoff-start");
+            if let Err(error) = bar.readback("bootweave") {
+                eprintln!("bifrost-bootweave: readback failed: {error}");
+            }
+        }
         thread::sleep(BAR_TICK);
     }
-    if let Err(error) = bar.readback() {
-        eprintln!("bifrost-bootweave: readback failed: {error}");
+    if first {
+        mark("display-handoff-start");
     }
 }
 
@@ -536,19 +609,18 @@ fn bar_loop(stop: Arc<AtomicBool>, timing: BootTiming) {
 // After the boot
 // ---------------------------------------------------------------------------------------------------------------
 
-/// Waits for `desktop-faded`, then folds this boot into the timing record and refreshes the module list.
-fn record_when_faded(prev: Option<BootTiming>, handoff: Option<BootTiming>) {
+/// Waits for `desktop-faded`, then folds this boot into the timing record.
+fn record_when_faded(prev: Option<BootTiming>, handoff: Option<Handoff>, appearance: Appearance) {
     let started = Instant::now();
     loop {
         let marks = parse_marks(&fs::read_to_string(springboard::bootsplash::MARKS).unwrap_or_default());
         if mark_ms(&marks, "desktop-faded").is_some() {
             if let Some(measured) = measure(&marks, handoff.map(|h| h.loader_ms)) {
-                let record = next_record(prev, measured, pick_timing(handoff, prev).appearance);
+                let record = next_record(prev, measured, appearance);
                 if let Err(error) = write_atomic(TIMING_PATH, &record.encode()) {
                     eprintln!("bifrost-bootweave: cannot write {TIMING_PATH}: {error}");
                 }
             }
-            write_module_list();
             return;
         }
         if started.elapsed() > RECORD_WAIT {
@@ -611,22 +683,27 @@ fn shutdown() {
 
 fn run() -> ! {
     clear_shutdown_state();
-    mark("bootweave-start");
-    mark("display-handoff-start");
+    mark(START_MARK);
     let records = pstore::crash_records(Path::new(pstore::DIR));
     if !records.is_empty() {
         crash_notice(&records);
     }
     let prev = read_record(TIMING_PATH);
-    let handoff = read_record(HANDOFF);
-    let timing = pick_timing(handoff, prev);
-    // Set once the window server has the display (its socket exists): the bar stops and never draws over it.
-    let handed_over = Arc::new(AtomicBool::new(false));
-    {
-        let stop = handed_over.clone();
-        thread::spawn(move || bar_loop(stop, timing));
+    let handoff = fs::read(HANDOFF).ok().and_then(|bytes| decode_efivar(&bytes));
+    let mut timing = pick_timing(handoff.map(|h| h.timing), prev);
+    // the user's Settings choice wins over the record the loader carried
+    let chosen = fs::read_to_string(SETTINGS).ok().and_then(|text| appearance_from_settings(&text));
+    if let Some(appearance) = chosen {
+        timing.appearance = appearance;
     }
-    thread::spawn(move || record_when_faded(prev, handoff));
+    let loader_ms = handoff.map_or(timing.loader_ms, |h| h.loader_ms);
+    // BAR_STOP is set once the window server has the display (its socket exists): the bar never draws over it.
+    let handle = thread::spawn(move || bar_loop(timing, loader_ms));
+    if let Ok(mut slot) = BAR_THREAD.lock() {
+        *slot = Some(handle);
+    }
+    let appearance = timing.appearance;
+    thread::spawn(move || record_when_faded(prev, handoff, appearance));
     let started = Instant::now();
     let mut child = match Command::new(SESSION).env("BIFROST_BOOTWEAVE", "1").spawn() {
         Ok(child) => child,
@@ -645,11 +722,11 @@ fn run() -> ! {
         loop {
             if !compositor_seen && wayland.exists() {
                 compositor_seen = true;
-                handed_over.store(true, Ordering::Relaxed);
+                BAR_STOP.store(true, Ordering::Relaxed);
                 mark("compositor-ready");
             }
             if ready.exists() {
-                handed_over.store(true, Ordering::Relaxed);
+                BAR_STOP.store(true, Ordering::Relaxed);
                 if !compositor_seen { mark("compositor-ready"); }
                 mark("desktop-first-frame");
                 // Provisional until the window server's three-part gate (docs/boot-architecture.md, "Reveal once"):
@@ -763,8 +840,8 @@ mod progress_tests {
 
     #[test]
     fn marks_keep_the_first_of_each_event_and_skip_junk() {
-        let parsed = marks("10.0 supervisor-start\n20.5 desktop-faded\n30.0 supervisor-start\nbad line\n-4 x\n");
-        assert_eq!(parsed, vec![("supervisor-start".to_string(), 10.0), ("desktop-faded".to_string(), 20.5)]);
+        let parsed = marks("10.0 bootweave-start\n20.5 desktop-faded\n30.0 bootweave-start\nbad line\n-4 x\n");
+        assert_eq!(parsed, vec![("bootweave-start".to_string(), 10.0), ("desktop-faded".to_string(), 20.5)]);
         assert_eq!(mark_ms(&parsed, "desktop-faded"), Some(20.5));
         assert_eq!(mark_ms(&parsed, "desktop-ready"), None);
     }
@@ -772,18 +849,18 @@ mod progress_tests {
     #[test]
     fn measure_splits_kernel_from_userspace_at_bootweave_start() {
         // kernel: 0 to 412.3 ms (rounds to 412); userspace: 412.3 to 2600.0 ms (2187.7, rounds to 2188)
-        let m = measure(&marks("412.3 supervisor-start\n2600.0 desktop-ready\n2900.0 desktop-faded\n"), Some(300)).unwrap();
+        let m = measure(&marks("412.3 bootweave-start\n2600.0 desktop-ready\n2900.0 desktop-faded\n"), Some(300)).unwrap();
         assert_eq!(m, Measured { loader_ms: Some(300), kernel_ms: 412, userspace_ms: 2188 });
     }
 
     #[test]
     fn measure_falls_back_to_faded_and_rejects_incomplete_marks() {
         // no desktop-ready: the end is desktop-faded, 3000.0 - 412.3 = 2587.7 rounds to 2588
-        let m = measure(&marks("412.3 supervisor-start\n3000.0 desktop-faded\n"), None).unwrap();
+        let m = measure(&marks("412.3 bootweave-start\n3000.0 desktop-faded\n"), None).unwrap();
         assert_eq!(m, Measured { loader_ms: None, kernel_ms: 412, userspace_ms: 2588 });
-        assert_eq!(measure(&marks("412.3 supervisor-start\n"), None), None, "no end mark");
+        assert_eq!(measure(&marks("412.3 bootweave-start\n"), None), None, "no end mark");
         assert_eq!(measure(&marks("3000.0 desktop-faded\n"), None), None, "no start mark");
-        assert_eq!(measure(&marks("500.0 supervisor-start\n400.0 desktop-faded\n"), None), None, "end before start");
+        assert_eq!(measure(&marks("500.0 bootweave-start\n400.0 desktop-faded\n"), None), None, "end before start");
     }
 
     #[test]
@@ -815,12 +892,43 @@ mod progress_tests {
     }
 
     #[test]
-    fn the_module_list_is_sorted_unique_and_one_per_line() {
-        let proc = "i915 3305472 2 - Live 0x0\nbtusb 80 0 - Live 0x0\ni915 3305472 2 - Live 0x0\n\nxhci_hcd 1 0 - Live 0\n";
-        let names = module_list(proc);
-        assert_eq!(names, vec!["btusb".to_string(), "i915".to_string(), "xhci_hcd".to_string()]);
-        assert_eq!(module_text(&names), "btusb\ni915\nxhci_hcd\n");
-        assert_eq!(module_text(&[]), "", "no modules: an empty file");
+    fn the_start_mark_is_the_one_the_supervisor_writes() {
+        assert_eq!(START_MARK, "bootweave-start");
+        assert!(springboard::bootsplash::CONTRACT_MARKS.contains(&START_MARK));
+        assert!(measure(&marks("412.3 bootweave-start\n2600.0 desktop-ready\n"), None).is_some());
+    }
+
+    #[test]
+    fn the_loader_hand_off_decodes_from_an_efivarfs_image() {
+        let record = Handoff { timing: BootTiming::DEFAULT, loader_ms: 240, shown_permille: 63 };
+        let mut image = vec![7u8, 0, 0, 0];
+        image.extend_from_slice(&record.encode());
+        assert_eq!(image.len(), 36);
+        assert_eq!(decode_efivar(&image), Some(record));
+        assert_eq!(decode_efivar(&image[4..]), None, "without the attribute bytes the length is wrong");
+        assert_eq!(decode_efivar(&[1, 2]), None);
+    }
+
+    #[test]
+    fn the_settings_appearance_wins_and_auto_defers() {
+        assert_eq!(appearance_from_settings("a=1\nappearance_mode=light\n"), Some(Appearance::Light));
+        assert_eq!(appearance_from_settings("appearance_mode=dark\n"), Some(Appearance::Dark));
+        assert_eq!(appearance_from_settings("appearance_mode=auto\n"), None);
+        assert_eq!(appearance_from_settings("wallpaper=x\n"), None);
+    }
+
+    #[test]
+    fn the_pixel_order_follows_the_channel_offsets() {
+        assert_eq!(order_from(16, 0), PixelOrder::Bgrx);
+        assert_eq!(order_from(0, 16), PixelOrder::Rgbx);
+        assert_eq!(order_from(0, 0), PixelOrder::Bgrx, "unknown stays the usual order");
+    }
+
+    #[test]
+    fn the_bar_gate_stops_on_the_flag_or_the_ceiling() {
+        assert!(bar_runs(false, Duration::from_secs(1)));
+        assert!(!bar_runs(true, Duration::from_secs(1)), "a failure screen stops it at once");
+        assert!(!bar_runs(false, BAR_CEILING));
     }
 
     #[test]
@@ -835,7 +943,11 @@ mod progress_tests {
         assert_eq!(parse_virtual_size("1920,1080\n"), Some((1920, 1080)));
         assert_eq!(parse_virtual_size("1920x1080"), None, "fbdev uses a comma");
         assert_eq!(parse_virtual_size("0,0"), None);
-        assert_eq!(readback_header(1920, 1080, 1920), "1920 1080 1920 bgrx\n");
+        assert_eq!(
+            readback_meta(1920, 1080, 1920, PixelOrder::Bgrx),
+            "{\"width\": 1920, \"height\": 1080, \"stride\": 1920, \"order\": \"bgrx\"}\n"
+        );
+        assert!(readback_meta(8, 2, 8, PixelOrder::Rgbx).contains("\"order\": \"rgbx\""));
     }
 
     /// The shipped unit, read at test time so the tests check the file that gets installed.

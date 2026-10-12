@@ -61,7 +61,10 @@ def parse_analyze(line):
 
 
 def loader_ms(init_us, exec_us):
-    """The loader's own run time from the two Boot Loader Interface timestamps (microseconds)."""
+    """The loader's own run time from the two Boot Loader Interface timestamps (microseconds, both absolute).
+    None when exec is before init: the pair is bogus (systemd discards it too), so it is NO DATA, never a PASS."""
+    if exec_us < init_us:
+        return None
     return round((exec_us - init_us) / 1000.0, 1)
 
 
@@ -254,6 +257,7 @@ class Tests(unittest.TestCase):
     def test_loader_ms_is_the_difference_of_the_two_timestamps(self):
         self.assertEqual(loader_ms(1_000_000, 1_250_500), 250.5)
         self.assertEqual(loader_ms(5_000, 5_000), 0.0)
+        self.assertIsNone(loader_ms(1_250_500, 1_000_000), "exec before init is not a measurement")
 
     def test_parse_marks_keeps_the_first_mark_of_each_event(self):
         text = "1200.5 bootweave-start\n1500.0 desktop-ready\n1600.0 desktop-ready\nnot a mark line here\n"
