@@ -612,6 +612,7 @@ pub mod linalg;
 pub mod mesh;
 pub mod shading;
 pub mod composition;
+pub mod candidates;
 pub mod audio_mix;
 pub mod audio_render;
 pub mod state_machine;
