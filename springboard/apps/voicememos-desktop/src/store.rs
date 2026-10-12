@@ -1,6 +1,7 @@
 //! The Voice Memos folder: WAV files named after their title.
 
 use bifrost_app::controls::recording::Trim;
+use bifrost_app::controls::voice_activity::{DetectionOptions, Event, SpeechDetector};
 use springboard::media::capture::{wav_bytes, wav_duration_ms};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -170,6 +171,61 @@ pub fn trimmed_wav(path: &Path, trim: Trim) -> Option<Vec<u8>> {
     Some(wav_bytes(rate, channels as u32, &samples))
 }
 
+/// Splits `memo` at `at` seconds into two new memos, `<title> part 1` and `<title> part 2`. The original is kept.
+/// Both parts must be at least the shortest trim long; otherwise nothing is written.
+pub fn save_split(memo: &Memo, at: f64) -> std::io::Result<(PathBuf, PathBuf)> {
+    let length = memo.duration_ms as f64 / 1000.0;
+    let (Some(head), Some(tail)) = (Trim::new(0.0, at, length), Trim::new(at, length, length)) else {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the split is too close to an end"));
+    };
+    let first = trimmed_wav(&memo.path, head).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "not a 16-bit WAV"))?;
+    let second = trimmed_wav(&memo.path, tail).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "not a 16-bit WAV"))?;
+    let dir = memo.path.parent().unwrap_or(Path::new("."));
+    let a = free_path(dir, &format!("{} part 1", memo.title), None);
+    springboard::shell::fsutil::write_atomic(&a, &first)?;
+    let b = free_path(dir, &format!("{} part 2", memo.title), None);
+    springboard::shell::fsutil::write_atomic(&b, &second)?;
+    Ok((a, b))
+}
+
+/// The speech in a 16-bit PCM WAV, as `(start, end)` in milliseconds, from the speech detector over 10 ms frames
+/// of the mixed-down signal. Empty when the file is not 16-bit PCM or holds no speech.
+pub fn speech_spans(path: &Path) -> Vec<(f64, f64)> {
+    let Ok(bytes) = std::fs::read(path) else { return Vec::new() };
+    let Some((rate, channels)) = pcm16_format(&bytes) else { return Vec::new() };
+    let Some(data) = bytes.get(44..) else { return Vec::new() };
+    let width = channels.max(1) as usize;
+    let samples: Vec<f32> = data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
+    let mono: Vec<f32> = samples.chunks_exact(width).map(|f| f.iter().sum::<f32>() / width as f32).collect();
+    let frame = (rate / 100).max(1) as usize;
+    let mut detector = SpeechDetector::new(DetectionOptions::default(), rate);
+    let mut spans = Vec::new();
+    let mut open: Option<f64> = None;
+    for event in detector.process(&mono, frame) {
+        match event {
+            Event::Started(t) => open = Some(t * 1000.0),
+            Event::Ended(t) => {
+                if let Some(start) = open.take() {
+                    spans.push((start, t * 1000.0));
+                }
+            }
+        }
+    }
+    if let Some(start) = open {
+        spans.push((start, mono.len() as f64 * 1000.0 / rate as f64));
+    }
+    spans
+}
+
+/// Where playback jumps to skip silence: the start of the next speech after `pos_ms`, when `pos_ms` is in silence.
+/// `None` while it is in speech, or when no speech comes later. `spans` are sorted, as `speech_spans` returns them.
+pub fn next_speech_ms(spans: &[(f64, f64)], pos_ms: f64) -> Option<f64> {
+    if spans.iter().any(|&(start, end)| pos_ms >= start && pos_ms < end) {
+        return None;
+    }
+    spans.iter().map(|&(start, _)| start).find(|&start| start > pos_ms)
+}
+
 /// Writes the trimmed part of `memo` as a new memo named `<title> trimmed` (numbered when taken).
 /// The original recording is kept as it was.
 pub fn save_trim(memo: &Memo, trim: Trim) -> std::io::Result<PathBuf> {
@@ -294,6 +350,57 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].duration_ms, 250, "the trimmed copy is newest");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn split_writes_two_parts_and_keeps_the_original() {
+        let dir = temp("split");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let memo = scan(&dir).remove(0);
+        let (a, b) = save_split(&memo, 0.25).unwrap();
+        assert!(a.file_name().unwrap().to_string_lossy().ends_with(" part 1.wav"));
+        assert!(b.file_name().unwrap().to_string_lossy().ends_with(" part 2.wav"));
+        let mut durations: Vec<u64> = scan(&dir).iter().map(|m| m.duration_ms).collect();
+        durations.sort();
+        assert_eq!(durations, vec![250, 750, 1000], "two parts that add up, and the original");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_split_too_close_to_an_end_writes_nothing() {
+        let dir = temp("split-short");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let memo = scan(&dir).remove(0);
+        assert!(save_split(&memo, 0.05).is_err(), "a 0.05 s head is below the 0.1 s minimum");
+        assert_eq!(scan(&dir).len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn speech_spans_find_the_loud_half_second() {
+        let dir = temp("spans");
+        // 0.5 s silence, 0.5 s loud (-10 dB, above the medium threshold), 0.5 s silence at 8 kHz
+        let mut samples = vec![0i16; 4000];
+        samples.extend(std::iter::repeat(10_000i16).take(4000));
+        samples.extend(std::iter::repeat(0i16).take(4000));
+        let path = save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let spans = speech_spans(&path);
+        assert_eq!(spans.len(), 1, "{spans:?}");
+        assert!((spans[0].0 - 500.0).abs() < 0.5, "starts at 500 ms: {spans:?}");
+        assert!((spans[0].1 - 1000.0).abs() < 0.5, "ends at 1000 ms: {spans:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn next_speech_jumps_over_silence_and_waits_inside_speech() {
+        let spans = [(500.0, 1000.0), (2000.0, 2500.0)];
+        assert_eq!(next_speech_ms(&spans, 0.0), Some(500.0), "leading silence is skipped");
+        assert_eq!(next_speech_ms(&spans, 700.0), None, "inside speech plays on");
+        assert_eq!(next_speech_ms(&spans, 1000.0), Some(2000.0), "the end is exclusive: a pause is silence");
+        assert_eq!(next_speech_ms(&spans, 2600.0), None, "no speech left");
+        assert_eq!(next_speech_ms(&[], 0.0), None, "no speech found, nothing to skip to");
     }
 }
 

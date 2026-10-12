@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- Split at Playhead: the Recording menu has a new item that cuts the take that is playing into two recordings,
+  "<title> part 1" and "<title> part 2", at the point it has reached. The original is kept. Playback stops, and the
+  first part is selected. The item is greyed out unless the selected take is playing, and a split too close to either
+  end (under a tenth of a second) is refused with a message.
+- Skip Silence: a check mark in the Recording menu. When it is on, playback jumps over the quiet parts of a take and
+  plays only the speech. A take with no speech plays as before. Turning it on during playback takes effect at once.
+- Recording quality, playback speed and enhanced levels are not in this version: the audio service still records one
+  fixed format and does not take a quality setting.
+
 ## 1.5.0 — 2026-10-12
 
 - Input meter: while you record, a bar under the timer shows the microphone level on a decibel scale, with the level

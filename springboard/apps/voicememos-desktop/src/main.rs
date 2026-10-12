@@ -133,14 +133,19 @@ impl App for VoiceMemosApp {
     /// One app menu, "Recording", between App and the shell's File, Edit, View, Window and Help.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let on = self.memos.as_ref().is_some_and(|m| m.has_selection());
+        let split = self.memos.as_ref().is_some_and(|m| m.can_split());
+        let skip = self.memos.as_ref().is_some_and(|m| m.skip_silence_on());
         vec![AppMenu {
             title: "Recording".into(),
             items: vec![
                 AppMenuItem::new(voicememos::MENU_TRIM, "Trim\u{2026}").key("cmd+t").enabled(on),
+                AppMenuItem::new(voicememos::MENU_SPLIT, "Split at Playhead").enabled(split),
                 AppMenuItem::new(voicememos::MENU_NOTES, "Notes\u{2026}").key("cmd+shift+n").enabled(on),
                 AppMenuItem::separator(),
                 AppMenuItem::new(voicememos::MENU_RENAME, "Rename\u{2026}").enabled(on),
                 AppMenuItem::new(voicememos::MENU_EXPORT, "Export to Downloads").key("cmd+shift+e").enabled(on),
+                AppMenuItem::separator(),
+                AppMenuItem::new(voicememos::MENU_SKIP, "Skip Silence").checked(skip).enabled(on),
             ],
         }]
     }
