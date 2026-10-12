@@ -55,7 +55,7 @@ impl Device {
 
     /// A command queue on the device's graphics+compute queue.
     pub fn new_command_queue(&self) -> CommandQueue {
-        todo!("gpu-command")
+        CommandQueue::new(self.clone())
     }
 
     /// A texture with its own memory.
