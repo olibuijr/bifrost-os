@@ -108,7 +108,7 @@ impl Dispatch<BifrostMaterialSurfaceV1, Weak<WlSurface>> for WmState {
         use bifrost_material_surface_v1::{Error, Request};
         let Ok(surface) = surface.upgrade() else { return };
         // None: leave pending alone; Some: replace it
-        let mut edit: Option<Box<dyn FnOnce(&mut Vec<MaterialSpec>)>> = None;
+        let edit: Option<Box<dyn FnOnce(&mut Vec<MaterialSpec>)>>;
         let mut destroyed = false;
         match request {
             Request::Destroy => {

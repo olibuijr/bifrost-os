@@ -23,6 +23,8 @@ pub mod protocol {
 
     pub mod __interfaces {
         use wayland_client::protocol::__interfaces::*;
+        // The interface statics name `wayland_backend::protocol::*`; wayland-client re-exports that as `backend`.
+        use wayland_client::backend as wayland_backend;
         wayland_scanner::generate_interfaces!("wm/protocol/bifrost-material-v1.xml");
     }
     use self::__interfaces::*;

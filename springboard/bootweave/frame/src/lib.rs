@@ -107,10 +107,6 @@ pub struct Handoff {
     splash: Vec<u32>,
     /// `splash` with the bar full, the frame the fade starts from (kept so the fade allocates nothing per tick)
     full: Vec<u32>,
-    w: u32,
-    h: u32,
-    appearance: Appearance,
-    order: PixelOrder,
     /// (first-screen time, the bar's fill then), both in ms
     start: Option<(f32, f32)>,
 }
@@ -122,7 +118,7 @@ impl Handoff {
         let frame = Frame { width, height, appearance, progress: None, screen: Screen::Boot };
         render(&frame, &mut splash, width as usize, order);
         let full = splash.clone();
-        Handoff { splash, full, w: width, h: height, appearance, order, start: None }
+        Handoff { splash, full, start: None }
     }
 
     /// True once the first screen arrived (the first `compose`).
