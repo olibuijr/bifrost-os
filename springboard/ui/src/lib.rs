@@ -898,6 +898,8 @@ pub mod gatt;
 pub mod gatt_server;
 pub mod advertising;
 pub mod pip_window;
+pub mod capture_event;
+pub mod input_picker;
 pub mod content_proposal;
 pub mod route_auth;
 pub mod route_action;
