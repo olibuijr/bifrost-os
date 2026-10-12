@@ -1019,6 +1019,7 @@ impl Shell {
 
     /// Opens `app` in a window (or raises it) and makes it the focused app.
     pub(super) fn desk_open(&mut self, app: AppId, t: f64) {
+        self.recent_note(app);
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
         if let Some(k)=apps().iter().position(|a|a.id==app){self.dock_start_bounce(k,t);}
