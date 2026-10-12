@@ -155,8 +155,8 @@ mod tests {
         assert!(!in_rotor(&text, 1), "static text is not in Controls");
         assert!(in_rotor(&text, 5), "static text is in Text");
         assert!(!in_rotor(&button, 5));
-        assert!(!in_rotor(&el("choice", "Off", "", true), 3), "a choice row is a list row, not a menu item");
-        assert!(in_rotor(&el("choice", "Off", "", true), 2), "a choice row is in Lists");
+        assert!(!in_rotor(&el("choice", "Off", "", true), 4), "a choice row is a list row, not a menu item");
+        assert!(in_rotor(&el("choice", "Off", "", true), 3), "a choice row is in Lists");
     }
 
     #[test]

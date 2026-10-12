@@ -168,6 +168,9 @@ impl Shell {
     pub(in crate::shell) fn reader_walk(&self) -> Vec<Element> {
         let mut out = Vec::new();
         let Some(desk) = self.desk.as_ref() else { return out };
+        // the menu bar exists only in the Wayland desktop build
+        #[cfg(feature = "desktop-wayland")]
+        {
         let bar = self.desktop_bar_height() as f32;
         for (_, x, w, label) in self.menu_buttons() {
             let slug = bifrost_ui::ax::slug(&label);
@@ -185,6 +188,7 @@ impl Shell {
                 out.push(walk::menu_row(index, &row.text, row.action.is_some(), b));
                 index += 1;
             }
+        }
         }
         if let Some(front) = desk.front() {
             match front.app {
@@ -237,7 +241,9 @@ impl Shell {
         }
         let centre = el.bounds.map(|b| (b.x + b.w / 2.0, b.y + b.h / 2.0));
         let fx = match (el.handle.as_str(), centre) {
+            #[cfg(feature = "desktop-wayland")]
             (BAR, Some((x, y))) => self.desktop_bar_event(Event::Down(x, y), t).unwrap_or_default(),
+            #[cfg(feature = "desktop-wayland")]
             (BAR_ROW, Some((x, y))) => {
                 let mut fx = self.desktop_bar_event(Event::Down(x, y), t).unwrap_or_default();
                 fx.extend(self.desktop_bar_event(Event::Up(x, y), t + 0.04).unwrap_or_default());

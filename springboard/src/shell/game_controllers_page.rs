@@ -355,7 +355,7 @@ mod tests {
         assert_eq!(s.groups[0].items.len(), 1);
         assert_eq!(s.groups[0].items[0].label, "Test Pad");
         assert_eq!(s.groups[0].items[0].value, "72%");
-        assert_eq!(s.groups[0].items[0].action, Action::None);
+        assert_eq!(s.groups[0].items[0].action, Action::Push(PageId::GameController(1)));
         let empty = spec(PageId::GameControllers, &[]);
         assert_eq!(empty.groups[0].items[0].label, "No Controllers");
     }

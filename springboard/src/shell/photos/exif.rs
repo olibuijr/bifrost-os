@@ -532,7 +532,7 @@ pub(crate) mod tests {
         let t = tiff(true, vec![ascii(0x0110, "Canon")], vec![ascii(0xA434, "EF24mm f/1.4G")], vec![]);
         let e = parse(&jpeg(&t, 1, 1)).unwrap();
         assert_eq!(e.lens.as_deref(), Some("EF24mm f/1.4G"));
-        assert_eq!(e.rows(), vec![("Camera", "Canon".to_string()), ("Lens", "EF24mm f/1.4G".to_string())]);
+        assert_eq!(e.rows(), vec![("Camera", "Canon".to_string()), ("Lens", "EF24mm f/1.4G".to_string()), ("Size", "1 x 1".to_string())]);
     }
 
     #[test]

@@ -605,7 +605,7 @@ pub struct Shell {
     /// The highlighted row of the open bar menu (keyboard or pointer), with the menu it belongs to.
     desktop_menu_row:Option<(desktop_bar::Menu,usize)>,
     /// Recent Items: the apps opened last, listed in the leading system menu (`recent_items`).
-    recent_apps:bifrost_ui::shared_list::SharedList,
+    recent_list:bifrost_ui::shared_list::SharedList,
     /// Type-to-select state of the open bar menu (`NativeMenu` type-ahead): the kit model keeps the typed prefix.
     desktop_menu_typed:Option<bifrost_ui::menu::Menu>,
     /// Width of the open bar menu, keyed by a hash of its rows and the scale (measuring every title on each pointer move was half the hover cost).
@@ -829,7 +829,7 @@ impl Shell {
             dirty: true,
             perf_only: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,desktop_menu_row:None,recent_apps:recent_items::new(),desktop_menu_typed:None,desktop_menu_width:std::cell::Cell::new(None),desktop_context:None,
+            desktop_menu:None,defaults:None,desktop_menu_row:None,recent_list:recent_items::new(),desktop_menu_typed:None,desktop_menu_width:std::cell::Cell::new(None),desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             doc_panel:None,
             #[cfg(feature = "desktop-wayland")]

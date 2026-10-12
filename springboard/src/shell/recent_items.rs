@@ -35,22 +35,22 @@ pub fn app_at(list: &SharedList, n: usize) -> Option<AppId> {
 impl super::Shell {
     /// Records a launch. Called from `desk_open`, so every way of opening an app counts.
     pub(super) fn recent_note(&mut self, app: AppId) {
-        note(&mut self.recent_apps, app);
+        note(&mut self.recent_list, app);
     }
 
     /// The titles listed in the system menu, newest first, at most `SHOWN`.
     pub(super) fn recent_titles(&self) -> Vec<String> {
-        self.recent_apps.entries().into_iter().take(SHOWN).map(|i| i.title.clone()).collect()
+        self.recent_list.entries().into_iter().take(SHOWN).map(|i| i.title.clone()).collect()
     }
 
     /// The app behind the `n`-th listed entry.
     pub(super) fn recent_app_at(&self, n: usize) -> Option<AppId> {
-        app_at(&self.recent_apps, n)
+        app_at(&self.recent_list, n)
     }
 
     /// Clear Menu: empties the recent apps.
     pub(super) fn recent_clear(&mut self) {
-        self.recent_apps.clear_recents();
+        self.recent_list.clear_recents();
     }
 }
 
