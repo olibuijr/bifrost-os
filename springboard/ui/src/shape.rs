@@ -186,6 +186,29 @@ impl Path {
         }
         out
     }
+
+    /// The path cut into dashes by `pattern` (on and off lengths in turn, see `stroke_style::dash_polyline`), starting
+    /// `phase` into the pattern. Each subpath is dashed as an open run; a closed subpath is walked back to its first
+    /// point first, so its closing edge takes part in the pattern.
+    pub fn dashed(&self, pattern: &[f32], phase: f32) -> Path {
+        let mut out = Path::new();
+        for s in &self.subpaths {
+            let mut pts: Vec<crate::path::Point> = s.points.iter().map(|p| (p.x, p.y)).collect();
+            if s.closed && pts.len() > 1 {
+                pts.push(pts[0]);
+            }
+            for run in crate::stroke_style::dash_polyline(&pts, pattern, phase) {
+                let mut it = run.into_iter();
+                if let Some((x, y)) = it.next() {
+                    out.move_to(Point { x, y });
+                    for (x, y) in it {
+                        out.line_to(Point { x, y });
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 /// The built-in shapes, each as a path inside a rect.
@@ -318,5 +341,29 @@ mod tests {
         assert!(near(p.length(), 10.0), "closing adds the edge back, 5 more");
         p.line_to(Point { x: 0.0, y: 0.0 });
         assert_eq!(p.subpaths().len(), 2, "a closed subpath is not extended");
+    }
+
+    #[test]
+    fn dashed_line_becomes_one_subpath_per_dash() {
+        let mut p = Path::new();
+        p.move_to(Point { x: 0.0, y: 0.0 }).line_to(Point { x: 10.0, y: 0.0 });
+        let d = p.dashed(&[4.0, 2.0], 0.0);
+        let runs: Vec<Vec<(f32, f32)>> =
+            d.subpaths().iter().map(|s| s.points.iter().map(|q| (q.x, q.y)).collect()).collect();
+        assert_eq!(runs, vec![vec![(0.0, 0.0), (4.0, 0.0)], vec![(6.0, 0.0), (10.0, 0.0)]]);
+    }
+
+    #[test]
+    fn dashed_closed_square_keeps_its_closing_edge_in_the_dash() {
+        // Perimeter 40. A pattern of [40] reads as [40, 40], so the whole closed outline is one unbroken dash.
+        let mut p = Path::new();
+        p.move_to(Point { x: 0.0, y: 0.0 })
+            .line_to(Point { x: 10.0, y: 0.0 })
+            .line_to(Point { x: 10.0, y: 10.0 })
+            .line_to(Point { x: 0.0, y: 10.0 })
+            .close();
+        let d = p.dashed(&[40.0], 0.0);
+        assert_eq!(d.subpaths().len(), 1);
+        assert_eq!(d.subpaths()[0].points.len(), 5, "four corners and the return to the start");
     }
 }

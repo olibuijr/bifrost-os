@@ -704,6 +704,8 @@ pub mod fetch;
 pub mod history;
 pub mod model_history;
 pub mod shape;
+pub mod stroke_style;
+pub mod layer_style;
 pub mod assetpack;
 pub mod downloadqueue;
 pub mod environment;
