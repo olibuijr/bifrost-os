@@ -815,7 +815,7 @@ fn run() -> std::io::Result<()> {
                     eprintln!("springboard: restart requested");
                     shell.session_save_for_exit();
                     shell.stop_apps();
-                    springboard::bare::crashlog::write_last_exit(&dir, RESTART_EXIT, "restart requested");
+                    springboard::bare::takeover::clean_stop(&dir, RESTART_EXIT, "restart requested");
                     power::set_brightness(panel_level(level, low_power, max));
                     boost.release();
                     std::process::exit(RESTART_EXIT);
@@ -827,6 +827,7 @@ fn run() -> std::io::Result<()> {
                     shell.flush();
                     shell.session_save_for_exit();
                     shell.stop_apps();
+                    springboard::bare::takeover::clean_stop(&dir, 0, "power action requested");
                     match action {
                         PowerAction::Off => {
                             halting = true;
