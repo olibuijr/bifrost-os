@@ -724,6 +724,7 @@ pub mod features;
 pub mod compute;
 pub mod ml_model;
 pub mod ml_state;
+pub mod work_stream;
 pub mod postal;
 pub mod recordsearch;
 pub mod file_sync;

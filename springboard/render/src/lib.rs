@@ -34,6 +34,8 @@ pub mod pattern;
 pub mod function;
 pub mod raw_params;
 pub mod upscale;
+pub mod replicator;
+pub mod emitter;
 
 #[cfg(test)]
 mod tests {
