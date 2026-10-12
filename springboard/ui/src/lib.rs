@@ -667,6 +667,7 @@ pub mod rule_system;
 pub mod tensor;
 pub mod graph;
 pub mod nn;
+pub mod cnn_layers;
 pub mod save_sync;
 pub mod ubiquitous_store;
 pub mod gamepad;
