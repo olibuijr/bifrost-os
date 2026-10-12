@@ -49,6 +49,36 @@ impl Kind {
         Kind::ResizeDown,
     ];
 
+    /// The name apps send over the `cursor` service (`i_beam`, `resize_left_right`, ...). [`Kind::from_name`] reads it back.
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Arrow => "arrow",
+            Kind::IBeam => "i_beam",
+            Kind::Crosshair => "crosshair",
+            Kind::OpenHand => "open_hand",
+            Kind::ClosedHand => "closed_hand",
+            Kind::PointingHand => "pointing_hand",
+            Kind::ContextualMenu => "contextual_menu",
+            Kind::OperationNotAllowed => "operation_not_allowed",
+            Kind::DragCopy => "drag_copy",
+            Kind::DragLink => "drag_link",
+            Kind::DisappearingItem => "disappearing_item",
+            Kind::ZoomIn => "zoom_in",
+            Kind::ZoomOut => "zoom_out",
+            Kind::ResizeLeftRight => "resize_left_right",
+            Kind::ResizeUpDown => "resize_up_down",
+            Kind::ResizeLeft => "resize_left",
+            Kind::ResizeRight => "resize_right",
+            Kind::ResizeUp => "resize_up",
+            Kind::ResizeDown => "resize_down",
+        }
+    }
+
+    /// The kind called `name` (as [`Kind::name`] spells it), or `None` for an unknown name.
+    pub fn from_name(name: &str) -> Option<Kind> {
+        Kind::ALL.iter().copied().find(|k| k.name() == name)
+    }
+
     /// The shape name in the cursor-shape protocol's spelling (`text`, `ew_resize`, ...).
     pub fn shape(self) -> &'static str {
         match self {
@@ -196,6 +226,18 @@ mod tests {
         c.set_hidden_until_mouse_moves(true);
         c.mouse_moved();
         assert!(!c.is_visible(), "a move does not undo a hide");
+    }
+
+    #[test]
+    fn every_kind_round_trips_through_its_service_name() {
+        let names: HashSet<&str> = Kind::ALL.iter().map(|k| k.name()).collect();
+        assert_eq!(names.len(), Kind::ALL.len(), "names are unique");
+        for &k in Kind::ALL {
+            assert_eq!(Kind::from_name(k.name()), Some(k));
+        }
+        assert_eq!(Kind::from_name("i_beam"), Some(Kind::IBeam));
+        assert_eq!(Kind::from_name("text"), None, "the protocol spelling is not a service name");
+        assert_eq!(Kind::from_name(""), None);
     }
 
     #[test]

@@ -40,6 +40,7 @@ pub mod kit {
 
 pub mod widgets;
 pub mod glyphs;
+pub mod cursor_service;
 pub mod defaults;
 pub mod font_descriptor;
 pub mod screen_saver_defaults;

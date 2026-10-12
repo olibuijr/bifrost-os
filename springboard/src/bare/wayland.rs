@@ -660,6 +660,48 @@ impl Dispatch<wl_seat::WlSeat, ()> for State {
         }
     }
 }
+/// The shape an app pushed with the `cursor` service, in the cursor-shape protocol's names.
+fn wl_shape(k: bifrost_ui::cursor::Kind) -> cursor_device::Shape {
+    use bifrost_ui::cursor::Kind as K;
+    match k {
+        K::Arrow => cursor_device::Shape::Default,
+        K::IBeam => cursor_device::Shape::Text,
+        K::Crosshair => cursor_device::Shape::Crosshair,
+        K::OpenHand => cursor_device::Shape::Grab,
+        K::ClosedHand => cursor_device::Shape::Grabbing,
+        K::PointingHand => cursor_device::Shape::Pointer,
+        K::ContextualMenu => cursor_device::Shape::ContextMenu,
+        K::OperationNotAllowed => cursor_device::Shape::NotAllowed,
+        K::DragCopy => cursor_device::Shape::Copy,
+        K::DragLink => cursor_device::Shape::Alias,
+        K::DisappearingItem => cursor_device::Shape::NoDrop,
+        K::ZoomIn => cursor_device::Shape::ZoomIn,
+        K::ZoomOut => cursor_device::Shape::ZoomOut,
+        K::ResizeLeftRight => cursor_device::Shape::EwResize,
+        K::ResizeUpDown => cursor_device::Shape::NsResize,
+        K::ResizeLeft => cursor_device::Shape::WResize,
+        K::ResizeRight => cursor_device::Shape::EResize,
+        K::ResizeUp => cursor_device::Shape::NResize,
+        K::ResizeDown => cursor_device::Shape::SResize,
+    }
+}
+
+/// Sets the pointer as the `cursor` service left it: hidden (no image), the shape an app pushed, or `edge`, the
+/// shell's own resize shape over a window edge. A hidden pointer gets no image from `set_cursor`, and the next
+/// `set_shape` shows it again.
+fn show_pointer(s: &State, serial: u32, edge: cursor_device::Shape) {
+    if !crate::shell::services::cursor_service::pointer_visible() {
+        if let Some(p) = &s.pointer {
+            p.set_cursor(serial, None, 0, 0);
+        }
+        return;
+    }
+    let shape = crate::shell::services::cursor_service::pointer_shape().map_or(edge, wl_shape);
+    if let Some(cursor) = &s.cursor_device {
+        cursor.set_shape(serial, shape);
+    }
+}
+
 impl Dispatch<wl_pointer::WlPointer, ()> for State {
     fn event(s: &mut Self, _: &wl_pointer::WlPointer, e: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         let t = super::sys::now_ms();
@@ -667,16 +709,17 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
         match e {
             wl_pointer::Event::Enter { surface,surface_x,surface_y,serial,.. } => {
                 s.cursor_serial=serial;
-                if let Some(cursor)=&s.cursor_device {cursor.set_shape(serial,cursor_device::Shape::Default);}
+                show_pointer(s,serial,cursor_device::Shape::Default);
                 s.chrome_target=s.chrome.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id);
                 s.target = s.windows.iter().find(|(_,w)| w.surface == surface).map(|(&id,_)| id);
                 let m = s.target.and_then(|id| s.windows.get(&id)).map_or(0.0, |w| w.margin as f32);
                 s.xy = (surface_x as f32 - m,surface_y as f32 - m);
             },
             wl_pointer::Event::Motion { surface_x,surface_y,.. } => {
+                crate::shell::services::cursor_service::pointer_moved();
                 let m = s.target.and_then(|id| s.windows.get(&id)).map_or(0.0, |w| w.margin as f32);
                 s.xy = (surface_x as f32 - m,surface_y as f32 - m);
-                if let Some(cursor)=&s.cursor_device {
+                {
                     let shape=s.target.and_then(|id|s.windows.get(&id)).map_or(cursor_device::Shape::Default,|w| {
                         let (x,y)=s.xy; let edge=6.0;
                         let left=x<edge;let right=x>w.frame.width as f32-edge;
@@ -687,7 +730,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                         else if top||bottom {cursor_device::Shape::NsResize}
                         else {cursor_device::Shape::Default}
                     });
-                    cursor.set_shape(s.cursor_serial,shape);
+                    show_pointer(&*s,s.cursor_serial,shape);
                 }
                 if s.pressed { s.inputs.push(Event::Move { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t }); }else{s.inputs.push(Event::Hover{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});}
             },
