@@ -1,0 +1,9 @@
+[Unit]
+Description=BifrOSt audio: PulseAudio native protocol server
+Requires=bifrost-audio-pulse.socket
+After=bifrost-audio-pulse.socket
+
+[Service]
+ExecStart=/usr/bin/bifrost-audio-pulse
+Restart=on-failure
+RestartSec=1
