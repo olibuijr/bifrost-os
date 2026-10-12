@@ -724,6 +724,8 @@ pub mod speech;
 pub mod recognition;
 pub mod voice_activity;
 pub mod analyzer_input;
+pub mod sound_result;
+pub mod sound_analyzer;
 pub mod audio_session;
 pub mod playback_arbiter;
 pub mod audio_hardware;
