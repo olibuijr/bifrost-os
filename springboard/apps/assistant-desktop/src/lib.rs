@@ -4,6 +4,7 @@ pub mod connect;
 pub mod model;
 pub mod safety;
 pub mod session;
+pub mod tools;
 pub mod view;
 
 use bifrost_core::json::Json;

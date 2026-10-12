@@ -14,6 +14,16 @@ pub const KEY_ACCOUNT: &str = "anthropic-api-key";
 pub struct Message {
     pub user: bool,
     pub text: String,
+    /// The tool calls the model made while writing this reply, in order. Empty for a message the user wrote.
+    pub tools: Vec<ToolRun>,
+}
+
+/// A tool the model called in a reply: its name, the arguments it chose (JSON text) and the result it was given.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolRun {
+    pub name: String,
+    pub arguments: String,
+    pub result: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,12 +63,32 @@ bifrost_app::codable!(Conversation { id: String, title: String = "New Chat".into
 
 impl Encodable for Message {
     fn encode(&self) -> Value {
-        Value::Dict(vec![("role".into(), Value::Str(if self.user { "user" } else { "assistant" }.into())), ("text".into(), Value::Str(self.text.clone()))])
+        Value::Dict(vec![
+            ("role".into(), Value::Str(if self.user { "user" } else { "assistant" }.into())),
+            ("text".into(), Value::Str(self.text.clone())),
+            ("tools".into(), self.tools.encode()),
+        ])
     }
 }
 impl Decodable for Message {
     fn decode(v: &Value) -> Result<Self, CodingError> {
-        Ok(Message { user: coding::field::<String>(v, "role")? == "user", text: coding::field(v, "text")? })
+        // Conversations saved before tool calls existed have no "tools" member: they load with none.
+        let tools = coding::field::<Vec<ToolRun>>(v, "tools").unwrap_or_default();
+        Ok(Message { user: coding::field::<String>(v, "role")? == "user", text: coding::field(v, "text")?, tools })
+    }
+}
+impl Encodable for ToolRun {
+    fn encode(&self) -> Value {
+        Value::Dict(vec![
+            ("name".into(), Value::Str(self.name.clone())),
+            ("arguments".into(), Value::Str(self.arguments.clone())),
+            ("result".into(), Value::Str(self.result.clone())),
+        ])
+    }
+}
+impl Decodable for ToolRun {
+    fn decode(v: &Value) -> Result<Self, CodingError> {
+        Ok(ToolRun { name: coding::field(v, "name")?, arguments: coding::field(v, "arguments")?, result: coding::field(v, "result")? })
     }
 }
 
@@ -209,11 +239,18 @@ mod tests {
     #[test]
     fn conversations_round_trip_through_json() {
         let mut c = Conversation::new("1".into(), 5);
-        c.messages.push(Message { user: true, text: "Hi \"there\"\nline two".into() });
-        c.messages.push(Message { user: false, text: "Hello".into() });
+        c.messages.push(Message { user: true, text: "Hi \"there\"\nline two".into(), tools: Vec::new() });
+        c.messages.push(Message { user: false, text: "Hello".into(), tools: vec![ToolRun { name: "count_words".into(), arguments: "{\"text\":\"a\"}".into(), result: "1 words".into() }] });
         c.retitle();
         assert_eq!(c.title, "Hi \"there\"");
         assert_eq!(from_json(&to_json(&[c.clone()])), vec![c]);
+    }
+
+    #[test]
+    fn a_saved_message_without_tools_loads_with_none() {
+        let old = "{\"conversations\":[{\"id\":\"1\",\"title\":\"T\",\"updated\":5,\"messages\":[{\"role\":\"assistant\",\"text\":\"Hello\"}]}]}";
+        let convs = from_json(old);
+        assert_eq!(convs[0].messages, vec![Message { user: false, text: "Hello".into(), tools: Vec::new() }]);
     }
 
     #[test]
@@ -235,8 +272,8 @@ mod tests {
     #[test]
     fn history_skips_the_empty_reply() {
         let mut c = Conversation::new("1".into(), 0);
-        c.messages.push(Message { user: true, text: "q".into() });
-        c.messages.push(Message { user: false, text: String::new() });
+        c.messages.push(Message { user: true, text: "q".into(), tools: Vec::new() });
+        c.messages.push(Message { user: false, text: String::new(), tools: Vec::new() });
         assert_eq!(c.history(), vec![(true, "q".to_string())]);
     }
 }

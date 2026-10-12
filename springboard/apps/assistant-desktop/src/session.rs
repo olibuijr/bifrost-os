@@ -87,7 +87,7 @@ mod tests {
     use super::*;
 
     fn msg(user: bool, text: &str) -> Message {
-        Message { user, text: text.to_string() }
+        Message { user, text: text.to_string(), tools: Vec::new() }
     }
 
     #[test]

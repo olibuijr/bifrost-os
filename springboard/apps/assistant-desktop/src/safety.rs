@@ -160,7 +160,8 @@ pub fn judge_call(key: &str, model: &str, prompt: &str) -> Result<String, String
                 }
                 true
             }
-            Event::Done => true,
+            // The judge only reads the reply text; a tool call it made is not part of the rating.
+            Event::Tool { .. } | Event::Done => true,
             Event::Error(e) => {
                 if let Ok(mut f) = failure.lock() {
                     *f = Some(e);
@@ -306,7 +307,7 @@ mod tests {
     }
 
     fn message(user: bool, text: &str) -> Message {
-        Message { user, text: text.to_string() }
+        Message { user, text: text.to_string(), tools: Vec::new() }
     }
 
     #[test]

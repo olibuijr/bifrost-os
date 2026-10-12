@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- The Assistant can use two tools while it answers: the current date and time (in UTC), and a word count. The model decides when to use them.
+- Each tool the model uses shows in the reply it belongs to, above the reply's text: the tool's name, the arguments it chose and the result it got. The tool calls are kept with the conversation.
+- When no model can be reached (you are offline, the service cannot be reached, or it is overloaded), a banner at the top of the chat says so. Your message is kept, so you can send it again later.
+- Replies still appear as they are written, as before.
+
 ## 1.3.0 — 2026-10-12
 
 - Each request is now built as a session of its conversation: the messages you sent and got back, under the instructions of the skill the request was routed to. A general request still goes out with no instructions, as before.
