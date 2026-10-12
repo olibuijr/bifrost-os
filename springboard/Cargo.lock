@@ -244,6 +244,8 @@ checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 name = "audiod"
 version = "0.1.0"
 dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
  "bifrost-proto",
  "springboard",
 ]
@@ -3706,6 +3708,8 @@ dependencies = [
 name = "springboard"
 version = "0.5.44"
 dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
  "bifrost-chrome",
  "bifrost-core",
  "bifrost-proto",

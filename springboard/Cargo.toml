@@ -32,6 +32,8 @@ tempfile = { version = "3", optional = true }
 # bifrost-portal: org.freedesktop.portal.Settings on the session bus (blocking API).
 zbus = { version = "5", optional = true }
 bifrost-proto = { path = "proto" }
+bifrost-audio-hal = { path = "audio/hal" }
+bifrost-audio-types = { path = "audio/types" }
 # the chrome model the shell serves to the menu bar, Dock and panels clients (src/shell/chrome_host)
 bifrost-chrome = { path = "chrome" }
 termcore = { package = "iosterm", path = "../../iOSTerm" }

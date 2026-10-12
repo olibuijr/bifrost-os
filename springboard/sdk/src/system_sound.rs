@@ -24,6 +24,29 @@ pub enum SoundKind {
     Alert,
 }
 
+/// The default-device role a sound plays on. System sounds and alerts always use the sound-effects device,
+/// never the one music plays on, so they follow the user's sound-effects choice and level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputRole {
+    Output,
+    SoundEffects,
+}
+
+impl SoundKind {
+    /// The device role the audio service opens to play this kind.
+    pub const fn role(self) -> OutputRole {
+        match self {
+            SoundKind::System | SoundKind::Alert => OutputRole::SoundEffects,
+        }
+    }
+}
+
+impl PlayRequest {
+    pub fn role(&self) -> OutputRole {
+        self.kind.role()
+    }
+}
+
 /// One play, as the audio service receives it. `completion` says the app asked to hear when the sound ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlayRequest {
@@ -162,6 +185,15 @@ mod tests {
         sounds.dispose(a).unwrap();
         assert_eq!(sounds.play(a, SoundKind::System, false), Err(SoundError::UnknownSound));
         assert_eq!(sounds.dispose(a), Err(SoundError::UnknownSound));
+    }
+
+    #[test]
+    fn every_kind_plays_on_the_sound_effects_role() {
+        assert_eq!(SoundKind::System.role(), OutputRole::SoundEffects);
+        assert_eq!(SoundKind::Alert.role(), OutputRole::SoundEffects);
+        let r = PlayRequest { id: SoundId(1), path: "/a.wav".into(), kind: SoundKind::Alert, completion: false };
+        assert_eq!(r.role(), OutputRole::SoundEffects);
+        assert_ne!(r.role(), OutputRole::Output);
     }
 
     #[test]

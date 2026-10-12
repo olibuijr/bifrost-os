@@ -2,10 +2,12 @@
 name = "audiod"
 version = "0.1.0"
 edition = "2021"
-description = "BifrOSt audio service (is.olibuijr.audio): speaker playback and microphone capture behind a socket"
+description = "BifrOSt media player service (is.olibuijr.mediaplayer): playback and voice-memo capture as a client of bifrost-audiod"
 
 [dependencies]
 bifrost-proto = { path = "../proto" }
+bifrost-audio-hal = { path = "../audio/hal" }
+bifrost-audio-types = { path = "../audio/types" }
 springboard = { path = ".." }
 
 [[bin]]
