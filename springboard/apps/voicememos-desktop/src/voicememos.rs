@@ -7,7 +7,8 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_XL, SPACE_XS, SPACE_XXL, S
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::store::{self, Memo};
 use bifrost_app::audio::{self, Track};
-use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, DETAIL_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::controls::values::Slider;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{Layout, SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT};
 use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
@@ -44,6 +45,27 @@ fn pts(ui: &Ui, (x, y, w, h): (f32, f32, f32, f32)) -> bifrost_app::controls::Re
     let k = ui.pt(1.0);
     bifrost_app::controls::Rect { x: x / k, y: y / k, w: w / k, h: h / k }
 }
+/// The level in dB relative to full scale. The service reports the power of the block, so the amplitude is its
+/// square root (the same reading the waveform uses). Silence and anything below the meter floor read as the floor.
+fn level_db(level: f32) -> f32 {
+    bifrost_core::meter::to_db(level.max(0.0).sqrt()).max(METER_FLOOR_DB)
+}
+
+/// The input meter's bar fraction, 0 at the floor and 1 at full scale.
+fn meter_fraction(level: f32) -> f32 {
+    ((level_db(level) - METER_FLOOR_DB) / -METER_FLOOR_DB).clamp(0.0, 1.0)
+}
+
+/// The meter's readout: "Silent" at the floor, otherwise the level in whole dB ("-6 dB").
+fn meter_title(level: f32) -> String {
+    let db = level_db(level);
+    if db <= METER_FLOOR_DB {
+        "Silent".into()
+    } else {
+        format!("{:.0} dB", db)
+    }
+}
+
 /// Toolbar item ids (also the semantic control ids).
 const BAR_RENAME: u32 = 1;
 const BAR_DELETE: u32 = 2;
@@ -82,6 +104,17 @@ const CTL_PLAY: u64 = 12;
 const CTL_FORWARD: u64 = 13;
 const CTL_CANCEL: u64 = 14;
 const CTL_DONE: u64 = 15;
+const CTL_VOLUME: u64 = 17;
+/// The input meter's scale in dB: silence at the floor, full scale at 0 dB.
+const METER_FLOOR_DB: f32 = -60.0;
+/// The input meter's bar height and the gap from the timer to the bar (points).
+const METER_H_PT: f32 = 6.0;
+const METER_TOP_PT: f32 = 56.0;
+/// The playback volume slider: track length, track height and knob diameter (points).
+const VOLUME_W_PT: f32 = 220.0;
+const VOLUME_H_PT: f32 = 24.0;
+const VOLUME_TRACK_PT: f32 = 4.0;
+const VOLUME_KNOB_PT: f32 = 16.0;
 /// The recordings sidebar as a list (rows are published by the kit's source list when there are any).
 const CTL_SIDEBAR: u64 = 16;
 /// Frame poll period while recording or playing (ms).
@@ -101,6 +134,8 @@ enum Target {
     Delete,
     Trim,
     Notes,
+    /// the playback volume slider under the transport (a press or drag sets the output level)
+    Volume,
     /// the notes text card (a press places the caret, a drag selects)
     NotesText,
     Cancel,
@@ -197,6 +232,12 @@ pub struct VoiceMemos {
     wants: Vec<Want>,
     /// the media session for the playing recording
     session: Option<MediaSession>,
+    /// the input level the service reported on the last `Record` event (power, 0 to 1)
+    input_level: f32,
+    /// the output volume (0 to 1) the slider shows: the service's level, or the value being dragged
+    volume: f32,
+    /// a press on the volume slider is dragging it
+    volume_drag: bool,
 }
 
 impl VoiceMemos {
@@ -245,6 +286,9 @@ impl VoiceMemos {
             notice: String::new(),
             wants: vec![Want::MicStatus, Want::ListDevices],
             session: new_session(),
+            input_level: 0.0,
+            volume: 1.0,
+            volume_drag: false,
         }
     }
 
@@ -350,6 +394,7 @@ impl VoiceMemos {
         self.end_playback();
         self.error.clear();
         self.notice.clear();
+        self.input_level = 0.0;
         // the microphone permission is checked on the last answer; this press asks again for the next one
         self.wants.push(Want::MicStatus);
         if let Err(message) = services::record_gate(self.mic) {
@@ -434,6 +479,14 @@ impl VoiceMemos {
     fn sync_audio(&mut self, t: f64) {
         self.dirty |= self.audio.pump();
         self.dirty |= self.audio.tick(t);
+        // the slider follows the service's output level, except while the user is dragging it
+        if !self.volume_drag {
+            let level = self.audio.snapshot().volume.clamp(0.0, 1.0);
+            if level != self.volume {
+                self.volume = level;
+                self.dirty = true;
+            }
+        }
         for (path, _ms) in self.audio.take_recordings() {
             if self.recording_path.as_deref().is_some_and(|p| p.to_string_lossy() == path) {
                 self.recording = false;
@@ -448,6 +501,7 @@ impl VoiceMemos {
                 Some(r) if r.active => {
                     self.rec_seen = true;
                     self.rec_elapsed_ms = r.elapsed_ms;
+                    self.input_level = r.level;
                     if t - self.live_t >= POLL_MS {
                         self.live_t = t;
                         self.live.push(r.level.sqrt().min(1.0));
@@ -803,6 +857,29 @@ impl VoiceMemos {
         (left + (size + gap) * n as f32, wave.1 + wave.3 + ui.pt(TRANSPORT_GAP), size, size)
     }
 
+    /// The playback volume track in pixels: centred in the pane, under the transport.
+    fn volume_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, w) = self.pane(ui);
+        let track_w = ui.pt(VOLUME_W_PT);
+        let play = self.transport_rect(ui, 1);
+        (x + (w - track_w) / 2.0, play.1 + play.3 + ui.pt(SPACE_XL), track_w, ui.pt(VOLUME_H_PT))
+    }
+
+    /// Sets the output level from a pointer at `x` (pixels) on the volume track. The track's value mapping is the
+    /// slider model's (0 at the left end, 1 at the right end).
+    fn volume_at(&mut self, ui: &Ui, x: f32) {
+        let mut slider = Slider::new(0.0, 1.0, self.volume, None);
+        slider.drag(pts(ui, self.volume_rect(ui)), x / ui.pt(1.0));
+        self.set_volume(slider.value());
+    }
+
+    /// Sends the output level to the audio service, which is the level Control Center shows as well.
+    fn set_volume(&mut self, level: f32) {
+        self.volume = level.clamp(0.0, 1.0);
+        self.audio.set_volume(self.volume);
+        self.dirty = true;
+    }
+
     /// The detail pane's unified toolbar: Rename and Delete (Confirm Delete while asking).
     fn bar(&self) -> Toolbar {
         let on = self.selected.is_some() && !self.recording;
@@ -863,6 +940,8 @@ impl VoiceMemos {
             let play = if self.playing.is_some() { "Pause" } else { "Play" };
             nodes.push(button(CTL_PLAY, play, self.transport_rect(ui, 1), true));
             nodes.push(button(CTL_FORWARD, "Skip Forward 15 Seconds", self.transport_rect(ui, 2), true));
+            let percent = (self.volume * 100.0).round() as u32;
+            nodes.push(Node { id: CTL_VOLUME, role: Role::Slider, label: "Volume".into(), value: format!("{percent} percent"), bounds: pts(ui, self.volume_rect(ui)), enabled: true });
         }
         nodes
     }
@@ -940,6 +1019,7 @@ impl VoiceMemos {
                 (Target::Back, self.transport_rect(ui, 0)),
                 (Target::Play, self.transport_rect(ui, 1)),
                 (Target::Forward, self.transport_rect(ui, 2)),
+                (Target::Volume, self.volume_rect(ui)),
             ] {
                 if Self::inside(r, x, y) {
                     return Some(target);
@@ -1015,7 +1095,7 @@ impl VoiceMemos {
             }
             Target::Back => self.skip(-15_000.0),
             Target::Forward => self.skip(15_000.0),
-            Target::Scrub => {}
+            Target::Scrub | Target::Volume => {}
             Target::Trim => self.begin_trim(),
             Target::Notes => self.begin_notes(ui),
             Target::NotesText => {}
@@ -1058,6 +1138,11 @@ impl VoiceMemos {
                     }
                 }
                 self.pressed = self.hit(ui, x, y);
+                if self.pressed == Some(Target::Volume) {
+                    self.volume_drag = true;
+                    self.volume_at(ui, x);
+                    return;
+                }
                 if self.pressed == Some(Target::NotesText) {
                     self.notes_drag = true;
                     self.notes_place(ui, x, y, false);
@@ -1086,6 +1171,8 @@ impl VoiceMemos {
                         ed.field.touch(ui, event, frame, w, t);
                     }
                     self.dirty = true;
+                } else if self.volume_drag {
+                    self.volume_at(ui, x);
                 } else if self.scrub {
                     if self.trim.is_some() {
                         self.trim_move(ui, x);
@@ -1114,6 +1201,10 @@ impl VoiceMemos {
                     if let Some(ed) = &mut self.editor {
                         ed.field.touch(ui, event, frame, w, t);
                     }
+                    return;
+                }
+                if std::mem::take(&mut self.volume_drag) {
+                    self.pressed = None;
                     return;
                 }
                 if std::mem::take(&mut self.scrub) {
@@ -1241,6 +1332,16 @@ impl VoiceMemos {
             Self::bars(s, ui, wave, &live, 0.0, true);
             s.fill_rect(wave.0 as usize, (wave.1 + wave.3 / 2.0) as usize, wave.2 as usize, 1, SEPARATOR_C.now());
             self.centred(s, ui, &text, DISPLAY_SMALL_PT, LABEL.now(), (pane_centre.0, wave.1 + wave.3 + ui.pt(SPACE_XL), pane_centre.2, ui.pt(48.0)));
+            // the input meter under the timer: a bar on the dB scale and the level read out
+            let (my, h, mw) = (wave.1 + wave.3 + ui.pt(METER_TOP_PT), ui.pt(METER_H_PT), ui.pt(VOLUME_W_PT));
+            let mx = px + (pw - mw) / 2.0;
+            s.fill_rrect(mx, my, mw, h, h / 2.0, LABEL_3.now());
+            let fill = meter_fraction(self.input_level) * mw;
+            if fill > 0.0 {
+                s.fill_rrect(mx, my, fill.max(h), h, h / 2.0, BLUE);
+            }
+            let readout = meter_title(self.input_level);
+            self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(20.0)));
         } else if let Some(memo) = memo {
             if self.peaks_for.as_deref() != Some(memo.path.as_path()) {
                 self.peaks = store::peaks(&memo.path, 256);
@@ -1290,6 +1391,7 @@ impl VoiceMemos {
                     s.fill_rect((cx - g * 0.35) as usize + c, (cy - h / 2.0) as usize, 1, h as usize, LABEL.now());
                 }
             }
+            self.draw_volume(s, ui);
         } else {
             self.centred(s, ui, "No Recording Selected", MAC_TITLE3_PT, LABEL_2.now(), (px, wave.1, pw, wave.3));
         }
@@ -1310,7 +1412,7 @@ impl VoiceMemos {
         let (cx, cy) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0);
         s.fill_rrect(r.0, r.1, r.2, r.3, r.2 / 2.0, LABEL_3.now());
         let inset = ui.pt(SPACE_XS);
-        s.fill_rrect(r.0 + inset, r.1 + inset, r.2 - 2.0 * inset, r.3 - 2.0 * inset, r.2 / 2.0, DETAIL_BG.now());
+        s.fill_rrect(r.0 + inset, r.1 + inset, r.2 - 2.0 * inset, r.3 - 2.0 * inset, r.2 / 2.0, CONTENT_BG.now());
         let d = if self.recording { r.2 * 0.38 } else { r.2 - 2.0 * (inset + ui.pt(SPACE_XS)) };
         let corner = if self.recording { ui.pt(SPACE_S) } else { d / 2.0 };
         s.fill_rrect(cx - d / 2.0, cy - d / 2.0, d, d, corner, RED);
@@ -1339,6 +1441,24 @@ impl VoiceMemos {
             self.centred(s, ui, "No Recordings", MAC_TITLE3_PT, LABEL_2.now(), (0.0, list_top, side, ui.pt(EMPTY_H)));
         }
         s.fill_rect(side as usize, 0, 1, bottom as usize, SEPARATOR_C.now());
+    }
+
+    /// The playback volume slider: a track with the filled part in the tint, and a knob at the level.
+    fn draw_volume(&mut self, s: &mut Surface, ui: &Ui) {
+        let r = self.volume_rect(ui);
+        let track = ui.pt(VOLUME_TRACK_PT);
+        let ty = r.1 + (r.3 - track) / 2.0;
+        s.fill_rrect(r.0, ty, r.2, track, track / 2.0, LABEL_3.now());
+        let filled = r.2 * self.volume;
+        if filled > 0.0 {
+            s.fill_rrect(r.0, ty, filled.max(track), track, track / 2.0, BLUE);
+        }
+        let knob = ui.pt(VOLUME_KNOB_PT);
+        let kx = r.0 + filled - knob / 2.0;
+        let ky = r.1 + (r.3 - knob) / 2.0;
+        s.fill_rrect(kx, ky, knob, knob, knob / 2.0, SEPARATOR_C.now());
+        let inner = ui.pt(1.0);
+        s.fill_rrect(kx + inner, ky + inner, knob - 2.0 * inner, knob - 2.0 * inner, (knob - 2.0 * inner) / 2.0, CARD_BG.now());
     }
 
     /// Trim mode: the waveform with the start and end handles, and the kept length. Cancel and Done sit where the
@@ -1621,6 +1741,39 @@ mod tests {
         assert_eq!(app.position_ms, 0.0, "clamped at the start");
         app.command(now_playing::Command::Next);
         assert_eq!(app.position_ms, 0.0, "next is not declared, so it does nothing");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn the_input_meter_reads_silence_as_the_floor_and_full_scale_at_the_top() {
+        assert_eq!(meter_fraction(0.0), 0.0);
+        assert_eq!(meter_title(0.0), "Silent");
+        assert!((meter_fraction(1.0) - 1.0).abs() < 1e-6);
+        assert_eq!(meter_title(1.0), "0 dB");
+        // power 0.25 is amplitude 0.5, about -6.02 dB: (60 - 6.02) / 60 = 0.8997
+        assert!((meter_fraction(0.25) - 0.8997).abs() < 0.001, "{}", meter_fraction(0.25));
+        assert_eq!(meter_title(0.25), "-6 dB");
+        // power 1e-7 is amplitude 3.2e-4, about -70 dB: below the floor, so the bar is empty and it reads Silent
+        assert_eq!(meter_fraction(1e-7), 0.0);
+        assert_eq!(meter_title(1e-7), "Silent");
+    }
+
+    #[test]
+    fn dragging_the_volume_slider_sets_the_level_and_clamps_at_the_ends() {
+        let (mut app, ui) = app("volume");
+        one_recording(&mut app, 8000);
+        let r = app.volume_rect(&ui);
+        let y = r.1 + r.3 / 2.0;
+        // a press a quarter of the way along the track sets the level to 0.25
+        app.touch(&ui, Event::Down(r.0 + r.2 * 0.25, y), 0.0);
+        app.touch(&ui, Event::Up(r.0 + r.2 * 0.25, y), 0.0);
+        assert!((app.volume - 0.25).abs() < 1e-3, "{}", app.volume);
+        // a drag past the right end clamps to full
+        app.touch(&ui, Event::Down(r.0 + r.2 * 0.5, y), 0.0);
+        app.touch(&ui, Event::Move(r.0 + r.2 * 2.0, y), 0.0);
+        app.touch(&ui, Event::Up(r.0 + r.2 * 2.0, y), 0.0);
+        assert_eq!(app.volume, 1.0);
+        assert!(!app.volume_drag, "the drag ends on release");
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 }

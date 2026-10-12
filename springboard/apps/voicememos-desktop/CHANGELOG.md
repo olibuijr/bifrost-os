@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- Input meter: while you record, a bar under the timer shows the microphone level on a decibel scale, with the level
+  read out in dB ("-6 dB"), or "Silent" when nothing is coming in. The bar is blue, as the app's one tint.
+- Playback volume: a volume slider sits under the playback buttons. Drag it, or press a point on it, to set the output
+  level. It is the same level Control Center shows, and it follows the level when that changes elsewhere.
+- The ring around the record button is now the content grey, so it matches the window in Dark appearance.
+- Recording quality and playback speed are not in this version: the audio service does not take a sample rate or a
+  playback speed yet.
+
 ## 1.4.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
