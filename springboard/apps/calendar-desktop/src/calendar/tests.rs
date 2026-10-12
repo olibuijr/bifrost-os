@@ -581,6 +581,26 @@ fn an_address_in_the_notes_is_offered_as_the_location() {
 }
 
 #[test]
+fn an_imported_events_invitees_are_listed_in_its_editor_with_their_answers() {
+    let temp = Temp::new();
+    fs::create_dir_all(&temp.0).unwrap();
+    let rich = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:dinner\r\nDTSTART:20261004T090000\r\nDTEND:20261004T093000\r\n\
+SUMMARY:Dinner\r\nATTENDEE;CN=Ana Lind;PARTSTAT=ACCEPTED:mailto:ana@example.is\r\n\
+ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:bo@example.is\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    fs::write(exchange::rich_path(&temp.file()), rich).unwrap();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Dinner")];
+    c.open(&ui, Some(1));
+    assert_eq!(c.editor.as_ref().unwrap().invitees.len(), 2, "both attendees read from the imported event");
+    assert!(c.rows().iter().any(|r| r.0 == Target::Invitees), "the Invitees row appears");
+    let row = invitees::summary(&c.editor.as_ref().unwrap().invitees);
+    assert_eq!(row, "Invitees: Ana Lind (Accepted), bo@example.is (Awaiting reply)");
+    c.activate(&ui, Target::Invitees, 1.0);
+    assert!(c.editor.is_some(), "the read-only row leaves the draft open");
+}
+
+#[test]
 fn a_phone_number_in_the_notes_is_offered_as_a_copy_action() {
     let temp = Temp::new();
     let ui = crate::test_ui();

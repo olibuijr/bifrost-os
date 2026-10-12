@@ -5,6 +5,7 @@ mod chrome;
 pub mod connect;
 pub mod exchange;
 pub mod ics;
+pub mod invitees;
 pub mod layout;
 pub mod notes;
 pub mod quick;
@@ -25,6 +26,7 @@ use springboard::shell::keyboard::Out;
 use springboard::shell::textfield::TextField;
 use springboard::shell::ui::{centred, home_zone, Ui, Weight, WHITE};
 use bifrost_app::kit::colors;
+use bifrost_app::controls::calendar_participant::Participant;
 use bifrost_app::kit::ui::{CARD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C};
 use bifrost_app::kit::ui::{MAC_TITLE2_PT, MAC_TITLE3_PT};
 use springboard::shell::Event;
@@ -120,6 +122,8 @@ enum Target {
     FillAddress,
     /// Copies the phone number written in the notes to the pasteboard.
     CopyPhone,
+    /// A read-only row: the invitees of an imported event and how each one answered.
+    Invitees,
     Repeat,
     Alert,
     Toggle(Slot),
@@ -145,6 +149,8 @@ struct Draft {
     event: CalendarEvent,
     existing: bool,
     open: Option<Slot>,
+    /// Invitees read from the imported event this entry came from (read-only).
+    invitees: Vec<Participant>,
 }
 
 pub struct Calendar {
@@ -357,6 +363,9 @@ impl Calendar {
         if self.notes_phone().is_some() {
             items.push(Some(Target::CopyPhone));
         }
+        if !draft.invitees.is_empty() {
+            items.extend([None, Some(Target::Invitees)]);
+        }
         if draft.existing {
             items.extend([None, Some(Target::Duplicate)]);
             if self.file_export {
@@ -520,10 +529,16 @@ impl Calendar {
         self.fields[1].set_text(ui, &event.location);
         self.fields[2].set_text(ui, &event.notes);
         self.focus((!existing).then_some(0));
+        let people = if existing {
+            invitees::for_event(&self.rich_events(), &event.title, event.date, event.minute, event.all_day)
+        } else {
+            vec![]
+        };
         self.editor = Some(Draft {
             event,
             existing,
             open: None,
+            invitees: people,
         });
         self.error = None;
     }
@@ -587,7 +602,7 @@ impl Calendar {
         copy.location = self.fields[1].text().trim().to_string();
         copy.notes = self.fields[2].text().trim().to_string();
         self.error = None;
-        self.editor = Some(Draft { event: copy, existing: false, open: None });
+        self.editor = Some(Draft { event: copy, existing: false, open: None, invitees: vec![] });
     }
 
     /// Writes the saved event as an .ics file under ~/Documents/Calendar Export.
@@ -817,6 +832,7 @@ impl Calendar {
                 }
             }
             Target::CopyPhone => self.copy_phone(),
+            Target::Invitees => {}
             Target::DateStep(_)
             | Target::MonthStep(_)
             | Target::TimeStep(_)
@@ -1127,6 +1143,7 @@ impl Calendar {
         };
         let event = draft.event.clone();
         let open = draft.open;
+        let people = draft.invitees.clone();
         let w = self.w as f32;
         let rows = self.rows();
         // Group backgrounds: consecutive rows without a gap share one cell.
@@ -1215,6 +1232,10 @@ impl Calendar {
                 Target::CopyPhone => {
                     let text = self.notes_phone().map_or_else(String::new, |p| format!("Copy {p}"));
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
+                }
+                Target::Invitees => {
+                    let text = invitees::summary(&people);
+                    self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, mid)
                 }
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
