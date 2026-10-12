@@ -86,6 +86,7 @@ pub mod url_components;
 pub mod http_cookies;
 pub mod http_auth;
 pub mod stream;
+pub mod external_accessory;
 pub mod error;
 pub mod coding;
 pub mod restoration;
