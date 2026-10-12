@@ -79,6 +79,8 @@ pub mod url;
 pub mod multipart;
 pub mod social;
 pub mod url_components;
+pub mod http_cookies;
+pub mod http_auth;
 pub mod stream;
 pub mod error;
 pub mod coding;
