@@ -346,6 +346,10 @@ pub struct AppHost {
     pub caret_rect: Option<(f32, f32, f32, f32)>,
     pub input_traits: bifrost_proto::InputTraits,
     pub accessory: Vec<bifrost_proto::AccessoryItem>,
+    /// How the shell shows this app (`launch_route` at spawn; a `Buffers` message from a direct app demotes it).
+    route: Route,
+    /// Set when a direct app demoted to `Route::Shm`; `take_fallback` reads it once so the shell opens its window.
+    fallback: bool,
 }
 
 impl AppHost {
@@ -356,6 +360,7 @@ impl AppHost {
 
     /// `spawn`, telling the app whether to restore its saved window state (`BIFROST_RESTORE`, see `bifrost_app::restoration`).
     pub fn spawn_with(id: &str, exec: &Path, data_dir: &Path, shell_dir: &Path, cfg: Configure, restore: bool) -> std::io::Result<AppHost> {
+        let route = launch_route();
         let (mine, theirs) = sys::socketpair_pair()?;
         let _ = std::fs::create_dir_all(data_dir);
         let fd = theirs.fd();
@@ -371,6 +376,8 @@ impl AppHost {
         cmd.env("BIFROST_SOCK", fd.to_string())
             .env("BIFROST_DATA", data_dir)
             .env("BIFROST_RESTORE", if restore { "1" } else { "0" })
+            // explicit, so the app never picks up a stale BIFROST_DIRECT from the shell's environment
+            .env("BIFROST_DIRECT", if route == Route::Direct { "1" } else { "0" })
             .stdin(Stdio::null())
             .current_dir(data_dir);
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_none() {cmd.env("BIFROST_SHELL_DIR",shell_dir);}
@@ -385,6 +392,7 @@ impl AppHost {
         drop(theirs);
         let mut h = AppHost::with_channel(id, mine, Some(child), cfg);
         h.exec = exec.to_path_buf();
+        h.route = route;
         h.send(&ToApp::Configure(cfg));
         Ok(h)
     }
@@ -429,7 +437,19 @@ impl AppHost {
             caret_rect: None,
             input_traits: bifrost_proto::InputTraits::default(),
             accessory: Vec::new(),
+            route: Route::Shm,
+            fallback: false,
         }
+    }
+
+    /// The route the shell gave this app: `Direct` apps draw in the window server and expect no frames.
+    pub fn route(&self) -> Route {
+        self.route
+    }
+
+    /// True once after a direct app fell back to the shared-memory path (`Buffers`): the shell must open its window.
+    pub fn take_fallback(&mut self) -> bool {
+        std::mem::take(&mut self.fallback)
     }
 
     pub fn status(&self) -> Status {
@@ -550,6 +570,12 @@ impl AppHost {
                 }
             }
             ToShell::Buffers { w, h } => {
+                // a direct app that sends shared-memory buffers fell back (no Vulkan device, no layer global)
+                let next = route_after_message(self.route, true);
+                if next != self.route {
+                    self.route = next;
+                    self.fallback = true;
+                }
                 let (w, h) = (w as usize, h as usize);
                 let bytes = w * h * 4;
                 if fds.len() == 2 && w > 0 && h > 0 && w <= 8192 && h <= 8192 {
@@ -773,6 +799,77 @@ pub enum QuitPlan {
 /// The decision, pure: terminable apps die now, the rest are asked and given the grace period.
 pub fn quit_plan(terminable: bool) -> QuitPlan {
     if terminable { QuitPlan::KillNow } else { QuitPlan::QuitThenKill(QUIT_GRACE_MS) }
+}
+
+/// How the shell shows an app it launched (docs/graphics-architecture.md, "Switch-over").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Route {
+    /// The shared-memory path: the app sends frames over the socket and the shell draws its window.
+    Shm,
+    /// The direct path: the app draws in the window server. The shell makes no window for it, expects no frames,
+    /// and lists it, focuses it and captures its thumbnails through the window server's protocols.
+    Direct,
+}
+
+impl Route {
+    /// Whether the shell expects frames from the app over the socket.
+    pub fn expects_frames(self) -> bool {
+        self == Route::Shm
+    }
+}
+
+/// The route for an app the shell is about to launch, pure. Direct only when the shell itself runs with
+/// `BIFROST_DIRECT=1` under `bifrost-wm` (its environment and `/etc/bifrost/compositor`); anything else is the
+/// shared-memory path, so labwc sessions and missing switches keep the old behaviour.
+pub fn route_for(direct_env: Option<&str>, compositor: Option<&str>) -> Route {
+    match (direct_env.map(str::trim), compositor.map(str::trim)) {
+        (Some("1"), Some("bifrost-wm")) => Route::Direct,
+        _ => Route::Shm,
+    }
+}
+
+/// `route_for` with the shell's real environment and session file.
+pub fn launch_route() -> Route {
+    let env = std::env::var("BIFROST_DIRECT").ok();
+    let compositor = std::fs::read_to_string("/etc/bifrost/compositor").ok();
+    route_for(env.as_deref(), compositor.as_deref())
+}
+
+/// The route after a message from the app. A direct app that sends shared-memory `Buffers` fell back to the
+/// socket path (its SDK found no Vulkan device or no `bifrost_layer_manager_v1`); every other message keeps the route.
+pub fn route_after_message(route: Route, is_buffers: bool) -> Route {
+    match route {
+        Route::Direct if is_buffers => Route::Shm,
+        other => other,
+    }
+}
+
+/// The window server's toplevel for an app: the first foreign toplevel whose app id is the app's id (the SDK's
+/// direct path sets its xdg app id to the manifest id). `windows` are (toplevel id, app id) pairs in list order.
+pub fn foreign_window_of<'a>(windows: impl IntoIterator<Item = (u32, &'a str)>, app_id: &str) -> Option<u32> {
+    windows.into_iter().find(|(_, id)| *id == app_id).map(|(toplevel, _)| toplevel)
+}
+
+/// What a switcher card or a crash screen shows for an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Thumb {
+    /// the app's last frame, kept by the shell
+    Frame,
+    /// a screencopy of the app's toplevel from the window server
+    Capture,
+    /// the app's icon: nothing to show yet
+    Icon,
+}
+
+/// The thumbnail source, pure. A shared-memory app shows its last frame; a direct app has no frame in the shell, so
+/// its card is a screencopy once the capture is ready and its icon until then.
+pub fn thumbnail(route: Route, has_frame: bool, capture_ready: bool) -> Thumb {
+    match route {
+        Route::Shm if has_frame => Thumb::Frame,
+        Route::Shm => Thumb::Icon,
+        Route::Direct if capture_ready => Thumb::Capture,
+        Route::Direct => Thumb::Icon,
+    }
 }
 
 impl Drop for AppHost {
@@ -1131,6 +1228,8 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         let mut docs = Vec::new();
         let mut died = Vec::new();
+        // direct apps that fell back to the socket path: their window opens now (after the loop, the shell is free)
+        let mut fell_back = Vec::new();
         for (slot, h) in self.ext.iter_mut().enumerate() {
             let Some(h) = h else { continue };
             h.sync_appearance(appearance);
@@ -1140,6 +1239,9 @@ impl Shell {
             let p = h.pump();
             if p.died {
                 died.push(slot as u8);
+            }
+            if h.take_fallback() {
+                fell_back.push(slot as u8);
             }
             if (p.frame || p.died) && fg == Some(slot as u8) {
                 self.dirty = true;
@@ -1228,6 +1330,9 @@ impl Shell {
         for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
         // a window whose app has exited must not keep its last frame on screen
         for slot in died { self.desk_close_app(super::AppId::External(slot)); }
+        if self.desk.is_some() {
+            for slot in fell_back { self.desk_open(super::AppId::External(slot), t); }
+        }
         if badge_changed { self.dirty = true; }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
@@ -1551,5 +1656,76 @@ mod badge_tests {
         assert_eq!(clean_badge("a\u{0}b\tc"), "abc");
         assert_eq!(clean_badge(""), "");
         assert_eq!(clean_badge("éééééé"), "éééé", "cut by characters, not bytes");
+    }
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+
+    fn cfg() -> Configure {
+        Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false }
+    }
+
+    #[test]
+    fn the_route_is_direct_only_under_bifrost_wm_with_the_switch_on() {
+        assert_eq!(route_for(Some("1"), Some("bifrost-wm")), Route::Direct);
+        assert_eq!(route_for(Some(" 1\n"), Some("bifrost-wm\n")), Route::Direct);
+        assert_eq!(route_for(Some("1"), Some("labwc")), Route::Shm, "labwc sessions keep the shared-memory path");
+        assert_eq!(route_for(None, Some("bifrost-wm")), Route::Shm, "no switch, no direct path");
+        assert_eq!(route_for(Some("0"), Some("bifrost-wm")), Route::Shm);
+        assert_eq!(route_for(Some("1"), None), Route::Shm, "no /etc/bifrost/compositor, no direct path");
+        assert_eq!(route_for(Some("true"), Some("bifrost-wm")), Route::Shm, "only the literal 1 switches it on");
+    }
+
+    #[test]
+    fn a_direct_app_that_sends_shared_memory_buffers_falls_back() {
+        assert_eq!(route_after_message(Route::Direct, true), Route::Shm);
+        assert_eq!(route_after_message(Route::Direct, false), Route::Direct, "a frame or any other message keeps the route");
+        assert_eq!(route_after_message(Route::Shm, true), Route::Shm);
+        assert_eq!(route_after_message(Route::Shm, false), Route::Shm);
+    }
+
+    #[test]
+    fn only_the_shared_memory_route_expects_frames() {
+        assert!(Route::Shm.expects_frames());
+        assert!(!Route::Direct.expects_frames());
+    }
+
+    #[test]
+    fn the_window_of_an_app_is_its_first_toplevel_with_that_app_id() {
+        let windows = [(3, "is.a"), (7, "is.b"), (9, "is.b")];
+        assert_eq!(foreign_window_of(windows, "is.b"), Some(7), "the first listed toplevel wins");
+        assert_eq!(foreign_window_of(windows, "is.a"), Some(3));
+        assert_eq!(foreign_window_of(windows, "is.c"), None, "no window while the app is still starting");
+        assert_eq!(foreign_window_of([(1, "is.bb")], "is.b"), None, "app ids match whole, not by prefix");
+        assert_eq!(foreign_window_of(Vec::<(u32, &str)>::new(), "is.a"), None);
+    }
+
+    #[test]
+    fn a_direct_app_thumbnail_is_a_capture_once_ready_and_its_icon_before() {
+        assert_eq!(thumbnail(Route::Shm, true, false), Thumb::Frame);
+        assert_eq!(thumbnail(Route::Shm, true, true), Thumb::Frame, "the shared-memory frame is kept by the shell");
+        assert_eq!(thumbnail(Route::Shm, false, true), Thumb::Icon, "no frame yet");
+        assert_eq!(thumbnail(Route::Direct, true, true), Thumb::Capture);
+        assert_eq!(thumbnail(Route::Direct, true, false), Thumb::Icon, "the shell has no frame for a direct app");
+        assert_eq!(thumbnail(Route::Direct, false, false), Thumb::Icon);
+    }
+
+    #[test]
+    fn a_direct_host_is_demoted_by_buffers_once_and_ignores_its_frames() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        host.route = Route::Direct;
+        let mut out = Pumped::default();
+        host.handle(ToShell::Frame { buf: 0, damage: vec![] }, Vec::new(), &mut out);
+        assert_eq!(host.route(), Route::Direct, "a frame from a direct app does not demote it");
+        assert!(!host.take_fallback());
+        host.handle(ToShell::Buffers { w: 4, h: 3 }, Vec::new(), &mut out);
+        assert_eq!(host.route(), Route::Shm);
+        assert!(host.take_fallback(), "the fallback is reported once");
+        assert!(!host.take_fallback());
+        host.handle(ToShell::Buffers { w: 4, h: 3 }, Vec::new(), &mut out);
+        assert!(!host.take_fallback(), "a shared-memory app is never demoted again");
     }
 }
