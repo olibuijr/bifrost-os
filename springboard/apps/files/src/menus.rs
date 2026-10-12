@@ -50,6 +50,8 @@ pub(crate) const MENU_GROUP_KIND: u32 = 23;
 
 pub(crate) const MENU_GROUP_DATE: u32 = 24;
 
+pub(crate) const MENU_OPEN_WITH: u32 = 25;
+
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
     pub(crate) fn context_menu_at(&mut self, ctx: &Ctx, x: f32, y: f32) {
@@ -71,6 +73,7 @@ impl Files {
                 ContextItem { id: MENU_QUICK_LOOK, label: "Preview".into(), enabled: single },
                 ContextItem { id: MENU_COPY_NAME, label: "Copy Name".into(), enabled: single },
                 ContextItem { id: MENU_INFO, label: "Get Info".into(), enabled: single },
+                ContextItem { id: MENU_OPEN_WITH, label: "Open With…".into(), enabled: single && self.focus_entry().is_some_and(|e| !e.is_dir) },
                 ContextItem { id: MENU_COMPRESS, label: "Compress".into(), enabled: !in_bin && !self.in_recents() },
                 ContextItem { id: MENU_TAGS, label: "Tags…".into(), enabled: true },
                 ContextItem { id: MENU_EXTRACT, label: "Extract".into(), enabled: single && self.focus_entry().is_some_and(Self::is_zip) },
@@ -108,6 +111,7 @@ impl Files {
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_INFO => self.get_info(),
+            MENU_OPEN_WITH => self.open_with_panel(),
             MENU_COMPRESS => self.compress(),
             MENU_TAGS => self.open_tags(),
             MENU_EXTRACT => self.extract(),

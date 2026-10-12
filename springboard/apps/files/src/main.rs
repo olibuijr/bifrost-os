@@ -47,6 +47,7 @@ mod go;
 mod info;
 mod keys;
 mod menus;
+mod openwith;
 mod model;
 mod ops;
 mod pathbar;
@@ -63,6 +64,7 @@ mod views;
 mod window;
 use go::*;
 use info::*;
+use openwith::*;
 use keys::*;
 use menus::*;
 use model::*;
@@ -136,6 +138,8 @@ struct Files {
     tag_index: TagIndex,
     /// The Tags panel, which toggles colours on the selection.
     tag_panel: bool,
+    /// The Open With panel for the focused file: the apps the launch service names for it.
+    open_with: Option<OpenWith>,
     /// A press on an item has moved far enough to drag the selection.
     dragging: bool,
     /// The columns view is on (with `grid` false).
@@ -232,6 +236,7 @@ impl Files {
             info: None,
             tag_index,
             tag_panel: false,
+            open_with: None,
             dragging: false,
             drop_target: None,
             undo: vec![],
@@ -595,6 +600,7 @@ impl Files {
                                 self.preview = None;
                                 self.info = None;
                                 self.tag_panel = false;
+                                self.open_with = None;
                                 self.revision += 1;
                                 self.searching = false;
                                 self.select_mode = false;
@@ -672,7 +678,7 @@ mod tests {
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
         }
     }
     fn folder(name: &str) -> Entry {

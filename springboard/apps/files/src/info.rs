@@ -11,6 +11,9 @@ pub(crate) const TAG_PANEL_H: f32 = 330.;
 /// Folder totals for Get Info stop counting after this long.
 pub(crate) const INFO_BUDGET: Duration = Duration::from_millis(800);
 
+/// The head of a JPEG read for its EXIF rows: the APP1 segment comes before the image data.
+const EXIF_HEAD_BYTES: u64 = 128 * 1024;
+
 /// The head of an image file read for Get Info: the 32 KB system area plus the volume descriptor.
 const IMAGE_HEAD_BYTES: u64 = 34 * 1024;
 
@@ -49,6 +52,34 @@ pub(crate) fn image_rows(head: &[u8], length: u64) -> Vec<(&'static str, String)
         rows.push(("Image Status", status.to_string()));
     }
     rows
+}
+
+/// The EXIF rows for a JPEG in Get Info (date, camera, exposure, dimensions, location), read from the head of the
+/// file, where the APP1 segment sits. Other files get none.
+pub(crate) fn exif_rows(path: &Path) -> Vec<(&'static str, String)> {
+    let ext = path.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !matches!(ext.as_str(), "jpg" | "jpeg") {
+        return Vec::new();
+    }
+    let mut head = Vec::new();
+    if let Ok(file) = std::fs::File::open(path) {
+        use std::io::Read;
+        if file.take(EXIF_HEAD_BYTES).read_to_end(&mut head).is_err() {
+            head.clear();
+        }
+    }
+    exif_rows_from(&head)
+}
+
+/// The EXIF rows for the start of a JPEG. The reader is the Photos app's (`springboard::shell::photos::exif`); its
+/// pixel size is labelled Dimensions here, because Get Info already has a Size row for the file.
+pub(crate) fn exif_rows_from(head: &[u8]) -> Vec<(&'static str, String)> {
+    springboard::shell::photos::exif::parse(head)
+        .map(|e| e.rows())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(label, value)| (if label == "Size" { "Dimensions" } else { label }, value))
+        .collect()
 }
 
 /// The owner and group rows for Get Info: the account name from the password and group tables (`/etc/passwd`,
@@ -114,6 +145,7 @@ impl Files {
         }
         self.preview = None;
         self.info = None;
+        self.open_with = None;
         self.tag_panel = true;
         self.revision += 1;
     }
@@ -138,6 +170,7 @@ impl Files {
         let Some(entry) = self.focus_entry().cloned() else {
             return;
         };
+        self.open_with = None;
         let wall = Wall::sample(bifrost_app::proto::sys::now_ms());
         let summary = entry.is_dir.then(|| {
             let deadline = Instant::now() + INFO_BUDGET;
@@ -148,6 +181,7 @@ impl Files {
         let mut rows = springboard::files::info::rows(&entry, summary, created, &tags, wall.unix, wall.offset);
         if !entry.is_dir {
             rows.extend(disk_image_rows(&entry.path, entry.size));
+            rows.extend(exif_rows(&entry.path));
         }
         if let Ok(st) = bifrost_app::file_stat::stat(&entry.path) {
             let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
@@ -293,6 +327,19 @@ mod image_tests {
     fn raw_image_has_no_volume_rows() {
         let rows = image_rows(&[0u8; 64], 4096);
         assert_eq!(rows, vec![("Image", "Raw disk image".to_string())]);
+    }
+
+    #[test]
+    fn a_jpeg_without_exif_shows_its_pixel_size_as_dimensions() {
+        // SOI, then a baseline frame header (SOF0, length 11): 8-bit, 10 lines high, 20 samples wide, one component
+        let head = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x0A, 0x00, 0x14, 0x01, 0x01, 0x11, 0x00];
+        assert_eq!(exif_rows_from(&head), vec![("Dimensions", "20 x 10".to_string())]);
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_jpeg_has_no_exif_rows() {
+        assert!(exif_rows_from(b"\x89PNG\r\n\x1a\n").is_empty());
+        assert!(exif_rows(std::path::Path::new("/nonexistent/photo.png")).is_empty());
     }
 
     #[test]

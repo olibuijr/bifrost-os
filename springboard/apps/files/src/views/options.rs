@@ -5,6 +5,49 @@ use springboard::gfx::Image;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+/// A picture's thumbnail for a box of `max_w` x `max_h` pixels, through the SDK image source. The header is read first,
+/// so a picture too large to decode is refused before any pixel is allocated; the decode is then scaled down to fit
+/// the box (never enlarged). None for bytes the decoder does not read (only PNG and JPEG).
+pub(crate) fn picture_thumb(bytes: &[u8], max_w: usize, max_h: usize) -> Option<Image> {
+    bifrost_app::image_source::ImageSource::new(bytes).ok()?.thumbnail(max_w, max_h).ok()
+}
+
+#[cfg(test)]
+mod thumb_tests {
+    use super::*;
+    use bifrost_app::image_source::{ImageSource, SourceError};
+
+    /// The 29 bytes a PNG header takes: the signature, the IHDR chunk with `width` x `height`, and 8-bit RGB.
+    fn png_header(width: u32, height: u32) -> Vec<u8> {
+        let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R'];
+        b.extend_from_slice(&width.to_be_bytes());
+        b.extend_from_slice(&height.to_be_bytes());
+        b.extend_from_slice(&[8, 2, 0, 0, 0]);
+        b
+    }
+
+    #[test]
+    fn a_header_gives_the_thumbnail_size_before_any_decode() {
+        // 4000 x 3000 in a 200 x 200 box: the scale is 0.05, so 200 x 150
+        let hdr = png_header(4000, 3000);
+        assert_eq!(ImageSource::new(&hdr).unwrap().thumbnail_size(200, 200), Ok((200, 150)));
+    }
+
+    #[test]
+    fn a_picture_wider_than_the_decode_limit_is_refused_from_its_header() {
+        // 8193 is one past MAX_SIDE (8192)
+        let hdr = png_header(8193, 100);
+        assert_eq!(ImageSource::new(&hdr).err(), Some(SourceError::TooLarge { width: 8193, height: 100 }));
+        assert!(picture_thumb(&hdr, 200, 200).is_none());
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_or_a_jpeg_have_no_thumbnail() {
+        assert!(picture_thumb(b"GIF89a....", 200, 200).is_none());
+        assert!(picture_thumb(&[], 200, 200).is_none());
+    }
+}
+
 /// Group By choices (Files: None, Kind, Date Modified).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Group {
@@ -241,7 +284,7 @@ impl Files {
             cache.clear();
         }
         let img = cache.entry((e.path.clone(), e.mtime, pw, ph)).or_insert_with(|| {
-            std::fs::read(&e.path).ok().and_then(|bytes| springboard::imgdec::decode(&bytes)).map(|i| springboard::imgdec::fit(&i, pw, ph))
+            std::fs::read(&e.path).ok().and_then(|bytes| picture_thumb(&bytes, pw, ph))
         });
         match img {
             Some(im) => {
