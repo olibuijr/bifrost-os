@@ -36,6 +36,8 @@ pub mod raw_params;
 pub mod upscale;
 pub mod replicator;
 pub mod emitter;
+pub mod plane_stats;
+pub mod plane_arith;
 
 #[cfg(test)]
 mod tests {
