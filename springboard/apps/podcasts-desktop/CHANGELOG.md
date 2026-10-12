@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0
+
+- While feeds load, the list says how many are done, for example "Updating feeds, 1 of 3", instead of only
+  "Loading...". The count resets for each new batch, and a feed that fails to load is counted as finished.
+  The count comes through the shared async publisher sequence, which the app pulls on each frame.
+- Trimming an episode and flashing-light dimming are not in this release. Podcasts plays audio only, and the
+  audio service has no call to cut a file.
+
 ## 1.4.0
 
 - Skips stop at the ends of an episode: a back skip never goes before the start, and a forward skip stops at the end

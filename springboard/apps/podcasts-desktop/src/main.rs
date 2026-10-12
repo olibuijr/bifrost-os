@@ -5,6 +5,7 @@ mod feed;
 mod icon;
 mod media;
 mod podcasts;
+mod refresh;
 mod transport;
 
 use bifrost_app::kit::{Damage, Event, Surface};
