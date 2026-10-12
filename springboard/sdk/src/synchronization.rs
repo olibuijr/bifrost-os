@@ -1,9 +1,10 @@
 //! Synchronization parity: `Mutex` with closure-scoped locking, `Atomic` integers with an explicit memory ordering
 //! per operation, `AtomicLazyReference` and `atomic_memory_fence`.
 //!
-//! Pure `std`: the orderings map onto `std::sync::atomic::Ordering` and nothing here uses `unsafe`. `WordPair`
-//! is not provided, because a lock-free double-word atomic needs `unsafe` or a platform instruction (see
-//! `docs/parity/synchronization.md`). Apps reach these types as `bifrost_app::synchronization`.
+//! Pure `std`: the orderings map onto `std::sync::atomic::Ordering` and nothing here uses `unsafe`. `WordPair` is
+//! provided lock-based (`AtomicWordPair`): a lock-free double-word atomic needs `unsafe` or a platform instruction,
+//! so the pair takes one lock per operation instead (see `docs/parity/w6-b08.md`). Apps reach these types as
+//! `bifrost_app::synchronization`.
 
 use std::sync::atomic::{self, AtomicI32, AtomicI64, AtomicIsize, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock, TryLockError};
@@ -290,6 +291,64 @@ impl<T> Default for AtomicLazyReference<T> {
     }
 }
 
+/// A pair of two word-sized unsigned integers (`WordPair`). Plain value: the two words are public fields, as in the
+/// reference SDK's `first` and `second` properties.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub struct WordPair {
+    pub first: usize,
+    pub second: usize,
+}
+
+impl WordPair {
+    pub fn new(first: usize, second: usize) -> Self {
+        Self { first, second }
+    }
+}
+
+/// A `WordPair` stored atomically. Every load, store and update takes one lock, so a reader never sees the first
+/// word from one update and the second word from another. This is lock based, not a double-word hardware
+/// instruction, and it uses no `unsafe`.
+pub struct AtomicWordPair {
+    inner: StdMutex<WordPair>,
+}
+
+impl AtomicWordPair {
+    pub fn new(initial: WordPair) -> Self {
+        Self { inner: StdMutex::new(initial) }
+    }
+
+    fn guard(&self) -> std::sync::MutexGuard<'_, WordPair> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The pair as it was at one instant.
+    pub fn load(&self) -> WordPair {
+        *self.guard()
+    }
+
+    pub fn store(&self, value: WordPair) {
+        *self.guard() = value;
+    }
+
+    /// Stores `value` and returns the pair it replaced.
+    pub fn exchange(&self, value: WordPair) -> WordPair {
+        std::mem::replace(&mut *self.guard(), value)
+    }
+
+    /// Stores `desired` only when the current pair equals `expected`. Returns whether it stored, and the pair that
+    /// was current before the call.
+    pub fn compare_exchange(&self, expected: WordPair, desired: WordPair) -> (bool, WordPair) {
+        let mut g = self.guard();
+        let current = *g;
+        if current == expected {
+            *g = desired;
+            (true, current)
+        } else {
+            (false, current)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,5 +466,61 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(second.as_str(), "first");
         assert_eq!(r.load().unwrap().as_str(), "first");
+    }
+
+    #[test]
+    fn word_pair_holds_both_words_and_defaults_to_zero() {
+        let p = WordPair::new(3, 7);
+        assert_eq!(p.first, 3);
+        assert_eq!(p.second, 7);
+        assert_eq!(WordPair::default(), WordPair::new(0, 0));
+    }
+
+    #[test]
+    fn atomic_word_pair_load_and_store_round_trip() {
+        let cell = AtomicWordPair::new(WordPair::new(1, 2));
+        assert_eq!(cell.load(), WordPair::new(1, 2));
+        cell.store(WordPair::new(5, 6));
+        assert_eq!(cell.load(), WordPair::new(5, 6));
+    }
+
+    #[test]
+    fn atomic_word_pair_exchange_returns_the_previous_pair() {
+        let cell = AtomicWordPair::new(WordPair::new(5, 6));
+        let previous = cell.exchange(WordPair::new(9, 8));
+        assert_eq!(previous, WordPair::new(5, 6));
+        assert_eq!(cell.load(), WordPair::new(9, 8));
+    }
+
+    #[test]
+    fn atomic_word_pair_compare_exchange_swaps_only_on_a_match() {
+        let cell = AtomicWordPair::new(WordPair::new(9, 8));
+        let (stored, current) = cell.compare_exchange(WordPair::new(9, 8), WordPair::new(0, 1));
+        assert!(stored);
+        assert_eq!(current, WordPair::new(9, 8));
+        assert_eq!(cell.load(), WordPair::new(0, 1));
+        let (stored, current) = cell.compare_exchange(WordPair::new(9, 8), WordPair::new(4, 4));
+        assert!(!stored);
+        assert_eq!(current, WordPair::new(0, 1));
+        assert_eq!(cell.load(), WordPair::new(0, 1));
+    }
+
+    #[test]
+    fn atomic_word_pair_never_shows_a_torn_pair_across_threads() {
+        let cell = Arc::new(AtomicWordPair::new(WordPair::new(0, 0)));
+        let writer = {
+            let cell = Arc::clone(&cell);
+            std::thread::spawn(move || {
+                for i in 1..=2000usize {
+                    cell.store(WordPair::new(i, i));
+                }
+            })
+        };
+        for _ in 0..2000 {
+            let p = cell.load();
+            assert_eq!(p.first, p.second);
+        }
+        writer.join().unwrap();
+        assert_eq!(cell.load(), WordPair::new(2000, 2000));
     }
 }
