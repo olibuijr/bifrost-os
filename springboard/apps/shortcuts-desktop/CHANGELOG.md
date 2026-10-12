@@ -5,6 +5,8 @@
 - Shortcuts can be used from other apps and from automation. A shortcut is found by its id or its name; a name that two shortcuts share asks for the id, and a name that matches none says so.
 - "Plan Shortcut" lists a shortcut's steps in order without running them. "Run Shortcut" finds the shortcut and then says that this device cannot run shortcut actions yet, so it never reports a run that did not happen.
 - A scripting view of the list: a shortcut's name and colour can be read and changed, and its action count is read-only. Changes are checked, saved, and an open window shows them at once.
+- A shortcut can have a daily reminder: the "Daily Reminder" row in its editor steps through a few times (07:00 to 22:30) and then Off. At that time the normal notification appears, and it says that this device cannot run shortcut actions yet.
+- "Open at Login" in All Shortcuts asks the desktop to start Shortcuts at login. The row shows Needs Approval until the user allows it in Settings > General > Login Items.
 - Needs system 0.4.84, as before.
 
 ## 1.2.2

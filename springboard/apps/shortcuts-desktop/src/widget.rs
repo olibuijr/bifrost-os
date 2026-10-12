@@ -16,7 +16,8 @@ use bifrost_app::controls::{Node, Rect as PtRect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_app::kit::{Event, Surface, TextCache};
-use crate::model::{Action, Shortcut, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
+use crate::model::{Action, Daily, Shortcut, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
+use bifrost_app::proto::LoginStatus as Status;
 use std::path::PathBuf;
 
 /// Tile colours a shortcut can take, as the Shortcuts app offers them.
@@ -64,6 +65,10 @@ enum Target {
     Pick(usize),
     Color(usize),
     Delete,
+    /// The "Daily Reminder" row of the open shortcut: steps to the next time.
+    Schedule,
+    /// The "Open at Login" row of the grid: asks the shell to turn it on or off.
+    LoginItem,
     /// All Shortcuts in the sidebar: back to the grid from any view.
     Home,
 }
@@ -101,6 +106,10 @@ pub struct Shortcuts {
     now: f64,
     dirty: bool,
     cache: TextCache,
+    /// the Login Items status the shell last reported; `None` until it answers
+    login: Option<Status>,
+    /// the toggle the last tap asked for: `Some(true)` to open at login, `Some(false)` to stop
+    login_request: Option<bool>,
 }
 
 const ROW_POS_FIRST: u8 = 1;
@@ -129,6 +138,8 @@ impl Shortcuts {
             now: 0.0,
             dirty: true,
             cache: TextCache::default(),
+            login: None,
+            login_request: None,
         }
     }
 
@@ -165,6 +176,30 @@ impl Shortcuts {
     /// The actions the last tap asked the shell to run, oldest first.
     pub fn take_runs(&mut self) -> Vec<Action> {
         std::mem::take(&mut self.runs)
+    }
+
+    /// The Login Items status the shell reported, or `None` when it has not answered.
+    pub fn set_login(&mut self, status: Option<Status>) {
+        self.login = status;
+        self.dirty = true;
+    }
+
+    /// The login toggle the last tap asked for (`Some(true)` to open at login), once.
+    pub fn take_login_request(&mut self) -> Option<bool> {
+        self.login_request.take()
+    }
+
+    /// Whether the row reads On: the app opens at login, or the user still has to allow it in Settings.
+    fn login_on(&self) -> bool {
+        matches!(self.login, Some(Status::Enabled) | Some(Status::RequiresApproval))
+    }
+
+    fn login_value(&self) -> &'static str {
+        match self.login {
+            Some(Status::Enabled) => "On",
+            Some(Status::RequiresApproval) => "Needs Approval",
+            _ => "Off",
+        }
     }
 
     fn top(ui: &Ui) -> f32 {
@@ -282,6 +317,8 @@ impl Shortcuts {
         match self.view {
             View::Grid => {
                 y += ui.pt(SPACE_XL);
+                self.row(ui, &mut cells, &mut y, "Open at Login", self.login_value(), LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::LoginItem));
+                y += ui.pt(SPACE_L);
                 let gap = ui.pt(SPACE_L);
                 let cols = (((w - 2.0 * m0 + gap) / (ui.pt(TILE_MIN_W) + gap)).floor() as usize).max(2);
                 let tw = (w - 2.0 * m0 - gap * (cols - 1) as f32) / cols as f32;
@@ -320,6 +357,9 @@ impl Shortcuts {
                     let pos = ROW_POS_LAST | if n == 0 { ROW_POS_FIRST } else { 0 };
                     self.row(ui, &mut cells, &mut y, "Add Action", "", SYSTEM_BLUE, pos, Some(Target::AddAction));
                 }
+                y += ui.pt(SPACE_L);
+                let when = sc.schedule.map(|d| d.label()).unwrap_or_else(|| "Off".into());
+                self.row(ui, &mut cells, &mut y, "Daily Reminder", &when, LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Schedule));
                 y += ui.pt(35.0) - ui.pt(SPACE_S);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Color".into()) });
                 y += ui.pt(SPACE_XXXL);
@@ -405,7 +445,7 @@ impl Shortcuts {
                 if self.list.len() < MAX_SHORTCUTS {
                     let name = (1..).map(|n| format!("Shortcut {n}")).find(|n| self.list.iter().all(|s| &s.name != n)).unwrap_or_default();
                     let color = self.list.len() % PALETTE.len();
-                    self.list.push(Shortcut { name, color, actions: Vec::new() });
+                    self.list.push(Shortcut { name, color, actions: Vec::new(), schedule: None });
                     self.view = View::Editor(self.list.len() - 1);
                     self.scroll = 0.0;
                     self.save();
@@ -461,6 +501,13 @@ impl Shortcuts {
                     self.save();
                 }
             }
+            Target::Schedule => {
+                if let Some(s) = self.editing() {
+                    s.schedule = Daily::after(s.schedule);
+                    self.save();
+                }
+            }
+            Target::LoginItem => self.login_request = Some(!self.login_on()),
             Target::Delete => {
                 if let View::Editor(i) = self.view {
                     if i < self.list.len() {
