@@ -24,6 +24,8 @@ png = "0.18"
 bifrost-core = { path = "core" }
 bifrost-render = { path = "render" }
 bifrost-ui = { path = "ui" }
+# the one boot frame and the timing record (docs/boot-architecture.md); no_std, no dependencies
+bootweave-frame = { path = "bootweave/frame" }
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"], optional = true }
 wayland-client = { version = "0.31", optional = true }
 wayland-protocols-wlr = { version = "0.3", features = ["client"], optional = true }
