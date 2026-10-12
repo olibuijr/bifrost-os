@@ -4,11 +4,14 @@
 //! `bifrost_app::file_provider`.
 //!
 //! Mirrors `item identifier` (`rootContainer`, `workingSet`, `trashContainer`),
-//! `item capabilities` (the `allows*` values and `allowsAll`), `type and creator`, and the
-//! identifier, parent and filename properties of `item protocol`.
+//! `item capabilities` (the `allows*` values and `allowsAll`), `type and creator`, the
+//! identifier, parent and filename properties of `item protocol`, and its content properties `documentSize`,
+//! `contentModificationDate`, `isDownloaded` and `isDownloading`. An item can be a placeholder: listed with its size
+//! and dates, its bytes not on this machine, and downloaded on request (`allowsReading`) or dropped again
+//! (`allowsEvicting`).
 //!
-//! Gaps: no content version or sync anchor, no download or upload state, no tags, and the capability bits are this
-//! crate's own layout, not the system's raw values.
+//! Gaps: no content version or sync anchor, no upload state, no download error or progress, no tags, and the
+//! capability bits are this crate's own layout, not the system's raw values.
 
 use std::fmt;
 
@@ -128,6 +131,19 @@ pub enum ItemError {
     ForbiddenCharacter,
     /// The item does not grant the capability the operation needs.
     NotAllowed(ItemCapabilities),
+    /// The item is not in the state the operation needs, such as finishing a download that never started.
+    InvalidState,
+}
+
+/// Whether the bytes of an item are on this machine: `isDownloaded` and `isDownloading`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalContent {
+    /// A placeholder: the item is listed with its size and dates, but its bytes are not on this machine.
+    Placeholder,
+    /// A transfer is running. The bytes are not on this machine yet.
+    Downloading,
+    /// The bytes are on this machine.
+    Downloaded,
 }
 
 fn check_filename(name: &str) -> Result<(), ItemError> {
@@ -149,11 +165,17 @@ pub struct ProvidedItem {
     /// A uniform type identifier, such as `public.rust-source`, when the provider knows it.
     pub content_type: Option<String>,
     pub type_and_creator: Option<TypeAndCreator>,
+    /// `documentSize`: the size of the content in bytes, when the provider knows it.
+    pub document_size: Option<u64>,
+    /// `contentModificationDate`: Unix seconds of the last change to the content, when known.
+    pub content_modification_date: Option<u64>,
     capabilities: ItemCapabilities,
+    local: LocalContent,
 }
 
 impl ProvidedItem {
     /// A new item with no capabilities granted: the provider opts in to each action with `with_capabilities`.
+    /// The bytes are on this machine until the item is marked as a placeholder.
     pub fn new(identifier: ItemIdentifier, parent: ItemIdentifier, filename: &str) -> Result<Self, ItemError> {
         check_filename(filename)?;
         Ok(Self {
@@ -162,8 +184,63 @@ impl ProvidedItem {
             filename: filename.into(),
             content_type: None,
             type_and_creator: None,
+            document_size: None,
+            content_modification_date: None,
             capabilities: ItemCapabilities::default(),
+            local: LocalContent::Downloaded,
         })
+    }
+
+    /// Marks the item as a placeholder: it is listed, but its bytes are not on this machine yet.
+    pub fn as_placeholder(mut self) -> Self {
+        self.local = LocalContent::Placeholder;
+        self
+    }
+
+    pub fn with_document_size(mut self, bytes: u64) -> Self {
+        self.document_size = Some(bytes);
+        self
+    }
+
+    pub fn local_content(&self) -> LocalContent {
+        self.local
+    }
+
+    /// Starts the download of a placeholder. Needs `READING`. Asking again while the download runs, or for bytes
+    /// already on this machine, changes nothing.
+    pub fn request_download(&mut self) -> Result<(), ItemError> {
+        if !self.can(ItemCapabilities::READING) {
+            return Err(ItemError::NotAllowed(ItemCapabilities::READING));
+        }
+        if self.local == LocalContent::Placeholder {
+            self.local = LocalContent::Downloading;
+        }
+        Ok(())
+    }
+
+    /// Records that the running download finished. Only a download that is running can finish.
+    pub fn finish_download(&mut self) -> Result<(), ItemError> {
+        if self.local != LocalContent::Downloading {
+            return Err(ItemError::InvalidState);
+        }
+        self.local = LocalContent::Downloaded;
+        Ok(())
+    }
+
+    /// Drops the bytes from this machine and keeps the item listed as a placeholder. Needs `EVICTING`. A placeholder
+    /// stays as it is. A running download cannot be evicted.
+    pub fn evict(&mut self) -> Result<(), ItemError> {
+        if !self.can(ItemCapabilities::EVICTING) {
+            return Err(ItemError::NotAllowed(ItemCapabilities::EVICTING));
+        }
+        match self.local {
+            LocalContent::Downloaded => {
+                self.local = LocalContent::Placeholder;
+                Ok(())
+            }
+            LocalContent::Placeholder => Ok(()),
+            LocalContent::Downloading => Err(ItemError::InvalidState),
+        }
     }
 
     pub fn with_capabilities(mut self, capabilities: ItemCapabilities) -> Self {
@@ -285,5 +362,68 @@ mod tests {
         assert_eq!(item.rename("c/d"), Err(ItemError::ForbiddenCharacter));
         assert_eq!(item.reparent(ItemIdentifier::working_set()), Err(ItemError::NotAllowed(ItemCapabilities::REPARENTING)));
         assert_eq!(item.parent, ItemIdentifier::root_container());
+    }
+
+    fn file(name: &str) -> ProvidedItem {
+        ProvidedItem::new(ItemIdentifier::new("f").unwrap(), ItemIdentifier::root_container(), name).unwrap()
+    }
+
+    #[test]
+    fn new_items_hold_their_bytes_until_marked_as_placeholders() {
+        let item = file("a.txt");
+        assert_eq!(item.local_content(), LocalContent::Downloaded);
+        assert_eq!(item.document_size, None);
+        let placeholder = file("a.txt").as_placeholder().with_document_size(4096);
+        assert_eq!(placeholder.local_content(), LocalContent::Placeholder);
+        assert_eq!(placeholder.document_size, Some(4096));
+    }
+
+    #[test]
+    fn a_placeholder_downloads_only_with_the_reading_capability() {
+        let mut item = file("a.txt").as_placeholder();
+        assert_eq!(item.request_download(), Err(ItemError::NotAllowed(ItemCapabilities::READING)));
+        assert_eq!(item.local_content(), LocalContent::Placeholder);
+        item = item.with_capabilities(ItemCapabilities::READING);
+        item.request_download().unwrap();
+        assert_eq!(item.local_content(), LocalContent::Downloading);
+        item.request_download().unwrap();
+        assert_eq!(item.local_content(), LocalContent::Downloading, "a second request changes nothing");
+        item.finish_download().unwrap();
+        assert_eq!(item.local_content(), LocalContent::Downloaded);
+    }
+
+    #[test]
+    fn only_a_running_download_can_finish() {
+        let mut item = file("a.txt").as_placeholder();
+        assert_eq!(item.finish_download(), Err(ItemError::InvalidState));
+        assert_eq!(item.local_content(), LocalContent::Placeholder);
+        let mut on_disk = file("b.txt");
+        assert_eq!(on_disk.finish_download(), Err(ItemError::InvalidState));
+    }
+
+    #[test]
+    fn eviction_keeps_the_item_listed_as_a_placeholder() {
+        let mut item = file("a.txt").with_capabilities(ItemCapabilities::EVICTING).with_document_size(12);
+        item.content_modification_date = Some(1_700_000_000);
+        item.evict().unwrap();
+        assert_eq!(item.local_content(), LocalContent::Placeholder);
+        assert_eq!(item.filename(), "a.txt");
+        assert_eq!(item.document_size, Some(12));
+        assert_eq!(item.content_modification_date, Some(1_700_000_000));
+        item.evict().unwrap();
+        assert_eq!(item.local_content(), LocalContent::Placeholder, "evicting a placeholder changes nothing");
+    }
+
+    #[test]
+    fn eviction_needs_the_capability_and_no_running_download() {
+        let mut plain = file("a.txt");
+        assert_eq!(plain.evict(), Err(ItemError::NotAllowed(ItemCapabilities::EVICTING)));
+        assert_eq!(plain.local_content(), LocalContent::Downloaded);
+        let mut busy = file("b.txt")
+            .as_placeholder()
+            .with_capabilities(ItemCapabilities::EVICTING.union(ItemCapabilities::READING));
+        busy.request_download().unwrap();
+        assert_eq!(busy.evict(), Err(ItemError::InvalidState));
+        assert_eq!(busy.local_content(), LocalContent::Downloading);
     }
 }
