@@ -1,5 +1,13 @@
 # BifrOSt changelog
 
+## 0.5.40 — 2026-10-12
+
+- Window tiling now goes through the compositor: Ctrl+Cmd+Left and Right snap the front window to a half,
+  Ctrl+Cmd+Up fills the screen, and Ctrl+Cmd+Down centres it, for every window. In 0.5.39 the Window menu's halves
+  did not move app windows and left a copy of the menu on the wallpaper. The menu keeps Fill and Return to Previous
+  Size, and shows the halves and Center with their shortcuts.
+- Maximized and snapped windows stay below the menu bar and above the Dock.
+
 ## 0.5.39 — 2026-10-12
 
 Parity wiring, wave 3.
