@@ -3,6 +3,9 @@
 - Nearby computers: Remote looks on the local network for other computers that share a desktop and lists them. Tap one to see its address.
 - Network: the window says whether this computer is connected by Ethernet, Wi-Fi or mobile data, or has no connection yet.
 - Not yet: this computer does not announce itself on the network, so other computers cannot list it.
+- Network changes arrive from the system as they happen, so the window updates when the connection drops or comes back. Older systems still check the link every few seconds.
+- Desktop size: the intro line shows the size of the desktop being shared.
+- Copy address: tap the address (yours, or the selected computer's) to copy it, then paste it into another app.
 
 ## 0.1.9 — 2026-10-11
 
