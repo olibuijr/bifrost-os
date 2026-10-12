@@ -292,6 +292,12 @@ fn size_text(n: u64) -> String {
 }
 
 impl Item {
+    /// A finished or running item without a child process, for the tests of the system glue (`system.rs`).
+    #[cfg(test)]
+    pub fn sample(path: &str, state: State, total: Option<u64>, received: u64) -> Item {
+        Item { id: 0, url: String::new(), name: String::new(), path: PathBuf::from(path), part: PathBuf::new(), total, received, state, child: None }
+    }
+
     pub fn status(&self) -> String {
         match &self.state {
             State::Active => match self.total {

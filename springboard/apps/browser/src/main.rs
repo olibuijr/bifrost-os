@@ -30,8 +30,10 @@ use bifrost_app::control::RpcError;
 mod inspector;
 mod pageui;
 mod prefs;
+mod system;
 use inspector::Inspector;
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+use bifrost_app::network_path::{self, Status};
 use bifrost_app::{glyphs, widgets, App, Ctx, Input, KeyInput, TouchKind};
 
 /// The engine archive bundled in assets/servo.tar.gz (version and the first 12 hex digits of its SHA-256).
@@ -57,6 +59,8 @@ const TAP_SLOP_PT: f32 = 6.0;
 
 /// evdev keys for the browser's shortcuts.
 const KEY_L: u32 = 38;
+const KEY_C: u32 = 46;
+const KEY_K: u32 = 37;
 const KEY_T: u32 = 20;
 const KEY_W: u32 = 17;
 const KEY_R: u32 = 19;
@@ -152,6 +156,13 @@ struct Browser {
     swallow: bool,
     /// A tab is being dragged to a new place.
     drag: bool,
+    /// System services (system.rs): the network state, the path request, a copy awaiting its answer, the pointer shape
+    /// and the dock progress last sent.
+    net: system::Network,
+    net_request: Option<u32>,
+    clip: Option<(u32, system::Clip)>,
+    pointer: system::Pointer,
+    dock: system::Dock,
     /// Downloads list and its popover.
     downloads: downloads::Downloads,
     /// Bookmark popover, Favorites bar and the Bookmarks / History panel.
@@ -241,9 +252,8 @@ impl Browser {
     /// Loads a bookmark or history entry in the current tab.
     fn lib_open(&mut self, url: &str) {
         self.editing = false;
-        let view = self.view();
-        if let (Some(p), Some(v)) = (&mut self.pool, view) {
-            p.load(v, url);
+        if let Some(v) = self.view() {
+            self.load_chosen(v, url);
         }
         self.sync_address();
     }
@@ -551,9 +561,8 @@ impl Browser {
             return;
         }
         let url = self.prefs.url_for_input(&text);
-        let view = self.view();
-        if let (Some(p), Some(v)) = (&mut self.pool, view) {
-            p.load(v, &url);
+        if let Some(v) = self.view() {
+            self.load_chosen(v, &url);
         }
         self.address.clear();
         self.address.push_str(&url);
@@ -752,6 +761,73 @@ impl Browser {
         }
     }
 
+    /// Applies a path status. Coming back online loads the tabs that were waiting for the network.
+    fn set_path(&mut self, status: Status) -> bool {
+        if !self.net.set_status(status) || self.net.offline() {
+            return false;
+        }
+        for (view, url) in self.net.take_waiting() {
+            if let Some(p) = self.pool.as_mut().filter(|p| p.state(view).is_some()) {
+                p.load(view, &url);
+            }
+        }
+        true
+    }
+
+    /// Loads an address the user chose. While the network is down the tab shows the offline page instead, and the
+    /// address loads again when the network comes back.
+    fn load_chosen(&mut self, view: WebViewId, url: &str) {
+        let offline = self.net.offline();
+        let Some(p) = self.pool.as_mut() else { return };
+        if offline {
+            self.net.hold(view, url);
+            p.load(view, &system::offline_url(url));
+        } else {
+            self.net.forget(view);
+            p.load(view, url);
+        }
+    }
+
+    /// The pointer shape over the chrome: an I-beam over the address field, unless a sheet or a page menu is up.
+    fn update_pointer(&mut self, ctx: &Ctx, x: f32, y: f32) {
+        let ui = &ctx.ui;
+        let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
+        let over = !self.sheet.open && !self.pageui.active() && py < UNIFIED_BAR_PT && self.address_rect(ui, ctx.cfg.w).contains(px, py);
+        if let Some(change) = self.pointer.update(over) {
+            system::send_pointer(ctx, change);
+        }
+    }
+
+    /// Cmd+Shift+C copies the page's link (URL and title); Cmd+Shift+K copies the newest downloaded image.
+    fn system_chord(&mut self, ctx: &Ctx, key: u32, mods: u32) -> bool {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_SHIFT == 0 || mods & CHORD_ALT != 0 {
+            return false;
+        }
+        match key {
+            KEY_C => {
+                let page = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|s| (s.url.clone(), s.title.clone()));
+                match page {
+                    Some((url, title)) if url.starts_with("http") => {
+                        self.clip = system::send_copy(ctx, system::Clip::Link { url, title });
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            KEY_K => {
+                let image = system::newest_image(&self.downloads.items).and_then(|i| system::read_image(&i.path));
+                match image {
+                    Some((uti, bytes)) => {
+                        self.clip = system::send_copy(ctx, system::Clip::Image { uti, bytes });
+                        true
+                    }
+                    None => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
     fn activate(&mut self, id: u32) {
         if id != DOWNLOADS {
             self.downloads.open = false;
@@ -835,6 +911,7 @@ impl App for Browser {
         ctx.enable_sudden_termination();
         self.start();
         self.place_web(ctx);
+        self.net_request = Some(network_path::request_path(ctx));
     }
 
     fn wake_fd(&self) -> Option<i32> {
@@ -873,6 +950,13 @@ impl App for Browser {
             self.fire_long_press();
         }
         let committed: Vec<WebViewId> = events.iter().filter_map(|e| if let WebViewEvent::LoadCommitted(v) = e { Some(*v) } else { None }).collect();
+        // a tab that committed a page other than the offline page (a data: URL) no longer waits for the network
+        for v in &committed {
+            let offline_page = self.pool.as_ref().and_then(|p| p.state(*v)).is_some_and(|s| s.url.starts_with("data:"));
+            if !offline_page {
+                self.net.forget(*v);
+            }
+        }
         let mut changed = !events.is_empty() || long_fired;
         for ev in &events {
             changed |= self.inspector.on_event(ev);
@@ -915,6 +999,11 @@ impl App for Browser {
             self.new_tab(&doc);
         }
         let (dl_changed, stop) = self.downloads.tick();
+        let dock = system::dock_progress(&self.downloads.items);
+        if system::dock_changed(self.dock, dock) {
+            self.dock = dock;
+            system::send_dock(ctx, dock);
+        }
         let dl_changed = self.favicons.tick() || dl_changed;
         if let Some(p) = &mut self.pool {
             // Servo 0.7.0 cannot cancel a load (the engine's `stop` is a no-op), so leave the download's page:
@@ -940,7 +1029,8 @@ impl App for Browser {
         perf::on_exit(&mut self.store);
     }
 
-    fn resume(&mut self, _ctx: &Ctx) {
+    fn resume(&mut self, ctx: &Ctx) {
+        self.net_request = Some(network_path::request_path(ctx));
         // no pings ran while suspended: do not read the gap as a wedged engine
         self.watchdog.reset(self.clock.elapsed().as_secs_f64());
         if let Some(p) = &mut self.pool {
@@ -949,8 +1039,40 @@ impl App for Browser {
         }
     }
 
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.net_request == Some(request) {
+            self.net_request = None;
+            match network_path::decode_reply(result.clone()) {
+                Ok(path) => return self.set_path(path.status),
+                Err(e) => ctx.log(&format!("network path unavailable: {e}")),
+            }
+            return false;
+        }
+        // a copy the service refused (an older shell) goes to the synchronous pasteboard instead
+        if let Some((id, clip)) = self.clip.take() {
+            if id == request {
+                if result.is_err() {
+                    system::fall_back(ctx, &clip);
+                }
+            } else {
+                self.clip = Some((id, clip));
+            }
+        }
+        false
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        match network_path::path_event(service, event, body) {
+            Some(Ok(path)) => self.set_path(path.status),
+            _ => false,
+        }
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let ui = &ctx.ui;
+        if let Input::Touch { x, y, .. } = ev {
+            self.update_pointer(ctx, x, y);
+        }
         // The SDK has no pointer-leave or window-deactivate input (runtime.rs `Input`), so the tab hover is cleared on
         // anything that is not a pointer position: keys, commands, menus, activation and touch cancel.
         if !matches!(ev, Input::Touch { kind: TouchKind::Down | TouchKind::Move | TouchKind::Up, .. }) {
@@ -1193,6 +1315,9 @@ impl App for Browser {
                     }
                     if self.dev_key(key, mods) {
                         self.place_web(ctx);
+                        return true;
+                    }
+                    if self.system_chord(ctx, key, mods) {
                         return true;
                     }
                     if self.lib_chord(ctx, key, mods) {
@@ -1632,6 +1757,11 @@ fn main() {
         long: None,
         swallow: false,
         drag: false,
+        net: Default::default(),
+        net_request: None,
+        clip: None,
+        pointer: Default::default(),
+        dock: Default::default(),
     });
 }
 
