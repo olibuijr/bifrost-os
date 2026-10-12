@@ -1795,3 +1795,15 @@ Code: `springboard/render/src/effects.rs` (planes, layers, shadow, mask, group o
 | `Canvas`, `GraphicsContext` fill, stroke, draw image, draw text, transforms, clip, opacity, blend, layers, shadow | `Canvas::draw`, `GraphicsContext::{fill, stroke, draw_image, draw_text, translate, scale, rotate, clip, set_opacity, set_blend_mode, add_shadow, draw_layer, save, restore}` |
 
 Gaps, decided: no hue/saturation/brightness/colour-matrix filters on views, no variable `blur` modifier in this module (glass blur lives in `render/src/glass.rs`); strokes have round joins and caps only, no dashes or miter limit; `draw_image` and `draw_text` take axis-aligned transforms only; no gradients/shading in `GraphicsContext` yet (use `render::gradient`); no resolved symbols or child views; view-tree integration (`.shadow()` style modifiers on widgets) is not wired because `sdk/src/widgets.rs` is owned by another wave. Not built or run in this round; tests are unrun golden-pixel tests (`effects.rs`, `graphics_context.rs`).
+
+## Core MIDI (`bifrost_app::midi`)
+
+The MIDI models are shared by the shell, the MIDI daemon and apps. `bifrost_midi` owns them; `sdk/src/midi.rs` re-exports
+`clock`, `endpoints`, `events`, `hub`, `thru` and `ump` so an app uses the same `Hub`, `Registry`, `Ump` and `MidiEvent` types as
+the server. Apple parity: the vocabulary follows MIDI Services (clients, virtual sources and destinations, source connections,
+received packets with host-clock timestamps). Decided: the SDK exposes the pure models only. An app does not open a device here;
+the daemon owns the hub and delivers to apps.
+
+Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
+daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
+tests in `sdk/src/midi.rs` are unrun.
