@@ -19,8 +19,8 @@ use crate::{perf, Browser, START};
 
 /// Prefix of the scroll probe's eval result.
 pub const SCROLL_PREFIX: &str = "bifrost-scroll:";
-/// First menu item id of the History menu: item `HISTORY_BASE + i` goes to entry `i` of the tab's list.
-pub const HISTORY_BASE: u32 = 1000;
+/// First menu item id of the History menu: item `NAV_MENU_BASE + i` goes to entry `i` of the tab's list.
+pub const NAV_MENU_BASE: u32 = 1000;
 /// Entries shown on each side of the current one in the History menu.
 const MENU_LIMIT: usize = 10;
 /// Characters of a URL kept in a History menu label.
@@ -28,7 +28,7 @@ const LABEL_CHARS: usize = 60;
 
 /// The History menu entry for an item id, when the id is one of ours.
 pub fn history_target(id: u32) -> Option<usize> {
-    let i = id.checked_sub(HISTORY_BASE)? as usize;
+    let i = id.checked_sub(NAV_MENU_BASE)? as usize;
     (i < MAX_HIST).then_some(i)
 }
 
@@ -312,7 +312,7 @@ impl Browser {
     }
 
     /// The History menu: Back and Forward submenus of the selected tab's entries, nearest first. Item ids are
-    /// `HISTORY_BASE` plus the entry index (see `jump_to`).
+    /// `NAV_MENU_BASE` plus the entry index (see `jump_to`).
     pub(crate) fn history_menu(&self) -> Vec<AppMenuItem> {
         let none: &[String] = &[];
         let (list, index) = self.view().and_then(|v| self.discard.entries(v)).unwrap_or((none, 0));
@@ -322,7 +322,7 @@ impl Browser {
             items.push(AppMenuItem::new(0, "No Earlier Pages").enabled(false).depth(1));
         }
         for (i, url) in back {
-            items.push(AppMenuItem::new(HISTORY_BASE + i as u32, &history_label(&url)).depth(1));
+            items.push(AppMenuItem::new(NAV_MENU_BASE + i as u32, &history_label(&url)).depth(1));
         }
         items.push(AppMenuItem::separator());
         items.push(AppMenuItem::submenu("Forward"));
@@ -330,7 +330,7 @@ impl Browser {
             items.push(AppMenuItem::new(0, "No Later Pages").enabled(false).depth(1));
         }
         for (i, url) in forward {
-            items.push(AppMenuItem::new(HISTORY_BASE + i as u32, &history_label(&url)).depth(1));
+            items.push(AppMenuItem::new(NAV_MENU_BASE + i as u32, &history_label(&url)).depth(1));
         }
         items
     }
@@ -497,10 +497,10 @@ mod tests {
 
     #[test]
     fn history_menu_ids_map_back_to_entries() {
-        assert_eq!(history_target(HISTORY_BASE), Some(0));
-        assert_eq!(history_target(HISTORY_BASE + 49), Some(49));
-        assert_eq!(history_target(HISTORY_BASE + 50), None);
-        assert_eq!(history_target(HISTORY_BASE - 1), None);
+        assert_eq!(history_target(NAV_MENU_BASE), Some(0));
+        assert_eq!(history_target(NAV_MENU_BASE + 49), Some(49));
+        assert_eq!(history_target(NAV_MENU_BASE + 50), None);
+        assert_eq!(history_target(NAV_MENU_BASE - 1), None);
         assert_eq!(history_target(1), None);
     }
 

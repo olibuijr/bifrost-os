@@ -1,3 +1,14 @@
+## 0.13.0 — 2026-10-12
+
+- View > Find in Page (Cmd+F) opens the find bar from the menu bar. Find Next (Cmd+G) and Find Previous (Cmd+Shift+G)
+  move between matches; both are greyed out while the bar is closed.
+- View > Zoom In (Cmd+=), Zoom Out (Cmd+-) and Actual Size (Cmd+0) are in the View menu, greyed out when no page is open.
+  Zoom is remembered for the site, as before.
+- File > Show Downloads opens the Downloads list under the toolbar button, and File > Clear Finished Downloads removes
+  the finished and failed entries from the list (the files stay on disk).
+- Not yet: a content blocker list, and Print for web pages. The engine cannot stop a request before it is sent, so a
+  block list would not block anything, and the engine has no print path.
+
 ## 0.12.0 — 2026-10-12
 
 - History menu: the menu has Back and Forward submenus with the pages before and after the current page in the selected

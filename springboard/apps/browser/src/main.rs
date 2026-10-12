@@ -64,9 +64,17 @@ const KEY_K: u32 = 37;
 const KEY_T: u32 = 20;
 const KEY_W: u32 = 17;
 const KEY_R: u32 = 19;
-/// Main-menu item ids (`App::menu_action`): View > Show Reader and File > Share.
+/// Main-menu item ids (`App::menu_action`): File > Share and Downloads, View > Show Reader, Zoom and Find.
 const MENU_READER: u32 = 1;
 const MENU_SHARE: u32 = 2;
+const MENU_ZOOM_IN: u32 = 3;
+const MENU_ZOOM_OUT: u32 = 4;
+const MENU_ACTUAL_SIZE: u32 = 5;
+const MENU_FIND: u32 = 6;
+const MENU_FIND_NEXT: u32 = 7;
+const MENU_FIND_PREV: u32 = 8;
+const MENU_DOWNLOADS: u32 = 9;
+const MENU_CLEAR_DOWNLOADS: u32 = 10;
 const KEY_D: u32 = 32;
 const KEY_Y: u32 = 21;
 const KEY_B: u32 = 48;
@@ -527,14 +535,31 @@ impl Browser {
     fn menus(&self) -> Vec<AppMenu> {
         let reader_ok = self.view().is_some_and(|v| self.reader.button(v));
         let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
+        let page = self.view().is_some();
+        let finished = self.downloads.items.iter().any(|i| i.state != downloads::State::Active);
         vec![
             AppMenu {
                 title: "File".into(),
-                items: vec![AppMenuItem::new(MENU_SHARE, "Share\u{2026}").enabled(self.web_url().is_some())],
+                items: vec![
+                    AppMenuItem::new(MENU_SHARE, "Share\u{2026}").enabled(self.web_url().is_some()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_DOWNLOADS, "Show Downloads").enabled(!self.downloads.items.is_empty()),
+                    AppMenuItem::new(MENU_CLEAR_DOWNLOADS, "Clear Finished Downloads").enabled(finished),
+                ],
             },
             AppMenu {
                 title: "View".into(),
-                items: vec![AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok)],
+                items: vec![
+                    AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ZOOM_IN, "Zoom In").key("cmd+=").enabled(page),
+                    AppMenuItem::new(MENU_ZOOM_OUT, "Zoom Out").key("cmd+-").enabled(page),
+                    AppMenuItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(page),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_FIND, "Find in Page\u{2026}").key("cmd+f").enabled(page),
+                    AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(self.find.open),
+                    AppMenuItem::new(MENU_FIND_PREV, "Find Previous").key("cmd+shift+g").enabled(self.find.open),
+                ],
             },
             AppMenu { title: "History".into(), items: self.history_menu() },
         ]
@@ -950,6 +975,41 @@ impl App for Browser {
                 true
             }
             MENU_SHARE => self.share_page(ctx),
+            MENU_FIND => {
+                self.editing = false;
+                if !self.find.open {
+                    self.show_find();
+                }
+                true
+            }
+            MENU_FIND_NEXT => {
+                self.find_step(FindDirection::Forward);
+                true
+            }
+            MENU_FIND_PREV => {
+                self.find_step(FindDirection::Backward);
+                true
+            }
+            MENU_ZOOM_IN => {
+                self.zoom_by(1);
+                true
+            }
+            MENU_ZOOM_OUT => {
+                self.zoom_by(-1);
+                true
+            }
+            MENU_ACTUAL_SIZE => {
+                self.zoom_by(0);
+                true
+            }
+            MENU_DOWNLOADS => {
+                self.downloads.open = !self.downloads.items.is_empty();
+                true
+            }
+            MENU_CLEAR_DOWNLOADS => {
+                self.downloads.clear_finished();
+                true
+            }
             _ => match tabdiscard::history_target(id) {
                 Some(target) => {
                     self.jump_to(target);
@@ -1826,6 +1886,18 @@ fn main() {
 #[cfg(test)]
 mod host_tests {
     use super::host_of;
+    use super::{MENU_ACTUAL_SIZE, MENU_CLEAR_DOWNLOADS, MENU_DOWNLOADS, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREV, MENU_READER, MENU_SHARE, MENU_ZOOM_IN, MENU_ZOOM_OUT};
+    use crate::tabdiscard::NAV_MENU_BASE;
+
+    #[test]
+    fn menu_ids_are_distinct_and_below_the_history_range() {
+        let ids = [MENU_READER, MENU_SHARE, MENU_ZOOM_IN, MENU_ZOOM_OUT, MENU_ACTUAL_SIZE, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREV, MENU_DOWNLOADS, MENU_CLEAR_DOWNLOADS];
+        for (i, a) in ids.iter().enumerate() {
+            assert!(*a > 0 && *a < NAV_MENU_BASE, "id {a} is outside 1..NAV_MENU_BASE");
+            assert!(ids[i + 1..].iter().all(|b| b != a), "id {a} is used twice");
+        }
+        assert_eq!(ids.len(), 10);
+    }
 
     #[test]
     fn address_host_drops_scheme_www_path_and_credentials() {
