@@ -3,6 +3,7 @@
 //! save appends one transaction to `history`. Nothing here touches disk. The app persists what it chooses to.
 
 use crate::model_history::{Change, History, Token};
+use crate::model_schema::{Attribute, Schema, SchemaError};
 use crate::relations::{Relation, RelationError, Relations};
 use std::collections::BTreeMap;
 
@@ -28,11 +29,19 @@ pub enum StoreError {
     Duplicate { entity: String, field: String, value: String },
     /// A relation refused the change.
     Relation(RelationError),
+    /// The entity has a schema and the write uses a field the schema does not declare.
+    Schema(SchemaError),
 }
 
 impl From<RelationError> for StoreError {
     fn from(error: RelationError) -> Self {
         StoreError::Relation(error)
+    }
+}
+
+impl From<SchemaError> for StoreError {
+    fn from(error: SchemaError) -> Self {
+        StoreError::Schema(error)
     }
 }
 
@@ -45,6 +54,7 @@ pub struct Store {
     saved: BTreeMap<u64, Record>,
     saved_relations: Relations,
     uniques: Vec<(String, String)>,
+    schema: Schema,
     next_id: u64,
     history: History,
 }
@@ -60,6 +70,25 @@ impl Store {
         if !self.uniques.contains(&key) {
             self.uniques.push(key);
         }
+    }
+
+    /// Declares a field of `entity` with its options. A unique field also gets the uniqueness check on every write.
+    /// Once an entity has a declared field, a write that uses any other field of it is refused.
+    pub fn declare_attribute(&mut self, entity: &str, field: &str, attribute: Attribute) {
+        self.schema.declare(entity, field, attribute);
+        if attribute.unique {
+            self.declare_unique(entity, field);
+        }
+    }
+
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    /// The fields of a record that a backend persists: every field except the transient ones.
+    pub fn persistent_fields(&self, id: u64) -> Option<BTreeMap<String, String>> {
+        let record = self.records.get(&id)?;
+        Some(self.schema.persistent_fields(&record.entity, &record.fields))
     }
 
     pub fn declare_relation(&mut self, relation: Relation) {
@@ -92,6 +121,7 @@ impl Store {
     pub fn insert(&mut self, entity: &str, fields: &[(&str, &str)]) -> Result<u64, StoreError> {
         let fields: BTreeMap<String, String> =
             fields.iter().map(|(name, value)| (name.to_string(), value.to_string())).collect();
+        self.schema.validate(entity, &fields)?;
         self.check_unique(None, entity, &fields)?;
         let id = self.next_id;
         self.next_id += 1;
@@ -106,6 +136,7 @@ impl Store {
         let mut fields = record.fields.clone();
         fields.insert(field.to_string(), value.to_string());
         let entity = record.entity.clone();
+        self.schema.validate(&entity, &fields)?;
         self.check_unique(Some(id), &entity, &fields)?;
         if let Some(record) = self.records.get_mut(&id) {
             record.fields = fields;
@@ -329,5 +360,36 @@ mod tests {
         let log = s.history().fetch(&Descriptor { after: Token(1), ..Descriptor::default() });
         assert_eq!(log.len(), 1);
         assert_eq!(log[0].changes, vec![Change::Update { record: f, entity: "Folder".into() }]);
+    }
+
+    #[test]
+    fn a_declared_entity_refuses_a_field_its_schema_does_not_declare() {
+        let mut s = Store::new();
+        s.declare_attribute("Contact", "email", Attribute { unique: true, ..Attribute::default() });
+        let a = s.insert("Contact", &[("email", "a@example.test")]).unwrap();
+        assert_eq!(
+            s.insert("Contact", &[("email", "b@example.test"), ("nick", "ada")]),
+            Err(StoreError::Schema(SchemaError::UnknownField { entity: "Contact".into(), field: "nick".into() }))
+        );
+        assert_eq!(
+            s.set(a, "nick", "ada"),
+            Err(StoreError::Schema(SchemaError::UnknownField { entity: "Contact".into(), field: "nick".into() }))
+        );
+        assert_eq!(s.get(a).unwrap().field("nick"), None, "a refused set changes nothing");
+        assert_eq!(s.fetch("Contact", |_| true).len(), 1);
+        assert!(s.schema().unique_fields("Contact").contains(&"email"));
+    }
+
+    #[test]
+    fn transient_fields_stay_out_of_the_persisted_fields() {
+        let mut s = Store::new();
+        s.declare_attribute("Note", "title", Attribute::default());
+        s.declare_attribute("Note", "cursor", Attribute { transient: true, ..Attribute::default() });
+        let n = s.insert("Note", &[("title", "one"), ("cursor", "14")]).unwrap();
+        assert_eq!(s.get(n).unwrap().field("cursor"), Some("14"), "the record still holds the transient field");
+        let persisted = s.persistent_fields(n).unwrap();
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted.get("title").map(String::as_str), Some("one"));
+        assert_eq!(s.persistent_fields(99), None);
     }
 }
