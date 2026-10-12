@@ -1612,6 +1612,22 @@ Gaps (not matched yet):
 - Nothing here was built or run when written; the unit tests in `window_fx.rs` and `apphost.rs` cover the math.
 
 
+## Disk Arbitration (DASession parity, `springboard/core/src/disk_session.rs`)
+
+Decisions, recorded for the disk-arbitration matrix rows (`docs/parity-matrix/data/disk-arbitration.json`):
+
+- A `Session` holds the last snapshot of block devices. The caller feeds it snapshots (a udev monitor is the source on
+  BifrOSt); the session diffs them with `disk_events::diff` and calls the appeared, disappeared and description-changed
+  callbacks in registration order. This matches `DARegisterDiskAppearedCallback`, `DARegisterDiskDisappearedCallback`
+  and `DARegisterDiskDescriptionChangedCallback` in shape, and `observe` returns the events it sent.
+- Gap, decided: there is no run loop or dispatch queue on the session (`DASessionScheduleWithRunLoop`,
+  `DASessionSetDispatchQueue`). Callbacks run on the thread that calls `observe`. The shell or an app schedules the
+  snapshots on its own loop. Matching a run loop needs the shared dispatch work, so it waits for that.
+- Gap, decided: the peek callback (`DARegisterDiskPeekCallback`) is not implemented.
+- Approvals and claims live on the session. `unmount` and `eject` plan commands through `disk_commands`, which checks
+  the claim, then the approval chain, then the device state. An unknown device name returns `Refusal::NoDisk`.
+- Status stays `partial` until the session is wired into the shell or the SDK and tested on Midget.
+
 ## Workspace (NSWorkspace parity, `bifrost_app::workspace`)
 
 Reference: AppKit `NSWorkspace` (`open(_:)`, `open(_:withApplicationAt:configuration:)`, `activateFileViewerSelecting(_:)`,
