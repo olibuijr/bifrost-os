@@ -38,6 +38,8 @@ zbus = { version = "5", optional = true }
 bifrost-proto = { path = "proto" }
 # the chrome model the shell serves to the menu bar, Dock and panels clients (src/shell/chrome_host)
 bifrost-chrome = { path = "chrome" }
+# the one boot frame (docs/boot-architecture.md): the supervisor draws the failure screens with it
+bootweave-frame = { path = "bootweave/frame" }
 termcore = { package = "iosterm", path = "../../iOSTerm" }
 # AAC-LC audio decoding (pure Rust; the only codec crate — video is decoded
 # by the hardware through media::VideoDecoder).

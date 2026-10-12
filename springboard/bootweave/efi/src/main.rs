@@ -14,6 +14,7 @@ mod crypto;
 mod handover;
 mod luks;
 mod unlock;
+mod screen;
 use alloc::vec::Vec;
 use bootweave_frame::progress::Progress;
 use bootweave_frame::render::{bar_rect, render_bar};
@@ -284,6 +285,23 @@ impl Session {
         choose_option(self.display.as_mut()?, entries)
     }
 
+    /// Starts the previous generation under the rollback screen (task 11). `None` when there is no previous generation.
+    /// The screen goes through the session's display while it still holds the panel (a pending update that failed on
+    /// an earlier boot), else through `screen::show` (the display was released by a failed `boot_line`).
+    fn rollback(&mut self, previous: Option<&str>) -> Option<Status> {
+        let line = previous?;
+        match self.display.as_mut() {
+            Some(display) => {
+                let frame = display.frame(Screen::Rollback, None);
+                display.draw(&frame);
+            }
+            None => {
+                screen::show(Screen::Rollback);
+            }
+        }
+        Some(self.boot_line(line))
+    }
+
     /// Starts the kernel stub with `line`. The loader's stage ends here: the bar snaps to the loader checkpoint, the
     /// frame is dropped (the kernel side takes the panel over), and `BifrostBootProgress` carries the bar to Bootweave.
     fn boot_line(&mut self, line: &str) -> Status {
@@ -432,18 +450,12 @@ fn main() -> Status {
         boot_policy::Choice::Previous => true,
     };
     if fallback {
-        return previous
-            .as_deref()
-            .map(|line| session.boot_line(line))
-            .unwrap_or(Status::LOAD_ERROR);
+        return session.rollback(previous.as_deref()).unwrap_or(Status::LOAD_ERROR);
     }
     let status = session.boot_line(&current);
     // A unified image that will not start falls back to the previous generation even without a pending update.
     if (marker.is_some() || uki::target(&current).is_some()) && status != Status::SUCCESS {
-        return previous
-            .as_deref()
-            .map(|line| session.boot_line(line))
-            .unwrap_or(status);
+        return session.rollback(previous.as_deref()).unwrap_or(status);
     }
     status
 }
