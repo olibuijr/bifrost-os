@@ -2,6 +2,9 @@
 pub mod json;
 pub mod geojson;
 pub mod sha256;
+pub mod sha512;
+pub mod sha3;
+pub mod hkdf;
 pub mod fsutil;
 pub mod log;
 pub mod log_entries;
