@@ -607,7 +607,8 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
             }
         }
         let mut dead = Vec::new();
-        for (i, c) in conns.iter().enumerate() {
+        // Only the connections that were polled have a `pfds` entry; the ones accepted above start next round.
+        for (i, c) in conns.iter().enumerate().take(pfds.len() - 2) {
             if pfds[i + 2].revents == 0 {
                 continue;
             }
