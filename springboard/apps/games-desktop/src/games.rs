@@ -7,6 +7,7 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_
 use crate::celebration::Celebration;
 use crate::phase::{Flow, Phase};
 use crate::solitaire;
+use crate::tile_motion::{scaled, TileMotion};
 use bifrost_core::random::{RandomSource, Xorshift64};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -102,6 +103,10 @@ pub struct Games {
     won_seen: [bool; 3],
     /// Window pixels at the centre of the board, from the last draw: where a celebration starts.
     board_centre: (f32, f32),
+    /// The 2048 tiles moving now (a merge swells, a new tile grows). See `tile_motion`.
+    motion: TileMotion,
+    /// The app clock (ms) at the last touch, tick or draw; the time a slide starts its motion at.
+    now: f64,
 }
 
 /// A non-zero xorshift seed taken from the wall clock, so every launch deals differently.
@@ -142,6 +147,8 @@ impl Games {
             burst: None,
             won_seen: [false; 3],
             board_centre: (0.0, 0.0),
+            motion: TileMotion::default(),
+            now: 0.0,
         };
         g.new_2048();
         g
@@ -204,23 +211,35 @@ impl Games {
         self.spawn();
     }
 
-    fn spawn(&mut self) {
+    /// Puts a new 2 (or, one time in ten, a 4) on a random empty cell, and returns that cell.
+    fn spawn(&mut self) -> Option<(usize, usize)> {
         let empty: Vec<(usize, usize)> = (0..N).flat_map(|r| (0..N).map(move |c| (r, c))).filter(|&(r, c)| self.grid[r][c] == 0).collect();
         if empty.is_empty() {
-            return;
+            return None;
         }
         let (r, c) = empty[self.rand() as usize % empty.len()];
         self.grid[r][c] = if self.rand() % 10 == 0 { 4 } else { 2 };
+        Some((r, c))
     }
 
-    /// Slides one line toward index 0, merging equal pairs once; returns the points gained.
+    /// Slides one line toward index 0, merging equal pairs once; returns the points gained. `shift` uses
+    /// `slide_merges`, which also reports the merged positions; this form is what the slide tests check.
+    #[cfg(test)]
     fn slide(line: [u32; N]) -> ([u32; N], u32) {
+        let (out, pts, _) = Self::slide_merges(line);
+        (out, pts)
+    }
+
+    /// `slide`, and which output positions hold a merged tile (a pair that became one tile).
+    fn slide_merges(line: [u32; N]) -> ([u32; N], u32, [bool; N]) {
         let tiles: Vec<u32> = line.iter().copied().filter(|&v| v != 0).collect();
         let mut out = [0; N];
+        let mut merged = [false; N];
         let (mut i, mut k, mut pts) = (0, 0, 0);
         while i < tiles.len() {
             if i + 1 < tiles.len() && tiles[i] == tiles[i + 1] {
                 out[k] = tiles[i] * 2;
+                merged[k] = true;
                 pts += out[k];
                 i += 2;
             } else {
@@ -229,7 +248,17 @@ impl Games {
             }
             k += 1;
         }
-        (out, pts)
+        (out, pts, merged)
+    }
+
+    /// The grid cell of output position `j` in line `i` for a slide `dir` (the mapping `shift` uses).
+    fn cell_of(dir: u8, i: usize, j: usize) -> (usize, usize) {
+        match dir {
+            0 => (i, j),
+            1 => (i, N - 1 - j),
+            2 => (j, i),
+            _ => (N - 1 - j, i),
+        }
     }
 
     /// dir: 0 left, 1 right, 2 up, 3 down.
@@ -238,6 +267,7 @@ impl Games {
             return;
         }
         let mut moved = false;
+        let mut merged_cells = Vec::new();
         for i in 0..N {
             let mut line = [0; N];
             for j in 0..N {
@@ -248,7 +278,12 @@ impl Games {
                     _ => self.grid[N - 1 - j][i],
                 };
             }
-            let (out, pts) = Self::slide(line);
+            let (out, pts, merged) = Self::slide_merges(line);
+            for j in 0..N {
+                if merged[j] {
+                    merged_cells.push(Self::cell_of(dir, i, j));
+                }
+            }
             self.score += pts;
             for j in 0..N {
                 let cell = match dir {
@@ -266,7 +301,8 @@ impl Games {
         if !moved {
             return;
         }
-        self.spawn();
+        let fresh = self.spawn();
+        self.plan_motion(&merged_cells, fresh);
         if self.score > self.best_2048 {
             self.best_2048 = self.score;
             let _ = self.prefs.set("best_2048", &self.best_2048.to_string());
@@ -276,6 +312,21 @@ impl Games {
         }
         if !self.can_move() {
             self.p2048.go(Phase::Lost);
+        }
+    }
+
+    /// Plans the motion of one slide: each merged tile swells and the new tile grows in. Tiles that only slide are not
+    /// animated (see `tile_motion`). With reduced effects nothing moves.
+    fn plan_motion(&mut self, merged: &[(usize, usize)], fresh: Option<(usize, usize)>) {
+        self.motion.clear();
+        if self.reduced {
+            return;
+        }
+        for &cell in merged {
+            self.motion.swell(cell, self.now);
+        }
+        if let Some(cell) = fresh {
+            self.motion.grow(cell, self.now);
         }
     }
 
@@ -533,6 +584,7 @@ impl Games {
     // ---- input ----
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) -> Vec<Effect> {
+        self.now = t;
         self.place_sol(ui);
         let (cx, cy, cw, _) = self.content(ui);
         let cwi = cw as i32;
@@ -601,7 +653,11 @@ impl Games {
     }
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
+        self.now = t;
         self.note_win(t);
+        if self.motion.is_live(t) {
+            self.dirty = true;
+        }
         let mut live = false;
         if let Some(b) = self.burst.as_mut() {
             b.advance(t);
@@ -627,8 +683,9 @@ impl Games {
     }
 
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        // a celebration asks for a frame every 16 ms while it lives
+        // a celebration or a moving tile asks for a frame every 16 ms while it lives
         let frame = self.burst.as_ref().map(|_| t + CELEBRATION_FRAME_MS);
+        let frame = frame.or_else(|| self.motion.is_live(t).then(|| t + CELEBRATION_FRAME_MS));
         let clock = self.started.and_then(|t0| {
             (self.game == Game::Mines && self.pm.phase() == Phase::Playing)
                 .then(|| t0 + (self.elapsed as f64 + self.clock_step() as f64) * 1000.0)
@@ -645,7 +702,7 @@ impl Games {
             None => "none".to_string(),
         };
         format!(
-            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\ngames_burst={}\n{}",
+            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\ngames_burst={}\ngames_tiles_moving={}\n{}",
             self.game,
             self.score,
             self.best_2048,
@@ -654,6 +711,7 @@ impl Games {
             if self.reduced { "reduced" } else { "full" },
             display,
             self.burst.as_ref().map_or(0, |b| b.live()),
+            self.motion.live(self.now),
             self.sol.describe()
         )
     }
@@ -672,7 +730,8 @@ impl Games {
         }
     }
 
-    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
+    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+        self.now = t;
         self.dirty = false;
         let style = (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold, LABEL.now());
         if style != self.cache_style {
@@ -765,7 +824,8 @@ impl Games {
         for r in 0..N {
             for c in 0..N {
                 let v = self.grid[r][c];
-                let rect = (bx + gap + c as f32 * (cs + gap), by + gap + r as f32 * (cs + gap), cs, cs);
+                let cell = (bx + gap + c as f32 * (cs + gap), by + gap + r as f32 * (cs + gap), cs, cs);
+                let rect = scaled(cell, self.motion.scale((r, c), self.now));
                 let (bg, fg) = Self::tile_color(v);
                 s.fill_rrect(rect.0, rect.1, rect.2, rect.3, ui.pt(SPACE_S), bg);
                 if v != 0 {
@@ -1040,6 +1100,45 @@ mod slide_tests {
         }
         assert!(g.burst.is_none());
         assert_eq!(g.next_wake(4000.0), None);
+    }
+}
+
+#[cfg(test)]
+mod tile_tests {
+    use super::*;
+
+    #[test]
+    fn a_merge_swells_the_merged_tile_and_the_new_tile_grows() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.grid = [[2, 2, 0, 0], [0; N], [0; N], [0; N]];
+        g.now = 1.0;
+        g.shift(0);
+        assert_eq!(g.grid[0][0], 4);
+        // the merged tile starts at full size and peaks 0.08 s later
+        assert!((g.motion.scale((0, 0), 1.0) - 1.0).abs() < 1e-3);
+        assert!((g.motion.scale((0, 0), 1.08) - 1.12).abs() < 1e-3);
+        // the new tile is the one cell, other than the merged tile, that now holds a tile
+        let fresh = (0..N)
+            .flat_map(|r| (0..N).map(move |c| (r, c)))
+            .find(|&(r, c)| (r, c) != (0, 0) && g.grid[r][c] != 0)
+            .expect("a new tile");
+        assert!((g.motion.scale(fresh, 1.0) - 0.5).abs() < 1e-3);
+        assert!((g.motion.scale(fresh, 1.2) - 1.0).abs() < 1e-3);
+        assert!(g.motion.is_live(1.05));
+        assert!(!g.motion.is_live(1.5));
+    }
+
+    #[test]
+    fn reduced_effects_plan_no_tile_motion() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.reduced = true;
+        g.grid = [[2, 2, 0, 0], [0; N], [0; N], [0; N]];
+        g.now = 1.0;
+        g.shift(0);
+        assert_eq!(g.grid[0][0], 4);
+        assert_eq!(g.motion.live(1.01), 0);
     }
 }
 
