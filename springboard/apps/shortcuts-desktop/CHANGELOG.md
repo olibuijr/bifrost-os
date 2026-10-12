@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.1 — 2026-10-12
 
 - Removed the unused procedural icon and the unused state dump; the app uses its icon.png.

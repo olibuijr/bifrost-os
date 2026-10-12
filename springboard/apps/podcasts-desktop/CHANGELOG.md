@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.2 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.7.1 — 2026-10-12
 
 - The feed refresh status line names the feeds that failed while a batch is still running, for example "Updating feeds,
