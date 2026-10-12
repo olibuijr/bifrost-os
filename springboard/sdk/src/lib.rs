@@ -170,6 +170,7 @@ pub mod workspace;
 pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
+pub mod gamepad_service;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
