@@ -96,7 +96,7 @@ impl AudioSetup {
             error: None,
             selected: None,
             editor: None,
-            labels: TextCache::new(),
+            labels: TextCache::default(),
             size: (1200.0, 780.0),
             last_refresh: f64::NEG_INFINITY,
             press: Target::Nothing,
@@ -316,10 +316,6 @@ impl AudioSetup {
         Rect { x: 0.0, y: UNIFIED_BAR_PT, w: SIDE_PT, h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
     }
 
-    pub fn detail_rect(&self) -> Rect {
-        Rect { x: SIDE_PT, y: UNIFIED_BAR_PT, w: (self.size.0 - SIDE_PT).max(0.0), h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
-    }
-
     /// The left edge of the detail content, and its width.
     pub fn content_x(&self) -> f32 {
         SIDE_PT + PAD_PT
@@ -411,13 +407,6 @@ impl AudioSetup {
         }
     }
 
-    /// Whether the member row `i` is the clock source of the open draft.
-    pub fn is_clock_member(&self, i: usize) -> bool {
-        match (&self.editor, self.editable().get(i)) {
-            (Some(e), Some(d)) => e.draft.clock() == Some(d.uid.as_str()) && e.draft.is_member(&d.uid),
-            _ => false,
-        }
-    }
 
     /// The accessibility target for a published node id (`Input::Activate`).
     pub fn target_of_id(id: u64) -> Target {

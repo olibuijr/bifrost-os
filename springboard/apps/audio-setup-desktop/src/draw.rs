@@ -8,6 +8,7 @@ use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{CAPSULE_BG, CAPSULE_EDGE, CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, FILL, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 
 /// Card corner radius (points): grouped cards are 13 pt, fields and segments are smaller.
@@ -71,7 +72,8 @@ pub fn paint(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
 
     if let Some(err) = w.error.clone() {
         let y = w.size.1 - 28.0;
-        text_mid(&mut w.labels, s, ui, &err, MAC_CALLOUT_PT, Weight::Regular, DESTRUCTIVE, w.content_x(), y, w.content_w());
+        let (x, cw) = (w.content_x(), w.content_w());
+        text_mid(&mut w.labels, s, ui, &err, MAC_CALLOUT_PT, Weight::Regular, DESTRUCTIVE, x, y, cw);
     }
 }
 
@@ -79,7 +81,7 @@ pub fn paint(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
 fn paint_detail(w: &mut AudioSetup, s: &mut Surface, ui: &Ui, d: &DeviceInfo) {
     let x = w.content_x();
     let cw = w.content_w();
-    let y0 = crate::window::UNIFIED_BAR_PT + crate::window::PAD_PT;
+    let y0 = UNIFIED_BAR_PT + crate::window::PAD_PT;
     text_mid(&mut w.labels, s, ui, &d.name, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
     let sub = if d.alive { subtitle(d) } else { format!("{} · unplugged", subtitle(d)) };
     text_mid(&mut w.labels, s, ui, &sub, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
@@ -115,8 +117,8 @@ fn paint_detail(w: &mut AudioSetup, s: &mut Surface, ui: &Ui, d: &DeviceInfo) {
 
 /// The start screen: no device chosen, or no server to ask.
 fn paint_empty(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
-    let x = w.content_x();
-    let y0 = crate::window::UNIFIED_BAR_PT + crate::window::PAD_PT;
+    let (x, cw) = (w.content_x(), w.content_w());
+    let y0 = UNIFIED_BAR_PT + crate::window::PAD_PT;
     let (title, body) = if w.error.is_some() {
         ("Audio Setup", "The audio server is not running, so there are no devices to show.")
     } else if w.devices.is_empty() {
@@ -124,8 +126,8 @@ fn paint_empty(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
     } else {
         ("Audio Setup", "Select a device to see its format, sample rate, buffer size, latency and volume.")
     };
-    text_mid(&mut w.labels, s, ui, title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, w.content_w());
-    text_mid(&mut w.labels, s, ui, body, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, w.content_w());
+    text_mid(&mut w.labels, s, ui, title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, body, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 }
 
 /// The aggregate and multi-output editor: name, kind, the members as a card, the clock, and the footer.
@@ -134,7 +136,7 @@ fn paint_editor(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
     let geo: EditorLayout = w.editor_layout();
     let x = w.content_x();
     let cw = w.content_w();
-    let y0 = crate::window::UNIFIED_BAR_PT + crate::window::PAD_PT;
+    let y0 = UNIFIED_BAR_PT + crate::window::PAD_PT;
     let heading = match (editor.draft.kind, editor.draft.uid.is_some()) {
         (Kind::MultiOutput, false) => "New Multi-Output",
         (Kind::MultiOutput, true) => "Edit Multi-Output",
