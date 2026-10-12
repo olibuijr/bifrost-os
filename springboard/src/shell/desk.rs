@@ -702,15 +702,18 @@ impl Shell {
     pub fn wayland_foreign_windows(&mut self,windows:Vec<crate::bare::wayland::ForeignWindow>) {
         #[cfg(feature = "desktop-wayland")]
         if self.desk.as_ref().is_some_and(|d|d.saved_native.is_none()) { self.desk_restore_native(); }
+        // apps the shell launched on the direct path: their window is the window server's, listed by manifest id
+        let direct:Vec<String>=apphost::installed().iter().enumerate().filter(|(slot,_)|self.ext.get(*slot).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.route()==apphost::Route::Direct)).map(|(_,a)|a.manifest.id.clone()).collect();
         let Some(desk)=self.desk.as_mut() else { return; };
         if desk.foreign_snapshot==windows {return;}
         desk.foreign_snapshot=windows.clone();
         for (slot, app) in apphost::installed().iter().enumerate() {
-            let compositor_id=if app.manifest.window=="native" {app.manifest.wayland_app_id.clone()}
+            let compositor_id=if direct.contains(&app.manifest.id) {app.manifest.id.clone()}
+                else if app.manifest.window=="native" {app.manifest.wayland_app_id.clone()}
                 else {let Some(index)=apps().iter().position(|a|a.id==AppId::External(slot as u8)) else {continue};format!("is.olibuijr.bifrost.{}",index+1)};
             crate::bare::app_manager::focus(&app.manifest.id, windows.iter().any(|w|w.app_id==compositor_id && w.active));
         }
-        desk.native_windows=windows.iter().filter(|w|apphost::installed().iter().any(|a|a.manifest.window=="native" && a.manifest.wayland_app_id==w.app_id)).cloned().collect();
+        desk.native_windows=windows.iter().filter(|w|apphost::installed().iter().any(|a|(a.manifest.window=="native" && a.manifest.wayland_app_id==w.app_id) || (direct.contains(&a.manifest.id) && a.manifest.id==w.app_id))).cloned().collect();
         let windows:Vec<_>=windows.into_iter().filter(|w|!w.app_id.starts_with("is.olibuijr.bifrost.") && !desk.native_windows.iter().any(|n|n.id==w.id)).collect();
         desk.linux_apps.retain(|app|windows.iter().any(|w|w.app_id==app.app_id)||desk.dock_preferences.pinned.contains(&format!("linux:{}",app.app_id)));
         for key in &desk.dock_preferences.pinned{if let Some(id)=key.strip_prefix("linux:"){if !desk.linux_apps.iter().any(|a|a.app_id==id){desk.linux_apps.push(LinuxDockApp{app_id:id.into(),windows:vec![],icon:linux_icon(id)});}}}
@@ -807,6 +810,34 @@ impl Shell {
         #[cfg(not(feature="desktop-wayland"))]Err(std::io::Error::other("Desktop Wayland is unavailable"))
     }
     /// Index of the front desktop window, for the Window menu and keyboard tiling.
+    /// Whether the window server lists a window for the app in `slot`: a direct app by its manifest id, a native app
+    /// by its Wayland app id (the Dock's running dot).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn foreign_running(&self, slot: usize) -> bool {
+        let (Some(desk), registered) = (self.desk.as_ref(), apphost::installed()) else { return false };
+        let Some(app) = registered.get(slot) else { return false };
+        let direct = self.ext.get(slot).and_then(Option::as_ref).is_some_and(|h| h.running() && h.route() == apphost::Route::Direct);
+        let id = if direct { app.manifest.id.as_str() } else { app.manifest.wayland_app_id.as_str() };
+        desk.native_windows.iter().any(|w| w.app_id == id)
+    }
+
+    /// Opens a direct app's window: the window server owns it, so the shell starts the app if needed and raises
+    /// its toplevel, and makes no window of its own. True when handled; false sends the open down the window path
+    /// (the app is on the shared-memory path, or the launch decision is not the direct one).
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_direct_open(&mut self, slot: usize) -> bool {
+        if apphost::launch_route() != apphost::Route::Direct { return false; }
+        self.ext_open(slot);
+        if let Some(h) = self.ext.get(slot).and_then(Option::as_ref) {
+            if h.route() == apphost::Route::Shm { return false; }
+        }
+        let id = apphost::installed().get(slot).map(|a| a.manifest.id.clone()).unwrap_or_default();
+        let toplevel = self.desk.as_ref().and_then(|d| apphost::foreign_window_of(d.native_windows.iter().map(|w| (w.id, w.app_id.as_str())), &id));
+        if let (Some(toplevel), Some(d)) = (toplevel, self.desk.as_mut()) { d.activate.push(toplevel); }
+        self.dirty = true;
+        true
+    }
+
     fn desk_front_index(&self) -> Option<usize> {
         self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
     }
@@ -947,7 +978,7 @@ impl Shell {
         let desk=self.desk.as_ref().unwrap();
         let mut list:Vec<usize>=desk.dock_preferences.pinned.iter().filter_map(|key|apps().iter().position(|a|a.icon==key)).collect();
         for (i,a) in apps().iter().enumerate(){#[cfg_attr(not(feature="desktop-wayland"),allow(unused_mut))] let mut running=desk.index_of(a.id).is_some();
-        #[cfg(feature="desktop-wayland")]if let AppId::External(slot)=a.id {running|=apphost::installed().get(slot as usize).is_some_and(|p|desk.native_windows.iter().any(|w|w.app_id==p.manifest.wayland_app_id));}
+        #[cfg(feature="desktop-wayland")]if let AppId::External(slot)=a.id {running|=self.foreign_running(slot as usize);}
         if running&&!list.contains(&i){list.push(i);}}
         #[cfg(feature = "desktop-wayland")]
         list.extend((0..self.desk.as_ref().unwrap().linux_apps.len()).map(|i|apps().len()+1+i));
@@ -1023,6 +1054,8 @@ impl Shell {
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
         if let Some(k)=apps().iter().position(|a|a.id==app){self.dock_start_bounce(k,t);}
+        #[cfg(feature = "desktop-wayland")]
+        if let AppId::External(slot)=app { if self.desk_direct_open(slot as usize) { return; } }
         #[cfg(feature = "desktop-wayland")]
         if app == AppId::Browser {
             if let Some(slot)=apphost::slot_of("is.olibuijr.browser.desktop") {self.desk_native_open(AppId::External(slot as u8));return;}
@@ -1137,6 +1170,8 @@ impl Shell {
     }
 
     pub(super) fn desk_close_app(&mut self, app: AppId) {
+        #[cfg(feature = "desktop-wayland")]
+        if let AppId::External(slot)=app { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.route()==apphost::Route::Direct) { self.ext_close(slot as usize); return; } }
         // the close effect starts while the window is still listed; its last frame is kept for the effect
         let t = self.last_input;
         self.desk_fx_start(app, FxCall::Close, t);
@@ -1759,7 +1794,7 @@ impl Shell {
             }
             let id = apps()[i].id;
             #[cfg(feature = "desktop-wayland")]
-            let native_running=if let AppId::External(slot)=id {apphost::installed().get(slot as usize).is_some_and(|a|desk.native_windows.iter().any(|w|w.app_id==a.manifest.wayland_app_id))} else {false};
+            let native_running=if let AppId::External(slot)=id {self.foreign_running(slot as usize)} else {false};
             #[cfg(not(feature = "desktop-wayland"))]
             let native_running=false;
             let background = matches!(id, AppId::External(slot) if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()));
