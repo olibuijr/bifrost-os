@@ -5,6 +5,7 @@ edition = "2021"
 description = "Layer tree, transactions and animations shared by the SDK and the window server (docs/graphics-architecture.md)"
 
 [dependencies]
+bifrost-wire = { path = "../wire" }
 # Wayland bindings for bifrost_layer_v1 (protocol/bifrost-layer-v1.xml), generated with wayland-scanner.
 # The model (layer, tree, animation, codec) stays std only; `client` is for the SDK, `server` for bifrost-wm.
 wayland-scanner = { version = "0.31", optional = true }

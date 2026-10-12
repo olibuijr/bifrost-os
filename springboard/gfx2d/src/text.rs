@@ -21,6 +21,7 @@ use bifrost_render::canvas::TextRun;
 use bifrost_render::font::{Font, Style, Var};
 
 use crate::shapes::Instance;
+use crate::uploads::Uploads;
 #[cfg(test)]
 use crate::shapes::Kind;
 
@@ -232,8 +233,10 @@ pub fn placements(font: &Font<'_>, run: &TextRun) -> Vec<Placement> {
     let mut buf = [0u8; 4];
     for ch in run.text.chars() {
         let gid = font.glyph(ch);
-        let key = glyph_key(run.face, gid, ch, run.px, &run.vars);
         let (whole, q) = split_pen(pen);
+        // The quarter-pixel phase is part of the key: each phase is its own bitmap (GFX-3).
+        let mut key = glyph_key(run.face, gid, ch, run.px, &run.vars);
+        key.subpixel = q;
         out.push(Placement { ch, key, pen, subpixel: q, x: whole - PAD as i32, y: oy });
         pen += font.measure_var(ch.encode_utf8(&mut buf), run.px, &run.vars);
     }
@@ -256,6 +259,10 @@ pub struct GlyphAtlas {
     pub(crate) texture: Texture,
     packer: ShelfPacker,
     entries: HashMap<GlyphKey, AtlasEntry>,
+    /// When set, glyph bitmaps are queued in `queue` (the renderer flushes them into the frame's command buffer)
+    /// instead of being uploaded with a blocking copy each.
+    pub(crate) defer: bool,
+    pub(crate) queue: Uploads,
 }
 
 impl GlyphAtlas {
@@ -268,7 +275,7 @@ impl GlyphAtlas {
             exportable: false,
             modifiers: Vec::new(),
         })?;
-        Ok(GlyphAtlas { texture, packer: ShelfPacker::new(ATLAS_SIZE, ATLAS_SIZE), entries: HashMap::new() })
+        Ok(GlyphAtlas { texture, packer: ShelfPacker::new(ATLAS_SIZE, ATLAS_SIZE), entries: HashMap::new(), defer: false, queue: Uploads::new() })
     }
 
     /// The atlas texture, bound by the renderer for Mask instances.
@@ -307,42 +314,51 @@ impl GlyphAtlas {
     /// fit in an empty atlas is an error.
     pub fn layout(&mut self, font: &Font<'_>, run: &TextRun, color: u32, out: &mut Vec<Instance>) -> Result<u32> {
         let start = out.len();
-        let places = placements(font, run);
-        for attempt in 0..2 {
-            out.truncate(start);
-            let mut uploaded = 0;
-            let mut full = false;
-            for p in &places {
-                let entry = match self.entries.get(&p.key) {
-                    Some(e) => *e,
-                    None => {
-                        let bitmap = rasterize(font, p.ch, run.px, &run.vars, p.subpixel);
-                        match self.insert(p.key, &bitmap)? {
-                            Some(e) => {
-                                uploaded += 1;
-                                e
-                            }
-                            None => {
-                                full = true;
-                                break;
-                            }
-                        }
-                    }
-                };
-                if entry.w == 0 {
-                    continue;
-                }
-                out.push(mask_instance(p.x, p.y, &entry, color));
-            }
-            if !full {
-                return Ok(uploaded);
-            }
-            if attempt == 0 {
-                self.reset();
+        if let Some(n) = self.try_layout(font, run, color, out)? {
+            return Ok(n);
+        }
+        // Full: forget everything and lay the run out again in the empty atlas.
+        self.reset();
+        out.truncate(start);
+        match self.try_layout(font, run, color, out)? {
+            Some(n) => Ok(n),
+            None => {
+                out.truncate(start);
+                Err(GpuError::Invalid(format!("text run of {} chars does not fit the glyph atlas", run.text.chars().count())))
             }
         }
-        out.truncate(start);
-        Err(GpuError::Invalid(format!("text run of {} glyphs does not fit the glyph atlas", places.len())))
+    }
+
+    /// Like `layout` but never resets the atlas: `Ok(None)` when the atlas ran out of room (`out` is cut back to
+    /// where it started). The renderer ends the current batch, resets, and retries, so instances already emitted in
+    /// the frame never point at overwritten texels (GFX-7).
+    pub fn try_layout(&mut self, font: &Font<'_>, run: &TextRun, color: u32, out: &mut Vec<Instance>) -> Result<Option<u32>> {
+        let start = out.len();
+        let places = placements(font, run);
+        let mut uploaded = 0;
+        for p in &places {
+            let entry = match self.entries.get(&p.key) {
+                Some(e) => *e,
+                None => {
+                    let bitmap = rasterize(font, p.ch, run.px, &run.vars, p.subpixel);
+                    match self.insert(p.key, &bitmap)? {
+                        Some(e) => {
+                            uploaded += 1;
+                            e
+                        }
+                        None => {
+                            out.truncate(start);
+                            return Ok(None);
+                        }
+                    }
+                }
+            };
+            if entry.w == 0 {
+                continue;
+            }
+            out.push(mask_instance(p.x, p.y, &entry, color));
+        }
+        Ok(Some(uploaded))
     }
 
     /// Places and uploads one bitmap. `Ok(None)` when the atlas has no room left.
@@ -359,7 +375,12 @@ impl GlyphAtlas {
         let Some((x, y)) = self.packer.allocate(w, h) else {
             return Ok(None);
         };
-        self.texture.replace_region(Region { x, y, width: w, height: h }, &bitmap.a, bitmap.w)?;
+        let region = Region { x, y, width: w, height: h };
+        if self.defer {
+            self.queue.push(&self.texture, region, &bitmap.a, bitmap.w, 1)?;
+        } else {
+            self.texture.replace_region(region, &bitmap.a, bitmap.w)?;
+        }
         let entry = AtlasEntry { x, y, w, h, left: -(PAD as f32), top: 0.0 };
         self.entries.insert(key, entry);
         Ok(Some(entry))

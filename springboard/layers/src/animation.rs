@@ -454,37 +454,14 @@ impl Animation {
     }
 }
 
-/// The model value of an animatable property, when it has a `Value` kind.
+/// The model value of an animatable property, when it has a `Value` kind (one implementation: `Layer::value`).
 pub(crate) fn model_value(layer: &Layer, key: Property) -> Option<Value> {
-    Some(match key {
-        Property::Bounds => Value::Rect(layer.bounds),
-        Property::Position => Value::Point(layer.position),
-        Property::AnchorPoint => Value::Point(layer.anchor_point),
-        Property::Transform => Value::Transform(layer.transform),
-        Property::Opacity => Value::Scalar(layer.opacity),
-        Property::CornerRadius => Value::Scalar(layer.corner_radius),
-        Property::ZPosition => Value::Scalar(layer.z_position),
-        Property::BackgroundColor => Value::Color(layer.background_color),
-        Property::Shadow => Value::Shadow(layer.shadow),
-        _ => return None,
-    })
+    layer.value(key)
 }
 
 /// Writes a value into a property. Returns false when the kind does not match the property.
 pub(crate) fn set_value(layer: &mut Layer, key: Property, value: Value) -> bool {
-    match (key, value) {
-        (Property::Bounds, Value::Rect(v)) => layer.bounds = v,
-        (Property::Position, Value::Point(v)) => layer.position = v,
-        (Property::AnchorPoint, Value::Point(v)) => layer.anchor_point = v,
-        (Property::Transform, Value::Transform(v)) => layer.transform = v,
-        (Property::Opacity, Value::Scalar(v)) => layer.opacity = v.clamp(0.0, 1.0),
-        (Property::CornerRadius, Value::Scalar(v)) => layer.corner_radius = v,
-        (Property::ZPosition, Value::Scalar(v)) => layer.z_position = v,
-        (Property::BackgroundColor, Value::Color(v)) => layer.background_color = v,
-        (Property::Shadow, Value::Shadow(v)) => layer.shadow = v,
-        _ => return false,
-    }
-    true
+    layer.set_value(key, value)
 }
 
 /// One value an animation produces at a time: the property, the value, and whether it adds to the model value.

@@ -49,7 +49,7 @@ type R<T> = Result<T, DecodeError>;
 /// refuses bigger ones).
 pub fn encode(tx: &Transaction) -> Vec<u8> {
     let mut w = Writer {
-        buf: Vec::with_capacity(64 + tx.changes.len() * 24),
+        inner: bifrost_wire::Writer { buf: Vec::with_capacity(64 + tx.changes.len() * 24) },
     };
     w.bytes(MAGIC);
     w.u64(tx.seq);
@@ -58,7 +58,7 @@ pub fn encode(tx: &Transaction) -> Vec<u8> {
         w.timing_fn(function);
     });
     w.list(tx.changes.as_slice(), |w, c| w.change(c));
-    w.buf
+    w.inner.into_inner()
 }
 
 /// Decodes a transaction; `decode(&encode(tx)) == Ok(tx)` for every transaction whose ids are not 0 and whose
@@ -149,37 +149,39 @@ fn fill_mode_code(m: FillMode) -> u8 {
     }
 }
 
+/// The layer codec's writer: the scalar encodings are the shared `bifrost-wire` ones (little endian).
 struct Writer {
-    buf: Vec<u8>,
+    inner: bifrost_wire::Writer,
 }
 
 impl Writer {
+    /// Raw bytes with no length prefix (the magic).
     fn bytes(&mut self, v: &[u8]) {
-        self.buf.extend_from_slice(v);
+        self.inner.buf.extend_from_slice(v);
     }
 
     fn u8(&mut self, v: u8) {
-        self.buf.push(v);
+        self.inner.u8(v);
     }
 
     fn bool(&mut self, v: bool) {
-        self.u8(v as u8);
+        self.inner.bool(v);
     }
 
     fn u32(&mut self, v: u32) {
-        self.bytes(&v.to_le_bytes());
+        self.inner.u32(v);
     }
 
     fn u64(&mut self, v: u64) {
-        self.bytes(&v.to_le_bytes());
+        self.inner.u64(v);
     }
 
     fn f32(&mut self, v: f32) {
-        self.u32(v.to_bits());
+        self.inner.f32(v);
     }
 
     fn f64(&mut self, v: f64) {
-        self.u64(v.to_bits());
+        self.inner.f64(v);
     }
 
     fn opt<T>(&mut self, v: &Option<T>, f: impl FnOnce(&mut Self, &T)) {
@@ -506,33 +508,35 @@ impl<'a> Reader<'a> {
         Ok(s)
     }
 
-    fn array<const N: usize>(&mut self) -> R<[u8; N]> {
-        let s = self.take(N)?;
-        <[u8; N]>::try_from(s).map_err(|_| DecodeError::Truncated)
+    /// Reads one scalar with the shared `bifrost-wire` reader over exactly its `n` bytes.
+    fn wire<T, const N: usize>(&mut self, f: impl FnOnce(&mut bifrost_wire::Reader<'a>) -> Result<T, bifrost_wire::DecodeError>) -> R<T> {
+        let mut inner = bifrost_wire::Reader::new(self.take(N)?);
+        f(&mut inner).map_err(|e| match e {
+            bifrost_wire::DecodeError::Truncated => DecodeError::Truncated,
+            bifrost_wire::DecodeError::TooLong => DecodeError::TooLong,
+            bifrost_wire::DecodeError::UnknownTag(t) => DecodeError::UnknownTag(t as u8),
+            bifrost_wire::DecodeError::BadValue => DecodeError::BadValue,
+        })
     }
 
     fn u8(&mut self) -> R<u8> {
-        Ok(self.array::<1>()?[0])
+        self.wire::<u8, 1>(|r| r.u8())
     }
 
     fn bool(&mut self) -> R<bool> {
-        match self.u8()? {
-            0 => Ok(false),
-            1 => Ok(true),
-            _ => Err(DecodeError::BadValue),
-        }
+        self.wire::<bool, 1>(|r| r.bool())
     }
 
     fn u32(&mut self) -> R<u32> {
-        Ok(u32::from_le_bytes(self.array()?))
+        self.wire::<u32, 4>(|r| r.u32())
     }
 
     fn u64(&mut self) -> R<u64> {
-        Ok(u64::from_le_bytes(self.array()?))
+        self.wire::<u64, 8>(|r| r.u64())
     }
 
     fn f32(&mut self) -> R<f32> {
-        Ok(f32::from_bits(self.u32()?))
+        self.wire::<f32, 4>(|r| r.f32())
     }
 
     /// A time or other f64 that must be finite.

@@ -99,13 +99,16 @@ pub struct ImageCache {
     pub(crate) budget: usize,
     book: LruBook,
     textures: HashMap<u64, Texture>,
+    /// When set, uploads are queued in `queue` for the renderer to record into the frame's command buffer.
+    pub(crate) defer: bool,
+    pub(crate) queue: crate::uploads::Uploads,
 }
 
 impl ImageCache {
     /// A cache with `budget_bytes` of texture memory. A zero budget is refused.
     pub fn new(device: &Device, budget_bytes: usize) -> Result<ImageCache> {
         check_budget(budget_bytes)?;
-        Ok(ImageCache { device: device.clone(), budget: budget_bytes, book: LruBook::new(budget_bytes), textures: HashMap::new() })
+        Ok(ImageCache { device: device.clone(), budget: budget_bytes, book: LruBook::new(budget_bytes), textures: HashMap::new(), defer: false, queue: crate::uploads::Uploads::new() })
     }
 
     /// The texture for `image`, uploading it on first use (or when its id now names an image of another size). A
@@ -130,7 +133,7 @@ impl ImageCache {
         })?;
         let full = Region { x: 0, y: 0, width: w, height: h };
         let bytes = pixel_bytes(&image.image.px, w as usize, full);
-        tex.replace_region(full, &bytes, w as usize * 4)?;
+        self.put(&tex, full, &bytes)?;
         let cost = w as usize * h as usize * 4;
         for victim in self.book.insert(image.id, cost) {
             self.textures.remove(&victim);
@@ -150,11 +153,21 @@ impl ImageCache {
         }
         check_region(region, w, h)?;
         let bytes = pixel_bytes(&image.image.px, w as usize, region);
-        if let Some(tex) = self.textures.get(&image.id) {
-            tex.replace_region(region, &bytes, region.width as usize * 4)?;
+        if let Some(tex) = self.textures.get(&image.id).cloned() {
+            self.put(&tex, region, &bytes)?;
         }
         self.book.touch(image.id);
         Ok(())
+    }
+
+    /// Uploads (or queues, when deferred) tightly packed RGBA8 `bytes` into `region` of `tex`.
+    fn put(&mut self, tex: &Texture, region: Region, bytes: &[u8]) -> Result<()> {
+        let stride = region.width as usize * 4;
+        if self.defer {
+            self.queue.push(tex, region, bytes, stride, 4)
+        } else {
+            tex.replace_region(region, bytes, stride)
+        }
     }
 
     /// Drops the texture of `id` now. Returns whether it was resident.

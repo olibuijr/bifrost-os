@@ -15,6 +15,7 @@
 //!
 //! Owner: wave G1 agent `gfx2d-renderer`; rewritten in the lead's review to use the shapes, text and images helpers.
 
+use crate::uploads::Uploads;
 use crate::shapes::{self, Clip, Instance, Shapes, INSTANCE_BYTES};
 use bifrost_gpu::{BufferUsage, CommandBuffer, Device, LoadAction, PixelFormat, Region, RenderPassDescriptor, Result, StoreAction, Texture, TextureDescriptor, TextureUsage};
 use bifrost_render::canvas::{self, Canvas, ImageRef, RectF, Transform2D};
@@ -30,6 +31,9 @@ pub struct FrameStats {
     pub instances: u32,
     pub glyphs_uploaded: u32,
     pub images_uploaded: u32,
+    /// Texture copies recorded into the command buffer (glyphs, images, path masks), batched into one staging buffer
+    /// per pass.
+    pub uploads: u32,
     /// CPU time spent encoding, in microseconds.
     pub encode_us: u32,
 }
@@ -53,6 +57,21 @@ pub struct Renderer {
     shapes_format: PixelFormat,
     /// Shape pipelines for other target formats, made on first use.
     extra_shapes: Vec<(PixelFormat, Shapes)>,
+}
+
+/// The instances, texture keys, frame-only textures and pending uploads of one pass.
+#[derive(Default)]
+struct Segment {
+    instances: Vec<Instance>,
+    keys: Vec<Tex>,
+    temps: Vec<Texture>,
+    uploads: Uploads,
+}
+
+impl Segment {
+    fn with_capacity(n: usize) -> Segment {
+        Segment { instances: Vec::with_capacity(n), keys: Vec::with_capacity(n), temps: Vec::new(), uploads: Uploads::new() }
+    }
 }
 
 /// The texture an instance samples, as a batching key.
@@ -79,7 +98,11 @@ impl Renderer {
         let shapes_format = PixelFormat::Bgra8Unorm;
         let shapes = Shapes::new(device, shapes_format)?;
         let text = crate::text::GlyphAtlas::new(device)?;
-        let images = crate::images::ImageCache::new(device, IMAGE_BUDGET_BYTES)?;
+        let mut text = text;
+        let mut images = crate::images::ImageCache::new(device, IMAGE_BUDGET_BYTES)?;
+        // Uploads are recorded into each frame's command buffer, not done with a blocking copy each.
+        text.defer = true;
+        images.defer = true;
         Ok(Renderer { device: device.clone(), shapes, text, images, shapes_format, extra_shapes: Vec::new() })
     }
 
@@ -91,12 +114,18 @@ impl Renderer {
         let (w, h) = (target.width(), target.height());
         let mut walk = Walk::new(RectF::new(0.0, 0.0, w as f32, h as f32));
         let mut stats = FrameStats { ops: list.ops.len() as u32, ..FrameStats::default() };
-        let mut instances: Vec<Instance> = Vec::with_capacity(list.ops.len());
-        let mut keys: Vec<Tex> = Vec::with_capacity(list.ops.len());
-        let mut temps: Vec<Texture> = Vec::new();
+        // The frame is cut into segments when the glyph atlas fills up part way: each segment is its own pass, so the
+        // atlas can be reset between them without earlier instances pointing at overwritten texels (GFX-7).
+        let mut segs: Vec<Segment> = Vec::new();
+        let mut cur = Segment::with_capacity(list.ops.len());
+        // Anything left queued by a frame that failed half way is recorded first, so no cache entry stays unpainted.
+        cur.uploads.append(&mut self.text.queue);
+        cur.uploads.append(&mut self.images.queue);
+        let mut atlas_fresh = false;
 
         if self.text.fill_ratio() >= ATLAS_RESET_FILL {
             self.text.reset();
+            atlas_fresh = true;
         }
 
         for (i, op) in list.ops.iter().enumerate() {
@@ -119,17 +148,37 @@ impl Renderer {
                     let (xf, clip, opacity) = (walk.transform(), walk.clip(), walk.opacity());
                     match op {
                         Op::Text { run, color } => {
-                            let start = instances.len();
-                            let atlas = &mut self.text;
-                            let uploaded = canvas::with_face(run.face, |font| atlas.layout(font, run, *color, &mut instances));
-                            match uploaded {
-                                Some(Ok(n)) => stats.glyphs_uploaded += n,
-                                Some(Err(e)) => return Err(e),
-                                None => {}
+                            let mut start = cur.instances.len();
+                            loop {
+                                let atlas = &mut self.text;
+                                let laid = canvas::with_face(run.face, |font| atlas.try_layout(font, run, *color, &mut cur.instances));
+                                match laid {
+                                    Some(Ok(Some(n))) => {
+                                        stats.glyphs_uploaded += n;
+                                        atlas_fresh = false;
+                                    }
+                                    Some(Ok(None)) => {
+                                        if atlas_fresh {
+                                            return Err(bifrost_gpu::Error::Invalid(format!("text run of {} chars does not fit the glyph atlas", run.text.chars().count())));
+                                        }
+                                        // Full: close this segment (its glyphs stay valid for its own pass), start over.
+                                        cur.uploads.append(&mut self.text.queue);
+                                        cur.uploads.append(&mut self.images.queue);
+                                        let next = Segment::with_capacity(list.ops.len().saturating_sub(i));
+                                        segs.push(std::mem::replace(&mut cur, next));
+                                        self.text.reset();
+                                        atlas_fresh = true;
+                                        start = 0;
+                                        continue;
+                                    }
+                                    Some(Err(e)) => return Err(e),
+                                    None => {}
+                                }
+                                break;
                             }
-                            for inst in &mut instances[start..] {
+                            for inst in &mut cur.instances[start..] {
                                 shapes::restate(inst, xf, clip, opacity);
-                                keys.push(Tex::Atlas);
+                                cur.keys.push(Tex::Atlas);
                             }
                         }
                         Op::Image { id, .. } | Op::ImageTinted { id, .. } => {
@@ -140,30 +189,30 @@ impl Renderer {
                                 stats.images_uploaded += 1;
                             }
                             for inst in shapes::op_instances(op, xf, clip, opacity) {
-                                instances.push(inst);
-                                keys.push(Tex::Image(*id));
+                                cur.instances.push(inst);
+                                cur.keys.push(Tex::Image(*id));
                             }
                         }
                         Op::Path { path, paint, color } => {
                             let Some(b) = list.bounds.get(i).copied().and_then(|b| intersect(b, walk.full)) else { continue };
                             let Some((img, dst)) = rasterize_path(path, *paint, *color, xf, b) else { continue };
-                            let tex = upload_temp(&self.device, &img)?;
-                            temps.push(tex);
+                            let tex = upload_temp(&self.device, &img, &mut cur.uploads)?;
+                            cur.temps.push(tex);
                             let mut inst = shapes::image(dst, 0.0, [0.0, 0.0, 1.0, 1.0], opacity, Transform2D::IDENTITY, clip);
                             inst.color[3] = opacity.clamp(0.0, 1.0);
-                            instances.push(inst);
-                            keys.push(Tex::Temp(temps.len() - 1));
+                            cur.instances.push(inst);
+                            cur.keys.push(Tex::Temp(cur.temps.len() - 1));
                         }
                         Op::Material { r, radius, style } => {
                             for inst in shapes::op_instances(&Op::FillRRect { r: *r, radius: *radius, color: style.tint }, xf, clip, opacity) {
-                                instances.push(inst);
-                                keys.push(Tex::None);
+                                cur.instances.push(inst);
+                                cur.keys.push(Tex::None);
                             }
                         }
                         _ => {
                             for inst in shapes::op_instances(op, xf, clip, opacity) {
-                                instances.push(inst);
-                                keys.push(Tex::None);
+                                cur.instances.push(inst);
+                                cur.keys.push(Tex::None);
                             }
                         }
                     }
@@ -171,39 +220,62 @@ impl Renderer {
             }
         }
 
-        let runs = batch_runs(&keys);
+        cur.uploads.append(&mut self.text.queue);
+        cur.uploads.append(&mut self.images.queue);
+        segs.push(cur);
+
         let pipeline_shapes = self.shapes_for(target.format())?;
         let (load, render_area) = match damage {
             Some(d) => (LoadAction::Load, Some(damage_region(d, w, h))),
             None => (LoadAction::Clear([0.0; 4]), None),
         };
-        let pass = RenderPassDescriptor { target: target.clone(), load, store: StoreAction::Store, render_area };
-        let mut enc = cb.render_encoder(&pass)?;
-        if !instances.is_empty() {
-            let mut bytes = Vec::with_capacity(instances.len() * INSTANCE_BYTES);
-            shapes::encode(&instances, &mut bytes);
-            let buffer = self.device.new_buffer(bytes.len(), BufferUsage::VERTEX | BufferUsage::MAPPED)?;
-            buffer.write(0, &bytes)?;
-            for run in &runs {
-                let tex = match run.tex {
-                    Tex::None | Tex::Atlas => self.text.texture().clone(),
-                    Tex::Image(id) => match self.images.texture(id) {
-                        Some(t) => t,
-                        None => continue,
-                    },
-                    Tex::Temp(i) => temps[i].clone(),
-                };
-                let shapes = match pipeline_shapes {
-                    None => &self.shapes,
-                    Some(i) => &self.extra_shapes[i].1,
-                };
-                shapes.draw(&mut enc, &buffer, run.first, run.count, (w, h), &tex);
-                stats.draws += 1;
+        for (si, seg) in segs.iter_mut().enumerate() {
+            // Uploads are recorded before the pass; every texture the pass samples is moved to its sampled layout
+            // here too, since a layout change cannot be recorded inside a pass.
+            stats.uploads += seg.uploads.flush(&self.device, cb)? as u32;
+            if si > 0 && seg.instances.is_empty() {
+                continue;
             }
+            let runs = batch_runs(&seg.keys);
+            cb.prepare_sampled(self.text.texture());
+            for run in &runs {
+                if let Tex::Image(id) = run.tex {
+                    if let Some(t) = self.images.texture(id) {
+                        cb.prepare_sampled(&t);
+                    }
+                }
+            }
+            for t in &seg.temps {
+                cb.prepare_sampled(t);
+            }
+            let pass = RenderPassDescriptor { target: target.clone(), load: if si == 0 { load } else { LoadAction::Load }, store: StoreAction::Store, render_area };
+            let mut enc = cb.render_encoder(&pass)?;
+            if !seg.instances.is_empty() {
+                let mut bytes = Vec::with_capacity(seg.instances.len() * INSTANCE_BYTES);
+                shapes::encode(&seg.instances, &mut bytes);
+                let buffer = self.device.new_buffer(bytes.len(), BufferUsage::VERTEX | BufferUsage::MAPPED)?;
+                buffer.write(0, &bytes)?;
+                for run in &runs {
+                    let tex = match run.tex {
+                        Tex::None | Tex::Atlas => self.text.texture().clone(),
+                        Tex::Image(id) => match self.images.texture(id) {
+                            Some(t) => t,
+                            None => continue,
+                        },
+                        Tex::Temp(i) => seg.temps[i].clone(),
+                    };
+                    let shapes = match pipeline_shapes {
+                        None => &self.shapes,
+                        Some(i) => &self.extra_shapes[i].1,
+                    };
+                    shapes.draw(&mut enc, &buffer, run.first, run.count, (w, h), &tex);
+                    stats.draws += 1;
+                }
+            }
+            enc.end();
+            stats.instances += seg.instances.len() as u32;
         }
-        enc.end();
 
-        stats.instances = instances.len() as u32;
         stats.encode_us = started.elapsed().as_micros().min(u32::MAX as u128) as u32;
         Ok(stats)
     }
@@ -245,11 +317,11 @@ pub(crate) fn rasterize_path(path: &canvas::PathData, paint: canvas::PathPaint, 
 }
 
 /// Uploads a frame-only texture (kept alive by the command buffer that samples it).
-fn upload_temp(device: &Device, img: &Image) -> Result<Texture> {
+fn upload_temp(device: &Device, img: &Image, uploads: &mut Uploads) -> Result<Texture> {
     let (w, h) = (img.w as u32, img.h as u32);
     let tex = device.new_texture(&TextureDescriptor { width: w, height: h, format: PixelFormat::Rgba8Unorm, usage: TextureUsage::SAMPLED | TextureUsage::COPY_DST, exportable: false, modifiers: Vec::new() })?;
     let bytes: Vec<u8> = img.px.iter().flat_map(|p| p.to_le_bytes()).collect();
-    tex.replace_region(Region { x: 0, y: 0, width: w, height: h }, &bytes, w as usize * 4)?;
+    uploads.push(&tex, Region { x: 0, y: 0, width: w, height: h }, &bytes, w as usize * 4, 4)?;
     Ok(tex)
 }
 
