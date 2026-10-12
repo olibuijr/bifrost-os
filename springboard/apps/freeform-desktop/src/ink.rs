@@ -94,6 +94,39 @@ pub fn nudge(dx: f32, dy: f32) -> AffineTransform {
     AffineTransform::translate(dx, dy)
 }
 
+/// Whole-number factor for a crisp export: how many device pixels the display has per canvas pixel. A display that
+/// is no denser than the canvas gives 1; the factor is capped at 4 so a huge export stays bounded.
+pub fn export_factor(backing: f32, ui_s: f32) -> u32 {
+    if !(backing > 0.0) || !(ui_s > 0.0) {
+        return 1;
+    }
+    (backing / ui_s).round().clamp(1.0, 4.0) as u32
+}
+
+/// Margin around a copied drawing, in canvas pixels per point of `scale`: the widest ink reaches 16 points from its
+/// centre line.
+const COPY_MARGIN_PT: f32 = 16.0;
+
+/// A PNG of the strokes alone, cropped to their box on paper, at `scale` pixels per point. An empty drawing gives a
+/// one-pixel paper PNG.
+pub fn render_png(drawing: &Drawing, scale: f32) -> Vec<u8> {
+    use bifrost_app::controls::affine::AffineTransform as T;
+    let paper = bifrost_app::kit::ui::WHITE;
+    let Some(b) = drawing.bounds() else {
+        return springboard::pngenc::encode_rgb(1, 1, &[paper]);
+    };
+    let pad = COPY_MARGIN_PT * scale;
+    let w = (b.w + 2.0 * pad).ceil().max(1.0) as usize;
+    let h = (b.h + 2.0 * pad).ceil().max(1.0) as usize;
+    let mut moved = drawing.clone();
+    moved.transform(T::translate(pad - b.x, pad - b.y));
+    let mut px = vec![paper; w * h];
+    for s in moved.strokes() {
+        paint_stroke(&mut px, w, h, s, scale);
+    }
+    springboard::pngenc::encode_rgb(w, h, &px)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,5 +246,46 @@ mod tests {
         let mut s = stroke(InkKind::Pen, BLACK, 2.0, &[(1.0, 1.0)]);
         s.transform(nudge(4.0, -1.0));
         assert_eq!((s.points[0].x, s.points[0].y), (5.0, 0.0));
+    }
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+    use bifrost_app::controls::drawing::StrokePoint;
+
+    /// (width, height) from the IHDR chunk of a PNG.
+    fn png_size(png: &[u8]) -> (u32, u32) {
+        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A], "a PNG signature");
+        let w = u32::from_be_bytes([png[16], png[17], png[18], png[19]]);
+        let h = u32::from_be_bytes([png[20], png[21], png[22], png[23]]);
+        (w, h)
+    }
+
+    #[test]
+    fn the_export_factor_follows_the_display_density_in_whole_steps() {
+        assert_eq!(export_factor(2.0, 1.0), 2);
+        assert_eq!(export_factor(1.0, 1.0), 1);
+        assert_eq!(export_factor(1.4, 1.0), 1, "a little denser rounds down to the canvas");
+        assert_eq!(export_factor(8.0, 1.0), 4, "capped at 4");
+        assert_eq!(export_factor(0.0, 1.0), 1, "no screen known: no change");
+        assert_eq!(export_factor(2.0, 0.0), 1);
+    }
+
+    #[test]
+    fn a_copied_drawing_renders_a_png_cropped_to_its_strokes_with_a_margin() {
+        let line = Stroke {
+            ink: Ink { kind: InkKind::Pen, color: 0xFF00_0000, width: 2.0 },
+            points: vec![StrokePoint::at(100.0, 100.0), StrokePoint::at(140.0, 100.0)],
+        };
+        let png = render_png(&Drawing::from_strokes(vec![line]), 1.0);
+        let (w, h) = png_size(&png);
+        assert_eq!(w, (40.0 + 2.0 * COPY_MARGIN_PT).ceil() as u32);
+        assert_eq!(h, (2.0 * COPY_MARGIN_PT).ceil() as u32, "a flat line only needs the margins");
+    }
+
+    #[test]
+    fn an_empty_drawing_still_gives_a_valid_png() {
+        assert_eq!(png_size(&render_png(&Drawing::new(), 1.0)), (1, 1));
     }
 }

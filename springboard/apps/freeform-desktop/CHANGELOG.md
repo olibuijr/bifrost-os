@@ -6,6 +6,10 @@
 - New Rectangle and Oval tools: drag out a shape and it is drawn as a closed outline in the current colour.
 - Every stroke is now kept as a stroke, not only as pixels, so the lasso can move and delete drawn strokes. Undo restores both the picture and its strokes.
 - The toolbar shows the new tools in the same segmented group as Pen, Marker and Eraser.
+- The pointer changes with the tool: a crosshair for the pen, marker, rectangle and oval, a poof for the eraser, an arrow for the lasso and the toolbar, and open and closed hands over a selection while it is moved.
+- New Copy button (next to Delete, enabled with a selection): copies the selected strokes to the clipboard as a PNG, and as Freeform's own stroke data for later use.
+- Save to Photos writes the picture at the display's density, so on a sharp screen the PNG is not soft.
+- The cursor, pasteboard and screens services are used when the system has them. Without them the pointer stays an arrow, Copy does nothing, and the export keeps the canvas size.
 
 ## 1.2.2
 
