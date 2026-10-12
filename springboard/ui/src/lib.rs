@@ -853,6 +853,7 @@ pub mod ax;
 pub mod text_marker;
 pub mod speech;
 pub mod recognition;
+pub mod recognition_task;
 pub mod voice_activity;
 pub mod speech_assets;
 pub mod voice_commands;
