@@ -121,6 +121,9 @@ Then one 450 ms fade, and the `desktop-faded` mark. No partial desktop is ever s
 
 - Kernel: `quiet loglevel=3`, deferred framebuffer-console takeover kept on, `vt.global_cursor_default=0`; initramfs
   and Bootweave log to the journal only.
+- Not text related but on every command line (installer `boot.cfg`, the loader's `DEFAULT_CMDLINE`, the ISO line):
+  `threadirqs`, so the audio server can raise the sound card's IRQ thread to SCHED_FIFO
+  (`docs/audio/21-lowest-latency-path.md`). The verbose transform keeps it.
 - Failure screens drawn with `bootframe`: rollback in progress, "BifrOSt could not start" with Restart and Recovery,
   and after a kernel panic the next boot says the computer restarted because of a problem (pstore). Never a console.
 - A held key in the loader (Shift) shows the boot options in the boot frame's style; a held key combination (Ctrl+V)

@@ -9,10 +9,12 @@ use alloc::vec::Vec;
 
 /// The baseline when no boot.cfg or cmdline.txt is readable: the same text-free flags the installer writes
 /// (`springboard/src/installer/plan.rs`, `cmdline_with`). `splash` is gone: nothing draws a boot splash through the
-/// kernel any more, the loader's frame is the only picture.
+/// kernel any more, the loader's frame is the only picture. `threadirqs` runs interrupt handlers as kernel threads,
+/// so the audio server can raise the sound card's IRQ thread to SCHED_FIFO (docs/audio/21-lowest-latency-path.md).
+/// It is not a text-free key, so a verbose boot keeps it.
 pub const DEFAULT_CMDLINE: &str = "initrd=\\arch\\boot\\x86_64\\initramfs-linux.img quiet loglevel=3 \
     systemd.show_status=false rd.systemd.show_status=false udev.log_level=3 rd.udev.log_level=3 \
-    systemd.log_target=journal vt.global_cursor_default=0";
+    systemd.log_target=journal vt.global_cursor_default=0 threadirqs";
 
 /// Tokens the verbose transform removes before it adds its own (every token the baseline sets).
 const TEXT_FREE_KEYS: &[&str] = &[
@@ -63,6 +65,16 @@ mod tests {
         assert!(tokens.contains(&"systemd.log_target=journal"));
         assert!(tokens.contains(&"vt.global_cursor_default=0"));
         assert!(!tokens.contains(&"splash"));
+    }
+
+    #[test]
+    fn default_runs_threaded_irqs_and_a_verbose_boot_keeps_them() {
+        let count = |line: &str| line.split_whitespace().filter(|t| *t == "threadirqs").count();
+        assert_eq!(count(DEFAULT_CMDLINE), 1);
+        assert!(!is_text_free_token("threadirqs"));
+        let out = verbose(DEFAULT_CMDLINE);
+        assert_eq!(count(&out), 1);
+        assert_eq!(out, format!("initrd=\\arch\\boot\\x86_64\\initramfs-linux.img threadirqs {VERBOSE_TOKENS}"));
     }
 
     #[test]

@@ -157,12 +157,13 @@ pub fn account_file(full_name: &str, username: &str) -> String {
 /// SPRINGBOARD_AUDIO_CPUS to pin itself there, or it would run on the other cores.
 pub const AUDIO_CORE: Option<&str> = None;
 
-/// Installed kernel command line. i915 framebuffer compression and PSR are off: on Skylake (HD 530) they produced
-/// sheared, repeated stripes across the top of the EFI frame and the first frames after the handoff.
-/// threadirqs (B1) runs interrupt handlers as kernel threads, so the sound card and xHCI IRQ threads can be
-/// raised above the rest of the system with chrt.
 pub const INITRAMFS_HOOKS: &str = "HOOKS=(base udev autodetect microcode modconf kms keyboard block filesystems bifrost-mounts)";
 
+/// Installed kernel command line (boot.cfg). i915 framebuffer compression and PSR are off: on Skylake (HD 530) they
+/// produced sheared, repeated stripes across the top of the EFI frame and the first frames after the handoff.
+/// threadirqs (B1) runs interrupt handlers as kernel threads, so the sound card and xHCI IRQ threads can be
+/// raised above the rest of the system (docs/audio/21-lowest-latency-path.md); the loader's fallback
+/// (`bootweave/efi/src/cmdline.rs`, `DEFAULT_CMDLINE`) and the ISO line (`tools/prepare-mkarchiso.py`) carry it too.
 /// An empty systemd.tty.rows.console= makes PID 1 skip its ANSI size query on /dev/console. Nothing answers
 /// that query behind the boot frame, so PID 1 otherwise waits out its 333 ms reply timeout every boot.
 pub fn cmdline_txt(root_uuid: &str) -> String {
@@ -805,6 +806,7 @@ mod tests {
         assert!(!c.contains("plymouth") && !c.contains(" splash"));
         assert!(!INITRAMFS_HOOKS.contains("systemd") && !INITRAMFS_HOOKS.contains("fsck") && INITRAMFS_HOOKS.contains(" kms "));
         assert!(c.contains(" threadirqs") && !c.contains("isolcpus"));
+        assert_eq!(c.split_whitespace().filter(|t| *t == "threadirqs").count(), 1, "threaded IRQs for the audio IRQ thread");
         assert!(c.contains(" systemd.tty.rows.console= "));
         // Text-free baseline (docs/boot-architecture.md): every console log level and status line off.
         for flag in ["quiet", "loglevel=3", "udev.log_level=3", "rd.udev.log_level=3", "systemd.show_status=false", "rd.systemd.show_status=false", "systemd.log_target=journal", "vt.global_cursor_default=0"] {
