@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- Paper tape: the calculations in the history sidebar can be copied as a tape. Copy Tape sits at the left of the
+  bottom row of the sidebar, next to Clear History. The tape lists the calculations oldest first, each with its
+  result on the line below, right-aligned like an adding machine's printout.
+- The tape is plain text on the shared clipboard, so it pastes into any app. Numbers follow the calculator's
+  language (a decimal comma when Icelandic is chosen).
+- Copy Tape is greyed out when the history is empty, and is published as a named control for accessibility.
+
 ## 1.4.0 — 2026-10-12
 
 - New Convert mode: a Convert segment in the toolbar, next to Basic and Scientific. Pick a category (Length, Mass,
