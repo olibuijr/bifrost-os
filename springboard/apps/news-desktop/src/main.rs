@@ -8,9 +8,12 @@ mod services;
 mod wire;
 
 use bifrost_app::kit::{Damage, Event, Surface};
-use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::sync::Arc;
+
+/// Edit > Translate Article: translates the open article (see `news::News::translate`).
+const MENU_TRANSLATE: u32 = 1;
 
 struct NewsApp {
     news: Option<news::News>,
@@ -93,6 +96,28 @@ impl App for NewsApp {
             }
             ticked | pumped
         })
+    }
+
+    /// One item in the shared Edit menu, enabled while an article is open.
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let open = self.news.as_ref().is_some_and(|n| n.can_translate());
+        vec![AppMenu {
+            title: "Edit".into(),
+            items: vec![AppMenuItem::new(MENU_TRANSLATE, "Translate Article").enabled(open)],
+        }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id != MENU_TRANSLATE {
+            return false;
+        }
+        match &mut self.news {
+            Some(n) if n.can_translate() => {
+                n.translate(&ctx.ui);
+                true
+            }
+            _ => false,
+        }
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {

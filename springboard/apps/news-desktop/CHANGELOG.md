@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.3.0 — 2026-10-12
+## 1.4.0 — 2026-10-12
+
+- Translate Article: Edit > Translate Article translates the open article's title and preview into the other of English and Icelandic. It is greyed out until an article is open. BifrOSt does not ship translation language packs yet, so for now News says that the languages are not installed on this PC; articles in other languages say that the source language is not supported.
+- The reader's background is the content colour (white in Light, dark grey in Dark) instead of the pure black used for the window's frame.
 
 - Reading List: a new Reading List row in the source list. The toolbar button saves the open article to it (or removes it again); the list is kept in the app's data folder and survives a restart. Pages without a web address cannot be saved and show the button dimmed.
 - Each article shows its language (for example Icelandic or English), word count and reading time under the source and date. The language is only shown when the text has recognisable letters.
