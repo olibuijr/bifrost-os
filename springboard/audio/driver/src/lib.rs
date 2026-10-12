@@ -126,6 +126,17 @@ pub trait DeviceIo: Send {
     fn latency(&self) -> Latency;
     /// The physical formats of the open streams (input, output).
     fn physical_formats(&self) -> (Option<StreamFormat>, Option<StreamFormat>);
+    /// Hardware sample rate over the nominal rate, as the driver's DLL estimates it (1.0 when it has no estimate).
+    /// Added by task 04 so the server can publish the rate scalar of the zero timestamp.
+    fn rate_scalar(&self) -> f64 {
+        1.0
+    }
+    /// The predicted host time (ns, `CLOCK_MONOTONIC_RAW`) at which `hw_frames` is played or captured, from the
+    /// driver's DLL; `None` until it has locked on. The server arms its cycle timer from this.
+    fn host_time_of(&self, hw_frames: u64) -> Option<u64> {
+        let _ = hw_frames;
+        None
+    }
 }
 
 /// A driver with devices on a manual clock: tests advance time with `advance` and every device's hardware pointer
