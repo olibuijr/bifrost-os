@@ -211,7 +211,7 @@ pub const TRAFFIC_RIM: u32 = pack(0, 0, 0, 60);
 /// The close, minimise and zoom glyphs shown while the pointer is over the traffic lights.
 pub const TRAFFIC_GLYPH: u32 = pack(0, 0, 0, 190);
 /// Desktop window corner radius, in pt.
-pub const WINDOW_RADIUS_PT: f32 = 10.0;
+pub const WINDOW_RADIUS_PT: f32 = 17.0; // = prefs_layout::m::WINDOW_RADIUS (owner decision 2026-10-09)
 /// Desktop menu and popup corner radius, in pt.
 pub const MENU_RADIUS_PT: f32 = 14.0;
 pub const FIELD_FILL: u32 = pack(58, 58, 60, 255); // search/address field on dark bars

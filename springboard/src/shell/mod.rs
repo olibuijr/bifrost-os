@@ -623,11 +623,15 @@ pub struct Shell {
     bar_backdrop:std::cell::RefCell<Option<((usize,usize,usize),Image)>>,
     /// Rendered strings of the desktop chrome (menu bar, menus, window titles, dock label), drawn every frame.
     chrome_text:std::cell::RefCell<bifrost_render::cache::TextCache>,
+    /// Blurred menu-bar label shadows, keyed by (text, size, weight, blur radius): blurred once, not every frame.
+    bar_shadows:std::cell::RefCell<std::collections::HashMap<(String,u32,std::mem::Discriminant<Weight>,usize),Image>>,
     /// what the last desktop frame drew outside the transparent content layer (GPU presenter only):
     /// the next desktop frame damages these and its own instead of the whole frame
     desk_regions:Option<Vec<(i32,i32,i32,i32)>>,
     /// set while a partial GPU desktop frame draws: the only rectangles the wallpaper layer clears
     desk_clear:Option<Vec<(i32,i32,i32,i32)>>,
+    /// A full desktop frame has been drawn since the last frame of any other screen (the HUD-only fast path needs it).
+    desk_drawn:bool,
     desktop_context:Option<desktop_bar::ContextMenu>,
     /// the open or save panel an app asked for (`docpanel`), shown as `desktop_menu = Document`
     #[cfg(feature = "desktop-wayland")]
@@ -853,7 +857,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:Default::default(),desk_regions:None,desk_clear:None,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:Default::default(),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             multi: None,
@@ -1706,9 +1710,6 @@ impl Shell {
         }
     }
 
-    /// Opens Search from the Today View's search bar (wired by the shell lead).
-    fn open_quicksearch(&mut self) {}
-
     /// Opens Deildu on the detail screen of the title the Today View remembered.
     fn open_deildu(&mut self, played: &Played, t: f64) {
         self.ensure_deildu();
@@ -1722,7 +1723,7 @@ impl Shell {
     /// Acts on what a tap on the Today page asked for.
     fn act(&mut self, action: Action, t: f64) {
         match action {
-            Action::OpenQuickSearch => self.open_quicksearch(),
+            Action::OpenQuickSearch => self.quicksearch_show(t),
             Action::OpenCalendar if self.screen == Screen::Lock => {}
             Action::OpenCalendar => {
                 if let Some(i) = apphost::slot_of("is.olibuijr.calendar") {
@@ -1748,6 +1749,7 @@ impl Shell {
     /// Idle trim (Snow Leopard): drops rebuildable caches before the heap is handed back.
     pub fn trim_caches(&mut self) {
         self.chrome_text.borrow_mut().clear();
+        self.bar_shadows.borrow_mut().clear();
         if bifrost_render::glass::gpu() {
             *self.bar_backdrop.borrow_mut() = None;
         }
@@ -2792,7 +2794,7 @@ impl Shell {
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.assistive_visible() && !self.quick_look.is_visible()
-            && self.drawn != Drawn::Nothing && self.retain_wayland_windows() {
+            && self.desk_drawn && self.retain_wayland_windows() {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
             let bottom=((y+h).ceil() as usize+1).min(s.h);
@@ -2803,6 +2805,7 @@ impl Shell {
             return &self.damage;
         }
         let prev_regions = self.desk_regions.take();
+        self.desk_drawn = false;
         if self.draw_turn(s, t) {
             damage.all();
             self.drawn = Drawn::App;
@@ -2966,6 +2969,7 @@ impl Shell {
                     damage.all();
                 }
                 self.desk_regions = now;
+                self.desk_drawn = true;
                 Drawn::Nothing
             }
             (Screen::App(_), _) if self.home_gesture.is_some() => {
@@ -4035,27 +4039,6 @@ impl Shell {
             None => {}
         }
         true
-    }
-
-    #[allow(dead_code)]
-    fn open_capture(&mut self, path: PathBuf, t: f64) {
-        if matches!(self.screen, Screen::Lock | Screen::Switcher) {
-            return;
-        }
-        self.ensure_photos();
-        if let Some(p) = &mut self.photos {
-            p.show(&self.ui, &path);
-        }
-        match self.screen {
-            Screen::Home => self.open(AppId::Photos, t),
-            Screen::App(app) if app != AppId::Photos => {
-                let frame = self.render_app_frame(app);
-                self.store_card(app, &frame);
-                self.fullscreen = false;
-                self.screen = Screen::App(AppId::Photos);
-            }
-            _ => {}
-        }
     }
 }
 

@@ -970,7 +970,7 @@ impl Shell {
             w: self.w,
             h: self.h,
             title: ui.pt(TITLE_PT).round() as i32,
-            menubar: self.layout.status_h.max(ui.pt(24.0) as i32),
+            menubar: self.desktop_bar_height() as i32,
             min_w: ui.pt(MIN_W_PT).round() as i32,
             min_h: ui.pt(MIN_H_PT).round() as i32,
             edge: ui.pt(EDGE_PT).round() as i32,
@@ -1100,11 +1100,7 @@ impl Shell {
         self.clear_notifications(app);
         self.fullscreen = false;
         self.screen = Screen::App(app);
-        if let Some(k) = apps().iter().position(|a| a.id == app) {
-            self.recent_apps.retain(|&r| r != k);
-            self.recent_apps.insert(0, k);
-            self.recent_apps.truncate(8);
-        }
+        // the phone dock's recents are not kept on the desktop: Recent Items has its own list
         self.dirty = true;
     }
 
@@ -1262,7 +1258,8 @@ impl Shell {
                 Some(vec![])
             }
             Event::Move(x, y) => {
-                let grab = self.desk.as_ref()?.grab?;
+                // a press that landed on the empty desktop has no grab: swallow the drag like its Down and Up
+                let Some(grab) = self.desk.as_ref()?.grab else { return Some(vec![]) };
                 match grab {
                     Grab::Move { dx, dy } => {
                         let i = self.desk.as_ref()?.wins.len().checked_sub(1)?;
@@ -1565,7 +1562,7 @@ impl Shell {
                 px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
                 let mut image = Image { w: w.r.w as usize, h: w.r.h as usize, px };
                 let mut local = *w; local.r.x = 0; local.r.y = 0;
-                self.draw_window(&mut Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 }, &local, Some(i) == front, &m, t);
+                self.draw_window(&mut Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 }, &local, Some(i) == front, &m, t, false);
                 if !w.maximized { clip_corners(&mut image,corner); }
                 let previous = cached.as_ref().filter(|c| c.width == image.w && c.height == image.h).map_or(&[][..], |c| c.pixels.as_ref());
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
@@ -1583,7 +1580,7 @@ impl Shell {
                 });
                 continue;
             }
-            self.draw_window(s, w, Some(i) == front, &m, t);
+            self.draw_window(s, w, Some(i) == front, &m, t, true);
         }
         #[cfg(feature = "desktop-wayland")]
         if let Some(d) = self.desk.as_mut() {
@@ -1613,13 +1610,14 @@ impl Shell {
         self.draw_perf(s);
     }
 
-    fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64) {
+    /// `shadow` is false for a window-local image: the presenter draws the shadow around it.
+    fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64, shadow: bool) {
         let ui = &self.ui;
         let r = w.r;
         let rad = if w.maximized { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
-        if !w.maximized {
+        if !w.maximized && shadow {
             let (layers, step, dy, a) = if focused { (8, 5.0, 12.0, 9) } else { (4, 4.0, 5.0, 8) };
             for k in (0..layers).rev() {
                 let g = ui.pt(step) * (k + 1) as f32;

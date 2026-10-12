@@ -1666,3 +1666,30 @@
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(1)));
     }
 
+    #[test]
+    fn work_area_starts_under_the_drawn_menu_bar() {
+        let sh = desktop_shell();
+        assert_eq!(sh.desk_metrics().menubar, sh.desktop_bar_height() as i32);
+    }
+
+    #[test]
+    fn a_drag_that_started_on_the_empty_desktop_is_swallowed() {
+        let mut sh = desktop_shell();
+        sh.desk.as_mut().unwrap().grab = None;
+        assert_eq!(sh.desk_event(Event::Move(600.0, 900.0), 10.0), Some(vec![]));
+    }
+
+    #[test]
+    fn open_quick_search_action_shows_search() {
+        let mut sh = desktop_shell();
+        sh.act(Action::OpenQuickSearch, 10.0);
+        assert!(sh.quicksearch.active());
+    }
+
+    #[test]
+    fn desktop_open_leaves_the_phone_dock_recents_alone() {
+        let mut sh = desktop_shell();
+        sh.desk_open(AppId::Settings, 10.0);
+        sh.desk_open(AppId::Settings, 20.0);
+        assert!(sh.recent_apps.is_empty());
+    }
