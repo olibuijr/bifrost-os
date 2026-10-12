@@ -102,9 +102,9 @@ fn main() {
         }
         seen = w;
         woke += 1;
-        // SAFETY: `quantum` is written by the server before it wakes us (reset), and only read here.
-        let q = unsafe { std::ptr::read_volatile(&act.quantum) } as usize;
-        let rate = unsafe { std::ptr::read_volatile(&act.rate) } as f32;
+        // The server stores this cycle's quantum and rate before it wakes us.
+        let q = act.quantum.load(Ordering::Acquire) as usize;
+        let rate = act.rate.load(Ordering::Acquire).max(1) as f32;
         let q = q.min(buf.len());
         for s in &mut buf[..q] {
             *s = 0.2 * (phase * std::f32::consts::TAU).sin();
