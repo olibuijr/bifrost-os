@@ -1,6 +1,6 @@
 id = "is.olibuijr.daw.desktop"
 name = "DAW"
-version = "0.2.6"
+version = "0.3.0"
 exec = "bifrost-daw"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -8,4 +8,4 @@ window = "full-size"
 summary = "Clip launcher, arrangement, piano roll and mixer for making music, with the songs from the mobile DAW."
 category = "Music"
 architecture = "x86_64-linux"
-permissions = ["storage", "audio"]
+permissions = ["storage", "audio", "documents"]
