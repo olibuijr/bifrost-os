@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.13.2 — 2026-10-12
 
 - Removed `model::outdent`, which nothing called. Make Regular Reminder on the Indent row already clears the draft's
