@@ -23,6 +23,7 @@ pub mod output;
 pub mod scene_build;
 pub mod server;
 pub mod stats;
+pub mod window_anim;
 
 /// Whether the Vulkan render server is selected (`BIFROST_WM_RENDERER=vulkan`, or `/etc/bifrost/renderer` says
 /// `vulkan`). The default flips to Vulkan at the switch-over.
