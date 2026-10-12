@@ -12,12 +12,15 @@ pub mod edit;
 pub mod exif;
 pub mod grid;
 pub mod library;
+pub mod models;
 pub mod slideshow;
 pub mod thumbs;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
 mod favorites_tests;
+#[cfg(test)]
+mod sort_tests;
 
 use crate::layout::in_rect as within;
 use super::cache::TextCache;
@@ -33,6 +36,7 @@ use crate::imgdec;
 use crate::layout::Rect;
 use crate::scene::STATUS_PT;
 use albums::Selection;
+use bifrost_ui::photo_smart_albums::SmartAlbum;
 use edit::{Aspect, Edit, Filter};
 use grid::Grid;
 use library::{civil, sections, Photo, Section};
@@ -98,6 +102,8 @@ pub enum Target {
     /// the viewer's Album button: add to (or remove from) a user album
     AddToAlbum,
     AlbumCancel,
+    /// the picker's sort row: flips oldest first and newest first
+    SortOrder,
     ZoomIn,
     ZoomOut,
     Back,
@@ -310,6 +316,8 @@ pub struct Photos {
     editor: Option<Editor>,
     album: Album,
     album_menu: bool,
+    /// the grid order: newest first (true) or oldest first, the library's own order (false)
+    newest_first: bool,
     sections: Vec<Section>,
     grid: Grid,
     scroll: Scroller,
@@ -395,6 +403,7 @@ impl Photos {
             editor: None,
             album: Album::All,
             album_menu: false,
+            newest_first: false,
             sections: vec![],
             grid: Grid::build(&[], ZOOMS[0], w as f32, GAP_PX, ui.pt(HEADER_PT)),
             scroll: Scroller::new(),
@@ -426,6 +435,7 @@ impl Photos {
             dirty: true,
             data,
         };
+        p.newest_first = p.prefs.get("sort") == Some("newest");
         p.rescan();
         Ok(p)
     }
@@ -610,7 +620,8 @@ impl Photos {
 
     /// Recomputes the albums, the filtered view, the sections and the grid.
     fn rebuild(&mut self, ui: &Ui) {
-        self.favorites = self.all.iter().filter(|p| self.is_favourite(p)).cloned().collect();
+        let now = unix_now();
+        self.favorites = models::smart_album(SmartAlbum::Favourites, &self.all, |p| self.is_favourite(p), now);
         self.fav_paths = self.all.iter().chain(&self.trash).filter(|p| self.is_favourite(p)).map(|p| p.path.clone()).collect();
         self.user_albums = (0..MAX_USER_ALBUMS)
             .filter_map(|i| {
@@ -619,14 +630,15 @@ impl Photos {
             })
             .map(|(i, name)| (name, self.all.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
             .collect();
-        self.recents = albums::recents(&self.all, unix_now());
-        self.screenshots = albums::screenshots(&self.all);
+        self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.all, |p| self.is_favourite(p), now);
+        self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.all, |p| self.is_favourite(p), now);
         let view = {
             let base = self.album_list(self.album);
-            match &self.filter {
+            let filtered = match &self.filter {
                 Some((_, range)) => albums::in_range(base, *range),
                 None => base.to_vec(),
-            }
+            };
+            models::by_date(&filtered, self.newest_first)
         };
         self.view = view;
         self.selection.retain_in(&self.view);
@@ -1057,6 +1069,9 @@ impl Photos {
             if self.user_albums.len() < MAX_USER_ALBUMS && within(x, y, self.new_album_row(ui)) {
                 return Some(Target::NewAlbum);
             }
+            if within(x, y, self.sort_row(ui)) {
+                return Some(Target::SortOrder);
+            }
             return Some(Target::AlbumCancel);
         }
         if self.editor.is_some() {
@@ -1300,6 +1315,13 @@ impl Photos {
             }
             Target::ChooseAlbum(album) => self.select_album(ui, album),
             Target::AlbumCancel => self.album_menu = false,
+            Target::SortOrder => {
+                self.newest_first = !self.newest_first;
+                let _ = self.pref_set("sort", if self.newest_first { "newest" } else { "oldest" });
+                self.album_menu = false;
+                self.rebuild(ui);
+                self.scroll.jump_to(if self.newest_first { 0.0 } else { f32::MAX });
+            }
             Target::NewAlbum => {
                 if let Some(i) = self.new_album() {
                     self.rebuild(ui);
@@ -1797,12 +1819,19 @@ impl Photos {
         (x, y + h * self.menu_albums().len() as f32, w, h)
     }
 
+    /// The picker's sort row, below the albums and the New Album row.
+    fn sort_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, y, w, h) = self.album_row(ui, Album::All);
+        let rows = self.menu_albums().len() + usize::from(self.user_albums.len() < MAX_USER_ALBUMS);
+        (x, y + h * rows as f32, w, h)
+    }
+
     fn draw_albums(&mut self, s: &mut Surface, ui: &Ui) {
         s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, rgba(0, 0, 0, 80));
         let (x, y, w, row_h) = self.album_row(ui, Album::All);
         let menu = self.menu_albums();
         let can_add = self.user_albums.len() < MAX_USER_ALBUMS;
-        s.fill_rrect(x, y, w, row_h * (menu.len() + usize::from(can_add)) as f32, flat(ui), SHEET);
+        s.fill_rrect(x, y, w, row_h * (menu.len() + usize::from(can_add) + 1) as f32, flat(ui), SHEET);
         if can_add {
             let (_, ny, _, _) = self.new_album_row(ui);
             if self.pressed == Some(Target::NewAlbum) {
@@ -1824,6 +1853,15 @@ impl Photos {
             let count = self.album_list(album).len();
             self.label(s, ui, &count.to_string(), 14.0, Weight::Regular, SECONDARY, x + w - ui.pt(22.0), cy);
         }
+        let (_, sy, _, _) = self.sort_row(ui);
+        if self.pressed == Some(Target::SortOrder) {
+            s.fill_rrect(x, sy, w, row_h, flat(ui), rgba(255, 255, 255, 20));
+        }
+        s.fill_rect((x + ui.pt(14.0)) as usize, sy as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+        let cy = sy + row_h / 2.0;
+        self.label_left(s, ui, "Sort by Date", 17.0, Weight::Regular, WHITE, x + ui.pt(16.0), cy);
+        let order = if self.newest_first { "Newest" } else { "Oldest" };
+        self.label(s, ui, order, 14.0, Weight::Regular, SECONDARY, x + w - ui.pt(60.0), cy);
     }
 
     /// A round zoom button with a plus or minus.

@@ -1,4 +1,4 @@
-//! Pure album logic: which photos are Screenshots or Recents, date filters
+//! Pure album logic: date filters
 //! typed as text or picked by month, the Recently Deleted retention and the
 //! multi-select set.
 
@@ -6,25 +6,9 @@ use super::library::{civil, Photo, MONTHS};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-/// Recents shows the last this many days.
-pub const RECENT_DAYS: i64 = 30;
 /// Deleted photos are purged after this many days.
 pub const TRASH_DAYS: i64 = 30;
 const DAY: i64 = 86_400;
-
-/// Screenshots are named `Screenshot...`.
-pub fn is_screenshot(p: &Photo) -> bool {
-    p.name().to_ascii_lowercase().starts_with("screenshot")
-}
-
-pub fn screenshots(photos: &[Photo]) -> Vec<Photo> {
-    photos.iter().filter(|p| is_screenshot(p)).cloned().collect()
-}
-
-/// Photos from the last `RECENT_DAYS` before `now`.
-pub fn recents(photos: &[Photo], now: i64) -> Vec<Photo> {
-    photos.iter().filter(|p| p.mtime > now - RECENT_DAYS * DAY && p.mtime <= now + DAY).cloned().collect()
-}
 
 /// Photos with `start <= mtime < end`, order kept.
 pub fn in_range(photos: &[Photo], range: (i64, i64)) -> Vec<Photo> {
@@ -208,10 +192,9 @@ mod tests {
     const NOW: i64 = 1_791_073_395;
 
     #[test]
-    fn screenshots_and_recents_are_picked_by_name_and_age() {
+    fn date_ranges_keep_the_photos_inside_them() {
+        // Screenshots and Recents moved to the smart album model (see models.rs); the range filter stays here.
         let photos = [photo("IMG_1.jpg", NOW - 40 * DAY), photo("Screenshot-2026.png", NOW - 40 * DAY), photo("screenshot_2.png", NOW - DAY), photo("IMG_2.jpg", NOW - 29 * DAY), photo("future.jpg", NOW + 10 * DAY)];
-        assert_eq!(screenshots(&photos).iter().map(Photo::name).collect::<Vec<_>>(), ["Screenshot-2026.png", "screenshot_2.png"]);
-        assert_eq!(recents(&photos, NOW).iter().map(Photo::name).collect::<Vec<_>>(), ["screenshot_2.png", "IMG_2.jpg"]);
         assert_eq!(in_range(&photos, (NOW - 2 * DAY, NOW)).len(), 1);
     }
 
