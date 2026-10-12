@@ -17,6 +17,7 @@ pub mod render_server;
 #[cfg(feature = "nested")]
 pub mod nested;
 pub mod scene;
+pub mod session_protocols;
 pub mod state;
 pub mod sync;
 pub mod wm;

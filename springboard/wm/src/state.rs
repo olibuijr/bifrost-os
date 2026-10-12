@@ -79,12 +79,15 @@ pub struct WmState {
     /// XWayland, its X11 window manager and the xwayland-shell global (`xwayland.rs`).
     #[cfg(feature = "xwayland")]
     pub xwayland: crate::xwayland::XWaylandState,
+    /// Session protocols: foreign toplevels, screencopy, output management and power, cursor shapes, activation.
+    pub session: crate::session_protocols::SessionState,
 }
 
 impl WmState {
     /// Listens on `socket` (or the next free `wayland-N`) and dispatches clients from `event_loop`.
     pub fn new(event_loop: &mut EventLoop<'static, WmState>, display: Display<WmState>, socket: Option<&str>) -> Self {
         let dh = display.handle();
+        let session = crate::session_protocols::SessionState::new(&dh);
         let mut seat_state = SeatState::new();
         let mut seat: Seat<WmState> = seat_state.new_wl_seat(&dh, "seat0");
         let prefs = crate::input::InputPrefs::load(&crate::input::prefs_path());
@@ -147,6 +150,7 @@ impl WmState {
             gestures: Default::default(),
             #[cfg(feature = "xwayland")]
             xwayland: crate::xwayland::XWaylandState::new(&dh),
+            session,
             dh,
         }
     }
@@ -224,6 +228,7 @@ impl WmState {
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, surface, serial);
         }
+        self.sync_toplevels();
     }
 
     /// Frame callbacks after a composited frame: windows, layer surfaces and the lock surface draw their next frame.
