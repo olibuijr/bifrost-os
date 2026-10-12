@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::material_filter::Tone;
+
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -21,7 +23,8 @@ use smithay::{
     utils::{Buffer, Logical, Physical, Point, Rectangle, Size, Transform},
 };
 
-/// The backdrop is rendered at 1/DIV of the output, then halved PASSES times and doubled PASSES-1 times.
+/// The backdrop is rendered at 1/DIV of the output (the recipes' `backdropScale` 0.25 for every desktop material), then
+/// halved PASSES times and doubled PASSES-1 times.
 pub const DIV: i32 = 4;
 pub const PASSES: usize = 3;
 /// Saturation of the blurred backdrop (vibrancy); 1.0 keeps the colours.
@@ -64,7 +67,15 @@ uniform sampler2D tex;
 uniform float alpha;
 uniform vec2 halfpixel;
 uniform float saturation;
+uniform float brightness;
+uniform float lum_amount;
+uniform vec4 lum_values;
 varying vec2 v_coords;
+// the luminance curve: the cubic Bezier through four control values (material_filter::curve)
+float lum_curve(float x) {
+    float u = 1.0 - x;
+    return u * u * u * lum_values.x + 3.0 * u * u * x * lum_values.y + 3.0 * u * x * x * lum_values.z + x * x * x * lum_values.w;
+}
 void main() {
     vec4 sum = texture2D(tex, v_coords + vec2(-halfpixel.x * 2.0, 0.0));
     sum += texture2D(tex, v_coords + vec2(-halfpixel.x, halfpixel.y)) * 2.0;
@@ -77,6 +88,11 @@ void main() {
     vec4 c = sum / 12.0;
     float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
     c.rgb = clamp(mix(vec3(l), c.rgb, saturation), 0.0, c.a);
+    if (lum_amount != 0.0) {
+        float m = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        c.rgb = clamp(c.rgb + lum_amount * (lum_curve(clamp(m, 0.0, 1.0)) - m), 0.0, c.a);
+    }
+    c.rgb = clamp(c.rgb + brightness, 0.0, c.a);
     gl_FragColor = c * alpha;
 }"#;
 
@@ -116,13 +132,23 @@ struct Signature {
     output: (i32, i32),
     /// The recipe's saturation, as bits (a recipe change rebuilds the backdrop).
     saturation: u32,
+    /// The recipe's tone, as bits.
+    tone: [u32; 6],
     below: Vec<(Id, CommitCounter, Rectangle<i32, Physical>)>,
 }
 
-fn signature<E: Element>(output: Size<i32, Physical>, below: &[E], saturation: f32) -> Signature {
+fn signature<E: Element>(output: Size<i32, Physical>, below: &[E], saturation: f32, tone: Tone) -> Signature {
     Signature {
         output: (output.w, output.h),
         saturation: saturation.to_bits(),
+        tone: [
+            tone.brightness.to_bits(),
+            tone.luminance_amount.to_bits(),
+            tone.luminance_values[0].to_bits(),
+            tone.luminance_values[1].to_bits(),
+            tone.luminance_values[2].to_bits(),
+            tone.luminance_values[3].to_bits(),
+        ],
         below: below.iter().map(|e| (e.id().clone(), e.current_commit(), e.geometry(1.0f64.into()))).collect(),
     }
 }
@@ -139,7 +165,13 @@ impl Glass {
         let down = renderer.compile_custom_texture_shader(DOWN, &[UniformName::new("halfpixel", UniformType::_2f)])?;
         let up = renderer.compile_custom_texture_shader(
             UP,
-            &[UniformName::new("halfpixel", UniformType::_2f), UniformName::new("saturation", UniformType::_1f)],
+            &[
+                UniformName::new("halfpixel", UniformType::_2f),
+                UniformName::new("saturation", UniformType::_1f),
+                UniformName::new("brightness", UniformType::_1f),
+                UniformName::new("lum_amount", UniformType::_1f),
+                UniformName::new("lum_values", UniformType::_4f),
+            ],
         )?;
         Ok(Glass { down, up, entries: HashMap::new() })
     }
@@ -154,13 +186,14 @@ impl Glass {
         below: &[E],
         regions: &[Rectangle<i32, Logical>],
         saturation: f32,
+        tone: Tone,
     ) -> Result<Vec<TextureRenderElement<GlesTexture>>, GlesError> {
         if regions.is_empty() {
             self.entries.remove(&key);
             return Ok(Vec::new());
         }
         let (bw, bh) = ((output.w / DIV).max(2), (output.h / DIV).max(2));
-        let sig = signature(output, below, saturation);
+        let sig = signature(output, below, saturation, tone);
         if let Some(entry) = self.entries.get(&key) {
             if entry.sig == sig {
                 return Ok(Self::elements(entry, regions, entry.src_size, output));
@@ -193,7 +226,15 @@ impl Glass {
                 let half = [0.5 / w as f32, 0.5 / h as f32];
                 let src_rect: Rectangle<f64, Buffer> = Rectangle::from_size((src_size.0 as f64, src_size.1 as f64).into());
                 let sat = if i == last { saturation } else { 1.0 };
-                let uniforms = [Uniform::new("halfpixel", half), Uniform::new("saturation", sat)];
+                // the tone applies on the last pass only, with the saturation
+                let t = if i == last { tone } else { Tone::NONE };
+                let uniforms = [
+                    Uniform::new("halfpixel", half),
+                    Uniform::new("saturation", sat),
+                    Uniform::new("brightness", t.brightness),
+                    Uniform::new("lum_amount", t.luminance_amount),
+                    Uniform::new("lum_values", t.luminance_values),
+                ];
                 let (program, uniforms) = if going_down { (&self.down, &uniforms[..1]) } else { (&self.up, &uniforms[..]) };
                 frame.render_texture_from_to(&src, src_rect, full[0], &full, &[], Transform::Normal, 1.0, Some(program), uniforms)?;
                 let _ = frame.finish()?;

@@ -22,6 +22,7 @@ use smithay::{
 use crate::{
     bifrost_material::effective_regions,
     glass::{Glass, SATURATION},
+    material_filter::Tone,
     material_kind::{resolve, Resolved},
     state::WmState,
 };
@@ -40,21 +41,24 @@ struct Item {
     blur: Vec<Rectangle<i32, Logical>>,
     /// Saturation of the backdrop from the material recipe of the first blurred region.
     saturation: f32,
+    /// Brightness and luminance mapping from the same recipe.
+    tone: Tone,
 }
 
 /// The blurred regions of `surface` placed with the surface's origin at `origin` (output logical px), and the
 /// recipe's saturation. Regions whose material resolves to a flat plate (inactive window, within-window blending)
 /// get no backdrop: the client paints those itself.
-fn blur_at(surface: &WlSurface, origin: Point<i32, Logical>, active: bool, dark: bool) -> (Vec<Rectangle<i32, Logical>>, f32) {
+fn blur_at(surface: &WlSurface, origin: Point<i32, Logical>, active: bool, dark: bool) -> (Vec<Rectangle<i32, Logical>>, f32, Tone) {
     let mut rects = Vec::new();
-    let mut saturation = None;
+    let mut look = None;
     for spec in effective_regions(surface) {
-        if let Resolved::Glass { saturation: s, .. } = resolve(&spec, active, dark) {
-            saturation.get_or_insert(s);
+        if let Resolved::Glass { saturation: s, tone, .. } = resolve(&spec, active, dark) {
+            look.get_or_insert((s, tone));
             rects.extend(spec.rects.iter().map(|r| Rectangle::new(r.loc + origin, r.size)));
         }
     }
-    (rects, saturation.unwrap_or(SATURATION))
+    let (saturation, tone) = look.unwrap_or((SATURATION, Tone::NONE));
+    (rects, saturation, tone)
 }
 
 /// A stable key for a surface's glass between frames.
@@ -76,8 +80,8 @@ fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, la
             .into_iter()
             .map(SceneElement::Surface)
             .collect();
-        let (blur, saturation) = blur_at(l.wl_surface(), geo.loc, true, dark);
-        out.push(Item { key: surface_key(l.wl_surface()), elements, blur, saturation });
+        let (blur, saturation, tone) = blur_at(l.wl_surface(), geo.loc, true, dark);
+        out.push(Item { key: surface_key(l.wl_surface()), elements, blur, saturation, tone });
     }
 }
 
@@ -94,15 +98,15 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
         let origin = loc - w.geometry().loc;
         let phys: Point<i32, Physical> = origin.to_physical_precise_round(scale);
         let elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = w.render_elements(renderer, phys, scale, 1.0);
-        let (key, blur, saturation) = match w.toplevel() {
+        let (key, blur, saturation, tone) = match w.toplevel() {
             Some(t) => {
                 let active = t.current_state().states.contains(smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Activated);
-                let (blur, sat) = blur_at(t.wl_surface(), origin, active, state.material_dark);
-                (surface_key(t.wl_surface()), blur, sat)
+                let (blur, sat, tone) = blur_at(t.wl_surface(), origin, active, state.material_dark);
+                (surface_key(t.wl_surface()), blur, sat, tone)
             }
-            None => (0, Vec::new(), SATURATION),
+            None => (0, Vec::new(), SATURATION, Tone::NONE),
         };
-        out.push(Item { key, elements: elements.into_iter().map(SceneElement::Surface).collect(), blur, saturation });
+        out.push(Item { key, elements: elements.into_iter().map(SceneElement::Surface).collect(), blur, saturation, tone });
     }
     layer_items(renderer, &map, Layer::Top, scale, state.material_dark, &mut out);
     layer_items(renderer, &map, Layer::Overlay, scale, state.material_dark, &mut out);
@@ -130,7 +134,7 @@ pub fn build(renderer: &mut GlesRenderer, state: &WmState, output: &Output, glas
     for item in items(renderer, state, output, scale) {
         let mut next = item.elements;
         if !item.blur.is_empty() {
-            match glass.backdrop(renderer, item.key, size, &below, &item.blur, item.saturation) {
+            match glass.backdrop(renderer, item.key, size, &below, &item.blur, item.saturation, item.tone) {
                 Ok(g) => next.extend(g.into_iter().map(SceneElement::Glass)),
                 Err(e) => eprintln!("bifrost-wm: glass: {e}"),
             }
