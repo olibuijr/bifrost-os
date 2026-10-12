@@ -1039,6 +1039,7 @@ pub mod event_tap;
 pub mod media_time;
 pub mod media_timebase;
 pub mod media_type_names;
+pub mod flashing_lights;
 pub mod audio_processing_tap;
 pub mod format_readers;
 

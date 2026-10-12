@@ -36,6 +36,7 @@ impl LibraryChange {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MediaLibrary {
     generating: bool,
+    loaded: bool,
     snapshot: HashMap<String, u64>,
     last_modified: Option<u64>,
 }
@@ -44,6 +45,19 @@ impl MediaLibrary {
     /// A tracker with notifications off and no snapshot yet.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Whether a listing has been observed since the last unload.
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
+    /// Drops the snapshot and the modification time, as an unload does. The notification switch is kept. The next
+    /// observed listing counts every item as inserted.
+    pub fn unload(&mut self) {
+        self.loaded = false;
+        self.snapshot.clear();
+        self.last_modified = None;
     }
 
     /// Switches change notifications on.
@@ -91,6 +105,7 @@ impl MediaLibrary {
         change.removed.sort();
         change.changed.sort();
         self.snapshot = next;
+        self.loaded = true;
         if change.is_empty() {
             return None;
         }
@@ -162,6 +177,22 @@ mod tests {
         library.begin_generating();
         assert_eq!(library.observe(&[stamp("a", 1), stamp("b", 1)], 3), None);
         assert_eq!(library.last_modified(), Some(2));
+    }
+
+    #[test]
+    fn unload_drops_the_snapshot_and_the_next_listing_reports_every_item_as_inserted() {
+        let mut library = MediaLibrary::new();
+        assert!(!library.is_loaded());
+        library.begin_generating();
+        library.observe(&[stamp("a", 1), stamp("b", 1)], 7);
+        assert!(library.is_loaded());
+        library.unload();
+        assert!(!library.is_loaded());
+        assert_eq!(library.last_modified(), None);
+        let change = library.observe(&[stamp("a", 1), stamp("b", 1)], 8).expect("notifications are on");
+        assert_eq!(change.inserted, vec!["a".to_string(), "b".to_string()]);
+        assert!(change.removed.is_empty() && change.changed.is_empty());
+        assert_eq!(library.last_modified(), Some(8));
     }
 
     #[test]

@@ -49,6 +49,12 @@ impl LoadOptions {
         LoadOptions { load_folders: true, include: None, exclude: Vec::new() }
     }
 
+    /// Builds the options from the optional load keys of a library load. An absent folders key loads folders, and an
+    /// absent include or exclude key applies no filter.
+    pub fn from_keys(folders: Option<bool>, include: Option<Vec<String>>, exclude: Option<Vec<String>>) -> Self {
+        LoadOptions { load_folders: folders.unwrap_or(true), include, exclude: exclude.unwrap_or_default() }
+    }
+
     /// The sources a load keeps, in the order given. A folder source is dropped unless folders load. An excluded
     /// identifier is dropped even when it is also included. A repeated identifier keeps its first entry.
     pub fn filter(&self, sources: &[MediaSource]) -> Vec<MediaSource> {
@@ -128,6 +134,13 @@ mod tests {
         let kept = LoadOptions::all().filter(&sources);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].kind, SourceType::Audio);
+    }
+
+    #[test]
+    fn absent_load_keys_load_everything_and_present_ones_narrow_the_load() {
+        assert_eq!(LoadOptions::from_keys(None, None, None), LoadOptions::all());
+        let opts = LoadOptions::from_keys(Some(false), Some(ids(&["a", "f"])), None);
+        assert_eq!(names(&opts.filter(&sample())), ids(&["a"]), "the folder is dropped by the folders key");
     }
 
     #[test]
