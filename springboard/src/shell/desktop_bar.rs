@@ -28,9 +28,11 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Status(u8),
     /// the input source menu extra: the active source's short label, its rows the enabled sources (shown with two or more)
     Input,
+    /// the Now Playing extra: shown while an app has a session, its menu is `now_playing_menu::panel`
+    NowPlaying,
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Media(bifrost_ui::media_session::RemoteCommand)}
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>}
 /// Row, separator and edge padding of a bar menu, in pt (the HIG groups menu items with separators).
@@ -144,6 +146,8 @@ impl Shell {
         // the input source sits left of Control Center (the extras are placed from the clock leftwards)
         let source=super::kb_layouts::active().short_name();let input=self.ui.measure(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
+        // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
+        if let Some(p)=super::now_playing_menu::panel(){let label=self.ui.fit(&p.label,12.,self.ui.pt(160.));let w=self.ui.measure(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
         // menu extras of running apps (`NativeStatusItem`) sit left of the system extras; an empty title shows the app's initial
         for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.ui.measure(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
         for (menu,width,label) in extras {
@@ -200,6 +204,8 @@ impl Shell {
             Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,"),Row::separator(),(if enabled{Row::action(quit,Action::Close)}else{Row::label(quit)}).key("cmd+q")]},
             Menu::System=>{use super::power_menu::PowerAction;vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock)]},
             Menu::ControlCenter=>Vec::new(),
+            // title and position as labels, then the transport: an enabled row sends its remote command to the owner
+            Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![Row::label(p.title),Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
             // View holds the Dock's display options (also in the Dock menu), as Files and Mail keep theirs in View
             Menu::View=>{use super::desktop_dock::Change;let autohide=self.desk.as_ref().is_some_and(|d|d.dock_preferences.autohide);let mut v=vec![Row::action(format!("{} Automatically Hide Dock",if autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)),Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))),Row::action("Larger Icons",Action::Dock(Change::Size(8.)))];if self.term_front(){v.splice(0..0,[Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v},
             // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked
@@ -272,7 +278,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
         let text=self.clock_text();
         self.bar_label(s,&text,12.,Weight::Medium,|im|(self.w-im.w as i32-self.ui.pt(16.) as i32,(height as i32-im.h as i32)/2));
     }
@@ -417,6 +423,7 @@ impl Shell {
                     Action::Lock=>effects.extend(self.sleep_screen()),
                     Action::Sleep=>{effects.extend(self.sleep_screen());effects.push(super::Effect::SleepSystem)}
                     Action::Halt(power)=>effects.push(Effect::Power(power)),
+                    Action::Media(command)=>{super::services::now_playing::send(command);},
                 }effects
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
