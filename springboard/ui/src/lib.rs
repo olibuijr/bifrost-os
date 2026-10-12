@@ -844,6 +844,8 @@ pub mod audio_hardware;
 pub mod audio_clock;
 pub mod channel_layout;
 pub mod hardware_clock;
+pub mod default_device;
+pub mod volume_control;
 pub mod scheduled_region;
 pub mod video_session;
 pub mod media_block;
