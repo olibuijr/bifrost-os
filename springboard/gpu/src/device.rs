@@ -83,20 +83,17 @@ impl Device {
 
     /// A render pipeline (vertex + fragment shader, blend, vertex layout).
     pub fn new_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> Result<RenderPipeline> {
-        let _ = desc;
-        todo!("gpu-pipeline")
+        crate::pipeline::new_render(self, desc)
     }
 
     /// A compute pipeline.
     pub fn new_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> Result<ComputePipeline> {
-        let _ = desc;
-        todo!("gpu-pipeline")
+        crate::pipeline::new_compute(self, desc)
     }
 
     /// A sampler.
     pub fn new_sampler(&self, desc: &SamplerDescriptor) -> Result<Sampler> {
-        let _ = desc;
-        todo!("gpu-pipeline")
+        crate::pipeline::new_sampler(self, desc)
     }
 
     /// A timeline semaphore starting at 0.
