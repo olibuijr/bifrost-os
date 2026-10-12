@@ -595,6 +595,8 @@ pub mod observe;
 pub mod controller;
 pub mod controller_power;
 pub mod calendar;
+pub mod calendar_error;
+pub mod calendar_store_changes;
 pub mod collection;
 pub mod dockdrag;
 pub mod dock_tile;

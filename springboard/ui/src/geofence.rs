@@ -160,6 +160,61 @@ impl RegionMonitor {
     }
 }
 
+/// Which crossings of a region an alarm reacts to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Proximity {
+    /// Only entering the region.
+    Enter,
+    /// Only leaving the region.
+    Leave,
+    /// Both entering and leaving.
+    Both,
+}
+
+impl CircularRegion {
+    /// Sets which crossings the region reports.
+    pub fn with_proximity(mut self, proximity: Proximity) -> Self {
+        self.notify_on_entry = matches!(proximity, Proximity::Enter | Proximity::Both);
+        self.notify_on_exit = matches!(proximity, Proximity::Leave | Proximity::Both);
+        self
+    }
+}
+
+/// A named place with a trigger radius, used as the location of a calendar item's alarm. The alarm fires when the
+/// user comes within `radius_m` of `geo_location`, so the place is the circle a [`RegionMonitor`] watches.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StructuredLocation {
+    /// Shown to the user, for example "Office". Never blank.
+    pub title: String,
+    pub geo_location: Coordinate,
+    /// Trigger distance in metres, always positive.
+    pub radius_m: f64,
+}
+
+impl StructuredLocation {
+    /// `None` when the title is blank or the radius is not a finite, positive number.
+    pub fn new(title: &str, geo_location: Coordinate, radius_m: f64) -> Option<Self> {
+        (!title.trim().is_empty() && radius_m.is_finite() && radius_m > 0.0).then(|| StructuredLocation {
+            title: title.to_string(),
+            geo_location,
+            radius_m,
+        })
+    }
+
+    /// The circle this location triggers on, under the identifier `identifier`.
+    pub fn region(&self, identifier: &str) -> Option<CircularRegion> {
+        CircularRegion::new(identifier, self.geo_location, self.radius_m)
+    }
+}
+
+impl RegionMonitor {
+    /// Starts watching the circle of `location` under `identifier`. Returns `false` when the identifier is already
+    /// watched or the location cannot form a region.
+    pub fn add_location(&mut self, identifier: &str, location: &StructuredLocation) -> bool {
+        location.region(identifier).map_or(false, |region| self.add(region))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +320,45 @@ mod tests {
         assert!(!m.remove("home"));
         assert!(m.is_empty());
         assert_eq!(m.state("home"), None);
+    }
+
+    #[test]
+    fn structured_locations_reject_a_blank_title_and_bad_radii() {
+        assert!(StructuredLocation::new("  ", c(0.0, 0.0), 100.0).is_none());
+        assert!(StructuredLocation::new("Office", c(0.0, 0.0), 0.0).is_none());
+        assert!(StructuredLocation::new("Office", c(0.0, 0.0), f64::INFINITY).is_none());
+        let office = StructuredLocation::new("Office", c(0.0, 0.0), 200.0).expect("valid location");
+        assert_eq!(office.title, "Office");
+        assert_eq!(office.region("office").map(|r| r.radius_m), Some(200.0));
+    }
+
+    #[test]
+    fn a_location_alarm_fires_on_arrival_and_departure() {
+        let office = StructuredLocation::new("Office", c(0.0, 0.0), 500.0).expect("valid location");
+        let mut m = RegionMonitor::new();
+        assert!(m.add_location("alarm-1", &office));
+        assert!(!m.add_location("alarm-1", &office), "one watch per identifier");
+        // Hand-worked: 1 degree of longitude on the equator is about 111 km, far outside 500 m.
+        m.observe(&fix(c(0.0, 1.0), 10.0, 1.0));
+        let arrived = m.observe(&fix(c(0.0, 0.0), 10.0, 2.0));
+        assert_eq!(arrived.len(), 1);
+        assert_eq!(arrived[0].kind, RegionEventKind::Entered);
+        let left = m.observe(&fix(c(0.0, 1.0), 10.0, 3.0));
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].identifier, "alarm-1");
+    }
+
+    #[test]
+    fn proximity_limits_the_crossings_a_region_reports() {
+        let arrive_only = region("arrive", 500.0).with_proximity(Proximity::Enter);
+        assert!(arrive_only.notify_on_entry && !arrive_only.notify_on_exit);
+        let leave_only = region("leave", 500.0).with_proximity(Proximity::Leave);
+        assert!(!leave_only.notify_on_entry && leave_only.notify_on_exit);
+        let mut m = RegionMonitor::new();
+        m.add(arrive_only);
+        m.observe(&fix(c(0.0, 1.0), 10.0, 1.0));
+        assert_eq!(m.observe(&fix(c(0.0, 0.0), 10.0, 2.0)).len(), 1);
+        assert!(m.observe(&fix(c(0.0, 1.0), 10.0, 3.0)).is_empty(), "exit is silent for an arrive-only region");
+        assert_eq!(m.state("arrive"), Some(RegionState::Outside), "the state still follows the user");
     }
 }
