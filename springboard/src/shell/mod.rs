@@ -725,7 +725,8 @@ impl Shell {
             gallery_page: 0,
             chrome: Chrome::default(),
             info: Info::default(),
-            screen: Screen::Lock,
+            // An unlock at boot is the login: the desktop starts, no lock screen (task 10).
+            screen: if login::take_autologin().is_some() { Screen::Home } else { Screen::Lock },
             screen_on: true,
             anim: None,
             lock_drag: None,

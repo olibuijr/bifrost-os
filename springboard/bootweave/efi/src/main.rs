@@ -5,6 +5,10 @@
 #![no_std]
 extern crate alloc;
 mod boot_policy;
+mod crypto;
+mod handover;
+mod luks;
+mod unlock;
 use alloc::vec::Vec;
 use uefi::boot::{self, LoadImageSource};
 use uefi::prelude::*;
@@ -177,6 +181,15 @@ fn main() -> Status {
     };
     drop(li);
     let current = cmdline(dev);
+    // Unlock is login (task 10): on an encrypted root the Unlock screen takes the passphrase once. The volume key goes
+    // to the initramfs in a one-time volatile variable; the account in `bifrost.user=` is logged in by the shell.
+    let user = current
+        .split_whitespace()
+        .find_map(|t| t.strip_prefix("bifrost.user="))
+        .unwrap_or("");
+    if let Some(volume) = unlock::run(user) {
+        let _ = handover::publish(&volume);
+    }
     let marker = read_text(dev, cstr16!("\\EFI\\BIFROST\\pending"));
     let previous = read_text(dev, cstr16!("\\EFI\\BIFROST\\rollback.txt"));
     let fallback = match boot_policy::choose(marker.as_deref()) {

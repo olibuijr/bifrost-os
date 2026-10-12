@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 uefi = { version = "0.41", features = ["alloc", "panic_handler", "global_allocator"] }
+bootweave-frame = { path = "../frame" }
 
 [profile.release]
 opt-level = "s"

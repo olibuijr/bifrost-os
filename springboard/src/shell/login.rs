@@ -729,6 +729,24 @@ pub fn power_effect(act: &Act) -> Option<Effect> {
     }
 }
 
+/// The account the initramfs logs in (task 10, "Unlock is login"): written to this file by the `bifrost-unlock` hook
+/// when the loader unlocked the encrypted root, so the desktop starts without a second login prompt.
+pub const AUTOLOGIN: &str = "/run/bifrost/autologin";
+
+/// The account name in an autologin file: one line of letters, digits, `-`, `_` or `.`, at most 64 bytes.
+pub fn autologin_name(text: &str) -> Option<String> {
+    let name = text.trim();
+    let ok = !name.is_empty() && name.len() <= 64 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b));
+    ok.then(|| name.to_string())
+}
+
+/// Reads and consumes the autologin file once, at shell start. `None` when the machine was not unlocked by the loader.
+pub fn take_autologin() -> Option<String> {
+    let text = std::fs::read_to_string(AUTOLOGIN).ok()?;
+    let _ = std::fs::remove_file(AUTOLOGIN);
+    autologin_name(&text)
+}
+
 // -- the shell's side of the login window ------------------------------------------------
 
 impl super::Shell {
@@ -953,5 +971,22 @@ mod tests {
         assert!(Privd::resolve(None, true).is_some());
         assert!(Privd::resolve(None, false).is_none());
         assert_eq!(Privd::resolve(Some("/x/p.sock".into()), false).unwrap().path, std::path::PathBuf::from("/x/p.sock"));
+    }
+
+    #[test]
+    fn autologin_accepts_one_account_name_line() {
+        assert_eq!(autologin_name("olibuijr\n"), Some("olibuijr".to_string()));
+        assert_eq!(autologin_name("  guest.1-a_b  "), Some("guest.1-a_b".to_string()));
+    }
+
+    #[test]
+    fn autologin_rejects_empty_hostile_and_long_names() {
+        assert_eq!(autologin_name(""), None);
+        assert_eq!(autologin_name("\n"), None);
+        assert_eq!(autologin_name("a b"), None);
+        assert_eq!(autologin_name("../root"), None);
+        assert_eq!(autologin_name("x\ny"), None);
+        assert_eq!(autologin_name(&"a".repeat(65)), None);
+        assert_eq!(autologin_name(&"a".repeat(64)).map(|n| n.len()), Some(64));
     }
 }
