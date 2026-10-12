@@ -6,8 +6,9 @@
 //! // in App::service_reply, once the reply for `id` arrives:
 //! //   let status = privacy_permissions::decode_status(&reply);   // Some(Status::Authorized)
 //! ```
-//! The calls only ask; the shell never shows a prompt from them. An app that has not been answered yet reads
-//! `NotDetermined`, which `can_capture` treats as not allowed. Decoding is pure, so the replies can be tested without a
+//! Status calls only ask. The `request` and `location_request` calls ask the person too: the shell shows an Allow /
+//! Don't Allow sheet when the answer is still open. An app that has not been answered yet reads `NotDetermined`,
+//! which `can_capture` treats as not allowed. Decoding is pure, so the replies can be tested without a
 //! shell. The wire names are the shell's (`springboard/src/shell/services/privacy_permissions.rs`).
 use crate::controls::capture_access::{Media, Status};
 use crate::controls::location_auth::{AuthorizationStatus, RequestOutcome};
@@ -49,6 +50,12 @@ pub fn all(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "all", &Json::Null)
 }
 
+/// Asks the person for one media type. The reply is the current status ([`decode_status`]). When the person has not
+/// answered yet, the shell shows an Allow / Don't Allow sheet; the answer shows in later `status` calls, not in this one.
+pub fn request(ctx: &Ctx, media: Media) -> u32 {
+    service::call(ctx, SERVICE, "request", &media_params(media))
+}
+
 /// The status in a `status` reply, or `None` for a reply of another shape.
 pub fn decode_status(reply: &Json) -> Option<Status> {
     parse_status(reply.get("status")?.as_str()?)
@@ -78,7 +85,7 @@ pub fn location_status(ctx: &Ctx) -> u32 {
 }
 
 /// Asks what a location request does now: prompt, already granted, or refused. The reply decodes with
-/// [`decode_location_outcome`]. The shell shows no sheet from this call.
+/// [`decode_location_outcome`]. A `prompt` outcome makes the shell show the Allow / Don't Allow sheet.
 pub fn location_request(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "location_request", &Json::Null)
 }
@@ -123,6 +130,13 @@ mod tests {
     fn requests_carry_the_media_name() {
         assert_eq!(media_params(Media::Audio).get("media").and_then(Json::as_str), Some("microphone"));
         assert_eq!(media_name(Media::Screen), "screen");
+    }
+
+    #[test]
+    fn the_service_name_and_the_request_params_are_the_shells_names() {
+        let params = media_params(Media::Video);
+        assert_eq!(params.get("media").and_then(Json::as_str), Some("camera"));
+        assert_eq!(SERVICE, "privacy");
     }
 
     #[test]
