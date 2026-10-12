@@ -68,7 +68,7 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
 - **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
   skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in
   `docs/parity-matrix/data/` in the same round (`check`, `build`, then the published database). Test on the host,
-  then the x86 VM, then Midget, which is always the final testbed; a row is `parity` only once it works on Midget.
+  then on Midget (owner, 2026-10-12: skip the VM, always use Midget); a row is `parity` only once it works on Midget.
 - **Release every iteration** (owner rule, 2026-10-09): each finished round is released without asking: bump the
   version and `CHANGELOG.md`, `bifrost pc publish`, `bifrost pc midget ota` until `phase=accepted`, then a Midget
   screenshot. Update the docs in the same round: `HANDOFF.md` (new top section), the feature's doc in `docs/`, and
