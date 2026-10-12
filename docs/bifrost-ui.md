@@ -1954,3 +1954,22 @@ Status stays partial until a test on Midget.
   Gap: the store does not send intents yet, so the queue has no producer and no SDK call that reads it.
 - Not decided here: sync of transactions and subscription management (App Store interactions) stay gaps; they need a
   store account service that BifrOSt does not have yet.
+
+## Drawing canvas models (reference pencil-canvas parity, `bifrost_app::drawing`, `tool_picker`, `lasso`)
+
+Shared models in `springboard/ui/src/drawing.rs`, `tool_picker.rs` and `lasso.rs`, re-exported by the SDK as
+`bifrost_app::drawing`, `bifrost_app::tool_picker` and `bifrost_app::lasso`. Pure state and geometry; the shell and
+apps draw and capture touch.
+
+- **Vector eraser.** `Drawing::erase_strokes_at(x, y, radius)` removes each stroke with a segment inside the radius, as
+  a whole, and returns the count. Decision: the bitmap eraser stays a caller concern (`tool_picker::EraserKind::Bitmap`
+  is only a choice on the picker).
+- **Image render.** `Drawing::image(rect, scale)` returns a `Raster` of 0xAARRGGBB pixels, painted in stroke order with
+  source-over blending. Decision: per-point opacity, pressure and marker blend modes are not rendered yet; colour alpha
+  and width are. Empty, non-finite or over `2^26` pixel requests give an empty raster.
+- **Tool picker.** `ToolPicker::new()` gives the default items (pen, marker, pencil, bitmap and vector eraser, lasso);
+  `with_items` takes a custom set. `current_ink` gives the ink for a new stroke. Widths clamp to `width_range`.
+  Decision: observers are not modelled; callers read `selected()` after each event.
+- **Gaps.** No serialised format beyond the text form in `drawing.rs`; no handwriting recognition or Scribble; no
+  ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
+  Midget test passes.

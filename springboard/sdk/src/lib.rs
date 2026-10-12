@@ -276,6 +276,9 @@ pub use bifrost_ui::call_ui as calling_ui;
 
 /// The default calling app and the apps registered for calling (`calling_apps::CallingApps`).
 pub use bifrost_ui::call_apps as calling_apps;
+/// Drawing models for the reference pencil-canvas framework: drawings, strokes, the lasso and the tool picker,
+/// shared by the shell and apps through `bifrost_ui`.
+pub use bifrost_ui::{drawing, lasso, tool_picker};
 
 /// An app. Only `id` and `draw` are required.
 pub trait App {

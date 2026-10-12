@@ -796,6 +796,7 @@ pub mod drawing;
 pub mod markup_drawing;
 pub mod stylus;
 pub mod lasso;
+pub mod tool_picker;
 pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
