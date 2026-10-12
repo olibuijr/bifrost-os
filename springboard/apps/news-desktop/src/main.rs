@@ -4,14 +4,18 @@ mod feed;
 mod icon;
 mod news;
 mod pictures;
+mod services;
 mod wire;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_core::json::Json;
 use std::sync::Arc;
 
 struct NewsApp {
     news: Option<news::News>,
+    /// the network-path request sent at start; its reply sets the offline state
+    path_request: Option<u32>,
 }
 
 impl App for NewsApp {
@@ -27,8 +31,40 @@ impl App for NewsApp {
                 // the feed cache is rebuilt by the next fetch, so the app holds no unsaved state
                 ctx.enable_sudden_termination();
                 self.news = Some(news::News::new(&ctx.ui, w, h, ctx.data_dir.clone(), Arc::new(springboard::shell::music::radio::Http::default())));
+                // once at start: the shell pushes path changes after this
+                self.path_request = Some(services::request_path(ctx));
             }
         }
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.path_request != Some(request) {
+            return false;
+        }
+        self.path_request = None;
+        match (services::online_from_reply(result), &mut self.news) {
+            (Some(online), Some(n)) => {
+                n.set_online(online);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if let Some(online) = services::online_from_event(service, event, body) {
+            return self.news.as_mut().is_some_and(|n| {
+                n.set_online(online);
+                true
+            });
+        }
+        // the shell asks for a fresh top-stories timeline when its reload date passes
+        if services::is_top_reload(service, event, body) {
+            if let Some(n) = &self.news {
+                services::publish_top(ctx, n.items(), services::now_secs());
+            }
+        }
+        false
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -50,7 +86,12 @@ impl App for NewsApp {
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.news.as_mut().is_some_and(|n| {
             let pumped = n.pump();
-            n.tick(&ctx.ui, t) | pumped
+            let ticked = n.tick(&ctx.ui, t);
+            // only when the headlines changed: a fetch or a reload, never every frame
+            if n.take_top_changed() {
+                services::publish_top(ctx, n.items(), services::now_secs());
+            }
+            ticked | pumped
         })
     }
 
@@ -77,5 +118,5 @@ impl App for NewsApp {
 }
 
 fn main() {
-    bifrost_app::run(NewsApp { news: None });
+    bifrost_app::run(NewsApp { news: None, path_request: None });
 }
