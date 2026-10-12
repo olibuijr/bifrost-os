@@ -1,8 +1,10 @@
 //! The `search-index` service: ranked search over the items an app indexed with Core Search, item expiry, and the
 //! language of a text. Apps reach it through `bifrost_app::search_ranking`.
 //!
-//! * `search {query, limit}` answers `[{id, domain, title}]`: the calling app's own items, ranked by [`spotindex`]
-//!   (every word must match, language-aware tie-break). `limit` is at most [`MAX_LIMIT`].
+//! * `search {query, limit}` answers `[{id, domain, title, kind}]`: the calling app's own items, ranked by [`spotindex`]
+//!   (every word must match, language-aware tie-break). `kind` is the `uttype` identifier of the item's file (from its
+//!   content URL extension) or null. The query may filter: "pdf" keeps PDFs, "last week" keeps items indexed last week,
+//!   and "pdf from last week" keeps both. `limit` is at most [`MAX_LIMIT`].
 //! * `expire {id, at}` sets the Unix time (seconds) after which the item is dropped; `at: null` clears it. Answers
 //!   true when the app has an item with that identifier.
 //! * `language {text}` answers the BCP 47 code of the text's dominant language, or null when none is recognisable.
@@ -38,7 +40,10 @@ impl SystemService for SearchRanking {
                 let hits = spotindex::search_app(app_id, query, limit);
                 Ok(Json::Arr(
                     hits.into_iter()
-                        .map(|h| Json::Obj(vec![("id".into(), Json::Str(h.unique_id)), ("domain".into(), Json::Str(h.domain)), ("title".into(), Json::Str(h.title))]))
+                        .map(|h| {
+                            let kind = h.kind.map_or(Json::Null, |k| Json::Str(k.into()));
+                            Json::Obj(vec![("id".into(), Json::Str(h.unique_id)), ("domain".into(), Json::Str(h.domain)), ("title".into(), Json::Str(h.title)), ("kind".into(), kind)])
+                        })
                         .collect(),
                 ))
             }

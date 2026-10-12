@@ -18,6 +18,7 @@ use super::textfield::TextField;
 use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, LABEL, LABEL_2, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, MENU_SOLID, MENU_TINT, SECONDARY, SIDEBAR_PLATE, WHITE};
 use super::{fuzzy, glyphs, settings, AppId, Effect, Event, Screen, Shell, apps};
 use crate::gfx::{rgba, scale, Image, Surface};
+use bifrost_ui::uttype;
 use std::path::{Path, PathBuf};
 
 const CARD_W_PT: f32 = 556.0;
@@ -168,8 +169,29 @@ pub enum Hit {
     File { path: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
-    /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message
-    Indexed { app_id: String, unique_id: String, domain: String, title: String },
+    /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
+    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
+    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+}
+
+/// The label of an indexed result: its title, then its content type when it has one ("Q1 report · PDF document").
+fn indexed_label(title: &str, kind: &str) -> String {
+    if kind.is_empty() {
+        title.to_string()
+    } else {
+        format!("{title} · {kind}")
+    }
+}
+
+#[cfg(test)]
+mod indexed_label_tests {
+    use super::indexed_label;
+
+    #[test]
+    fn an_indexed_result_shows_its_content_type_after_the_title() {
+        assert_eq!(indexed_label("Q1 report", "PDF document"), "Q1 report · PDF document");
+        assert_eq!(indexed_label("Notes", ""), "Notes");
+    }
 }
 
 /// The runnable `[[intent]]` shortcuts of the installed apps, with their folded search text.
@@ -274,7 +296,14 @@ fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], cont
 fn indexed_groups(query: &str) -> Vec<Group> {
     let hits: Vec<Hit> = super::spotindex::search(query, PER_GROUP)
         .into_iter()
-        .map(|f| Hit::Indexed { app_id: f.app_id, unique_id: f.unique_id, domain: f.domain, title: f.title })
+        .map(|f| Hit::Indexed {
+            kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
+            thumb: f.thumbnail,
+            app_id: f.app_id,
+            unique_id: f.unique_id,
+            domain: f.domain,
+            title: f.title,
+        })
         .collect();
     if hits.is_empty() {
         vec![]
@@ -429,6 +458,8 @@ pub struct QuickSearch {
     /// recent queries, newest first, and their rendered rows
     searches: Vec<String>,
     search_imgs: Vec<Image>,
+    /// decoded thumbnails of indexed results: (app/path key, icon size in pixels, image; None when unreadable)
+    thumbs: Vec<(String, usize, Option<Image>)>,
     searches_header: Image,
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
@@ -495,6 +526,7 @@ impl QuickSearch {
             searches_header: ui.text("Recent Searches", 20.0, Weight::Semibold, WHITE),
             icons: vec![],
             sections: vec![],
+            thumbs: vec![],
             deildu_titles: vec![],
             deildu_folded: vec![],
             contacts: vec![],
@@ -778,6 +810,12 @@ impl QuickSearch {
         let mut sections = vec![];
         let mut y = self.content_top(ui) + ui.pt(m.bottom_pad);
         let bottom = if self.mac { h as f32 - ui.pt(12.0) } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
+        // thumbnails are fitted to the row's icon square; a size change (another scale) reloads them
+        let isz = ui.pt(m.row_icon).round() as usize;
+        self.thumbs.retain(|(_, s, _)| *s == isz);
+        if self.thumbs.len() > 64 {
+            self.thumbs.clear();
+        }
         'fill: for g in groups {
             let mut rows = vec![];
             for hit in g.hits {
@@ -786,6 +824,13 @@ impl QuickSearch {
                     break 'fill;
                 }
                 y += need;
+                if let Hit::Indexed { app_id, thumb, .. } = &hit {
+                    let key = format!("{app_id}/{thumb}");
+                    if !thumb.is_empty() && !self.thumbs.iter().any(|(k, _, _)| *k == key) {
+                        let img = super::spotindex::load_thumbnail(app_id, thumb, isz);
+                        self.thumbs.push((key, isz, img));
+                    }
+                }
                 let label = match &hit {
                     Hit::App(app) => apps().iter().find(|a| a.id == *app).map_or(String::new(), |a| a.name.to_string()),
                     Hit::Settings(name) | Hit::City(name) => name.to_string(),
@@ -795,7 +840,7 @@ impl QuickSearch {
                     Hit::Answer(a) => format!("= {a}"),
                     Hit::File { name, .. } => name.clone(),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
-                    Hit::Indexed { title, .. } => title.clone(),
+                    Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
                 rows.push((hit, ui.text(&ui.fit(&label, self.m().label_pt, max_w), self.m().label_pt, Weight::Regular, WHITE)));
@@ -1161,8 +1206,19 @@ impl QuickSearch {
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Settings(_) => None,
                     };
+                    // an indexed item with a readable thumbnail shows it in place of its app's icon
+                    let thumb_img = match hit {
+                        Hit::Indexed { app_id, thumb, .. } if !thumb.is_empty() => {
+                            let key = format!("{app_id}/{thumb}");
+                            self.thumbs.iter().find(|(k, s, _)| *k == key && *s == isz.round() as usize).and_then(|(_, _, img)| img.as_ref())
+                        }
+                        _ => None,
+                    };
+                    if let Some(img) = thumb_img {
+                        s.blit(img, (ix + (isz - img.w as f32) / 2.0) as i32, (iy + (isz - img.h as f32) / 2.0) as i32, 255, alpha);
+                    }
                     match (app, hit) {
-                        (Some(app), _) => {
+                        (Some(app), _) if thumb_img.is_none() => {
                             if let Some((_, _, small, _)) = self.icons.iter().find(|(a, ..)| *a == app) {
                                 s.blit(small, ix as i32, iy as i32, 255, alpha);
                             }
