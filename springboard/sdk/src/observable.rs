@@ -6,10 +6,17 @@
 //! A `set` made from inside a subscriber is queued and delivered after the running change, in order.
 //! `with_observation_tracking` records the observables its closure reads and calls `on_change` once when
 //! one of them changes; `Observable::observations` pulls the changes in order instead of calling back.
+//!
+//! The publisher side (Combine) adds: [`Completion`] and [`Never`] for how a stream stops; [`Finite`] for
+//! the replay publishers `Just`, `Empty`, `Fail` and `Record`; [`Future`] and [`Promise`] for one later
+//! result; [`Deferred`] for a publisher built per subscriber; [`Connectable`] and [`Autoconnect`] for
+//! `multicast`, `connect`, `autoconnect` and `share`; and [`CombineIdentifier`] on each subject.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::fmt;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 type Callback<T> = Box<dyn FnMut(&T)>;
 
@@ -331,6 +338,7 @@ where
 }
 
 struct PassInner<T> {
+    id: CombineIdentifier,
     next: u64,
     subs: Vec<(u64, Callback<T>)>,
     /// Subscribers cancelled while a `send` is delivering; applied when the outermost send returns.
@@ -359,8 +367,42 @@ impl<T: 'static> Default for PassthroughSubject<T> {
 
 impl<T: 'static> PassthroughSubject<T> {
     pub fn new() -> Self {
-        let inner = PassInner { next: 0, subs: Vec::new(), cancelled: Vec::new(), depth: 0 };
+        let inner = PassInner {
+            id: CombineIdentifier::new(),
+            next: 0,
+            subs: Vec::new(),
+            cancelled: Vec::new(),
+            depth: 0,
+        };
         PassthroughSubject { inner: Rc::new(RefCell::new(inner)) }
+    }
+
+    /// The identifier of this subject. Clones share it; a new subject gets a new one.
+    pub fn identifier(&self) -> CombineIdentifier {
+        self.inner.borrow().id
+    }
+
+    /// Number of live subscribers. Reads 0 while a `send` is delivering (subscribers are taken out), as
+    /// [`Observable::subscriber_count`] does.
+    pub fn subscriber_count(&self) -> usize {
+        self.inner.borrow().subs.len()
+    }
+
+    /// `multicast`: a connectable view of this publisher. Subscribers attach to the view; nothing flows
+    /// from this publisher to them until [`Connectable::connect`] is called.
+    pub fn multicast(&self) -> Connectable<T>
+    where
+        T: Clone,
+    {
+        Connectable::new(self)
+    }
+
+    /// `share()`: `multicast` that connects when the first subscriber arrives and stays connected.
+    pub fn share(&self) -> Autoconnect<T>
+    where
+        T: Clone,
+    {
+        self.multicast().autoconnect()
     }
 
     /// `send(_:)`: delivers `value` to each subscriber in subscription order. A subscriber cancelled
@@ -435,6 +477,230 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
             }
         });
         (out, sub)
+    }
+}
+
+/// `Subscribers.Completion`: how a publisher stopped producing values.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Completion<E> {
+    Finished,
+    Failed(E),
+}
+
+/// `Never`: the failure type of a publisher that cannot fail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Never {}
+
+/// A publisher that replays a fixed list of values, then finishes, fails, or never completes. It covers
+/// `Just` (one value, then finish), `Empty` (no values; finish now or never), `Fail` (no values, then a
+/// failure) and `Record` (a given list, then a given completion). Each subscriber gets every value and
+/// then the completion, synchronously and in order.
+#[derive(Clone, Debug)]
+pub struct Finite<T, E> {
+    values: Vec<T>,
+    /// `None` means the publisher never completes.
+    completion: Option<Completion<E>>,
+}
+
+impl<T: Clone, E: Clone> Finite<T, E> {
+    /// `Record(output:completion:)`.
+    pub fn record(values: Vec<T>, completion: Completion<E>) -> Self {
+        Finite { values, completion: Some(completion) }
+    }
+
+    /// `Just(_:)`: emits `value` once, then finishes.
+    pub fn just(value: T) -> Self {
+        Self::record(vec![value], Completion::Finished)
+    }
+
+    /// `Empty(completeImmediately:)`: no values; finishes at once when `complete_immediately` is set,
+    /// otherwise never completes.
+    pub fn empty(complete_immediately: bool) -> Self {
+        Finite { values: Vec::new(), completion: complete_immediately.then_some(Completion::Finished) }
+    }
+
+    /// `Fail(error:)`: no values, then fails at once.
+    pub fn fail(error: E) -> Self {
+        Self::record(Vec::new(), Completion::Failed(error))
+    }
+
+    /// Number of values this publisher replays.
+    pub fn value_count(&self) -> usize {
+        self.values.len()
+    }
+
+    /// Replays the values to `on_value`, then the completion to `on_completion` if there is one.
+    pub fn subscribe(&self, mut on_value: impl FnMut(&T), on_completion: impl FnOnce(Completion<E>)) {
+        for v in &self.values {
+            on_value(v);
+        }
+        if let Some(c) = self.completion.clone() {
+            on_completion(c);
+        }
+    }
+}
+
+struct FutureInner<T, E> {
+    result: Option<Result<T, E>>,
+    waiting: Vec<Box<dyn FnOnce(&Result<T, E>)>>,
+}
+
+/// `Future`: a publisher of one result that is produced later by a [`Promise`]. A subscriber that
+/// arrives before the result waits for it; a later subscriber gets the stored result at once. Each
+/// subscriber receives the result once. A waiting subscriber cannot be cancelled.
+pub struct Future<T, E> {
+    inner: Rc<RefCell<FutureInner<T, E>>>,
+}
+
+/// The handle a [`Future`] gives its producer. The first result wins; later ones are refused.
+pub struct Promise<T, E> {
+    inner: Rc<RefCell<FutureInner<T, E>>>,
+}
+
+impl<T: Clone + 'static, E: Clone + 'static> Future<T, E> {
+    /// Runs `attempt` at once with the promise. The attempt may resolve it synchronously or keep the
+    /// promise and resolve it later.
+    pub fn new(attempt: impl FnOnce(Promise<T, E>)) -> Self {
+        let inner = Rc::new(RefCell::new(FutureInner { result: None, waiting: Vec::new() }));
+        attempt(Promise { inner: inner.clone() });
+        Future { inner }
+    }
+
+    /// Calls `f` with the result: now if it is resolved, otherwise when the promise resolves.
+    pub fn subscribe(&self, f: impl FnOnce(&Result<T, E>) + 'static) {
+        let ready = self.inner.borrow().result.clone();
+        match ready {
+            Some(r) => f(&r),
+            None => self.inner.borrow_mut().waiting.push(Box::new(f)),
+        }
+    }
+
+    /// True once the promise has been resolved.
+    pub fn is_resolved(&self) -> bool {
+        self.inner.borrow().result.is_some()
+    }
+}
+
+impl<T: Clone + 'static, E: Clone + 'static> Promise<T, E> {
+    /// Resolves the future and calls the waiting subscribers in the order they subscribed. Returns
+    /// `false` and changes nothing when the future was already resolved.
+    pub fn resolve(&self, result: Result<T, E>) -> bool {
+        let waiting = {
+            let mut i = self.inner.borrow_mut();
+            if i.result.is_some() {
+                return false;
+            }
+            i.result = Some(result.clone());
+            std::mem::take(&mut i.waiting)
+        };
+        for f in waiting {
+            f(&result);
+        }
+        true
+    }
+}
+
+/// `Deferred`: builds a fresh publisher for each subscriber, so the work runs only when someone subscribes.
+#[derive(Clone)]
+pub struct Deferred<T, E> {
+    make: Rc<dyn Fn() -> Finite<T, E>>,
+}
+
+impl<T: Clone + 'static, E: Clone + 'static> Deferred<T, E> {
+    pub fn new(make: impl Fn() -> Finite<T, E> + 'static) -> Self {
+        Deferred { make: Rc::new(make) }
+    }
+
+    /// Calls the factory for this subscriber and replays its publisher.
+    pub fn subscribe(&self, on_value: impl FnMut(&T), on_completion: impl FnOnce(Completion<E>)) {
+        (self.make)().subscribe(on_value, on_completion);
+    }
+}
+
+/// `ConnectablePublisher`: values from `upstream` reach the subscribers only while connected. Subscribers
+/// attach to a shared subject; [`Connectable::connect`] links that subject to the upstream.
+#[derive(Clone)]
+pub struct Connectable<T> {
+    upstream: PassthroughSubject<T>,
+    subject: PassthroughSubject<T>,
+}
+
+impl<T: Clone + 'static> Connectable<T> {
+    /// A connectable view of `upstream`, not yet connected.
+    pub fn new(upstream: &PassthroughSubject<T>) -> Self {
+        Connectable { upstream: upstream.clone(), subject: PassthroughSubject::new() }
+    }
+
+    /// `connect()`: forwards each upstream value to the subscribers until the returned `Subscription`
+    /// is cancelled or dropped. Each call adds another link.
+    pub fn connect(&self) -> Subscription {
+        let out = self.subject.clone();
+        self.upstream.sink(move |v| out.send(v.clone()))
+    }
+
+    /// Attaches a subscriber to the shared subject.
+    pub fn sink(&self, f: impl FnMut(&T) + 'static) -> Subscription {
+        self.subject.sink(f)
+    }
+
+    /// Number of subscribers on the shared subject.
+    pub fn subscriber_count(&self) -> usize {
+        self.subject.subscriber_count()
+    }
+
+    /// `autoconnect()`: connects when the first subscriber arrives and never disconnects afterwards.
+    pub fn autoconnect(&self) -> Autoconnect<T> {
+        Autoconnect { connectable: self.clone(), link: Rc::new(RefCell::new(None)) }
+    }
+}
+
+/// `Publishers.Autoconnect`: a [`Connectable`] that connects on the first subscription. The connection
+/// is kept for the life of the value, so later subscribers share it.
+#[derive(Clone)]
+pub struct Autoconnect<T> {
+    connectable: Connectable<T>,
+    link: Rc<RefCell<Option<Subscription>>>,
+}
+
+impl<T: Clone + 'static> Autoconnect<T> {
+    /// Attaches a subscriber, connecting first if no connection exists yet.
+    pub fn sink(&self, f: impl FnMut(&T) + 'static) -> Subscription {
+        let connected = self.link.borrow().is_some();
+        if !connected {
+            let link = self.connectable.connect();
+            *self.link.borrow_mut() = Some(link);
+        }
+        self.connectable.sink(f)
+    }
+}
+
+/// `CombineIdentifier`: a process-unique id for a publisher stream. Values are never reused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CombineIdentifier(u64);
+
+static NEXT_IDENTIFIER: AtomicU64 = AtomicU64::new(1);
+
+impl CombineIdentifier {
+    /// A new identifier, distinct from every one made before it in this process.
+    pub fn new() -> Self {
+        CombineIdentifier(NEXT_IDENTIFIER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// The numeric value of the identifier.
+    pub fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl Default for CombineIdentifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for CombineIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CombineIdentifier({:#x})", self.0)
     }
 }
 
@@ -664,5 +930,148 @@ mod tests {
         assert_eq!(seq.try_next(), None);
         drop(seq);
         assert_eq!(o.subscriber_count(), 0);
+    }
+
+    #[test]
+    fn just_emits_its_value_once_then_finishes() {
+        let f: Finite<i32, Never> = Finite::just(3);
+        let mut vals = Vec::new();
+        let done = Rc::new(RefCell::new(None));
+        let d = done.clone();
+        f.subscribe(|v| vals.push(*v), |c| *d.borrow_mut() = Some(c));
+        assert_eq!(vals, vec![3]);
+        assert_eq!(*done.borrow(), Some(Completion::Finished));
+    }
+
+    #[test]
+    fn empty_finishes_at_once_or_never() {
+        let mut emitted = 0;
+        let mut completed = false;
+        Finite::<i32, &str>::empty(false).subscribe(|_| emitted += 1, |_| completed = true);
+        assert_eq!(emitted, 0, "empty(false) emits nothing");
+        assert!(!completed, "empty(false) never completes");
+        let done = Rc::new(RefCell::new(None));
+        let d = done.clone();
+        let f = Finite::<i32, &str>::empty(true);
+        f.subscribe(|_| panic!("no values"), |c| *d.borrow_mut() = Some(c));
+        assert_eq!(f.value_count(), 0);
+        assert_eq!(*done.borrow(), Some(Completion::Finished));
+    }
+
+    #[test]
+    fn fail_and_record_replay_values_then_the_failure_in_order() {
+        let (log, w) = counter();
+        let done = Rc::new(RefCell::new(None));
+        let d = done.clone();
+        Finite::record(vec![1, 2], Completion::Failed("boom")).subscribe(
+            move |v| w.borrow_mut().push(*v),
+            |c| *d.borrow_mut() = Some(c),
+        );
+        assert_eq!(*log.borrow(), vec![1, 2]);
+        assert_eq!(*done.borrow(), Some(Completion::Failed("boom")));
+
+        let failed = Rc::new(RefCell::new(None));
+        let f2 = failed.clone();
+        Finite::<i32, &str>::fail("nope").subscribe(|_| panic!("no values"), |c| *f2.borrow_mut() = Some(c));
+        assert_eq!(*failed.borrow(), Some(Completion::Failed("nope")));
+    }
+
+    #[test]
+    fn future_waits_for_the_promise_then_keeps_the_first_result() {
+        let slot: Rc<RefCell<Option<Promise<i32, &'static str>>>> = Rc::new(RefCell::new(None));
+        let s = slot.clone();
+        let fut: Future<i32, &'static str> = Future::new(move |p| *s.borrow_mut() = Some(p));
+        let (log, w) = counter();
+        fut.subscribe(move |r| w.borrow_mut().push(r.clone().unwrap_or(-1)));
+        assert!(log.borrow().is_empty());
+        assert!(!fut.is_resolved());
+        let promise = slot.borrow_mut().take().unwrap();
+        assert!(promise.resolve(Ok(5)));
+        assert!(!promise.resolve(Ok(9)), "the first result wins");
+        assert_eq!(*log.borrow(), vec![5]);
+        // A subscriber after the result gets it at once.
+        let late = Rc::new(RefCell::new(None));
+        let l = late.clone();
+        fut.subscribe(move |r| *l.borrow_mut() = Some(r.clone()));
+        assert_eq!(*late.borrow(), Some(Ok(5)));
+        assert!(fut.is_resolved());
+    }
+
+    #[test]
+    fn future_resolved_during_creation_and_failure_result() {
+        let fut: Future<i32, &'static str> = Future::new(|p| {
+            p.resolve(Err("x"));
+        });
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        fut.subscribe(move |r| *g.borrow_mut() = Some(r.clone()));
+        assert_eq!(*got.borrow(), Some(Err("x")));
+    }
+
+    #[test]
+    fn deferred_builds_a_fresh_publisher_per_subscriber() {
+        let made = Rc::new(Cell::new(0));
+        let m = made.clone();
+        let d: Deferred<u32, ()> = Deferred::new(move || {
+            m.set(m.get() + 1);
+            Finite::just(m.get())
+        });
+        assert_eq!(made.get(), 0, "nothing runs before a subscription");
+        let (log, w) = counter_u32();
+        let w2 = w.clone();
+        d.subscribe(move |v| w.borrow_mut().push(*v), |_| {});
+        d.subscribe(move |v| w2.borrow_mut().push(*v), |_| {});
+        assert_eq!(made.get(), 2);
+        assert_eq!(*log.borrow(), vec![1, 2]);
+    }
+
+    #[test]
+    fn connectable_delivers_only_while_connected() {
+        let up = PassthroughSubject::<i32>::new();
+        let conn = up.multicast();
+        let (log, w) = counter();
+        let _s = conn.sink(move |v| w.borrow_mut().push(*v));
+        up.send(1);
+        assert!(log.borrow().is_empty(), "nothing flows before connect");
+        let link = conn.connect();
+        assert_eq!(up.subscriber_count(), 1);
+        up.send(2);
+        link.cancel();
+        assert_eq!(up.subscriber_count(), 0);
+        up.send(3);
+        assert_eq!(*log.borrow(), vec![2]);
+    }
+
+    #[test]
+    fn share_connects_on_first_subscriber_and_shares_one_link() {
+        let up = PassthroughSubject::<i32>::new();
+        let shared = up.share();
+        assert_eq!(up.subscriber_count(), 0);
+        let (a_log, aw) = counter();
+        let (b_log, bw) = counter();
+        let _a = shared.sink(move |v| aw.borrow_mut().push(*v));
+        assert_eq!(up.subscriber_count(), 1, "the first subscriber connects");
+        let _b = shared.sink(move |v| bw.borrow_mut().push(*v));
+        assert_eq!(up.subscriber_count(), 1, "later subscribers share the connection");
+        up.send(7);
+        assert_eq!(*a_log.borrow(), vec![7]);
+        assert_eq!(*b_log.borrow(), vec![7]);
+    }
+
+    #[test]
+    fn combine_identifiers_are_unique_shared_by_clones_and_display_as_hex() {
+        let a = PassthroughSubject::<i32>::new();
+        let b = PassthroughSubject::<i32>::new();
+        assert_ne!(a.identifier(), b.identifier());
+        assert_eq!(a.clone().identifier(), a.identifier());
+        let x = CombineIdentifier::new();
+        let y = CombineIdentifier::new();
+        assert!(y.raw() > x.raw());
+        assert_eq!(CombineIdentifier(255).to_string(), "CombineIdentifier(0xff)");
+    }
+
+    fn counter_u32() -> (Rc<RefCell<Vec<u32>>>, Rc<RefCell<Vec<u32>>>) {
+        let l = Rc::new(RefCell::new(Vec::new()));
+        (l.clone(), l)
     }
 }
