@@ -748,6 +748,12 @@ the windows behind the window. Ours, end to end:
   only when the list changes. Shell to app: `appearance::VIBRANCY` (GPU presenter, no Reduce Transparency) and
   `appearance::MATERIALS` (the shell decodes every kind and state). Without `MATERIALS` the SDK sends
   `MaterialKind::legacy()` kinds (`Sidebar`, else `Titlebar`) with the default state, which every shell decodes.
+- Window server (Apple parity: `NSVisualEffectView` behind-window sidebar material): under bifrost-wm the shell
+  sends each External window's material rects (`expand_material`, window radius growth on inner sides) as the
+  `ext-background-effect` blur region, exactly as for built-in windows; apps need no extra call beyond
+  `visual_effect` / `source_list`. Direct Wayland-surface apps do not send a region yet (gap).
+- Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
+  stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a
   `glass::Kind` (`Sidebar`, `Titlebar` for title bar and header, `Content` for the background materials, `Menu` for
   the floating ones) and the fixed state, and adds the Settings sidebar column.

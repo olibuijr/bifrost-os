@@ -114,7 +114,7 @@ Shell side (this round): the shell binds `ext_background_effect_manager_v1` when
 the blur capability. For each window with materials it then sends the material rects (shadow margin added) as the
 blur region and leaves the window translucent: no presenter blur, no inactive opaque plate.
 `BIFROST_WM_MATERIALS=0` keeps the presenter path. The SDK apps (`bifrost_app`) must use the same call; no client
-sends a region yet except the shell, so Files-class apps show no blur under bifrost-wm until step 3 below.
+sends a region yet except the shell and, through it, SDK apps (step 3 below).
 
 ### labwc: black Files and black Settings material (diagnosis, not reproduced)
 
@@ -131,8 +131,13 @@ composed black by labwc. Check on Midget with a screenshot while Files is open, 
 1. (done) Shell windows request blur through ext-background-effect when the server offers it.
 2. Move the region computation into `springboard/ui` (a `material` module), re-exported by `bifrost_app::controls`,
    so the shell and SDK apps share one call (the shell cannot import `bifrost_app`).
-3. SDK: `bifrost_app` windows send the blur region from the kit's `source_list` / `toolbar` material rects and keep
+3. (done for hosted apps) SDK: `bifrost_app` windows send the blur region from the kit's `source_list` / `toolbar` material rects and keep
    their buffer translucent there. Files then blurs like Settings.
+   Status: SDK apps hosted by the shell already declare their materials (`ToShell::Materials`, kit `source_list` /
+   `toolbar_band`); `Shell::take_wayland_materials` turns them into window px (`expand_material`, unit-tested) and
+   `Wayland::window_materials` sends them as the ext-background-effect blur region of the External(N) window, the
+   same path as Settings. No protocol change was needed. Direct apps that own a Wayland surface (route `Direct`)
+   do not send a region yet. Unverified on Midget.
 4. Server: draw the inactive-material plate in the window server (it knows activation) and send xdg `activated` to
    shell windows, so foreign focus no longer leaves the shell believing it is key.
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
