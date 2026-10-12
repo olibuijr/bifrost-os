@@ -12,6 +12,7 @@ pub mod midi_file;
 pub mod model;
 pub mod params;
 pub mod playback;
+pub mod rack;
 pub mod render;
 pub mod store;
 pub mod system;

@@ -49,6 +49,26 @@ pub fn params_from_tree(spec: &[P], tree: &ParameterTree) -> Params {
     params
 }
 
+/// A device's tree with the stored values written over the spec defaults. A stored value that is not a number is
+/// ignored, and the tree clamps each value into its range.
+pub fn tree_from_extra(spec: &[P], extra: &Extra) -> Result<ParameterTree, HostError> {
+    let mut tree = tree_for(spec)?;
+    let values = Params::new(spec, extra);
+    for (index, s) in spec.iter().enumerate() {
+        tree.set_value(index as u64, values.get(s.name) as f32)?;
+    }
+    Ok(tree)
+}
+
+/// Writes the tree's values back into a device's stored values, under each spec name.
+pub fn write_back(spec: &[P], tree: &ParameterTree, extra: &mut Extra) {
+    for (index, s) in spec.iter().enumerate() {
+        if let Some(value) = tree.value(index as u64) {
+            extra.insert(s.name.to_string(), serde_json::Value::from(f64::from(value)));
+        }
+    }
+}
+
 /// An empty preset store: the device has no factory presets, and the user saves their own.
 pub fn new_presets() -> Result<PresetStore, HostError> {
     PresetStore::new(Vec::new())

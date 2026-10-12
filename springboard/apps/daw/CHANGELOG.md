@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-10-12
+
+- Rack inspector: the Rack view shows each parameter of the track's instrument and effects as a slider with its value in the device's unit. Click a slider to set the value; click a parameter's name to open it for automation as before.
+- Track stream format: the Rack shows the track's playback format under the title, the sample rate, the channel layout and its channel names.
+- Presets: "Save Preset" stores the instrument's current values as a numbered preset ("Preset 1", "Preset 2"...). Tap a preset in the list to apply it to the instrument. Presets are kept in the store's presets folder per instrument, so they are available in every song.
+- Previous Track and Next Track move the Rack to another track.
 ## 0.3.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
