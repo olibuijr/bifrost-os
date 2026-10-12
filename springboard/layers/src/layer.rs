@@ -171,7 +171,8 @@ impl Layer {
             (Property::Position, Value::Point(v)) => self.position = v,
             (Property::AnchorPoint, Value::Point(v)) => self.anchor_point = v,
             (Property::Transform, Value::Transform(v)) => self.transform = v,
-            (Property::Opacity, Value::Scalar(v)) => self.opacity = v,
+            // Clamped here, so the model and the presented value agree (GFX-14).
+            (Property::Opacity, Value::Scalar(v)) => self.opacity = v.clamp(0.0, 1.0),
             (Property::CornerRadius, Value::Scalar(v)) => self.corner_radius = v,
             (Property::BackgroundColor, Value::Color(v)) => self.background_color = v,
             (Property::Shadow, Value::Shadow(v)) => self.shadow = v,
