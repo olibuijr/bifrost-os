@@ -1,7 +1,8 @@
 //! Name-keyed notifications with integer tokens: polled checks, per-name state values and an optional datagram
 //! per token. A token is a handle into one `NotifyCenter`. A post to a name marks every live, unsuspended token on
-//! that name as pending, and `check` reads and clears that mark. Signal delivery is not modelled (it needs a kernel
-//! signal path). `SYSTEM_EVENTS` fixes the spelling of the system change names the shell may post.
+//! that name as pending, and `check` reads and clears that mark. A signal token queues its signal number on each post,
+//! and `take_signals` hands the queue to the caller, which raises the signals itself: no kernel signal path is used.
+//! `SYSTEM_EVENTS` fixes the spelling of the system change names the shell may post.
 
 use std::collections::{BTreeMap, HashMap};
 use std::io;
@@ -27,7 +28,12 @@ struct Registration {
     suspended: bool,
     /// Sending end of a datagram pair, present for tokens made with `register_fd`.
     sink: Option<UnixDatagram>,
+    /// Signal number queued on each post, present for tokens made with `register_signal`.
+    signal: Option<i32>,
 }
+
+/// Largest signal number a signal token may name. The range is 1 to this value, inclusive.
+pub const MAX_SIGNAL: i32 = 64;
 
 /// The table of registrations and the state values. Not shared between threads; a caller wraps it in its own lock.
 #[derive(Debug, Default)]
@@ -35,6 +41,8 @@ pub struct NotifyCenter {
     last: u32,
     tokens: BTreeMap<u32, Registration>,
     states: HashMap<String, u64>,
+    /// Signals queued by posts, in post order, until `take_signals` reads them.
+    signals: Vec<i32>,
 }
 
 impl NotifyCenter {
@@ -42,20 +50,35 @@ impl NotifyCenter {
         Self::default()
     }
 
-    fn add(&mut self, name: &str, sink: Option<UnixDatagram>) -> u32 {
+    fn add(&mut self, name: &str, sink: Option<UnixDatagram>, signal: Option<i32>) -> u32 {
         // Zero is never handed out, and the counter starts again at one if it ever wraps.
         self.last = self.last.checked_add(1).unwrap_or(1);
         let token = self.last;
         self.tokens.insert(
             token,
-            Registration { name: name.to_string(), pending: false, suspended: false, sink },
+            Registration { name: name.to_string(), pending: false, suspended: false, sink, signal },
         );
         token
     }
 
     /// Registers a name for polling with `check`.
     pub fn register(&mut self, name: &str) -> u32 {
-        self.add(name, None)
+        self.add(name, None, None)
+    }
+
+    /// Registers a name for signal delivery. Each post to the name queues `signal` for the caller, read with
+    /// `take_signals`. The number must be from 1 to `MAX_SIGNAL`, or the call fails with `InvalidInput`.
+    pub fn register_signal(&mut self, name: &str, signal: i32) -> io::Result<u32> {
+        if !(1..=MAX_SIGNAL).contains(&signal) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "signal number out of range"));
+        }
+        Ok(self.add(name, None, Some(signal)))
+    }
+
+    /// Returns the signals queued by posts since the last call, in post order, and clears the queue. Signals
+    /// queued before a token is cancelled stay in the queue.
+    pub fn take_signals(&mut self) -> Vec<i32> {
+        std::mem::take(&mut self.signals)
     }
 
     /// Registers a name and returns the token with the reading end of a datagram pair. Each delivered post writes
@@ -63,7 +86,7 @@ impl NotifyCenter {
     pub fn register_fd(&mut self, name: &str) -> io::Result<(u32, UnixDatagram)> {
         let (sink, reader) = UnixDatagram::pair()?;
         sink.set_nonblocking(true)?;
-        Ok((self.add(name, Some(sink)), reader))
+        Ok((self.add(name, Some(sink), None), reader))
     }
 
     pub fn is_valid(&self, token: u32) -> bool {
@@ -111,6 +134,9 @@ impl NotifyCenter {
             }
             reg.pending = true;
             count += 1;
+            if let Some(signal) = reg.signal {
+                self.signals.push(signal);
+            }
             if let Some(sink) = &reg.sink {
                 // A full buffer means the reader is behind. The pending mark is still set, so nothing is lost.
                 let _ = sink.send(&[1]);
@@ -219,5 +245,58 @@ mod tests {
                 assert_ne!(a, b);
             }
         }
+    }
+
+    #[test]
+    fn signal_numbers_must_be_from_one_to_sixty_four() {
+        let mut c = NotifyCenter::new();
+        assert!(c.register_signal("n", 0).is_err());
+        assert!(c.register_signal("n", -1).is_err());
+        assert!(c.register_signal("n", 65).is_err());
+        assert_eq!(c.register_signal("n", 1).expect("one is valid"), 1);
+        assert_eq!(c.register_signal("n", 64).expect("sixty-four is valid"), 2);
+    }
+
+    #[test]
+    fn each_post_queues_one_signal_per_signal_token_in_token_order() {
+        let mut c = NotifyCenter::new();
+        let a = c.register_signal("n", 10).expect("valid");
+        let b = c.register_signal("n", 12).expect("valid");
+        let plain = c.register("n");
+        assert_eq!((a, b, plain), (1, 2, 3));
+        assert_eq!(c.post("n"), 3);
+        assert_eq!(c.take_signals(), vec![10, 12]);
+        assert!(c.take_signals().is_empty());
+    }
+
+    #[test]
+    fn repeated_posts_queue_repeated_signals_and_keep_the_pending_mark() {
+        let mut c = NotifyCenter::new();
+        let t = c.register_signal("n", 10).expect("valid");
+        c.post("n");
+        c.post("n");
+        assert_eq!(c.take_signals(), vec![10, 10]);
+        assert!(c.check(t));
+        assert!(!c.check(t));
+    }
+
+    #[test]
+    fn suspended_signal_tokens_queue_nothing() {
+        let mut c = NotifyCenter::new();
+        let t = c.register_signal("n", 10).expect("valid");
+        assert!(c.suspend(t));
+        assert_eq!(c.post("n"), 0);
+        assert!(c.take_signals().is_empty());
+        assert!(c.resume(t));
+        c.post("n");
+        assert_eq!(c.take_signals(), vec![10]);
+    }
+
+    #[test]
+    fn a_post_to_another_name_queues_no_signal() {
+        let mut c = NotifyCenter::new();
+        c.register_signal("x", 10).expect("valid");
+        assert_eq!(c.post("y"), 0);
+        assert!(c.take_signals().is_empty());
     }
 }
