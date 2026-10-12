@@ -22,6 +22,8 @@ zune-jpeg = "0.5"
 zune-core = "0.5"
 png = "0.18"
 bifrost-core = { path = "core" }
+# the one boot frame (docs/boot-architecture.md, "One frame"): the kernel hand-off, the installer and the window server
+bootweave-frame = { path = "bootweave/frame" }
 bifrost-render = { path = "render" }
 bifrost-ui = { path = "ui" }
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"], optional = true }

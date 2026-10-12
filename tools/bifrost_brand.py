@@ -58,13 +58,7 @@ def svg_mark(n):
 def main():
     pk = ROOT / "packaging/archiso/airootfs/usr/share"
     svg_mark(512).save(pk / "bifrost/installer/logo.png")
-    on_black = Image.new("RGBA", (160, 160), (0, 0, 0, 255))
-    on_black.alpha_composite(svg_mark(160))
-    raw = bytearray()
-    for r, g, b in on_black.convert("RGB").getdata():
-        raw += bytes((b, g, r, 0))
-    (ROOT / "springboard/bootweave/efi/logo.bgrx").write_bytes(raw)
-    print("wrote installer logo and bootweave-efi/logo.bgrx")
+    print("wrote installer logo")
 
 
 if __name__ == "__main__":
