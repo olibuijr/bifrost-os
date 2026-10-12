@@ -6,6 +6,9 @@ ISO=${1:?usage: $0 ISO}
 cd "$(dirname "$0")/.."
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 bad=0
+# the loader build the ISO tools use: tools/build-efi-boot.sh writes both copies, the recovery one is tracked
+LOADER=packaging/archiso/bootweave.efi
+[ -s "$LOADER" ] || LOADER=packaging/arch/recovery/bootweave.efi
 xorriso -indev "$ISO" -report_el_torito plain 2>/dev/null | grep -q 'El Torito boot img : *[0-9]* *BIOS' && { echo "FOUND BIOS El Torito entry"; bad=1; }
 tree=$(xorriso -indev "$ISO" -find / 2>/dev/null)
 for p in /boot/syslinux /boot/memtest86+ /shellx64.efi /EFI/BOOT/BOOTIA32.EFI; do
@@ -22,7 +25,7 @@ esp=$(ls "$T"/eltorito_img*_uefi.img 2>/dev/null | head -1)
 if [ -z "$esp" ]; then echo "MISSING UEFI boot image"; bad=1
 else
   for p in EFI/BOOT/BOOTx64.efi EFI/BIFROST/BOOTx64.efi; do
-    mcopy -n -i "$esp" "::/$p" "$T/l.efi" 2>/dev/null && cmp -s "$T/l.efi" packaging/archiso/bootweave.efi || { echo "ESP $p is not the BifrOSt loader"; bad=1; }
+    mcopy -n -i "$esp" "::/$p" "$T/l.efi" 2>/dev/null && cmp -s "$T/l.efi" "$LOADER" || { echo "ESP $p is not the BifrOSt loader"; bad=1; }
     rm -f "$T/l.efi"
   done
   mdir -/ -b -i "$esp" :: 2>/dev/null | grep -iE 'systemd|loader\.conf|shell.*\.efi|memtest' && { echo "FOUND foreign boot files in ESP"; bad=1; }

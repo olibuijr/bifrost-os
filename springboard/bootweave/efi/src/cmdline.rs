@@ -38,6 +38,13 @@ fn is_text_free_token(token: &str) -> bool {
     TEXT_FREE_KEYS.iter().any(|key| token == *key || (key.ends_with('=') && token.starts_with(key)))
 }
 
+/// Whether the loader should look for an encrypted root at all: only a line that names a mapped root
+/// (`root=/dev/mapper/..`) or carries the explicit `bifrost.unlock` token does. Every other boot skips the scan of
+/// every block device, which would otherwise run before anything is painted.
+pub fn wants_unlock(line: &str) -> bool {
+    line.split_whitespace().any(|t| t == "bifrost.unlock" || t.starts_with("root=/dev/mapper/"))
+}
+
 /// Returns `line` with every text-free token replaced by the verbose set. Every other token (root, subvolume,
 /// the initrd path, the hardware flags) is kept in order.
 pub fn verbose(line: &str) -> String {
@@ -53,6 +60,15 @@ pub fn verbose(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unlock_runs_only_for_a_mapped_root_or_the_token() {
+        assert!(wants_unlock("quiet root=/dev/mapper/bifrost-root rw"));
+        assert!(wants_unlock("quiet bifrost.unlock"));
+        assert!(!wants_unlock("quiet root=UUID=abcd rw"));
+        assert!(!wants_unlock("quiet bifrost.unlocked=1 root=/dev/sda2"));
+        assert!(!wants_unlock(""));
+    }
 
     #[test]
     fn default_is_text_free() {

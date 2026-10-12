@@ -2,9 +2,7 @@
 # The compositor and Linux apps run as the installed account. The existing shell
 # keeps its system-service privileges until those services have separate helpers.
 set -euo pipefail
-timing=/var/log/bifrost-boot-timing.log
 mark() {
-    printf '%s %s\n' "$(cut -d' ' -f1 /proc/uptime)" "$1" >> "$timing" 2>/dev/null || true
     /usr/bin/bifrost-bootweave mark "$1" 2>/dev/null || true
 }
 mark session-start

@@ -65,7 +65,7 @@ systems read `EFI\BIFROST\boot.cfg`, USB media `EFI\BOOT\cmdline.txt`.
 |---|---|---|---|
 | S0 firmware | UEFI (not ours) | the firmware's logo, if any | GOP framebuffer at the firmware's mode |
 | S1 loader | `springboard/bootweave/efi` | frame 0 at the native mode: background, logo, progress bar from 0 to the S1 checkpoint | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
-| S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0; the bar holds | the inherited CRTC mode; `/run/bifrost/boot-progress` from the loader's record |
+| S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0; the bar holds | the inherited CRTC mode; the `BifrostBootProgress` EFI variable (efivarfs) from the loader; the supervisor republishes the bar at `/run/bifrost/bootweave/progress` |
 | S3 early userspace | `bifrost-bootweave` | the same frame, redrawn into the inherited KMS framebuffer, the bar continuing | the session and the display to the window server |
 | S4 window server | `bifrost-wm` (`labwc` until the switch) | the same frame until desktop-ready, then one fade | the desktop |
 | S5 session | the shell and the chrome clients | the desktop | |
