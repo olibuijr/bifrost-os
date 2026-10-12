@@ -286,7 +286,7 @@ impl AudioSetup {
             if rows.is_empty() {
                 continue;
             }
-            items.push(SidebarItem::header(if kind == Kind::Hardware { "Hardware" } else { "Aggregates" }));
+            items.push(SidebarItem::header(kind.section()));
             for i in rows {
                 let d = &self.devices[i];
                 let symbol = if d.kind.is_made() { "rectangle.stack" } else { "speaker.wave.2" };

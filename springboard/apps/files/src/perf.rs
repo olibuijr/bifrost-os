@@ -23,6 +23,8 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> Lru<K, V> {
     pub(crate) fn new(cap: usize) -> Self {
         Self { cap: cap.max(1), tick: 0, map: HashMap::new() }
     }
+    /// The number of entries; the tests check the bound.
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
     }

@@ -1,6 +1,8 @@
 //! Develop menu state: View Source, Reload From Origin, user agent presets and Responsive Design Mode
 //! (Browser's Develop menu, `WebView.customUserAgent`).
 
+use bifrost_app::AppMenuItem;
+
 pub const UA_PRESETS: [(&str, &str); 5] = [
     ("Default", ""),
     ("Browser Golden Gate", "Mozilla/5.0 (Macintosh; Intel Golden Gate 10_15_7) WebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Browser/605.1.15"),
@@ -11,6 +13,38 @@ pub const UA_PRESETS: [(&str, &str); 5] = [
 
 /// Responsive presets: name, CSS width, CSS height.
 pub const SIZE_PRESETS: [(&str, u32, u32); 3] = [("bifrost 15", 393, 852), ("bifrost", 820, 1180), ("1280x800", 1280, 800)];
+/// Device pixel ratios the Develop menu offers.
+pub const DPRS: [u32; 3] = [1, 2, 3];
+
+/// Develop menu item ids. The user agent, size and pixel-ratio items are `base + index` into their table.
+pub const MENU_RESPONSIVE: u32 = 1400;
+const MENU_UA_BASE: u32 = 1410;
+const MENU_SIZE_BASE: u32 = 1420;
+const MENU_DPR_BASE: u32 = 1430;
+
+/// What a Develop menu item picks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    Responsive,
+    UserAgent(usize),
+    Size(usize),
+    Dpr(u32),
+}
+
+/// The choice a Develop menu item id stands for, when the id is one of ours.
+pub fn pick(id: u32) -> Option<Pick> {
+    if id == MENU_RESPONSIVE {
+        return Some(Pick::Responsive);
+    }
+    let within = |base: u32, len: usize| id.checked_sub(base).map(|i| i as usize).filter(|&i| i < len);
+    if let Some(i) = within(MENU_UA_BASE, UA_PRESETS.len()) {
+        return Some(Pick::UserAgent(i));
+    }
+    if let Some(i) = within(MENU_SIZE_BASE, SIZE_PRESETS.len()) {
+        return Some(Pick::Size(i));
+    }
+    within(MENU_DPR_BASE, DPRS.len()).map(|i| Pick::Dpr(DPRS[i]))
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Responsive {
@@ -32,6 +66,28 @@ impl DevMenu {
     pub fn set_ua(&mut self, i: usize) {
         self.ua = i.min(UA_PRESETS.len() - 1);
     }
+    /// The Develop menu: the user agent presets, Responsive Design Mode and, while it is on, its size and pixel ratio.
+    /// `page` says whether a page is open.
+    pub fn menu_items(&self, page: bool) -> Vec<AppMenuItem> {
+        let on = self.responsive.is_some();
+        let mut items = vec![AppMenuItem::submenu("User Agent")];
+        for (i, (name, _)) in UA_PRESETS.iter().enumerate() {
+            items.push(AppMenuItem::new(MENU_UA_BASE + i as u32, name).depth(1).checked(i == self.ua));
+        }
+        items.push(AppMenuItem::separator());
+        items.push(AppMenuItem::new(MENU_RESPONSIVE, "Responsive Design Mode").key("cmd+alt+r").checked(on).enabled(page));
+        items.push(AppMenuItem::submenu("Responsive Size").enabled(on));
+        for (i, (name, w, h)) in SIZE_PRESETS.iter().enumerate() {
+            let same = self.responsive.as_ref().is_some_and(|r| (r.w, r.h) == (*w, *h));
+            items.push(AppMenuItem::new(MENU_SIZE_BASE + i as u32, name).depth(1).checked(same).enabled(on));
+        }
+        items.push(AppMenuItem::submenu("Device Pixel Ratio").enabled(on));
+        for (i, d) in DPRS.iter().enumerate() {
+            let same = self.responsive.as_ref().is_some_and(|r| r.dpr == *d);
+            items.push(AppMenuItem::new(MENU_DPR_BASE + i as u32, &format!("{d}x")).depth(1).checked(same).enabled(on));
+        }
+        items
+    }
     pub fn toggle_responsive(&mut self) {
         self.responsive = match self.responsive {
             Some(_) => None,
@@ -42,18 +98,6 @@ impl DevMenu {
         if let (Some(r), Some(&(_, w, h))) = (&mut self.responsive, SIZE_PRESETS.get(i)) {
             r.w = w;
             r.h = h;
-        }
-    }
-    /// Custom `WxH`; false when the text does not parse or the mode is off.
-    pub fn custom(&mut self, text: &str) -> bool {
-        let Some((w, h)) = text.trim().split_once(['x', 'X']) else { return false };
-        match (w.trim().parse::<u32>(), h.trim().parse::<u32>(), &mut self.responsive) {
-            (Ok(w), Ok(h), Some(r)) if w > 0 && h > 0 => {
-                r.w = w.min(8192);
-                r.h = h.min(8192);
-                true
-            }
-            _ => false,
         }
     }
     pub fn set_dpr(&mut self, dpr: u32) {
@@ -98,14 +142,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn responsive_custom_size_and_dpr() {
+    fn responsive_size_and_dpr_follow_the_menu() {
         let mut d = DevMenu::default();
-        assert!(!d.custom("10x10"), "off by default");
-        d.toggle_responsive();
-        assert!(d.custom("1024 x 600"));
         d.set_dpr(9);
-        assert_eq!(d.readout().as_deref(), Some("1024 x 600 @3x"));
-        assert!(!d.custom("abc"));
+        assert_eq!(d.readout(), None, "off by default");
+        d.toggle_responsive();
+        d.preset(1);
+        d.set_dpr(9);
+        assert_eq!(d.readout().as_deref(), Some("820 x 1180 @3x"));
+        d.preset(9);
+        assert_eq!(d.readout().as_deref(), Some("820 x 1180 @3x"), "an unknown preset is ignored");
+    }
+
+    #[test]
+    fn the_default_user_agent_is_none_and_choices_clamp() {
+        let mut d = DevMenu::default();
+        assert_eq!(d.user_agent(), None);
+        d.set_ua(99);
+        assert_eq!(d.ua, UA_PRESETS.len() - 1);
+        assert!(d.user_agent().is_some());
+    }
+
+    #[test]
+    fn menu_ids_map_back_to_their_choice() {
+        assert_eq!(pick(MENU_RESPONSIVE), Some(Pick::Responsive));
+        assert_eq!(pick(MENU_UA_BASE + 2), Some(Pick::UserAgent(2)));
+        assert_eq!(pick(MENU_UA_BASE + UA_PRESETS.len() as u32), None);
+        assert_eq!(pick(MENU_SIZE_BASE + 1), Some(Pick::Size(1)));
+        assert_eq!(pick(MENU_DPR_BASE + 2), Some(Pick::Dpr(3)));
+        assert_eq!(pick(10), None);
     }
 
     #[test]

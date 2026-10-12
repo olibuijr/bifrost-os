@@ -1046,6 +1046,8 @@ impl Freeform {
         self.toast.as_ref().map(|(_, until)| *until)
     }
 
+    /// The state line the tests compare (the SDK `App` trait has no describe hook).
+    #[cfg(test)]
     pub fn describe(&self) -> String {
         format!(
             "freeform_tool={:?} freeform_color={} freeform_undo={} freeform_canvas={}x{}",

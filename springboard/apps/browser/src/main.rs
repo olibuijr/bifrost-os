@@ -121,6 +121,8 @@ enum Press {
     BannerClose,
     BannerReload,
     Reader,
+    /// The star at the address field's trailing edge: toggles the bookmark of the open page.
+    Bookmark,
 }
 
 struct Browser {
@@ -180,6 +182,11 @@ struct Browser {
     lib: library::Library,
     /// Site icons for tabs, the address field and suggestions (favicon.rs).
     favicons: favicon::Favicons,
+}
+
+/// The bookmark star at the trailing edge of the address field (a square the height of the field).
+fn star_rect(field: Rect) -> Rect {
+    Rect { x: field.x + field.w - field.h, y: field.y, w: field.h, h: field.h }
 }
 
 fn home() -> PathBuf {
@@ -561,6 +568,7 @@ impl Browser {
                     AppMenuItem::new(MENU_FIND_PREV, "Find Previous").key("cmd+shift+g").enabled(self.find.open),
                 ],
             },
+            AppMenu { title: "Develop".into(), items: self.dev.menu_items(page) },
             AppMenu { title: "History".into(), items: self.history_menu() },
         ]
     }
@@ -934,6 +942,9 @@ impl Browser {
             if !self.editing && self.view().is_some_and(|v| self.reader.button(v)) && reader::button_rect(self.address_rect(ui, w)).contains(px, py) {
                 return Some(Press::Reader);
             }
+            if !self.editing && self.view().is_some_and(|v| self.pool.as_ref().and_then(|p| p.state(v)).is_some()) && star_rect(self.address_rect(ui, w)).contains(px, py) {
+                return Some(Press::Bookmark);
+            }
             if self.address_rect(ui, w).contains(px, py) {
                 return Some(Press::Bar(ADDRESS));
             }
@@ -1010,6 +1021,10 @@ impl App for Browser {
                 self.downloads.clear_finished();
                 true
             }
+            _ if devmenu::pick(id).is_some() => {
+                self.dev_menu_action(ctx, id);
+                true
+            }
             _ => match tabdiscard::history_target(id) {
                 Some(target) => {
                     self.jump_to(target);
@@ -1018,6 +1033,34 @@ impl App for Browser {
                 None => false,
             },
         }
+    }
+
+    /// Develop menu: Responsive Design Mode, its size and pixel ratio, and the user agent preset.
+    fn dev_menu_action(&mut self, ctx: &Ctx, id: u32) {
+        match devmenu::pick(id) {
+            Some(devmenu::Pick::Responsive) => self.dev.toggle_responsive(),
+            Some(devmenu::Pick::UserAgent(i)) => self.set_user_agent(i),
+            Some(devmenu::Pick::Size(i)) => self.dev.preset(i),
+            Some(devmenu::Pick::Dpr(d)) => self.dev.set_dpr(d),
+            None => return,
+        }
+        self.place_web(ctx);
+    }
+
+    /// Develop > User Agent. The engine reads the user agent at start-up, so the choice takes effect on the next start.
+    fn set_user_agent(&mut self, i: usize) {
+        self.dev.set_ua(i);
+        let ua = self.dev.user_agent();
+        self.ctl.ua = ua.map(String::from);
+        if let Some(p) = self.pool.as_mut() {
+            p.set_user_agent(ua);
+        }
+    }
+
+    /// Clicking the address field's star: bookmarks the open page, or removes its bookmark when it has one.
+    fn toggle_bookmark(&mut self) {
+        let Some((url, title)) = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|st| (st.url.clone(), st.title.clone())) else { return };
+        self.store.toggle_bookmark(&url, &title, store::now());
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -1400,6 +1443,7 @@ impl App for Browser {
                         Press::BannerClose => self.banner_activate(crashbanner::BannerHit::Close),
                         Press::BannerReload => self.banner_activate(crashbanner::BannerHit::Reload),
                         Press::Reader => self.toggle_reader(),
+                        Press::Bookmark => self.toggle_bookmark(),
                         Press::Web => {}
                     }
                     if strip_before != self.strip_shown() {
@@ -1704,11 +1748,12 @@ impl App for Browser {
             let r = reader::button_rect(field);
             glyphs::glyph(s, ui, "doc", Rect { x: r.x + r.w * 0.2, y: r.y + r.h * 0.2, w: r.w * 0.6, h: r.h * 0.6 }, if self.reader.is_active(v) { TINT } else { LABEL_2.now() });
         }
-        // bookmarked pages show a star at the field's trailing edge
+        // the star at the field's trailing edge: filled for a bookmarked page, an outline otherwise (Browser)
         if let Some(st) = self.view().and_then(|v| self.pool.as_ref()?.state(v)) {
-            if !self.editing && self.store.is_bookmarked(&st.url) {
-                let star = Rect { x: field.x + field.w - field.h, y: field.y, w: field.h, h: field.h };
-                glyphs::glyph(s, ui, "star.fill", star, TINT);
+            if !self.editing {
+                let marked = self.store.is_bookmarked(&st.url);
+                let (name, color) = if marked { ("star.fill", TINT) } else { ("star", LABEL_2.now()) };
+                glyphs::glyph(s, ui, name, star_rect(field), color);
             }
         }
         // load progress along the bottom of the address field (Browser)

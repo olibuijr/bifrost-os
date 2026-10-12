@@ -1,3 +1,7 @@
+## 1.21.2
+
+- The label cache's length is compiled only for its tests.
+
 ## 1.21.1 — 2026-10-12
 
 - Removed the unused icon grid constants; the cell size comes from the icon size.
