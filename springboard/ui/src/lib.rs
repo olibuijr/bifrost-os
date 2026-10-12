@@ -704,6 +704,8 @@ pub mod model_store;
 pub mod ml_tensor;
 pub mod features;
 pub mod compute;
+pub mod ml_model;
+pub mod ml_state;
 pub mod postal;
 pub mod recordsearch;
 #[cfg(test)]
