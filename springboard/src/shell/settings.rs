@@ -247,6 +247,7 @@ pub struct Settings {
     login_moved: Vec<String>,
     /// Settings > Fonts, loaded when the page opens
     fonts: super::pages::FontsView,
+    sound: super::sound_page::SoundView,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
     notify_edge: Option<NotifyEdit>,
@@ -440,6 +441,7 @@ impl Settings {
             login_moved: Vec::new(),
             login_out: Vec::new(),
             fonts: Default::default(),
+            sound: Default::default(),
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
@@ -517,7 +519,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, fonts: &self.fonts }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, fonts: &self.fonts, sound: &self.sound }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -1906,6 +1908,16 @@ impl Settings {
                         let position = [super::desktop_dock::Position::Bottom, super::desktop_dock::Position::Left, super::desktop_dock::Position::Right][k.min(2)];
                         self.dock.position = position;
                         self.dock_out.push(super::desktop_dock::Change::Position(position));
+                        vec![]
+                    }
+                    Pick::SoundOutput(k) | Pick::SoundInput(k) => {
+                        let input = matches!(pick, Pick::SoundInput(_));
+                        if let Some((key, uid)) = super::sound_page::pick_pref(&self.sound, input, k) {
+                            if let Err(e) = prefs.set(key, &uid) {
+                                eprintln!("settings: {key}: {e}");
+                            }
+                            if input { self.sound.input = Some(k) } else { self.sound.output = Some(k) }
+                        }
                         vec![]
                     }
                     Pick::IconSize(k) => {

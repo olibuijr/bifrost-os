@@ -167,6 +167,9 @@ pub enum Toggle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Settings > Sound: the n-th listed output / input becomes the default
+    SoundOutput(usize),
+    SoundInput(usize),
     AutoLock(usize),
     SystemSleep(usize),
     IconSize(usize),
@@ -338,6 +341,8 @@ pub struct Model<'a> {
     pub login_pending: &'a [(String, String)],
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
+    /// Settings > Sound: the device lists from the audio object model
+    pub sound: &'a super::sound_page::SoundView,
 }
 
 /// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
@@ -638,10 +643,14 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Sounds => page(
             "Sounds",
             false,
-            vec![
-                Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
-                Group::new(sound_switches(o, m.haptics)),
-            ],
+            {
+                let mut groups = vec![
+                    Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
+                    Group::new(sound_switches(o, m.haptics)),
+                ];
+                groups.extend(super::sound_page::groups(m.sound));
+                groups
+            },
         ),
         PageId::Focus => page(
             "Focus",
@@ -1330,7 +1339,7 @@ mod tests {
     }
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
     }
 
     #[test]
