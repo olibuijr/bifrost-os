@@ -267,3 +267,42 @@ fn without_a_tip_store_the_details_form_has_no_tip_row() {
     cleanup(&path);
 }
 
+#[test]
+fn edit_undo_and_redo_step_through_saves_and_completions() {
+    let (mut app, ui, path) = app("edit-undo");
+    add(&mut app, &ui, "Milk", 0.0);
+    assert_eq!(app.edit_titles(), ("Undo New Reminder".to_string(), "Redo".to_string()));
+    let id = app.data.items[0].id;
+    app.toggle_item(&ui, id);
+    assert!(app.data.items[0].completed);
+    assert_eq!(app.edit_titles(), ("Undo Mark as Completed".to_string(), "Redo".to_string()));
+    assert!(app.step_history(&ui, false), "undo the completion");
+    assert!(!app.data.items[0].completed, "undo marks it open again");
+    assert_eq!(app.edit_titles().1, "Redo Mark as Completed");
+    assert!(app.step_history(&ui, true), "redo the completion");
+    assert!(app.data.items[0].completed, "redo completes it again");
+    assert!(app.step_history(&ui, false));
+    assert!(app.step_history(&ui, false), "the save is the next step back");
+    assert!(titles(&app).is_empty(), "undoing the save removes the new reminder");
+    assert!(!app.step_history(&ui, false), "nothing left to undo");
+    assert!(app.step_history(&ui, true));
+    assert_eq!(titles(&app), ["Milk"], "redo brings the reminder back");
+    app.open_editor(&ui, Some(id), 50.0);
+    assert!(!app.step_history(&ui, false), "no undo while an editor holds a draft");
+    cleanup(&path);
+}
+
+#[test]
+fn a_new_change_after_an_undo_drops_the_redo_steps() {
+    let (mut app, ui, path) = app("edit-redo-drop");
+    add(&mut app, &ui, "Bread", 0.0);
+    let id = app.data.items[0].id;
+    app.toggle_item(&ui, id);
+    assert!(app.step_history(&ui, false));
+    assert_eq!(app.edit_titles().1, "Redo Mark as Completed");
+    app.toggle_item(&ui, id);
+    assert!(app.data.items[0].completed, "the new completion stands");
+    assert!(!app.history.can_redo(), "the undone step is gone");
+    cleanup(&path);
+}
+
