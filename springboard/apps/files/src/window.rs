@@ -372,8 +372,9 @@ impl Files {
     }
     pub(crate) fn paint(&mut self, ui: &Ui, s: &mut Surface) {
         let (w, h) = (self.w, self.h);
-        // Reset every dirty pixel opaquely, including fractional-scale edge rows.
-        s.fill_rect(0,0,s.w,s.h,DETAIL_BG.now());
+        // Reset every dirty pixel opaquely, including fractional-scale edge rows. The content area is the window's
+        // grey in both schemes (WINDOW_FRAME_FOCUSED: dark 52,52,55 and light 236), not the pure black or white of DETAIL_BG.
+        s.fill_rect(0,0,s.w,s.h,WINDOW_FRAME_FOCUSED.now());
         // Golden Gate full-size window: the sidebar runs to the top edge under the traffic lights (the shell draws them)
         if !self.sidebar_hidden {
             let pressed = if self.dragging { self.drop_target.as_ref().and_then(|t| self.sidebar_id(t)) } else { None };

@@ -11,6 +11,46 @@ pub(crate) const TAG_PANEL_H: f32 = 330.;
 /// Folder totals for Get Info stop counting after this long.
 pub(crate) const INFO_BUDGET: Duration = Duration::from_millis(800);
 
+/// The head of an image file read for Get Info: the 32 KB system area plus the volume descriptor.
+const IMAGE_HEAD_BYTES: u64 = 34 * 1024;
+
+/// Disk image rows for Get Info, read from the image's own descriptor (`.iso` and `.img` files only; other files get
+/// none). The contents, the volume name, the declared volume size and whether the file holds all of it.
+pub(crate) fn disk_image_rows(path: &Path, length: u64) -> Vec<(&'static str, String)> {
+    let ext = path.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !matches!(ext.as_str(), "iso" | "img") {
+        return Vec::new();
+    }
+    let mut head = Vec::new();
+    if let Ok(file) = std::fs::File::open(path) {
+        use std::io::Read;
+        if file.take(IMAGE_HEAD_BYTES).read_to_end(&mut head).is_err() {
+            head.clear();
+        }
+    }
+    image_rows(&head, length)
+}
+
+/// The Get Info rows for a disk image whose first bytes are `head` and whose file is `length` bytes long.
+pub(crate) fn image_rows(head: &[u8], length: u64) -> Vec<(&'static str, String)> {
+    use bifrost_app::controls::disk_image::{inspect, ImageContents};
+    let props = inspect(head, length);
+    let contents = match props.contents {
+        ImageContents::Iso9660 => "ISO 9660 disc image",
+        ImageContents::Raw => "Raw disk image",
+    };
+    let mut rows = vec![("Image", contents.to_string())];
+    if let Some(name) = props.volume_name.clone() {
+        rows.push(("Volume", name));
+    }
+    if let Some(size) = props.declared_size() {
+        rows.push(("Volume Size", springboard::files::fs::size_text(size)));
+        let status = if props.is_complete() { "Complete" } else { "Truncated: the file is shorter than its volume" };
+        rows.push(("Image Status", status.to_string()));
+    }
+    rows
+}
+
 /// The Get Info panel: a name and labelled rows.
 pub(crate) struct Info {
     pub(crate) name: String,
@@ -76,7 +116,10 @@ impl Files {
         });
         let tags = TagIndex::load(&sidecar_path(&self.home));
         let created = springboard::files::info::created_at(&entry.path);
-        let rows = springboard::files::info::rows(&entry, summary, created, &tags, wall.unix, wall.offset);
+        let mut rows = springboard::files::info::rows(&entry, summary, created, &tags, wall.unix, wall.offset);
+        if !entry.is_dir {
+            rows.extend(disk_image_rows(&entry.path, entry.size));
+        }
         self.preview = None;
         self.info = Some(Info { name: entry.name.clone(), rows });
         self.revision += 1;
@@ -114,5 +157,52 @@ impl Files {
             }
             text(s, ui, "Press Escape or click to close", 11., LABEL_2.now(), x + 20., y + 56. + info.rows.len() as f32 * 26. + 12., w - x - 56.);
         }
+    }
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+
+    /// A 2048-byte-block ISO head: the primary descriptor at 32 KB, volume "BIFROST", 100 blocks.
+    fn iso_head() -> Vec<u8> {
+        let mut h = vec![0u8; IMAGE_HEAD_BYTES as usize];
+        let pvd = 16 * 2048;
+        h[pvd] = 1;
+        h[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+        h[pvd + 6] = 1;
+        let name = b"BIFROST";
+        h[pvd + 40..pvd + 72].fill(b' ');
+        h[pvd + 40..pvd + 40 + name.len()].copy_from_slice(name);
+        h[pvd + 80..pvd + 84].copy_from_slice(&100u32.to_le_bytes());
+        h[pvd + 128..pvd + 130].copy_from_slice(&2048u16.to_le_bytes());
+        h
+    }
+
+    #[test]
+    fn complete_iso_reports_its_volume() {
+        let rows = image_rows(&iso_head(), 204_800);
+        assert_eq!(rows[0], ("Image", "ISO 9660 disc image".to_string()));
+        assert_eq!(rows[1], ("Volume", "BIFROST".to_string()));
+        assert_eq!(rows[2], ("Volume Size", springboard::files::fs::size_text(204_800)));
+        assert_eq!(rows[3], ("Image Status", "Complete".to_string()));
+        assert_eq!(rows.len(), 4);
+    }
+
+    #[test]
+    fn short_iso_is_flagged_as_truncated() {
+        let rows = image_rows(&iso_head(), 150_000);
+        assert_eq!(rows.last().unwrap().1, "Truncated: the file is shorter than its volume");
+    }
+
+    #[test]
+    fn raw_image_has_no_volume_rows() {
+        let rows = image_rows(&[0u8; 64], 4096);
+        assert_eq!(rows, vec![("Image", "Raw disk image".to_string())]);
+    }
+
+    #[test]
+    fn only_image_extensions_are_read() {
+        assert!(disk_image_rows(std::path::Path::new("/nonexistent/notes.txt"), 10).is_empty());
     }
 }

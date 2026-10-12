@@ -27,6 +27,7 @@ use springboard::shell::clock::Wall;
 
 use springboard::shell::ui::{
     Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, TINT, WHITE,
+    WINDOW_FRAME_FOCUSED,
 };
 use std::{
     collections::BTreeSet,
@@ -144,6 +145,10 @@ struct Files {
     ancestors: Vec<(PathBuf, Vec<Entry>)>,
     /// WatchEvents stream on the data folder: it wakes the loop when the Show in Files request arrives.
     watch: Option<bifrost_app::fswatch::WatchStream>,
+    /// Watch events kept so the open folder can catch up on the ones it missed while it was loading.
+    journal: bifrost_app::fswatch::EventJournal,
+    /// The journal id the open folder has applied up to.
+    journal_seen: u64,
     /// The app's data folder, once configured; the folder stream watches it beside the open folder.
     data_dir: Option<PathBuf>,
     /// Rendered names, bounded and keyed by path and mtime.
@@ -232,6 +237,8 @@ impl Files {
             columns: false,
             ancestors: vec![],
             watch: None,
+            journal: bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),
+            journal_seen: 0,
             fx: FileManagerState::default(),
             vo: ViewOpts::default(),
             data_dir: None,
@@ -308,7 +315,8 @@ impl App for Files {
         }
         // Show in Files: the shell or the helper leaves a folder request in our data folder; the watch wakes the loop
         let events = self.watch.as_mut().map(|w| w.poll(std::time::Instant::now())).unwrap_or_default();
-        if !events.is_empty() && self.fold_events(events) {
+        self.record_events(events);
+        if self.catch_up() {
             changed = true;
         }
         if let Some(folder) = handoff::take_request(&ctx.data_dir) {
@@ -336,6 +344,7 @@ impl App for Files {
             self.revision += 1;
             self.job = None;
             self.update_controls();
+            self.catch_up();
             changed = true;
         }
         let mut finished = None;
@@ -655,7 +664,7 @@ mod tests {
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
         }
     }
     fn folder(name: &str) -> Entry {

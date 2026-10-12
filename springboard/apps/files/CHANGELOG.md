@@ -1,3 +1,9 @@
+## 1.18.0 — 2026-10-12
+
+- Dark appearance: the content area behind the file list, grid and columns is the window's grey, not the pure black it was. It follows Light and Dark through the shared window colour.
+- Get Info shows what an ISO or IMG disk image holds: the disc format, its volume name and size, and whether the file is complete or shorter than its volume ("Truncated").
+- A folder that changes while it is still loading catches up: the changes are kept and applied once the listing is ready. If too many changes were dropped, the folder lists again.
+
 ## 1.17.2 — 2026-10-12
 
 - Moving an item to the Trash takes the item's folder under the shared file coordination lock, so another app that coordinates its reads and writes never sees the item half moved. If the folder stays busy for five seconds the item is left in place and the report says "The item is in use by another app."

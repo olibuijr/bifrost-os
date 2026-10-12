@@ -1,7 +1,7 @@
 //! Large-folder performance: worker-side ordering, the visible row window, a bounded label cache keyed by
 //! path and mtime, and incremental folder updates from the SDK `WatchStream`.
 use crate::*;
-use bifrost_app::fswatch::{WatchEvent, WatchEventFlags, WatchStream, WatchStreamFlags};
+use bifrost_app::fswatch::{EventJournal, Replay, WatchEvent, WatchEventFlags, WatchStream, WatchStreamFlags};
 use bifrost_app::kit::Image;
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
@@ -145,6 +145,41 @@ pub(crate) fn apply_events(list: &mut Vec<Entry>, dir: &Path, events: &[WatchEve
     Some(changed)
 }
 
+/// Watch events kept for catching up: a busy folder's churn while its listing loads.
+pub(crate) const JOURNAL_CAP: usize = 256;
+
+/// The events a folder still owes from a journal replay, oldest first. `None` when the journal dropped events the
+/// folder had not seen: the folder then lists again rather than guess.
+pub(crate) fn unseen(replay: Replay) -> Option<Vec<WatchEvent>> {
+    replay.complete.then(|| replay.events.into_iter().map(|(_, e)| e).collect())
+}
+
+impl Files {
+    /// Writes a batch of watch events into the journal.
+    pub(crate) fn record_events(&mut self, events: Vec<WatchEvent>) {
+        for e in events {
+            self.journal.record(e);
+        }
+    }
+    /// Applies the journal events the open folder has not applied yet. While the folder is loading (or a recents or
+    /// trash view is open) nothing is applied and the cursor stays, so the events wait for the listing.
+    pub(crate) fn catch_up(&mut self) -> bool {
+        if self.journal.latest_id() == self.journal_seen || self.loading || self.in_recents() || self.in_bin() {
+            return false;
+        }
+        let replay = self.journal.replay_since(self.journal_seen);
+        self.journal_seen = self.journal.latest_id();
+        match unseen(replay) {
+            Some(events) => self.fold_events(events),
+            None => {
+                let dir = self.path.clone();
+                self.navigate(dir, false);
+                true
+            }
+        }
+    }
+}
+
 impl Files {
     /// Points the stream at the data folder (Show in Files) and, for a real folder, the open one.
     pub(crate) fn rewatch(&mut self) {
@@ -215,6 +250,20 @@ mod tests {
         assert!(r.start <= 100 && r.end >= 115 && r.len() < 30, "{r:?}");
         assert_eq!(row_span(0., 94., 32., 94., 600., 5), 0..5);
         assert!(row_span(1e9, 94., 32., 94., 600., 10).is_empty());
+    }
+
+    #[test]
+    fn unseen_events_replay_in_order_or_force_a_listing() {
+        let mut j = EventJournal::new(2);
+        let ev = |n: &str| WatchEvent { path: PathBuf::from("/d").join(n), flags: WatchEventFlags::CREATED };
+        j.record(ev("a"));
+        j.record(ev("b"));
+        assert_eq!(unseen(j.replay_since(0)).unwrap().len(), 2);
+        j.record(ev("c"));
+        // id 1 was dropped before this folder saw it: a fresh listing is needed
+        assert!(unseen(j.replay_since(0)).is_none());
+        let got: Vec<PathBuf> = unseen(j.replay_since(1)).unwrap().into_iter().map(|e| e.path).collect();
+        assert_eq!(got, vec![PathBuf::from("/d/b"), PathBuf::from("/d/c")]);
     }
 
     #[test]
