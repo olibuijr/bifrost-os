@@ -1939,3 +1939,18 @@ shell or the video path, and not yet run on the VM or Midget, so the matrix rows
 - Decided gaps: nothing switches the panel yet (the video path owns it); HDR is only a dynamic range flag, with no HDR metadata
   or tone mapping; there is no user setting that turns mode switching off; route selection still lacks an AirPlay and nearby
   receiver source on the shell side.
+
+## StoreKit parity round (product kinds and promoted purchases)
+
+Built as pure models in `springboard/ui/src/` (shared by the shell and the SDK through `bifrost_app::controls`). Not run or
+built in this round; the unit tests in `product.rs`, `promotion.rs` and `springboard/src/shell/store/api.rs` are unrun.
+Status stays partial until a test on Midget.
+
+- `product::ProductType` (Product kinds: consumable, non-consumable, non-renewing, auto-renewable). The store catalogue
+  reads `product_type` (`StoreApp::product_type`); an unknown or missing kind is `None`. Decision: consumables are never
+  restorable and only consumables repeat.
+- `promotion::PurchaseIntents` (purchase intents from a promoted product). Decision: first in, first out, no duplicate
+  product while it waits, at most 16 waiting (`MAX_PENDING`). `promotion::in_display_order` gives the promoted list order.
+  Gap: the store does not send intents yet, so the queue has no producer and no SDK call that reads it.
+- Not decided here: sync of transactions and subscription management (App Store interactions) stay gaps; they need a
+  store account service that BifrOSt does not have yet.

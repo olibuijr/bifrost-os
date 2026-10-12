@@ -709,6 +709,8 @@ pub mod credential_identity;
 pub mod credential_exchange;
 pub mod entitlement;
 pub mod purchase;
+pub mod product;
+pub mod promotion;
 pub mod store_test;
 pub mod jws;
 pub mod offer;
