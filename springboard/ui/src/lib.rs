@@ -954,6 +954,10 @@ pub mod smartcard_slot;
 pub mod token_watch;
 pub mod token_objects;
 pub mod token_registry;
+pub mod token_objects;
+pub mod token_registration;
+pub mod certificate_panel;
+pub mod identity_chooser;
 pub mod screensaver;
 pub mod disk_image;
 
