@@ -191,13 +191,18 @@ impl Conn {
 
     /// One request, one reply (and the fds that came with it). `Reply::Error` becomes `Err`.
     pub fn request(&self, req: &Request, fds: &[RawFd]) -> Result<Msg, AudioError> {
+        self.request_within(req, fds, REPLY_TIMEOUT)
+    }
+
+    /// Like [`Conn::request`] with its own reply timeout. Workers that must not wait long (the shell's probes) pass a short one.
+    pub fn request_within(&self, req: &Request, fds: &[RawFd], timeout: Duration) -> Result<Msg, AudioError> {
         let rx = self.rx.lock().unwrap();
         if self.shared.dead.load(Ordering::Acquire) {
             return Err(AudioError::NoServer);
         }
         while rx.try_recv().is_ok() {}
         send_packet(self.sock.as_raw_fd(), &encode_request(req), fds).map_err(|_| AudioError::NoServer)?;
-        match rx.recv_timeout(REPLY_TIMEOUT) {
+        match rx.recv_timeout(timeout) {
             Ok((Reply::Error(e), _)) => Err(e),
             Ok(m) => Ok(m),
             Err(RecvTimeoutError::Timeout) => Err(AudioError::Io),
