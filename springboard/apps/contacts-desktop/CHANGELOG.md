@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0
+
+- Groups can be renamed and deleted. With a group shown in the sidebar, Rename Group types the new name in the search
+  box's place (Return saves, Escape cancels). Delete Group removes the group only; its contacts stay in the list.
+- Add People opens a picker that lists every contact. A press adds that person to the group shown; people already in
+  the group cannot be chosen again. Done ends the picker.
+- Settings (gear button) has a Sort Order row: System Default, Family Name, Given Name or Keep Order. The choice is
+  saved in `display.txt` beside the contacts file. Keep Order lists contacts in the order they were added.
+- Groups are saved with their numbers (`groups.txt` format 2), so a deleted group leaves no gap in the file. Files
+  written by earlier versions still open.
+
 ## 1.3.0
 
 - Copy Contact on the contact card puts the person on the shared pasteboard as a vCard and as plain text (name, company,
