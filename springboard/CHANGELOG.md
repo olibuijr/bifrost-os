@@ -1,5 +1,25 @@
 # BifrOSt changelog
 
+## 0.5.36 — 2026-10-12
+
+Reference-SDK parity, the wiring wave: the pure models from waves 1 to 5 now run in the shell and in the apps.
+
+- 17 new shell system services over the named service channel (no wire protocol change), each with a typed SDK
+  client: audio devices and volume, Bluetooth, cursor stack, Dock tile (badge, progress, bounce), game controllers,
+  keychain access groups, login items (with an approval step in Settings), network path, scheduled notifications,
+  Now Playing (Control Center's media tile drives the owning app), pasteboard (typed items, named boards, change
+  events), power, privacy (camera and microphone ask once per app), Quick Look panel, screens, search index (ranked,
+  language-aware Spotlight) and widget timelines with live activities in Notification Centre.
+- 19 apps use the models: Books (find in book, highlights), Browser (bookmark import, ranged history clearing),
+  Calculator (Convert mode), Calendar, Console (log positions), Contacts, DAW (MIDI events), Files (coordinated
+  moves), Freeform (strokes and lasso), Games (state machines, randomization), Music and Podcasts (Now Playing),
+  News (language, rich links, Reading List), Notes (find, data detectors, spelling), Reminders (shell-scheduled due
+  alerts), Remote (service discovery, network path), Shortcuts, Voice Memos and Weather. Notes per branch in
+  `docs/parity/wire-*.md`.
+- Fixes found while integrating: language identification ignores links, email addresses and host names, so "com" no
+  longer makes an English note Portuguese.
+- 9530 tests pass across the workspace.
+
 ## 0.5.35 — 2026-10-12
 
 Reference-SDK parity, waves 3 to 5. The deploy gate is reached: 82.0% of the 1935 applicable feature rows are built
