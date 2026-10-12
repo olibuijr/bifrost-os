@@ -3,7 +3,7 @@
 
 Benchmarks are #[ignore]d tests that print `BENCH <name> <value> ms`. Each run records the git sha,
 system version and host, prints the change against the previous run, and flags regressions over 15 %.
-Usage: tools/bench.py [--no-record] [--history] [--midget [--reboot] [--apps]]
+Usage: tools/bench.py [--audio] [--no-record] [--history] [--midget [--reboot] [--apps]]
 --midget records the shell's on-device GPU presenter averages (journal line "gpu present") and the Midget idle and
 footprint numbers (midget_* keys: tools/midget-idle-measure.py, tools/midget-memory.py). It then checks every key in
 docs/budgets.toml [midget] (a maximum) and exits 3 listing each key over budget. Acceptance runs it with --no-record.
@@ -336,6 +336,39 @@ def midget_gpu():
     return out
 
 
+def _audio_bench():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("audio_bench", os.path.join(TOOLS, "audio-bench.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _bench_audio(bench, mode):
+    """p99 per quantum as keys audio_<bench>_q<N>_p99_ms (the full JSON goes through tools/audio-bench.py --append)."""
+    ab = _audio_bench()
+    results, breaches = ab.run_mode(mode, benches=[bench])
+    for b in breaches:
+        print("over budget: " + b)
+    return {f"audio_{bench.replace('-', '_')}_q{r['quantum']}_p99_ms": r["p99_ms"] for r in results}
+
+
+def bench_audio_midi_latency(mode="host"):
+    return _bench_audio("midi-latency", mode)
+
+
+def bench_audio_roundtrip(mode="host"):
+    return _bench_audio("audio-roundtrip", mode)
+
+
+def bench_audio_xrun_sweep(mode="midget"):
+    return _bench_audio("xrun-sweep", mode)
+
+
+def bench_audio_midi_throughput(mode="host"):
+    return _bench_audio("midi-throughput", mode)
+
+
 def main():
     hist = load()
     if "--history" in sys.argv:
@@ -350,6 +383,12 @@ def main():
         for k, lim in BROWSER_BUDGETS.items():
             if res.get(k, 0) > lim:
                 print(f"over budget: {k} {res[k]:.1f} > {lim}")
+    if "--audio" in sys.argv:  # needs bifrost-audio-bench built (host) or installed (Midget with --midget)
+        mode = "midget" if "--midget" in sys.argv else "host"
+        for fn in (bench_audio_midi_latency, bench_audio_roundtrip, bench_audio_midi_throughput):
+            res.update(fn(mode))
+        if mode == "midget":
+            res.update(bench_audio_xrun_sweep(mode))
     breaches = budget_check(res) if "--midget" in sys.argv else []
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     ver = re.search(r'^version = "([^"]+)"', open(os.path.join(ROOT, "springboard", "Cargo.toml")).read(), re.M).group(1)

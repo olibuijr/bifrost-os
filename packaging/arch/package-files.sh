@@ -42,6 +42,11 @@ package_bifrost_files() {
   if [[ -x $audiod ]]; then
     install -Dm755 "$audiod" "$pkgdir/usr/bin/bifrost-audiod"
   fi
+  # latency benches (tools/audio-bench.py midget runs this over ssh)
+  audiobench=${PC_AUDIO_BENCH:-$(dirname "$binary")/bifrost-audio-bench}
+  if [[ -x $audiobench ]]; then
+    install -Dm755 "$audiobench" "$pkgdir/usr/bin/bifrost-audio-bench"
+  fi
   install -Dm644 "$here/bifrost-audiod.service" "$pkgdir/usr/lib/systemd/system/bifrost-audiod.service"
   install -Dm644 "$here/sysusers-bifrost-audio.conf" "$pkgdir/usr/lib/sysusers.d/bifrost-audio.conf"
   install -Dm644 "$here/tmpfiles-bifrost-audio.conf" "$pkgdir/usr/lib/tmpfiles.d/bifrost-audio.conf"
