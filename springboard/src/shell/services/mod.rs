@@ -13,6 +13,7 @@ pub mod keychain_groups;
 pub mod search_ranking;
 pub mod privacy_permissions;
 pub mod power_service;
+pub mod audio_devices;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -46,6 +47,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(privacy_permissions::PrivacyPermissions),
         Box::new(widgets_timeline::WidgetsTimeline),
         Box::new(power_service::PowerService::default()),
+        Box::new(audio_devices::AudioDevices::new()),
     ]
 }
 
