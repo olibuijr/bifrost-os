@@ -152,6 +152,7 @@ pub mod network_connection;
 pub mod network_browser;
 pub mod http_cookies;
 pub mod passkey_client_data;
+pub mod credential_exchange;
 pub mod http_auth;
 pub mod host_addressing;
 pub mod ftp;
