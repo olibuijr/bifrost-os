@@ -16,6 +16,7 @@ mod chrome;
 pub mod icon;
 pub mod rpc;
 
+mod parity;
 mod picker;
 pub mod store;
 
@@ -153,6 +154,10 @@ enum Act {
     ChoosePhoto,
     /// pin or unpin the open note
     TogglePin,
+    /// Find > Match Whole Word
+    ToggleWholeWord,
+    /// Check Spelling and Links in the open note
+    CheckSpelling,
 }
 
 /// A popover list of actions (folders and sorting in the list, note actions
@@ -277,6 +282,8 @@ pub struct Notes {
     hl: Vec<Range<usize>>,
     hl_cur: usize,
     hl_query: String,
+    /// Find > Match Whole Word: a search hit must not touch a letter or digit.
+    whole_word: bool,
     rows: Vec<Row>,
     /// indices into `notes` shown by the list (the search result)
     shown: Vec<usize>,
@@ -373,6 +380,7 @@ impl Notes {
             hl: vec![],
             hl_cur: 0,
             hl_query: String::new(),
+            whole_word: false,
             dir,
             wall,
             rows: vec![],
@@ -953,14 +961,19 @@ impl Notes {
     fn refresh_date(&mut self, ui: &Ui) {
         if let Screen::Editor(i) = self.screen {
             let words = md::word_count(&self.notes[i].text);
-            let label = format!("{} - {} word{}", store::long_date(self.notes[i].modified, self.wall.offset), words, if words == 1 { "" } else { "s" });
+            let mut label = format!("{} - {} word{}", store::long_date(self.notes[i].modified, self.wall.offset), words, if words == 1 { "" } else { "s" });
+            // The note's language, when its text has letters to judge by (Edit > Language is detected, not set).
+            if let Some(name) = parity::language_label(&self.notes[i].text) {
+                label.push_str(" - ");
+                label.push_str(name);
+            }
             self.date = Some(ui.text(&label, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now()));
         }
     }
 
     /// Recomputes the search matches in the open note.
     fn refresh_highlights(&mut self, ui: &Ui, jump: bool) {
-        self.hl = if self.hl_query.is_empty() { vec![] } else { store::find_all(self.editor.text(), &self.hl_query) };
+        self.hl = if self.hl_query.is_empty() { vec![] } else { parity::find_ranges(self.editor.text(), &self.hl_query, self.whole_word) };
         if self.hl_cur >= self.hl.len() {
             self.hl_cur = 0;
         }
@@ -968,6 +981,20 @@ impl Notes {
         if jump {
             self.scroll_to_match(ui);
         }
+    }
+
+    /// Check Spelling and Links (editor menu): flags the misspelled words, links, dates and phone numbers of the
+    /// open note, and steps through them with the find arrows. The next edit ends the check, as a search does.
+    fn check_note(&mut self, ui: &Ui) {
+        if !self.is_editing() {
+            return;
+        }
+        self.hl_query.clear();
+        self.hl = parity::check_ranges(self.editor.text());
+        self.hl_cur = 0;
+        self.editor.set_highlights(self.hl.clone(), (!self.hl.is_empty()).then_some(0));
+        self.scroll_to_match(ui);
+        self.dirty = true;
     }
 
     /// Scrolls the current match into view.
@@ -1387,6 +1414,8 @@ impl Notes {
             ("Move Checked to Bottom".to_string(), Act::SortCheckedNow, false),
             ("Photo from Library".to_string(), Act::ChoosePhoto, false),
             ("Attach Latest Photo".to_string(), Act::AttachPhoto, false),
+            ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
+            ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
         ];
         if here != folders::TRASH {
             if !here.is_empty() {
@@ -1551,6 +1580,12 @@ impl Notes {
             }
             Act::AttachPhoto => self.attach_latest_photo(ui, t),
             Act::TogglePin => self.activate(ui, Target::EditorPin, 0.0, 0.0, t),
+            Act::ToggleWholeWord => {
+                self.whole_word = !self.whole_word;
+                self.refresh_highlights(ui, true);
+                self.dirty = true;
+            }
+            Act::CheckSpelling => self.check_note(ui),
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
         }
     }
@@ -3280,6 +3315,31 @@ mod tests {
         assert_eq!(n.match_state().1, 3);
         n.activate(&ui, Target::Back, 0.0, 0.0, 800.0);
         assert_eq!(n.match_state(), (0, 0), "leaving the note clears the highlights");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn whole_word_find_and_check_spelling_step_through_their_matches() {
+        let ui = ui();
+        let dir = scratch("parity");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "rust rusty rust\nsee https://example.com on 2026-10-09");
+        n.hl_query = "rust".into();
+        n.refresh_highlights(&ui, false);
+        assert_eq!(n.match_state().1, 3, "rusty counts as a hit");
+        n.run(&ui, Act::ToggleWholeWord, 100.0);
+        assert!(n.whole_word);
+        assert_eq!(n.match_state().1, 2, "whole word skips rusty");
+        n.open_editor_menu(&ui);
+        let labels: Vec<_> = n.menu.as_ref().unwrap().items.iter().map(|(l, ..)| l.as_str()).collect();
+        assert!(labels.contains(&"Check Spelling and Links") && labels.contains(&"Match Whole Word in Find"));
+        n.menu = None;
+        n.run(&ui, Act::CheckSpelling, 200.0);
+        let text = n.editor.text().to_string();
+        let flagged: Vec<String> = n.hl.iter().map(|r| text.chars().skip(r.start).take(r.end - r.start).collect()).collect();
+        assert!(flagged.iter().any(|s| s == "https://example.com"), "{flagged:?}");
+        assert!(flagged.iter().any(|s| s == "2026-10-09"), "{flagged:?}");
+        assert!(n.match_state().0 == 1, "the first flagged item is selected");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
