@@ -1711,7 +1711,7 @@ impl Shell {
         let (bw, bh) = ((bar.w as usize).min(s.w.saturating_sub(bx)), (bar.h as usize).min(s.h.saturating_sub(by)));
         if bw > 0 && bh > 0 && bifrost_render::glass::gpu() {
             let rad = bar.w.min(bar.h) as f32 * DOCK_RADIUS_K;
-            bifrost_render::glass::push(bifrost_render::glass::Rect { x: bar.x as f32, y: bar.y as f32, w: bar.w as f32, h: bar.h as f32, r: rad, ..Default::default() });
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::MaterialRequest::for_surface(bifrost_ui::material_request::ShellSurface::Dock, (bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32), rad)));
             soft_shadow(s, ui, bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad);
             s.fill_rrect(bar.x as f32 - 1.0, bar.y as f32 - 1.0, bar.w as f32 + 2.0, bar.h as f32 + 2.0, rad + 1.0, rgba(255, 255, 255, 36));
             s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad, bifrost_render::glass::tint(super::ui::DOCK_TINT.now()));

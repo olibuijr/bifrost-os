@@ -6,6 +6,7 @@
 //! opening and closing, `Kind::PanelReveal` for a page settling); both are instant with Reduce Motion.
 
 use super::control_center::desk_glass;
+use bifrost_ui::material_request::ShellSurface;
 use super::overview::{KeyMods, KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_RIGHT, KEY_UP};
 use super::ui::{Weight, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_SUBHEAD_PT, SIDEBAR_PLATE, WHITE};
 use super::{apps, Effect, Event, Shell};
@@ -454,7 +455,7 @@ impl AppGrid {
         let ui = &sh.ui;
         let m = sh.desk_metrics();
         let veil_h = lay.h - m.menubar as f32 - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 0.0 };
-        desk_glass(s, (0.0, m.menubar as f32, lay.w, veil_h.max(1.0)), 0.0, (235.0 * p) as u32);
+        desk_glass(s, ShellSurface::AppGridVeil, (0.0, m.menubar as f32, lay.w, veil_h.max(1.0)), 0.0, (235.0 * p) as u32);
         s.fill_rrect(0.0, m.menubar as f32, lay.w, veil_h.max(1.0), 0.0, rgba(0, 0, 0, (50.0 * p) as u8));
         // search field: a capsule
         let (sx, sy, sw, shh) = lay.search;
