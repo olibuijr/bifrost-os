@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 — 2026-10-12
+
+- Import MIDI: the "Import MIDI" button under the track list opens a panel for a Standard MIDI File (.mid). The notes become a new track on the synth, placed in the scene of the selected clip (or the first scene), and the clip grows to whole bars that fit them. Notes keep their timing at the song tempo.
+- Trim and Export: Trim selects the whole song, and the Start and End buttons move the in-point and out-point one bar at a time (a bar is four beats at the song tempo). Export writes the trimmed part, or the whole song when not trimming, as a 32-bit float WAV in the song store's exports folder, and shows the file path in the status line. Cancel Trim leaves the song as it was.
+- The export renders on the main thread, so a long song takes a moment to finish.
+
 ## 0.2.6 — 2026-10-12
 
 - MIDI input: a recorder turns note-on and note-off messages (raw MIDI bytes or events) into song notes at their song position, with running status and the sustain pedal holding notes until it is released.

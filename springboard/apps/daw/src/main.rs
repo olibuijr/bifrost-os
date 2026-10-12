@@ -3,14 +3,19 @@
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{ui, Damage, Surface, Ui, Weight};
 use bifrost_app::layout::traffic_lights_trailing;
-use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_app::controls::media_trim::{TrimResult, TrimSession};
 use bifrost_app::now_playing::Command;
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{App, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_core::json::Json;
 use daw::ai;
-use daw::model::{Instrument, Project, Scene, Track};
+use daw::model::{Clip, Instrument, Project, Scene, Track};
 use daw::playback::Player;
+use daw::render::{self, RenderOpts};
 use daw::store::{self, Summary};
 use daw::system::{self, Transport};
+use daw::{export, midi_file, wav};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const MARGIN: f32 = 20.0;
@@ -57,6 +62,10 @@ struct Daw {
     system: system::System,
     /// playback was paused from the Now Playing tile (the service keeps the position)
     paused: bool,
+    /// the region being trimmed for export, while Trim is on (in and out points, one bar at least)
+    trim: Option<TrimSession>,
+    /// an Import MIDI tap asked for the open panel; `event` opens it, since `touch` has no context
+    pending_import: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -82,7 +91,27 @@ enum Hit {
     ArrAdd(usize),
     ArrMute(usize),
     RackParam(usize),
+    ImportMidi,
+    Trim,
+    TrimStart,
+    TrimEnd,
+    Export,
     Nothing,
+}
+
+/// One bar in seconds at a song tempo (4 beats; the song's meter is not used for trimming).
+fn bar_seconds(bpm: f64) -> f64 {
+    240.0 / bpm.clamp(40.0, 240.0)
+}
+
+/// The song's length in seconds, from the same schedule the renderer uses, before the reverb tail.
+fn song_seconds(p: &Project) -> f64 {
+    let segs = if p.arrangement.is_empty() {
+        render::scene_segments(p, RenderOpts::default().loops, None)
+    } else {
+        render::arrangement_segments(p)
+    };
+    render::step_times(p, &segs).1
 }
 
 fn rect_contains(r: (f32, f32, f32, f32), x: f32, y: f32) -> bool {
@@ -96,7 +125,7 @@ impl Daw {
         let root = PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()));
         let instruments = load_instruments(&plugins);
         let player = std::env::var("BIFROST_SOCK").ok().map(|_| Player::new(&root, store_dir.join("render-cache"), plugins));
-        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false }
+        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false, trim: None, pending_import: false }
     }
 
     /// Writes the project to `<store>/projects/<id>.json`.
@@ -292,6 +321,20 @@ impl Daw {
                 if rect_contains((w - 110.0, 16.0, 100.0, 32.0), x, y) {
                     return Hit::Stop;
                 }
+                if rect_contains((w - 660.0, 16.0, 100.0, 32.0), x, y) {
+                    return Hit::Trim;
+                }
+                if rect_contains((w - 770.0, 16.0, 100.0, 32.0), x, y) {
+                    return Hit::Export;
+                }
+                if self.trim.is_some() {
+                    if rect_contains((w - 880.0, 16.0, 100.0, 32.0), x, y) {
+                        return Hit::TrimStart;
+                    }
+                    if rect_contains((w - 990.0, 16.0, 100.0, 32.0), x, y) {
+                        return Hit::TrimEnd;
+                    }
+                }
                 if rect_contains((self.lead, 8.0, 80.0, 40.0), x, y) {
                     return Hit::Back;
                 }
@@ -311,6 +354,9 @@ impl Daw {
                     }
                     if x >= gx + TRACK_W && x < gx + TRACK_W + 120.0 && p.scenes.len() < 8 {
                         return Hit::AddScene;
+                    }
+                    if x >= gx + TRACK_W + 120.0 && x < gx + TRACK_W + 260.0 {
+                        return Hit::ImportMidi;
                     }
                     return Hit::Nothing;
                 }
@@ -488,6 +534,11 @@ impl Daw {
                 }
                 self.selected_clip = Some((r, c));
             }
+            Hit::ImportMidi => self.pending_import = true,
+            Hit::Trim => self.toggle_trim(),
+            Hit::TrimStart => self.nudge_trim(true),
+            Hit::TrimEnd => self.nudge_trim(false),
+            Hit::Export => self.export(),
             Hit::Arrange => self.view = View::Arrangement,
             Hit::Rack => {
                 if let Some((r, _)) = self.selected_clip {
@@ -534,6 +585,104 @@ impl Daw {
             Hit::Nothing => return false,
         }
         true
+    }
+
+    /// Imports a Standard MIDI File into a new track on the first instrument (the synth when there is one). The
+    /// notes go into the clip of the selected clip's scene, or the first scene, and the clip grows to fit them.
+    fn import_midi(&mut self, bytes: &[u8], name: &str) {
+        let Some(p) = self.project.as_ref() else {
+            self.status = "Open a song first".into();
+            return;
+        };
+        if p.scenes.is_empty() {
+            self.status = "Add a scene first".into();
+            return;
+        }
+        let scene = self.selected_clip.map_or(0, |(_, c)| c).min(p.scenes.len() - 1);
+        let scene_id = p.scenes[scene].id.clone();
+        let bpm = p.bpm;
+        let track_index = p.tracks.len();
+        let kind = match self.instruments.iter().find(|i| i.0 == "synth").or(self.instruments.first()) {
+            Some(i) => i.0.clone(),
+            None => {
+                self.status = "No instrument is available".into();
+                return;
+            }
+        };
+        let notes = match midi_file::import_notes(bytes, bpm) {
+            Ok(notes) => notes,
+            Err(e) => {
+                self.status = format!("{name}: {e}");
+                return;
+            }
+        };
+        let count = notes.len();
+        let track_name = name.to_string();
+        self.add_track(&kind, &track_name);
+        let Some(p) = self.project.as_mut() else { return };
+        let Some(track) = p.tracks.get_mut(track_index) else { return };
+        let mut clip = Clip {
+            id: ai::new_id("c", track_index * 100 + scene),
+            name: track_name.clone(),
+            length: 16,
+            notes: vec![],
+            automation: None,
+            cc: None,
+            extra: Default::default(),
+        };
+        midi_file::fill_clip(&mut clip, notes);
+        track.clips.insert(scene_id, clip);
+        self.selected_clip = Some((track_index, scene));
+        self.save();
+        self.status = format!("Imported {count} notes from {track_name}");
+    }
+
+    /// Trim on: the whole song is selected, one bar at least. Trim again cancels.
+    fn toggle_trim(&mut self) {
+        if self.trim.take().is_some() {
+            self.status = "Trim cancelled".into();
+            return;
+        }
+        let Some(p) = self.project.as_ref() else { return };
+        let mut session = TrimSession::new(song_seconds(p), bar_seconds(p.bpm));
+        if session.begin_trimming() {
+            self.trim = Some(session);
+            self.status = "Trim: move the start and end a bar at a time, then Export".into();
+        } else {
+            self.status = "Nothing to trim yet: add some notes first".into();
+        }
+    }
+
+    /// Moves the in-point later or the out-point earlier by one bar. The session keeps them in the song.
+    fn nudge_trim(&mut self, start: bool) {
+        let Some(p) = self.project.as_ref() else { return };
+        let bar = bar_seconds(p.bpm);
+        let Some(session) = self.trim.as_mut() else { return };
+        let (s, e) = session.selection();
+        if start {
+            session.set_start(s + bar);
+        } else {
+            session.set_end(e - bar);
+        }
+    }
+
+    /// Exports the trimmed region, or the whole song when not trimming, as a 32-bit float WAV in `exports/`. The
+    /// render runs here, so a long song takes a moment.
+    fn export(&mut self) {
+        let Some(p) = self.project.as_ref() else { return };
+        let (start, end) = match self.trim.take() {
+            Some(mut session) => session.finish(TrimResult::Ok).unwrap_or((0.0, song_seconds(p))),
+            None => (0.0, song_seconds(p)),
+        };
+        let rendered = render::render(p, &RenderOpts::default());
+        let bytes = export::region_wav(&rendered, start, end);
+        let dir = self.store_dir.join("exports");
+        let file = dir.join(format!("{}-{}-{}.wav", p.id, (start * 1000.0).round() as u64, (end * 1000.0).round() as u64));
+        let result = std::fs::create_dir_all(&dir).and_then(|()| wav::write_file(&file, &bytes));
+        self.status = match result {
+            Ok(()) => format!("Exported {}", file.display()),
+            Err(e) => format!("Export failed: {e}"),
+        };
     }
 
     fn play(&mut self) {
@@ -630,6 +779,18 @@ impl Daw {
             s.fill_rect(x as usize, 16, 100, 32, if on { ui::TINT } else { ui::FIELD_BG.now() });
             Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, if on { ui::WHITE } else { ui::LABEL.now() }, x + 12.0, 22.0);
         }
+        // Trim and Export; the in and out buttons only while trimming
+        let trimming = self.trim.is_some();
+        let trim_label = if trimming { "Cancel Trim" } else { "Trim" };
+        let mut trim_buttons = vec![(w - 660.0, trim_label, trimming), (w - 770.0, "Export", false)];
+        if trimming {
+            trim_buttons.push((w - 880.0, "Start +1 Bar", false));
+            trim_buttons.push((w - 990.0, "End -1 Bar", false));
+        }
+        for (x, label, on) in trim_buttons {
+            s.fill_rect(x as usize, 16, 100, 32, if on { ui::TINT } else { ui::FIELD_BG.now() });
+            Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, if on { ui::WHITE } else { ui::LABEL.now() }, x + 10.0, 22.0);
+        }
         let (gx, gy, _gw, _gh) = self.layout_session(s.w as f32, s.h as f32);
         // the scene row: Stop in the head column
         s.fill_rect(gx as usize, (gy + 4.0) as usize, (TRACK_W - 8.0) as usize, 24, ui::FIELD_BG.now());
@@ -637,6 +798,7 @@ impl Daw {
         // the add row under the last track: + Track, and + Scene while under 8 scenes
         let add_y = gy + 32.0 + p.tracks.len() as f32 * CELL_H;
         Self::draw_text(s, ui, "+ Track", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + 8.0, add_y + 12.0);
+        Self::draw_text(s, ui, "Import MIDI", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + TRACK_W + 132.0, add_y + 12.0);
         if p.scenes.len() < 8 {
             Self::draw_text(s, ui, "+ Scene", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + TRACK_W + 8.0, add_y + 12.0);
         }
@@ -833,14 +995,23 @@ impl Daw {
         let back = (self.lead, 8.0, 80.0, 40.0);
         match self.view {
             View::Songs => vec![(1, "New Song", (w - 150.0, 26.0, 130.0, 40.0))],
-            View::Session => vec![
-                (1, "Back", back),
-                (2, "Play", (w - 220.0, 16.0, 100.0, 32.0)),
-                (3, "Arrange", (w - 330.0, 16.0, 100.0, 32.0)),
-                (4, "Rack", (w - 440.0, 16.0, 100.0, 32.0)),
-                (5, "Auto", (w - 550.0, 16.0, 100.0, 32.0)),
-                (6, "Stop", (w - 110.0, 16.0, 100.0, 32.0)),
-            ],
+            View::Session => {
+                let mut buttons = vec![
+                    (1, "Back", back),
+                    (2, "Play", (w - 220.0, 16.0, 100.0, 32.0)),
+                    (3, "Arrange", (w - 330.0, 16.0, 100.0, 32.0)),
+                    (4, "Rack", (w - 440.0, 16.0, 100.0, 32.0)),
+                    (5, "Auto", (w - 550.0, 16.0, 100.0, 32.0)),
+                    (6, "Stop", (w - 110.0, 16.0, 100.0, 32.0)),
+                    (7, if self.trim.is_some() { "Cancel Trim" } else { "Trim" }, (w - 660.0, 16.0, 100.0, 32.0)),
+                    (8, "Export", (w - 770.0, 16.0, 100.0, 32.0)),
+                ];
+                if self.trim.is_some() {
+                    buttons.push((9, "Start +1 Bar", (w - 880.0, 16.0, 100.0, 32.0)));
+                    buttons.push((10, "End -1 Bar", (w - 990.0, 16.0, 100.0, 32.0)));
+                }
+                buttons
+            }
             View::Arrangement => vec![(1, "Back", back), (2, "Play", (w - 220.0, 16.0, 100.0, 32.0))],
             View::Rack => vec![(1, "Back", back)],
         }
@@ -879,7 +1050,35 @@ impl App for Daw {
         self.set_lead(&ctx.ui);
         let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
         match ev {
-            Input::Touch { kind: TouchKind::Down, x, y, .. } => self.touch(w, h, x, y),
+            Input::Touch { kind: TouchKind::Down, x, y, .. } => {
+                let handled = self.touch(w, h, x, y);
+                if std::mem::take(&mut self.pending_import) {
+                    ctx.open_document(DocMode::Read, "Import MIDI File", &["mid", "midi"]);
+                }
+                handled
+            }
+            _ => false,
+        }
+    }
+
+    /// The open panel's answer: a chosen .mid file is read and imported. Cancelling leaves the song alone.
+    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::Opened(doc) => {
+                let name = doc.name.trim_end_matches(".mid").trim_end_matches(".midi").to_string();
+                let mut file = doc.file;
+                let mut bytes = Vec::new();
+                match file.read_to_end(&mut bytes) {
+                    Ok(_) => self.import_midi(&bytes, &name),
+                    Err(e) => self.status = format!("Could not read {name}: {e}"),
+                }
+                true
+            }
+            DocumentEvent::Failed { code: DocErrorCode::Cancelled, .. } => false,
+            DocumentEvent::Failed { .. } => {
+                self.status = "The MIDI file could not be opened".into();
+                true
+            }
             _ => false,
         }
     }
