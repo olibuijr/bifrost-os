@@ -1,3 +1,11 @@
+## 1.19.0 — 2026-10-12
+
+- Go > Connect to Server (Command-K) opens an address sheet. Type an ftp:// address (or a host name; ftp:// is added for you) and press Return. The server's folder appears in a sheet: Return opens a folder, Delete goes up one level, Escape disconnects. Anonymous login is used unless the address has a user name.
+- Recent servers: the addresses you connected to are listed under the field, newest first (up to eight). Down picks one and Return connects. The list is kept between launches.
+- Connecting runs in the background, so Files stays responsive. A server that does not answer within fifteen seconds reports why instead of hanging.
+- Remote files cannot be opened or copied yet; the browser lists folders and files only.
+- Pictures in the preview panel are now previewed through the shared preview registry, so every image type it can decode shows its picture and any picture too large to show falls back to its details.
+
 ## 1.18.0 — 2026-10-12
 
 - Dark appearance: the content area behind the file list, grid and columns is the window's grey, not the pure black it was. It follows Light and Dark through the shared window colour.

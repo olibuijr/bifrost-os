@@ -53,6 +53,7 @@ mod pathbar;
 mod perf;
 mod peek;
 mod search;
+mod server;
 mod sidebar;
 mod statusbar;
 mod system;
@@ -310,6 +311,9 @@ impl App for Files {
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         let mut changed = self.poll_search();
+        if self.poll_server() {
+            changed = true;
+        }
         if self.spring_tick() {
             changed = true;
         }
@@ -403,6 +407,10 @@ impl Files {
     /// Routes one input to its handler. `event` sends the service calls the handler queued.
     fn route_input(&mut self, ctx: &Ctx, input: Input) -> bool {
         if self.goto_input(&input) {
+            self.update_controls();
+            return true;
+        }
+        if self.server_input(&input) {
             self.update_controls();
             return true;
         }
