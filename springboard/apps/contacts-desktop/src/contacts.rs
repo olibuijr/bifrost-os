@@ -99,6 +99,7 @@ const NODE_FAVORITE: u64 = 200;
 const NODE_SHARE: u64 = 201;
 const NODE_DELETE: u64 = 202;
 const NODE_CANCEL: u64 = 203;
+const NODE_COPY_CONTACT: u64 = 204;
 const NODE_COPY: u64 = 210;
 const NODE_FIELD: u64 = 220;
 const NODE_LABEL: u64 = 230;
@@ -136,6 +137,7 @@ enum Target {
     SearchClear,
     Row(usize),
     Copy(usize),
+    CopyContact,
     Favorite,
     Share,
     Delete,
@@ -163,6 +165,7 @@ struct CardLayout {
     notes: Rect,
     favorite: Rect,
     share: Rect,
+    copy_contact: Rect,
     delete: Rect,
     cancel: Option<Rect>,
     height: f32,
@@ -213,6 +216,8 @@ pub struct Contacts {
     pressed: Option<Target>,
     scroll_list: Option<bool>,
     share_req: Option<springboard::shell::share::Item>,
+    /// The contact a Copy Contact press asked to put on the pasteboard; `main.rs` takes it with `take_copy`.
+    copy_out: Option<Contact>,
     confirm_delete: bool,
     /// A failed load must not turn into an overwrite of unknown data.
     load_failed: bool,
@@ -274,6 +279,7 @@ impl Contacts {
             pressed: None,
             scroll_list: None,
             share_req: None,
+            copy_out: None,
             confirm_delete: false,
             load_failed,
             error: error.or(groups_error),
@@ -293,10 +299,10 @@ impl Contacts {
     pub fn listed(&self) -> Vec<&Contact> {
         self.rows.iter().map(|r| &self.contacts[r.contact]).collect()
     }
-    /// Saved contacts for system search; independent of the list's filter.
-    #[allow(dead_code)]
-    pub fn all_contacts(&self) -> &[Contact] {
-        &self.contacts
+    /// Saved contacts for the search index; independent of the list's filter. `None` when the file did not load, so an
+    /// unreadable file never clears what the index holds.
+    pub fn all_contacts(&self) -> Option<&[Contact]> {
+        (!self.load_failed).then_some(self.contacts.as_slice())
     }
 
     /// Opens a saved contact by stable ID, ignoring a stale search result.
@@ -344,6 +350,17 @@ impl Contacts {
     /// The contact the user just chose to share, if any.
     pub fn take_share(&mut self) -> Option<springboard::shell::share::Item> {
         self.share_req.take()
+    }
+
+    /// The contact the user asked to copy to the pasteboard, if any (taken once).
+    pub fn take_copy(&mut self) -> Option<Contact> {
+        self.copy_out.take()
+    }
+
+    /// Shows a line of feedback in the header, such as the outcome of a copy.
+    pub fn show_status(&mut self, text: String) {
+        self.status = Some(text);
+        self.dirty = true;
     }
 
     // ---- geometry (points) ----
@@ -489,6 +506,8 @@ impl Contacts {
         y += BUTTON_ROW + m::CARD_GAP;
         let share = rect(x, y, cw, BUTTON_ROW);
         y += BUTTON_ROW + m::CARD_GAP;
+        let copy_contact = rect(x, y, cw, BUTTON_ROW);
+        y += BUTTON_ROW + m::CARD_GAP;
         let delete = rect(x, y, cw, BUTTON_ROW);
         y += BUTTON_ROW + m::CARD_GAP;
         let cancel = self.confirm_delete.then(|| {
@@ -496,7 +515,7 @@ impl Contacts {
             y += BUTTON_ROW + m::CARD_GAP;
             r
         });
-        CardLayout { avatar, name_y, values, notes, favorite, share, delete, cancel, height: y + off + SPACE_XL }
+        CardLayout { avatar, name_y, values, notes, favorite, share, copy_contact, delete, cancel, height: y + off + SPACE_XL }
     }
     fn edit_layout(&self, ui: &Ui) -> EditLayout {
         let (x, cw) = self.column();
@@ -945,6 +964,9 @@ impl Contacts {
                 if l.share.contains(x, y) {
                     return Some(Target::Share);
                 }
+                if l.copy_contact.contains(x, y) {
+                    return Some(Target::CopyContact);
+                }
                 if l.delete.contains(x, y) {
                     return Some(if self.confirm_delete { Target::ConfirmDelete } else { Target::Delete });
                 }
@@ -1015,6 +1037,7 @@ impl Contacts {
             }
             NODE_FAVORITE => Target::Favorite,
             NODE_SHARE => Target::Share,
+            NODE_COPY_CONTACT => Target::CopyContact,
             NODE_DELETE if self.confirm_delete => Target::ConfirmDelete,
             NODE_DELETE => Target::Delete,
             NODE_CANCEL => Target::CancelDelete,
@@ -1074,6 +1097,7 @@ impl Contacts {
                     self.share_req = Some(springboard::shell::share::Item::from_contact(c));
                 }
             }
+            Target::CopyContact => self.copy_out = self.selected().cloned(),
             Target::Favorite => self.toggle_favorite(ui),
             Target::Delete => {
                 self.confirm_delete = true;
@@ -1242,6 +1266,7 @@ impl Contacts {
                 let fav = if contact.favorite { "Remove from Favorites" } else { "Add to Favorites" };
                 nodes.push(button(NODE_FAVORITE, fav, l.favorite));
                 nodes.push(button(NODE_SHARE, "Share Contact", l.share));
+                nodes.push(button(NODE_COPY_CONTACT, "Copy Contact", l.copy_contact));
                 let delete = if self.confirm_delete { "Confirm Delete Contact" } else { "Delete Contact" };
                 nodes.push(button(NODE_DELETE, delete, l.delete));
                 if let Some(c) = l.cancel {
@@ -1462,6 +1487,7 @@ impl Contacts {
         let fav = if contact.favorite { "Remove from Favorites" } else { "Add to Favorites" };
         self.button_row(s, ui, l.favorite, fav, LABEL.now());
         self.button_row(s, ui, l.share, "Share Contact", LABEL.now());
+        self.button_row(s, ui, l.copy_contact, "Copy Contact", LABEL.now());
         let delete = if self.confirm_delete { "Confirm Delete Contact" } else { "Delete Contact" };
         self.button_row(s, ui, l.delete, delete, DESTRUCTIVE);
         if let Some(c) = l.cancel {
@@ -1591,6 +1617,20 @@ mod tests {
     }
 
     #[test]
+    fn copy_contact_queues_the_open_contact_once_from_the_card_and_the_accessibility_control() {
+        let path = file_with("copy", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path);
+        app.open_detail(&ui, 1);
+        assert!(app.activate_control(&ui, NODE_COPY_CONTACT));
+        assert_eq!(app.take_copy().map(|c| c.id), Some(1));
+        assert!(app.take_copy().is_none(), "taken once");
+        app.open_detail(&ui, 2);
+        app.activate(&ui, Target::CopyContact, 0.0, 0.0, 0.0);
+        assert_eq!(app.take_copy().map(|c| c.name), Some("Bo Berg".to_string()));
+    }
+
+    #[test]
     fn list_is_sorted_by_name_with_one_section_per_letter() {
         let path = file_with("sorted", &[contact(1, "Bo Berg"), contact(2, "Anna As"), contact(3, "Anders Ek")]);
         let ui = test_ui();
@@ -1717,6 +1757,21 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].id, 1);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn an_unreadable_file_gives_the_search_index_nothing_to_clear() {
+        let ui = test_ui();
+        let loaded = Contacts::new(&ui, 1200, 780, file_with("index-ok", &[contact(1, "Anna As")]));
+        assert_eq!(loaded.all_contacts().map(|all| all.len()), Some(1));
+        let dir = std::env::temp_dir().join(format!("contacts-index-corrupt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("contacts.txt");
+        std::fs::write(&path, "not a contacts file\n").unwrap();
+        let broken = Contacts::new(&ui, 1200, 780, path);
+        assert!(broken.all_contacts().is_none(), "no contacts are offered to the index");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

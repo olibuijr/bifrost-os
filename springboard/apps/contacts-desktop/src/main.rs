@@ -6,19 +6,39 @@ mod exchange;
 mod group_file;
 mod history;
 mod names;
+mod services;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;
 use bifrost_app::{App, Commands, Ctx, Input, KeyInput, TouchKind};
 use springboard::shell::keyboard::Out;
+use std::collections::BTreeMap;
 
 struct ContactsApp {
     app: Option<contacts::Contacts>,
     /// Whether the app has told the shell it may be killed at once (`ProcessInfo` sudden termination).
     terminable: bool,
+    /// What this run has sent to the desktop search index.
+    index: services::SearchIndex,
+    /// Copies waiting for the pasteboard's reply, by request id, with the contact's label for the status line.
+    copies: BTreeMap<u32, String>,
 }
 
 impl ContactsApp {
+    /// Runs after each input: the termination flag, a Copy Contact press (sent to the pasteboard), and the search index
+    /// (sent only when a contact changed).
+    fn after_input(&mut self, ctx: &Ctx) {
+        self.sync_termination(ctx);
+        let Some(c) = &mut self.app else { return };
+        if let Some(contact) = c.take_copy() {
+            let request = services::copy_contact(ctx, &contact);
+            self.copies.insert(request, services::label(&contact));
+        }
+        if let Some(all) = c.all_contacts() {
+            self.index.sync(ctx, all);
+        }
+    }
+
     /// Contacts saves each edit when the form is done, so only an open editor holds unsaved state. The shell counts
     /// enable and disable calls, so the state is only sent when it flips.
     fn sync_termination(&mut self, ctx: &Ctx) {
@@ -46,6 +66,10 @@ impl App for ContactsApp {
             None => self.app = Some(contacts::Contacts::new(&ctx.ui, w, h, ctx.data_dir.join("Contacts/contacts.tsv"))),
         }
         self.sync_termination(ctx);
+        // The first call indexes every contact; later calls only send what changed since.
+        if let Some(all) = self.app.as_ref().and_then(|c| c.all_contacts()) {
+            self.index.sync(ctx, all);
+        }
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -59,7 +83,7 @@ impl App for ContactsApp {
                 };
                 c.touch(&ctx.ui, e, t);
                 let _ = c.take_share(); // the share sheet is a shell feature; not available to packages yet
-                self.sync_termination(ctx);
+                self.after_input(ctx);
                 true
             }
             Input::Key(k) => {
@@ -74,17 +98,17 @@ impl App for ContactsApp {
                     KeyInput::Code(_) => return false,
                 };
                 c.key(&ctx.ui, out, bifrost_app::proto::sys::now_ms());
-                self.sync_termination(ctx);
+                self.after_input(ctx);
                 true
             }
             Input::Command(command) => {
                 let handled = c.command(&ctx.ui, command);
-                self.sync_termination(ctx);
+                self.after_input(ctx);
                 handled
             }
             Input::Activate(id) => {
                 let handled = c.activate_control(&ctx.ui, id);
-                self.sync_termination(ctx);
+                self.after_input(ctx);
                 handled
             }
             Input::Open(_) => false,
@@ -115,6 +139,14 @@ impl App for ContactsApp {
         }
     }
 
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        let Some(label) = self.copies.remove(&request) else { return false };
+        if let Some(c) = &mut self.app {
+            c.show_status(services::copy_reply_text(&label, result.is_ok()));
+        }
+        true
+    }
+
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         if let Some(c) = &mut self.app {
             c.draw(s, &ctx.ui, t);
@@ -126,5 +158,5 @@ impl App for ContactsApp {
 }
 
 fn main() {
-    bifrost_app::run(ContactsApp { app: None, terminable: false });
+    bifrost_app::run(ContactsApp { app: None, terminable: false, index: Default::default(), copies: BTreeMap::new() });
 }
