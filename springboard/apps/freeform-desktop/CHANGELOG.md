@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0
+
+- New Pencil tool in the toolbar, beside Pen: a thinner line with pencil ink, half the pen's width. It is in the same segmented group as Pen, Marker and Eraser.
+- Shadows in the Inspector are soft now: the shadow spreads a few points around its edge instead of ending in a hard copy. Opacity and offset are as before.
+
 ## 1.5.0
 
 - New Inspector button in the toolbar opens a panel on the right for the strokes you selected with Lasso. Rectangles and ovals can be filled with a solid colour or a gradient from the current colour to the next one in the palette.
