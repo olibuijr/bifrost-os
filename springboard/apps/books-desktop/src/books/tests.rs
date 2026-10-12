@@ -340,3 +340,75 @@ fn pages_row_jumps_to_its_page() {
     assert!(b.reader.as_ref().unwrap().panel.is_none());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn two_pages_spread_turns_by_two_and_selects_both_pages() {
+    let ui = ui();
+    let dir = scratch("two-pages");
+    let mut b = reader(&dir, &ui);
+    let single = b.reader.as_ref().unwrap().layout.pages.len();
+    b.set_two_pages(&ui, true);
+    assert!(b.two_pages());
+    assert!(b.reader.as_ref().unwrap().layout.pages.len() > single, "half-width columns paginate into more pages");
+    assert_eq!(b.page().unwrap().0, 0, "the spread stays on the first page");
+    // a turn moves a whole spread, and a spread changes at once
+    b.turn(1, 1000.0);
+    assert_eq!(b.page().unwrap().0, 2);
+    assert!(b.slide.is_none());
+    // Select Page takes both pages of the spread, in order, and Copy Selection gets that text
+    assert!(b.select_page());
+    assert!(b.has_selection());
+    let want = {
+        let r = b.reader.as_ref().unwrap();
+        format!("{}\n{}", page_text(&r.layout.pages[2]), page_text(&r.layout.pages[3]))
+    };
+    assert_eq!(b.selection_text().as_deref(), Some(want.as_str()));
+    // a turn clears the selection
+    b.turn(1, 2000.0);
+    assert!(!b.has_selection());
+    // back to one page: the reader keeps its place, which is past the start of the book
+    b.set_two_pages(&ui, false);
+    assert!(!b.two_pages());
+    assert!(b.page().unwrap().0 > 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn select_page_copies_the_text_on_one_page() {
+    let ui = ui();
+    let dir = scratch("select-page");
+    let mut b = reader(&dir, &ui);
+    assert!(!b.has_selection());
+    assert_eq!(b.selection_text(), None);
+    assert!(b.select_page());
+    let text = b.selection_text().unwrap();
+    assert!(text.contains("Chapter One"), "the first page starts with the first heading");
+    let want = page_text(&b.reader.as_ref().unwrap().layout.pages[0]);
+    assert_eq!(text, want);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn pdf_highlights_are_annotations_with_their_notes() {
+    let ui = ui();
+    let dir = scratch("pdf-highlight");
+    let mut b = Books::with_library_dirs(&ui, 1200, 1920, dir.clone(), Vec::new());
+    let book = PathBuf::from("/virtual/long.pdf");
+    b.show_book(&ui, book.clone(), long_book());
+    let span = Span { block: 1, offset: 0, len: 4 };
+    b.store.toggle_highlight(&book, span);
+    b.store.set_note(&book, span, "Hi");
+    let page = b.reader.as_ref().unwrap().layout.page_of(Pos { block: 1, offset: 0 });
+    let marks = b.pdf_highlights(&ui, page).expect("a PDF book keeps its highlights as annotations");
+    assert_eq!(marks.annotations().len(), 1, "one highlighted run on the page");
+    let mark = &marks.annotations()[0];
+    assert_eq!(mark.subtype(), bifrost_app::controls::pdfannot::Subtype::Highlight);
+    assert_eq!(mark.contents(), "Hi");
+    assert!(mark.is_highlighted());
+    assert!(mark.bounds().x.abs() < 0.01, "the run starts at the left edge of the line");
+    assert!(mark.bounds().w > 0.0);
+    // an EPUB book keeps drawing its highlights as text spans
+    b.show_book(&ui, PathBuf::from("/virtual/long.epub"), long_book());
+    assert!(b.pdf_highlights(&ui, page).is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+
+- View menu: Single Page shows one page of a book at a time, as before. Two Pages shows a spread: two pages side by
+  side, with the text set to the narrower column. A turn moves a whole spread. Continuous scrolling is not in this
+  release.
+- Select Page (Find menu) selects the text on the screen: both pages of a spread. Copy Selection puts the selected text
+  on the shared clipboard. A turn to another page clears the selection.
+- PDF books: the highlights you make are kept as highlight annotations, each with its note, so a note travels with its
+  highlight. Other formats draw their highlights as before.
+
 ## 1.5.0
 
 - Find menu: Add Note writes a note on the text the last find went to. The text is highlighted if it was not, and the

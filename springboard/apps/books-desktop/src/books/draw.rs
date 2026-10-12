@@ -201,7 +201,14 @@ impl Books {
                 self.draw_page(s, ui, &pal, old, -dir as f32 * w * e);
                 self.draw_page(s, ui, &pal, cur, dir as f32 * w * (1.0 - e));
             }
-            None => self.draw_page(s, ui, &pal, cur, 0.0),
+            None => {
+                self.draw_page(s, ui, &pal, cur, 0.0);
+                // View > Two Pages: the page after the current one sits in the right column, after the gutter
+                if self.two_pages() && self.reader.as_ref().is_some_and(|r| cur + 1 < r.layout.pages.len()) {
+                    let column = self.metrics(ui).width + ui.pt(PAGE_GUTTER_PT);
+                    self.draw_page(s, ui, &pal, cur + 1, column);
+                }
+            }
         }
         let (chrome, panel) = match &self.reader {
             Some(r) => (r.chrome, r.panel),
@@ -238,13 +245,38 @@ impl Books {
     fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32) {
         let m = self.metrics(ui);
         let marked = self.reader.as_ref().is_some_and(|_r| !self.page_marks(page_no).is_empty());
+        // a PDF book's saved highlights are highlight annotations, drawn under the text; other books draw them as spans
+        let marks = self.pdf_highlights(ui, page_no);
         // the saved highlights of this book, drawn under the text like the find match
-        let spans: Vec<super::store::Span> = self.reader.as_ref().and_then(|r| self.store.entry(&r.path)).map_or_else(Vec::new, |e| e.highlights.clone());
+        let spans: Vec<super::store::Span> = if marks.is_some() {
+            Vec::new()
+        } else {
+            self.reader.as_ref().and_then(|r| self.store.entry(&r.path)).map_or_else(Vec::new, |e| e.highlights.clone())
+        };
         let Some(r) = self.reader.as_mut() else { return };
         let (left, top) = (ui.pt(PAGE_MARGIN_PT) + dx, ui.pt(page_top_pt()));
         let body_pt = Self::pt_of(ui, m.body);
         let Some(page) = r.layout.pages.get(page_no) else { return };
+        if let Some(marks) = &marks {
+            for mark in marks.annotations().iter().filter(|a| a.should_display()) {
+                let b = mark.bounds();
+                s.fill_rrect(left + b.x, top + b.y, b.w, b.h, 0.0, fade(SYSTEM_YELLOW, 110));
+            }
+        }
+        // the text picked by Select Page on this page: character ranges of the page text (see `page_text`)
+        let selected: Vec<std::ops::Range<usize>> = r.selection.as_ref().map_or_else(Vec::new, |sel| {
+            sel.ranges().iter().filter(|(p, _)| *p == page_no).map(|(_, range)| range.clone()).collect()
+        });
+        // where each line starts in the page text; pictures take no characters
+        let mut starts = Vec::with_capacity(page.lines.len());
+        let mut at = 0usize;
         for line in &page.lines {
+            starts.push(at);
+            if !matches!(line.kind, Kind::Image { .. }) {
+                at += line.text.chars().count() + 1;
+            }
+        }
+        for (li, line) in page.lines.iter().enumerate() {
             match line.kind {
                 Kind::Image { w, h } => {
                     if let Some(super::engine::Block::Image(img)) = r.book.blocks.get(line.block) {
@@ -259,6 +291,19 @@ impl Books {
                         _ => (body_pt, Weight::Regular),
                     };
                     let lh = ui.pt(pt) * ui.text_scale * LINE_HEIGHT;
+                    // the Select Page tint, over the characters of this line that the selection covers
+                    let line_start = starts[li];
+                    let line_end = line_start + line.text.chars().count();
+                    for range in &selected {
+                        let (a, b) = (range.start.max(line_start), range.end.min(line_end));
+                        if a < b {
+                            let prefix: String = line.text.chars().take(a - line_start).collect();
+                            let word: String = line.text.chars().skip(a - line_start).take(b - a).collect();
+                            let x0 = left + ui.measure(&prefix, pt, weight);
+                            let x1 = x0 + ui.measure(&word, pt, weight);
+                            s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 90));
+                        }
+                    }
                     if let Some((block, off, len)) = r.highlight {
                         if block == line.block {
                             let text = r.book.blocks.get(block).and_then(|b| b.text()).unwrap_or("");
@@ -307,7 +352,9 @@ impl Books {
         let label = format!("{} / {}", page_no + 1, total);
         put_mid(&mut self.labels, s, ui, &label, MAC_FOOTNOTE_PT, Weight::Regular, pal.dim, self.w as f32 / 2.0 + dx, self.h as f32 - ui.pt(FOOTER_PT) + ui.pt(SPACE_XXL));
         if marked {
-            s.fill_rrect(self.w as f32 - ui.pt(64.0) + dx, ui.pt(super::nav_bottom_pt()), ui.pt(SPACE_XL), ui.pt(38.0), 0.0, ORANGE);
+            // the ribbon sits at the trailing edge of this page's column (a spread has two)
+            let right = if self.two_pages() { left + m.width } else { self.w as f32 + dx };
+            s.fill_rrect(right - ui.pt(64.0), ui.pt(super::nav_bottom_pt()), ui.pt(SPACE_XL), ui.pt(38.0), 0.0, ORANGE);
         }
     }
 
