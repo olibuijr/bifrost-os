@@ -210,6 +210,116 @@ impl Default for ThumbnailCache {
     }
 }
 
+/// `QLPreviewViewStyle`: the layout of an embedded preview. `normal` is for larger, full-sized previews and `compact`
+/// for smaller previews or inspectors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewStyle {
+    #[default]
+    Normal,
+    Compact,
+}
+
+/// `QLPreviewView`: a preview an app places in its own view hierarchy, where [`PreviewPanel`] is a floating panel.
+/// It holds one item, the item's display state, and two switches: whether a new item starts loading on its own
+/// (`autostarts`) and whether the preview closes with its window. Pure model: the app's view layer draws it.
+#[derive(Clone, Debug)]
+pub struct PreviewView {
+    style: ViewStyle,
+    item: Option<PreviewItem>,
+    state: ItemState,
+    autostarts: bool,
+    closes_with_window: bool,
+    refreshes: u64,
+}
+
+impl PreviewView {
+    pub fn new(style: ViewStyle) -> Self {
+        PreviewView {
+            style,
+            item: None,
+            state: ItemState::Ready,
+            autostarts: true,
+            closes_with_window: true,
+            refreshes: 0,
+        }
+    }
+
+    pub fn style(&self) -> ViewStyle {
+        self.style
+    }
+
+    /// `previewItem`: the item on show, if any.
+    pub fn preview_item(&self) -> Option<&PreviewItem> {
+        self.item.as_ref()
+    }
+
+    /// `displayState`: how far the current item's preview has got.
+    pub fn display_state(&self) -> ItemState {
+        self.state
+    }
+
+    /// The app reports how far the preview got (for example after a load finishes).
+    pub fn set_display_state(&mut self, state: ItemState) {
+        self.state = state;
+    }
+
+    pub fn autostarts(&self) -> bool {
+        self.autostarts
+    }
+
+    pub fn set_autostarts(&mut self, on: bool) {
+        self.autostarts = on;
+    }
+
+    pub fn closes_with_window(&self) -> bool {
+        self.closes_with_window
+    }
+
+    pub fn set_closes_with_window(&mut self, on: bool) {
+        self.closes_with_window = on;
+    }
+
+    /// `previewItem` setter. With `autostarts` a new item starts as `Loading`; without it the item waits at `Ready`
+    /// until the app sets the state. Clearing the item sets `Ready`.
+    pub fn set_preview_item(&mut self, item: Option<PreviewItem>) {
+        self.state = match (&item, self.autostarts) {
+            (Some(_), true) => ItemState::Loading,
+            _ => ItemState::Ready,
+        };
+        self.item = item;
+    }
+
+    /// `refreshPreviewItem()`: re-reads the current item. Returns false when there is no item to refresh.
+    pub fn refresh_preview_item(&mut self) -> bool {
+        if self.item.is_none() {
+            return false;
+        }
+        self.refreshes += 1;
+        true
+    }
+
+    /// How many refreshes have been accepted since the view was made.
+    pub fn refresh_count(&self) -> u64 {
+        self.refreshes
+    }
+
+    /// `close()`: drops the current item and returns it. The state goes back to `Ready`.
+    pub fn close(&mut self) -> Option<PreviewItem> {
+        self.state = ItemState::Ready;
+        self.item.take()
+    }
+
+    /// The owning window closed. Closes the view only when `closes_with_window` is set; returns whether it did.
+    pub fn window_closed(&mut self) -> bool {
+        if self.closes_with_window {
+            self.close();
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,5 +451,75 @@ mod tests {
         assert_eq!(p.display_state(3), None);
         p.load_from(&Generated(0));
         assert_eq!(p.display_state(0), None);
+    }
+}
+
+#[cfg(test)]
+mod preview_view_tests {
+    use super::*;
+
+    fn item(title: &str) -> PreviewItem {
+        PreviewItem { url: format!("file:///tmp/{title}.txt"), title: title.to_string() }
+    }
+
+    #[test]
+    fn new_view_has_no_item_and_default_switches() {
+        let v = PreviewView::new(ViewStyle::default());
+        assert_eq!(v.style(), ViewStyle::Normal);
+        assert!(v.preview_item().is_none());
+        assert_eq!(v.display_state(), ItemState::Ready);
+        assert!(v.autostarts());
+        assert!(v.closes_with_window());
+    }
+
+    #[test]
+    fn autostarting_item_loads_until_the_app_reports_ready() {
+        let mut v = PreviewView::new(ViewStyle::Compact);
+        v.set_preview_item(Some(item("notes")));
+        assert_eq!(v.display_state(), ItemState::Loading);
+        assert_eq!(v.preview_item().map(|i| i.title.as_str()), Some("notes"));
+        v.set_display_state(ItemState::Ready);
+        assert_eq!(v.display_state(), ItemState::Ready);
+    }
+
+    #[test]
+    fn without_autostart_the_item_waits_at_ready() {
+        let mut v = PreviewView::new(ViewStyle::Normal);
+        v.set_autostarts(false);
+        v.set_preview_item(Some(item("photo")));
+        assert_eq!(v.display_state(), ItemState::Ready);
+    }
+
+    #[test]
+    fn refresh_needs_an_item_and_is_counted() {
+        let mut v = PreviewView::new(ViewStyle::Normal);
+        assert!(!v.refresh_preview_item());
+        v.set_preview_item(Some(item("a")));
+        assert!(v.refresh_preview_item());
+        assert!(v.refresh_preview_item());
+        assert_eq!(v.refresh_count(), 2);
+    }
+
+    #[test]
+    fn close_returns_the_item_and_resets_state() {
+        let mut v = PreviewView::new(ViewStyle::Normal);
+        v.set_preview_item(Some(item("doc")));
+        let gone = v.close().unwrap();
+        assert_eq!(gone.title, "doc");
+        assert!(v.preview_item().is_none());
+        assert_eq!(v.display_state(), ItemState::Ready);
+        assert!(v.close().is_none());
+    }
+
+    #[test]
+    fn window_close_only_closes_when_the_switch_is_on() {
+        let mut v = PreviewView::new(ViewStyle::Normal);
+        v.set_closes_with_window(false);
+        v.set_preview_item(Some(item("kept")));
+        assert!(!v.window_closed());
+        assert!(v.preview_item().is_some());
+        v.set_closes_with_window(true);
+        assert!(v.window_closed());
+        assert!(v.preview_item().is_none());
     }
 }
