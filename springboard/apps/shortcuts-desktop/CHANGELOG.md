@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- "Plan Shortcut" shows its result in a panel at the bottom of the window instead of a one-line message: the shortcut's name, how many steps it has, and each step on its own numbered row. Long plans show the first eight rows and then "and N more".
+- The panel has a "Run Shortcut" button that runs the same shortcut next, and a Done button. The panel closes when you tap Done, or after eight seconds.
+- Run and plan results that have no rows still show the one-line message, as before.
+- Nothing else changes: the grid, the editor, the scripting and control socket behave as before. The plan result from the control socket gains a snippet and a follow-on, and its value and dialog are the same.
+
 ## 1.5.0 — 2026-10-12
 
 - The Add Action list has an Intents section. It lists the actions other apps can ask Shortcuts to do, each with its name and a one-line description.

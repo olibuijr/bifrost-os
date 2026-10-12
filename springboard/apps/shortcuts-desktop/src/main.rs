@@ -43,14 +43,18 @@ impl ShortcutsApp {
 
     /// Runs a declared intent from the action library through the same path the control socket uses, on the shortcut
     /// in front, and shows its dialog (or the reason it did not run) in the window.
-    fn run_intent(&mut self, data_dir: &Path, id: &str, t: f64) {
+    /// A result with a snippet opens the result panel (its rows, and a follow-on button when it opens an intent);
+    /// any other result, or a failure, is a toast.
+    fn run_intent(&mut self, data_dir: &Path, id: &str, params: &Json, t: f64) {
         let list = self.shortcuts(data_dir);
-        let text = match automation::perform(&list, id, &Json::Obj(Vec::new()), self.frontmost(), &self.planner) {
-            Ok(r) => r.dialog.unwrap_or_else(|| "Done.".to_string()),
-            Err(e) => e.message,
-        };
-        if let Some(c) = self.w.as_mut() {
-            c.show_result(&text, t);
+        let outcome = automation::perform(&list, id, params, self.frontmost(), &self.planner);
+        let Some(c) = self.w.as_mut() else { return };
+        match outcome {
+            Ok(r) => match r.snippet {
+                Some(snippet) => c.show_snippet(&snippet, r.dialog.as_deref(), r.opens, t),
+                None => c.show_result(&r.dialog.unwrap_or_else(|| "Done.".to_string()), t),
+            },
+            Err(e) => c.show_result(&e.message, t),
         }
     }
 
@@ -97,8 +101,8 @@ impl App for ShortcutsApp {
             services::set_login(ctx, on);
         }
         self.sync(ctx);
-        for id in requests {
-            self.run_intent(&ctx.data_dir, &id, t);
+        for (id, params) in requests {
+            self.run_intent(&ctx.data_dir, &id, &params, t);
         }
         true
     }

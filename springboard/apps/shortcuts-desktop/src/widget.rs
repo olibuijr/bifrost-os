@@ -19,7 +19,17 @@ use bifrost_app::widgets;
 use bifrost_app::kit::{Event, Surface, TextCache};
 use crate::model::{Action, Daily, Shortcut, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
 use bifrost_app::proto::LoginStatus as Status;
+use bifrost_app::intents::Snippet;
+use bifrost_core::json::Json;
 use std::path::PathBuf;
+
+/// The result panel's width (points) and the most step rows it shows before "and N more".
+const RESULT_W: f32 = 360.0;
+const RESULT_MAX_ROWS: usize = 8;
+/// The result panel's corner radius (points): grouped cards are 13 pt (owner decision, 2026-10-09).
+const RESULT_RADIUS_PT: f32 = 13.0;
+/// How long a result panel stays when nobody dismisses it, in milliseconds.
+const RESULT_MS: f64 = 8000.0;
 
 /// Tile colours a shortcut can take, as the Shortcuts app offers them.
 pub const PALETTE: [u32; 8] =
@@ -68,6 +78,10 @@ enum Target {
     Intent(usize),
     Color(usize),
     Delete,
+    /// The follow-on button of the result panel: asks for the intent the result opens.
+    ResultRun,
+    /// The Done button of the result panel.
+    ResultDismiss,
     /// The "Daily Reminder" row of the open shortcut: steps to the next time.
     Schedule,
     /// The "Open at Login" row of the grid: asks the shell to turn it on or off.
@@ -94,6 +108,24 @@ struct Cell {
     look: Look,
 }
 
+/// The follow-on an intent result opens: the intent to run next and the parameters it gets.
+#[derive(Clone, Debug)]
+struct Follow {
+    intent: String,
+    title: String,
+    params: Json,
+}
+
+/// The result panel of an intent run that carries a snippet (the plan steps).
+#[derive(Clone, Debug)]
+struct ResultPanel {
+    title: String,
+    dialog: Option<String>,
+    rows: Vec<(String, String)>,
+    follow: Option<Follow>,
+    until: f64,
+}
+
 pub struct Shortcuts {
     w: i32,
     h: i32,
@@ -115,8 +147,10 @@ pub struct Shortcuts {
     login: Option<Status>,
     /// the toggle the last tap asked for: `Some(true)` to open at login, `Some(false)` to stop
     login_request: Option<bool>,
-    /// the intents the last taps asked to run, oldest first
-    intent_requests: Vec<String>,
+    /// the intents the last taps asked to run, oldest first, with their parameters
+    intent_requests: Vec<(String, Json)>,
+    /// the result panel of the last intent run that had a snippet, if it is still showing
+    result: Option<ResultPanel>,
 }
 
 const ROW_POS_FIRST: u8 = 1;
@@ -148,6 +182,7 @@ impl Shortcuts {
             login: None,
             login_request: None,
             intent_requests: Vec::new(),
+            result: None,
         }
     }
 
@@ -201,14 +236,31 @@ impl Shortcuts {
         std::mem::take(&mut self.runs)
     }
 
-    /// The ids of the intents the last taps asked to run from the action library, oldest first.
-    pub fn take_intent_requests(&mut self) -> Vec<String> {
+    /// The intents the last taps asked to run from the action library (or a result's follow-on), oldest first, with
+    /// their parameters.
+    pub fn take_intent_requests(&mut self) -> Vec<(String, Json)> {
         std::mem::take(&mut self.intent_requests)
     }
 
     /// Shows the outcome of an intent run from the action library: its dialog, or why it did not run.
     pub fn show_result(&mut self, text: &str, t: f64) {
+        self.result = None;
         self.toast = Some((text.to_string(), t + 3000.0));
+        self.dirty = true;
+    }
+
+    /// Shows a result that carries a snippet: a panel with the snippet's title, the dialog, its rows, a follow-on
+    /// button when the result opens another intent, and Done. It stays until Done is tapped or it times out.
+    pub fn show_snippet(&mut self, snippet: &Snippet, dialog: Option<&str>, opens: Option<(String, Json)>, t: f64) {
+        let follow = opens.map(|(intent, params)| Follow { title: automation::title_of(&intent), intent, params });
+        self.toast = None;
+        self.result = Some(ResultPanel {
+            title: snippet.title.clone(),
+            dialog: dialog.map(str::to_string),
+            rows: snippet.rows.iter().map(|r| (r.label.clone(), r.text.clone())).collect(),
+            follow,
+            until: t + RESULT_MS,
+        });
         self.dirty = true;
     }
 
@@ -436,6 +488,30 @@ impl Shortcuts {
         (cells, y + self.scroll)
     }
 
+    /// The result panel's box in pixels: a title, the dialog (when there is one), the step rows, an "and N more" line
+    /// when the rows are capped, and the button row.
+    fn result_box(&self, ui: &Ui, p: &ResultPanel) -> Rect {
+        let x0 = Self::side(ui);
+        let pw = ui.pt(RESULT_W).min(self.w as f32 - x0 - 2.0 * ui.pt(SPACE_L));
+        let shown = p.rows.len().min(RESULT_MAX_ROWS);
+        let more = usize::from(p.rows.len() > shown);
+        let lines = 2 + usize::from(p.dialog.is_some()) + shown + more;
+        let ph = ui.pt(SPACE_L) * 2.0 + ui.pt(SPACE_XXXL) * lines as f32;
+        let x = x0 + (self.w as f32 - x0 - pw) / 2.0;
+        let y = self.h as f32 - ph - ui.pt(SPACE_XXL);
+        (x, y, pw, ph)
+    }
+
+    /// The follow-on button's rect (only when the result opens an intent) and the Done button's rect, in pixels.
+    fn result_buttons(&self, ui: &Ui, p: &ResultPanel) -> (Option<Rect>, Rect) {
+        let (x, y, w, h) = self.result_box(ui, p);
+        let (pad, row_h) = (ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+        let by = y + h - pad - row_h;
+        let follow = p.follow.as_ref().map(|_| (x + pad, by, w / 2.0 - pad, row_h));
+        let done = (x + w / 2.0, by, w / 2.0 - pad, row_h);
+        (follow, done)
+    }
+
     fn max_scroll(&self, ui: &Ui) -> f32 {
         let (_, bottom) = self.layout(ui);
         (bottom + ui.pt(SPACE_XXL) - self.h as f32).max(0.0)
@@ -451,6 +527,18 @@ impl Shortcuts {
             let list = self.sidebar();
             let sy = y / ui.s + UNIFIED_BAR_PT + 4.0 - list.header_h;
             return (sy >= 0.0 && sy < list.row_h && self.view != View::Grid).then_some(Target::Home);
+        }
+        // the result panel floats over the content: its buttons win, and the rest of it takes no tap
+        if let Some(p) = &self.result {
+            let (bx, by, bw, bh) = self.result_box(ui, p);
+            if x >= bx && x < bx + bw && y >= by && y < by + bh {
+                let (follow, done) = self.result_buttons(ui, p);
+                let inside = |r: Rect| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
+                if follow.is_some_and(|r| inside(r)) {
+                    return Some(Target::ResultRun);
+                }
+                return inside(done).then_some(Target::ResultDismiss);
+            }
         }
         let (cells, _) = self.layout(ui);
         cells
@@ -547,9 +635,16 @@ impl Shortcuts {
             }
             Target::Intent(k) => {
                 if let Some(intent) = automation::declared().get(k) {
-                    self.intent_requests.push(intent.id.clone());
+                    self.intent_requests.push((intent.id.clone(), Json::Obj(Vec::new())));
                 }
             }
+            Target::ResultRun => {
+                // the follow-on runs the intent the result opened, with the parameters it named
+                if let Some(follow) = self.result.take().and_then(|p| p.follow) {
+                    self.intent_requests.push((follow.intent, follow.params));
+                }
+            }
+            Target::ResultDismiss => self.result = None,
             Target::Schedule => {
                 if let Some(s) = self.editing() {
                     s.schedule = Daily::after(s.schedule);
@@ -613,11 +708,20 @@ impl Shortcuts {
             self.toast = None;
             self.dirty = true;
         }
+        if matches!(&self.result, Some(p) if t >= p.until) {
+            self.result = None;
+            self.dirty = true;
+        }
         self.dirty
     }
 
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
-        self.toast.as_ref().map(|(_, until)| *until)
+        let toast = self.toast.as_ref().map(|(_, until)| *until);
+        let panel = self.result.as_ref().map(|p| p.until);
+        match (toast, panel) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     pub fn describe(&self) -> String {
@@ -632,6 +736,45 @@ impl Shortcuts {
             _ => x - img.w as f32,
         };
         s.blit(img, ix as i32, (y + (h - img.h as f32) / 2.0) as i32, 255, 255);
+    }
+
+    /// Draws the result panel: the title, the dialog, the step rows, then the follow-on button and Done.
+    fn draw_result(&mut self, s: &mut Surface, ui: &Ui, p: &ResultPanel) {
+        let (x, y, w, h) = self.result_box(ui, p);
+        s.fill_rrect(x, y, w, h, ui.pt(RESULT_RADIUS_PT), CARD_BG.now());
+        s.stroke_rrect(x, y, w, h, ui.pt(RESULT_RADIUS_PT), 1.0, SEPARATOR_C.now());
+        let (pad, row_h) = (ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+        let inner = w - 2.0 * pad;
+        let mut ty = y + pad;
+        let title = ui.fit(&p.title, MAC_TITLE3_PT, inner);
+        self.put(s, ui, &title, MAC_TITLE3_PT, Weight::Bold, LABEL.now(), x + pad, ty, row_h, 0);
+        ty += row_h;
+        if let Some(d) = &p.dialog {
+            let text = ui.fit(d, MAC_FOOTNOTE_PT, inner);
+            self.put(s, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + pad, ty, row_h, 0);
+            ty += row_h;
+        }
+        // the step number in a narrow column, the step text beside it
+        let col = ui.pt(SPACE_XXXL);
+        for (label, text) in p.rows.iter().take(RESULT_MAX_ROWS) {
+            self.put(s, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + pad, ty, row_h, 0);
+            let fitted = ui.fit(text, MAC_BODY_PT, inner - col);
+            self.put(s, ui, &fitted, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + pad + col, ty, row_h, 0);
+            ty += row_h;
+        }
+        if p.rows.len() > RESULT_MAX_ROWS {
+            let more = format!("and {} more", p.rows.len() - RESULT_MAX_ROWS);
+            self.put(s, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + pad, ty, row_h, 0);
+        }
+        let (follow, done) = self.result_buttons(ui, p);
+        if let (Some((fx, fy, fw, fh)), Some(f)) = (follow, &p.follow) {
+            let col = if self.pressed == Some(Target::ResultRun) { LABEL_2.now() } else { LINK };
+            let text = ui.fit(&f.title, MAC_BODY_PT, fw);
+            self.put(s, ui, &text, MAC_BODY_PT, Weight::Semibold, col, fx, fy, fh, 0);
+        }
+        let (dx, dy, dw, dh) = done;
+        let col = if self.pressed == Some(Target::ResultDismiss) { LABEL_2.now() } else { LINK };
+        self.put(s, ui, "Done", MAC_BODY_PT, Weight::Semibold, col, dx + dw, dy, dh, 2);
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
@@ -735,7 +878,9 @@ impl Shortcuts {
         }
         widgets::source_list(s, ui, PtRect { x: 0.0, y: 0.0, w: SIDEBAR_W, h: self.h as f32 / ui.s }, &self.sidebar(), -(UNIFIED_BAR_PT + 4.0), None);
         s.fill_rect(x0 as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
-        if let Some((msg, _)) = self.toast.clone() {
+        if let Some(p) = self.result.clone() {
+            self.draw_result(s, ui, &p);
+        } else if let Some((msg, _)) = self.toast.clone() {
             let img = self.cache.get(ui, &msg, MAC_CALLOUT_PT, Weight::Regular, WHITE);
             let pw = img.w as f32 + ui.pt(SPACE_XXXL);
             let ph = img.h as f32 + ui.pt(SPACE_L);
