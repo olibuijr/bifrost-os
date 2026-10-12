@@ -52,6 +52,8 @@ pub struct DockItem {
     pub badge: String,
     /// Launch or download progress 0..1, negative for none.
     pub progress: f32,
+    /// Kept in the Dock (the context menu offers Remove from Dock). Added after v1: the codec carries it at the end.
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
