@@ -784,6 +784,8 @@ pub mod playback_arbiter;
 pub mod remote_command;
 pub mod media_content;
 pub mod audio_hardware;
+pub mod audio_clock;
+pub mod channel_layout;
 pub mod process_tap;
 pub mod scan;
 pub mod analysis;
