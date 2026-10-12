@@ -31,9 +31,9 @@
     {
       "feature": "Snippets and result views",
       "apple": "IntentResult.Snippet, result(dialog:view:), SnippetIntent, EmptySnippetIntent",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no interactive result view for an intent"
+      "bifrost": "springboard/sdk/src/intents.rs (Snippet",
+      "status": "partial",
+      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interactive result view for an intent"
     },
     {
       "feature": "Follow-on and opens-app results",
@@ -94,9 +94,9 @@
     {
       "feature": "Common data types",
       "apple": "Common data types (Files, Dates, Currencies, Payments, People, Placemarks, Measurements)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "only the parameter types listed under Intent parameters"
+      "bifrost": "springboard/sdk/src/intents.rs (ParamType::Double",
+      "status": "partial",
+      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only the parameter types listed under Intent parameters"
     },
     {
       "feature": "Donations and discovery",

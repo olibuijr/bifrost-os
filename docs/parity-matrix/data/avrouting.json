@@ -10,16 +10,16 @@
     {
       "feature": "System route picker with custom destinations",
       "apple": "AVRoutePickerView, AVCustomRoutingController, AVCustomRoutingDelegate",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"
+      "bifrost": "springboard/ui/src/route_picker.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"
     },
     {
       "feature": "Authorized routes and route activation",
       "apple": "AVCustomRoutingController.authorizedRoutes, setActive(_:for:), isRouteActive(_:), invalidateAuthorization(for:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no per-app authorization of network receivers"
+      "bifrost": "springboard/ui/src/route_auth.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-app authorization of network receivers"
     },
     {
       "feature": "Route addresses on the local network",
@@ -31,16 +31,16 @@
     {
       "feature": "Custom action items in the picker",
       "apple": "AVCustomRoutingActionItem, customActionItems",
-      "bifrost": "none",
-      "status": "gap",
-      "note": ""
+      "bifrost": "springboard/ui/src/route_action.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Route events",
       "apple": "AVCustomRoutingEvent, AVCustomDeviceRoute, AVCustomRoutingEventReason",
-      "bifrost": "none",
-      "status": "gap",
-      "note": ""
+      "bifrost": "springboard/sdk/src/route_events.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Device discovery extension",

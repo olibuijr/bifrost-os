@@ -17,9 +17,9 @@
     {
       "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",
       "apple": "Declare extension content and handle incoming XPC connections",
-      "bifrost": "springboard/sdk/src/control.rs (per-app RPC socket, not an extension entry point)",
-      "status": "gap",
-      "note": "Control socket serves the app's own methods; no extension bundle type or connection handler"
+      "bifrost": "springboard/sdk/src/peer_session.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Control socket serves the app's own methods; no extension bundle type or connection handler"
     },
     {
       "feature": "Discovering extensions (AppExtensionIdentity)",

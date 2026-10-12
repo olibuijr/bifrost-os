@@ -38,9 +38,9 @@
     {
       "feature": "Compute streams",
       "apple": "ComputeStream",
-      "bifrost": "none for apps",
-      "status": "gap",
-      "note": "The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
+      "bifrost": "springboard/ui/src/work_stream.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
     },
     {
       "feature": "Background inference",

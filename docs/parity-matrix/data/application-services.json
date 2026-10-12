@@ -24,9 +24,9 @@
     {
       "feature": "Accessibility text (AXText, attributed strings, text markers)",
       "apple": "AXTextAttributedString.h, AXTextMarker, AXTextMarkerRange, AXValue.h",
-      "bifrost": "springboard/sdk/src/attributed.rs, docs/bifrost-ui.md (Accessibility bridge gaps)",
-      "status": "gap",
-      "note": "No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."
+      "bifrost": "springboard/ui/src/text_marker.rs, springboard/sdk/src/attributed.rs (ax_runs)",
+      "status": "partial",
+      "note": "Wave 3 (theme-24, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."
     },
     {
       "feature": "Accessibility announcements and actions",

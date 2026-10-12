@@ -45,9 +45,9 @@
     {
       "feature": "Caller ID and blocking",
       "apple": "CXCallDirectoryProvider, Manager, ExtensionContext",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no call directory extension"
+      "bifrost": "springboard/ui/src/call_directory.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no call directory extension"
     },
     {
       "feature": "Default calling app",

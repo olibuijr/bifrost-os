@@ -31,23 +31,23 @@
     {
       "feature": "Convenience publishers",
       "apple": "Future, Just, Deferred, Empty, Fail, Record",
-      "bifrost": "",
-      "status": "gap",
-      "note": "none; Observable::new is the nearest to Just"
+      "bifrost": "springboard/sdk/src/observable.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. none; Observable::new is the nearest to Just"
     },
     {
       "feature": "Connectable publishers",
       "apple": "ConnectablePublisher, share, multicast",
-      "bifrost": "",
-      "status": "gap",
-      "note": "no connect/autoconnect"
+      "bifrost": "springboard/sdk/src/observable.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no connect/autoconnect"
     },
     {
       "feature": "Subscribers and demand",
       "apple": "Subscriber, Subscribers, AnySubscriber, Subscription, Subscriptions, back pressure",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "gap",
-      "note": "sink/subscribe closures only; no Demand, no completion, no failure type"
+      "status": "partial",
+      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. sink/subscribe closures only; no Demand, no completion, no failure type"
     },
     {
       "feature": "Subjects",
@@ -94,9 +94,9 @@
     {
       "feature": "Debugging identifiers",
       "apple": "CombineIdentifier, CustomCombineIdentifierConvertible, print/handleEvents",
-      "bifrost": "",
-      "status": "gap",
-      "note": "only subscriber_count"
+      "bifrost": "springboard/sdk/src/observable.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only subscriber_count"
     },
     {
       "feature": "UI-side observable value",

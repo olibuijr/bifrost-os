@@ -10,9 +10,9 @@
     {
       "feature": "GL view and drawable",
       "apple": "GLKView, GLKViewDelegate (init(frame:context:), drawableColorFormat, bindDrawable, display, snapshot); macOS deprecated 10.14",
-      "bifrost": "none app-facing; internal EGL/GLES target in springboard/src/gpu/mod.rs",
-      "status": "gap",
-      "note": "apps cannot obtain a GL context or drawable; the presenter draws the desktop only"
+      "bifrost": "springboard/ui/src/drawable.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot obtain a GL context or drawable; the presenter draws the desktop only"
     },
     {
       "feature": "Render loop controller",

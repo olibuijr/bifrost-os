@@ -2,20 +2,74 @@
   "framework": "Screen Saver",
   "doc": "https://developer.apple.com/documentation/screensaver",
   "macos_since": "10.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "no screen saver module or SDK class. Idle display-off and auto-lock live in springboard/src/shell/mod.rs and springboard/wm/src/input.rs; app preferences in springboard/sdk/src/defaults.rs",
   "summary": "Apple's framework is a plug-in interface: a .saver bundle subclasses ScreenSaverView, which the system animates in its own engine. BifrOSt has no such plug-in host, no SDK class for it, and no screen saver preview or configuration sheet. The idle display-off, auto-lock and suspend-after-screen-off behaviour that a screen saver sits on top of exists in the shell and system layer, but no app can hook into it.",
   "rea_evidence": "ev_cc2a3e312b2679aab08837530b31bc4264f252a6ac1417506af9f1d0610ddb94",
   "features": [
-    {"feature": "ScreenSaverView (plug-in view and animation lifecycle)", "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)", "bifrost": "none", "status": "gap", "note": "no .saver bundle loader and no screen saver engine; the shell has no idle-animation host"},
-    {"feature": "Preview and configuration sheet", "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet", "bifrost": "none", "status": "gap", "note": "no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page)"},
-    {"feature": "Preference storage for a screen saver module", "apple": "ScreenSaverDefaults: init(forModuleWithName:)", "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults-style store for apps)", "status": "partial", "note": "a general defaults store exists; no per-module screen saver domain"},
-    {"feature": "Window backing store and gamma fade for the saver window", "apple": "ScreenSaverView.backingStoreType(), performGammaFade()", "bifrost": "none", "status": "gap", "note": "no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"},
-    {"feature": "Random value and rectangle helpers", "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect", "bifrost": "none found", "status": "gap", "note": "these are small utilities; no SDK equivalent was found in springboard/sdk/src/"},
-    {"feature": "Idle detection that starts the saver", "apple": "The system starts the saver after user inactivity (screen saver engine)", "bifrost": "springboard/wm/src/input.rs:19-21 (any input calls ext-idle-notify notify_activity); springboard/src/shell/mod.rs:2458 (screen goes off after idle_off_ms)", "status": "os", "note": "the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation"},
-    {"feature": "Auto-lock after idle", "apple": "Screen saver with password on wake (not a separate Apple API)", "bifrost": "springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)", "status": "os", "note": "shell-level auto-lock; no SDK hook for an app to take part"},
-    {"feature": "System sleep after the screen is off", "apple": "Energy settings (outside the framework)", "bifrost": "springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)", "status": "os", "note": "suspend is decided by the system layer; apps cannot change it"},
-    {"feature": "Sleep inhibitors held by apps", "apple": "Power management assertions (outside the framework)", "bifrost": "springboard/src/bare/sleep.rs:66 (parse_sleep_blockers, reads systemd-inhibit idle and sleep blocks)", "status": "os", "note": "the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"}
+    {
+      "feature": "ScreenSaverView (plug-in view and animation lifecycle)",
+      "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)",
+      "bifrost": "springboard/ui/src/screensaver.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no .saver bundle loader and no screen saver engine; the shell has no idle-animation host"
+    },
+    {
+      "feature": "Preview and configuration sheet",
+      "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page)"
+    },
+    {
+      "feature": "Preference storage for a screen saver module",
+      "apple": "ScreenSaverDefaults: init(forModuleWithName:)",
+      "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults-style store for apps)",
+      "status": "partial",
+      "note": "a general defaults store exists; no per-module screen saver domain"
+    },
+    {
+      "feature": "Window backing store and gamma fade for the saver window",
+      "apple": "ScreenSaverView.backingStoreType(), performGammaFade()",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"
+    },
+    {
+      "feature": "Random value and rectangle helpers",
+      "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect",
+      "bifrost": "springboard/ui/src/screensaver.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. these are small utilities; no SDK equivalent was found in springboard/sdk/src/"
+    },
+    {
+      "feature": "Idle detection that starts the saver",
+      "apple": "The system starts the saver after user inactivity (screen saver engine)",
+      "bifrost": "springboard/wm/src/input.rs:19-21 (any input calls ext-idle-notify notify_activity); springboard/src/shell/mod.rs:2458 (screen goes off after idle_off_ms)",
+      "status": "os",
+      "note": "the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation"
+    },
+    {
+      "feature": "Auto-lock after idle",
+      "apple": "Screen saver with password on wake (not a separate Apple API)",
+      "bifrost": "springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)",
+      "status": "os",
+      "note": "shell-level auto-lock; no SDK hook for an app to take part"
+    },
+    {
+      "feature": "System sleep after the screen is off",
+      "apple": "Energy settings (outside the framework)",
+      "bifrost": "springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)",
+      "status": "os",
+      "note": "suspend is decided by the system layer; apps cannot change it"
+    },
+    {
+      "feature": "Sleep inhibitors held by apps",
+      "apple": "Power management assertions (outside the framework)",
+      "bifrost": "springboard/src/bare/sleep.rs:66 (parse_sleep_blockers, reads systemd-inhibit idle and sleep blocks)",
+      "status": "os",
+      "note": "the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
+    }
   ],
   "gaps": [
     "No screen saver plug-in host: no .saver bundle loading and no ScreenSaverView lifecycle (start, animate, stop).",

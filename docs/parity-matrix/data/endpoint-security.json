@@ -45,16 +45,16 @@
     {
       "feature": "File metadata events (xattr, ACL, flags, mode, owner, stat, readdir)",
       "apple": "es_event_getextattr_t, es_event_setacl_t, es_event_stat_t, es_event_readdir_t and the other File Metadata Event Types",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The watcher reports content changes only, not attribute or metadata access."
+      "bifrost": "springboard/sdk/src/file_metadata.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The watcher reports content changes only, not attribute or metadata access."
     },
     {
       "feature": "Authorization events and responses",
       "apple": "es_respond_auth_result, es_respond_flags_result, es_auth_result_t, AUTH event types, es_result_t",
-      "bifrost": "springboard/src/bare/docbroker.rs (file grants), springboard/src/bare/app_policy.rs (launch-time sandbox)",
-      "status": "gap",
-      "note": "Endpoint Security can allow or deny an operation before it runs. Docbroker grants decide what an app may open, but they are not a system event hook. The sandbox is applied once at launch with no per-event decision."
+      "bifrost": "springboard/sdk/src/auth_events.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Endpoint Security can allow or deny an operation before it runs. Docbroker grants decide what an app may open, but they are not a system event hook. The sandbox is applied once at launch with no per-event decision."
     },
     {
       "feature": "Mount, unmount and remount events",
@@ -87,16 +87,16 @@
     {
       "feature": "User and group ID change events",
       "apple": "es_event_setuid_t, es_event_setgid_t, es_event_seteuid_t, es_event_setegid_t, es_event_setreuid_t, es_event_setregid_t (User and Group ID Types)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No hook on credential changes. Launch-time identity drops are handled in springboard/src/bare/app_policy.rs (drop_identity), with no event emitted."
+      "bifrost": "springboard/sdk/src/identity_events.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on credential changes. Launch-time identity drops are handled in springboard/src/bare/app_policy.rs (drop_identity), with no event emitted."
     },
     {
       "feature": "Code signing validity events",
       "apple": "es_event_cs_invalidated_t, ES_CS_VALIDATION_CATEGORY_* (Code Signing Event Types)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No code-signing status events. Packages are checked at install time, which is a different event."
+      "bifrost": "springboard/core/src/codesign_events.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code-signing status events. Packages are checked at install time, which is a different event."
     },
     {
       "feature": "Login, logout, su, sudo, SSH and screen-sharing events",

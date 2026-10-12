@@ -94,16 +94,16 @@
     {
       "feature": "Playback rate and language options",
       "apple": "MPChangePlaybackRateCommand, MPNowPlayingInfoLanguageOption, MPNowPlayingInfoLanguageOptionGroup",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no playback rate control and no subtitle or audio language options for Now Playing"
+      "bifrost": "springboard/ui/src/remote_command.rs (PlaybackRateCommand",
+      "status": "partial",
+      "note": "Wave 3 (w3-media-player, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no playback rate control and no subtitle or audio language options for Now Playing"
     },
     {
       "feature": "Feedback and rating",
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
-      "bifrost": "springboard/apps/music-desktop/src/music.rs (favourite zone, Target::More)",
-      "status": "gap",
-      "note": "favourites exist only inside the Music app; no feedback or rating commands for the system"
+      "bifrost": "springboard/ui/src/media_feedback.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
     },
     {
       "feature": "Now Playing sessions and focus",

@@ -31,9 +31,9 @@
     {
       "feature": "Parts of speech and lexical tagging (NLTagger, NLTag lexical class)",
       "apple": "NLTagger with NLTagScheme.lexicalClass, tags(in:unit:scheme:options:), enumerateTags",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no part-of-speech or lemma data; the spellcheck dictionary is a plain word list (springboard/apps/keyboard/src/words/en.txt) with no tags"
+      "bifrost": "springboard/ui/src/lexical_tags.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no part-of-speech or lemma data; the spellcheck dictionary is a plain word list (springboard/apps/keyboard/src/words/en.txt) with no tags"
     },
     {
       "feature": "Named entity recognition (NLTagger nameType)",
@@ -52,9 +52,9 @@
     {
       "feature": "Text embedding and similarity (NLEmbedding)",
       "apple": "NLEmbedding: wordEmbedding(for:), sentenceEmbedding(for:), neighbors(for:maximumCount:distanceType:)",
-      "bifrost": "none found in springboard/sdk/src or springboard/ui/src",
-      "status": "gap",
-      "note": "no vector model and no distance API for apps; quicksearch matches keywords and titles only (springboard/sdk/src/quicksearch.rs:18, :33)"
+      "bifrost": "springboard/ui/src/embedding.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no vector model and no distance API for apps; quicksearch matches keywords and titles only (springboard/sdk/src/quicksearch.rs:18, :33)"
     },
     {
       "feature": "Contextual embedding (NLContextualEmbedding)",

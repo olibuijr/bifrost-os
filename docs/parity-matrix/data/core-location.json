@@ -38,9 +38,9 @@
     {
       "feature": "Reverse geocoding (coordinates to placemark)",
       "apple": "CLGeocoder (reverseGeocodeLocation), CLPlacemark, Converting a user's location to a descriptive placemark",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No reverse lookup exists. The Open-Meteo search in data.rs goes from text to coordinates only."
+      "bifrost": "springboard/ui/src/reverse_lookup.rs (Place",
+      "status": "partial",
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No reverse lookup exists. The Open-Meteo search in data.rs goes from text to coordinates only."
     },
     {
       "feature": "Region monitoring and conditions",

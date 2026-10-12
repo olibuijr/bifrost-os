@@ -10,9 +10,9 @@
     {
       "feature": "View management (MTKView, MTKViewDelegate)",
       "apple": "MTKView, MTKViewDelegate",
-      "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/sdk/src/view/",
-      "status": "gap",
-      "note": "Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
+      "bifrost": "springboard/ui/src/render_loop.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
     },
     {
       "feature": "Device and drawable setup",

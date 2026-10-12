@@ -2,19 +2,67 @@
   "framework": "Security Interface",
   "doc": "https://developer.apple.com/documentation/securityinterface",
   "macos_since": "10.3",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/keychain.rs (no UI), springboard/sdk/src/document.rs (panel pattern), springboard/src/shell/wifi_page.rs:56 (certificate notice text only), docs/privd-protocol.md (privileged-action password gate, OS layer)",
   "summary": "Apple's framework is a set of certificate, identity, keychain and authorization panels and views. BifrOSt has none of these panels or views. The keychain store exists as an SDK API for generic passwords only, and the privileged-action password gate lives in the OS daemon layer with no app-facing lock view.",
   "rea_evidence": "ev_399558a105f71e1ef50a7190ff9d21125c2d873eb30e0b85b35b3ea64ae55720",
   "features": [
-    {"feature": "Authorization lock view and plug-in views", "apple": "SFAuthorizationView, SFAuthorizationPluginView, SFAuthorizationViewState, SFButtonType, SFViewType", "bifrost": "docs/privd-protocol.md (password gate with wrong_password and locked_out errors)", "status": "os", "note": "The privileged-action password check exists in the privd daemon. No app-facing lock icon, authorization dialog or plug-in view exists in the SDK or the shell."},
-    {"feature": "Certificate panel", "apple": "SFCertificatePanel", "bifrost": "none", "status": "gap", "note": "No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."},
-    {"feature": "Certificate trust editor", "apple": "SFCertificateTrustPanel", "bifrost": "none", "status": "gap", "note": "No trust settings UI and no certificate chain handling in the SDK or shell."},
-    {"feature": "Certificate view", "apple": "SFCertificateView, SFCertificateViewDisclosureStateDidChange", "bifrost": "springboard/src/shell/wifi_page.rs:56 (text notice for 802.1X server validation only)", "status": "gap", "note": "The Wi-Fi notice is a fixed string, not a certificate view. Nothing displays certificate contents or details."},
-    {"feature": "Choose identity panel and table cell", "apple": "SFChooseIdentityPanel, SFChooseIdentityTableCellView", "bifrost": "none", "status": "gap", "note": "No identity picker. The keychain API does not store identities, keys or certificates."},
-    {"feature": "Keychain save panel", "apple": "SFKeychainSavePanel", "bifrost": "springboard/sdk/src/keychain.rs (SDK API without UI)", "status": "gap", "note": "The SDK stores generic passwords for each app. No panel lets the user create a keychain. docs/bifrost-ui.md (Keychain section, around line 422) lists the gaps."},
-    {"feature": "Keychain settings panel", "apple": "SFKeychainSettingsPanel", "bifrost": "none", "status": "gap", "note": "No UI for keychain settings. Items are available whenever the shell runs and have no access control."},
-    {"feature": "Framework constants and error", "apple": "SecurityInterface Constants (Plug-in View Keys, SFDisplayViewException), SecurityInterface Enumerations", "bifrost": "none", "status": "n/a", "note": "These serve Apple's authorization plug-in model and the authorization view. BifrOSt has no plug-in model of that kind."}
+    {
+      "feature": "Authorization lock view and plug-in views",
+      "apple": "SFAuthorizationView, SFAuthorizationPluginView, SFAuthorizationViewState, SFButtonType, SFViewType",
+      "bifrost": "docs/privd-protocol.md (password gate with wrong_password and locked_out errors)",
+      "status": "os",
+      "note": "The privileged-action password check exists in the privd daemon. No app-facing lock icon, authorization dialog or plug-in view exists in the SDK or the shell."
+    },
+    {
+      "feature": "Certificate panel",
+      "apple": "SFCertificatePanel",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."
+    },
+    {
+      "feature": "Certificate trust editor",
+      "apple": "SFCertificateTrustPanel",
+      "bifrost": "springboard/ui/src/certificate_trust.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No trust settings UI and no certificate chain handling in the SDK or shell."
+    },
+    {
+      "feature": "Certificate view",
+      "apple": "SFCertificateView, SFCertificateViewDisclosureStateDidChange",
+      "bifrost": "springboard/ui/src/trust.rs (CertificateView)",
+      "status": "partial",
+      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi notice is a fixed string, not a certificate view. Nothing displays certificate contents or details."
+    },
+    {
+      "feature": "Choose identity panel and table cell",
+      "apple": "SFChooseIdentityPanel, SFChooseIdentityTableCellView",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No identity picker. The keychain API does not store identities, keys or certificates."
+    },
+    {
+      "feature": "Keychain save panel",
+      "apple": "SFKeychainSavePanel",
+      "bifrost": "springboard/ui/src/keychain_save.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK stores generic passwords for each app. No panel lets the user create a keychain. docs/bifrost-ui.md (Keychain section, around line 422) lists the gaps."
+    },
+    {
+      "feature": "Keychain settings panel",
+      "apple": "SFKeychainSettingsPanel",
+      "bifrost": "springboard/ui/src/keychain_settings.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No UI for keychain settings. Items are available whenever the shell runs and have no access control."
+    },
+    {
+      "feature": "Framework constants and error",
+      "apple": "SecurityInterface Constants (Plug-in View Keys, SFDisplayViewException), SecurityInterface Enumerations",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "These serve Apple's authorization plug-in model and the authorization view. BifrOSt has no plug-in model of that kind."
+    }
   ],
   "gaps": [
     "No certificate panel, certificate view or certificate trust editor. The shell has no certificate display or trust UI.",

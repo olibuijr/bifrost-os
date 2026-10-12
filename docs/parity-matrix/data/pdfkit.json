@@ -59,9 +59,9 @@
     {
       "feature": "Annotations",
       "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
-      "bifrost": "none found (no annotation code in springboard/src/shell/books, springboard/sdk/src or springboard/apps/pdfcraft-desktop source)",
-      "status": "gap",
-      "note": "pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked"
+      "bifrost": "springboard/ui/src/annotation.rs (Annotation",
+      "status": "partial",
+      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked"
     },
     {
       "feature": "Widgets and form fields",
@@ -80,9 +80,9 @@
     {
       "feature": "Selection and find",
       "apple": "PDFSelection, PDFDocument selection(from:at:to:at:with:), PDFPage selectionForWord(at:), selectionForLine(at:), PDFDocument find and FoundSelection",
-      "bifrost": "none found in the Books reader (springboard/src/shell/books/engine/mod.rs and pdf/mod.rs have no search or selection code)",
-      "status": "gap",
-      "note": "The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object"
+      "bifrost": "springboard/ui/src/pdfselect.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-pdfkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object"
     },
     {
       "feature": "Write operations (save, write options, permissions)",

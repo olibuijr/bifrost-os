@@ -10,9 +10,9 @@
     {
       "feature": "Loading and running a model",
       "apple": "MLModel, MLModelAsset, MLModelError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no SDK API loads a compiled model or runs a prediction"
+      "bifrost": "springboard/ui/src/ml_model.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API loads a compiled model or runs a prediction"
     },
     {
       "feature": "Model inputs and outputs",
@@ -38,9 +38,9 @@
     {
       "feature": "Stateful models",
       "apple": "MLState, MLStateConstraint",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no state buffers for recurrent models"
+      "bifrost": "springboard/ui/src/ml_state.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no state buffers for recurrent models"
     },
     {
       "feature": "On-device model updates",

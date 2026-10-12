@@ -10,16 +10,16 @@
     {
       "feature": "Preference pane class (NSPreferencePane)",
       "apple": "NSPreferencePane, init(bundle:), bundle, mainNibName",
-      "bifrost": "springboard/src/shell/settings.rs (Settings is shell code)",
-      "status": "gap",
-      "note": "No API lets an app or bundle supply a pane; Settings builds every page from its own PageId enum (springboard/src/shell/pages.rs)."
+      "bifrost": "springboard/ui/src/pane.rs (PaneHooks",
+      "status": "partial",
+      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or bundle supply a pane; Settings builds every page from its own PageId enum (springboard/src/shell/pages.rs)."
     },
     {
       "feature": "Loading the main view",
       "apple": "loadMainView(), assignMainView(), mainViewDidLoad(), mainView",
-      "bifrost": "springboard/src/shell/settings.rs (Settings::build)",
-      "status": "gap",
-      "note": "Pages are built in code from specs; no nib or view load hook for external panes."
+      "bifrost": "springboard/ui/src/pane.rs (PaneHooks::load_main_view",
+      "status": "partial",
+      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pages are built in code from specs; no nib or view load hook for external panes."
     },
     {
       "feature": "Selecting and deselecting panes",
@@ -66,9 +66,9 @@
     {
       "feature": "Pane bundle format and Info.plist keys",
       "apple": "Preference pane bundle, NSPrefPaneHelpMenu* keys in the bundle property list",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."
+      "bifrost": "springboard/ui/src/pane.rs (parse_manifest",
+      "status": "partial",
+      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."
     }
   ],
   "gaps": [

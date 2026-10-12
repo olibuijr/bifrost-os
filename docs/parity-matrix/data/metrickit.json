@@ -59,23 +59,23 @@
     {
       "feature": "Time-in-use metrics (foreground, background, audio, location time)",
       "apple": "TotalForegroundTimeMetric, TotalBackgroundTimeMetric, TotalBackgroundAudioTimeMetric, TotalBackgroundLocationTimeMetric, LocationActivityTimeMetric, CellularConditionTimeMetric",
-      "bifrost": "springboard/src/bare/app_manager.rs (app lifecycle), springboard/sdk/src/runtime.rs",
-      "status": "gap",
-      "note": "The shell knows when each app is foreground or backgrounded but keeps no per-app time totals and reports none."
+      "bifrost": "springboard/core/src/app_metrics.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell knows when each app is foreground or backgrounded but keeps no per-app time totals and reports none."
     },
     {
       "feature": "Launch, resume and extended launch timing (TimeToFirstDrawMetric, ApplicationResumeTimeMetric, ExtendedLaunchMetric)",
       "apple": "TimeToFirstDrawMetric, OptimizedTimeToFirstDrawMetric, ApplicationResumeTimeMetric, ExtendedLaunchMetric, LaunchTaskID",
-      "bifrost": "springboard/src/bare/app_manager.rs, springboard/src/bare/jank.rs",
-      "status": "gap",
-      "note": "No time-to-first-draw or resume timing is measured per app and delivered to it."
+      "bifrost": "springboard/core/src/app_metrics.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No time-to-first-draw or resume timing is measured per app and delivered to it."
     },
     {
       "feature": "Termination metrics (ForegroundTerminationMetric, BackgroundTerminationMetric)",
       "apple": "ForegroundTerminationMetric, BackgroundTerminationMetric, AppLaunchDiagnostic",
-      "bifrost": "springboard/src/shell/diag.rs (last_exit file), springboard/src/bare/heartbeat.rs",
-      "status": "gap",
-      "note": "The shell writes a last_exit file for the watchdog. Termination is not counted by category and not reported to apps."
+      "bifrost": "springboard/core/src/app_metrics.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell writes a last_exit file for the watchdog. Termination is not counted by category and not reported to apps."
     },
     {
       "feature": "Network data metrics (Wi-Fi and cellular upload and download)",

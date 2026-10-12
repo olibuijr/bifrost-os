@@ -52,9 +52,9 @@
     {
       "feature": "Key pairs gated by authentication (LAPublicKey, LAPrivateKey)",
       "apple": "LAPublicKey, LAPrivateKey",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
+      "bifrost": "springboard/ui/src/access_control.rs (KeyPairPolicy)",
+      "status": "partial",
+      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
     },
     {
       "feature": "Authentication errors (LAError, LAErrorDomain)",

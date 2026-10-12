@@ -59,9 +59,9 @@
     {
       "feature": "Preview extensions (QLPreviewingController)",
       "apple": "QLPreviewingController: preparePreviewOfFile(at:completionHandler:), preparePreviewOfSearchableItem(...), providePreview(for:completionHandler:)",
-      "bifrost": "none found in springboard/sdk/src or springboard/src",
-      "status": "gap",
-      "note": "No mechanism for an app to register a preview for its own file types, and no searchable item preview."
+      "bifrost": "springboard/ui/src/preview.rs (Subject",
+      "status": "partial",
+      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mechanism for an app to register a preview for its own file types, and no searchable item preview."
     },
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",

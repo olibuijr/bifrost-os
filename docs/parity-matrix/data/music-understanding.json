@@ -45,9 +45,9 @@
     {
       "feature": "Pace",
       "apple": "PaceResult, AnalysisType.pace",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no pace or tempo-change analysis"
+      "bifrost": "springboard/ui/src/music.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pace or tempo-change analysis"
     },
     {
       "feature": "Structure (sections, segments, phrases)",

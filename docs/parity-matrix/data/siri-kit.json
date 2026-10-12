@@ -73,9 +73,9 @@
     {
       "feature": "Custom vocabulary, synonyms and intent phrases",
       "apple": "Registering Custom Vocabulary with SiriKit, INVocabulary, Specifying Synonyms for Your App Name, Intent Phrases, Parameter Vocabularies",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No vocabulary file or phrase registration. Search matches titles and app names only."
+      "bifrost": "springboard/ui/src/intent_vocab.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vocabulary file or phrase registration. Search matches titles and app names only."
     },
     {
       "feature": "Messaging intents (send, search messages, contacts)",
@@ -94,9 +94,9 @@
     {
       "feature": "Media intents (play, add to queue, search media)",
       "apple": "Media, Managing Audio with SiriKit, Improving Siri Media Interactions and App Selection",
-      "bifrost": "none found in springboard/apps (no media-domain intents)",
-      "status": "gap",
-      "note": "Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
+      "bifrost": "springboard/ui/src/media_request.rs (MediaVerb)",
+      "status": "partial",
+      "note": "Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
     },
     {
       "feature": "Ride, payment, workout, reservation, car and calling domains",
@@ -122,9 +122,9 @@
     {
       "feature": "Authorization to use Siri",
       "apple": "Requesting Authorization to Use Siri",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
+      "bifrost": "springboard/ui/src/intent_access.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
     },
     {
       "feature": "Watch face and Maps relevance",

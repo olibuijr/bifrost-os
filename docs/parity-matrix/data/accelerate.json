@@ -17,9 +17,9 @@
     {
       "feature": "FFT, DFT and DCT",
       "apple": "vDSP Fourier transforms, Discrete Cosine transforms, fast Fourier transforms",
-      "bifrost": "springboard/apps/daw/src/conv.rs (private Fft struct, radix-2 complex)",
-      "status": "gap",
-      "note": "The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
+      "bifrost": "springboard/ui/src/fourier.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
     },
     {
       "feature": "Convolution and morphology",

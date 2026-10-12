@@ -7,23 +7,125 @@
   "summary": "Image decoding (PNG and JPEG), PNG and JPEG writing, EXIF reading and writing, and thumbnail downsampling exist inside the system layer and the Photos and Browser apps. Apps get no SDK API for images: no CGImageSource or CGImageDestination equivalent, no GIF, HEIC, WebP or TIFF, no XMP, no animation, and no colour profile handling.",
   "rea_evidence": "ev_1f78cc989db83cafeda1ab3033c6d43e407a9f6ef4ead529ffeb323eb64aa9ff",
   "features": [
-    {"feature": "Image source: decode from data or file", "apple": "CGImageSource", "bifrost": "springboard/render/src/imgdec.rs:12 (decode), springboard/src/shell/browser/images.rs", "status": "os", "note": "Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type."},
-    {"feature": "Image destination: encode and write", "apple": "CGImageDestination", "bifrost": "springboard/src/pngenc.rs:9 (encode_rgb, uncompressed zlib), springboard/src/shell/camera/jpeg.rs:284 (encode_rgb, encode_pixels), springboard/src/shell/photos/edit.rs:343 (save_copy)", "status": "os", "note": "Writes PNG (stored deflate blocks, no compression) and JPEG at a quality setting. Only the Photos edit copy and the camera use them."},
-    {"feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)", "apple": "Image I/O supported type list (Image Properties, format-specific property keys)", "bifrost": "springboard/src/shell/browser/images.rs:12-14 (GIF, WebP and SVG sniffed, not decoded)", "status": "gap", "note": "Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."},
-    {"feature": "Downsampled and thumbnail decode", "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)", "bifrost": "springboard/src/shell/browser/images.rs:1-8 (area-averaging row downsample), springboard/render/src/imgdec.rs:66 (box_down), :91 (cover), :113 (contain)", "status": "os", "note": "Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file."},
-    {"feature": "Decode size limits", "apple": "No direct equivalent (Image I/O reads the header first)", "bifrost": "springboard/render/src/imgdec.rs:7 (MAX_SIDE 8192), springboard/src/shell/browser/images.rs (MAX_PIXELS checked from the header before decode)", "status": "os", "note": "Oversized pictures are refused before decoding."},
-    {"feature": "EXIF metadata read (camera, date, exposure, size)", "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)", "bifrost": "springboard/src/shell/photos/exif.rs:113 (EXIF reader for the info sheet)", "status": "os", "note": "Photos app only. Not exposed to SDK apps."},
-    {"feature": "EXIF orientation applied on decode", "apple": "kCGImagePropertyOrientation", "bifrost": "springboard/src/shell/photos/mod.rs (decode_upright; test decoding_applies_the_exif_orientation), springboard/src/shell/photos/exif.rs:178 (orientation)", "status": "os", "note": "Applied in the Photos app. Browser decode does not read it."},
-    {"feature": "EXIF write", "apple": "CGImageDestination with EXIF properties", "bifrost": "springboard/src/shell/camera/jpeg.rs:249 (exif_block: Orientation, DateTime, DateTimeOriginal)", "status": "os", "note": "Camera capture only. Orientation, date and time only."},
-    {"feature": "GPS dictionary", "apple": "GPS Dictionary Keys", "bifrost": "springboard/src/shell/photos/exif.rs (GPS read for the info sheet)", "status": "os", "note": "Read only. No write, no SDK API."},
-    {"feature": "XMP, IPTC and 8BIM metadata", "apple": "CGImageMetadata, CGMutableImageMetadata, CGImageMetadataTag, IPTC Dictionary Keys", "bifrost": "none found", "status": "gap", "note": "No XMP or IPTC parser or writer in springboard/."},
-    {"feature": "Animated GIF and APNG frames", "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime", "bifrost": "springboard/src/shell/browser/images.rs:14 (animated GIFs skipped, no frames kept)", "status": "gap", "note": "No frame iteration or delay API."},
-    {"feature": "Colour profiles and HDR gain maps", "apple": "Color management (kCGImageDestinationEncode* gain map and base colour space keys)", "bifrost": "none for images (springboard/src/pngenc.rs writes no colour chunk)", "status": "gap", "note": "Images are treated as sRGB. No ICC, gain map or HDR support."},
-    {"feature": "Spatial photos and stereo HEIC", "apple": "Writing spatial photos; spatial metadata", "bifrost": "none", "status": "n/a", "note": "Vision Pro media. No BifrOSt counterpart."},
-    {"feature": "Manufacturer maker-note dictionaries", "apple": "Nikon, Canon, Apple, Minolta, Fuji, Olympus, Pentax dictionary keys", "bifrost": "none", "status": "n/a", "note": "Vendor-specific camera data; not a desktop app need today."},
-    {"feature": "Image file types for the type system", "apple": "UTType for image types (public.png, public.jpeg)", "bifrost": "springboard/ui/src/uttype.rs (type_for_extension, conforms), springboard/src/files/fs.rs:49 (kind_of: PNG and JPEG are Image)", "status": "partial", "note": "UTType for images is in the SDK as controls::uttype. Only PNG and JPEG count as images; other formats are not image types."},
-    {"feature": "Image data in drag and drop", "apple": "public.image in registerForDraggedTypes", "bifrost": "springboard/sdk/src/dnd.rs (register_types), docs/bifrost-ui.md:513 (public.image accepts PNG and JPEG)", "status": "partial", "note": "Image drops are typed by UTType. Image payloads (data) are not carried; the docs list it as a gap."},
-    {"feature": "Tiled image providers", "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight", "bifrost": "none", "status": "gap", "note": "No streaming tile provider."}
+    {
+      "feature": "Image source: decode from data or file",
+      "apple": "CGImageSource",
+      "bifrost": "springboard/render/src/imgdec.rs:12 (decode), springboard/src/shell/browser/images.rs",
+      "status": "os",
+      "note": "Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type."
+    },
+    {
+      "feature": "Image destination: encode and write",
+      "apple": "CGImageDestination",
+      "bifrost": "springboard/src/pngenc.rs:9 (encode_rgb, uncompressed zlib), springboard/src/shell/camera/jpeg.rs:284 (encode_rgb, encode_pixels), springboard/src/shell/photos/edit.rs:343 (save_copy)",
+      "status": "os",
+      "note": "Writes PNG (stored deflate blocks, no compression) and JPEG at a quality setting. Only the Photos edit copy and the camera use them."
+    },
+    {
+      "feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)",
+      "apple": "Image I/O supported type list (Image Properties, format-specific property keys)",
+      "bifrost": "springboard/src/shell/browser/images.rs:12-14 (GIF, WebP and SVG sniffed, not decoded)",
+      "status": "gap",
+      "note": "Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."
+    },
+    {
+      "feature": "Downsampled and thumbnail decode",
+      "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)",
+      "bifrost": "springboard/src/shell/browser/images.rs:1-8 (area-averaging row downsample), springboard/render/src/imgdec.rs:66 (box_down), :91 (cover), :113 (contain)",
+      "status": "os",
+      "note": "Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file."
+    },
+    {
+      "feature": "Decode size limits",
+      "apple": "No direct equivalent (Image I/O reads the header first)",
+      "bifrost": "springboard/render/src/imgdec.rs:7 (MAX_SIDE 8192), springboard/src/shell/browser/images.rs (MAX_PIXELS checked from the header before decode)",
+      "status": "os",
+      "note": "Oversized pictures are refused before decoding."
+    },
+    {
+      "feature": "EXIF metadata read (camera, date, exposure, size)",
+      "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)",
+      "bifrost": "springboard/src/shell/photos/exif.rs:113 (EXIF reader for the info sheet)",
+      "status": "os",
+      "note": "Photos app only. Not exposed to SDK apps."
+    },
+    {
+      "feature": "EXIF orientation applied on decode",
+      "apple": "kCGImagePropertyOrientation",
+      "bifrost": "springboard/src/shell/photos/mod.rs (decode_upright; test decoding_applies_the_exif_orientation), springboard/src/shell/photos/exif.rs:178 (orientation)",
+      "status": "os",
+      "note": "Applied in the Photos app. Browser decode does not read it."
+    },
+    {
+      "feature": "EXIF write",
+      "apple": "CGImageDestination with EXIF properties",
+      "bifrost": "springboard/src/shell/camera/jpeg.rs:249 (exif_block: Orientation, DateTime, DateTimeOriginal)",
+      "status": "os",
+      "note": "Camera capture only. Orientation, date and time only."
+    },
+    {
+      "feature": "GPS dictionary",
+      "apple": "GPS Dictionary Keys",
+      "bifrost": "springboard/src/shell/photos/exif.rs (GPS read for the info sheet)",
+      "status": "os",
+      "note": "Read only. No write, no SDK API."
+    },
+    {
+      "feature": "XMP, IPTC and 8BIM metadata",
+      "apple": "CGImageMetadata, CGMutableImageMetadata, CGImageMetadataTag, IPTC Dictionary Keys",
+      "bifrost": "springboard/core/src/imgmeta.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No XMP or IPTC parser or writer in springboard/."
+    },
+    {
+      "feature": "Animated GIF and APNG frames",
+      "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
+      "bifrost": "springboard/src/shell/browser/images.rs:14 (animated GIFs skipped, no frames kept)",
+      "status": "gap",
+      "note": "No frame iteration or delay API."
+    },
+    {
+      "feature": "Colour profiles and HDR gain maps",
+      "apple": "Color management (kCGImageDestinationEncode* gain map and base colour space keys)",
+      "bifrost": "none for images (springboard/src/pngenc.rs writes no colour chunk)",
+      "status": "gap",
+      "note": "Images are treated as sRGB. No ICC, gain map or HDR support."
+    },
+    {
+      "feature": "Spatial photos and stereo HEIC",
+      "apple": "Writing spatial photos; spatial metadata",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Vision Pro media. No BifrOSt counterpart."
+    },
+    {
+      "feature": "Manufacturer maker-note dictionaries",
+      "apple": "Nikon, Canon, Apple, Minolta, Fuji, Olympus, Pentax dictionary keys",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Vendor-specific camera data; not a desktop app need today."
+    },
+    {
+      "feature": "Image file types for the type system",
+      "apple": "UTType for image types (public.png, public.jpeg)",
+      "bifrost": "springboard/ui/src/uttype.rs (type_for_extension, conforms), springboard/src/files/fs.rs:49 (kind_of: PNG and JPEG are Image)",
+      "status": "partial",
+      "note": "UTType for images is in the SDK as controls::uttype. Only PNG and JPEG count as images; other formats are not image types."
+    },
+    {
+      "feature": "Image data in drag and drop",
+      "apple": "public.image in registerForDraggedTypes",
+      "bifrost": "springboard/sdk/src/dnd.rs (register_types), docs/bifrost-ui.md:513 (public.image accepts PNG and JPEG)",
+      "status": "partial",
+      "note": "Image drops are typed by UTType. Image payloads (data) are not carried; the docs list it as a gap."
+    },
+    {
+      "feature": "Tiled image providers",
+      "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No streaming tile provider."
+    }
   ],
   "gaps": [
     "No SDK module for images: apps cannot decode, encode or read metadata through bifrost_app.",

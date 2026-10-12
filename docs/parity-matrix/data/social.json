@@ -17,9 +17,9 @@
     {
       "feature": "Service availability check",
       "apple": "SLComposeViewController.isAvailable(forServiceType:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No service types exist to check."
+      "bifrost": "springboard/sdk/src/social.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service types exist to check."
     },
     {
       "feature": "Post contents (initial text, images, URLs)",

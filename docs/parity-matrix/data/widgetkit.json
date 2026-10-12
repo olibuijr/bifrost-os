@@ -80,16 +80,16 @@
     {
       "feature": "Interactivity in widgets (Button, Toggle, AppIntent in widget)",
       "apple": "Button, Toggle, Adding interactivity to widgets and Live Activities",
-      "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "gap",
-      "note": "Shell tiles take taps that open the shell's own apps. No widget action invokes an app intent."
+      "bifrost": "springboard/ui/src/widget_action.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tiles take taps that open the shell's own apps. No widget action invokes an app intent."
     },
     {
       "feature": "Deep links from widgets (widgetURL, Link)",
       "apple": "widgetURL(_:), Link, Linking to specific app scenes from your widget",
-      "bifrost": "springboard/src/shell/today.rs (tile taps)",
-      "status": "gap",
-      "note": "Shell tile taps open fixed destinations. Apps cannot give a widget a URL or scene target."
+      "bifrost": "springboard/ui/src/widget_link.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tile taps open fixed destinations. Apps cannot give a widget a URL or scene target."
     },
     {
       "feature": "Live Activities (ActivityConfiguration, DynamicIsland, ActivityKit)",
@@ -122,9 +122,9 @@
     {
       "feature": "Accessibility descriptions for widgets",
       "apple": "Adding accessible descriptions to widgets and Live Activities",
-      "bifrost": "springboard/src/shell/today.rs (tiles are rendered images, see the tile function near line 295)",
-      "status": "gap",
-      "note": "Shell tiles are pixel images with no widget-level label or value for assistive technology."
+      "bifrost": "springboard/ui/src/widget_ax.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tiles are pixel images with no widget-level label or value for assistive technology."
     },
     {
       "feature": "Accessory, watch complication, StandBy, CarPlay and visionOS widgets (AccessoryWidgetGroup, widgetLabel, WidgetTexture, LevelOfDetail)",

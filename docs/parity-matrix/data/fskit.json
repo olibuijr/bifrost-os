@@ -2,21 +2,81 @@
   "framework": "FSKit",
   "doc": "https://developer.apple.com/documentation/fskit",
   "macos_since": "15.4",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/bare/docbroker.rs, springboard/src/files/fs.rs, springboard/sdk/src/fswatch.rs, springboard/sdk/src/file_coordination.rs",
   "summary": "Apple's FSKit lets an app extension run a file system module in user space and mount it. BifrOSt has no user-space file system module API and no volume or item model for apps. Its file access is the document grant broker and file watching, and the Linux kernel supplies the file systems themselves.",
   "rea_evidence": "ev_86a103ec81a5e027e4f3851012c7962454d08d9382dfac265dd6b4a653419441",
   "features": [
-    {"feature": "Unary file system extension (user-space module)", "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase", "bifrost": "none; no SDK or shell API for an app to register a mount type", "status": "gap", "note": "Apple's module runs as an app extension and is driven by FSKit. Linux has FUSE in the kernel, but BifrOSt exposes no SDK wrapper for it."},
-    {"feature": "Volumes and items", "apple": "FSVolume, FSItem, FSFileName", "bifrost": "springboard/src/files/fs.rs (Files app file operations), springboard/sdk/src/file_coordination.rs", "status": "gap", "note": "Files uses shell file utilities. Apps get paths and descriptors, not a volume or item object model."},
-    {"feature": "Resources (block device, path URL, generic URL)", "apple": "FSResource, FSBlockDeviceResource, FSPathURLResource, FSGenericURLResource", "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor)", "status": "partial", "note": "The grant model covers one path per app and per file. There is no block device resource and no generic URL resource."},
-    {"feature": "Containers and probing", "apple": "FSContainerIdentifier, FSContainerStatus, FSProbeResult, FSMatchResult", "bifrost": "none", "status": "gap", "note": "No probe-then-mount step exists for an app or the shell."},
-    {"feature": "Extents and blockmaps", "apple": "FSExtentPacker, FSExtentType, FSBlockmapFlags, FSMetadataRange, FSCompleteIOFlags", "bifrost": "Linux kernel file systems (no BifrOSt SDK surface)", "status": "os", "note": "Extent mapping happens in the Linux kernel file systems. No app-facing API exists."},
-    {"feature": "Errors and logging", "apple": "FSError, FSKitErrorDomain, fs_errorForPOSIXError, FSDataCacheError", "bifrost": "springboard/core/src/log.rs", "status": "partial", "note": "Logging exists. FSKit's typed file system error domain has no BifrOSt counterpart."},
-    {"feature": "Tasks and operation identifiers", "apple": "FSTask, FSTaskOptions, FSOperationID", "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation)", "status": "partial", "note": "Grant requests have ids and can be cancelled. There is no FSTask log or completion channel for file system modules."},
-    {"feature": "File change notification", "apple": "Used with mounted volumes (no direct FSKit class)", "bifrost": "springboard/sdk/src/fswatch.rs (FSEvent stream over inotify, recursive)", "status": "partial", "note": "Apple's FSEvents has no direct FSKit class. This row covers the watch side of a mounted volume's changes."},
-    {"feature": "Client interaction and maintenance", "apple": "FSClient, FSManageableResourceMaintenanceOperations", "bifrost": "none", "status": "gap", "note": "No API lets an app or daemon ask for a mount, check or repair. The installer partitions disks (springboard/src/installer/plan.rs), but that is not an app-facing API."},
-    {"feature": "Entitlement and sandbox", "apple": "com.apple.developer.fskit.fsmodule entitlement", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap app sandbox)", "status": "n/a", "note": "The entitlement is an Apple distribution control with no counterpart. App isolation exists in app_policy.rs."}
+    {
+      "feature": "Unary file system extension (user-space module)",
+      "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase",
+      "bifrost": "none; no SDK or shell API for an app to register a mount type",
+      "status": "gap",
+      "note": "Apple's module runs as an app extension and is driven by FSKit. Linux has FUSE in the kernel, but BifrOSt exposes no SDK wrapper for it."
+    },
+    {
+      "feature": "Volumes and items",
+      "apple": "FSVolume, FSItem, FSFileName",
+      "bifrost": "springboard/ui/src/fs_volume.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files uses shell file utilities. Apps get paths and descriptors, not a volume or item object model."
+    },
+    {
+      "feature": "Resources (block device, path URL, generic URL)",
+      "apple": "FSResource, FSBlockDeviceResource, FSPathURLResource, FSGenericURLResource",
+      "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor)",
+      "status": "partial",
+      "note": "The grant model covers one path per app and per file. There is no block device resource and no generic URL resource."
+    },
+    {
+      "feature": "Containers and probing",
+      "apple": "FSContainerIdentifier, FSContainerStatus, FSProbeResult, FSMatchResult",
+      "bifrost": "springboard/ui/src/fs_probe.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No probe-then-mount step exists for an app or the shell."
+    },
+    {
+      "feature": "Extents and blockmaps",
+      "apple": "FSExtentPacker, FSExtentType, FSBlockmapFlags, FSMetadataRange, FSCompleteIOFlags",
+      "bifrost": "Linux kernel file systems (no BifrOSt SDK surface)",
+      "status": "os",
+      "note": "Extent mapping happens in the Linux kernel file systems. No app-facing API exists."
+    },
+    {
+      "feature": "Errors and logging",
+      "apple": "FSError, FSKitErrorDomain, fs_errorForPOSIXError, FSDataCacheError",
+      "bifrost": "springboard/core/src/log.rs",
+      "status": "partial",
+      "note": "Logging exists. FSKit's typed file system error domain has no BifrOSt counterpart."
+    },
+    {
+      "feature": "Tasks and operation identifiers",
+      "apple": "FSTask, FSTaskOptions, FSOperationID",
+      "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation)",
+      "status": "partial",
+      "note": "Grant requests have ids and can be cancelled. There is no FSTask log or completion channel for file system modules."
+    },
+    {
+      "feature": "File change notification",
+      "apple": "Used with mounted volumes (no direct FSKit class)",
+      "bifrost": "springboard/sdk/src/fswatch.rs (FSEvent stream over inotify, recursive)",
+      "status": "partial",
+      "note": "Apple's FSEvents has no direct FSKit class. This row covers the watch side of a mounted volume's changes."
+    },
+    {
+      "feature": "Client interaction and maintenance",
+      "apple": "FSClient, FSManageableResourceMaintenanceOperations",
+      "bifrost": "springboard/ui/src/fs_maintenance.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or daemon ask for a mount, check or repair. The installer partitions disks (springboard/src/installer/plan.rs), but that is not an app-facing API."
+    },
+    {
+      "feature": "Entitlement and sandbox",
+      "apple": "com.apple.developer.fskit.fsmodule entitlement",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap app sandbox)",
+      "status": "n/a",
+      "note": "The entitlement is an Apple distribution control with no counterpart. App isolation exists in app_policy.rs."
+    }
   ],
   "gaps": [
     "No user-space file system module API: no way for an app to ship and mount a file system, the core of FSKit",

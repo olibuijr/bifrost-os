@@ -1,33 +1,117 @@
 {
- "framework":"AppKit (App Structure)",
- "doc":"https://developer.apple.com/documentation/appkit",
- "macos_since":"10.0",
- "status":"partial",
- "bifrost":"springboard/sdk/src/runtime.rs, document.rs, pasteboard.rs, restoration.rs, workspace.rs, observable.rs",
- "summary":"App lifecycle, documents, pasteboard, state restoration, workspace and sandbox permissions have SDK counterparts. Liquid Glass-style materials exist in the renderer. Cocoa Bindings, nib/storyboard loading, app extensions and iCloud have no equivalent.",
- "rea_evidence":"ev_13fb77cf2a8baeb76d5ba523cb7154f39cc259d6e99eaf466bc087940ef72843",
- "features":[
-  {"feature":"Adopting Liquid Glass","apple":"Article on the new material","bifrost":"springboard/render/src/glass.rs (vibrancy hook); docs/gpu-first.md","status":"partial","note":"Glass backdrop exists in the shell; no app-facing material API guaranteed"},
-  {"feature":"AppKit updates","apple":"What's new article","bifrost":"docs/bifrost-ui.md (Apple-parity sections)","status":"partial","note":"Parity tracked per feature, not per release"},
-  {"feature":"Protecting the user's privacy","apple":"Permission prompts for personal data","bifrost":"springboard/src/bare/app_policy.rs; docs/app-isolation.md; springboard/src/bare/docbroker.rs","status":"partial","note":"Bubblewrap sandbox and file grants; per-app permissions like documents; no TCC-style prompt for every data class"},
-  {"feature":"Porting to Apple silicon","apple":"Universal binary guidance","bifrost":"","status":"n/a","note":"Apple hardware migration; packages are x86_64-linux"},
-  {"feature":"App and Environment","apple":"NSApplication, NSWorkspace, NSRunningApplication, app delegate, process info","bifrost":"springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs","status":"partial","note":"Lifecycle, open/reveal/recycle, launch events present; memory-warning callbacks and occlusion suspension still planned (task/008-lifecycle-recovery.md)"},
-  {"feature":"Documents (NSDocument, NSDocumentController)","apple":"Document model, open/save panels, autosave, versions","bifrost":"springboard/sdk/src/document.rs; springboard/sdk/src/runtime.rs (open panel); springboard/sdk/src/file_coordination.rs","status":"partial","note":"Document model and panels exist; see docs/bifrost-ui.md Documents section for gaps"},
-  {"feature":"Preferences and user defaults","apple":"UserDefaults-style app data","bifrost":"springboard/sdk/src/defaults.rs; springboard/sdk/src/coding.rs","status":"parity","note":""},
-  {"feature":"Pasteboard","apple":"NSPasteboard, rich types, file URLs","bifrost":"springboard/sdk/src/pasteboard.rs; docs/bifrost-ui.md","status":"partial","note":"Shell publishes only one text-like type to Wayland selection; other types stay inside BifrOSt"},
-  {"feature":"iCloud / ubiquitous data","apple":"iCloud document storage and key-value sync","bifrost":"","status":"gap","note":"Cloud sync lives in ~/Projects/bifrost-cloud (outside this repo); no SDK API for apps"},
-  {"feature":"State restoration","apple":"NSWindowRestoration, restorable state","bifrost":"springboard/sdk/src/restoration.rs","status":"parity","note":"Reopens windows when logging back in"},
-  {"feature":"Undo","apple":"NSUndoManager integration in documents","bifrost":"springboard/ui/src/undo.rs","status":"parity","note":"Named undo present"},
-  {"feature":"Cocoa Bindings","apple":"NSObjectController, NSArrayController, KVC/KVO bindings","bifrost":"springboard/sdk/src/observable.rs","status":"partial","note":"Observable<T> gives Combine-style value streams; no controllers or declarative model-to-view bindings"},
-  {"feature":"Resource management (nib, storyboard, bundle)","apple":"NSNib, NSStoryboard, NSBundle resource loading","bifrost":"","status":"gap","note":"Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"},
-  {"feature":"App extensions","apple":"Share, Quick Look, widget, Finder-sync and other extension points","bifrost":"springboard/sdk/src/share.rs; springboard/sdk/src/peek.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/status_item.rs","status":"partial","note":"Individual extension-like APIs exist; no general extension host or packaging model"}
- ],
- "gaps":[
-  "Cocoa Bindings controllers and declarative bindings",
-  "nib/storyboard-style resource loading",
-  "General app extension host and packaging",
-  "iCloud-style document and key-value sync API",
-  "App memory-warning callbacks and occlusion suspension (task/008-lifecycle-recovery.md)",
-  "Multi-type pasteboard publishing to the Wayland selection"
- ]
+  "framework": "AppKit (App Structure)",
+  "doc": "https://developer.apple.com/documentation/appkit",
+  "macos_since": "10.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/runtime.rs, document.rs, pasteboard.rs, restoration.rs, workspace.rs, observable.rs",
+  "summary": "App lifecycle, documents, pasteboard, state restoration, workspace and sandbox permissions have SDK counterparts. Liquid Glass-style materials exist in the renderer. Cocoa Bindings, nib/storyboard loading, app extensions and iCloud have no equivalent.",
+  "rea_evidence": "ev_13fb77cf2a8baeb76d5ba523cb7154f39cc259d6e99eaf466bc087940ef72843",
+  "features": [
+    {
+      "feature": "Adopting Liquid Glass",
+      "apple": "Article on the new material",
+      "bifrost": "springboard/render/src/glass.rs (vibrancy hook); docs/gpu-first.md",
+      "status": "partial",
+      "note": "Glass backdrop exists in the shell; no app-facing material API guaranteed"
+    },
+    {
+      "feature": "AppKit updates",
+      "apple": "What's new article",
+      "bifrost": "docs/bifrost-ui.md (Apple-parity sections)",
+      "status": "partial",
+      "note": "Parity tracked per feature, not per release"
+    },
+    {
+      "feature": "Protecting the user's privacy",
+      "apple": "Permission prompts for personal data",
+      "bifrost": "springboard/src/bare/app_policy.rs; docs/app-isolation.md; springboard/src/bare/docbroker.rs",
+      "status": "partial",
+      "note": "Bubblewrap sandbox and file grants; per-app permissions like documents; no TCC-style prompt for every data class"
+    },
+    {
+      "feature": "Porting to Apple silicon",
+      "apple": "Universal binary guidance",
+      "bifrost": "",
+      "status": "n/a",
+      "note": "Apple hardware migration; packages are x86_64-linux"
+    },
+    {
+      "feature": "App and Environment",
+      "apple": "NSApplication, NSWorkspace, NSRunningApplication, app delegate, process info",
+      "bifrost": "springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs",
+      "status": "partial",
+      "note": "Lifecycle, open/reveal/recycle, launch events present; memory-warning callbacks and occlusion suspension still planned (task/008-lifecycle-recovery.md)"
+    },
+    {
+      "feature": "Documents (NSDocument, NSDocumentController)",
+      "apple": "Document model, open/save panels, autosave, versions",
+      "bifrost": "springboard/sdk/src/document.rs; springboard/sdk/src/runtime.rs (open panel); springboard/sdk/src/file_coordination.rs",
+      "status": "partial",
+      "note": "Document model and panels exist; see docs/bifrost-ui.md Documents section for gaps"
+    },
+    {
+      "feature": "Preferences and user defaults",
+      "apple": "UserDefaults-style app data",
+      "bifrost": "springboard/sdk/src/defaults.rs; springboard/sdk/src/coding.rs",
+      "status": "parity",
+      "note": ""
+    },
+    {
+      "feature": "Pasteboard",
+      "apple": "NSPasteboard, rich types, file URLs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs; docs/bifrost-ui.md",
+      "status": "partial",
+      "note": "Shell publishes only one text-like type to Wayland selection; other types stay inside BifrOSt"
+    },
+    {
+      "feature": "iCloud / ubiquitous data",
+      "apple": "iCloud document storage and key-value sync",
+      "bifrost": "springboard/ui/src/ubiquitous_store.rs (key-value part only",
+      "status": "partial",
+      "note": "Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Cloud sync lives in ~/Projects/bifrost-cloud (outside this repo); no SDK API for apps"
+    },
+    {
+      "feature": "State restoration",
+      "apple": "NSWindowRestoration, restorable state",
+      "bifrost": "springboard/sdk/src/restoration.rs",
+      "status": "parity",
+      "note": "Reopens windows when logging back in"
+    },
+    {
+      "feature": "Undo",
+      "apple": "NSUndoManager integration in documents",
+      "bifrost": "springboard/ui/src/undo.rs",
+      "status": "parity",
+      "note": "Named undo present"
+    },
+    {
+      "feature": "Cocoa Bindings",
+      "apple": "NSObjectController, NSArrayController, KVC/KVO bindings",
+      "bifrost": "springboard/sdk/src/observable.rs",
+      "status": "partial",
+      "note": "Observable<T> gives Combine-style value streams; no controllers or declarative model-to-view bindings"
+    },
+    {
+      "feature": "Resource management (nib, storyboard, bundle)",
+      "apple": "NSNib, NSStoryboard, NSBundle resource loading",
+      "bifrost": "",
+      "status": "gap",
+      "note": "Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"
+    },
+    {
+      "feature": "App extensions",
+      "apple": "Share, Quick Look, widget, Finder-sync and other extension points",
+      "bifrost": "springboard/sdk/src/share.rs; springboard/sdk/src/peek.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/status_item.rs",
+      "status": "partial",
+      "note": "Individual extension-like APIs exist; no general extension host or packaging model"
+    }
+  ],
+  "gaps": [
+    "Cocoa Bindings controllers and declarative bindings",
+    "nib/storyboard-style resource loading",
+    "General app extension host and packaging",
+    "iCloud-style document and key-value sync API",
+    "App memory-warning callbacks and occlusion suspension (task/008-lifecycle-recovery.md)",
+    "Multi-type pasteboard publishing to the Wayland selection"
+  ]
 }

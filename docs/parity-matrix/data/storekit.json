@@ -17,9 +17,9 @@
     {
       "feature": "Purchase flow",
       "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
-      "bifrost": "none; springboard/src/shell/store/install.rs installs free packages only",
-      "status": "gap",
-      "note": "no payment sheet, no purchase result type, no paid-app install path"
+      "bifrost": "springboard/ui/src/purchase.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path"
     },
     {
       "feature": "Transactions and entitlements",
@@ -45,9 +45,9 @@
     {
       "feature": "Offers, offer codes and win-back offers",
       "apple": "Product.SubscriptionOffer, OfferType, offer code redemption, win-back offer sheet",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no offer data in the catalogue"
+      "bifrost": "springboard/ui/src/offer.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no offer data in the catalogue"
     },
     {
       "feature": "Promoted purchases",
@@ -73,9 +73,9 @@
     {
       "feature": "App transaction (purchase of the app itself)",
       "apple": "AppTransaction, AppStore.sync, original purchase date and version",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "BifrOSt apps have no signed record of how they were obtained"
+      "bifrost": "springboard/sdk/src/app_transaction.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt apps have no signed record of how they were obtained"
     },
     {
       "feature": "App Store interactions",

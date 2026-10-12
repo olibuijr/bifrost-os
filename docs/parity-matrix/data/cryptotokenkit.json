@@ -2,20 +2,74 @@
   "framework": "CryptoTokenKit",
   "doc": "https://developer.apple.com/documentation/cryptotokenkit",
   "macos_since": "10.10",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "none for CryptoTokenKit; closest adjacent code is springboard/sdk/src/keychain.rs and springboard/src/keychain.rs (generic-password keychain only)",
   "summary": "CryptoTokenKit covers smart cards, token drivers and token authentication, none of which BifrOSt has. The repo has no smart card, PC/SC, token driver or token registration code. The app keychain stores only generic passwords and does not handle keys, certificates or tokens.",
   "rea_evidence": "ev_7e6dc41868020e0569f34207427910726479b76e591d0c195c261d76f5b92509",
   "features": [
-    {"feature": "Smart card slots and cards", "apple": "TKSmartCardSlotManager, TKSmartCardSlot, TKSmartCard (https://developer.apple.com/documentation/cryptotokenkit)", "bifrost": "none", "status": "gap", "note": "No smart card reader enumeration or slot handling. Repo-wide search for pcsc, smartcard, ccid and token terms finds no code."},
-    {"feature": "Using cryptographic assets stored on a smart card", "apple": "Article: Using Cryptographic Assets Stored on a Smart Card", "bifrost": "none", "status": "gap", "note": "Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."},
-    {"feature": "Smart card token driver and token", "apple": "TKSmartCardTokenDriver, TKSmartCardToken, TKSmartCardTokenSession", "bifrost": "none", "status": "gap", "note": "No app extension or driver mechanism for tokens. No counterpart in springboard/src/bare/ (checked the file list)."},
-    {"feature": "Token watcher, driver and session base classes", "apple": "TKTokenWatcher, TKTokenDriver, TKToken, TKTokenSession", "bifrost": "none", "status": "gap", "note": "No token presence tracking or session authentication state."},
-    {"feature": "Authenticating users with a cryptographic token", "apple": "Article: Authenticating Users with a Cryptographic Token", "bifrost": "springboard/src/shell/login.rs (password login only, as far as the repo search shows)", "status": "gap", "note": "No token-based login factor. Login itself exists; no hardware token is involved."},
-    {"feature": "Smart card authentication configuration", "apple": "Article: Configuring Smart Card Authentication; TKSmartCardTokenRegistrationManager", "bifrost": "none", "status": "gap", "note": "No token registration or managed-device policy for token auth."},
-    {"feature": "Persistent tokens (HSM)", "apple": "Persistent token support, macOS 10.15.4 and later (overview)", "bifrost": "none", "status": "gap", "note": "No always-available token or HSM access."},
-    {"feature": "NFC smart card slot session", "apple": "TKSmartCardSlotNFCSession", "bifrost": "none", "status": "n/a", "note": "Tied to Apple NFC hardware sessions. No BifrOSt counterpart is sensible."},
-    {"feature": "Errors", "apple": "TKError, TKErrorDomain, TKError.Code", "bifrost": "springboard/sdk/src/keychain.rs (keychain Error enum only)", "status": "gap", "note": "No CryptoTokenKit error domain. The keychain error type covers generic-password results only."}
+    {
+      "feature": "Smart card slots and cards",
+      "apple": "TKSmartCardSlotManager, TKSmartCardSlot, TKSmartCard (https://developer.apple.com/documentation/cryptotokenkit)",
+      "bifrost": "springboard/ui/src/smartcard_slot.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No smart card reader enumeration or slot handling. Repo-wide search for pcsc, smartcard, ccid and token terms finds no code."
+    },
+    {
+      "feature": "Using cryptographic assets stored on a smart card",
+      "apple": "Article: Using Cryptographic Assets Stored on a Smart Card",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."
+    },
+    {
+      "feature": "Smart card token driver and token",
+      "apple": "TKSmartCardTokenDriver, TKSmartCardToken, TKSmartCardTokenSession",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No app extension or driver mechanism for tokens. No counterpart in springboard/src/bare/ (checked the file list)."
+    },
+    {
+      "feature": "Token watcher, driver and session base classes",
+      "apple": "TKTokenWatcher, TKTokenDriver, TKToken, TKTokenSession",
+      "bifrost": "springboard/ui/src/token_watch.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token presence tracking or session authentication state."
+    },
+    {
+      "feature": "Authenticating users with a cryptographic token",
+      "apple": "Article: Authenticating Users with a Cryptographic Token",
+      "bifrost": "springboard/src/shell/login.rs (password login only, as far as the repo search shows)",
+      "status": "gap",
+      "note": "No token-based login factor. Login itself exists; no hardware token is involved."
+    },
+    {
+      "feature": "Smart card authentication configuration",
+      "apple": "Article: Configuring Smart Card Authentication; TKSmartCardTokenRegistrationManager",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No token registration or managed-device policy for token auth."
+    },
+    {
+      "feature": "Persistent tokens (HSM)",
+      "apple": "Persistent token support, macOS 10.15.4 and later (overview)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No always-available token or HSM access."
+    },
+    {
+      "feature": "NFC smart card slot session",
+      "apple": "TKSmartCardSlotNFCSession",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Tied to Apple NFC hardware sessions. No BifrOSt counterpart is sensible."
+    },
+    {
+      "feature": "Errors",
+      "apple": "TKError, TKErrorDomain, TKError.Code",
+      "bifrost": "springboard/ui/src/token_watch.rs (TokenError)",
+      "status": "partial",
+      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No CryptoTokenKit error domain. The keychain error type covers generic-password results only."
+    }
   ],
   "gaps": [
     "No smart card reader or slot layer (PC/SC equivalent) in springboard/src/bare/ or anywhere else in the repo.",

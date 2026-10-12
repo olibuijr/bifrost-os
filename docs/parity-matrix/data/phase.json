@@ -2,24 +2,102 @@
   "framework": "PHASE",
   "doc": "https://developer.apple.com/documentation/phase",
   "macos_since": "12.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/sdk/src/lib.rs (audio client), springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs, springboard/src/media/mixer.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs, springboard/src/media/speaker.rs, springboard/apps/daw/src/devices/mod.rs",
   "summary": "PHASE is a spatial and game audio engine: 3D sources and listener, occlusion, reverb, distance models, sound event graphs and runtime parameters. BifrOSt has a playback and capture service with volume and output routing, but no positional audio, no scene model and no event graph API for apps. The SDK exposes only the playback client.",
   "rea_evidence": "ev_ae3ef8f049211241c669b63265081488bc102f10cbbfb71dd8b9618b536127bc",
   "features": [
-    {"feature": "Engine and asset registry", "apple": "PHASEEngine, PHASEAssetRegistry, PHASESoundAsset, PHASEAsset", "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client)", "status": "partial", "note": "a shared playback service exists; no engine object, no asset registry and no update-mode control"},
-    {"feature": "Sampler playback of complete audio", "apple": "PHASESamplerNodeDefinition, PHASEPlaybackMode", "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs", "status": "partial", "note": "files play through the player and the DAW sampler voices; the sampler is app-internal, not an SDK API; no loop mode options in the SDK"},
-    {"feature": "Streamed buffers (push and pull streams)", "apple": "PHASEPushStreamNode, PHASEPullStreamNode, PHASEStreamNode, PHASEPushStreamBufferOptions", "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs", "status": "partial", "note": "the decoder pipeline streams internally; apps cannot supply their own buffers or set buffer priority"},
-    {"feature": "Spatial sources and listener", "apple": "PHASESource, PHASEListener, PHASEObject", "bifrost": "none", "status": "gap", "note": "no 3D position or orientation for sound; route.rs only switches outputs"},
-    {"feature": "Occluders, shapes and materials", "apple": "PHASEOccluder, PHASEShape, PHASEShape.Element, PHASEMaterial, PHASEMaterialPreset", "bifrost": "none", "status": "gap", "note": "no geometry-based acoustics"},
-    {"feature": "Spatial mixing and reverb", "apple": "PHASESpatialMixerDefinition, PHASESpatialPipeline, PHASEReverbPreset, PHASEMedium", "bifrost": "none", "status": "gap", "note": "no environmental effects API"},
-    {"feature": "Distance models and directivity", "apple": "PHASEGeometricSpreadingDistanceModelParameters, PHASEEnvelopeDistanceModelParameters, PHASECardioidDirectivityModelParameters, PHASEConeDirectivityModelParameters", "bifrost": "none", "status": "gap", "note": "volume is set per route and per player only (springboard/src/media/volume.rs)"},
-    {"feature": "Mixers and layering", "apple": "PHASEMixer, PHASEMixerDefinition, PHASEChannelMixerDefinition, PHASEAmbientMixerDefinition, PHASEMixerParameters", "bifrost": "springboard/src/media/mixer.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)", "status": "partial", "note": "mixer.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"},
-    {"feature": "Sound event nodes (switch, random, blend, container)", "apple": "PHASESoundEventNodeDefinition, PHASESwitchNodeDefinition, PHASERandomNodeDefinition, PHASEBlendNodeDefinition, PHASEContainerNodeDefinition, PHASESoundEvent", "bifrost": "none", "status": "gap", "note": "playback is a flat track queue (springboard/src/media/queue.rs); no event tree"},
-    {"feature": "Runtime parameters and envelopes", "apple": "PHASEMetaParameter, PHASENumberMetaParameter, PHASEStringMetaParameter, PHASEMappedMetaParameterDefinition, PHASEEnvelope, PHASEEnvelopeSegment, PHASECurveType", "bifrost": "none", "status": "gap", "note": "no API to change in-flight audio parameters over time"},
-    {"feature": "Groups and ducking", "apple": "PHASEGroup, PHASEGroupPreset, PHASEDucker", "bifrost": "none", "status": "gap", "note": "the sound server mixes streams; apps cannot share parameters or duck competing sounds"},
-    {"feature": "Loudness normalization and calibration", "apple": "PHASENormalizationMode, PHASECalibrationMode", "bifrost": "springboard/src/media/volume.rs (apply, software gain)", "status": "partial", "note": "a per-route volume and headphone cap exist; no per-asset loudness normalization"},
-    {"feature": "Head tracking and personalized spatial audio", "apple": "PHASEAutomaticHeadTrackingFlags, personalizing spatial audio article", "bifrost": "none", "status": "n/a", "note": "depends on Apple headphone motion and personal HRTF data, which BifrOSt does not have"}
+    {
+      "feature": "Engine and asset registry",
+      "apple": "PHASEEngine, PHASEAssetRegistry, PHASESoundAsset, PHASEAsset",
+      "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client)",
+      "status": "partial",
+      "note": "a shared playback service exists; no engine object, no asset registry and no update-mode control"
+    },
+    {
+      "feature": "Sampler playback of complete audio",
+      "apple": "PHASESamplerNodeDefinition, PHASEPlaybackMode",
+      "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs",
+      "status": "partial",
+      "note": "files play through the player and the DAW sampler voices; the sampler is app-internal, not an SDK API; no loop mode options in the SDK"
+    },
+    {
+      "feature": "Streamed buffers (push and pull streams)",
+      "apple": "PHASEPushStreamNode, PHASEPullStreamNode, PHASEStreamNode, PHASEPushStreamBufferOptions",
+      "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs",
+      "status": "partial",
+      "note": "the decoder pipeline streams internally; apps cannot supply their own buffers or set buffer priority"
+    },
+    {
+      "feature": "Spatial sources and listener",
+      "apple": "PHASESource, PHASEListener, PHASEObject",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no 3D position or orientation for sound; route.rs only switches outputs"
+    },
+    {
+      "feature": "Occluders, shapes and materials",
+      "apple": "PHASEOccluder, PHASEShape, PHASEShape.Element, PHASEMaterial, PHASEMaterialPreset",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no geometry-based acoustics"
+    },
+    {
+      "feature": "Spatial mixing and reverb",
+      "apple": "PHASESpatialMixerDefinition, PHASESpatialPipeline, PHASEReverbPreset, PHASEMedium",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no environmental effects API"
+    },
+    {
+      "feature": "Distance models and directivity",
+      "apple": "PHASEGeometricSpreadingDistanceModelParameters, PHASEEnvelopeDistanceModelParameters, PHASECardioidDirectivityModelParameters, PHASEConeDirectivityModelParameters",
+      "bifrost": "springboard/ui/src/sound_distance.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. volume is set per route and per player only (springboard/src/media/volume.rs)"
+    },
+    {
+      "feature": "Mixers and layering",
+      "apple": "PHASEMixer, PHASEMixerDefinition, PHASEChannelMixerDefinition, PHASEAmbientMixerDefinition, PHASEMixerParameters",
+      "bifrost": "springboard/src/media/mixer.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)",
+      "status": "partial",
+      "note": "mixer.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"
+    },
+    {
+      "feature": "Sound event nodes (switch, random, blend, container)",
+      "apple": "PHASESoundEventNodeDefinition, PHASESwitchNodeDefinition, PHASERandomNodeDefinition, PHASEBlendNodeDefinition, PHASEContainerNodeDefinition, PHASESoundEvent",
+      "bifrost": "springboard/ui/src/sound_event.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playback is a flat track queue (springboard/src/media/queue.rs); no event tree"
+    },
+    {
+      "feature": "Runtime parameters and envelopes",
+      "apple": "PHASEMetaParameter, PHASENumberMetaParameter, PHASEStringMetaParameter, PHASEMappedMetaParameterDefinition, PHASEEnvelope, PHASEEnvelopeSegment, PHASECurveType",
+      "bifrost": "springboard/ui/src/sound_envelope.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API to change in-flight audio parameters over time"
+    },
+    {
+      "feature": "Groups and ducking",
+      "apple": "PHASEGroup, PHASEGroupPreset, PHASEDucker",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "the sound server mixes streams; apps cannot share parameters or duck competing sounds"
+    },
+    {
+      "feature": "Loudness normalization and calibration",
+      "apple": "PHASENormalizationMode, PHASECalibrationMode",
+      "bifrost": "springboard/src/media/volume.rs (apply, software gain)",
+      "status": "partial",
+      "note": "a per-route volume and headphone cap exist; no per-asset loudness normalization"
+    },
+    {
+      "feature": "Head tracking and personalized spatial audio",
+      "apple": "PHASEAutomaticHeadTrackingFlags, personalizing spatial audio article",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "depends on Apple headphone motion and personal HRTF data, which BifrOSt does not have"
+    }
   ],
   "gaps": [
     "No 3D sound: no source position, listener or orientation, and no spatialization or HRTF output",

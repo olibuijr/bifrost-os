@@ -17,9 +17,9 @@
     {
       "feature": "Font collections and font manager (registration, enumeration, activation)",
       "apple": "CTFontCollection, CTFontManager*, CTFontManagerRegisterFontsForURL, CTFontManagerCopyAvailableFontFamilyNames",
-      "bifrost": "springboard/render/src/fontprefs.rs (library, installed)",
-      "status": "gap",
-      "note": "fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."
+      "bifrost": "springboard/render/src/fontregistry.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-text, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."
     },
     {
       "feature": "Character to glyph mapping",
@@ -52,9 +52,9 @@
     {
       "feature": "OpenType layout (kerning, ligatures, contextual forms)",
       "apple": "CTTypesetter shaping via GSUB and GPOS, kCTFontOpenTypeFeatureTag",
-      "bifrost": "springboard/render/src/emoji.rs (GSUB type 4 ligatures for colour emoji only)",
-      "status": "gap",
-      "note": "No GPOS and no kern table reader. Plain text is laid out by summing advances, so pairs are not kerned. No OpenType feature selection."
+      "bifrost": "springboard/render/src/kern.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-text, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPOS and no kern table reader. Plain text is laid out by summing advances, so pairs are not kerned. No OpenType feature selection."
     },
     {
       "feature": "Attributed string styling",

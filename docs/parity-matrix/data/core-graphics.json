@@ -31,9 +31,9 @@
     {
       "feature": "Clipping",
       "apple": "CGContextClip, clip rect and clip path, CGContextClipToRect",
-      "bifrost": "docs/bifrost-ui.md:867 (Surface has no clip rectangle); springboard/sdk/src/view/animation.rs:451 (full-window repaint when clipping is needed)",
-      "status": "gap",
-      "note": "The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
+      "bifrost": "springboard/ui/src/clip.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
     },
     {
       "feature": "Affine transforms and transform stack (CGAffineTransform, CTM)",
@@ -59,16 +59,16 @@
     {
       "feature": "Shadings and gradient functions (CGShading, CGFunction)",
       "apple": "CGShading, CGFunction, CGContextDrawShading",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No callback-based shading or function evaluation in the renderer or the SDK."
+      "bifrost": "springboard/render/src/function.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-graphics, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback-based shading or function evaluation in the renderer or the SDK."
     },
     {
       "feature": "Patterns (CGPattern)",
       "apple": "CGPattern, CGContextSetFillPattern",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No repeating-pattern fill for paths or rectangles."
+      "bifrost": "springboard/render/src/pattern.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-core-graphics, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No repeating-pattern fill for paths or rectangles."
     },
     {
       "feature": "Images and bitmaps (CGImage, image masks, cropping)",

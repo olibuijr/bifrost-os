@@ -31,16 +31,16 @@
     {
       "feature": "Subtitle and caption tracks in playback",
       "apple": "MAMediaCharacteristicTranscribesSpokenDialogForAccessibility, MAMediaCharacteristicDescribesMusicAndSoundForAccessibility (track characteristics)",
-      "bifrost": "springboard/src/media/demux/webm.rs (parse_tracks keeps only video and audio); springboard/src/media/demux/mod.rs (TrackKind: Video, Audio)",
-      "status": "gap",
-      "note": "The WebM parser drops subtitle tracks; its test asserts 'subtitle track dropped'. The MP4 path (springboard/src/media/mp4.rs, Kind: Video, Audio) has no text track either. No caption rendering exists."
+      "bifrost": "springboard/ui/src/media_selection.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The WebM parser drops subtitle tracks; its test asserts 'subtitle track dropped'. The MP4 path (springboard/src/media/mp4.rs, Kind: Video, Audio) has no text track either. No caption rendering exists."
     },
     {
       "feature": "Audible media selection (described video, audio description preference)",
       "apple": "MAAudibleMediaCopyPreferredCharacteristics, MAMediaCharacteristicDescribesVideoForAccessibility, kMAAudibleMediaSettingsChangedNotification",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No preference is read or exposed. The player in springboard/src/media/player.rs selects audio tracks without any accessibility characteristic."
+      "bifrost": "springboard/ui/src/media_selection.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No preference is read or exposed. The player in springboard/src/media/player.rs selects audio tracks without any accessibility characteristic."
     },
     {
       "feature": "Flashing lights detection and dimming",
@@ -59,9 +59,9 @@
     {
       "feature": "Image accessibility captions (metadata)",
       "apple": "MAImageCaptioningCopyCaption, MAImageCaptioningSetCaption, MAImageCaptioningCopyMetadataTagPath",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No code reads or writes an image caption in image metadata. springboard/src/shell/md.rs only renders markdown image lines."
+      "bifrost": "springboard/core/src/imgmeta.rs (caption)",
+      "status": "partial",
+      "note": "Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code reads or writes an image caption in image metadata. springboard/src/shell/md.rs only renders markdown image lines."
     }
   ],
   "gaps": [

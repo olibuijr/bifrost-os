@@ -7,17 +7,83 @@
   "summary": "BifrOSt has nearby LAN discovery and one-shot file and byte transfer between devices, run by the shell (UDP beacon on 224.0.0.251:5354, TCP transfer with an explicit Accept). Apps get no SDK API for peers, sessions, invitations or messages, and nothing is encrypted in transit; the MultipeerConnectivity session model is not covered.",
   "rea_evidence": "ev_b3b5c0bde001c7ec68d2f53dd69e9886ae8810ea152c2af72aa30cb096c10c5f",
   "features": [
-    {"feature": "Browsing for nearby services (MCNearbyServiceBrowser)", "apple": "MCNearbyServiceBrowser, MCNearbyServiceBrowserDelegate", "bifrost": "springboard/src/net/share.rs (Service::start, Peers::heard, Peers::live)", "status": "os", "note": "Discovery runs in the shell over a fixed beacon group. Apps cannot browse by their own service type; there is no delegate for found or lost peers."},
-    {"feature": "Advertising a service (MCNearbyServiceAdvertiser)", "apple": "MCNearbyServiceAdvertiser, MCNearbyServiceAdvertiserDelegate", "bifrost": "springboard/src/net/share.rs (beacon every 2 s, BEACON_EVERY)", "status": "os", "note": "The beacon carries a device name, a TCP port and a fingerprint of the shared secret. It is not per-app and apps cannot publish their own service."},
-    {"feature": "Advertiser and browser UI (MCAdvertiserAssistant, MCBrowserViewController)", "apple": "MCAdvertiserAssistant, MCBrowserViewController, their delegates", "bifrost": "springboard/src/shell/share/mod.rs (Send Nearby list), springboard/src/shell/share/prompt.rs (Accept/Decline banner)", "status": "partial", "note": "The shell draws a Nearby device row and an incoming-offer prompt. No app can present the peer picker or receive the invitation decision."},
-    {"feature": "Peer identity (MCPeerID)", "apple": "MCPeerID", "bifrost": "springboard/src/net/share.rs (struct Peer: name, addr)", "status": "partial", "note": "A peer is a display name plus a socket address that changes with the network. There is no stable peer ID object an app can hold."},
-    {"feature": "Sessions and invitations (MCSession, invite and accept)", "apple": "MCSession, MCSessionDelegate, invitation handler", "bifrost": "none in the SDK; springboard/src/net/share.rs (Offer, accept, decline)", "status": "gap", "note": "Only a one-file Offer exists, answered by the user. There is no session object, no multi-peer connection state, and no connected or disconnected callbacks."},
-    {"feature": "Message-based data (send Data to peers)", "apple": "MCSession.send(_:toPeers:with:), MCSessionSendDataMode", "bifrost": "springboard/src/net/share.rs (send_bytes)", "status": "gap", "note": "send_bytes sends a one-shot named payload from the shell. Apps have no send API and no reliable or unreliable mode."},
-    {"feature": "Streaming and resource (file) transfer", "apple": "MCSession.startStream, sendResource(at:withName:toPeer:withCompletionHandler:)", "bifrost": "springboard/src/net/share.rs (send, Header, check_incoming, MAX_FILE_SIZE)", "status": "partial", "note": "File transfer works between BifrOSt devices with a size limit, a SHA-256 check and a receive deadline. There is no streaming API, no progress for apps (the shell passes a no-op progress callback), and apps cannot start it."},
-    {"feature": "Encryption preference (MCEncryptionPreference)", "apple": "MCEncryptionPreference, MCSession encryption", "bifrost": "springboard/src/net/share.rs (module doc: MAC over header only)", "status": "gap", "note": "The header carries an HMAC keyed by the secret, and the body is streamed in plaintext. No TLS or session encryption exists. The default secret is the constant \"nearby\"."},
-    {"feature": "Background behaviour (stop and resume on background)", "apple": "framework stops advertising and browsing when the app is backgrounded", "bifrost": "springboard/src/shell/share/glue.rs (poll_share)", "status": "os", "note": "The shell owns the beacon and it runs while the desktop is up. Apps have no lifecycle hook for it."},
-    {"feature": "Error reporting (MCError, MCErrorDomain)", "apple": "MCError, MCErrorDomain, MCError.Code", "bifrost": "springboard/src/net/share.rs (Event::Failed(String))", "status": "partial", "note": "Failures reach the shell as a text string. There is no typed error domain or code list."},
-    {"feature": "Session limits (kMCSessionMaximumNumberOfPeers)", "apple": "kMCSessionMaximumNumberOfPeers, kMCSessionMinimumNumberOfPeers", "bifrost": "none", "status": "gap", "note": "No session exists, so there is no peer limit."}
+    {
+      "feature": "Browsing for nearby services (MCNearbyServiceBrowser)",
+      "apple": "MCNearbyServiceBrowser, MCNearbyServiceBrowserDelegate",
+      "bifrost": "springboard/src/net/share.rs (Service::start, Peers::heard, Peers::live)",
+      "status": "os",
+      "note": "Discovery runs in the shell over a fixed beacon group. Apps cannot browse by their own service type; there is no delegate for found or lost peers."
+    },
+    {
+      "feature": "Advertising a service (MCNearbyServiceAdvertiser)",
+      "apple": "MCNearbyServiceAdvertiser, MCNearbyServiceAdvertiserDelegate",
+      "bifrost": "springboard/src/net/share.rs (beacon every 2 s, BEACON_EVERY)",
+      "status": "os",
+      "note": "The beacon carries a device name, a TCP port and a fingerprint of the shared secret. It is not per-app and apps cannot publish their own service."
+    },
+    {
+      "feature": "Advertiser and browser UI (MCAdvertiserAssistant, MCBrowserViewController)",
+      "apple": "MCAdvertiserAssistant, MCBrowserViewController, their delegates",
+      "bifrost": "springboard/src/shell/share/mod.rs (Send Nearby list), springboard/src/shell/share/prompt.rs (Accept/Decline banner)",
+      "status": "partial",
+      "note": "The shell draws a Nearby device row and an incoming-offer prompt. No app can present the peer picker or receive the invitation decision."
+    },
+    {
+      "feature": "Peer identity (MCPeerID)",
+      "apple": "MCPeerID",
+      "bifrost": "springboard/src/net/share.rs (struct Peer: name, addr)",
+      "status": "partial",
+      "note": "A peer is a display name plus a socket address that changes with the network. There is no stable peer ID object an app can hold."
+    },
+    {
+      "feature": "Sessions and invitations (MCSession, invite and accept)",
+      "apple": "MCSession, MCSessionDelegate, invitation handler",
+      "bifrost": "springboard/sdk/src/peer_mesh.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only a one-file Offer exists, answered by the user. There is no session object, no multi-peer connection state, and no connected or disconnected callbacks."
+    },
+    {
+      "feature": "Message-based data (send Data to peers)",
+      "apple": "MCSession.send(_:toPeers:with:), MCSessionSendDataMode",
+      "bifrost": "springboard/sdk/src/peer_mesh.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. send_bytes sends a one-shot named payload from the shell. Apps have no send API and no reliable or unreliable mode."
+    },
+    {
+      "feature": "Streaming and resource (file) transfer",
+      "apple": "MCSession.startStream, sendResource(at:withName:toPeer:withCompletionHandler:)",
+      "bifrost": "springboard/src/net/share.rs (send, Header, check_incoming, MAX_FILE_SIZE)",
+      "status": "partial",
+      "note": "File transfer works between BifrOSt devices with a size limit, a SHA-256 check and a receive deadline. There is no streaming API, no progress for apps (the shell passes a no-op progress callback), and apps cannot start it."
+    },
+    {
+      "feature": "Encryption preference (MCEncryptionPreference)",
+      "apple": "MCEncryptionPreference, MCSession encryption",
+      "bifrost": "springboard/src/net/share.rs (module doc: MAC over header only)",
+      "status": "gap",
+      "note": "The header carries an HMAC keyed by the secret, and the body is streamed in plaintext. No TLS or session encryption exists. The default secret is the constant \"nearby\"."
+    },
+    {
+      "feature": "Background behaviour (stop and resume on background)",
+      "apple": "framework stops advertising and browsing when the app is backgrounded",
+      "bifrost": "springboard/src/shell/share/glue.rs (poll_share)",
+      "status": "os",
+      "note": "The shell owns the beacon and it runs while the desktop is up. Apps have no lifecycle hook for it."
+    },
+    {
+      "feature": "Error reporting (MCError, MCErrorDomain)",
+      "apple": "MCError, MCErrorDomain, MCError.Code",
+      "bifrost": "springboard/src/net/share.rs (Event::Failed(String))",
+      "status": "partial",
+      "note": "Failures reach the shell as a text string. There is no typed error domain or code list."
+    },
+    {
+      "feature": "Session limits (kMCSessionMaximumNumberOfPeers)",
+      "apple": "kMCSessionMaximumNumberOfPeers, kMCSessionMinimumNumberOfPeers",
+      "bifrost": "springboard/sdk/src/peer_mesh.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No session exists, so there is no peer limit."
+    }
   ],
   "gaps": [
     "No SDK API for peers: an app cannot browse or advertise its own service type, and cannot list nearby peers (springboard/sdk/src/share.rs exposes only show_picker and is_inbound).",

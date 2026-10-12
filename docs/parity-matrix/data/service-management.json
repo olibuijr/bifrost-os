@@ -7,19 +7,97 @@
   "summary": "Login items for the app itself are covered: register, unregister, refresh and a four-case status enum, with the shell keeping the list and starting the apps at session start. Launch agents, launch daemons, embedded helper executables, the completion-handler and legacy APIs, the error constants and the deprecated SMJob/SMLoginItemSetEnabled calls have no BifrOSt counterpart.",
   "rea_evidence": "ev_2e998ed710ee6f18ac8c032c6df24db1fcdd3a0624632be9a80d07f655334958",
   "features": [
-    {"feature": "Login item for the main app (SMAppService.mainApp)", "apple": "SMAppService.mainApp, register(), unregister()", "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::main_app, register, unregister)", "status": "parity", "note": "register and unregister are asynchronous: the result arrives as App::login_item_status with the request id; Apple returns it inline or through a completion handler"},
-    {"feature": "Refresh and status of the login item", "apple": "status, SMAppService.Status", "bifrost": "springboard/sdk/src/service_management.rs (status, refresh); springboard/proto/src/extras.rs (LoginStatus)", "status": "parity", "note": "NotRegistered, Enabled, RequiresApproval and NotFound all exist; RequiresApproval is never produced because there is no approval step"},
-    {"feature": "Unregister with completion handler", "apple": "unregister(completionHandler:)", "bifrost": "springboard/sdk/src/service_management.rs (unregister)", "status": "partial", "note": "only the request-id form exists; the error value is not returned to the app"},
-    {"feature": "Login item by bundle identifier", "apple": "SMAppService.loginItem(identifier:)", "bifrost": "none", "status": "gap", "note": "BifrOSt login items are app ids only; no helper bundles"},
-    {"feature": "Launch agents", "apple": "SMAppService.agent(plistName:)", "bifrost": "none", "status": "gap", "note": "no launch agent plist is loaded from an app bundle; bifrostd is the system supervisor and is not exposed to apps"},
-    {"feature": "Launch daemons", "apple": "SMAppService.daemon(plistName:)", "bifrost": "none", "status": "gap", "note": "no SDK API for root daemons shipped in an app bundle"},
-    {"feature": "Embedded helper executables", "apple": "helper executables inside the app's main bundle, registered through SMAppService", "bifrost": "none", "status": "gap", "note": "the SDK doc states BifrOSt has no embedded login-item helpers, launch agents or daemons"},
-    {"feature": "Settings page for login items", "apple": "SMAppService.openSystemSettingsLoginItems()", "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref)", "status": "partial", "note": "the page exists and lets the user remove items, but apps cannot open it through an SDK call"},
-    {"feature": "Legacy login item authorization check", "apple": "SMAppService.statusForLegacyPlist(at:)", "bifrost": "none", "status": "gap", "note": "BifrOSt has no earlier login-item plist format to check"},
-    {"feature": "Service Management error constants", "apple": "kSMErrorAlreadyRegistered, kSMErrorJobNotFound, kSMErrorLaunchDeniedByUser and the other kSMError values, SMAppServiceErrorDomain", "bifrost": "none", "status": "gap", "note": "the SDK has no error type; the shell reply carries only a status, so failures cannot be reported with Apple's codes"},
-    {"feature": "Privileged helper authorization", "apple": "SMJobBless(_:_:_:_:), Authorization Constants (kSMRightBlessPrivilegedHelper, kSMRightModifySystemDaemons)", "bifrost": "none", "status": "gap", "note": "deprecated by Apple; a desktop equivalent would sit on the bifrostd and app policy layers (springboard/src/bare/app_policy.rs), none exposed to apps"},
-    {"feature": "Deprecated launchd job functions", "apple": "SMJobSubmit, SMJobRemove, SMJobCopyDictionary, SMCopyAllJobDictionaries and the kSMDomain constants", "bifrost": "none", "status": "n/a", "note": "deprecated launchd C API tied to Apple's launchd; BifrOSt's supervisor is bifrostd with no app-facing job API"},
-    {"feature": "Login item enablement (deprecated)", "apple": "SMLoginItemSetEnabled(_:_:)", "bifrost": "none", "status": "gap", "note": "deprecated by Apple in favour of SMAppService; the SDK exposes only the replacement shape"}
+    {
+      "feature": "Login item for the main app (SMAppService.mainApp)",
+      "apple": "SMAppService.mainApp, register(), unregister()",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::main_app, register, unregister)",
+      "status": "parity",
+      "note": "register and unregister are asynchronous: the result arrives as App::login_item_status with the request id; Apple returns it inline or through a completion handler"
+    },
+    {
+      "feature": "Refresh and status of the login item",
+      "apple": "status, SMAppService.Status",
+      "bifrost": "springboard/sdk/src/service_management.rs (status, refresh); springboard/proto/src/extras.rs (LoginStatus)",
+      "status": "parity",
+      "note": "NotRegistered, Enabled, RequiresApproval and NotFound all exist; RequiresApproval is never produced because there is no approval step"
+    },
+    {
+      "feature": "Unregister with completion handler",
+      "apple": "unregister(completionHandler:)",
+      "bifrost": "springboard/sdk/src/service_management.rs (unregister)",
+      "status": "partial",
+      "note": "only the request-id form exists; the error value is not returned to the app"
+    },
+    {
+      "feature": "Login item by bundle identifier",
+      "apple": "SMAppService.loginItem(identifier:)",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item",
+      "status": "partial",
+      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt login items are app ids only; no helper bundles"
+    },
+    {
+      "feature": "Launch agents",
+      "apple": "SMAppService.agent(plistName:)",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent",
+      "status": "partial",
+      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no launch agent plist is loaded from an app bundle; bifrostd is the system supervisor and is not exposed to apps"
+    },
+    {
+      "feature": "Launch daemons",
+      "apple": "SMAppService.daemon(plistName:)",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon",
+      "status": "partial",
+      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API for root daemons shipped in an app bundle"
+    },
+    {
+      "feature": "Embedded helper executables",
+      "apple": "helper executables inside the app's main bundle, registered through SMAppService",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "the SDK doc states BifrOSt has no embedded login-item helpers, launch agents or daemons"
+    },
+    {
+      "feature": "Settings page for login items",
+      "apple": "SMAppService.openSystemSettingsLoginItems()",
+      "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref)",
+      "status": "partial",
+      "note": "the page exists and lets the user remove items, but apps cannot open it through an SDK call"
+    },
+    {
+      "feature": "Legacy login item authorization check",
+      "apple": "SMAppService.statusForLegacyPlist(at:)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "BifrOSt has no earlier login-item plist format to check"
+    },
+    {
+      "feature": "Service Management error constants",
+      "apple": "kSMErrorAlreadyRegistered, kSMErrorJobNotFound, kSMErrorLaunchDeniedByUser and the other kSMError values, SMAppServiceErrorDomain",
+      "bifrost": "springboard/sdk/src/service_management.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the SDK has no error type; the shell reply carries only a status, so failures cannot be reported with Apple's codes"
+    },
+    {
+      "feature": "Privileged helper authorization",
+      "apple": "SMJobBless(_:_:_:_:), Authorization Constants (kSMRightBlessPrivilegedHelper, kSMRightModifySystemDaemons)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "deprecated by Apple; a desktop equivalent would sit on the bifrostd and app policy layers (springboard/src/bare/app_policy.rs), none exposed to apps"
+    },
+    {
+      "feature": "Deprecated launchd job functions",
+      "apple": "SMJobSubmit, SMJobRemove, SMJobCopyDictionary, SMCopyAllJobDictionaries and the kSMDomain constants",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "deprecated launchd C API tied to Apple's launchd; BifrOSt's supervisor is bifrostd with no app-facing job API"
+    },
+    {
+      "feature": "Login item enablement (deprecated)",
+      "apple": "SMLoginItemSetEnabled(_:_:)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "deprecated by Apple in favour of SMAppService; the SDK exposes only the replacement shape"
+    }
   ],
   "gaps": [
     "Launch agents and launch daemons: SMAppService.agent(plistName:) and daemon(plistName:) (the SDK doc states none exist)",

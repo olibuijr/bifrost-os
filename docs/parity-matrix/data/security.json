@@ -52,9 +52,9 @@
     {
       "feature": "Certificate, key and trust evaluation",
       "apple": "SecTrustCreateWithCertificates, SecTrustEvaluateWithError, SecIdentityCreate, SecPolicyCreate*",
-      "bifrost": "none in springboard/sdk/src/ (no SecTrust-style API)",
-      "status": "gap",
-      "note": "The Wi-Fi 802.1X sheet has a Don't Validate Server option, but that is a user choice in the network sheet, not a certificate API (springboard/src/shell/wifi_page.rs:56, NOTICE). The SDK has no certificate types."
+      "bifrost": "springboard/ui/src/trust.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi 802.1X sheet has a Don't Validate Server option, but that is a user choice in the network sheet, not a certificate API (springboard/src/shell/wifi_page.rs:56, NOTICE). The SDK has no certificate types."
     },
     {
       "feature": "App Transport Security (secure network links)",
@@ -108,9 +108,9 @@
     {
       "feature": "One-time codes",
       "apple": "One-time codes (textContentType oneTimeCode)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No SDK text-field content type for one-time codes or autofill from messages."
+      "bifrost": "springboard/ui/src/one_time_code.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK text-field content type for one-time codes or autofill from messages."
     },
     {
       "feature": "Security framework result codes",

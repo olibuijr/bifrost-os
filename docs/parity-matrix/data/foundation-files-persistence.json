@@ -80,9 +80,9 @@
     {
       "feature": "iCloud documents and key-value store",
       "apple": "NSUbiquitousKeyValueStore, ubiquity containers",
-      "bifrost": "springboard/sdk/src/keychain.rs",
-      "status": "n/a",
-      "note": "Apple iCloud service; BifrOSt Cloud backups/sync are separate and not an SDK file API."
+      "bifrost": "springboard/ui/src/ubiquitous_store.rs (key-value part only",
+      "status": "partial",
+      "note": "Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apple iCloud service; BifrOSt Cloud backups/sync are separate and not an SDK file API."
     },
     {
       "feature": "Backup exclusion and purgeable data",

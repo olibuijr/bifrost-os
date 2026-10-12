@@ -45,9 +45,9 @@
     {
       "feature": "Battery and light on controllers",
       "apple": "GCDeviceBattery, GCDeviceLight",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No controller battery or light query. springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would be the transport for a wireless pad, but it does not read pad profiles."
+      "bifrost": "springboard/ui/src/controller_power.rs (Battery",
+      "status": "partial",
+      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No controller battery or light query. springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would be the transport for a wireless pad, but it does not read pad profiles."
     },
     {
       "feature": "Motion sensing (gyro and accelerometer)",

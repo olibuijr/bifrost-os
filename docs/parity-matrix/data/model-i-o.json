@@ -10,16 +10,16 @@
     {
       "feature": "3D asset container and object hierarchy",
       "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed",
-      "bifrost": "none; views are 2D frames (docs/bifrost-ui.md:835 'no per-view bounds, flipping or transform')",
-      "status": "gap",
-      "note": "no scene graph of 3D objects anywhere in springboard/"
+      "bifrost": "springboard/ui/src/scene_object.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene graph of 3D objects anywhere in springboard/"
     },
     {
       "feature": "Transforms (local coordinate space)",
       "apple": "MDLTransform, MDLTransformStack, MDLTransformOp and its rotate/scale/translate/matrix subclasses",
-      "bifrost": "none; springboard/sdk/src/view/ has no transforms",
-      "status": "gap",
-      "note": "docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"
+      "bifrost": "springboard/ui/src/scene_object.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"
     },
     {
       "feature": "Mesh and vertex buffers",
@@ -59,9 +59,9 @@
     {
       "feature": "Cameras",
       "apple": "MDLCamera, MDLStereoscopicCamera",
-      "bifrost": "none; springboard/src/shell/camera/mod.rs is the webcam capture app",
-      "status": "gap",
-      "note": "webcam capture is not a 3D view camera"
+      "bifrost": "springboard/ui/src/view_camera.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. webcam capture is not a 3D view camera"
     },
     {
       "feature": "File format import and export",
@@ -73,9 +73,9 @@
     {
       "feature": "Skeletal animation and animated values",
       "apple": "MDLAnimatedScalar, MDLAnimatedVector3, MDLAnimatedQuaternion, MDLSkeleton, MDLJointAnimation, MDLPackedJointAnimation",
-      "bifrost": "springboard/ui/src/anim.rs (scalar tweens and springs for 2D views only)",
-      "status": "gap",
-      "note": "no keyframes, joints or quaternions"
+      "bifrost": "springboard/ui/src/animated_values.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no keyframes, joints or quaternions"
     },
     {
       "feature": "Mesh processing and baking",

@@ -31,23 +31,23 @@
     {
       "feature": "Custom records on a service (AddRecord, UpdateRecord, RemoveRecord, RegisterRecord)",
       "apple": "DNSServiceAddRecord, DNSServiceUpdateRecord, DNSServiceRemoveRecord, DNSServiceRegisterRecord",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No DNS resource record sets are built or published."
+      "bifrost": "springboard/core/src/dnssd.rs (Record",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No DNS resource record sets are built or published."
     },
     {
       "feature": "Query arbitrary DNS records (DNSServiceQueryRecord)",
       "apple": "DNSServiceQueryRecord, DNSServiceQueryRecordReply",
-      "bifrost": "springboard/src/deildu/http.rs:27 (Tls, UDP resolver for the tracker client)",
-      "status": "gap",
-      "note": "The UDP resolver is private to the tracker HTTP client and is not exposed to apps. It does not run mDNS or multicast queries."
+      "bifrost": "springboard/core/src/dnssd.rs (query",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The UDP resolver is private to the tracker HTTP client and is not exposed to apps. It does not run mDNS or multicast queries."
     },
     {
       "feature": "Resolve hostnames to IPv4 and IPv6 (DNSServiceGetAddrInfo)",
       "apple": "DNSServiceGetAddrInfo, DNSServiceGetAddrInfoReply",
-      "bifrost": "springboard/src/deildu/http.rs:27 (private resolver)",
-      "status": "gap",
-      "note": "No app-facing address lookup. The private resolver is used only for HTTPS fetches."
+      "bifrost": "springboard/core/src/dnssd.rs (resolve_addresses",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing address lookup. The private resolver is used only for HTTPS fetches."
     },
     {
       "feature": "TXT record construction and parsing (TXTRecordCreate, TXTRecordSetValue, TXTRecordGetValuePtr and the rest)",
@@ -73,23 +73,23 @@
     {
       "feature": "Enumerate recommended domains (DNSServiceEnumerateDomains)",
       "apple": "DNSServiceEnumerateDomains, DNSServiceDomainEnumReply",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No domain browsing or registration-domain lookup."
+      "bifrost": "springboard/core/src/dnssd.rs (DomainEnumeration)",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No domain browsing or registration-domain lookup."
     },
     {
       "feature": "Error codes, flags and interface indices (kDNSServiceErr_*, kDNSServiceFlags*, kDNSServiceInterfaceIndex*)",
       "apple": "DNSServiceErrorType, DNSServiceFlags, DNSServiceProtocol, kDNSServiceInterfaceIndexAny and related constants",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "The beacon uses its own error results and no DNS-SD flags or interface indices are exposed."
+      "bifrost": "springboard/core/src/dnssd.rs (DnsServiceError",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon uses its own error results and no DNS-SD flags or interface indices are exposed."
     },
     {
       "feature": "Multicast DNS and DNS-SD wire protocol on port 5353",
       "apple": "dnssd C API over mDNSResponder (RFC 6762, RFC 6763 wire format)",
-      "bifrost": "springboard/src/net/share.rs:1-20 (beacon format on port 5354, not 5353)",
-      "status": "gap",
-      "note": "No code sends or parses mDNS packets or DNS-SD PTR, SRV and TXT records. The share beacon interoperates only with BifrOSt peers."
+      "bifrost": "springboard/core/src/dnssd.rs (Message::encode",
+      "status": "partial",
+      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code sends or parses mDNS packets or DNS-SD PTR, SRV and TXT records. The share beacon interoperates only with BifrOSt peers."
     }
   ],
   "gaps": [

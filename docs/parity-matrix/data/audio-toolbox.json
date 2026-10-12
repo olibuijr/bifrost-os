@@ -31,9 +31,9 @@
     {
       "feature": "Audio Unit v3 plug-ins and AUAudioUnit host (parameters, presets, buses)",
       "apple": "AUAudioUnit, AUAudioUnitBus, AUParameterTree, AUAudioUnitPreset, AUv3 app extensions",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No plug-in host, extension point or parameter tree. Searched for audio unit, plugin and parameter terms in springboard/."
+      "bifrost": "springboard/ui/src/plugin_host.rs (ParameterTree",
+      "status": "partial",
+      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No plug-in host, extension point or parameter tree. Searched for audio unit, plugin and parameter terms in springboard/."
     },
     {
       "feature": "Audio components (registration, lookup, instantiation)",
@@ -66,9 +66,9 @@
     {
       "feature": "System sounds and alert playback (Audio Services)",
       "apple": "AudioServicesPlaySystemSound, AudioServicesCreateSystemSoundID",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."
+      "bifrost": "springboard/sdk/src/system_sound.rs (SystemSounds",
+      "status": "partial",
+      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."
     },
     {
       "feature": "Scheduled file regions and slices (ScheduledAudioFileRegion)",

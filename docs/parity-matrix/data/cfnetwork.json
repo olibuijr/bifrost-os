@@ -24,16 +24,16 @@
     {
       "feature": "Cookies and session storage",
       "apple": "Cookie storage through CFNetwork and the HTTP stream session (CFHTTPMessage headers; Apple doc mentions no separate cookie API in this framework)",
-      "bifrost": "springboard/src/deildu/http.rs (cookie jar on the Deildu Client); springboard/sdk/src/url.rs (no cookie storage)",
-      "status": "gap",
-      "note": "The SDK URLSession keeps no cookies. Only the Deildu client keeps its own jar; apps get none."
+      "bifrost": "springboard/sdk/src/http_cookies.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK URLSession keeps no cookies. Only the Deildu client keeps its own jar; apps get none."
     },
     {
       "feature": "HTTP authentication",
       "apple": "CFHTTPAuthentication, CFHTTPMessageApplyCredentials, kCFHTTPAuthenticationSchemeBasic (https://developer.apple.com/documentation/cfnetwork/http-authentication)",
-      "bifrost": "none found in springboard/sdk/src/url.rs",
-      "status": "gap",
-      "note": "No credentials type and no challenge handling for apps. Decided in docs/bifrost-ui.md section URLSession as a gap (no URLCredential)."
+      "bifrost": "springboard/sdk/src/http_auth.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No credentials type and no challenge handling for apps. Decided in docs/bifrost-ui.md section URLSession as a gap (no URLCredential)."
     },
     {
       "feature": "Host name resolution",

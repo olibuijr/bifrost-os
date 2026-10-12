@@ -94,9 +94,9 @@
     {
       "feature": "Web extensions",
       "apple": "WKWebExtension, WKWebExtensionController, WKWebExtensionContext and related delegates",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no extension manifest loading or runtime; out of scope for a first-party desktop unless the browser needs it"
+      "bifrost": "springboard/ui/src/match_pattern.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension manifest loading or runtime; out of scope for a first-party desktop unless the browser needs it"
     },
     {
       "feature": "WebKit for SwiftUI",

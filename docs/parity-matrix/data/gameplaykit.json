@@ -10,9 +10,9 @@
     {
       "feature": "Entities and components",
       "apple": "GKEntity, GKComponent, GKComponentSystem",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
+      "bifrost": "springboard/ui/src/ecs.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
     },
     {
       "feature": "State machines",
@@ -24,9 +24,9 @@
     {
       "feature": "Spatial partitioning",
       "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
+      "bifrost": "springboard/ui/src/quadtree.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
     },
     {
       "feature": "Strategists (turn-based AI)",
@@ -38,9 +38,9 @@
     {
       "feature": "Decision trees and rule systems",
       "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No rule engine or decision tree. Predicate logic is written inline per app."
+      "bifrost": "springboard/ui/src/decision.rs, springboard/ui/src/rules.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app."
     },
     {
       "feature": "Pathfinding and navigation graphs",
@@ -66,9 +66,9 @@
     {
       "feature": "Procedural noise",
       "apple": "GKNoise, GKNoiseMap, GKPerlinNoiseSource, GKVoronoiNoiseSource and other noise sources",
-      "bifrost": "springboard/apps/games-desktop/src/games.rs (rand); springboard/src/shell/kb_clicks.rs:34 (ad hoc click noise, not an API)",
-      "status": "gap",
-      "note": "No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
+      "bifrost": "springboard/ui/src/noise.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
     },
     {
       "feature": "Randomization",

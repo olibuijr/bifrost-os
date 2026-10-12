@@ -52,30 +52,30 @@
     {
       "feature": "Network relays",
       "apple": "Relays collection group (NERelayManager, NERelayManagerClientError)",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No HTTP/2 or HTTP/3 relay configuration. The browser at springboard/src/shell/browser/doc.rs does its own requests and is not a system proxy."
+      "bifrost": "springboard/core/src/relay.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No HTTP/2 or HTTP/3 relay configuration. The browser at springboard/src/shell/browser/doc.rs does its own requests and is not a system proxy."
     },
     {
       "feature": "Content filter providers",
       "apple": "Content filter providers collection group",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No on-device flow filter. The only content blocking seen is the browser's own CSS and element handling, not a network filter."
+      "bifrost": "springboard/core/src/content_filter.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device flow filter. The only content blocking seen is the browser's own CSS and element handling, not a network filter."
     },
     {
       "feature": "URL filters",
       "apple": "URL filters collection group",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No URL analysis or filtering layer."
+      "bifrost": "springboard/ui/src/url_filter.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No URL analysis or filtering layer."
     },
     {
       "feature": "DNS settings (system-wide encrypted DNS)",
       "apple": "DNS settings collection group (NEDNSSettingsManager)",
-      "bifrost": "springboard/src/net/dhcp.rs (Lease.dns, option 6), springboard/src/net/wifi.rs:557 (write_native_dns to /run/a8-wifi/resolv.conf)",
-      "status": "os",
-      "note": "The DHCP-supplied resolvers are applied to the system. No DoH or DoT configuration, no user-set DNS profile and no API for apps."
+      "bifrost": "springboard/core/src/dns_settings.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The DHCP-supplied resolvers are applied to the system. No DoH or DoT configuration, no user-set DNS profile and no API for apps."
     },
     {
       "feature": "DNS proxy provider",

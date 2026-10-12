@@ -38,9 +38,9 @@
     {
       "feature": "Pressure trend",
       "apple": "PressureTrend",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The forecast URL does not request pressure."
+      "bifrost": "springboard/ui/src/pressure_trend.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL does not request pressure."
     },
     {
       "feature": "UV index",
@@ -80,9 +80,9 @@
     {
       "feature": "Historical statistics and comparisons",
       "apple": "DailyWeatherStatistics, MonthlyWeatherStatistics, HourlyWeatherStatistics, Percentiles, Trend, HistoricalComparisons, WeatherChanges",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No code in the repo requests or stores historical or statistical weather data. Open-Meteo is used only for the forecast endpoint."
+      "bifrost": "springboard/ui/src/weather_stats.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code in the repo requests or stores historical or statistical weather data. Open-Meteo is used only for the forecast endpoint."
     },
     {
       "feature": "Weather errors",

@@ -7,14 +7,62 @@
   "summary": "Media Intents is the Siri audio search and playback type set (AudioSearch) that Apple delivers through App Intents. BifrOSt has the App Intents side (typed intents and entity queries, no Siri or voice), a per-app audio playback service with shell now-playing controls, and a pure model of the search request, its criteria and catalogue matching (springboard/ui/src/media_search.rs). Nothing routes requests from the system to apps, and there is no voice path.",
   "rea_evidence": "ev_a39e06deb47221d7e378a755d1f9e231b874c4f5a1b7589e72ffdd0e9beeafe4",
   "features": [
-    {"feature": "Audio search and playback requests from Siri", "apple": "Responding to audio search and playback requests (Siri, AudioSearch)", "bifrost": "springboard/sdk/src/intents.rs (intent.<id>, entity.query)", "status": "gap", "note": "No AudioSearch type, no Siri, no voice dialog; intents are called as JSON over the control socket and the dialog text is not spoken"},
-    {"feature": "AudioSearch request and metadata type", "apple": "AudioSearch (struct), AudioSearch.Criteria (searchQuery, unspecified, url)", "bifrost": "springboard/ui/src/media_search.rs (MediaSearch, MediaCriteria::classify)", "status": "partial", "note": "Criteria cases mirror the official enum; the request is built from request text or a link. No media fields (artist, album, genre, mood, media type) and no spotlight search results input"},
-    {"feature": "Resolving free-text media requests to app results", "apple": "AudioSearch values(for:) through the intent value query (the system delivers the search type to App Intents)", "bifrost": "springboard/ui/src/media_search.rs (values_for), springboard/sdk/src/intents.rs (entities(matching:))", "status": "partial", "note": "values_for matches every content word against title, artist and album with the fuzzy matcher and ranks by score; it is a library call, not a system-delivered search, and the shell does not resolve parameters (Spotlight runs parameterless shortcuts only, docs/bifrost-ui.md:966-973)"},
-    {"feature": "Audio content entities (song, album, artist, episode)", "apple": "Audio domain entity schemas (song, album, artist, podcast episode) for App Intents", "bifrost": "springboard/ui/src/media_search.rs (MediaItem, MediaKind)", "status": "partial", "note": "Four kinds with title, artist and album; no schema declared to the system and no duration, artwork or playback URL fields"},
-    {"feature": "App-side audio playback engine", "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)", "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs", "status": "partial", "note": "Playback is a shared service that survives app restarts; the SDK exposes the client as bifrost_app::audio (springboard/sdk/src/lib.rs:88), but there is no media-item or queue type for apps to return to a voice request"},
-    {"feature": "Now-playing state shown outside the app", "apple": "Not in Media Intents itself (Now Playing and lock-screen controls are separate Apple APIs)", "bifrost": "springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs", "status": "os", "note": "The shell draws the lock-screen card and Control Center media controls for whatever the audio service plays; apps get no SDK call to publish their own metadata"},
-    {"feature": "Discovering intents without launching the app", "apple": "Intents surfaced to the system for Siri and Shortcuts", "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml)", "status": "partial", "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter; no Siri or Shortcuts-app listing"},
-    {"feature": "Voice and spoken dialog", "apple": "Siri voice responses and dialogs for media requests", "bifrost": "docs/bifrost-ui.md:973 (No Siri or voice)", "status": "gap", "note": "IntentResult dialog is returned to the caller and logged on failure, never spoken or shown by Spotlight"}
+    {
+      "feature": "Audio search and playback requests from Siri",
+      "apple": "Responding to audio search and playback requests (Siri, AudioSearch)",
+      "bifrost": "springboard/ui/src/media_request.rs (PlaybackRequest",
+      "status": "partial",
+      "note": "Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No AudioSearch type, no Siri, no voice dialog; intents are called as JSON over the control socket and the dialog text is not spoken"
+    },
+    {
+      "feature": "AudioSearch request and metadata type",
+      "apple": "AudioSearch (struct), AudioSearch.Criteria (searchQuery, unspecified, url)",
+      "bifrost": "springboard/ui/src/media_search.rs (MediaSearch, MediaCriteria::classify)",
+      "status": "partial",
+      "note": "Criteria cases mirror the official enum; the request is built from request text or a link. No media fields (artist, album, genre, mood, media type) and no spotlight search results input"
+    },
+    {
+      "feature": "Resolving free-text media requests to app results",
+      "apple": "AudioSearch values(for:) through the intent value query (the system delivers the search type to App Intents)",
+      "bifrost": "springboard/ui/src/media_search.rs (values_for), springboard/sdk/src/intents.rs (entities(matching:))",
+      "status": "partial",
+      "note": "values_for matches every content word against title, artist and album with the fuzzy matcher and ranks by score; it is a library call, not a system-delivered search, and the shell does not resolve parameters (Spotlight runs parameterless shortcuts only, docs/bifrost-ui.md:966-973)"
+    },
+    {
+      "feature": "Audio content entities (song, album, artist, episode)",
+      "apple": "Audio domain entity schemas (song, album, artist, podcast episode) for App Intents",
+      "bifrost": "springboard/ui/src/media_search.rs (MediaItem, MediaKind)",
+      "status": "partial",
+      "note": "Four kinds with title, artist and album; no schema declared to the system and no duration, artwork or playback URL fields"
+    },
+    {
+      "feature": "App-side audio playback engine",
+      "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)",
+      "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs",
+      "status": "partial",
+      "note": "Playback is a shared service that survives app restarts; the SDK exposes the client as bifrost_app::audio (springboard/sdk/src/lib.rs:88), but there is no media-item or queue type for apps to return to a voice request"
+    },
+    {
+      "feature": "Now-playing state shown outside the app",
+      "apple": "Not in Media Intents itself (Now Playing and lock-screen controls are separate Apple APIs)",
+      "bifrost": "springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs",
+      "status": "os",
+      "note": "The shell draws the lock-screen card and Control Center media controls for whatever the audio service plays; apps get no SDK call to publish their own metadata"
+    },
+    {
+      "feature": "Discovering intents without launching the app",
+      "apple": "Intents surfaced to the system for Siri and Shortcuts",
+      "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml)",
+      "status": "partial",
+      "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter; no Siri or Shortcuts-app listing"
+    },
+    {
+      "feature": "Voice and spoken dialog",
+      "apple": "Siri voice responses and dialogs for media requests",
+      "bifrost": "springboard/ui/src/media_request.rs (PlaybackRequest::dialog",
+      "status": "partial",
+      "note": "Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. IntentResult dialog is returned to the caller and logged on failure, never spoken or shown by Spotlight"
+    }
   ],
   "gaps": [
     "No system delivery of audio search requests and no Siri or voice request path for media (springboard/ui/src/media_search.rs models the request, but nothing routes system requests to apps).",

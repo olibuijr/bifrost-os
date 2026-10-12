@@ -7,14 +7,62 @@
   "summary": "BifrOSt has no XPC API for apps: no XPCSession, XPCListener, XPC activities or XPC event handlers. It covers part of the same job with a service supervisor (bifrostd, restarts services with backoff), a root daemon contract (privd), an owner-only JSON-RPC control socket per app, in-process and distributed notifications, and ProcessInfo activities that keep an app running in the background.",
   "rea_evidence": "ev_6d848fe5109f2f68624bff910f3992869ede9c354b0893f935a14563d9eaf856",
   "features": [
-    {"feature": "Creating XPC services (XPCListener, XPCSession, XPCReceivedMessage)", "apple": "XPCListener, XPCSession, XPCReceivedMessage, xpc_listener_t, xpc_session_t", "bifrost": "springboard/sdk/src/control.rs (JSON-RPC 2.0 over an owner-only unix socket, SO_PEERCRED check); springboard/proto/src/lib.rs (SOCK_SEQPACKET wire format between SpringBoard and an app)", "status": "gap", "note": "No SDK type for typed peer-to-peer sessions with a listener. The control socket is one request per connection and is served by the app for agents and tools, not for app-to-app messaging. The shell-to-app protocol is internal and not exposed to apps."},
-    {"feature": "XPC services launched on demand, shut down when idle, restarted on crash", "apple": "XPC services (managed by launchd)", "bifrost": "springboard/bifrostd/src/lib.rs (kind = \"service\" packages run as child processes, restarted with backoff, new version swapped in after a ping); springboard/sdk/src/service_management.rs (SMAppService, mainApp only)", "status": "os", "note": "The supervisor restarts services and swaps versions after a health check, but there is no on-demand launch and no idle shutdown. Apps get no SDK API to declare or connect to a service; SMAppService.register is the only app-facing call and it covers the main app only."},
-    {"feature": "Privileged helper and root daemon", "apple": "XPC services with privileged LaunchDaemon (via Service Management)", "bifrost": "docs/privd-protocol.md (contract for the root daemon bifrost-privd, proto 1); springboard/src/bin/portal.rs (D-Bus org.freedesktop.portal.Settings service)", "status": "os", "note": "Root work is planned to go through bifrost-privd, but the protocol is a system contract with no app-facing SDK API. The portal is a D-Bus service for Linux toolkit apps, not an XPC counterpart."},
-    {"feature": "XPC activities (background activity scheduling)", "apple": "XPC activities (xpc_activity_register, criteria, defer and check-in)", "bifrost": "springboard/sdk/src/process_info.rs (ActivityOptions: USER_INITIATED, LATENCY_CRITICAL, BACKGROUND, IDLE_SYSTEM_SLEEP_DISABLED); springboard/sdk/src/runtime.rs:213 (beginActivity keeps an app running after it leaves the foreground)", "status": "partial", "note": "Activities keep an app from being suspended and hint the system's throttling. There is no scheduler: no criteria, interval, deferral or system-run callback like XPC activities."},
-    {"feature": "XPC events (on-demand IOKit and notification events)", "apple": "XPC events (IOKit matching, system notifications delivered to a service)", "bifrost": "springboard/sdk/src/notification.rs (NotificationCenter, DistributedNotificationCenter add_observer, post); springboard/sdk/src/workspace.rs (NSWorkspace-style calls)", "status": "partial", "note": "Named notifications work inside the app process, with a distributed variant that posts through the shell. Nothing wakes a service from a device or IOKit event. Cross-process delivery of the distributed variant was not verified in code."},
-    {"feature": "XPC objects (typed values for messages)", "apple": "XPC objects (xpc_dictionary_t, xpc_array_t, xpc_string_t and others)", "bifrost": "springboard/sdk/src/coding.rs (Codable and plist); bifrost_core::json (JSON values used by control and intent calls)", "status": "partial", "note": "Messages are JSON or plist, not XPC objects. Apps that already use Codable or JSON can exchange data, but there is no typed XPC object model or XPC-compatible wire format."},
-    {"feature": "XPC connections and endpoints (XPCEndpoint, anonymous listeners)", "apple": "XPCEndpoint, XPCPeerRequirement, xpc_endpoint_t", "bifrost": "springboard/sdk/src/control.rs (owner UID check via SO_PEERCRED); springboard/bifrostd/src/lib.rs (services listen on the unix socket named by BIFROST_SERVICE_SOCK)", "status": "gap", "note": "No endpoint objects that can be passed between processes, and no peer requirement or code-signing check. Access control is owner-UID only."},
-    {"feature": "Peer validation (XPCPeerRequirement)", "apple": "XPCPeerRequirement, xpc_peer_requirement_t", "bifrost": "springboard/sdk/src/control.rs (SO_PEERCRED owner check); springboard/src/bare/app_policy.rs (bubblewrap sandbox policy for apps)", "status": "partial", "note": "The owner UID check covers same-user access. There is no requirement on bundle identity, signing or entitlements, because BifrOSt has no code-signing peer check."}
+    {
+      "feature": "Creating XPC services (XPCListener, XPCSession, XPCReceivedMessage)",
+      "apple": "XPCListener, XPCSession, XPCReceivedMessage, xpc_listener_t, xpc_session_t",
+      "bifrost": "springboard/sdk/src/peer_session.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type for typed peer-to-peer sessions with a listener. The control socket is one request per connection and is served by the app for agents and tools, not for app-to-app messaging. The shell-to-app protocol is internal and not exposed to apps."
+    },
+    {
+      "feature": "XPC services launched on demand, shut down when idle, restarted on crash",
+      "apple": "XPC services (managed by launchd)",
+      "bifrost": "springboard/bifrostd/src/lib.rs (kind = \"service\" packages run as child processes, restarted with backoff, new version swapped in after a ping); springboard/sdk/src/service_management.rs (SMAppService, mainApp only)",
+      "status": "os",
+      "note": "The supervisor restarts services and swaps versions after a health check, but there is no on-demand launch and no idle shutdown. Apps get no SDK API to declare or connect to a service; SMAppService.register is the only app-facing call and it covers the main app only."
+    },
+    {
+      "feature": "Privileged helper and root daemon",
+      "apple": "XPC services with privileged LaunchDaemon (via Service Management)",
+      "bifrost": "docs/privd-protocol.md (contract for the root daemon bifrost-privd, proto 1); springboard/src/bin/portal.rs (D-Bus org.freedesktop.portal.Settings service)",
+      "status": "os",
+      "note": "Root work is planned to go through bifrost-privd, but the protocol is a system contract with no app-facing SDK API. The portal is a D-Bus service for Linux toolkit apps, not an XPC counterpart."
+    },
+    {
+      "feature": "XPC activities (background activity scheduling)",
+      "apple": "XPC activities (xpc_activity_register, criteria, defer and check-in)",
+      "bifrost": "springboard/sdk/src/process_info.rs (ActivityOptions: USER_INITIATED, LATENCY_CRITICAL, BACKGROUND, IDLE_SYSTEM_SLEEP_DISABLED); springboard/sdk/src/runtime.rs:213 (beginActivity keeps an app running after it leaves the foreground)",
+      "status": "partial",
+      "note": "Activities keep an app from being suspended and hint the system's throttling. There is no scheduler: no criteria, interval, deferral or system-run callback like XPC activities."
+    },
+    {
+      "feature": "XPC events (on-demand IOKit and notification events)",
+      "apple": "XPC events (IOKit matching, system notifications delivered to a service)",
+      "bifrost": "springboard/sdk/src/notification.rs (NotificationCenter, DistributedNotificationCenter add_observer, post); springboard/sdk/src/workspace.rs (NSWorkspace-style calls)",
+      "status": "partial",
+      "note": "Named notifications work inside the app process, with a distributed variant that posts through the shell. Nothing wakes a service from a device or IOKit event. Cross-process delivery of the distributed variant was not verified in code."
+    },
+    {
+      "feature": "XPC objects (typed values for messages)",
+      "apple": "XPC objects (xpc_dictionary_t, xpc_array_t, xpc_string_t and others)",
+      "bifrost": "springboard/sdk/src/coding.rs (Codable and plist); bifrost_core::json (JSON values used by control and intent calls)",
+      "status": "partial",
+      "note": "Messages are JSON or plist, not XPC objects. Apps that already use Codable or JSON can exchange data, but there is no typed XPC object model or XPC-compatible wire format."
+    },
+    {
+      "feature": "XPC connections and endpoints (XPCEndpoint, anonymous listeners)",
+      "apple": "XPCEndpoint, XPCPeerRequirement, xpc_endpoint_t",
+      "bifrost": "springboard/sdk/src/peer_session.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No endpoint objects that can be passed between processes, and no peer requirement or code-signing check. Access control is owner-UID only."
+    },
+    {
+      "feature": "Peer validation (XPCPeerRequirement)",
+      "apple": "XPCPeerRequirement, xpc_peer_requirement_t",
+      "bifrost": "springboard/sdk/src/control.rs (SO_PEERCRED owner check); springboard/src/bare/app_policy.rs (bubblewrap sandbox policy for apps)",
+      "status": "partial",
+      "note": "The owner UID check covers same-user access. There is no requirement on bundle identity, signing or entitlements, because BifrOSt has no code-signing peer check."
+    }
   ],
   "gaps": [
     "No SDK API for XPC-style typed sessions between an app and a helper (XPCListener, XPCSession, XPCReceivedMessage).",

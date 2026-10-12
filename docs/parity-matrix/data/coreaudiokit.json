@@ -2,20 +2,74 @@
   "framework": "CoreAudioKit",
   "doc": "https://developer.apple.com/documentation/coreaudiokit",
   "macos_since": "10.4",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (audio service), springboard/src/media/audioplayer.rs, springboard/src/media/route.rs, springboard/src/bare/bluetooth.rs",
   "summary": "CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network MIDI/audio device pickers and inter-app audio widgets. BifrOSt has no Audio Unit host and no AU view API; its audio service and Bluetooth module cover playback routing and device status but none of the CoreAudioKit views.",
   "rea_evidence": "ev_fce537cae879085afc4fa492589b09fde26470cac4c1bd04590c15f5923fbaa6",
   "features": [
-    {"feature": "Audio unit custom UI (view controller, view configuration, generic view)", "apple": "AUViewController, AUAudioUnitViewConfiguration, AUGenericView, AUCustomViewPersistentData", "bifrost": "springboard/apps/daw/assets/plugins/ (DAW device format, not hosted AUs); springboard/apps/daw/src/devices/mod.rs (built-in devices, parameter specs)", "status": "gap", "note": "No Audio Unit host and no plugin view controller. The DAW plugins are an in-house instrument/effect format with built-in device UIs. The generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific."},
-    {"feature": "Panner audio unit view", "apple": "AUPannerView", "bifrost": "none", "status": "gap", "note": "No panner unit or specialised panner UI."},
-    {"feature": "Bluetooth MIDI peripheral picker and advertising", "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController", "bifrost": "springboard/src/bare/bluetooth.rs (device list, audio profiles)", "status": "gap", "note": "The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."},
-    {"feature": "Network audio device browser", "apple": "CANetworkBrowserWindowController", "bifrost": "springboard/src/deildu/mod.rs (LAN stream URL for the TV), springboard/src/media/route.rs (route display)", "status": "gap", "note": "No browser for network audio devices and no SDK API for one. The LAN stream server serves a download to the TV, not a device picker."},
-    {"feature": "Audio route indicator for connected devices", "apple": "Route picker shown with now playing (CoreAudioKit does not supply it; listed for context)", "bifrost": "springboard/src/media/route.rs (bluetooth_sink, name for Now Playing)", "status": "partial", "note": "Shows the connected Bluetooth audio device name in Now Playing. It is not a reusable SDK route picker for apps."},
-    {"feature": "Audio playback service shared by apps", "apple": "Not part of CoreAudioKit (AVFoundation and Core Audio); listed because CoreAudioKit device views depend on it", "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs", "status": "os", "note": "Service owns the speaker and microphone; apps reach it over the service socket. The SDK has no audio API of its own (springboard/sdk/src/lib.rs has no audio module)."},
-    {"feature": "Inter-device audio picker", "apple": "CAInterDeviceAudioViewController", "bifrost": "none", "status": "n/a", "note": "Lists iOS devices that support inter-device audio. Apple-device-only feature with no BifrOSt counterpart."},
-    {"feature": "Inter-App Audio switcher and transport views", "apple": "CAInterAppAudioSwitcherView, CAInterAppAudioTransportView", "bifrost": "none", "status": "n/a", "note": "Deprecated in iOS 13 and unavailable for iPad apps on macOS per the Apple page."},
-    {"feature": "Deprecated generic view internals", "apple": "AUGenericViewInternal, AUGenericViewInternalBase, AUGenericViewController, AUAppleCustomViewLoader, AUGenericViewDisplayFlags", "bifrost": "none", "status": "n/a", "note": "Deprecated Apple internals with no BifrOSt counterpart."}
+    {
+      "feature": "Audio unit custom UI (view controller, view configuration, generic view)",
+      "apple": "AUViewController, AUAudioUnitViewConfiguration, AUGenericView, AUCustomViewPersistentData",
+      "bifrost": "springboard/ui/src/param_view.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Audio Unit host and no plugin view controller. The DAW plugins are an in-house instrument/effect format with built-in device UIs. The generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific."
+    },
+    {
+      "feature": "Panner audio unit view",
+      "apple": "AUPannerView",
+      "bifrost": "springboard/ui/src/panner.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panner unit or specialised panner UI."
+    },
+    {
+      "feature": "Bluetooth MIDI peripheral picker and advertising",
+      "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController",
+      "bifrost": "springboard/src/bare/bluetooth.rs (device list, audio profiles)",
+      "status": "gap",
+      "note": "The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."
+    },
+    {
+      "feature": "Network audio device browser",
+      "apple": "CANetworkBrowserWindowController",
+      "bifrost": "springboard/src/deildu/mod.rs (LAN stream URL for the TV), springboard/src/media/route.rs (route display)",
+      "status": "gap",
+      "note": "No browser for network audio devices and no SDK API for one. The LAN stream server serves a download to the TV, not a device picker."
+    },
+    {
+      "feature": "Audio route indicator for connected devices",
+      "apple": "Route picker shown with now playing (CoreAudioKit does not supply it; listed for context)",
+      "bifrost": "springboard/src/media/route.rs (bluetooth_sink, name for Now Playing)",
+      "status": "partial",
+      "note": "Shows the connected Bluetooth audio device name in Now Playing. It is not a reusable SDK route picker for apps."
+    },
+    {
+      "feature": "Audio playback service shared by apps",
+      "apple": "Not part of CoreAudioKit (AVFoundation and Core Audio); listed because CoreAudioKit device views depend on it",
+      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs",
+      "status": "os",
+      "note": "Service owns the speaker and microphone; apps reach it over the service socket. The SDK has no audio API of its own (springboard/sdk/src/lib.rs has no audio module)."
+    },
+    {
+      "feature": "Inter-device audio picker",
+      "apple": "CAInterDeviceAudioViewController",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Lists iOS devices that support inter-device audio. Apple-device-only feature with no BifrOSt counterpart."
+    },
+    {
+      "feature": "Inter-App Audio switcher and transport views",
+      "apple": "CAInterAppAudioSwitcherView, CAInterAppAudioTransportView",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Deprecated in iOS 13 and unavailable for iPad apps on macOS per the Apple page."
+    },
+    {
+      "feature": "Deprecated generic view internals",
+      "apple": "AUGenericViewInternal, AUGenericViewInternalBase, AUGenericViewController, AUAppleCustomViewLoader, AUGenericViewDisplayFlags",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Deprecated Apple internals with no BifrOSt counterpart."
+    }
   ],
   "gaps": [
     "No Audio Unit host: BifrOSt cannot load third-party AU plugins or show their custom views (AUViewController, AUAudioUnitViewConfiguration).",

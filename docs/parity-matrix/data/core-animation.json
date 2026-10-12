@@ -87,9 +87,9 @@
     {
       "feature": "Gradient layer (CAGradientLayer)",
       "apple": "CAGradientLayer, CAGradientLayerType",
-      "bifrost": "springboard/src/shell/browser/style/values.rs:888 (GradientKind, CSS only), springboard/src/shell/browser/tiles.rs (RadialGradient display item)",
-      "status": "gap",
-      "note": "gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
+      "bifrost": "springboard/ui/src/gradient.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
     },
     {
       "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
@@ -115,9 +115,9 @@
     {
       "feature": "Replicator and particle layers (CAReplicatorLayer, CAEmitterLayer, CAEmitterCell)",
       "apple": "CAReplicatorLayer, CAEmitterLayer, CAEmitterCell",
-      "bifrost": "none found in springboard/sdk/src, springboard/ui/src or springboard/render/src",
-      "status": "gap",
-      "note": "no replication or particle system in the SDK or renderer"
+      "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no replication or particle system in the SDK or renderer"
     },
     {
       "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",

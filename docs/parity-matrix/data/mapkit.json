@@ -24,9 +24,9 @@
     {
       "feature": "Annotations, markers and overlays",
       "apple": "MKAnnotation views, MapPolygon, MapPolyline, MapCircle, Marker, Annotation",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "nothing draws pins, shapes or callouts on a map"
+      "bifrost": "springboard/ui/src/mapshape.rs (Polygon",
+      "status": "partial",
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. nothing draws pins, shapes or callouts on a map"
     },
     {
       "feature": "Forward geocoding (place name to coordinate)",
@@ -38,9 +38,9 @@
     {
       "feature": "Reverse geocoding (coordinate to address)",
       "apple": "MKReverseGeocodingRequest, MKAddress, MKAddressRepresentations",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no coordinate-to-place lookup; the Weather app only names places it searched for"
+      "bifrost": "springboard/ui/src/reverse_lookup.rs (PlaceIndex)",
+      "status": "partial",
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no coordinate-to-place lookup; the Weather app only names places it searched for"
     },
     {
       "feature": "Local search and search completion",
@@ -52,16 +52,16 @@
     {
       "feature": "Points of interest and map features",
       "apple": "MKMapFeatureAnnotation, MKMapFeatureOptions, MKPointOfInterestFilter, MKPointOfInterestCategory, MapFeature, MapSelection",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no POI categories, selectable features or map-item detail"
+      "bifrost": "springboard/ui/src/poi_filter.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no POI categories, selectable features or map-item detail"
     },
     {
       "feature": "Directions and routes",
       "apple": "MKDirections, MKRoute, MKRoute.Step, MKDirections.ETAResponse",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no routing service or route data"
+      "bifrost": "springboard/ui/src/route.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no routing service or route data"
     },
     {
       "feature": "Map snapshots (static images)",
@@ -73,16 +73,16 @@
     {
       "feature": "Map controls (compass, zoom, scale, user tracking)",
       "apple": "MKCompassButton, MKZoomControl, MKScaleView, MKPitchControl, MKUserTrackingButton, MapZoomStepper, MapScaleView",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no map controls exist to adapt"
+      "bifrost": "springboard/ui/src/mapview.rs (scale_bar",
+      "status": "partial",
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no map controls exist to adapt"
     },
     {
       "feature": "User location on a map",
       "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no location service API was found in the SDK index (searched for location and geolocation terms)"
+      "bifrost": "springboard/ui/src/mapview.rs (UserTracking",
+      "status": "partial",
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no location service API was found in the SDK index (searched for location and geolocation terms)"
     },
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",

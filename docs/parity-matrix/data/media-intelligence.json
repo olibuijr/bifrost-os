@@ -2,16 +2,46 @@
   "framework": "Media Intelligence",
   "doc": "https://developer.apple.com/documentation/mediaintelligence",
   "macos_since": "27.0",
-  "status": "gap",
+  "status": "partial",
   "bifrost": "springboard/src/media/demux/mp4.rs (keyframe flag on samples, seek to sync sample); no analysis API in springboard/sdk/src/ or springboard/ui/src/",
   "summary": "Media Intelligence is an on-device analysis framework for face grouping in images and highlight and keyframe selection in video. BifrOSt has no face detection, no person grouping, no highlight or keyframe analysis, and no on-device ML runtime. The only related code is the MP4 demuxer, which reads the sync-sample flags for seeking, not for analysis.",
   "rea_evidence": "ev_2c9b700223e1adc5dc69aeb5346e155855b4bfa0499c492ea61bf0ef6041038c",
   "features": [
-    {"feature": "Face grouping in images (FaceGroupAnalyzer, MediaIntelligenceImageAsset)", "apple": "FaceGroupAnalyzer, MediaIntelligenceImageAsset; query faces by asset, entity or face ID", "bifrost": "none", "status": "gap", "note": "No face detector and no person clustering in springboard/sdk/src or springboard/apps. The photocraft app is an upstream release (springboard/apps/photocraft-desktop/upstream.toml points at storytold/photocraft on GitHub); its source is not in this repo, so its internals cannot be checked here."},
-    {"feature": "Best moment and highlight segments in video (VideoAnalyzer, HighlightAnalysisRequest)", "apple": "VideoAnalyzer, MediaIntelligenceVideoAsset, HighlightAnalysisRequest", "bifrost": "none", "status": "gap", "note": "The media stack (springboard/src/media/) decodes and plays video but has no engagement or highlight scoring. filmcraft is also an upstream release (springboard/apps/filmcraft-desktop/upstream.toml), so its code is not checked here."},
-    {"feature": "Keyframe selection for video theme (KeyFrameAnalysisRequest)", "apple": "KeyFrameAnalysisRequest", "bifrost": "springboard/src/media/demux/mp4.rs (Sample.keyframe at line 77; seek_ms lands on the previous sync sample)", "status": "gap", "note": "The demuxer exposes container sync samples for seeking, which is not the same as choosing a representative frame by content analysis. No representative-frame API exists in the SDK."},
-    {"feature": "On-device ML analysis runtime (shared by all requests)", "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)", "bifrost": "none", "status": "gap", "note": "No ML inference runtime in springboard/. Searches for onnx, tflite and inference found nothing in springboard source. ML inference lives in the separate hamr project, which is not a BifrOSt desktop feature."},
-    {"feature": "Errors (MediaIntelligenceError)", "apple": "MediaIntelligenceError", "bifrost": "none", "status": "gap", "note": "No error type for media analysis, since no analysis operation exists. Non-applicable until the analysis APIs exist."}
+    {
+      "feature": "Face grouping in images (FaceGroupAnalyzer, MediaIntelligenceImageAsset)",
+      "apple": "FaceGroupAnalyzer, MediaIntelligenceImageAsset; query faces by asset, entity or face ID",
+      "bifrost": "springboard/ui/src/face_group.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No face detector and no person clustering in springboard/sdk/src or springboard/apps. The photocraft app is an upstream release (springboard/apps/photocraft-desktop/upstream.toml points at storytold/photocraft on GitHub); its source is not in this repo, so its internals cannot be checked here."
+    },
+    {
+      "feature": "Best moment and highlight segments in video (VideoAnalyzer, HighlightAnalysisRequest)",
+      "apple": "VideoAnalyzer, MediaIntelligenceVideoAsset, HighlightAnalysisRequest",
+      "bifrost": "springboard/ui/src/highlight_rank.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The media stack (springboard/src/media/) decodes and plays video but has no engagement or highlight scoring. filmcraft is also an upstream release (springboard/apps/filmcraft-desktop/upstream.toml), so its code is not checked here."
+    },
+    {
+      "feature": "Keyframe selection for video theme (KeyFrameAnalysisRequest)",
+      "apple": "KeyFrameAnalysisRequest",
+      "bifrost": "springboard/ui/src/keyframe_pick.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The demuxer exposes container sync samples for seeking, which is not the same as choosing a representative frame by content analysis. No representative-frame API exists in the SDK."
+    },
+    {
+      "feature": "On-device ML analysis runtime (shared by all requests)",
+      "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No ML inference runtime in springboard/. Searches for onnx, tflite and inference found nothing in springboard source. ML inference lives in the separate hamr project, which is not a BifrOSt desktop feature."
+    },
+    {
+      "feature": "Errors (MediaIntelligenceError)",
+      "apple": "MediaIntelligenceError",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No error type for media analysis, since no analysis operation exists. Non-applicable until the analysis APIs exist."
+    }
   ],
   "gaps": [
     "Face detection and person grouping for images, with a query API by asset, entity or face ID",

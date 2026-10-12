@@ -31,9 +31,9 @@
     {
       "feature": "Convolution, median, Sobel and Laplacian filters",
       "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
-      "bifrost": "none found for images",
-      "status": "gap",
-      "note": "springboard/apps/daw/src/conv.rs is an audio convolver and is not an image counterpart."
+      "bifrost": "springboard/render/src/filter.rs",
+      "status": "partial",
+      "note": "Wave 3 (w3-metal-performance-shaders, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. springboard/apps/daw/src/conv.rs is an audio convolver and is not an image counterpart."
     },
     {
       "feature": "Pyramid filters (Gaussian, Laplacian)",
@@ -59,9 +59,9 @@
     {
       "feature": "Integral images and statistics (mean, variance, min and max)",
       "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No image statistics API."
+      "bifrost": "springboard/render/src/plane_stats.rs (Integral",
+      "status": "partial",
+      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image statistics API."
     },
     {
       "feature": "Scaling and resampling",
@@ -73,16 +73,16 @@
     {
       "feature": "Image arithmetic and pixel conversion",
       "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose",
-      "bifrost": "springboard/render/src/gfx.rs (premultiplied RGBA Image type, CPU compositing)",
-      "status": "gap",
-      "note": "Compositing is done on the CPU in gfx.rs. No GPU arithmetic kernels or colour-space conversion API."
+      "bifrost": "springboard/render/src/plane_arith.rs (combine",
+      "status": "partial",
+      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Compositing is done on the CPU in gfx.rs. No GPU arithmetic kernels or colour-space conversion API."
     },
     {
       "feature": "Reduction filters (row and column min, max, sum, mean)",
       "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No reduction code."
+      "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows",
+      "status": "partial",
+      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No reduction code."
     },
     {
       "feature": "Euclidean distance transform, guided filter, keypoints",

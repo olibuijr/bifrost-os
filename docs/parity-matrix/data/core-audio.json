@@ -31,9 +31,9 @@
     {
       "feature": "Process taps (capture a process's output)",
       "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
-      "bifrost": "none; springboard/src/media/capture.rs captures the microphone only",
-      "status": "gap",
-      "note": "No per-application or system output capture. Apple taps need an output-side hook that the audio service does not have."
+      "bifrost": "springboard/ui/src/process_tap.rs",
+      "status": "partial",
+      "note": "Wave 3 (theme-20, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-application or system output capture. Apple taps need an output-side hook that the audio service does not have."
     },
     {
       "feature": "Process objects (client process list)",
