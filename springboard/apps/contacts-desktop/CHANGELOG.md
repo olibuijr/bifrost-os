@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+- A contact can hold more than one phone number, email and address. The first of each is still the contact's main value; the others are kept beside it and show on the card under their labels (Mobile, Home, Work, Other).
+- Searching the list also finds a contact by any of its extra phone numbers, emails and addresses.
+- Importing vCards keeps the extra phone numbers and emails of each card (up to six extra values per contact). Export writes them back, and Copy Contact puts them in the text and the vCard.
+- Your existing contacts open as before. The extra values are saved in their own file (values.txt) beside the contacts file, and deleting a contact removes its extra values.
+- Still to come: adding or editing the extra values in the contact editor, and merging duplicate contacts.
+
 ## 1.6.0
 
 - The File menu now has Import vCards, Export vCard 3.0 and Export vCard 4.0, so the vCard files can be reached from the

@@ -4,6 +4,7 @@ mod contacts;
 mod display_file;
 mod dupes;
 mod exchange;
+mod extras;
 mod group_file;
 mod history;
 mod names;
@@ -31,8 +32,8 @@ impl ContactsApp {
     fn after_input(&mut self, ctx: &Ctx) {
         self.sync_termination(ctx);
         let Some(c) = &mut self.app else { return };
-        if let Some(contact) = c.take_copy() {
-            let request = services::copy_contact(ctx, &contact);
+        if let Some((contact, extra)) = c.take_copy() {
+            let request = services::copy_contact(ctx, &contact, &extra);
             self.copies.insert(request, services::label(&contact));
         }
         if let Some(all) = c.all_contacts() {

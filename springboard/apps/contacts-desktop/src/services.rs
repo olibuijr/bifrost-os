@@ -11,6 +11,7 @@
 //! per frame.
 
 use crate::exchange::{self, Version};
+use crate::extras::{Extra, Extras};
 use bifrost_app::pasteboard_types::{Board, Item, STRING};
 use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet};
 use bifrost_app::Ctx;
@@ -32,23 +33,28 @@ pub fn label(c: &Contact) -> String {
     }
 }
 
-/// The plain text of a contact: its non-empty fields, one per line.
-pub fn plain_text(c: &Contact) -> String {
+/// The plain text of a contact: its non-empty fields, one per line, then its extra values.
+pub fn plain_text(c: &Contact, extra: &[Extra]) -> String {
     let mut lines = vec![c.name.trim(), c.company.trim(), c.phone.trim(), c.email.trim(), c.address.trim()];
+    lines.extend(extra.iter().map(|e| e.value.trim()));
     lines.retain(|line| !line.is_empty());
     lines.join("\n")
 }
 
 /// The pasteboard item of a contact: the plain text first, so a text field takes it, then the vCard.
-pub fn contact_item(c: &Contact) -> Item {
+pub fn contact_item(c: &Contact, extra: &[Extra]) -> Item {
+    let mut values = Extras::default();
+    for value in extra {
+        values.add(c.id, value.clone());
+    }
     Item::default()
-        .with(STRING, plain_text(c).as_bytes())
-        .with(VCARD, exchange::export(std::slice::from_ref(c), Version::V3).as_bytes())
+        .with(STRING, plain_text(c, extra).as_bytes())
+        .with(VCARD, exchange::export(std::slice::from_ref(c), &values, Version::V3).as_bytes())
 }
 
-/// Writes a contact to the general board. The reply (write result) arrives in `App::service_reply`.
-pub fn copy_contact(ctx: &Ctx, c: &Contact) -> u32 {
-    Board::general().write(ctx, &[contact_item(c)])
+/// Writes a contact, with its extra values, to the general board. The reply (write result) arrives in `App::service_reply`.
+pub fn copy_contact(ctx: &Ctx, c: &Contact, extra: &[Extra]) -> u32 {
+    Board::general().write(ctx, &[contact_item(c, extra)])
 }
 
 /// The status line after a copy: the reply decides it, so a missing pasteboard service is not reported as success.
@@ -176,13 +182,20 @@ mod tests {
 
     #[test]
     fn plain_text_lists_the_filled_fields_one_per_line() {
-        assert_eq!(plain_text(&anna()), "Anna Ásgeirsdóttir\n+354 555 1234\nanna@example.is\nLaugavegur 1, Reykjavík");
-        assert_eq!(plain_text(&bo()), "Bo Berg\nbo@example.is");
+        assert_eq!(plain_text(&anna(), &[]), "Anna Ásgeirsdóttir\n+354 555 1234\nanna@example.is\nLaugavegur 1, Reykjavík");
+        assert_eq!(plain_text(&bo(), &[]), "Bo Berg\nbo@example.is");
+    }
+
+    #[test]
+    fn the_plain_text_and_the_vcard_carry_the_extra_values() {
+        use crate::extras::ValueKind;
+        let extra = [Extra { kind: ValueKind::Phone, label: "home".into(), value: "555 0199".into() }];
+        assert_eq!(plain_text(&bo(), &extra), "Bo Berg\nbo@example.is\n555 0199");
     }
 
     #[test]
     fn a_contact_item_has_the_text_first_and_then_the_vcard() {
-        let item = contact_item(&anna());
+        let item = contact_item(&anna(), &[]);
         let utis: Vec<&str> = item.representations.iter().map(|r| r.uti.as_str()).collect();
         assert_eq!(utis, [STRING, VCARD]);
         let card = String::from_utf8(item.data(VCARD).unwrap().to_vec()).unwrap();
@@ -193,7 +206,7 @@ mod tests {
     #[test]
     fn copy_contact_writes_the_item_to_the_general_board() {
         let ctx = test_ctx();
-        let request = copy_contact(&ctx, &anna());
+        let request = copy_contact(&ctx, &anna(), &[]);
         let sent = ctx.take_sent();
         let [ToShell::ServiceCall { request: sent_request, service, method, body }] = sent.as_slice() else {
             panic!("expected one service call, got {sent:?}")

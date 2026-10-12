@@ -3,12 +3,14 @@
 //! The bifrost-ui `vcard` model reads and writes vCard 3.0: names, one organization, labelled phones and emails, and the
 //! note. This module adds what the app needs around it. It reads 4.0 syntax (quoted `TYPE` values, `tel:` and `mailto:`
 //! URIs, `VALUE=uri` parameters), skips `KIND:group` cards (groups are not people), and keeps the postal address, which
-//! the model does not parse. A contact holds one phone and one email, so the first of each is kept and the rest are
-//! counted. Pure std.
+//! the model does not parse. The store holds one phone, one email and one address per contact, so the first of each
+//! is kept in the store and the later phones and emails are kept as extra values (`extras.rs`), up to `MAX_EXTRAS`
+//! per contact; the rest are counted. Pure std.
 
+use crate::extras::{Extra, Extras, ValueKind, MAX_EXTRAS};
 use crate::names;
 use bifrost_app::controls::vcard::{self, Card, Labeled};
-use springboard::shell::contactstore::Contact;
+use springboard::shell::contactstore::{Contact, LABELS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Version {
@@ -21,9 +23,11 @@ pub enum Version {
 pub struct Import {
     /// The people read, with identifiers not yet assigned (0).
     pub contacts: Vec<Contact>,
+    /// The extra values of each person in `contacts`, in the same order.
+    pub values: Vec<Vec<Extra>>,
     /// Cards the contact store cannot hold: no name or company, or a field longer than the store allows.
     pub invalid: usize,
-    /// Phone numbers and emails after the first of each, which a contact does not hold.
+    /// Phone numbers and emails after the first of each, beyond the `MAX_EXTRAS` a contact keeps.
     pub extra_values: usize,
     /// `KIND:group` cards, skipped.
     pub groups: usize,
@@ -53,10 +57,11 @@ pub fn import(text: &str) -> Result<Import, String> {
         vcard::Error::Malformed => "A card in the file does not begin and end properly".to_string(),
     })?;
     for (card, address) in cards.iter().zip(addresses) {
-        let (contact, extra) = contact_of(card, &address);
-        out.extra_values += extra;
+        let (contact, values, dropped) = contact_of(card, &address);
+        out.extra_values += dropped;
         if contact.valid() {
             out.contacts.push(contact);
+            out.values.push(values);
         } else {
             out.invalid += 1;
         }
@@ -64,15 +69,19 @@ pub fn import(text: &str) -> Result<Import, String> {
     Ok(out)
 }
 
-/// Writes contacts as one vCard text, in the chosen version. Each card ends with CRLF.
-pub fn export(contacts: &[Contact], version: Version) -> String {
+/// Writes contacts as one vCard text, in the chosen version, with their extra values. Each card ends with CRLF.
+pub fn export(contacts: &[Contact], values: &Extras, version: Version) -> String {
     let mut out = String::new();
     for contact in contacts {
-        let mut lines = logical_lines(&card_of(contact).to_vcard());
-        if !contact.address.trim().is_empty() {
-            // The last line is END:VCARD; the address goes just before it.
-            let end = lines.len().saturating_sub(1);
-            lines.insert(end, format!("ADR:;;{};;;;", escape(contact.address.trim())));
+        let extra = values.get(contact.id);
+        let mut lines = logical_lines(&card_of(contact, extra).to_vcard());
+        // The addresses go just before the last line, END:VCARD, in order.
+        let addresses = std::iter::once(contact.address.trim())
+            .chain(extra.iter().filter(|e| e.kind == ValueKind::Address).map(|e| e.value.trim()))
+            .filter(|address| !address.is_empty());
+        let end = lines.len().saturating_sub(1);
+        for (i, address) in addresses.enumerate() {
+            lines.insert(end + i, format!("ADR:;;{};;;;", escape(address)));
         }
         for line in lines {
             let line = match version {
@@ -187,7 +196,9 @@ fn street_text(raw: &str) -> String {
         .join(", ")
 }
 
-fn contact_of(card: &Card, address: &str) -> (Contact, usize) {
+/// The store contact for a card, its extra values (phones and emails after the first of each, up to `MAX_EXTRAS`),
+/// and how many extra values were dropped.
+fn contact_of(card: &Card, address: &str) -> (Contact, Vec<Extra>, usize) {
     let person = [card.given_name.trim(), card.family_name.trim()]
         .into_iter()
         .filter(|part| !part.is_empty())
@@ -196,7 +207,28 @@ fn contact_of(card: &Card, address: &str) -> (Contact, usize) {
     let name = if person.is_empty() { card.formatted_name.trim().to_string() } else { person };
     let phone = card.phones.first();
     let email = card.emails.first();
-    let extra = card.phones.len().saturating_sub(1) + card.emails.len().saturating_sub(1);
+    let spare = card
+        .phones
+        .iter()
+        .skip(1)
+        .map(|p| Extra { kind: ValueKind::Phone, label: LABELS[0][phone_index(&p.label) as usize].into(), value: p.value.trim().into() })
+        .chain(card.emails.iter().skip(1).map(|e| Extra {
+            kind: ValueKind::Email,
+            label: LABELS[1][email_index(&e.label) as usize].into(),
+            value: e.value.trim().into(),
+        }));
+    let mut values = Vec::new();
+    let mut dropped = 0;
+    for extra in spare {
+        if extra.value.is_empty() {
+            continue;
+        }
+        if values.len() < MAX_EXTRAS && extra.well_formed() {
+            values.push(extra);
+        } else {
+            dropped += 1;
+        }
+    }
     let contact = Contact {
         id: 0,
         name,
@@ -208,7 +240,7 @@ fn contact_of(card: &Card, address: &str) -> (Contact, usize) {
         address: address.to_string(),
         labels: [phone.map_or(3, |p| phone_index(&p.label)), email.map_or(2, |e| email_index(&e.label)), 2],
     };
-    (contact, extra)
+    (contact, values, dropped)
 }
 
 /// The store's phone labels are mobile, home, work, other.
@@ -247,18 +279,35 @@ fn email_label(index: u8) -> &'static str {
     }
 }
 
-fn card_of(contact: &Contact) -> Card {
+/// The vCard `TYPE` for a predefined label: `mobile` is written as `cell`, and `other` has no type.
+fn type_of(label: &str) -> &str {
+    match label {
+        "mobile" => "cell",
+        "other" => "",
+        label => label,
+    }
+}
+
+fn card_of(contact: &Contact, extra: &[Extra]) -> Card {
     let (given, family) = names::split(&contact.name);
-    let phones = if contact.phone.trim().is_empty() {
+    let mut phones = if contact.phone.trim().is_empty() {
         vec![]
     } else {
         vec![Labeled { label: phone_label(contact.labels[0]).into(), value: contact.phone.trim().into() }]
     };
-    let emails = if contact.email.trim().is_empty() {
+    let mut emails = if contact.email.trim().is_empty() {
         vec![]
     } else {
         vec![Labeled { label: email_label(contact.labels[1]).into(), value: contact.email.trim().into() }]
     };
+    for value in extra {
+        let labeled = Labeled { label: type_of(&value.label).into(), value: value.value.trim().into() };
+        match value.kind {
+            ValueKind::Phone => phones.push(labeled),
+            ValueKind::Email => emails.push(labeled),
+            ValueKind::Address => {}
+        }
+    }
     Card {
         formatted_name: contact.display_name().to_string(),
         family_name: family.to_string(),
@@ -376,7 +425,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
     fn a_contact_round_trips_through_3_0_and_4_0() {
         let original = sample();
         for version in [Version::V3, Version::V4] {
-            let text = export(std::slice::from_ref(&original), version);
+            let text = export(std::slice::from_ref(&original), &Extras::default(), version);
             let got = import(&text).unwrap();
             assert_eq!(got.contacts, vec![original.clone()], "{version:?}");
         }
@@ -384,11 +433,11 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
 
     #[test]
     fn version_4_0_export_quotes_types_and_says_4_0() {
-        let text = export(&[sample()], Version::V4);
+        let text = export(&[sample()], &Extras::default(), Version::V4);
         assert!(text.starts_with("BEGIN:VCARD\r\nVERSION:4.0\r\n"), "{text}");
         assert!(text.contains("TEL;TYPE=\"work\":+354 555 1234\r\n"), "{text}");
         assert!(text.contains("EMAIL;TYPE=\"work\":olafur@example.is\r\n"), "{text}");
-        let v3 = export(&[sample()], Version::V3);
+        let v3 = export(&[sample()], &Extras::default(), Version::V3);
         assert!(v3.contains("TEL;TYPE=work:+354 555 1234\r\n"), "{v3}");
     }
 
@@ -396,7 +445,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
     fn long_lines_are_folded_to_75_bytes_and_read_back() {
         let mut long = sample();
         long.notes = "ä".repeat(120);
-        let text = export(std::slice::from_ref(&long), Version::V3);
+        let text = export(std::slice::from_ref(&long), &Extras::default(), Version::V3);
         for line in text.split("\r\n") {
             assert!(line.len() <= 75, "{line:?}");
         }
@@ -413,10 +462,44 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
     }
 
     #[test]
-    fn extra_phones_and_emails_are_counted() {
-        let text = "BEGIN:VCARD\r\nFN:Cara Cole\r\nTEL:111\r\nTEL:222\r\nEMAIL:a@x.is\r\nEMAIL:b@x.is\r\nEND:VCARD\r\n";
+    fn extra_phones_and_emails_are_kept_under_their_labels() {
+        let text = "BEGIN:VCARD\r\nFN:Cara Cole\r\nTEL:111\r\nTEL;TYPE=work:222\r\nEMAIL:a@x.is\r\nEMAIL;TYPE=home:b@x.is\r\nEND:VCARD\r\n";
         let got = import(text).unwrap();
-        assert_eq!(got.extra_values, 2);
+        assert_eq!(got.extra_values, 0);
         assert_eq!(got.contacts[0].phone, "111");
+        assert_eq!(
+            got.values,
+            vec![vec![
+                Extra { kind: ValueKind::Phone, label: "work".into(), value: "222".into() },
+                Extra { kind: ValueKind::Email, label: "home".into(), value: "b@x.is".into() },
+            ]]
+        );
+    }
+
+    #[test]
+    fn a_contact_keeps_six_extra_values_and_counts_the_rest() {
+        let mut text = String::from("BEGIN:VCARD\r\nFN:Cara Cole\r\n");
+        for i in 1..=8 {
+            text.push_str(&format!("TEL:10{i}\r\n"));
+        }
+        text.push_str("END:VCARD\r\n");
+        let got = import(&text).unwrap();
+        assert_eq!(got.extra_values, 1, "seven extras, six kept");
+        assert_eq!(got.values[0].len(), 6);
+        assert_eq!(got.values[0][5].value, "107");
+    }
+
+    #[test]
+    fn extra_values_and_addresses_are_written_back_on_export() {
+        let mut contact = sample();
+        contact.address = "Gata 1".into();
+        let mut values = Extras::default();
+        assert!(values.add(contact.id, Extra { kind: ValueKind::Phone, label: "work".into(), value: "+354 555 9999".into() }));
+        assert!(values.add(contact.id, Extra { kind: ValueKind::Address, label: "home".into(), value: "Gata 2".into() }));
+        let text = export(std::slice::from_ref(&contact), &values, Version::V3);
+        assert!(text.contains("TEL;TYPE=work:+354 555 9999\r\n"), "{text}");
+        assert!(text.contains("ADR:;;Gata 1;;;;\r\n") && text.contains("ADR:;;Gata 2;;;;\r\n"), "{text}");
+        let got = import(&text).unwrap();
+        assert_eq!(got.values[0], vec![Extra { kind: ValueKind::Phone, label: "work".into(), value: "+354 555 9999".into() }]);
     }
 }
