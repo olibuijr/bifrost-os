@@ -1,0 +1,10 @@
+[Unit]
+Description=BifrOSt audio: PulseAudio protocol socket
+
+[Socket]
+ListenStream=%t/pulse/native
+DirectoryMode=0700
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target
