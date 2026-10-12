@@ -43,6 +43,7 @@ pub mod keychain;
 pub mod gss_status;
 pub mod gss_oid;
 pub mod gss_buffer;
+pub mod archive;
 pub mod accounts;
 pub mod testing;
 pub mod usernotif;
