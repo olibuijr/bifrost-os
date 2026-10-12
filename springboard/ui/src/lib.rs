@@ -925,3 +925,5 @@ pub mod capture_content;
 pub mod capture_filter;
 pub mod capture_config;
 pub mod capture_error;
+pub mod surface_use;
+pub mod surface_attach;

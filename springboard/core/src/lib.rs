@@ -75,3 +75,4 @@ pub mod power_supply;
 pub mod serial_ports;
 pub mod imgprobe;
 pub mod gifframes;
+pub mod surface_registry;
