@@ -66,6 +66,7 @@ pub mod extension;
 pub mod quicksearch;
 pub mod visual_search;
 pub mod peek;
+pub mod permission_kit;
 pub mod webview;
 pub mod webview_dev;
 pub mod script_value;
