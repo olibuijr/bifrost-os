@@ -235,6 +235,8 @@ pub struct SavedNetwork {
     pub auto_join: bool,
     /// why it is not connected: "Incorrect Password", "No Internet Connection"; empty when fine
     pub note: String,
+    /// the security type the network was saved with; None when the source does not say
+    pub security: Option<crate::net::wifi_config::Security>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

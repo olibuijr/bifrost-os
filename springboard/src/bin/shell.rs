@@ -245,7 +245,7 @@ fn run() -> std::io::Result<()> {
             wifi: wifi_text,
             wifi_on: ws.state != State::Off,
             networks,
-            saved: ws.known.iter().map(|k| SavedNetwork { ssid: k.ssid.clone(), auto_join: k.auto_join, note: ws.notes.get(&k.ssid).cloned().unwrap_or_default() }).collect(),
+            saved: ws.known.iter().map(|k| SavedNetwork { ssid: k.ssid.clone(), auto_join: k.auto_join, note: ws.notes.get(&k.ssid).cloned().unwrap_or_default(), security: None }).collect(),
             enterprise: ws.scan.iter().filter(|r| r.enterprise).map(|r| r.ssid.clone()).collect(),
             current_ssid: ws.ssid.clone().filter(|_| ws.state == State::Connected),
             wifi_notice: None,
