@@ -96,9 +96,29 @@ def keys(*codes):
     time.sleep(0.6)
 
 
+SHIFT = 42
+# punctuation on a US layout: (key code, needs Shift)
+PUNCT = {".": (52, False), ",": (51, False), "-": (12, False), "_": (12, True), "=": (13, False), "+": (13, True),
+         "/": (53, False), "?": (53, True), ";": (39, False), ":": (39, True), "@": (3, True), "!": (2, True),
+         "#": (4, True), "$": (5, True), "%": (6, True), "*": (9, True), " ": (57, False)}
+
+
 def type_text(text):
+    """Type ASCII text through the installer's input FIFO: lowercase, digits, uppercase (Shift) and common punctuation."""
     for ch in text:
-        keys(CODES[ch])
+        if ch in CODES:
+            keys(CODES[ch])
+        elif ch.lower() in CODES and ch.isupper():
+            c = CODES[ch.lower()]
+            ssh(f"printf 'key {SHIFT} 1\\nkey {c} 1\\nkey {c} 0\\nkey {SHIFT} 0\\n' > /run/bifrost-input")
+            time.sleep(0.6)
+        elif ch in PUNCT:
+            c, shift = PUNCT[ch]
+            seq = (f"key {SHIFT} 1\\n" if shift else "") + f"key {c} 1\\nkey {c} 0\\n" + (f"key {SHIFT} 0\\n" if shift else "")
+            ssh(f"printf '{seq}' > /run/bifrost-input")
+            time.sleep(0.6)
+        else:
+            raise SystemExit(f"type_text: no key for {ch!r}; use a US-layout ASCII password")
 
 
 def main():
