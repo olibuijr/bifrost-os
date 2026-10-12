@@ -51,6 +51,12 @@ pub enum Tile {
     Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight, Fill, Center,
 }
 
+/// Whether the Wayland compositor owns window positions (the desktop session): the shell can maximize and restore a
+/// window there, but cannot move it to a half or the centre.
+pub fn compositor_places_windows() -> bool {
+    cfg!(feature = "desktop-wayland") && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+}
+
 /// The rectangle of `tile` inside the work area `a`; Centre keeps two thirds of each side.
 pub fn tile_rect(a: Rect, tile: Tile) -> Rect {
     let (hw, hh) = (a.w / 2, a.h / 2);
@@ -802,21 +808,44 @@ impl Shell {
         self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
     }
 
-    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys).
+    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys). In the Wayland session the
+    /// compositor places windows, so only Fill (maximize) applies here; the halves and Center are compositor key
+    /// bindings (packaging/arch/wayland/rc.xml).
     pub(super) fn desk_tile_front(&mut self, tile: Tile) {
         let Some(i) = self.desk_front_index() else { return };
+        if compositor_places_windows() {
+            let maximized = self.desk.as_ref().is_some_and(|d| d.wins[i].maximized);
+            if tile == Tile::Fill && !maximized { self.desk_zoom_window(i); }
+            return;
+        }
         let m = self.desk_metrics();
         if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
         self.desk_layout(i);
+        self.desk_frame_changed(i);
+    }
+
+    /// After a frame change outside a drag: the presenter takes the new frame through the zoom effect (as Zoom does),
+    /// otherwise the app's surface stays where it was.
+    fn desk_frame_changed(&mut self, i: usize) {
+        if let Some(app) = self.desk.as_ref().and_then(|d| d.wins.get(i)).map(|w| w.app) {
+            let t = self.last_input;
+            self.desk_fx_start(app, FxCall::Zoom, t);
+        }
+        // the whole desk repaints: a menu that chose the action closes on this frame, and its area must not be kept
+        self.drawn = super::Drawn::Nothing;
         self.dirty = true;
     }
 
     /// Returns the front desktop window to the size it had before its last tiling or zoom.
     pub(super) fn desk_restore_front(&mut self) {
         let Some(i) = self.desk_front_index() else { return };
+        if compositor_places_windows() {
+            if self.desk.as_ref().is_some_and(|d| d.wins[i].maximized) { self.desk_zoom_window(i); }
+            return;
+        }
         if let Some(d) = self.desk.as_mut() { d.return_to_previous(i); }
         self.desk_layout(i);
-        self.dirty = true;
+        self.desk_frame_changed(i);
     }
 
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
@@ -1233,6 +1262,7 @@ impl Shell {
                         if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.wins.len().checked_sub(1)) {
                             if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
                             self.desk_layout(i);
+                            self.desk_frame_changed(i);
                         }
                         Some(vec![])
                     }

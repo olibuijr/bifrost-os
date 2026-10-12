@@ -389,6 +389,21 @@ impl Display {
         }
         Ok(())
     }
+/// Anchors a chrome surface and reserves its edge. The menu bar (id 0) spans the top edge and the Dock (id 2) sits on
+/// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
+/// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
+/// the top-left corner and reserves nothing.
+fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32)) {
+    match frame.id {
+        0 => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left|surface::Anchor::Right);l.set_margin(frame.y,0,0,0);l.set_exclusive_zone(frame.height as i32+frame.y.max(0));}
+        2 if screen.1>0 => {
+            let bottom=(screen.1 as i32-frame.y-frame.height as i32).max(0);
+            l.set_anchor(surface::Anchor::Bottom);l.set_margin(0,0,bottom,0);l.set_exclusive_zone(frame.height as i32+bottom);
+        }
+        _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(0);}
+    }
+}
+
     pub fn chrome(&mut self, frames:Vec<ChromeFrame>) -> io::Result<()> {
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
         let removed:Vec<_>=self.state.chrome.keys().filter(|id|!ids.contains(id)).copied().collect();
@@ -397,8 +412,9 @@ impl Display {
             if let Some(g)=&mut self.gpu {g.p.destroy_surface(id);}}
         let qh=self.queue.handle();
         for frame in frames {
+            let screen=self.state.size;
             if let Some(w)=self.state.chrome.get_mut(&frame.id) {
-                w.layer.set_margin(frame.y,0,0,frame.x);
+                Self::place_chrome(&w.layer,&frame,screen);
                 if (w.frame.width,w.frame.height)!=(frame.width,frame.height) {
                     for slot in w.slots.drain(..) {slot.buffer.destroy();}
                     if let Some(slots)=self.state.gpu_slots.remove(&frame.id) {for s in slots {s.buffer.destroy();}}
@@ -413,8 +429,7 @@ impl Display {
             } else {
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
-                l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_size(frame.width as u32,frame.height as u32);l.set_margin(frame.y,0,0,frame.x);
-                l.set_exclusive_zone(if frame.id==0 {frame.height as i32}else{0});
+                l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
                 // id 3 is Search: it takes the keyboard from the window in front while it is open
                 l.set_keyboard_interactivity(if frame.id==3 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();

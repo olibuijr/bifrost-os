@@ -16,6 +16,11 @@
     <keybind key="W-a"><action name="Execute" command="/usr/bin/bifrost-apps"/></keybind>
     <keybind key="A-Tab"><action name="NextWindow"/></keybind>
     <keybind key="A-F4"><action name="Close"/></keybind>
+    <!-- Window > Left Half, Right Half, Fill and Center (Ctrl+Cmd+arrows): the compositor places windows, so it tiles -->
+    <keybind key="C-W-Left"><action name="SnapToEdge" direction="left"/></keybind>
+    <keybind key="C-W-Right"><action name="SnapToEdge" direction="right"/></keybind>
+    <keybind key="C-W-Up"><action name="ToggleMaximize"/></keybind>
+    <keybind key="C-W-Down"><action name="UnSnap"/><action name="AutoPlace" policy="center"/></keybind>
   </keyboard>
   <windowRules>
     <windowRule identifier="is.olibuijr.bifrost.*"><serverDecoration>no</serverDecoration></windowRule>

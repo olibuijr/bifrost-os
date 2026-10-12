@@ -338,7 +338,7 @@ mod tests {
     fn an_unknown_media_or_method_is_an_error() {
         assert!(answer("x", "status", &obj("location")).is_err());
         assert!(answer("x", "status", &Json::Null).is_err());
-        assert!(answer("x", "request", &obj("camera")).is_err());
+        assert!(answer("x", "erase", &obj("camera")).is_err());
     }
 
     #[test]

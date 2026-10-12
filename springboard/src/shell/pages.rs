@@ -1355,7 +1355,8 @@ mod tests {
         assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         assert_eq!(s.groups[2].items[8].value, "Lake Day");
-        assert_eq!(s.groups[2].items[9].value, "63%");
+        assert_eq!(s.groups[2].items[9].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[2].items[10].value, "63%");
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
