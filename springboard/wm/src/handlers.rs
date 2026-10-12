@@ -53,6 +53,10 @@ impl CompositorHandler for WmState {
         &client.get_data::<ClientState>().expect("client state").compositor_state
     }
 
+    fn new_surface(&mut self, surface: &WlSurface) {
+        crate::sync::watch_surface(surface);
+    }
+
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
         crate::background_effect::commit(surface);
@@ -360,6 +364,17 @@ impl smithay::wayland::dmabuf::DmabufHandler for WmState {
 
 smithay::delegate_idle_notify!(WmState);
 smithay::delegate_dmabuf!(WmState);
+smithay::delegate_presentation!(WmState);
+
+#[cfg(feature = "drm")]
+impl smithay::wayland::drm_syncobj::DrmSyncobjHandler for WmState {
+    fn drm_syncobj_state(&mut self) -> Option<&mut smithay::wayland::drm_syncobj::DrmSyncobjState> {
+        self.drm_syncobj_state.as_mut()
+    }
+}
+
+#[cfg(feature = "drm")]
+smithay::delegate_drm_syncobj!(WmState);
 delegate_compositor!(WmState);
 delegate_shm!(WmState);
 delegate_seat!(WmState);
