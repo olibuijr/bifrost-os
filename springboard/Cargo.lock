@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -722,9 +722,12 @@ dependencies = [
  "png",
  "smithay",
  "tempfile",
+ "wayland-backend",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
+ "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]
