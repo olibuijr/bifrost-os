@@ -19,8 +19,10 @@ Contract: `docs/audio-architecture.md` ("Client IO", "Real-time threads"). Task:
   ring, `shm::finish(act, &[], now)` (status FINISHED). All scratch is allocated before the loop; channel scratch
   is a stack array, so the limit is `MAX_CHANNELS = 32` per direction. Timestamps: `now` = zero stamp extrapolated
   to the host clock; input time = `now` minus one buffer; output time = `now` plus one buffer.
-  `RtScope` plus `RtGuardAllocator` (debug builds): an app or test binary that installs the allocator gets a panic
-  on allocation inside the IOProc. Locks and syscalls cannot be detected from a library; the rule is documented.
+  `RtScope` plus `RtGuardAllocator` (debug builds): an app or test binary that installs the allocator has every
+  allocation inside the IOProc counted (`RtScope::violations()`) and reported on stderr with a fixed `write(2)`
+  message; it never panics (a global allocator must not unwind). With `BIFROST_RT_STRICT=1` (read once, at the
+  first scope) the process aborts instead. Locks and syscalls cannot be detected from a library; the rule is documented.
 - `workgroup.rs`: `join` (asks the server for SCHED_FIFO 80 via `Promote`, with a pidfd; then `sched_setattr`
   `sched_util_min` 512), `Membership` (drop clears uclamp), `set_affinity` hint, `set_util_min`. A refused
   promotion is not fatal for `start`: the thread runs at normal priority with the frequency hint and logs it.
