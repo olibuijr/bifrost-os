@@ -633,6 +633,8 @@ pub mod workflow;
 pub mod scripting;
 pub mod subscription;
 pub mod entitlement;
+pub mod purchase;
+pub mod offer;
 pub mod download;
 pub mod nav_policy;
 pub mod translation;
