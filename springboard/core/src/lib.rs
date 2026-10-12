@@ -97,3 +97,5 @@ pub mod usb_printer;
 pub mod serial_line;
 pub mod idle_monitor;
 pub mod sleep_assertions;
+pub mod app_transfer;
+pub mod app_disk_writes;
