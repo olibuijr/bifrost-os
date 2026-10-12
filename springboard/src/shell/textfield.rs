@@ -68,6 +68,8 @@ pub struct TextField {
     rendered: Option<Image>,
     /// px from the text's left edge to the caret
     caret_px: f32,
+    /// the composing (marked) range in chars, while an input method has text in progress; drawn underlined
+    marked: Option<(usize, usize)>,
     /// when the caret was last reset to visible (an edit or a focus)
     blink_from: f64,
     press: Option<Press>,
@@ -98,6 +100,7 @@ impl TextField {
             placeholder: ui.text(placeholder, size_pt, Weight::Regular, SECONDARY),
             rendered: None,
             caret_px: 0.0,
+            marked: None,
             blink_from: 0.0,
             press: None,
             menu_touch: false,
@@ -144,6 +147,43 @@ impl TextField {
         self.caret = self.len();
         self.anchor = None;
         self.menu = None;
+        self.marked = None;
+        self.render(ui);
+    }
+
+    /// The composing (marked) range in chars, when an input method has text in progress.
+    pub fn marked_range(&self) -> Option<(usize, usize)> {
+        self.marked
+    }
+
+    /// An input method's composition (`SetMarkedText`): `text` replaces the marked range, or the selection when none is
+    /// open, and is marked for underlining. The caret goes to `sel_start` (a byte offset into `text`, as the protocol
+    /// sends it), or to the end when that is past the text. The text is cut at the field's limit.
+    pub fn set_marked(&mut self, ui: &Ui, text: &str, sel_start: usize) {
+        self.menu = None;
+        let (start, end) = self.marked.unwrap_or_else(|| self.selection());
+        let before: String = self.text.chars().take(start).collect();
+        let after: String = self.text.chars().skip(end).collect();
+        let room = self.max.saturating_sub(before.chars().count() + after.chars().count());
+        let mid: String = text.chars().take(room).collect();
+        let mid_len = mid.chars().count();
+        self.text = format!("{before}{mid}{after}");
+        self.marked = Some((start, start + mid_len));
+        let within = text.get(..sel_start.min(text.len())).map_or(mid_len, |p| p.chars().count().min(mid_len));
+        self.caret = start + within;
+        self.anchor = None;
+        self.render(ui);
+    }
+
+    /// The input method finished its composition. `commit` keeps the marked text; otherwise it is removed and the caret
+    /// falls back to where the composition began.
+    pub fn unmark(&mut self, ui: &Ui, commit: bool) {
+        let Some((start, end)) = self.marked.take() else { return };
+        if !commit {
+            self.text = self.text.chars().enumerate().filter(|(i, _)| *i < start || *i >= end).map(|(_, c)| c).collect();
+            self.caret = if self.caret >= end { self.caret - (end - start) } else { self.caret.min(start) };
+        }
+        self.anchor = None;
         self.render(ui);
     }
 
@@ -166,6 +206,8 @@ impl TextField {
     pub fn edit(&mut self, ui: &Ui, out: &Out, t: f64) -> bool {
         self.blink_from = t;
         self.menu = None;
+        // a key the input method did not take ends the composition: the marked text stays as plain text
+        self.marked = None;
         let (start, end) = self.selection();
         if matches!(out, Out::Text(_) | Out::Backspace) {
             self.snapshot();
@@ -498,6 +540,13 @@ impl TextField {
                 caret_x = x;
             }
         }
+        // composing text is underlined across the marked range, as an input method marks it
+        if let (Some((a, b)), Some(_)) = (self.marked, &self.rendered) {
+            let (x0, x1) = ((x + self.x_of(ui, a) - scroll).max(x), (x + self.x_of(ui, b) - scroll).min(x + w));
+            if x1 > x0 {
+                s.fill_rrect(x0, mid + self.line_h(ui) / 2.0 - ui.pt(2.0), x1 - x0, ui.pt(1.0), 0.0, super::ui::LABEL.now());
+            }
+        }
         if let Some((hx, hy, hw, hh)) = self.highlight(ui, frame) {
             let (hx0, hx1) = (hx.max(x), (hx + hw).min(x + w));
             if hx1 > hx0 {
@@ -632,6 +681,58 @@ mod tests {
         f.edit(&ui, &Out::Named("Tab"), 8.0);
         f.edit(&ui, &Out::Hide, 8.0);
         assert_eq!(f.text(), "ab");
+    }
+
+    #[test]
+    fn composing_text_is_marked_then_kept_or_removed() {
+        let ui = ui();
+        let mut f = field(&ui, false);
+        f.edit(&ui, &Out::Text("ab".into()), 0.0);
+        // "にほ" is 6 bytes; a caret at byte 3 sits after "に" (one char)
+        f.set_marked(&ui, "にほ", 3);
+        assert_eq!(f.text(), "abにほ");
+        assert_eq!(f.marked_range(), Some((2, 4)));
+        assert_eq!(f.caret(), 3);
+        // the next composition replaces the marked range, not the text before it
+        f.set_marked(&ui, "にほん", 9);
+        assert_eq!(f.text(), "abにほん");
+        assert_eq!(f.marked_range(), Some((2, 5)));
+        assert_eq!(f.caret(), 5, "caret at the end when sel_start is the end");
+        f.unmark(&ui, true);
+        assert_eq!(f.marked_range(), None);
+        assert_eq!(f.text(), "abにほん", "a committed composition stays");
+        assert_eq!(f.caret(), 5);
+    }
+
+    #[test]
+    fn a_cancelled_composition_is_removed_and_the_caret_falls_back() {
+        let ui = ui();
+        let mut f = field(&ui, false);
+        f.edit(&ui, &Out::Text("ab".into()), 0.0);
+        // sel_start 1 is after "x", so the caret is one char into the marked text
+        f.set_marked(&ui, "xy", 1);
+        assert_eq!(f.text(), "abxy");
+        assert_eq!(f.marked_range(), Some((2, 4)));
+        assert_eq!(f.caret(), 3);
+        f.unmark(&ui, false);
+        assert_eq!(f.text(), "ab");
+        assert_eq!(f.marked_range(), None);
+        assert_eq!(f.caret(), 2, "the caret goes back to where the composition began");
+    }
+
+    #[test]
+    fn a_typed_key_ends_the_composition_and_composing_is_cut_at_the_limit() {
+        let ui = ui();
+        let mut f = field(&ui, false);
+        f.set_marked(&ui, "abc", 3);
+        assert_eq!(f.marked_range(), Some((0, 3)));
+        f.edit(&ui, &Out::Text("d".into()), 1.0);
+        assert_eq!(f.marked_range(), None, "the next key commits what was marked");
+        assert_eq!(f.text(), "abcd");
+        // the field holds 10 chars at most
+        f.set_marked(&ui, "zzzzzzzzzzzzzz", 14);
+        assert_eq!(f.text(), "abcdzzzzzz");
+        assert_eq!(f.marked_range(), Some((4, 10)));
     }
 
     #[test]

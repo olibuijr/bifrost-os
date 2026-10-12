@@ -31,6 +31,22 @@ impl Layout {
             Layout::English => "en_US",
         }
     }
+
+    /// The keymap id the hardware keyboard uses for this layout (`installer::keymaps::layout_index`).
+    pub fn keymap(self) -> &'static str {
+        match self {
+            Layout::Icelandic => "is",
+            Layout::English => "us",
+        }
+    }
+
+    /// The short label the menu bar shows for the active source (the input menu).
+    pub fn short_name(self) -> &'static str {
+        match self {
+            Layout::Icelandic => "IS",
+            Layout::English => "ABC",
+        }
+    }
 }
 
 fn file() -> std::path::PathBuf {
@@ -177,6 +193,23 @@ pub fn next(from_emoji: bool) -> Option<Layout> {
     }
 }
 
+/// The source after `from` in `on`, wrapping round to the first. A `from` that is not enabled gives the first enabled
+/// source; an empty list keeps `from`.
+pub fn next_in(on: &[Layout], from: Layout) -> Layout {
+    match on.iter().position(|l| *l == from) {
+        Some(i) => on[(i + 1) % on.len()],
+        None => on.first().copied().unwrap_or(from),
+    }
+}
+
+/// Input source switch (Ctrl+Space, the input menu): makes the next enabled layout active, saves the choice and
+/// returns it. With one layout enabled it stays on that layout.
+pub fn cycle() -> Layout {
+    let next = next_in(&enabled(), active());
+    set_active(next);
+    next
+}
+
 pub fn letters(l: Layout) -> [&'static [&'static str]; 3] {
     match l {
         Layout::Icelandic => ICELANDIC,
@@ -205,4 +238,30 @@ pub fn by_name(n: &str) -> Option<Layout> {
 /// Settings > General > Keyboard value: "2" style count.
 pub fn summary() -> String {
     enabled().len().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_next_source_wraps_through_the_enabled_ones() {
+        assert_eq!(next_in(&[Layout::Icelandic, Layout::English], Layout::Icelandic), Layout::English);
+        assert_eq!(next_in(&[Layout::Icelandic, Layout::English], Layout::English), Layout::Icelandic);
+        assert_eq!(next_in(&[Layout::English], Layout::English), Layout::English, "one source stays on itself");
+    }
+
+    #[test]
+    fn a_source_that_is_not_enabled_moves_to_the_first_enabled() {
+        assert_eq!(next_in(&[Layout::English], Layout::Icelandic), Layout::English);
+        assert_eq!(next_in(&[], Layout::Icelandic), Layout::Icelandic, "nothing enabled keeps the source");
+    }
+
+    #[test]
+    fn each_source_names_its_keymap_and_menu_bar_label() {
+        assert_eq!(Layout::Icelandic.keymap(), "is");
+        assert_eq!(Layout::English.keymap(), "us");
+        assert_eq!(Layout::Icelandic.short_name(), "IS");
+        assert_eq!(Layout::English.short_name(), "ABC");
+    }
 }
