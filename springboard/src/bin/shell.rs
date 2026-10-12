@@ -331,6 +331,8 @@ fn run() -> std::io::Result<()> {
     let mut power_key = PowerKey::default();
     let mut hw_keys = springboard::shell::hwkeys::HwKeys::default();
     hw_keys.set_layout(springboard::installer::keymaps::configured_layout());
+    // the input source the hardware layout last followed; the configured layout holds until it changes
+    let mut seen_source = springboard::shell::kb_layouts::active();
     let mut key_repeat = springboard::shell::hwkeys::KeyRepeat::default();
     // desktop pointer: the cursor stamped over presented CPU frames, when the pointer last moved or
     // clicked (it hides after a while), and the damage of a frame with the cursor's rectangles added
@@ -651,6 +653,12 @@ fn run() -> std::io::Result<()> {
                     }
                     // a physical keyboard types into the terminal and text fields
                     // only a key-down types: a dead key keeps state between presses
+                    // an input source switch (Ctrl+Space or the input menu) moves the hardware layout with it
+                    let source = springboard::shell::kb_layouts::active();
+                    if source != seen_source {
+                        seen_source = source;
+                        hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
+                    }
                     let typed = if down { hw_keys.typed(code) } else { None };
                     if let Some(out) = typed {
                         key_repeat.press(code, Some(out.clone()), t);

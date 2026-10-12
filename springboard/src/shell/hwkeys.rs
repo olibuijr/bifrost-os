@@ -1,6 +1,6 @@
 //! Hardware-keyboard shortcuts: tracks the modifier keys from evdev key
-//! events and turns chords into shell actions. Cmd/Meta/Ctrl+Space opens
-//! Search, Alt/Meta/Ctrl+Tab the app switcher, Esc is Back, Meta alone is
+//! events and turns chords into shell actions. Cmd/Meta+Space opens
+//! Search, Ctrl+Space switches the input source, Alt/Meta/Ctrl+Tab the app switcher, Esc is Back, Meta alone is
 //! Home, and Ctrl+C/V/X/A/Z are the clipboard and undo, which text controls
 //! take as `Out::Named`.
 
@@ -110,6 +110,8 @@ pub enum Shortcut {
     Tile(Tile),
     /// Cmd+`: bring the window behind the front one forward (the Window menu's Next Window)
     CycleWindow,
+    /// Ctrl+Space: the next enabled input source (`kb_layouts::cycle`); the binary moves the hardware layout with it
+    InputSource,
 }
 
 impl Shortcut {
@@ -122,7 +124,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource => return None,
         }))
     }
 }
@@ -203,7 +205,9 @@ impl HwKeys {
             }
         }
         match code {
-            KEY_SPACE if (meta || ctrl) && !alt => Some(Shortcut::QuickSearch),
+            KEY_SPACE if meta && !alt => Some(Shortcut::QuickSearch),
+            // Ctrl+Space switches the input source (the input menu's next keyboard), as on the reference platform
+            KEY_SPACE if ctrl && !alt => Some(Shortcut::InputSource),
             KEY_TAB if alt || meta || ctrl => Some(Shortcut::AppSwitch),
             KEY_ESC if !ctrl && !alt && !meta => Some(Shortcut::Back),
             // Cmd on a Mac keyboard is Meta here, so it works for edits too
@@ -507,6 +511,13 @@ impl Shell {
                 self.open_quicksearch_hw(t);
                 vec![]
             }
+            // the binary moves the hardware layout to the new source before the next key is typed; the menu bar
+            // shows the new label
+            Shortcut::InputSource => {
+                super::kb_layouts::cycle();
+                self.dirty = true;
+                vec![]
+            }
             Shortcut::AppSwitch => {
                 if self.screen != Screen::Switcher {
                     self.open_app_switcher(t);
@@ -668,7 +679,8 @@ mod tests {
         assert_eq!(chord(&mut k, &[], KEY_SPACE), None);
         assert_eq!(chord(&mut k, &[], KEY_TAB), None);
                 assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_C), None);
-        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::QuickSearch));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch), "Cmd wins over Ctrl");
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_TAB), Some(Shortcut::AppSwitch));
     }
 
