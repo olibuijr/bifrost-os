@@ -4,10 +4,13 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{ui, Damage, Surface, Ui, Weight};
 use bifrost_app::layout::traffic_lights_trailing;
 use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_app::now_playing::Command;
+use bifrost_core::json::Json;
 use daw::ai;
 use daw::model::{Instrument, Project, Scene, Track};
 use daw::playback::Player;
 use daw::store::{self, Summary};
+use daw::system::{self, Transport};
 use std::path::{Path, PathBuf};
 
 const MARGIN: f32 = 20.0;
@@ -50,6 +53,10 @@ struct Daw {
     instruments: Vec<(String, String, String)>,
     /// x of the header controls in px: right of the traffic lights in the full-size window band
     lead: f32,
+    /// the shell services the app uses: output route, Now Playing session, Low Power Mode (system.rs)
+    system: system::System,
+    /// playback was paused from the Now Playing tile (the service keeps the position)
+    paused: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -89,7 +96,7 @@ impl Daw {
         let root = PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()));
         let instruments = load_instruments(&plugins);
         let player = std::env::var("BIFROST_SOCK").ok().map(|_| Player::new(&root, store_dir.join("render-cache"), plugins));
-        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0 }
+        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false }
     }
 
     /// Writes the project to `<store>/projects/<id>.json`.
@@ -537,6 +544,7 @@ impl Daw {
         match player.play(p) {
             Ok(path) => {
                 self.playing = true;
+                self.paused = false;
                 self.status = format!("playing {}", path.display());
             }
             Err(e) => self.status = e,
@@ -548,6 +556,40 @@ impl Daw {
             player.stop();
         }
         self.playing = false;
+        self.paused = false;
+    }
+
+    /// Pauses the song in place; play resumes it from the same position.
+    fn pause(&mut self) {
+        if !self.playing {
+            return;
+        }
+        if let Some(player) = self.player.as_mut() {
+            player.pause();
+        }
+        self.playing = false;
+        self.paused = true;
+    }
+
+    /// The transport the desktop should show.
+    fn transport(&self) -> Transport {
+        if self.playing {
+            Transport::Playing
+        } else if self.paused {
+            Transport::Paused
+        } else {
+            Transport::Stopped
+        }
+    }
+
+    /// A transport command from the Now Playing tile. Only play, pause and stop are declared to the desktop.
+    fn command(&mut self, cmd: Command) {
+        match cmd {
+            Command::Play if !self.playing => self.play(),
+            Command::Pause => self.pause(),
+            Command::Stop => self.stop(),
+            _ => {}
+        }
     }
 
     fn draw_text(s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, x: f32, y: f32) {
@@ -813,6 +855,7 @@ impl App for Daw {
     fn configure(&mut self, ctx: &Ctx) {
         self.songs = store::list(&self.store_dir);
         self.set_lead(&ctx.ui);
+        self.system.start(ctx);
         // every edit is written at once and atomically, so nothing is left unsaved when the shell kills the app
         ctx.enable_sudden_termination();
     }
@@ -841,12 +884,37 @@ impl App for Daw {
         }
     }
 
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        self.system.reply(request, result)
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        match self.system.event(ctx, service, event, body) {
+            system::Event::Ignored => false,
+            system::Event::Route(text) => {
+                self.status = text;
+                true
+            }
+            system::Event::Power => true,
+            system::Event::Command(cmd) => {
+                self.command(cmd);
+                true
+            }
+        }
+    }
+
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         self.now = t;
         self.set_lead(&ctx.ui);
         if let Some(player) = self.player.as_mut() {
             player.tick(t);
             self.playing = player.playing();
+        }
+        let transport = self.transport();
+        if self.system.shown() != Some(transport) {
+            let position = self.player.as_ref().map_or(0, |p| p.position_ms().max(0.0) as u64);
+            let title = self.project.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+            self.system.sync_session(ctx, transport, &title, position);
         }
         let ui: &Ui = &ctx.ui;
         s.fill_rect(0, 0, s.w, s.h, ui::DETAIL_BG.now());
@@ -858,6 +926,10 @@ impl App for Daw {
         }
         if !self.status.is_empty() {
             Self::draw_text(s, ui, &self.status, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), MARGIN, s.h as f32 - 16.0);
+        }
+        if self.system.low_power {
+            let warning = "Low Power Mode is on. Playback and rendering may be slower.";
+            Self::draw_text(s, ui, warning, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::SYSTEM_ORANGE, MARGIN, s.h as f32 - 40.0);
         }
         let mut d = Damage::new(s.w, s.h);
         d.all();

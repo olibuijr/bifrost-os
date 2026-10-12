@@ -7,6 +7,10 @@
 - MIDI clock: a song position in sixteenth steps converts to MIDI clock pulses (24 per quarter note), with start, continue and stop bytes.
 - Device parameters: each instrument and effect exposes its parameters as a parameter tree with names, units and clamped values, and the engine reads those values back.
 - Presets: a device's current values can be saved as a named preset, applied again, and kept as JSON.
+- Output device: the DAW reads the default output from the shell and shows a status line when the output route changes (Speaker or Headphones) or the device list changes.
+- Now Playing: while a song plays, Control Center shows it as a session with the project name; the tile's play, pause and stop control the DAW, and the session goes away on stop.
+- Pause: a song can be paused from the Now Playing tile and resumed from the same position.
+- Low Power Mode: a warning line shows at the bottom of the window while the shell reports Low Power Mode.
 
 ## 0.2.5 — 2026-10-11
 
