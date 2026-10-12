@@ -335,17 +335,24 @@ impl Region {
         unsafe { &*(p as *const T) }
     }
 
-    /// Initialises the ring header at `offset` (producer side of the setup, before the fd is shared).
-    pub fn init_ring(&self, offset: u32, channels: u32, frames: u32) {
-        assert!(offset as usize + ring_bytes(channels, frames) as usize <= self.len);
-        assert!(offset % 64 == 0 && (self.addr % 64 == 0));
+    /// Initialises the ring header at `offset` (producer side of the setup, before the fd is shared). Returns false,
+    /// and writes nothing, when the offset is misaligned or the ring does not fit the mapping.
+    pub fn init_ring(&self, offset: u32, channels: u32, frames: u32) -> bool {
+        let off = offset as usize;
+        if off % 64 != 0 || self.addr % 64 != 0 {
+            return false;
+        }
+        if !off.checked_add(ring_bytes(channels, frames) as usize).is_some_and(|e| e <= self.len) {
+            return false;
+        }
         // SAFETY: in bounds, aligned; nobody else has the region yet, so the plain write of the non-atomic fields
         // does not race.
         unsafe {
-            let h = (self.addr + offset as usize) as *mut RingHeader;
+            let h = (self.addr + off) as *mut RingHeader;
             core::ptr::addr_of_mut!((*h).frames).write(frames);
             core::ptr::addr_of_mut!((*h).channels).write(channels);
         }
+        true
     }
 
     /// A ring view over the (initialised) ring at `offset`. Validates the header against the mapping, so a hostile
@@ -597,7 +604,11 @@ pub mod selftest {
         for i in 0..3 {
             reset(act(i), 64, 48_000);
         }
-        act(1).trigger(now_ns());
+        // Wake both followers: A to see `stop`, then B, which no longer gets a trigger from A. Triggering only A left
+        // B waiting out its 2 s timeout, which exits with status 2 and failed the run.
+        let now = now_ns();
+        act(1).trigger(now);
+        act(2).trigger(now);
         for pid in pids {
             let mut st = 0;
             // SAFETY: waiting for our own child.
@@ -738,9 +749,16 @@ mod tests {
         h.write.store(1 << 40, Ordering::Relaxed);
         let ring = r.ring(0).unwrap();
         assert_eq!(ring.readable(), 8); // clamped
-        // a header claiming more planes than the mapping holds
+        // the producer side refuses a ring that does not fit the mapping, and writes nothing
         let big = Region::create("t-big", 128).unwrap();
-        big.init_ring(0, 4, 1000);
+        assert!(!big.init_ring(0, 4, 1000));
+        // a header a peer wrote claiming more planes than the mapping holds
+        // SAFETY: test-only plain writes to the non-atomic size fields of a live header, standing in for the peer.
+        unsafe {
+            let hp = big.addr as *mut RingHeader;
+            core::ptr::addr_of_mut!((*hp).frames).write(1000);
+            core::ptr::addr_of_mut!((*hp).channels).write(4);
+        }
         assert!(big.ring(0).is_none());
     }
 
