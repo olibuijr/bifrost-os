@@ -957,6 +957,7 @@ pub mod emitter;
 pub mod physics;
 pub mod node_constraint;
 pub mod tilemap;
+pub mod scene2d;
 pub mod midi_thru;
 pub mod midi_events;
 pub mod fourier;
