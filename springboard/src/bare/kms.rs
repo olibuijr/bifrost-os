@@ -841,7 +841,7 @@ impl Display {
         #[cfg(feature = "desktop-wayland")]
         if let Some(w) = &mut self.wayland {
             w.read().unwrap_or_else(|e| { eprintln!("springboard: Wayland: {e}"); std::process::exit(1) });
-            return Some(super::sys::now_ms());
+            return w.take_flip();
         }
         if self.virt {
             return None;
