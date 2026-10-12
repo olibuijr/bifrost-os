@@ -44,6 +44,21 @@ impl Json {
     pub fn str_field(&self, key: &str) -> Option<String> {
         self.get(key).and_then(Json::as_str).map(str::to_string)
     }
+    /// Compact JSON text (non-finite numbers become `null`).
+    pub fn encode(&self) -> String {
+        match self {
+            Json::Null => "null".into(),
+            Json::Bool(b) => b.to_string(),
+            Json::Num(n) if n.is_finite() && n.fract() == 0.0 && n.abs() < 9.0e15 => format!("{}", *n as i64),
+            Json::Num(n) if n.is_finite() => format!("{n}"),
+            Json::Num(_) => "null".into(),
+            Json::Str(s) => quote(s),
+            Json::Arr(items) => format!("[{}]", items.iter().map(Json::encode).collect::<Vec<_>>().join(",")),
+            Json::Obj(fields) => {
+                format!("{{{}}}", fields.iter().map(|(k, v)| format!("{}:{}", quote(k), v.encode())).collect::<Vec<_>>().join(","))
+            }
+        }
+    }
 }
 
 pub fn parse(text: &str) -> Result<Json, String> {

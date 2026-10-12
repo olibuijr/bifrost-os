@@ -819,6 +819,14 @@ impl Shell {
                     super::spotindex::apply(&a.manifest.id, m);
                 }
             }
+            ToShell::ServiceCall { request, service, method, body } => {
+                let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
+                let (ok, body) = match self.service_call(&app_id, &service, &method, &body, t) {
+                    Ok(j) => (true, j.encode()),
+                    Err(e) => (false, e),
+                };
+                self.ext_send(slot as usize, &bifrost_proto::ToApp::ServiceReply { request, ok, body });
+            }
             ToShell::DistPost { name, user_info } => {
                 let m = bifrost_proto::ToApp::DistNotify { name, user_info };
                 for other in 0..self.ext.len() {
@@ -1177,6 +1185,7 @@ impl Shell {
                     r @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
+                    r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]
@@ -1197,6 +1206,7 @@ impl Shell {
         if badge_changed { self.dirty = true; }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
+        self.services_tick(t);
         if indexed { super::spotindex::flush(); }
         self.share_tick();
         self.usernotif_tick(t);

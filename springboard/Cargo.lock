@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.17.0"
+version = "1.17.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -3481,7 +3481,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.5.34"
+version = "0.5.35"
 dependencies = [
  "bifrost-core",
  "bifrost-proto",

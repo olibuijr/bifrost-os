@@ -228,6 +228,10 @@ fn get(r: &mut Reader, max: usize) -> Result<String, DecodeError> {
     Ok(s)
 }
 
+/// A system-service name or method name: at most this many characters.
+pub const MAX_SERVICE_NAME: usize = 64;
+/// A system-service JSON body (call, reply or event): at most this many characters.
+pub const MAX_SERVICE_BODY: usize = 64 * 1024;
 pub const MAX_DIST_INFO: usize = 32;
 pub const MAX_DIST_VALUE: usize = 1024;
 
@@ -463,6 +467,9 @@ pub(crate) mod tag {
     pub const DRAG_CANCEL: u32 = 0x149;
     pub const DIST_POST: u32 = 0x1d0;
     pub const DIST_NOTIFY: u32 = 0x1d1;
+    pub const SERVICE_CALL: u32 = 0x1d2;
+    pub const SERVICE_REPLY: u32 = 0x1d2;
+    pub const SERVICE_EVENT: u32 = 0x1d3;
 }
 
 /// Encodes the variants of `ToApp` that belong to this module (anything else writes nothing).
@@ -501,6 +508,18 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             u32_(b, tag::DIST_NOTIFY);
             put_dist(b, name, user_info);
         }
+        ToApp::ServiceReply { request, ok, body } => {
+            u32_(b, tag::SERVICE_REPLY);
+            u32_(b, *request);
+            b.push(*ok as u8);
+            put(b, body, MAX_SERVICE_BODY);
+        }
+        ToApp::ServiceEvent { service, event, body } => {
+            u32_(b, tag::SERVICE_EVENT);
+            put(b, service, MAX_SERVICE_NAME);
+            put(b, event, MAX_SERVICE_NAME);
+            put(b, body, MAX_SERVICE_BODY);
+        }
         ToApp::DragDest { session, phase, x, y, allowed, items } => {
             u32_(b, tag::DRAG_DEST);
             u32_(b, *session);
@@ -535,6 +554,12 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             let (name, user_info) = get_dist(r)?;
             ToApp::DistNotify { name, user_info }
         }
+        tag::SERVICE_REPLY => ToApp::ServiceReply { request: r.u32()?, ok: flag(r)?, body: get(r, MAX_SERVICE_BODY)? },
+        tag::SERVICE_EVENT => ToApp::ServiceEvent {
+            service: get(r, MAX_SERVICE_NAME)?,
+            event: get(r, MAX_SERVICE_NAME)?,
+            body: get(r, MAX_SERVICE_BODY)?,
+        },
         tag::SHARE_DONE => ToApp::ShareDone { request: r.u32()?, target: get(r, MAX_NOTIF_ID)? },
         tag::DRAG_DEST => {
             let session = r.u32()?;
@@ -588,6 +613,13 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, tag::DIST_POST);
             put_dist(b, name, user_info);
         }
+        ToShell::ServiceCall { request, service, method, body } => {
+            u32_(b, tag::SERVICE_CALL);
+            u32_(b, *request);
+            put(b, service, MAX_SERVICE_NAME);
+            put(b, method, MAX_SERVICE_NAME);
+            put(b, body, MAX_SERVICE_BODY);
+        }
         ToShell::Share { request, items, anchor } => {
             u32_(b, tag::SHARE);
             u32_(b, *request);
@@ -640,6 +672,12 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             let (name, user_info) = get_dist(r)?;
             ToShell::DistPost { name, user_info }
         }
+        tag::SERVICE_CALL => ToShell::ServiceCall {
+            request: r.u32()?,
+            service: get(r, MAX_SERVICE_NAME)?,
+            method: get(r, MAX_SERVICE_NAME)?,
+            body: get(r, MAX_SERVICE_BODY)?,
+        },
         tag::SHARE => {
             let request = r.u32()?;
             let anchor = UiRect { x: finite(r.f32()?)?, y: finite(r.f32()?)?, w: finite(r.f32()?)?, h: finite(r.f32()?)? };
@@ -761,6 +799,10 @@ mod tests {
         app_rt(ToApp::ShareDone { request: 2, target: "is.olibuijr.notes.desktop".into() });
         shell_rt(ToShell::DistPost { name: "n".into(), user_info: vec![("k".into(), "v ü".into())] });
         app_rt(ToApp::DistNotify { name: "n".into(), user_info: vec![] });
+        shell_rt(ToShell::ServiceCall { request: 7, service: "dock".into(), method: "badge".into(), body: r#"{"text":"3"}"#.into() });
+        app_rt(ToApp::ServiceReply { request: 7, ok: true, body: "null".into() });
+        app_rt(ToApp::ServiceReply { request: 8, ok: false, body: "no such method".into() });
+        app_rt(ToApp::ServiceEvent { service: "now-playing".into(), event: "command".into(), body: r#"{"cmd":"pause"}"#.into() });
         app_rt(ToApp::ShareDone { request: 3, target: String::new() });
         let many = ToShell::Share { request: 1, items: (0..20).map(|i| Payload::Text(i.to_string())).collect(), anchor: UiRect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 } };
         let Ok(ToShell::Share { items, .. }) = ToShell::decode(&many.encode()) else { panic!("decode") };

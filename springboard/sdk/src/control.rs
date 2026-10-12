@@ -309,21 +309,9 @@ fn error_reply(id: &Json, code: i64, message: &str) -> String {
     )
 }
 
-/// Compact JSON text for a value.
+/// Compact JSON text for a value (`Json::encode`).
 pub fn encode(v: &Json) -> String {
-    match v {
-        Json::Null => "null".into(),
-        Json::Bool(b) => b.to_string(),
-        Json::Num(n) if n.is_finite() && n.fract() == 0.0 && n.abs() < 9.0e15 => format!("{}", *n as i64),
-        Json::Num(n) if n.is_finite() => format!("{n}"),
-        Json::Num(_) => "null".into(),
-        Json::Str(s) => json::quote(s),
-        Json::Arr(items) => format!("[{}]", items.iter().map(encode).collect::<Vec<_>>().join(",")),
-        Json::Obj(fields) => format!(
-            "{{{}}}",
-            fields.iter().map(|(k, v)| format!("{}:{}", json::quote(k), encode(v))).collect::<Vec<_>>().join(",")
-        ),
-    }
+    v.encode()
 }
 
 #[repr(C)]

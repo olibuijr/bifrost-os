@@ -64,6 +64,7 @@ pub mod extras;
 pub mod spotindex;
 pub mod sharing;
 pub mod workspace;
+pub mod services;
 pub mod dnd;
 pub mod photos;
 pub mod music;
@@ -479,6 +480,8 @@ pub struct Shell {
     /// the share sheet an app asked for (`sharing`)
     app_share: sharing::State,
     app_workspace: workspace::State,
+    /// System services apps call by name (`services/`).
+    pub(crate) services: Vec<Box<dyn services::SystemService>>,
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
@@ -724,6 +727,7 @@ impl Shell {
             extras: extras::Registry::default(),
             app_share: sharing::State::default(),
             app_workspace: workspace::State::default(),
+            services: services::all(),
             dnd: dnd::State::default(),
             fullscreen: false,
             prefs: Prefs::memory(),

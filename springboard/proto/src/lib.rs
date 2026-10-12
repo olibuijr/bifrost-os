@@ -425,6 +425,10 @@ pub enum ToApp {
     StatusItemAction { item: u32, id: u32 },
     /// A `DistributedNotificationCenter` post by another app, relayed by the shell.
     DistNotify { name: String, user_info: Vec<(String, String)> },
+    /// The answer to `ToShell::ServiceCall` `request`: `ok` with a JSON result, else an error message. Tag 0x1d2.
+    ServiceReply { request: u32, ok: bool, body: String },
+    /// An event a system service pushes to the app (JSON `body`). Tag 0x1d3.
+    ServiceEvent { service: String, event: String, body: String },
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
     /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
     /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
@@ -706,6 +710,9 @@ pub enum ToShell {
     StatusItemRemove { item: u32 },
     /// `DistributedNotificationCenter.post`: the shell forwards it to every other running app as `ToApp::DistNotify`.
     DistPost { name: String, user_info: Vec<(String, String)> },
+    /// Calls `method` on the shell's named system service with JSON `body` (`springboard/src/shell/services/`);
+    /// answered with `ToApp::ServiceReply` carrying the same `request`. Tag 0x1d2.
+    ServiceCall { request: u32, service: String, method: String, body: String },
     /// `beginDraggingSession`: the shell tracks the pointer until it is released. `session` should have bit 31 set.
     DragBegin { session: u32, allowed: u8, items: Vec<DragItem>, preview: DragPreview },
     /// `registerForDraggedTypes`: the UTTypes the window accepts (conformance counts); empty accepts none.
@@ -1115,7 +1122,7 @@ impl ToApp {
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -1359,7 +1366,7 @@ impl ToShell {
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);

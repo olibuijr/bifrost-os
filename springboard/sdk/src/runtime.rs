@@ -678,6 +678,21 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     crate::notification::distributed_incoming(&name, user_info.into_iter().collect());
                     need_frame = true;
                 }
+                ToApp::ServiceReply { request, ok, body } => {
+                    let result = crate::service::decode_reply(ok, &body);
+                    let taken = ctx.as_ref().is_some_and(|c| app.service_reply(c, request, &result));
+                    if taken {
+                        need_frame = true;
+                    } else {
+                        crate::service::keep(request, result);
+                    }
+                }
+                ToApp::ServiceEvent { service, event, body } => {
+                    let body = bifrost_core::json::parse(&body).unwrap_or(bifrost_core::json::Json::Null);
+                    if let Some(c) = &ctx {
+                        need_frame |= app.service_event(c, &service, &event, &body);
+                    }
+                }
                 ToApp::WorkspaceReply { request, status, items } => {
                     crate::workspace::reply_incoming(request, status, items);
                     need_frame = true;

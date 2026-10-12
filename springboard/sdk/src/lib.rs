@@ -162,6 +162,7 @@ pub mod notification;
 pub mod post_delivery;
 pub mod system_sound;
 pub mod workspace;
+pub mod service;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
@@ -302,6 +303,15 @@ pub trait App {
     /// The user chose entry `id` in the menu of status item `item` (`status_item::StatusItem::id`). Return true when a frame
     /// is needed.
     fn status_item_action(&mut self, _ctx: &Ctx, _item: u32, _id: u32) -> bool {
+        false
+    }
+    /// The reply to a `service::call` with id `request`. Return true when the app took it (and a frame is needed);
+    /// false keeps it for `service::take_reply`.
+    fn service_reply(&mut self, _ctx: &Ctx, _request: u32, _result: &Result<bifrost_core::json::Json, String>) -> bool {
+        false
+    }
+    /// An event pushed by the shell service `service`. Return true when a frame is needed.
+    fn service_event(&mut self, _ctx: &Ctx, _service: &str, _event: &str, _body: &bifrost_core::json::Json) -> bool {
         false
     }
     /// A drag and drop event (`NativeDraggingDestination` for a window that called `dnd::register_types`,
