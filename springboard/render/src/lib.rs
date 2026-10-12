@@ -38,6 +38,8 @@ pub mod replicator;
 pub mod emitter;
 pub mod plane_stats;
 pub mod plane_arith;
+pub mod video_transfer;
+pub mod block_motion;
 
 #[cfg(test)]
 mod tests {
