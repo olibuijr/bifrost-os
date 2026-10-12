@@ -60,19 +60,17 @@ impl Device {
 
     /// A texture with its own memory.
     pub fn new_texture(&self, desc: &TextureDescriptor) -> Result<Texture> {
-        let _ = desc;
-        todo!("gpu-texture")
+        crate::texture::create(self, desc)
     }
 
     /// A texture that samples (or renders into) another process's dma-buf, without a copy.
     pub fn import_dmabuf(&self, dmabuf: &DmaBuf) -> Result<Texture> {
-        let _ = dmabuf;
-        todo!("gpu-texture")
+        crate::dmabuf::import(self, dmabuf)
     }
 
     /// The fourcc and modifier pairs this device can import for sampling, for linux-dmabuf v4 feedback.
     pub fn supported_dmabuf_formats(&self) -> Vec<DmaBufFormat> {
-        todo!("gpu-texture")
+        crate::dmabuf::supported_formats(self)
     }
 
     /// A buffer of `len` bytes.
