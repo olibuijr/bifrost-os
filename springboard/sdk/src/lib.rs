@@ -123,6 +123,7 @@ pub mod spellcheck;
 pub mod translation;
 pub mod wlan;
 pub mod notification;
+pub mod post_delivery;
 pub mod system_sound;
 pub mod workspace;
 pub mod distributed;
