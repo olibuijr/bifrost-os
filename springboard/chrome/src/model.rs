@@ -204,60 +204,61 @@ impl Writer {
     }
 }
 
-struct Reader<'a> {
-    b: &'a [u8],
-    pos: usize,
+impl From<bifrost_wire::DecodeError> for DecodeError {
+    fn from(e: bifrost_wire::DecodeError) -> Self {
+        match e {
+            bifrost_wire::DecodeError::Truncated => DecodeError::Truncated,
+            bifrost_wire::DecodeError::BadValue => DecodeError::BadValue,
+            bifrost_wire::DecodeError::TooLong => DecodeError::TooLong,
+            bifrost_wire::DecodeError::UnknownTag(t) => DecodeError::UnknownTag(t as u8),
+        }
+    }
 }
 
+/// The shared wire reader plus this protocol's policies (no NaN floats, string and count limits).
+struct Reader<'a> {
+    w: bifrost_wire::Reader<'a>,
+}
+
+/// Smallest encoded size of one element, so a hostile count cannot reserve more than the input could hold (IPC-10).
+const MIN_MENU_ITEM: usize = 18;
+const MIN_MENU: usize = 12;
+const MIN_STATUS_ITEM: usize = 16;
+const MIN_DOCK_ITEM: usize = 23;
+const MIN_NOTIFICATION: usize = 24;
+const MIN_ACTION: usize = 8;
+const MIN_CONTROL: usize = 17;
+
 impl<'a> Reader<'a> {
-    fn take(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
-        let end = self.pos.checked_add(n).ok_or(DecodeError::Truncated)?;
-        if end > self.b.len() {
-            return Err(DecodeError::Truncated);
-        }
-        let s = &self.b[self.pos..end];
-        self.pos = end;
-        Ok(s)
-    }
     fn u8(&mut self) -> Result<u8, DecodeError> {
-        Ok(self.take(1)?[0])
+        Ok(self.w.u8()?)
     }
     fn u32(&mut self) -> Result<u32, DecodeError> {
-        let s = self.take(4)?;
-        Ok(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+        Ok(self.w.u32()?)
     }
     fn f32(&mut self) -> Result<f32, DecodeError> {
-        let v = f32::from_bits(self.u32()?);
+        let v = self.w.f32()?;
         if v.is_nan() {
             return Err(DecodeError::BadValue);
         }
         Ok(v)
     }
     fn bool(&mut self) -> Result<bool, DecodeError> {
-        match self.u8()? {
-            0 => Ok(false),
-            1 => Ok(true),
-            _ => Err(DecodeError::BadValue),
-        }
+        Ok(self.w.bool()?)
     }
     fn str(&mut self) -> Result<String, DecodeError> {
-        let n = self.u32()? as usize;
+        let n = self.w.clone().u32()? as usize;
         if n > MAX_LEN {
             return Err(DecodeError::TooLong);
         }
-        let bytes = self.take(n)?;
-        String::from_utf8(bytes.to_vec()).map_err(|_| DecodeError::BadValue)
+        Ok(self.w.str()?.to_owned())
     }
-    /// A count of elements that each take at least one byte, so it cannot exceed what is left.
-    fn count(&mut self) -> Result<usize, DecodeError> {
-        let n = self.u32()? as usize;
-        if n > self.b.len() - self.pos {
-            return Err(DecodeError::Truncated);
-        }
-        Ok(n)
+    /// A count of elements that each take at least `min_elem` bytes, so it cannot exceed what is left.
+    fn count(&mut self, min_elem: usize) -> Result<usize, DecodeError> {
+        Ok(self.w.count(MAX_LEN, min_elem)?)
     }
     fn menu_items(&mut self, depth: u32) -> Result<Vec<MenuItem>, DecodeError> {
-        let n = self.count()?;
+        let n = self.count(MIN_MENU_ITEM)?;
         let mut v = Vec::with_capacity(n);
         for _ in 0..n {
             v.push(self.menu_item(depth)?);
@@ -278,7 +279,7 @@ impl<'a> Reader<'a> {
         })
     }
     fn menus(&mut self) -> Result<Vec<Menu>, DecodeError> {
-        let n = self.count()?;
+        let n = self.count(MIN_MENU)?;
         let mut v = Vec::with_capacity(n);
         for _ in 0..n {
             v.push(Menu { id: self.u32()?, title: self.str()?, items: self.menu_items(0)? });
@@ -286,7 +287,7 @@ impl<'a> Reader<'a> {
         Ok(v)
     }
     fn status(&mut self) -> Result<Vec<StatusItem>, DecodeError> {
-        let n = self.count()?;
+        let n = self.count(MIN_STATUS_ITEM)?;
         let mut v = Vec::with_capacity(n);
         for _ in 0..n {
             v.push(StatusItem { id: self.u32()?, symbol: self.str()?, text: self.str()?, menu: self.menu_items(0)? });
@@ -294,11 +295,7 @@ impl<'a> Reader<'a> {
         Ok(v)
     }
     fn finish(&self) -> Result<(), DecodeError> {
-        if self.pos == self.b.len() {
-            Ok(())
-        } else {
-            Err(DecodeError::BadValue)
-        }
+        Ok(self.w.done()?)
     }
 }
 
@@ -306,7 +303,7 @@ fn reader(b: &[u8]) -> Result<Reader<'_>, DecodeError> {
     if b.len() > MAX_LEN {
         return Err(DecodeError::TooLong);
     }
-    let mut r = Reader { b, pos: 0 };
+    let mut r = Reader { w: bifrost_wire::Reader::new(b) };
     if r.u8()? != VERSION {
         return Err(DecodeError::BadVersion);
     }
@@ -411,7 +408,7 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
             ToChrome::MenuBar(MenuBarModel { app_name, menus, status })
         }
         TO_DOCK => {
-            let n = r.count()?;
+            let n = r.count(MIN_DOCK_ITEM)?;
             let mut items = Vec::with_capacity(n);
             for _ in 0..n {
                 items.push(DockItem {
@@ -437,7 +434,7 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
             ToChrome::Dock(DockModel { items, size, magnified, position, autohide })
         }
         TO_PANELS => {
-            let n = r.count()?;
+            let n = r.count(MIN_NOTIFICATION)?;
             let mut notifications = Vec::with_capacity(n);
             for _ in 0..n {
                 let id = r.u32()?;
@@ -445,14 +442,14 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
                 let title = r.str()?;
                 let body = r.str()?;
                 let time = r.str()?;
-                let na = r.count()?;
+                let na = r.count(MIN_ACTION)?;
                 let mut actions = Vec::with_capacity(na);
                 for _ in 0..na {
                     actions.push((r.u32()?, r.str()?));
                 }
                 notifications.push(Notification { id, app_id, title, body, time, actions });
             }
-            let nc = r.count()?;
+            let nc = r.count(MIN_CONTROL)?;
             let mut controls = Vec::with_capacity(nc);
             for _ in 0..nc {
                 controls.push(ControlModule { id: r.u32()?, title: r.str()?, symbol: r.str()?, on: r.bool()?, value: r.f32()? });
@@ -692,6 +689,16 @@ mod tests {
         // Oversized messages are refused before parsing.
         let big = vec![VERSION; MAX_LEN + 1];
         assert_eq!(decode_to_chrome(&big), Err(DecodeError::TooLong));
+    }
+
+    #[test]
+    fn a_huge_count_in_a_big_message_is_refused_before_allocating() {
+        // 4 MiB of zeros claiming 4 million menus: the count must be backed by 12 bytes per menu (IPC-10).
+        let mut bytes = vec![0u8; MAX_LEN];
+        bytes[0] = VERSION;
+        bytes[1] = TO_MENU_BAR;
+        bytes[6..10].copy_from_slice(&4_000_000u32.to_le_bytes());
+        assert_eq!(decode_to_chrome(&bytes), Err(DecodeError::Truncated));
     }
 
     #[test]

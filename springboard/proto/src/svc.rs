@@ -29,7 +29,14 @@ pub fn listen(sock: &std::path::Path) -> io::Result<std::os::unix::net::UnixList
     UnixListener::bind(sock)
 }
 
+/// Longest list a status or state event carries; longer lists are cut on encode so a frame stays under `MAX_FRAME`.
+pub const MAX_LIST: usize = 512;
+
 pub fn write_frame<W: Write>(w: &mut W, payload: &[u8]) -> io::Result<()> {
+    // the reader refuses frames over MAX_FRAME and then loses the stream, so refuse to write one
+    if payload.len() > MAX_FRAME {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "frame too large"));
+    }
     let mut buf = Vec::with_capacity(payload.len() + 4);
     buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     buf.extend_from_slice(payload);
@@ -99,44 +106,46 @@ impl Enc {
     }
 }
 
-/// Reads fields from a payload.
-pub struct Dec<'a>(&'a [u8]);
+/// Reads fields from a payload (the shared `bifrost_wire::Reader` with this protocol's error type).
+pub struct Dec<'a>(bifrost_wire::Reader<'a>);
+
+fn wire_err(e: bifrost_wire::DecodeError) -> DecodeError {
+    match e {
+        bifrost_wire::DecodeError::Truncated => DecodeError::Truncated,
+        bifrost_wire::DecodeError::BadValue => DecodeError::BadValue,
+        bifrost_wire::DecodeError::TooLong => DecodeError::BadValue,
+        bifrost_wire::DecodeError::UnknownTag(t) => DecodeError::UnknownTag(t),
+    }
+}
 
 impl<'a> Dec<'a> {
     /// Splits the tag off the payload.
     pub fn new(payload: &'a [u8]) -> Result<(u32, Dec<'a>), DecodeError> {
-        let tag = payload.get(..4).ok_or(DecodeError::Truncated)?;
-        Ok((u32::from_le_bytes(tag.try_into().unwrap()), Dec(&payload[4..])))
-    }
-    fn take(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
-        if self.0.len() < n {
-            return Err(DecodeError::Truncated);
-        }
-        let (a, b) = self.0.split_at(n);
-        self.0 = b;
-        Ok(a)
+        let mut r = bifrost_wire::Reader::new(payload);
+        let tag = r.u32().map_err(wire_err)?;
+        Ok((tag, Dec(r)))
     }
     pub fn u8(&mut self) -> Result<u8, DecodeError> {
-        Ok(self.take(1)?[0])
+        self.0.u8().map_err(wire_err)
     }
     pub fn bool(&mut self) -> Result<bool, DecodeError> {
-        Ok(self.u8()? != 0)
+        self.0.bool().map_err(wire_err)
     }
     pub fn u32(&mut self) -> Result<u32, DecodeError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        self.0.u32().map_err(wire_err)
     }
     pub fn u64(&mut self) -> Result<u64, DecodeError> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+        self.0.u64().map_err(wire_err)
     }
     pub fn f32(&mut self) -> Result<f32, DecodeError> {
-        Ok(f32::from_bits(self.u32()?))
+        self.0.f32().map_err(wire_err)
     }
     pub fn f64(&mut self) -> Result<f64, DecodeError> {
-        Ok(f64::from_bits(self.u64()?))
+        self.0.f64().map_err(wire_err)
     }
     pub fn str(&mut self) -> Result<String, DecodeError> {
-        let n = self.u32()? as usize;
-        String::from_utf8(self.take(n)?.to_vec()).map_err(|_| DecodeError::BadUtf8)
+        let bytes = self.0.bytes().map_err(wire_err)?;
+        String::from_utf8(bytes.to_vec()).map_err(|_| DecodeError::BadUtf8)
     }
     pub fn opt_str(&mut self) -> Result<Option<String>, DecodeError> {
         if self.bool()? { self.str().map(Some) } else { Ok(None) }
@@ -551,16 +560,16 @@ pub mod net {
                 Evt::Pong { id, version } => common::pong(id, version),
                 Evt::Status(s) => {
                     let mut e = Enc::tag(t::STATUS).u8(s.state).opt_str(&s.ssid).opt_str(&s.ip).opt_str(&s.router).opt_f64(s.rssi.map(f64::from));
-                    e = e.u32(s.scan.len() as u32);
-                    for a in &s.scan {
+                    e = e.u32(s.scan.len().min(MAX_LIST) as u32);
+                    for a in s.scan.iter().take(MAX_LIST) {
                         e = e.str(&a.ssid).str(&a.bssid).u32(a.signal as u32).bool(a.secure).bool(a.enterprise);
                     }
-                    e = e.u32(s.saved.len() as u32);
-                    for n in &s.saved {
+                    e = e.u32(s.saved.len().min(MAX_LIST) as u32);
+                    for n in s.saved.iter().take(MAX_LIST) {
                         e = e.str(n);
                     }
-                    e = e.u32(s.notes.len() as u32);
-                    for (k, v) in &s.notes {
+                    e = e.u32(s.notes.len().min(MAX_LIST) as u32);
+                    for (k, v) in s.notes.iter().take(MAX_LIST) {
                         e = e.str(k).str(v);
                     }
                     e.opt_str(&s.error).done()
@@ -632,6 +641,19 @@ pub mod net {
             let e = Evt::Status(s);
             assert_eq!(Evt::decode(&e.encode()), Ok(e));
             assert_eq!(Cmd::decode(&Enc::tag(0x7fff).done()), Err(DecodeError::UnknownTag(0x7fff)));
+        }
+
+        #[test]
+        fn oversized_frames_are_refused_and_big_status_lists_are_cut() {
+            let mut sink = Vec::new();
+            assert!(write_frame(&mut sink, &vec![0; MAX_FRAME + 1]).is_err());
+            assert!(write_frame(&mut sink, &vec![0; MAX_FRAME]).is_ok());
+            let ap = Ap { ssid: "s".repeat(32), bssid: "aa:bb:cc:dd:ee:ff".into(), signal: -40, secure: true, enterprise: false };
+            let s = Status { scan: vec![ap; 10_000], ..Default::default() };
+            let bytes = Evt::Status(s).encode();
+            assert!(bytes.len() < MAX_FRAME);
+            let Ok(Evt::Status(back)) = Evt::decode(&bytes) else { panic!("decode") };
+            assert_eq!(back.scan.len(), MAX_LIST);
         }
     }
 }
@@ -764,12 +786,12 @@ pub mod update {
                         Some(o) => e.bool(true).str(&o.version).opt_str(&o.build).str(&o.sha256).u64(o.size).str(&o.url).opt_str(&o.notes),
                         None => e.bool(false),
                     };
-                    e = e.f32(s.fraction).u32(s.apps.len() as u32);
-                    for (id, v) in &s.apps {
+                    e = e.f32(s.fraction).u32(s.apps.len().min(MAX_LIST) as u32);
+                    for (id, v) in s.apps.iter().take(MAX_LIST) {
                         e = e.str(id).str(v);
                     }
-                    e = e.u32(s.system.len() as u32);
-                    for id in &s.system {
+                    e = e.u32(s.system.len().min(MAX_LIST) as u32);
+                    for id in s.system.iter().take(MAX_LIST) {
                         e = e.str(id);
                     }
                     e.opt_str(&s.error).done()
