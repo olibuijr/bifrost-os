@@ -49,6 +49,7 @@ pub mod distance;
 pub mod guided;
 pub mod blend;
 pub mod blur_kernels;
+pub mod blur_filters;
 pub mod effect_chain;
 pub mod gamma_fade;
 pub mod video_transfer;
