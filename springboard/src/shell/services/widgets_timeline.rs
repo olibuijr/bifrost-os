@@ -6,8 +6,14 @@
 //! Methods (JSON in, JSON out):
 //! - `reload {kind, entries:[{date,title,text}], policy:"at_end"|"never"|"after", reload_at?}` replaces the app's
 //!   timeline for `kind`; returns the entry count.
+//!   An optional `relevance` object ranks the widget in the stack: `{score, duration}` (eligible `duration` seconds from
+//!   the entry's date) or `{score, at}` / `{score, from, to, closed?}` (eligible while a time clue is active); `kind`
+//!   ("default"|"informational"|"scheduled") moves the score. Without it the widget keeps its place in the stack.
 //! - `remove {kind}` drops it; returns whether one was there.
 //! - `current {kind}` returns `{date,title,text}` of the entry on screen now, or null.
+//! - `search {kind, description?, placeholder?, results:[string]}` sets the widget's search view (the reference
+//!   `NCWidgetSearchViewController` results); returns the result count.
+//! - `search_rows {kind}` returns `{rows:[string], placeholder, description}` for the search view, or the empty view.
 //! - `start_activity {title,text,stale_at?,start_at?}` returns the activity id.
 //! - `update_activity {id,title,text,stale_at?}`, `end_activity {id,title?,text?,dismissal:"default"|"immediate"|"after",after?}`.
 //! - `activities {}` lists the app's activities on screen: `[{id,state,title,text}]`.
@@ -16,7 +22,9 @@
 //! [`Store`], which the tests drive directly.
 use super::{Event, Shell, SystemService};
 use bifrost_ui::live_activity::{Content, Dismissal, Error, Registry, State};
+use bifrost_ui::relevance::{self, ClueError, DateKind, Item, Relevance, TimeClue};
 use bifrost_ui::timeline::{Entry, ReloadPolicy, Timeline};
+use bifrost_ui::widget_search::WidgetSearch;
 use bifrost_core::json::Json;
 use std::sync::Mutex;
 
@@ -45,17 +53,58 @@ pub struct Row {
     pub text: String,
 }
 
+/// A widget's relevance hint: how the stack ranks its entry (`relevance::rank`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Hint {
+    /// Eligible for `duration` seconds from the entry's date, with `score`.
+    Entry { score: f32, duration: f64 },
+    /// Eligible while `clue` is active; the clue's hint moves `score`.
+    Clue { score: f32, clue: TimeClue },
+}
+
+impl Hint {
+    /// The rank item for an entry dated `date`, as seen at `now`.
+    fn item(&self, date: f64, now: f64) -> Item {
+        match *self {
+            Hint::Entry { score, duration } => Item { date, relevance: Some(Relevance { score, duration }) },
+            Hint::Clue { score, clue } => {
+                // While the clue is active its score is final, so the item stays eligible until the clue ends.
+                let relevance = clue.score_at(score, now).map(|s| Relevance { score: s, duration: f64::INFINITY });
+                Item { date: clue.window().0, relevance }
+            }
+        }
+    }
+}
+
 struct Widget {
     app: String,
     kind: String,
     timeline: Timeline<Text>,
     /// the reload event was already sent for this timeline
     requested: bool,
+    /// how the stack ranks this widget; None keeps the widget in its given place
+    hint: Option<Hint>,
 }
 
-/// Every app's widget timelines and live activities.
+/// An app's search view for one widget kind.
+struct Search {
+    app: String,
+    kind: String,
+    view: WidgetSearch<String>,
+}
+
+/// The string a search result shows in the list.
+fn result_title(s: &String) -> &str {
+    s.as_str()
+}
+
+/// The most results one search view may hold.
+const MAX_RESULTS: usize = 64;
+
+/// Every app's widget timelines, search views and live activities.
 pub struct Store {
     widgets: Vec<Widget>,
+    searches: Vec<Search>,
     activities: Registry<Text>,
     /// the app that started each activity, by id
     owners: Vec<(u32, String)>,
@@ -63,7 +112,7 @@ pub struct Store {
 
 impl Default for Store {
     fn default() -> Self {
-        Store { widgets: Vec::new(), activities: Registry::new(true), owners: Vec::new() }
+        Store { widgets: Vec::new(), searches: Vec::new(), activities: Registry::new(true), owners: Vec::new() }
     }
 }
 
@@ -103,18 +152,50 @@ fn unix(now: i64) -> u64 {
 }
 
 impl Store {
-    /// Replaces the timeline `kind` of `app`. The kind must be 1 to 64 bytes and the entries at most 64.
+    /// Replaces the timeline `kind` of `app`, with no relevance hint. The kind must be 1 to 64 bytes and the entries
+    /// at most 64.
+    #[cfg(test)]
     pub fn reload(&mut self, app: &str, kind: &str, entries: Vec<Entry<Text>>, policy: ReloadPolicy) -> Result<usize, String> {
-        if kind.is_empty() || kind.len() > MAX_KIND {
-            return Err(format!("a widget kind is 1 to {MAX_KIND} bytes"));
-        }
+        self.reload_ranked(app, kind, entries, policy, None)
+    }
+
+    /// [`Store::reload`] with the widget's relevance hint (None for no ranking).
+    pub fn reload_ranked(
+        &mut self,
+        app: &str,
+        kind: &str,
+        entries: Vec<Entry<Text>>,
+        policy: ReloadPolicy,
+        hint: Option<Hint>,
+    ) -> Result<usize, String> {
+        check_kind(kind)?;
         if entries.len() > MAX_ENTRIES {
             return Err(format!("a timeline holds at most {MAX_ENTRIES} entries"));
         }
         let n = entries.len();
         self.widgets.retain(|w| !(w.app == app && w.kind == kind));
-        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false });
+        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint });
         Ok(n)
+    }
+
+    /// Replaces the search view of `kind` for `app` with `results`, in their order. Blank `description` or
+    /// `placeholder` text is no text. Returns the result count.
+    pub fn set_search(&mut self, app: &str, kind: &str, description: &str, placeholder: &str, results: Vec<String>) -> Result<usize, String> {
+        check_kind(kind)?;
+        if results.len() > MAX_RESULTS {
+            return Err(format!("a search view holds at most {MAX_RESULTS} results"));
+        }
+        let n = results.len();
+        let mut view = WidgetSearch::new(result_title).with_description(description).with_placeholder(placeholder);
+        view.set_results(results);
+        self.searches.retain(|s| !(s.app == app && s.kind == kind));
+        self.searches.push(Search { app: app.into(), kind: kind.into(), view });
+        Ok(n)
+    }
+
+    /// The search view of `kind` for `app`, if the app set one.
+    pub fn search_view(&self, app: &str, kind: &str) -> Option<&WidgetSearch<String>> {
+        self.searches.iter().find(|s| s.app == app && s.kind == kind).map(|s| &s.view)
     }
 
     pub fn remove(&mut self, app: &str, kind: &str) -> bool {
@@ -148,11 +229,19 @@ impl Store {
     }
 
     pub fn rows(&self, now: i64) -> Vec<Row> {
-        let mut rows: Vec<Row> = self
-            .widgets
+        let now_f = now as f64;
+        // each widget's entry on screen, paired with its rank item; widgets without a hint rank last, in their order
+        let shown: Vec<(&Entry<Text>, Option<Hint>)> = self.widgets.iter().filter_map(|w| w.timeline.entry_at(now_f).map(|e| (e, w.hint))).collect();
+        let items: Vec<Item> = shown
             .iter()
-            .filter_map(|w| w.timeline.entry_at(now as f64))
-            .map(|e| Row { title: e.value.title.clone(), text: e.value.text.clone() })
+            .map(|(e, hint)| match hint {
+                Some(h) => h.item(e.date, now_f),
+                None => Item { date: e.date, relevance: None },
+            })
+            .collect();
+        let mut rows: Vec<Row> = relevance::rank(&items, now_f)
+            .into_iter()
+            .map(|i| Row { title: shown[i].0.value.title.clone(), text: shown[i].0.value.text.clone() })
             .collect();
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
@@ -186,8 +275,35 @@ impl Store {
                     let date = e.get("date").and_then(Json::number).ok_or("an entry needs a date")?;
                     entries.push(Entry { date, value: Text::of(e) });
                 }
-                let n = self.reload(app, &kind, entries, policy)?;
+                let hint = hint_of(p)?;
+                let n = self.reload_ranked(app, &kind, entries, policy, hint)?;
                 Ok(Json::Num(n as f64))
+            }
+            "search" => {
+                let kind = p.str_field("kind").ok_or("search needs a kind")?;
+                let description = p.str_field("description").unwrap_or_default();
+                let placeholder = p.str_field("placeholder").unwrap_or_default();
+                let results: Vec<String> = p
+                    .get("results")
+                    .and_then(|j| j.as_array())
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|r| r.as_str().map(|s| s.to_string()))
+                    .collect();
+                let n = self.set_search(app, &kind, &description, &placeholder, results)?;
+                Ok(Json::Num(n as f64))
+            }
+            "search_rows" => {
+                let kind = p.str_field("kind").ok_or("search_rows needs a kind")?;
+                let view = self.search_view(app, &kind);
+                let rows: Vec<Json> = view.map(|v| v.rows().into_iter().map(|r| Json::Str(r.to_string())).collect()).unwrap_or_default();
+                let placeholder = view.and_then(|v| v.placeholder()).map_or(Json::Null, |s| Json::Str(s.to_string()));
+                let description = view.and_then(|v| v.description()).map_or(Json::Null, |s| Json::Str(s.to_string()));
+                Ok(Json::Obj(vec![
+                    ("rows".into(), Json::Arr(rows)),
+                    ("placeholder".into(), placeholder),
+                    ("description".into(), description),
+                ]))
             }
             "remove" => {
                 let kind = p.str_field("kind").ok_or("remove needs a kind")?;
@@ -254,6 +370,50 @@ impl Store {
 fn id_of(p: &Json) -> Result<u32, String> {
     let id = p.get("id").and_then(Json::as_u64).ok_or("needs an activity id")?;
     u32::try_from(id).map_err(|_| "no such activity".to_string())
+}
+
+/// A widget kind must be 1 to `MAX_KIND` bytes.
+fn check_kind(kind: &str) -> Result<(), String> {
+    if kind.is_empty() || kind.len() > MAX_KIND {
+        return Err(format!("a widget kind is 1 to {MAX_KIND} bytes"));
+    }
+    Ok(())
+}
+
+/// The relevance hint of a `reload` call: `{score, duration}`, or a time clue `{score, at}` / `{score, from, to,
+/// closed?}`, with an optional `kind`. None when the call has no `relevance`.
+fn hint_of(p: &Json) -> Result<Option<Hint>, String> {
+    let Some(r) = p.get("relevance") else { return Ok(None) };
+    let score: f64 = r.get("score").and_then(Json::number).ok_or("relevance needs a score")?;
+    if !score.is_finite() {
+        return Err("a relevance score is a number".into());
+    }
+    let score = score as f32;
+    let kind = match r.get("kind").and_then(Json::as_str).unwrap_or("default") {
+        "default" => DateKind::Default,
+        "informational" => DateKind::Informational,
+        "scheduled" => DateKind::Scheduled,
+        other => return Err(format!("no relevance kind {other}")),
+    };
+    if let Some(duration) = r.get("duration").and_then(Json::number) {
+        return Ok(Some(Hint::Entry { score: score + kind.score_offset(), duration }));
+    }
+    let clue = if let Some(at) = r.get("at").and_then(Json::number) {
+        TimeClue::at(at, kind)
+    } else if let (Some(from), Some(to)) = (r.get("from").and_then(Json::number), r.get("to").and_then(Json::number)) {
+        if matches!(r.get("closed"), Some(Json::Bool(true))) {
+            TimeClue::range(from, to, kind)
+        } else {
+            TimeClue::interval(from, to, kind)
+        }
+    } else {
+        return Err("relevance needs a duration, an at date, or from and to".into());
+    };
+    let clue = clue.map_err(|e| match e {
+        ClueError::NotFinite => "a clue date is a number".to_string(),
+        ClueError::EmptyWindow => "a clue window is not empty".to_string(),
+    })?;
+    Ok(Some(Hint::Clue { score, clue }))
 }
 
 fn content_of(p: &Json) -> Content<Text> {
@@ -398,5 +558,95 @@ mod tests {
     fn unknown_methods_are_errors() {
         let mut s = Store::default();
         assert!(s.call("is.a", "nope", &Json::Null, 0).is_err());
+    }
+
+    fn ranked(s: &mut Store, app: &str, kind: &str, date: f64, text: &str, hint: Option<Hint>) {
+        s.reload_ranked(app, kind, vec![entry(date, "W", text)], ReloadPolicy::Never, hint).unwrap();
+    }
+
+    fn texts(rows: &[Row]) -> Vec<&str> {
+        rows.iter().map(|r| r.text.as_str()).collect()
+    }
+
+    #[test]
+    fn widgets_without_a_hint_keep_their_stack_order() {
+        let mut s = Store::default();
+        ranked(&mut s, "is.a", "one", 100.0, "a", None);
+        ranked(&mut s, "is.a", "two", 100.0, "b", None);
+        assert_eq!(texts(&s.rows(150)), ["a", "b"]);
+    }
+
+    #[test]
+    fn a_higher_score_comes_first_and_an_expired_entry_falls_behind() {
+        let mut s = Store::default();
+        // A: score 1, eligible 100..1100. B: score 3, eligible 100..1100. C: no hint.
+        ranked(&mut s, "is.a", "a", 100.0, "a", Some(Hint::Entry { score: 1.0, duration: 1000.0 }));
+        ranked(&mut s, "is.a", "b", 100.0, "b", Some(Hint::Entry { score: 3.0, duration: 1000.0 }));
+        ranked(&mut s, "is.a", "c", 100.0, "c", None);
+        assert_eq!(texts(&s.rows(150)), ["b", "a", "c"]);
+        // B is re-added with duration 20, so it has expired at 150. The stack is now [A, C, B]: A is eligible, then
+        // C and B keep their stack order.
+        ranked(&mut s, "is.a", "b", 100.0, "b", Some(Hint::Entry { score: 3.0, duration: 20.0 }));
+        assert_eq!(texts(&s.rows(150)), ["a", "c", "b"]);
+    }
+
+    #[test]
+    fn a_time_clue_scores_by_its_hint_and_drops_out_when_it_ends() {
+        let mut s = Store::default();
+        // D: a scheduled clue over 0..200 with base 1.0, so 1.0 + 1.0 = 2.0 while active.
+        let clue = TimeClue::interval(0.0, 200.0, DateKind::Scheduled).unwrap();
+        ranked(&mut s, "is.a", "d", 0.0, "d", Some(Hint::Clue { score: 1.0, clue }));
+        // E: entry-based score 1.5 for 1000 s from 100.
+        ranked(&mut s, "is.a", "e", 100.0, "e", Some(Hint::Entry { score: 1.5, duration: 1000.0 }));
+        assert_eq!(texts(&s.rows(150)), ["d", "e"], "2.0 beats 1.5");
+        assert_eq!(texts(&s.rows(250)), ["e", "d"], "the clue ended at 200, so D has no score");
+    }
+
+    #[test]
+    fn a_relevance_object_in_the_reload_call_builds_the_hint() {
+        let mut s = Store::default();
+        let body = |relevance: Json| {
+            obj(&[
+                ("kind", Json::Str("k".into())),
+                ("relevance", relevance),
+                ("entries", Json::Arr(vec![obj(&[("date", Json::Num(0.0)), ("text", Json::Str("v".into()))])])),
+            ])
+        };
+        let clue = obj(&[("score", Json::Num(1.0)), ("kind", Json::Str("scheduled".into())), ("from", Json::Num(0.0)), ("to", Json::Num(200.0))]);
+        assert_eq!(s.call("is.a", "reload", &body(clue), 10), Ok(Json::Num(1.0)));
+        let plain = obj(&[("score", Json::Num(2.0)), ("duration", Json::Num(60.0))]);
+        assert_eq!(hint_of(&body(plain)), Ok(Some(Hint::Entry { score: 2.0, duration: 60.0 })));
+        let scheduled = obj(&[("score", Json::Num(1.0)), ("kind", Json::Str("scheduled".into())), ("duration", Json::Num(60.0))]);
+        assert_eq!(hint_of(&body(scheduled)), Ok(Some(Hint::Entry { score: 2.0, duration: 60.0 })), "scheduled adds 1.0");
+        assert!(hint_of(&body(obj(&[("score", Json::Num(1.0))]))).is_err(), "no duration and no clue dates");
+        assert!(hint_of(&body(obj(&[("duration", Json::Num(1.0))]))).is_err(), "a score is required");
+        let empty = obj(&[("score", Json::Num(1.0)), ("from", Json::Num(5.0)), ("to", Json::Num(5.0))]);
+        assert!(hint_of(&body(empty)).is_err(), "an interval with no length is refused");
+        assert_eq!(hint_of(&obj(&[("kind", Json::Str("k".into()))])), Ok(None), "no relevance object, no hint");
+    }
+
+    #[test]
+    fn a_search_view_holds_its_results_and_shows_the_placeholder_when_empty() {
+        let mut s = Store::default();
+        let set = |results: Vec<Json>| {
+            obj(&[
+                ("kind", Json::Str("notes".into())),
+                ("description", Json::Str(" Notes ".into())),
+                ("placeholder", Json::Str("No notes match".into())),
+                ("results", Json::Arr(results)),
+            ])
+        };
+        assert_eq!(s.call("is.a", "search", &set(vec![Json::Str("Groceries".into()), Json::Str("Plan".into())]), 0), Ok(Json::Num(2.0)));
+        let view = s.call("is.a", "search_rows", &obj(&[("kind", Json::Str("notes".into()))]), 0).unwrap();
+        assert_eq!(view.get("description").and_then(Json::as_str), Some("Notes"), "trimmed");
+        assert_eq!(view.get("placeholder"), Some(&Json::Null), "results are shown, so no placeholder");
+        assert_eq!(view.get("rows").and_then(|j| j.as_array()).map(|a| a.len()), Some(2));
+        // A new search with no results shows the placeholder in place of the list.
+        assert_eq!(s.call("is.a", "search", &set(vec![]), 0), Ok(Json::Num(0.0)));
+        let empty = s.call("is.a", "search_rows", &obj(&[("kind", Json::Str("notes".into()))]), 0).unwrap();
+        assert_eq!(empty.get("placeholder").and_then(Json::as_str), Some("No notes match"));
+        assert_eq!(empty.get("rows").and_then(|j| j.as_array()).map(|a| a.len()), Some(0));
+        let other = s.call("is.b", "search_rows", &obj(&[("kind", Json::Str("notes".into()))]), 0).unwrap();
+        assert_eq!(other.get("placeholder"), Some(&Json::Null), "another app has no search view");
     }
 }
