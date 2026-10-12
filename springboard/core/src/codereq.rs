@@ -179,6 +179,46 @@ pub fn hash_hex(data: &[u8]) -> String {
     sha256::hex(&sha256::digest(data))
 }
 
+/// The error a constraint builder reports. It has the same cases as `BuildError`.
+pub type ConstraintError = BuildError;
+
+/// The context a requirement is checked in: code on disk, a running process, or a program about to launch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    OnDisk,
+    Process,
+    Launch,
+}
+
+/// A requirement bound to the context it is checked in. The builder takes the operator arguments as a `Vec`, since
+/// Rust has no closure-based result builder, and rejects the same empty and duplicate arguments as `allOf` and `anyOf`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Constraint {
+    pub scope: Scope,
+    pub requirement: Requirement,
+}
+
+impl Constraint {
+    /// Builds an `allOf` constraint for one scope.
+    pub fn all_of(scope: Scope, parts: Vec<Requirement>) -> Result<Constraint, ConstraintError> {
+        Ok(Constraint { scope, requirement: Requirement::all_of(parts)? })
+    }
+
+    /// Builds an `anyOf` constraint for one scope.
+    pub fn any_of(scope: Scope, parts: Vec<Requirement>) -> Result<Constraint, ConstraintError> {
+        Ok(Constraint { scope, requirement: Requirement::any_of(parts)? })
+    }
+
+    /// Checks `subject` in this constraint's scope. `caller` matters only for process scope and caller tests.
+    pub fn satisfied_by(&self, subject: &Identity, caller: Option<&Identity>) -> bool {
+        match self.scope {
+            Scope::OnDisk => check_on_disk(&self.requirement, subject).satisfied,
+            Scope::Process => check_process(&self.requirement, subject, caller),
+            Scope::Launch => check_launch(&self.requirement, subject).is_ok(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +312,46 @@ mod tests {
         other.signing_id = Some("org.example.evil".into());
         assert!(check_launch(&req, &other).is_err());
         assert_eq!(hash_hex(b"abc").len(), 64);
+    }
+
+    #[test]
+    fn constraint_builder_rejects_empty_and_duplicate_arguments() {
+        assert_eq!(Constraint::all_of(Scope::Process, vec![]), Err(ConstraintError::Empty));
+        let team = Requirement::Test(Test::TeamIdentifier("TEAM1".into()));
+        assert!(matches!(Constraint::any_of(Scope::Launch, vec![team.clone(), team]), Err(BuildError::Duplicate(_))));
+    }
+
+    #[test]
+    fn process_constraint_uses_the_caller_and_on_disk_constraint_ignores_it() {
+        let app = dev_app();
+        let caller = dev_app();
+        let c = Constraint::any_of(
+            Scope::Process,
+            vec![Requirement::Test(Test::TeamIdentifierMatchesCaller), Requirement::Test(Test::Platform("linux".into()))],
+        )
+        .unwrap();
+        assert!(!c.satisfied_by(&app, None));
+        assert!(c.satisfied_by(&app, Some(&caller)));
+        // On-disk checks pass no caller, so the caller test fails and the platform test fails for a developer app.
+        let disk = Constraint { scope: Scope::OnDisk, requirement: c.requirement.clone() };
+        assert!(!disk.satisfied_by(&app, None));
+        assert!(!disk.satisfied_by(&app, Some(&caller)));
+    }
+
+    #[test]
+    fn launch_constraint_refuses_a_different_signing_identifier() {
+        let c = Constraint::all_of(Scope::Launch, vec![Requirement::Test(Test::SigningIdentifier("org.example.notes".into()))]).unwrap();
+        assert_eq!(c.scope, Scope::Launch);
+        assert!(c.satisfied_by(&dev_app(), None));
+        let mut other = dev_app();
+        other.signing_id = Some("org.example.evil".into());
+        assert!(!c.satisfied_by(&other, None));
+    }
+
+    #[test]
+    fn unsigned_on_disk_constraint_accepts_only_unsigned_code() {
+        let c = Constraint::all_of(Scope::OnDisk, vec![Requirement::Test(Test::Unsigned)]).unwrap();
+        assert!(c.satisfied_by(&Identity { signed: false, ..Identity::default() }, None));
+        assert!(!c.satisfied_by(&dev_app(), None));
     }
 }
