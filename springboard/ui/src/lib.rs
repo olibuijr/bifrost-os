@@ -943,6 +943,7 @@ pub mod url_filter;
 pub mod web_history;
 pub mod webpage_usage;
 pub mod call_directory;
+pub mod conference;
 pub mod annotation;
 pub mod ecs;
 pub mod rules;
