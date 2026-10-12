@@ -617,6 +617,7 @@ pub mod prefs_layout;
 pub mod search;
 pub mod textfind;
 pub mod textlist;
+pub mod textlayout;
 pub mod metaquery;
 pub mod column_summary;
 pub mod searchquery;
