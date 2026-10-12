@@ -1,13 +1,42 @@
-//! Default applications (`NativeWorkspace` / Launch Services): which app opens a file type or a URL scheme.
+//! Default applications: which app opens a file type or a URL scheme, and which app acts as viewer, editor or shell.
 //!
-//! Apps declare what they can open, as Golden Gate apps do in `CFBundleDocumentTypes` (`LSItemContentTypes` with an
-//! `LSHandlerRank`) and `CFBundleURLTypes`. The registry answers `urlForApplication(toOpen:)`, lists every candidate
+//! Apps declare what they can open, as Golden Gate apps do in their bundle's document types (content type with a
+//! handler rank) and URL types. The registry answers `urlForApplication(toOpen:)`, lists every candidate
 //! for an "Open With" menu, and keeps the user's explicit choice per type (`setDefaultApplication(at:toOpenContentType:)`,
 //! Files's Get Info > Open with > Change All). Without a choice the best declaration wins: the most specific type,
-//! then the higher rank, then the app registered first. Pure data, no I/O: the shell stores `to_lines` in its prefs.
+//! then the higher rank, then the app registered first. Role handlers (`Role`) keep one default per
+//! type and role, so an editor can differ from the viewer. Pure data, no I/O: the shell stores `to_lines` in its prefs.
 use crate::uttype;
 use std::cell::RefCell;
 use std::collections::HashMap;
+
+/// The roles an app can take on an item: view it, edit it, or act as the shell for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Role {
+    Viewer,
+    Editor,
+    Shell,
+}
+
+impl Role {
+    /// The word used in the preferences file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Role::Viewer => "viewer",
+            Role::Editor => "editor",
+            Role::Shell => "shell",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Role> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "viewer" => Some(Role::Viewer),
+            "editor" => Some(Role::Editor),
+            "shell" => Some(Role::Shell),
+            _ => None,
+        }
+    }
+}
 
 /// `LSHandlerRank`. `None` means the app can open the type but never becomes the default by itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -38,14 +67,21 @@ pub struct Handler {
     pub types: Vec<(String, Rank)>,
     /// URL schemes without the colon ("https", "mailto")
     pub schemes: Vec<String>,
+    /// (uniform type identifier, role): roles the app can take on for a type. Separate from `types`.
+    pub roles: Vec<(String, Role)>,
 }
 
 impl Handler {
     pub fn new(app: &str) -> Self {
-        Handler { app: app.into(), types: Vec::new(), schemes: Vec::new() }
+        Handler { app: app.into(), types: Vec::new(), schemes: Vec::new(), roles: Vec::new() }
     }
     pub fn opens(mut self, uti: &str, rank: Rank) -> Self {
         self.types.push((uti.into(), rank));
+        self
+    }
+    /// Declares that the app can act as `role` for `uti` (and its subtypes).
+    pub fn role(mut self, role: Role, uti: &str) -> Self {
+        self.roles.push((uti.into(), role));
         self
     }
     pub fn scheme(mut self, s: &str) -> Self {
@@ -72,6 +108,8 @@ pub struct Registry {
     handlers: Vec<Handler>,
     types: HashMap<String, String>,
     schemes: HashMap<String, String>,
+    /// (type, role) -> the user's chosen app for that role
+    roles: HashMap<(String, Role), String>,
     /// type -> index of its default handler; cleared by every change (a lookup walks the type tree for each app)
     resolved: RefCell<HashMap<String, Option<usize>>>,
 }
@@ -167,6 +205,48 @@ impl Registry {
         self.types.get(uti).map(String::as_str)
     }
 
+    /// Every app that declares `role` for `uti` (all role handlers for a type): nearest declaration first,
+    /// then registration order. Role declarations are separate from `opens`, so an app can view a type without
+    /// being offered as its editor.
+    pub fn apps_for_role(&self, uti: &str, role: Role) -> Vec<&str> {
+        let mut found = Vec::new();
+        for (order, h) in self.handlers.iter().enumerate() {
+            let nearest = h.roles.iter().filter(|(_, r)| *r == role).filter_map(|(t, _)| uttype::distance(uti, t)).min();
+            if let Some(d) = nearest {
+                found.push((d, order, h.app.as_str()));
+            }
+        }
+        found.sort();
+        found.into_iter().map(|f| f.2).collect()
+    }
+
+    /// Default role handler for a type: the user's choice for this role when that app still declares it,
+    /// else the first app for the role.
+    pub fn default_for_role(&self, uti: &str, role: Role) -> Option<&str> {
+        let apps = self.apps_for_role(uti, role);
+        let chosen = self.roles.get(&(uti.to_string(), role)).and_then(|a| apps.iter().find(|x| *x == a).copied());
+        chosen.or_else(|| apps.first().copied())
+    }
+
+    /// Sets the default role handler. The app must declare the role for the type (or an ancestor of it).
+    pub fn set_default_for_role(&mut self, uti: &str, role: Role, app: &str) -> Result<(), SetError> {
+        if !self.apps_for_role(uti, role).contains(&app) {
+            return Err(SetError::CannotOpen);
+        }
+        self.roles.insert((uti.to_string(), role), app.to_string());
+        Ok(())
+    }
+
+    /// Drops the user's choice for one role of a type.
+    pub fn reset_role(&mut self, uti: &str, role: Role) {
+        self.roles.remove(&(uti.to_string(), role));
+    }
+
+    /// The user's own choice for a role, whether or not the app is still installed.
+    pub fn user_role_choice(&self, uti: &str, role: Role) -> Option<&str> {
+        self.roles.get(&(uti.to_string(), role)).map(String::as_str)
+    }
+
     pub fn apps_for_scheme(&self, scheme: &str) -> Vec<&str> {
         let s = scheme.to_ascii_lowercase();
         self.handlers.iter().filter(|h| h.schemes.contains(&s)).map(|h| h.app.as_str()).collect()
@@ -195,7 +275,13 @@ impl Registry {
 
     /// The user's choices as `type <uti> <app>` / `scheme <scheme> <app>` lines, sorted, for the prefs file.
     pub fn to_lines(&self) -> String {
-        let mut v: Vec<String> = self.types.iter().map(|(k, a)| format!("type {k} {a}")).chain(self.schemes.iter().map(|(k, a)| format!("scheme {k} {a}"))).collect();
+        let mut v: Vec<String> = self
+            .types
+            .iter()
+            .map(|(k, a)| format!("type {k} {a}"))
+            .chain(self.schemes.iter().map(|(k, a)| format!("scheme {k} {a}")))
+            .chain(self.roles.iter().map(|((k, r), a)| format!("role {k} {} {a}", r.name())))
+            .collect();
         v.sort();
         v.into_iter().map(|l| l + "\n").collect()
     }
@@ -214,14 +300,19 @@ impl Registry {
     /// registered yet (they are checked when asked), so a store app installed later picks its choice up again.
     pub fn load_lines(&mut self, text: &str) {
         for line in text.lines() {
-            let mut p = line.split_whitespace();
-            match (p.next(), p.next(), p.next(), p.next()) {
-                (Some("type"), Some(k), Some(a), None) => {
+            let p: Vec<&str> = line.split_whitespace().collect();
+            match p.as_slice() {
+                ["type", k, a] => {
                     self.resolved.get_mut().clear();
-                    self.types.insert(k.into(), a.into());
+                    self.types.insert(k.to_string(), a.to_string());
                 }
-                (Some("scheme"), Some(k), Some(a), None) => {
-                    self.schemes.insert(k.to_ascii_lowercase(), a.into());
+                ["scheme", k, a] => {
+                    self.schemes.insert(k.to_ascii_lowercase(), a.to_string());
+                }
+                ["role", k, r, a] => {
+                    if let Some(role) = Role::parse(r) {
+                        self.roles.insert((k.to_string(), role), a.to_string());
+                    }
                 }
                 _ => {}
             }
@@ -331,5 +422,60 @@ mod tests {
         assert!(r.is_registered("photos") && !r.is_registered("nope"));
         assert_eq!(Rank::parse("Owner"), Some(Rank::Owner));
         assert_eq!(Rank::parse("x"), None);
+    }
+
+    fn roles_reg() -> Registry {
+        let mut r = Registry::new();
+        r.register(Handler::new("photos").role(Role::Editor, "public.image").role(Role::Viewer, "public.image"));
+        r.register(Handler::new("pixel").role(Role::Editor, "public.png"));
+        r.register(Handler::new("preview").role(Role::Viewer, "public.png"));
+        r
+    }
+
+    #[test]
+    fn each_role_has_its_own_nearest_default() {
+        let r = roles_reg();
+        // pixel declares PNG itself; photos only the image family, so pixel is nearer for the editor role
+        assert_eq!(r.apps_for_role("public.png", Role::Editor), ["pixel", "photos"]);
+        assert_eq!(r.default_for_role("public.png", Role::Editor), Some("pixel"));
+        assert_eq!(r.default_for_role("public.png", Role::Viewer), Some("preview"));
+        assert_eq!(r.default_for_role("public.jpeg", Role::Viewer), Some("photos"));
+        assert_eq!(r.default_for_role("public.png", Role::Shell), None, "no app declares the shell role");
+        assert_eq!(r.default_for_type("public.png"), None, "role declarations do not change the type default");
+    }
+
+    #[test]
+    fn a_role_choice_is_kept_per_role_and_only_while_valid() {
+        let mut r = roles_reg();
+        assert_eq!(r.set_default_for_role("public.png", Role::Editor, "photos"), Ok(()));
+        assert_eq!(r.default_for_role("public.png", Role::Editor), Some("photos"));
+        assert_eq!(r.default_for_role("public.png", Role::Viewer), Some("preview"), "other roles unchanged");
+        assert_eq!(r.set_default_for_role("public.png", Role::Editor, "preview"), Err(SetError::CannotOpen));
+        r.unregister("photos");
+        assert_eq!(r.default_for_role("public.png", Role::Editor), Some("pixel"), "uninstalled choice falls back");
+        assert_eq!(r.user_role_choice("public.png", Role::Editor), Some("photos"), "and is remembered");
+        r.reset_role("public.png", Role::Editor);
+        assert_eq!(r.user_role_choice("public.png", Role::Editor), None);
+    }
+
+    #[test]
+    fn role_choices_round_trip_and_bad_lines_are_skipped() {
+        let mut r = roles_reg();
+        r.set_default_for_role("public.png", Role::Editor, "photos").unwrap();
+        let text = r.to_lines();
+        assert_eq!(text, "role public.png editor photos\n");
+        let mut fresh = roles_reg();
+        fresh.load_lines(&(text + "role public.png bogus photos\nrole public.png viewer\n"));
+        assert_eq!(fresh.user_role_choice("public.png", Role::Editor), Some("photos"));
+        assert_eq!(fresh.user_role_choice("public.png", Role::Viewer), None);
+        assert_eq!(fresh.default_for_role("public.png", Role::Viewer), Some("preview"));
+    }
+
+    #[test]
+    fn role_names_parse_case_insensitively() {
+        assert_eq!(Role::parse(" Editor "), Some(Role::Editor));
+        assert_eq!(Role::parse("VIEWER"), Some(Role::Viewer));
+        assert_eq!(Role::parse("shell").map(Role::name), Some("shell"));
+        assert_eq!(Role::parse("owner"), None);
     }
 }
