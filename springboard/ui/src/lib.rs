@@ -580,6 +580,8 @@ pub mod directory_query;
 pub mod access_control;
 pub mod focus;
 pub mod pane;
+pub mod panner;
+pub mod param_view;
 pub mod uttype;
 pub mod preview;
 pub mod thumbnail;
