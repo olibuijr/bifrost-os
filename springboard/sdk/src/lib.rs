@@ -110,6 +110,7 @@ pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
 pub mod translation;
+pub mod wlan;
 pub mod notification;
 pub mod system_sound;
 pub mod workspace;
