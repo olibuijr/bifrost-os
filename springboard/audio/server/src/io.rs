@@ -17,7 +17,6 @@ use bifrost_audio_driver::{DeviceIo, DriverError, HwPosition, ZeroTimeStamp};
 use bifrost_audio_shm::{self as shm, Activation, Region, Ring, RingHeader, ZeroStamp, ZeroStampValue};
 use bifrost_audio_types::control::ShmLayout;
 use bifrost_audio_types::{Buffer, BufferList};
-use std::cell::UnsafeCell;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -25,7 +24,7 @@ use std::sync::{Arc, Mutex};
 /// The most clients one server runs.
 pub const MAX_CLIENTS: usize = 64;
 /// The most channels one client stream or device has.
-pub const MAX_CH: usize = 32;
+pub const MAX_CH: usize = bifrost_audio_types::control::MAX_CLIENT_CHANNELS;
 pub const MIN_QUANTUM: u32 = 16;
 pub const MAX_QUANTUM: u32 = 4096;
 pub const DEFAULT_QUANTUM: u32 = 256;
@@ -33,8 +32,6 @@ pub const DEFAULT_QUANTUM: u32 = 256;
 pub const IO_PRIORITY: u32 = 88;
 /// SCHED_FIFO priority granted to client IO threads.
 pub const CLIENT_PRIORITY: u32 = 80;
-/// The size of the client's "done" record that follows the layout in the memfd.
-pub const DONE_BYTES: u32 = 64;
 
 /// Unified Logging, subsystem `is.olibuijr.audio` (categories `io`, `driver`, `client`, `policy`, `xrun`).
 /// The shared logger is not a dependency of this crate, so this is the stderr form with the category prefix.
@@ -44,10 +41,7 @@ pub fn log(category: &str, msg: &str) {
 
 /// Host time: `CLOCK_MONOTONIC_RAW` in nanoseconds.
 pub fn now_raw_ns() -> u64 {
-    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    // SAFETY: `ts` is a valid out-pointer for the duration of the call.
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_RAW, &mut ts) };
-    ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
+    shm::now_ns()
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -114,7 +108,7 @@ pub struct ClientSlot {
     pub ring_frames: u32,
     /// Layout of the client's memfd as sent to the client (`total` includes the done record).
     pub layout: ShmLayout,
-    /// Offset of the "done" activation (the last `DONE_BYTES` of the memfd): the client's `finish` targets it.
+    /// Offset of the "done" activation (`layout.done`, after the rings): the client's `finish` targets it.
     pub done_offset: u32,
     pub region: Region,
     pub wake_fd: OwnedFd,
@@ -136,9 +130,8 @@ impl ClientSlot {
         buffer_frames: u32,
         ring_frames: u32,
     ) -> std::io::Result<ClientSlot> {
-        let mut layout = shm::layout(input_channels, output_channels, ring_frames);
-        let done_offset = layout.total;
-        layout.total += DONE_BYTES;
+        let layout = shm::layout(input_channels, output_channels, ring_frames);
+        let done_offset = layout.done;
         let region = Region::create("bifrost-audio-client", layout.total as usize)?;
         // SAFETY: eventfd takes no pointers; the result is checked before it is owned.
         let efd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
@@ -197,23 +190,24 @@ impl ClientSlot {
         self.region.get(self.layout.zero_stamp)
     }
 
-    fn ring_at(&self, offset: u32, channels: u32) -> Ring<'_> {
-        let header: &RingHeader = self.region.get(offset);
-        let planes_addr = self.region.addr + offset as usize + std::mem::size_of::<RingHeader>();
-        let n = channels as usize * self.ring_frames as usize;
-        // SAFETY: `shm::layout` reserves `channels * ring_frames` f32 after the 64-byte header at `offset`, inside
-        // the mapping, which lives as long as `self.region`; `UnsafeCell<f32>` has the layout of `f32`, and the
-        // ring protocol (single producer, single consumer) governs who touches which frames.
-        let planes = unsafe { std::slice::from_raw_parts(planes_addr as *const UnsafeCell<f32>, n) };
-        Ring { header, planes }
+    /// A ring view sized from the server's own `channels` and `ring_frames`; the header's size fields (in memory the
+    /// client can rewrite) are never read.
+    fn ring_at(&self, offset: u32, channels: u32) -> Option<Ring<'_>> {
+        self.region.ring_trusted(offset, channels, self.ring_frames)
     }
 
     pub fn input_ring(&self) -> Option<Ring<'_>> {
-        (self.input_channels > 0).then(|| self.ring_at(self.layout.input_ring, self.input_channels))
+        if self.input_channels == 0 {
+            return None;
+        }
+        self.ring_at(self.layout.input_ring, self.input_channels)
     }
 
     pub fn output_ring(&self) -> Option<Ring<'_>> {
-        (self.output_channels > 0).then(|| self.ring_at(self.layout.output_ring, self.output_channels))
+        if self.output_channels == 0 {
+            return None;
+        }
+        self.ring_at(self.layout.output_ring, self.output_channels)
     }
 
     pub fn volume(&self) -> f32 {
@@ -256,6 +250,14 @@ pub struct Shared {
     pub restarts: AtomicU64,
     /// The quantum the sustained-xrun fallback raised to (0 = none); the control thread never goes below it.
     pub fallback_floor: AtomicU32,
+    /// Event counters the real-time thread bumps instead of logging (a log line allocates and writes to a pipe);
+    /// a normal-priority thread drains them once a second (`spawn_event_logger`).
+    pub ev_device_xruns: AtomicU64,
+    pub ev_late_cycles: AtomicU64,
+    pub ev_restarts: AtomicU64,
+    /// Number of sustained-xrun fallbacks, and the quantum the last one raised to.
+    pub ev_fallbacks: AtomicU64,
+    pub ev_fallback_quantum: AtomicU32,
 }
 
 impl Shared {
@@ -270,6 +272,11 @@ impl Shared {
             late_total: AtomicU64::new(0),
             restarts: AtomicU64::new(0),
             fallback_floor: AtomicU32::new(0),
+            ev_device_xruns: AtomicU64::new(0),
+            ev_late_cycles: AtomicU64::new(0),
+            ev_restarts: AtomicU64::new(0),
+            ev_fallbacks: AtomicU64::new(0),
+            ev_fallback_quantum: AtomicU32::new(0),
         })
     }
 
@@ -555,17 +562,18 @@ impl DeviceRunner {
             }
         }
         if let WaitPolicy::Futex { budget_ns } = self.cfg.wait {
-            let deadline = now_ns + budget_ns;
+            // The budget runs on the host clock, whatever clock the driver's `now_ns` is on.
+            let deadline = now_raw_ns() + budget_ns;
             for (s, st) in self.snapshot.iter().zip(self.states.iter()) {
                 if !(st.active && st.trigger && st.every == 1) {
                     continue;
                 }
                 loop {
                     let seen = s.done().wake.load(Ordering::Acquire);
-                    let ready = match s.output_ring() {
-                        Some(r) => r.readable() as usize >= q,
-                        None => s.done().pending.load(Ordering::Acquire) == 0,
-                    };
+                    // The client's `finish` decrements the done record's pending to 0 and wakes `wake`; its output
+                    // is in the ring by then. A ring that is already full needs no wait either.
+                    let finished = s.done().pending.load(Ordering::Acquire) == 0;
+                    let ready = finished || s.output_ring().is_some_and(|r| r.readable() as usize >= q);
                     let t = now_raw_ns();
                     if ready || t >= deadline {
                         break;
@@ -631,6 +639,62 @@ impl DeviceRunner {
 // ---------------------------------------------------------------------------------------------------------------
 // The IO thread
 
+/// What `drain_events` saw last time, to report only the change.
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct EventMark {
+    device_xruns: u64,
+    late_cycles: u64,
+    restarts: u64,
+    fallbacks: u64,
+}
+
+/// The log lines for the events since `mark` (empty when nothing happened); updates `mark`. Called off the real-time
+/// thread, so it may allocate.
+pub fn drain_events(name: &str, shared: &Shared, mark: &mut EventMark) -> Vec<(&'static str, String)> {
+    let now = EventMark {
+        device_xruns: shared.ev_device_xruns.load(Ordering::Relaxed),
+        late_cycles: shared.ev_late_cycles.load(Ordering::Relaxed),
+        restarts: shared.ev_restarts.load(Ordering::Relaxed),
+        fallbacks: shared.ev_fallbacks.load(Ordering::Relaxed),
+    };
+    let mut out = Vec::new();
+    if now.device_xruns > mark.device_xruns {
+        out.push(("xrun", format!("{name}: {} device xrun(s)", now.device_xruns - mark.device_xruns)));
+    }
+    if now.restarts > mark.restarts {
+        out.push(("driver", format!("{name}: {} stream restart(s), timeline re-anchored", now.restarts - mark.restarts)));
+    }
+    if now.late_cycles > mark.late_cycles {
+        out.push(("xrun", format!("{name}: {} cycle(s) with late clients", now.late_cycles - mark.late_cycles)));
+    }
+    if now.fallbacks > mark.fallbacks {
+        let q = shared.ev_fallback_quantum.load(Ordering::Relaxed);
+        out.push(("xrun", format!("{name}: sustained xruns, quantum now {q}")));
+    }
+    *mark = now;
+    out
+}
+
+/// A normal-priority thread that logs the real-time thread's events at most once a second, until `shared.stop`.
+fn spawn_event_logger(name: String, shared: Arc<Shared>) {
+    let _ = std::thread::Builder::new().name(format!("{name}-log")).spawn(move || {
+        let mut mark = EventMark::default();
+        let mut ticks = 0u32;
+        while !shared.stop.load(Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ticks += 1;
+            if ticks % 10 == 0 {
+                for (cat, line) in drain_events(&name, &shared, &mut mark) {
+                    log(cat, &line);
+                }
+            }
+        }
+        for (cat, line) in drain_events(&name, &shared, &mut mark) {
+            log(cat, &line);
+        }
+    });
+}
+
 /// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
 pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
     spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default())
@@ -668,6 +732,7 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         let mut policy = rt::FallbackPolicy::new();
         let mut margin = rt::DEFAULT_MARGIN_NS;
         log("io", &format!("{name}: started at quantum {}", runner.quantum()));
+        spawn_event_logger(name.clone(), runner.shared.clone());
         while !runner.shared.stop.load(Ordering::Acquire) {
             let target = (next as i64 + offset).max(0) as u64;
             let arm = target.saturating_sub(margin);
@@ -681,21 +746,23 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
             }
             rt::spin_until(target);
             let rep = runner.cycle(now_raw_ns());
+            // Counters only: the real-time thread must not allocate or write to stderr.
             if rep.device_xrun {
-                log("xrun", &format!("{name}: device xrun at cycle {}", runner.cycles()));
+                runner.shared.ev_device_xruns.fetch_add(1, Ordering::Relaxed);
             }
             if rep.restarted {
-                log("driver", &format!("{name}: stream restarted at cycle {}, timeline re-anchored (seed {})", runner.cycles(), runner.seed()));
+                runner.shared.ev_restarts.fetch_add(1, Ordering::Relaxed);
             }
             if rep.late > 0 {
-                log("xrun", &format!("{name}: {} late client(s) at cycle {}", rep.late, runner.cycles()));
+                runner.shared.ev_late_cycles.fetch_add(1, Ordering::Relaxed);
             }
             let rate = runner.cfg.rate;
             if let Some(q) = policy.record(rep.device_xrun || rep.late > 0, rep.frames, rt::window_cycles(rep.frames, rate)) {
                 runner.shared.fallback_floor.store(q, Ordering::Release);
                 runner.shared.quantum.store(q, Ordering::Release);
                 runner.notify_overload();
-                log("xrun", &format!("{name}: sustained xruns at quantum {}, now {q}", rep.frames));
+                runner.shared.ev_fallback_quantum.store(q, Ordering::Relaxed);
+                runner.shared.ev_fallbacks.fetch_add(1, Ordering::Relaxed);
             }
             if runner.cycles() % 64 == 0 {
                 margin = jitter.margin_ns(rep.frames as u64 * 1_000_000_000 / rate.max(1) as u64);
@@ -758,9 +825,70 @@ mod tests {
     #[test]
     fn done_record_follows_the_layout() {
         let s = ClientSlot::new(1, 1, 2, 2, 256, 1024).unwrap();
-        assert_eq!(s.done_offset + DONE_BYTES, s.layout.total);
+        assert_eq!(s.done_offset, s.layout.done);
+        assert_eq!(s.done_offset + std::mem::size_of::<Activation>() as u32, s.layout.total);
         assert!(s.done_offset >= s.layout.output_ring);
         assert_eq!(s.done_offset % 64, 0);
+    }
+
+    #[test]
+    fn a_client_that_finishes_late_does_not_burn_the_budget() {
+        let mut r = rig(256);
+        r.runner.cfg.wait = WaitPolicy::Futex { budget_ns: 2_500_000 };
+        let slot = r.add(1, 0, 2, 256);
+        let client = slot.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop2 = stop.clone();
+        let t = std::thread::spawn(move || {
+            let act: &Activation = client.region.get(client.layout.activation);
+            let done: &Activation = client.region.get(client.layout.done);
+            while !stop2.load(Ordering::Acquire) {
+                if act.wait_triggered(20_000_000) {
+                    std::thread::sleep(std::time::Duration::from_micros(300));
+                    Rig::play(&client, 256, &[0.5, 0.5]);
+                    shm::finish(act, &[done], now_raw_ns());
+                }
+            }
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let mut worst = 0u64;
+        let mut late = 0;
+        for _ in 0..100 {
+            let t0 = now_raw_ns();
+            late += r.runner.cycle(t0).late;
+            worst = worst.max(now_raw_ns() - t0);
+        }
+        stop.store(true, Ordering::Release);
+        shm::futex::wake(&slot.activation().wake, 1);
+        t.join().unwrap();
+        assert_eq!(late, 0, "the client always finished inside the cycle");
+        assert!(worst < 2_000_000, "a cycle waited out the 2.5 ms budget: {worst} ns");
+    }
+
+    #[test]
+    fn rt_thread_events_are_counted_and_drained_once() {
+        let shared = Shared::new(256);
+        shared.ev_late_cycles.fetch_add(3, Ordering::Relaxed);
+        shared.ev_fallbacks.fetch_add(1, Ordering::Relaxed);
+        shared.ev_fallback_quantum.store(512, Ordering::Relaxed);
+        let mut mark = EventMark::default();
+        let lines = drain_events("dev", &shared, &mut mark);
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].1.contains("3 cycle(s)"));
+        assert!(lines[1].1.contains("512"));
+        assert!(drain_events("dev", &shared, &mut mark).is_empty());
+    }
+
+    #[test]
+    fn a_hostile_header_cannot_widen_the_server_ring() {
+        let slot = ClientSlot::new(1, 1, 0, 2, 256, 64).unwrap();
+        let h = (slot.region.addr + slot.layout.output_ring as usize) as *mut RingHeader;
+        // SAFETY: test-only write of the non-atomic size field of a live header, standing in for the client process.
+        unsafe { std::ptr::addr_of_mut!((*h).frames).write(u32::MAX) };
+        let ring = slot.output_ring().unwrap();
+        let (a, b) = (vec![1.0f32; 100], vec![1.0f32; 100]);
+        assert_eq!(ring.write(&[&a, &b], 100), 64, "capped by the server's own ring_frames");
+        assert_eq!(ring.writable(), 0);
     }
 
     #[test]

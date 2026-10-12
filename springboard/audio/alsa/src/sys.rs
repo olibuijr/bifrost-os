@@ -92,7 +92,7 @@ fn clock_ns(clock: libc::clockid_t) -> u64 {
 
 /// Host time: `CLOCK_MONOTONIC_RAW` in nanoseconds (the clock of the contract and of the PCM timestamps).
 pub fn now_raw_ns() -> u64 {
-    clock_ns(libc::CLOCK_MONOTONIC_RAW)
+    bifrost_audio_shm::now_ns()
 }
 
 /// `CLOCK_MONOTONIC` in nanoseconds (the clock timerfd supports).

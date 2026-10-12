@@ -13,7 +13,13 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// The protocol version a client says in `Hello`.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
+
+/// The most channels one client IO procedure stream has: the one wire limit the server's `AddIoProc` validation, the
+/// client library's scratch arrays and the ring layout all share.
+pub const MAX_CLIENT_CHANNELS: usize = 32;
+/// The largest graph quantum, in frames (bounds the ring layout together with `MAX_CLIENT_CHANNELS`).
+pub const MAX_RING_QUANTUM: usize = 4096;
 
 /// The control socket path.
 pub const CONTROL_SOCKET: &str = "/run/bifrost/audio/control";
@@ -77,6 +83,9 @@ pub struct ShmLayout {
     pub output_ring: u32,
     pub ring_frames: u32,
     pub total: u32,
+    /// Offset of the server's per-client "done" activation record: the client's `finish` targets it so the server's
+    /// wait for the client ends at once. Appended last (protocol 2).
+    pub done: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -461,7 +470,7 @@ pub fn encode_reply(m: &Reply) -> Vec<u8> {
         Reply::IoProcAdded { id, layout } => {
             w.u8(5);
             w.u32(*id);
-            for v in [layout.activation, layout.zero_stamp, layout.input_ring, layout.output_ring, layout.ring_frames, layout.total] {
+            for v in [layout.activation, layout.zero_stamp, layout.input_ring, layout.output_ring, layout.ring_frames, layout.total, layout.done] {
                 w.u32(v);
             }
         }
@@ -502,6 +511,7 @@ pub fn decode_reply(b: &[u8]) -> Result<Reply, DecodeError> {
                 output_ring: r.u32()?,
                 ring_frames: r.u32()?,
                 total: r.u32()?,
+                done: r.u32()?,
             },
         },
         6 => Reply::Error(*ERRORS.get(r.u8()? as usize).ok_or(DecodeError::BadValue)?),
@@ -604,7 +614,7 @@ mod tests {
             Reply::Objects(vec![ObjectId(2)]),
             Reply::IoProcAdded {
                 id: 1,
-                layout: ShmLayout { activation: 0, zero_stamp: 64, input_ring: 128, output_ring: 4224, ring_frames: 1024, total: 8320 },
+                layout: ShmLayout { activation: 0, zero_stamp: 64, input_ring: 128, output_ring: 4224, ring_frames: 1024, total: 8320, done: 8256 },
             },
             Reply::Error(AudioError::NotSettable),
             Reply::Error(AudioError::Io),
@@ -692,6 +702,14 @@ mod tests {
         // tag, version (4), length (4), then the two string bytes
         b[9] = 0xff;
         assert_eq!(decode_request(&b), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn max_channels_fit_the_ring_layout() {
+        // one ring of the widest stream at the largest quantum, doubled for the ring's slack, still fits a u32 offset
+        let bytes = MAX_CLIENT_CHANNELS as u64 * MAX_RING_QUANTUM as u64 * 2 * 4;
+        assert_eq!(bytes, 1_048_576);
+        assert!(2 * bytes + 64 * 4 < u32::MAX as u64);
     }
 
     #[test]

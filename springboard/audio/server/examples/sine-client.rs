@@ -71,16 +71,8 @@ fn main() {
     let memfd = fds.remove(0);
     let region = Region::map(memfd, layout.total as usize).expect("map");
     let act: &Activation = region.get(layout.activation);
-    let done: &Activation = region.get(layout.total - 64);
-    let out = {
-        let header: &shm::RingHeader = region.get(layout.output_ring);
-        let planes = (region.addr + layout.output_ring as usize + std::mem::size_of::<shm::RingHeader>())
-            as *const std::cell::UnsafeCell<f32>;
-        // SAFETY: the layout reserves channels * ring_frames f32 after the header, inside the mapping, which lives
-        // as long as `region`; this thread is the ring's only producer.
-        let planes = unsafe { std::slice::from_raw_parts(planes, 2 * layout.ring_frames as usize) };
-        shm::Ring { header, planes }
-    };
+    let done: &Activation = region.get(layout.done);
+    let out = region.ring_trusted(layout.output_ring, 2, layout.ring_frames).expect("ring");
 
     // Ask the server for real-time priority on this thread (no CAP_SYS_NICE needed here).
     // SAFETY: gettid takes no arguments.

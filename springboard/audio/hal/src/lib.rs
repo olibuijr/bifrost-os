@@ -231,6 +231,8 @@ fn stop_thread(e: &mut ProcEntry) {
     if let Some((handle, stop)) = e.thread.take() {
         stop.store(true, Ordering::Release);
         let act: &bifrost_audio_shm::Activation = e.region.get(e.layout.activation);
+        // Bump the word too, so a thread that is between its stop check and its futex wait does not miss the wake.
+        act.wake.fetch_add(1, Ordering::AcqRel);
         bifrost_audio_shm::futex::wake(&act.wake, 1);
         if let Ok(f) = handle.join() {
             e.f = Some(f);

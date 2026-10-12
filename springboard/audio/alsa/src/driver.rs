@@ -477,7 +477,8 @@ impl DeviceIo for AlsaIo {
         self.started = true;
         let now = now_raw_ns();
         // converter latency, read once per start (an ioctl, never in the cycle)
-        self.conv_in = self.inp.as_ref().map_or(0, |p| p.fifo_frames());
+        // capture: the FIFO plus the delay beyond the frames already captured (the converter's own latency)
+        self.conv_in = self.inp.as_mut().map_or(0, |p| p.converter_latency());
         self.conv_out = self.out.as_ref().map_or(0, |o| {
             let queued = self.prefill as i64;
             o.fifo_frames() + o.delay_frames().map_or(0, |d| converter_delay(d, queued))

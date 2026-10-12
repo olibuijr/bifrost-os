@@ -250,9 +250,9 @@ impl Transport for LoopbackTransport {
 
 // --------------------------------------------------------------------------------------------- shared memory
 
+/// The shared host clock (`CLOCK_MONOTONIC_RAW`), the one the server writes `signal_ns`/`finish_ns` with.
 fn now_ns() -> u64 {
-    static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-    EPOCH.get_or_init(std::time::Instant::now).elapsed().as_nanos() as u64
+    bifrost_audio_shm::now_ns()
 }
 
 /// The host side of the shared-memory crossing. `to_worker` holds `inputs + 2` planes (inputs, MIDI, parameters),

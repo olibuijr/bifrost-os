@@ -61,6 +61,9 @@ pub struct ZeroStampValue {
     pub seed: u32,
 }
 
+/// How often `ZeroStamp::read` retries a torn read before it gives up.
+const ZEROSTAMP_RETRIES: u32 = 1024;
+
 impl ZeroStamp {
     /// Publishes a new value (single writer: the device's IO thread).
     pub fn publish(&self, v: ZeroStampValue) {
@@ -76,8 +79,17 @@ impl ZeroStamp {
     }
 
     /// Reads a consistent value, retrying on a torn read (wait-free for the reader in the absence of a writer).
+    /// The retries are bounded: if the writer died mid-update (seq stuck odd) the last values seen are returned
+    /// instead of spinning forever; the caller extrapolates from them.
     pub fn read(&self) -> ZeroStampValue {
-        loop {
+        self.read_checked().0
+    }
+
+    /// Like [`read`](Self::read), and also says whether the value is consistent (false: the retries ran out, the
+    /// value is the last, possibly torn, read).
+    pub fn read_checked(&self) -> (ZeroStampValue, bool) {
+        let mut last = ZeroStampValue::default();
+        for _ in 0..ZEROSTAMP_RETRIES {
             let s1 = self.seq.load(Ordering::Acquire);
             if s1 & 1 == 0 {
                 let v = ZeroStampValue {
@@ -88,11 +100,13 @@ impl ZeroStamp {
                 };
                 fence(Ordering::Acquire);
                 if self.seq.load(Ordering::Relaxed) == s1 {
-                    return v;
+                    return (v, true);
                 }
+                last = v;
             }
             core::hint::spin_loop();
         }
+        (last, false)
     }
 }
 
@@ -119,11 +133,24 @@ pub fn ring_bytes(channels: u32, frames: u32) -> u32 {
 pub struct Ring<'a> {
     pub header: &'a RingHeader,
     pub planes: &'a [UnsafeCell<f32>],
+    /// Frames per plane and plane count, copied at construction from values the owner trusts. The header's own
+    /// `frames`/`channels` live in memory the peer can rewrite and are never read after the view is built.
+    cap: u32,
+    channels: u32,
 }
 
-impl Ring<'_> {
+impl<'a> Ring<'a> {
+    /// A view of `channels` planes of `frames` frames. Fails when `planes` is smaller than `channels * frames`.
+    pub fn new(header: &'a RingHeader, planes: &'a [UnsafeCell<f32>], channels: u32, frames: u32) -> Option<Ring<'a>> {
+        let cells = (channels as usize).checked_mul(frames as usize)?;
+        if cells > planes.len() {
+            return None;
+        }
+        Some(Ring { header, planes, cap: frames, channels })
+    }
+
     fn cap(&self) -> u32 {
-        self.header.frames
+        self.cap
     }
 
     /// Frames available to read. A corrupt header from the peer is clamped to the capacity.
@@ -141,7 +168,7 @@ impl Ring<'_> {
     /// Writes up to `frames` frames from per-channel slices; returns the frames written.
     pub fn write(&self, src: &[&[f32]], frames: u32) -> u32 {
         let cap = self.cap();
-        let ch = (self.header.channels as usize).min(src.len());
+        let ch = (self.channels as usize).min(src.len());
         let mut n = frames.min(self.writable());
         for s in &src[..ch] {
             n = n.min(s.len() as u32);
@@ -161,7 +188,7 @@ impl Ring<'_> {
     /// Reads up to `frames` frames into per-channel slices; returns the frames read.
     pub fn read(&self, dst: &mut [&mut [f32]], frames: u32) -> u32 {
         let cap = self.cap();
-        let ch = (self.header.channels as usize).min(dst.len());
+        let ch = (self.channels as usize).min(dst.len());
         let mut n = frames.min(self.readable());
         for d in &dst[..ch] {
             n = n.min(d.len() as u32);
@@ -180,13 +207,15 @@ impl Ring<'_> {
 
     fn plane_ptr(&self, c: usize) -> *mut f32 {
         let cap = self.cap() as usize;
-        debug_assert!((c + 1) * cap <= self.planes.len());
-        // SAFETY: the plane slice holds channels * frames cells (checked when the ring view is built).
+        assert!(c < self.channels as usize && (c + 1) * cap <= self.planes.len(), "ring plane out of bounds");
+        // SAFETY: the plane slice holds at least channels * cap cells (checked in `Ring::new`) and c < channels
+        // (asserted above), so the plane starts and ends inside the slice.
         unsafe { UnsafeCell::raw_get(self.planes.as_ptr().add(c * cap)) }
     }
 
     fn copy_in(&self, c: usize, start: usize, s: &[f32]) {
         let cap = self.cap() as usize;
+        assert!(start <= cap && s.len() <= cap, "ring write out of bounds");
         let first = s.len().min(cap - start);
         let p = self.plane_ptr(c);
         // SAFETY: SPSC: only the producer writes the free region [write, write + n), which the consumer does not
@@ -199,6 +228,7 @@ impl Ring<'_> {
 
     fn copy_out(&self, c: usize, start: usize, d: &mut [f32]) {
         let cap = self.cap() as usize;
+        assert!(start <= cap && d.len() <= cap, "ring read out of bounds");
         let first = d.len().min(cap - start);
         let p = self.plane_ptr(c);
         // SAFETY: SPSC: the consumer reads only [read, read + n), published by the producer's release store.
@@ -216,8 +246,10 @@ pub fn layout(input_channels: u32, output_channels: u32, ring_frames: u32) -> bi
     let zero_stamp = activation + core::mem::size_of::<Activation>() as u32;
     let input_ring = zero_stamp + core::mem::size_of::<ZeroStamp>() as u32;
     let output_ring = input_ring + ring_bytes(input_channels, ring_frames);
-    let total = output_ring + ring_bytes(output_channels, ring_frames);
-    bifrost_audio_types::control::ShmLayout { activation, zero_stamp, input_ring, output_ring, ring_frames, total }
+    // The server's per-client "done" record follows the rings; the client's `finish` targets it.
+    let done = output_ring + ring_bytes(output_channels, ring_frames);
+    let total = done + core::mem::size_of::<Activation>() as u32;
+    bifrost_audio_types::control::ShmLayout { activation, zero_stamp, input_ring, output_ring, ring_frames, total, done }
 }
 
 /// A shared memory region: a sealed memfd mapped read-write.
@@ -331,7 +363,25 @@ impl Region {
         }
         // SAFETY: bounds checked above; UnsafeCell<f32> has the layout of f32 and is 4-aligned (off + 64).
         let planes = unsafe { core::slice::from_raw_parts((self.addr + off + 64) as *const UnsafeCell<f32>, cells) };
-        Some(Ring { header, planes })
+        Ring::new(header, planes, header.channels, header.frames)
+    }
+
+    /// A ring view with a layout the caller trusts (`channels` planes of `frames`, as it laid the memfd out itself),
+    /// ignoring whatever the peer wrote into the header's size fields.
+    pub fn ring_trusted(&self, offset: u32, channels: u32, frames: u32) -> Option<Ring<'_>> {
+        let off = offset as usize;
+        if off % 64 != 0 || off.checked_add(64)? > self.len {
+            return None;
+        }
+        let header: &RingHeader = self.get(offset);
+        let cells = (channels as usize).checked_mul(frames as usize)?;
+        let end = off.checked_add(64)?.checked_add(cells.checked_mul(4)?)?;
+        if end > self.len {
+            return None;
+        }
+        // SAFETY: bounds checked above; UnsafeCell<f32> has the layout of f32 and is 4-aligned (off + 64).
+        let planes = unsafe { core::slice::from_raw_parts((self.addr + off + 64) as *const UnsafeCell<f32>, cells) };
+        Ring::new(header, planes, channels, frames)
     }
 }
 
@@ -344,11 +394,13 @@ impl Drop for Region {
     }
 }
 
-/// Monotonic host time in nanoseconds (vDSO, no syscall).
+/// Host time in nanoseconds: `CLOCK_MONOTONIC_RAW` (vDSO, no syscall), the one clock every audio crate shares (the
+/// contract's host clock; the window server presents on it). `bifrost-audio-types` is `no_std` without libc, so the
+/// single implementation lives here and the HAL, server, ALSA driver and units re-export or call it.
 pub fn now_ns() -> u64 {
     let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
     // SAFETY: valid out pointer.
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_RAW, &mut ts) };
     ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
 }
 
@@ -611,7 +663,9 @@ mod tests {
         // 2 in, 4 out, 256 frames: activation 0..64, stamp 64..128, input ring 64 + 2*256*4 = 2112 bytes from 128
         // to 2240; output ring 64 + 4*256*4 = 4160 bytes from 2240 to 6400.
         let l = layout(2, 4, 256);
-        assert_eq!((l.activation, l.zero_stamp, l.input_ring, l.output_ring, l.total), (0, 64, 128, 2240, 6400));
+        assert_eq!((l.activation, l.zero_stamp, l.input_ring, l.output_ring, l.total - 64), (0, 64, 128, 2240, 6400));
+        // the done record follows the output ring: 6400..6464
+        assert_eq!((l.done, l.total), (6400, 6464));
         assert_eq!(l.ring_frames, 256);
     }
 
@@ -635,7 +689,10 @@ mod tests {
         });
         let mut reads = 0;
         while !t.is_finished() {
-            let v = z.read();
+            let (v, consistent) = z.read_checked();
+            if !consistent {
+                continue; // retries exhausted against a hot writer: the value may be torn by definition
+            }
             assert_eq!(v.host_ns, v.sample_time * 2);
             assert_eq!(v.rate_scalar, v.sample_time as f64);
             assert_eq!(v.seed, v.sample_time as u32);
@@ -685,6 +742,40 @@ mod tests {
         let big = Region::create("t-big", 128).unwrap();
         big.init_ring(0, 4, 1000);
         assert!(big.ring(0).is_none());
+    }
+
+    #[test]
+    fn ring_ignores_a_rewritten_header() {
+        // The trusted view holds its own size; a peer rewriting the header's frames/channels changes nothing.
+        let r = ring_region(2, 8);
+        let ring = r.ring_trusted(0, 2, 8).unwrap();
+        let h = r.addr as *mut RingHeader;
+        // SAFETY: test-only plain writes to the non-atomic size fields of a live header, standing in for the peer.
+        unsafe {
+            core::ptr::addr_of_mut!((*h).frames).write(u32::MAX);
+            core::ptr::addr_of_mut!((*h).channels).write(u32::MAX);
+        }
+        let a = [1.0f32; 6];
+        let b = [2.0f32; 6];
+        assert_eq!(ring.write(&[&a, &b], 6), 6);
+        assert_eq!(ring.readable(), 6);
+        assert_eq!(ring.write(&[&a, &b], 6), 2);
+        let (mut x, mut y) = ([0f32; 8], [0f32; 8]);
+        assert_eq!(ring.read(&mut [&mut x, &mut y], 8), 8);
+        assert_eq!(&y[..6], &[2.0; 6]);
+        // a trusted size larger than the mapping is refused
+        assert!(r.ring_trusted(0, 2, 1 << 20).is_none());
+    }
+
+    #[test]
+    fn stuck_odd_seqlock_does_not_spin_forever() {
+        let z = ZeroStamp::default();
+        z.publish(ZeroStampValue { sample_time: 5, host_ns: 6, rate_scalar: 1.0, seed: 1 });
+        z.seq.store(3, Ordering::Relaxed); // the writer died mid-update
+        let (v, consistent) = z.read_checked();
+        assert!(!consistent);
+        let _ = v;
+        let _ = z.read();
     }
 
     #[test]

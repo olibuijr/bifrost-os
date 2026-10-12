@@ -14,18 +14,13 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, OnceLock};
 
 /// The most channels one IO procedure handles (scratch arrays are on the stack).
-pub const MAX_CHANNELS: usize = 32;
-/// The loop wakes at least this often to look at the stop flag (a backstop; `stop` also wakes the futex).
-const BACKSTOP_NS: u64 = 250_000_000;
+pub const MAX_CHANNELS: usize = bifrost_audio_types::control::MAX_CLIENT_CHANNELS;
 /// The rate assumed when the activation record has none yet.
 const DEFAULT_RATE: f64 = 48_000.0;
 
 /// Host time: `CLOCK_MONOTONIC_RAW` nanoseconds (the contract's host clock).
 pub fn now_ns() -> u64 {
-    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    // SAFETY: `ts` is a valid out-pointer; the clock id is constant.
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_RAW, &mut ts) };
-    ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
+    bifrost_audio_shm::now_ns()
 }
 
 thread_local! {
@@ -134,7 +129,15 @@ pub(crate) fn ring_view(region: &Region, offset: u32, channels: u32) -> Option<R
     // SAFETY: the planes lie inside the mapping (checked above), start 64-byte aligned after the header, and the
     // mapping lives as long as `region`; f32 has no invalid bit patterns and UnsafeCell<f32> has f32's layout.
     let planes = unsafe { std::slice::from_raw_parts((region.addr + end as usize) as *const UnsafeCell<f32>, samples as usize) };
-    Some(Ring { header, planes })
+    // The size is copied now, from the header just validated against the mapping; later rewrites are ignored.
+    Ring::new(header, planes, header.channels, header.frames)
+}
+
+/// The done record of `layout`, when it lies 64-aligned inside the mapping and is not the activation itself.
+pub(crate) fn done_record<'a>(region: &'a Region, layout: &ShmLayout) -> Option<&'a Activation> {
+    let size = std::mem::size_of::<Activation>() as u64;
+    let ok = layout.done != layout.activation && layout.done % 64 == 0 && layout.done as u64 + size <= region.len as u64;
+    ok.then(|| region.get(layout.done))
 }
 
 fn flag_all() -> TimeStampFlags {
@@ -172,6 +175,9 @@ pub(crate) fn run(a: IoArgs) -> IoProc {
 
     let act: &Activation = region.get(layout.activation);
     let zs: &ZeroStamp = region.get(layout.zero_stamp);
+    // The server's "done" record: finishing it ends the server's wait for this client. An implausible offset
+    // (old or hostile server) means no target, never a write outside the mapping.
+    let done: Option<&Activation> = done_record(&region, &layout);
     let in_ring = if input_channels > 0 { ring_view(&region, layout.input_ring, input_channels) } else { None };
     let out_ring = if output_channels > 0 { ring_view(&region, layout.output_ring, output_channels) } else { None };
     if (input_channels > 0 && in_ring.is_none()) || (output_channels > 0 && out_ring.is_none()) {
@@ -185,7 +191,11 @@ pub(crate) fn run(a: IoArgs) -> IoProc {
     let mut last = act.wake.load(Ordering::Acquire);
 
     while !stop.load(Ordering::Acquire) {
-        futex::wait(&act.wake, last, BACKSTOP_NS);
+        // Sleep until triggered; `stop` bumps the word and wakes it, so no periodic wakeup is needed (timeout 0).
+        futex::wait(&act.wake, last, 0);
+        if stop.load(Ordering::Acquire) {
+            break;
+        }
         let cur = act.wake.load(Ordering::Acquire);
         if cur == last {
             continue;
@@ -197,7 +207,10 @@ pub(crate) fn run(a: IoArgs) -> IoProc {
         act.awake_ns.store(t0, Ordering::Relaxed);
         cycle_once(act, zs, in_ring.as_ref(), out_ring.as_ref(), &mut in_list, &mut out_list, frames, cycle, t0, &mut f);
         cycle += 1;
-        bifrost_audio_shm::finish(act, &[], now_ns());
+        match done {
+            Some(d) => bifrost_audio_shm::finish(act, &[d], now_ns()),
+            None => bifrost_audio_shm::finish(act, &[], now_ns()),
+        }
     }
     drop(member);
     f
@@ -263,6 +276,20 @@ pub(crate) fn cycle_once(
 mod tests {
     use super::*;
     use bifrost_audio_shm::ZeroStampValue;
+
+    #[test]
+    fn done_record_is_checked() {
+        let layout = bifrost_audio_shm::layout(1, 1, 8);
+        let region = Region::create("done-test", layout.total as usize).unwrap();
+        assert!(done_record(&region, &layout).is_some());
+        let mut bad = layout;
+        bad.done = 0; // the activation itself
+        assert!(done_record(&region, &bad).is_none());
+        bad.done = layout.total; // past the end
+        assert!(done_record(&region, &bad).is_none());
+        bad.done = 70; // misaligned
+        assert!(done_record(&region, &bad).is_none());
+    }
 
     #[test]
     fn now_ns_is_monotonic() {
