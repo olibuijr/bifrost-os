@@ -1,8 +1,41 @@
 //! Preview: the preview panel of the focused file (picture, text, or icon and info).
+//!
+//! Pictures go through the preview registry (`bifrost_app::peek`): the picture provider is registered for the
+//! image type tree, so every image type it can decode is previewed, and its reply's pixel size is validated there.
 use crate::*;
+use bifrost_app::peek::{Content, ModelError, PreviewProvider, Registry, Reply};
+use std::cell::RefCell;
 
 /// Pictures larger than this are not decoded for the preview.
 const PREVIEW_MAX_BYTES: u64 = 32 << 20;
+
+/// The name the picture provider is registered under.
+const PICTURES: &str = "files.pictures";
+
+/// The data-based provider for pictures: it decodes the file and replies with the picture's pixel size. The decoded
+/// picture is kept for the panel to draw.
+struct PictureFile {
+    path: PathBuf,
+    image: RefCell<Option<springboard::gfx::Image>>,
+}
+
+impl PreviewProvider for PictureFile {
+    fn provide(&self, _file_name: &str) -> Result<Reply, ModelError> {
+        // no size to report when the file cannot be read or decoded
+        let bytes = std::fs::read(&self.path).map_err(|_| ModelError::BadSize)?;
+        let img = springboard::imgdec::decode(&bytes).ok_or(ModelError::BadSize)?;
+        let reply = Reply::new(Content::Bitmap { width: img.w as u32, height: img.h as u32 })?;
+        *self.image.borrow_mut() = Some(img);
+        Ok(reply)
+    }
+}
+
+/// The registry Files previews with: the picture provider for every image type.
+fn picture_registry() -> Registry {
+    let mut registry = Registry::new();
+    let _ = registry.register(PICTURES, &["public.image"]);
+    registry
+}
 
 impl Files {
     pub(crate) fn peek(&mut self) {
@@ -11,10 +44,14 @@ impl Files {
         let Some(e) = self.focus_entry().cloned() else {
             return;
         };
-        let ext = e.path.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
-        if matches!(ext.as_str(), "png" | "jpg" | "jpeg") && e.size <= PREVIEW_MAX_BYTES {
-            if let Some(img) = std::fs::read(&e.path).ok().and_then(|b| springboard::imgdec::decode(&b)) {
+        let file = PictureFile { path: e.path.clone(), image: RefCell::new(None) };
+        let providers: [(&str, &dyn PreviewProvider); 1] = [(PICTURES, &file)];
+        let picture = e.size <= PREVIEW_MAX_BYTES && matches!(picture_registry().preview(&e.name, &providers), Some(Ok(_)));
+        if picture {
+            if let Some(img) = file.image.take() {
                 self.fx.preview_image = Some(img);
+                self.preview = Some((e.name.clone(), String::new()));
+                return;
             }
         }
         let content = if e.kind == Kind::Text {

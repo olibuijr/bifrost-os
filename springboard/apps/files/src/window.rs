@@ -440,6 +440,7 @@ impl Files {
         self.paint_info(ui, s);
         self.paint_preview(ui, s);
         self.paint_goto(ui, s);
+        self.paint_server(ui, s);
     }
     /// Recents and Tags list files from several places; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {

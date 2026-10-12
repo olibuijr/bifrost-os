@@ -1,4 +1,4 @@
-//! Files's Go menu (Go to Folder with path completion, Home, Desktop, Documents, Downloads, Recents), spring-loaded folders
+//! Files's Go menu (Go to Folder with path completion, Connect to Server, Home, Desktop, Documents, Downloads, Recents), spring-loaded folders
 //! and the Option-to-copy drag state.
 use crate::*;
 
@@ -18,6 +18,8 @@ pub(crate) struct FileManagerState {
     pub(crate) copy_drag: bool,
     /// The decoded picture of the Preview panel (JPEG and PNG).
     pub(crate) preview_image: Option<springboard::gfx::Image>,
+    /// Go > Connect to Server: the address sheet, the remote folder browser and the recent servers.
+    pub(crate) server: crate::server::ServerState,
 }
 
 /// Expands a typed path: `~` is the home folder, a relative path is taken from `base`.
@@ -93,6 +95,7 @@ impl Files {
             (32, true, false) => self.go_to(self.home.join("Desktop")),  // Shift+D: Desktop
             (24, true, false) => self.go_to(self.home.join("Documents")), // Shift+O: Documents
             (38, false, true) => self.go_to(self.home.join("Downloads")), // Option+L: Downloads
+            (37, false, false) => self.open_connect(),                   // K: Connect to Server
             _ => return false,
         }
         true
