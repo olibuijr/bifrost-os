@@ -80,9 +80,9 @@
     {
       "feature": "Async publishers",
       "apple": "AsyncPublisher, AsyncThrowingPublisher",
-      "bifrost": "springboard/sdk/src/async_publisher.rs",
+      "bifrost": "springboard/sdk/src/async_publisher.rs; wired: springboard/apps/podcasts-desktop/src/refresh.rs (over springboard/sdk/src/async_publisher.rs)",
       "status": "partial",
-      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no async sequence bridge"
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no async sequence bridge Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Encoders and decoders",

@@ -10,16 +10,16 @@
     {
       "feature": "Map view (MKMapView, Map)",
       "apple": "MKMapView, Map (SwiftUI)",
-      "bifrost": "springboard/ui/src/mapview.rs (MapView, MapType, MapInteraction)",
+      "bifrost": "springboard/ui/src/mapview.rs (MapView, MapType, MapInteraction); wired: springboard/apps/weather-desktop/src/insights.rs (map_view, grid) and weather.rs MAP card",
       "status": "partial",
-      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK"
+      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Map camera and region",
       "apple": "MKCoordinateRegion, MKCoordinateSpan, MKMapCamera, MapCameraPosition",
-      "bifrost": "springboard/ui/src/geo.rs",
+      "bifrost": "springboard/ui/src/geo.rs; wired: springboard/apps/weather-desktop/src/insights.rs (map_view at MAP_ZOOM, grid)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Annotations, markers and overlays",
@@ -73,9 +73,9 @@
     {
       "feature": "Map controls (compass, zoom, scale, user tracking)",
       "apple": "MKCompassButton, MKZoomControl, MKScaleView, MKPitchControl, MKUserTrackingButton, MapZoomStepper, MapScaleView",
-      "bifrost": "springboard/ui/src/mapview.rs (scale_bar",
+      "bifrost": "springboard/ui/src/mapview.rs (scale_bar; wired: springboard/apps/weather-desktop/src/weather.rs MAP block (MapCamera::scale_bar)",
       "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no map controls exist to adapt"
+      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no map controls exist to adapt Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "User location on a map",

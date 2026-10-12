@@ -52,9 +52,9 @@
     {
       "feature": "Inspect image properties",
       "apple": "DiskImage properties (framework overview page)",
-      "bifrost": "springboard/ui/src/disk_image.rs (inspect, ImageProperties)",
+      "bifrost": "springboard/ui/src/disk_image.rs (inspect, ImageProperties); wired: springboard/apps/files/src/info.rs (disk_image_rows, image_rows)",
       "status": "partial",
-      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No image metadata API."
+      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No image metadata API. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Virtualization integration",

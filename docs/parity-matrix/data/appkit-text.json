@@ -24,9 +24,9 @@
     {
       "feature": "Text Display: multi-line text view widget",
       "apple": "NSTextView, NSScrollView text container",
-      "bifrost": "springboard/ui/src/textview.rs",
+      "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs",
       "status": "partial",
-      "note": "Wave 6 (b14, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK"
+      "note": "Wave 6 (b14, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Text Display: spell checking",

@@ -38,16 +38,16 @@
     {
       "feature": "Value query results (ResolvedValueQueryResult)",
       "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition",
-      "bifrost": "springboard/ui/src/value_query.rs",
+      "bifrost": "springboard/ui/src/value_query.rs; wired: springboard/ui/src/value_query.rs (ValueQueryResult; used by springboard/apps/shortcuts-desktop/src/automation.rs picker and entities)",
       "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type}"
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type} Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Entity annotation and onscreen context",
       "apple": "ViewAnnotation (entity, isSelected)",
-      "bifrost": "springboard/ui/src/onscreen_entity.rs",
+      "bifrost": "springboard/ui/src/onscreen_entity.rs; wired: springboard/ui/src/onscreen_entity.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs onscreen_context, frontmost; src/widget.rs on_screen; src/main.rs frontmost)",
       "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link"
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Type-erased intent and entity wrappers",

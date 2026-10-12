@@ -10,9 +10,9 @@
     {
       "feature": "Chart view and content builder",
       "apple": "Chart, ChartContent, ChartContentBuilder, Plot (https://developer.apple.com/documentation/charts)",
-      "bifrost": "springboard/ui/src/chart_content.rs",
+      "bifrost": "springboard/ui/src/chart_content.rs; wired: springboard/apps/weather-desktop/src/insights.rs (temperature_plot, temperature_line) drawn in weather.rs draw_main_with",
       "status": "partial",
-      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative chart container; apps would hand-draw every bar and label"
+      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative chart container; apps would hand-draw every bar and label Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Bar marks",
@@ -52,9 +52,9 @@
     {
       "feature": "Scales, domains and ranges",
       "apple": "ScaleType, ScaleDomain, AutomaticScaleDomain, ScaleRange, PositionScaleRange, PlotDimensionScaleRange",
-      "bifrost": "springboard/ui/src/chart.rs",
+      "bifrost": "springboard/ui/src/chart.rs; wired: springboard/apps/weather-desktop/src/insights.rs (temperature_scale, chart::axis_ticks)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the domain is hard-coded per chart; no automatic domain inference and no log or sqrt scale"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the domain is hard-coded per chart; no automatic domain inference and no log or sqrt scale Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Axes and axis marks",

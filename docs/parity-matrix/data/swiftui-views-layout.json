@@ -94,9 +94,9 @@
     {
       "feature": "Custom layout (Layout protocol)",
       "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
-      "bifrost": "springboard/ui/src/layout_protocol.rs",
+      "bifrost": "springboard/ui/src/layout_protocol.rs; wired: springboard/ui/src/layout_protocol.rs (FlowLayout) via Arrange in springboard/apps/freeform-desktop/src/freeform.rs",
       "status": "partial",
-      "note": "Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions"
+      "note": "Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Lists",

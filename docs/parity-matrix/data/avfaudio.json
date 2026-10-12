@@ -59,9 +59,9 @@
     {
       "feature": "MIDI playback (AVMIDIPlayer)",
       "apple": "AVMIDIPlayer with a sound bank",
-      "bifrost": "springboard/core/src/smf.rs",
+      "bifrost": "springboard/core/src/smf.rs; wired: springboard/apps/daw/src/midi_file.rs (import_notes), springboard/core/src/smf.rs; wired: springboard/apps/music-desktop/src/music/library.rs (scan_midi, Song::is_midi) reading springboard/core/src/smf.rs; listed and timed, not played (no sound bank)",
       "status": "partial",
-      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod"
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Audio engine graph (AVAudioEngine)",

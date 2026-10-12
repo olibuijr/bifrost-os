@@ -10,16 +10,16 @@
     {
       "feature": "Library entry point (MLMediaLibrary)",
       "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey",
-      "bifrost": "springboard/ui/src/media_sources.rs (LoadOptions::from_keys)",
+      "bifrost": "springboard/ui/src/media_sources.rs (LoadOptions::from_keys); wired: springboard/apps/music-desktop/src/music/library.rs (library_load_options, plan, find_files_except) using LoadOptions::from_keys",
       "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no shared entry point; each app picks its own roots, and there is no include/exclude source filter"
+      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no shared entry point; each app picks its own roots, and there is no include/exclude source filter Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Media sources (MLMediaSource)",
       "apple": "MLMediaSource, MLMediaSourceType, source identifiers (iTunes, Photos, Movies folder, app-defined folders)",
-      "bifrost": "springboard/ui/src/media_sources.rs",
+      "bifrost": "springboard/ui/src/media_sources.rs; wired: springboard/apps/music-desktop/src/music/library.rs (plan, child_folders): the root and each folder directly inside it are sources",
       "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no source abstraction; files come from plain folder scans"
+      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no source abstraction; files come from plain folder scans Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Media groups (MLMediaGroup)",
@@ -52,9 +52,9 @@
     {
       "feature": "Live changes to the collection",
       "apple": "read-only snapshot per library instance; reloading is explicit",
-      "bifrost": "springboard/src/shell/photos/mod.rs (rescan)",
+      "bifrost": "springboard/src/shell/photos/mod.rs (rescan); wired: springboard/apps/music-desktop/src/music.rs (watch, tick, apply: Done::Stamps) with MediaLibrary::observe",
       "status": "partial",
-      "note": "the shell Photos code rescans; the Music app builds once from its roots and has no file-watch update path in this module"
+      "note": "the shell Photos code rescans; the Music app builds once from its roots and has no file-watch update path in this module Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Source-specific identifiers and group types (iTunes, iPhoto, Aperture, Final Cut, GarageBand, Logic, Photos)",

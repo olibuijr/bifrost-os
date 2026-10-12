@@ -45,9 +45,9 @@
     {
       "feature": "Actors and isolation",
       "apple": "Actor, @MainActor, Sendable",
-      "bifrost": "springboard/sdk/src/actor.rs",
+      "bifrost": "springboard/sdk/src/actor.rs; wired: springboard/sdk/src/actor.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs Planner)",
       "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK"
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Distributed actors",

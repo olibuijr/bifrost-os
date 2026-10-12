@@ -66,9 +66,9 @@
     {
       "feature": "Particle systems",
       "apple": "SCNParticleSystem, SCNParticlePropertyController",
-      "bifrost": "springboard/ui/src/particle_system3d.rs",
+      "bifrost": "springboard/ui/src/particle_system3d.rs; wired: springboard/ui/src/particle_system3d.rs (used by springboard/apps/games-desktop/src/celebration.rs)",
       "status": "partial",
-      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no particle emitter in the SDK or render crates"
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no particle emitter in the SDK or render crates Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Positional audio",

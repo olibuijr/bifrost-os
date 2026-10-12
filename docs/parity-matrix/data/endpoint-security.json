@@ -108,9 +108,9 @@
     {
       "feature": "Socket, pseudoterminal, clock and kernel events",
       "apple": "Socket Event Types, Pseudoterminal Event Types, Clock Event Types, Kernel Event Types",
-      "bifrost": "springboard/core/src/security_event.rs",
+      "bifrost": "springboard/core/src/security_event.rs; wired: springboard/core/src/security_event.rs (adapter springboard/apps/console-desktop/src/security.rs)",
       "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No event hooks for these. The terminal app exists but emits no security events."
+      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No event hooks for these. The terminal app exists but emits no security events. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Muting and clearing the cache",

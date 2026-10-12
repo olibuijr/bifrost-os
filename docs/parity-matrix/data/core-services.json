@@ -66,9 +66,9 @@
     {
       "feature": "Event history and event IDs",
       "apple": "FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime, FSEventStreamGetLatestEventId, FSEventStreamFlushSync",
-      "bifrost": "springboard/sdk/src/fswatch.rs (EventJournal, replay_since)",
+      "bifrost": "springboard/sdk/src/fswatch.rs (EventJournal, replay_since); wired: springboard/apps/files/src/perf.rs (catch_up, unseen, record_events)",
       "status": "partial",
-      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A change stream cannot replay events since a saved ID after a restart."
+      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A change stream cannot replay events since a saved ID after a restart. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Apple Events (inter-process messages with replies)",

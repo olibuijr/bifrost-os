@@ -1,5 +1,22 @@
 # BifrOSt changelog
 
+## 0.5.38 — 2026-10-12
+
+Parity wiring, wave 2: the models from the parity waves are now reachable in 13 apps and the shell.
+
+- Desktop: the Calendar icon in the Dock shows today's weekday and date (it showed "Tue 1").
+- Settings: Accessibility > Display has Dim Flashing Lights, and apps can read it. Privacy & Security lists Location
+  access per app. A Bluetooth device's page has a Services row, and the network service can browse local services.
+  Neither has a data source yet, so both lists stay empty.
+- Files 1.18: the file area is white in Light and dark grey in Dark (it was pure black). Get Info describes disk
+  images, and folders pick up changes made while they load.
+- Contacts 1.4 (groups, Add People, sort order), Music 1.4 (rescans when files change, lists MIDI files),
+  Notes 1.11 (detects flight numbers and addresses), Voice Memos 1.4 (Recording menu, memo notes),
+  Podcasts 1.5 (feed refresh progress), Freeform 1.4 (first-use tip, Arrange), Weather 1.3 (map and chart),
+  Games 1.4 (win confetti), Shortcuts 1.4 (entity queries, the open shortcut as context), Assistant 1.2
+  (answer guardrails, request routing, Diagnostics), DAW 0.3 (MIDI file import, region export),
+  Console 1.2 (Security Events, code requirement checks).
+
 ## 0.5.37 — 2026-10-12
 
 Reference-SDK parity, wave 6: 20 agents worked through the 184 remaining gap rows. 62 are now built as pure models

@@ -45,9 +45,9 @@
     {
       "feature": "Bonjour: advertise and browse services",
       "apple": "NetService, NetServiceBrowser",
-      "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs",
+      "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (browse only; no advertise)",
       "status": "partial",
-      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK"
+      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "XPC: interprocess communication",

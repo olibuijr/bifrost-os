@@ -59,9 +59,9 @@
     {
       "feature": "MIDI input and note data",
       "apple": "MIDI events delivered to instrument units",
-      "bifrost": "springboard/ui/src/midi_events.rs",
+      "bifrost": "springboard/ui/src/midi_events.rs; wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-audio-unit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. note data is internal to the DAW; no MIDI device input or MIDI event API found"
+      "note": "Wave 3 (w3-audio-unit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. note data is internal to the DAW; no MIDI device input or MIDI event API found Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     }
   ],
   "gaps": [

@@ -17,9 +17,9 @@
     {
       "feature": "Intent parameters",
       "apple": "IntentParameter, primitive and framework types (Integers, Doubles, Booleans, Strings, URLs, Dates, Files, Currencies, People, Placemarks, Measurements)",
-      "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113",
+      "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113; wired: springboard/apps/shortcuts-desktop/src/automation.rs declared (shortcut parameter now optional)",
       "status": "partial",
-      "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform"
+      "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Perform and IntentResult (value and dialog)",

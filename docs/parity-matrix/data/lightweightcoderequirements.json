@@ -10,9 +10,9 @@
     {
       "feature": "Checking code requirements for running processes",
       "apple": "SecTaskValidateForRequirement(task:requirement:), ProcessCodeRequirement, ProcessConstraint, anyOf, allOf",
-      "bifrost": "springboard/core/src/codereq.rs",
+      "bifrost": "springboard/core/src/codereq.rs; wired: springboard/core/src/codereq.rs (adapter springboard/apps/console-desktop/src/identity.rs)",
       "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No check of a running process's signed identity. Peer identity is not checked either (no SO_PEERCRED use in the app host files)."
+      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No check of a running process's signed identity. Peer identity is not checked either (no SO_PEERCRED use in the app host files). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Checking code requirements for launching processes",

@@ -52,9 +52,9 @@
     {
       "feature": "Containers and groups",
       "apple": "CNContainer, CNGroup, CNMutableGroup, CNContainerTypeKey",
-      "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs",
+      "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs; wired: springboard/ui/src/contact_groups.rs (wired in springboard/apps/contacts-desktop/src/contacts.rs and group_file.rs)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Change history and contacts-changed notification",
@@ -66,9 +66,9 @@
     {
       "feature": "Formatting names and addresses",
       "apple": "CNContactFormatter, CNPostalAddressFormatter",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials",
+      "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing)",
       "status": "partial",
-      "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter."
+      "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "vCard serialization",
@@ -94,9 +94,9 @@
     {
       "feature": "Contact picker and access UI (ContactsUI)",
       "apple": "Contact access button, Contact access picker (sample code)",
-      "bifrost": "springboard/ui/src/contact_access.rs (model only",
+      "bifrost": "springboard/ui/src/contact_access.rs (model only; wired: springboard/ui/src/contact_picker.rs (Add People picker in springboard/apps/contacts-desktop/src/contacts.rs)",
       "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No picker that lets an app receive one chosen contact without seeing the whole store."
+      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No picker that lets an app receive one chosen contact without seeing the whole store. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Errors and validation",

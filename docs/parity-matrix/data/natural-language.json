@@ -66,9 +66,9 @@
     {
       "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",
       "apple": "NLModel, Create ML text classifier and word tagger",
-      "bifrost": "springboard/ui/src/text_classifier.rs",
+      "bifrost": "springboard/ui/src/text_classifier.rs; wired: springboard/ui/src/text_classifier.rs (used by springboard/apps/assistant-desktop/src/safety.rs router and route)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no API to load or run a trained text model in apps; the shell has no ML text runtime"
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no API to load or run a trained text model in apps; the shell has no ML text runtime Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Locale-aware text formatting (related to language data)",
