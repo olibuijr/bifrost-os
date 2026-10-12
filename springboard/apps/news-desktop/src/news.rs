@@ -9,6 +9,8 @@ use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::reading_list::ReadingList;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::TextField;
+use bifrost_app::KeyInput;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -41,6 +43,11 @@ pub const BAR_BACK: u32 = 1;
 pub const BAR_REFRESH: u32 = 2;
 /// Saves the open article to the Reading List, or removes it.
 pub const BAR_READ: u32 = 3;
+/// The toolbar's search field: it filters the list by headline as the user types.
+pub const BAR_SEARCH: u32 = 4;
+/// The search field's width, and the clear button's hit width at its trailing end (points).
+const SEARCH_W: f32 = 200.0;
+const SEARCH_CLEAR_PT: f32 = 28.0;
 /// Tab 0 is Today, tab 1 the Reading List, and tab n + 2 is feed n.
 const READING_TAB: usize = 1;
 const FEED_TAB: usize = 2;
@@ -76,6 +83,10 @@ enum Target {
     Row(usize),
     /// the toolbar's Reading List button
     Read,
+    /// the toolbar's search field: focuses it
+    Search,
+    /// the search field's clear button: empties the query
+    ClearSearch,
 }
 
 enum Done {
@@ -128,6 +139,10 @@ pub struct News {
     notice: Option<String>,
     /// the reader's text size step (see `reader_size`), kept across articles
     text_step: usize,
+    /// the toolbar search query: the list keeps the headlines that contain it
+    query: TextField,
+    /// whether the search field has keyboard focus (typing then goes to the query)
+    search_focus: bool,
 }
 
 /// `c` at the nearest end of the Light/Dark fade: pictures are rounded onto it once per scheme.
@@ -194,6 +209,8 @@ impl News {
             top_changed: true,
             notice: None,
             text_step: reader_size::DEFAULT_STEP,
+            query: TextField::new(),
+            search_focus: false,
         };
         n.rebuild();
         n
@@ -264,6 +281,7 @@ impl News {
             READING_TAB => wire::rows(&self.reading),
             tab => self.items.get(tab - FEED_TAB).cloned().unwrap_or_default(),
         };
+        wire::search_rows(&mut self.list, &self.query);
     }
 
     // ---- fetching ----
@@ -455,6 +473,7 @@ impl News {
             items.push(ToolbarItem::button(BAR_READ, label).enabled(ReadingList::supports(&item.link)));
         }
         items.push(ToolbarItem::button(BAR_REFRESH, if self.pending.is_empty() { "Refresh" } else { "Refreshing\u{2026}" }).enabled(self.pending.is_empty()));
+        items.push(ToolbarItem::custom(BAR_SEARCH, "Search", SEARCH_W));
         Toolbar::new(items)
     }
 
@@ -471,7 +490,12 @@ impl News {
             .bar
             .iter()
             .flat_map(|p| p.visible.iter())
-            .filter_map(|(id, r)| bar.items.iter().find(|i| i.id == *id).map(|i| Node { id: *id as u64, role: Role::Button, label: i.label.clone(), value: String::new(), bounds: *r, enabled: i.enabled }))
+            .filter_map(|(id, r)| {
+                let search = *id == BAR_SEARCH;
+                let role = if search { Role::TextField } else { Role::Button };
+                let value = if search { self.query.to_string() } else { String::new() };
+                bar.items.iter().find(|i| i.id == *id).map(|i| Node { id: *id as u64, role, label: i.label.clone(), value, bounds: *r, enabled: i.enabled })
+            })
             .collect();
         // the source list's rows: Today, then each feed (the ids match `sidebar` and `activate_control`)
         let list = self.sidebar();
@@ -491,6 +515,7 @@ impl News {
             BAR_BACK if self.open.is_some() => Target::Back,
             BAR_REFRESH => Target::Refresh,
             BAR_READ if self.open.is_some() => Target::Read,
+            BAR_SEARCH => Target::Search,
             n if n >= SIDEBAR_ROW && (n - SIDEBAR_ROW) as usize <= READING_TAB + self.feeds.len() => Target::Feed((n - SIDEBAR_ROW) as usize),
             _ => return false,
         };
@@ -536,6 +561,15 @@ impl News {
                 BAR_BACK => Some(Target::Back),
                 BAR_REFRESH if self.pending.is_empty() => Some(Target::Refresh),
                 BAR_READ => Some(Target::Read),
+                BAR_SEARCH => {
+                    let field = self.bar.as_ref()?.rect_of(BAR_SEARCH)?;
+                    // the clear button sits at the trailing end, and only while there is a query
+                    if !self.query.is_empty() && px >= field.right() - SEARCH_CLEAR_PT {
+                        Some(Target::ClearSearch)
+                    } else {
+                        Some(Target::Search)
+                    }
+                }
                 _ => None,
             };
         }
@@ -600,9 +634,57 @@ impl News {
         self.dirty = true;
     }
 
+    /// Whether the search field has keyboard focus; the shell shows the keyboard for it.
+    pub fn search_focused(&self) -> bool {
+        self.search_focus
+    }
+
+    /// A key press for the search field while it has focus: text is added, Backspace removes the last character,
+    /// Return leaves the field, and Escape clears the query and leaves it. Other keys are not used here.
+    pub fn key(&mut self, k: KeyInput) -> bool {
+        if !self.search_focus {
+            return false;
+        }
+        match k {
+            KeyInput::Text(s) => {
+                let clean: String = s.chars().filter(|c| !c.is_control()).collect();
+                if clean.is_empty() {
+                    return true;
+                }
+                self.query.push_str(&clean);
+            }
+            KeyInput::Code(8) => self.query.pop(),
+            KeyInput::Code(13) => self.search_focus = false,
+            KeyInput::Code(1) => {
+                self.query.clear();
+                self.search_focus = false;
+            }
+            KeyInput::Code(_) => return false,
+        }
+        self.rebuild();
+        self.scroll.jump_top();
+        self.dirty = true;
+        true
+    }
+
     fn activate(&mut self, ui: &Ui, target: Target) {
         self.notice = None;
+        // any press outside the search field leaves it
+        if !matches!(target, Target::Search | Target::ClearSearch) {
+            self.search_focus = false;
+        }
+        if target == Target::Search {
+            self.search_focus = true;
+            self.dirty = true;
+            return;
+        }
         match target {
+            Target::Search => {}
+            Target::ClearSearch => {
+                self.query.clear();
+                self.search_focus = true;
+                self.rebuild();
+            }
             Target::Back => {
                 self.open = None;
             }
@@ -721,6 +803,9 @@ impl News {
             _ => None,
         };
         self.bar = Some(widgets::toolbar(s, ui, self.bar_bounds(ui), &self.toolbar(), pressed));
+        if let Some(r) = self.bar.as_ref().and_then(|b| b.rect_of(BAR_SEARCH)) {
+            widgets::search_field(s, ui, &self.query, Rect { x: r.x, y: r.y + 4.0, w: r.w, h: r.h - 8.0 }, "Search", self.search_focus);
+        }
     }
 
     fn draw_list(&mut self, s: &mut Surface, ui: &Ui) {
@@ -739,6 +824,7 @@ impl News {
                     (_, false) => "Loading headlines\u{2026}".to_string(),
                     _ if !self.online && self.tab != READING_TAB => "You are offline".to_string(),
                     (Some(e), true) => e.clone(),
+                    _ if !self.query.is_empty() => "No matching articles".to_string(),
                     _ if self.tab == READING_TAB => "Nothing saved yet".to_string(),
                     _ => "No headlines".to_string(),
                 };
