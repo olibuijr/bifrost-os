@@ -573,7 +573,7 @@ impl Menubar {
                 if let Some(row) = self.popup_layout(slot).row_at(y).filter(|&r| items.get(r).is_some_and(selectable)) {
                     self.nav.row = Some(row);
                     if let Some((menu, item)) = self.nav.activate(&self.model) {
-                        link.send(&FromChrome::MenuAction { menu, item }).map_err(|e| format!("shell link: {e}"))?;
+                        link.send(&FromChrome::MenuAction { menu, item, generation: self.model.generation }).map_err(|e| format!("shell link: {e}"))?;
                         self.nav.close();
                     }
                 }
@@ -596,7 +596,7 @@ impl Menubar {
             XK_RIGHT => self.nav.switch(&self.model, &slots, 1),
             XK_RETURN | XK_KP_ENTER => {
                 if let Some((menu, item)) = self.nav.activate(&self.model) {
-                    link.send(&FromChrome::MenuAction { menu, item }).map_err(|e| format!("shell link: {e}"))?;
+                    link.send(&FromChrome::MenuAction { menu, item, generation: self.model.generation }).map_err(|e| format!("shell link: {e}"))?;
                     self.nav.close();
                 }
             }
@@ -719,6 +719,7 @@ mod tests {
                 Menu { id: 2, title: "File".into(), items: vec![item(0, "New", true), sep(1), item(2, "Close", true)] },
             ],
             status: Vec::new(),
+            generation: 0,
         }
     }
 

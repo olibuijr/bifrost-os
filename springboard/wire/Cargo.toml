@@ -1,0 +1,7 @@
+[package]
+name = "bifrost-wire"
+version = "0.1.0"
+edition = "2021"
+description = "Little-endian wire codec shared by the BifrOSt IPC protocols (Writer, Reader, DecodeError); std only"
+
+[dependencies]

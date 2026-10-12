@@ -460,6 +460,7 @@ dependencies = [
  "bifrost-gpu",
  "bifrost-layers",
  "bifrost-render",
+ "bifrost-wire",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
@@ -640,6 +641,7 @@ name = "bifrost-proto"
 version = "0.1.0"
 dependencies = [
  "bifrost-ui",
+ "bifrost-wire",
 ]
 
 [[package]]
@@ -704,6 +706,10 @@ dependencies = [
  "bifrost-core",
  "springboard",
 ]
+
+[[package]]
+name = "bifrost-wire"
+version = "0.1.0"
 
 [[package]]
 name = "bifrost-wm"

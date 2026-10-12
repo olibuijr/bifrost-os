@@ -51,6 +51,7 @@ extern "C" {
     fn close(fd: c_int) -> c_int;
     fn fcntl(fd: c_int, cmd: c_int, arg: c_int) -> c_int;
     fn ftruncate(fd: c_int, len: i64) -> c_int;
+    fn lseek(fd: c_int, off: i64, whence: c_int) -> i64;
     fn mmap(addr: *mut c_void, len: usize, prot: c_int, flags: c_int, fd: c_int, off: i64) -> *mut c_void;
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
     fn poll(fds: *mut PollFd, n: u64, timeout: c_int) -> c_int;
@@ -74,6 +75,12 @@ const PROT_READ: c_int = 1;
 const PROT_WRITE: c_int = 2;
 const MAP_SHARED: c_int = 1;
 const MFD_CLOEXEC: u32 = 1;
+const MFD_ALLOW_SEALING: u32 = 2;
+const F_ADD_SEALS: c_int = 1033;
+const F_SEAL_SHRINK: c_int = 2;
+const SEEK_END: c_int = 2;
+const MSG_TRUNC: c_int = 0x20;
+const MSG_CTRUNC: c_int = 0x8;
 const O_RDWR: c_int = 2;
 const ASHMEM_SET_NAME: u64 = 0x4100_7701;
 const ASHMEM_SET_SIZE: u64 = 0x4008_7703;
@@ -131,6 +138,22 @@ pub fn shm_resize(fd: &Owned, size: usize) -> io::Result<()> {
     cvt(unsafe { ftruncate(fd.0, size as i64) }).map(|_| ())
 }
 
+/// Size in bytes of a shared memory file (`lseek` to the end; works for memfd and ashmem).
+pub fn shm_len(fd: &Owned) -> io::Result<usize> {
+    let n = unsafe { lseek(fd.0, 0, SEEK_END) };
+    if n < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(n as usize)
+    }
+}
+
+/// Forbids shrinking the file, so a mapping of its current size can never fault past EOF (memfd only;
+/// the creator must have allowed sealing, which `shm_create` does). Idempotent.
+pub fn seal_shrink(fd: &Owned) -> io::Result<()> {
+    cvt(unsafe { fcntl(fd.0, F_ADD_SEALS, F_SEAL_SHRINK) }).map(|_| ())
+}
+
 /// Puts `fd` in non-blocking mode (reads return `WouldBlock` instead of waiting).
 pub fn set_nonblocking(fd: Fd) -> io::Result<()> {
     const F_GETFL: c_int = 3;
@@ -167,6 +190,15 @@ impl Channel {
 
     /// Sends one packet with optional descriptors.
     pub fn send(&self, data: &[u8], fds: &[Fd]) -> io::Result<()> {
+        self.send_flags(data, fds, 0)
+    }
+
+    /// Like `send` but never waits: a full queue is `ErrorKind::WouldBlock` (the shell's end uses this).
+    pub fn try_send(&self, data: &[u8], fds: &[Fd]) -> io::Result<()> {
+        self.send_flags(data, fds, MSG_DONTWAIT)
+    }
+
+    fn send_flags(&self, data: &[u8], fds: &[Fd], flags: c_int) -> io::Result<()> {
         assert!(fds.len() <= MAX_FDS);
         let mut iov = IoVec { base: data.as_ptr() as *mut c_void, len: data.len() };
         let mut ctrl = CtrlBuf([0; CMSG_SPACE_FDS]);
@@ -182,7 +214,7 @@ impl Channel {
             msg.controllen = (len + 7) & !7;
         }
         loop {
-            let n = unsafe { sendmsg(self.fd.0, &msg, MSG_NOSIGNAL) };
+            let n = unsafe { sendmsg(self.fd.0, &msg, MSG_NOSIGNAL | flags) };
             if n >= 0 {
                 return Ok(());
             }
@@ -195,7 +227,7 @@ impl Channel {
 
     /// Receives one packet; `block = false` returns `Empty` when none is queued.
     pub fn recv(&self, block: bool) -> io::Result<Recv> {
-        let mut buf = vec![0u8; crate::MAX_PACKET];
+        let buf = &mut [0u8; crate::MAX_PACKET];
         let mut iov = IoVec { base: buf.as_mut_ptr() as *mut c_void, len: buf.len() };
         let mut ctrl = CtrlBuf([0; CMSG_SPACE_FDS]);
         let mut msg = MsgHdr {
@@ -231,11 +263,14 @@ impl Channel {
                 }
             }
         }
+        if msg.flags & (MSG_TRUNC | MSG_CTRUNC) != 0 {
+            // an oversized packet or lost descriptors: a protocol error (the fds in `fds` close on drop)
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "packet truncated"));
+        }
         if n == 0 && fds.is_empty() {
             return Ok(Recv::Closed);
         }
-        buf.truncate(n);
-        Ok(Recv::Packet(buf, fds))
+        Ok(Recv::Packet(buf[..n].to_vec(), fds))
     }
 
     /// Waits until a packet (or EOF) is readable; false on timeout (`None` = forever).
@@ -273,7 +308,7 @@ impl Channel {
 /// Shared memory: `memfd_create`, or `/dev/ashmem` where the syscall is refused (Android SELinux).
 pub fn shm_create(name: &str, size: usize) -> io::Result<Owned> {
     let cname = format!("{name}\0");
-    let fd = unsafe { syscall(SYS_MEMFD_CREATE, cname.as_ptr() as *const c_char, MFD_CLOEXEC) } as c_int;
+    let fd = unsafe { syscall(SYS_MEMFD_CREATE, cname.as_ptr() as *const c_char, MFD_CLOEXEC | MFD_ALLOW_SEALING) } as c_int;
     if fd >= 0 {
         let fd = Owned(fd);
         cvt(unsafe { ftruncate(fd.0, size as i64) })?;

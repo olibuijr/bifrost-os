@@ -231,7 +231,17 @@ fn get(r: &mut Reader, max: usize) -> Result<String, DecodeError> {
 /// A system-service name or method name: at most this many characters.
 pub const MAX_SERVICE_NAME: usize = 64;
 /// A system-service JSON body (call, reply or event): at most this many characters.
-pub const MAX_SERVICE_BODY: usize = 64 * 1024;
+pub const MAX_SERVICE_BODY: usize = crate::MAX_PACKET - 512;
+
+/// The body as sent: a body over `MAX_SERVICE_BODY` bytes is replaced by `instead`, never cut (a cut JSON body
+/// would arrive as a valid-looking, truncated reply).
+fn fit_body<'a>(body: &'a str, instead: &'a str) -> &'a str {
+    if body.len() > MAX_SERVICE_BODY {
+        instead
+    } else {
+        body
+    }
+}
 pub const MAX_DIST_INFO: usize = 32;
 pub const MAX_DIST_VALUE: usize = 1024;
 
@@ -511,14 +521,15 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
         ToApp::ServiceReply { request, ok, body } => {
             u32_(b, tag::SERVICE_REPLY);
             u32_(b, *request);
-            b.push(*ok as u8);
-            put(b, body, MAX_SERVICE_BODY);
+            let too_big = body.len() > MAX_SERVICE_BODY;
+            b.push((*ok && !too_big) as u8);
+            put(b, if too_big { "body too large" } else { body }, MAX_SERVICE_BODY);
         }
         ToApp::ServiceEvent { service, event, body } => {
             u32_(b, tag::SERVICE_EVENT);
             put(b, service, MAX_SERVICE_NAME);
             put(b, event, MAX_SERVICE_NAME);
-            put(b, body, MAX_SERVICE_BODY);
+            put(b, fit_body(body, "{\"error\":\"body too large\"}"), MAX_SERVICE_BODY);
         }
         ToApp::DragDest { session, phase, x, y, allowed, items } => {
             u32_(b, tag::DRAG_DEST);
@@ -618,7 +629,7 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, *request);
             put(b, service, MAX_SERVICE_NAME);
             put(b, method, MAX_SERVICE_NAME);
-            put(b, body, MAX_SERVICE_BODY);
+            put(b, fit_body(body, "null"), MAX_SERVICE_BODY);
         }
         ToShell::Share { request, items, anchor } => {
             u32_(b, tag::SHARE);

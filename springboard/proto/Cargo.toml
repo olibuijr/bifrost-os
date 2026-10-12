@@ -2,7 +2,8 @@
 name = "bifrost-proto"
 version = "0.1.0"
 edition = "2021"
-description = "BifrOSt app <-> SpringBoard wire protocol (see docs/apps.md); no dependencies"
+description = "BifrOSt app <-> SpringBoard wire protocol (see docs/apps.md); depends only on bifrost-ui and bifrost-wire"
 
 [dependencies]
 bifrost-ui = { path = "../ui" }
+bifrost-wire = { path = "../wire" }

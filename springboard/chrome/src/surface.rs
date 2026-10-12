@@ -10,8 +10,7 @@
 //! the root contents of the surface's layer context and commits the context. The compositor sends `wl_buffer.release`
 //! when it is done with a slot. Frame callbacks drive redraws.
 //!
-//! Known limits (see docs/graphics/g2-chrome-core.md): `dispatch` waits by sleeping in 1 ms steps, because waiting on
-//! the extra fd with poll(2) needs libc or rustix, which this crate does not depend on; key events carry the evdev
+//! Known limits (see docs/graphics/g2-chrome-core.md): key events carry the evdev
 //! code, not an xkb keysym; the scale is 1 until output scale is read; GPU waits are blocking, not explicit sync.
 
 use bifrost_2d::Renderer;
@@ -330,28 +329,43 @@ impl Display {
         self.conn.flush().map_err(|e| format!("flush: {e:?}"))
     }
 
-    /// Waits up to `timeout_ms` (or for `extra_fd` to be readable, the shell link) and returns what happened.
-    /// Waits in 1 ms steps on the Wayland socket; `extra_fd` is not polled yet (see the module note), so callers
-    /// poll their own link after each return.
+    /// Waits up to `timeout_ms` (`-1` = until something happens) or until `extra_fd` (the shell link) is
+    /// readable, and returns the events that arrived. Sleeps in poll(2) on the Wayland socket and `extra_fd`.
     pub fn dispatch(&mut self, timeout_ms: i32, extra_fd: Option<std::os::fd::RawFd>) -> Result<Vec<Event>, String> {
-        let _ = extra_fd;
-        let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(0) as u64);
+        let deadline = deadline_for(timeout_ms);
         loop {
             self.queue.dispatch_pending(&mut self.state).map_err(|e| format!("dispatch: {e:?}"))?;
             self.conn.flush().map_err(|e| format!("flush: {e:?}"))?;
+            if !self.state.events.is_empty() || !self.state.configures.is_empty() || !self.state.closed.is_empty() {
+                break;
+            }
+            let wait = match deadline {
+                None => -1,
+                Some(d) => {
+                    let left = d.saturating_duration_since(Instant::now());
+                    // round up so a sub-millisecond remainder does not become a busy 0 ms poll
+                    left.as_millis().min(i32::MAX as u128 - 1) as i32 + i32::from(left.subsec_nanos() % 1_000_000 != 0)
+                }
+            };
+            let mut link_ready = false;
             if let Some(guard) = self.conn.prepare_read() {
-                match guard.read() {
-                    Ok(_) => {}
-                    Err(WaylandError::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                    Err(e) => return Err(format!("read: {e:?}")),
+                use std::os::fd::AsRawFd;
+                let (wl_ready, extra_ready) = poll_fds(guard.connection_fd().as_raw_fd(), extra_fd, wait);
+                link_ready = extra_ready;
+                if wl_ready {
+                    match guard.read() {
+                        Ok(_) => {}
+                        Err(WaylandError::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(e) => return Err(format!("read: {e:?}")),
+                    }
+                } else {
+                    drop(guard);
                 }
             }
             self.queue.dispatch_pending(&mut self.state).map_err(|e| format!("dispatch: {e:?}"))?;
-            let now = Instant::now();
-            if !self.state.events.is_empty() || !self.state.configures.is_empty() || !self.state.closed.is_empty() || now >= deadline {
+            if link_ready || deadline.is_some_and(|d| Instant::now() >= d) {
                 break;
             }
-            std::thread::sleep((deadline - now).min(Duration::from_millis(1)));
         }
         self.apply_state();
         Ok(std::mem::take(&mut self.state.events))
@@ -597,8 +611,58 @@ impl Dispatch<BifrostLayerContextV1, SurfaceId> for State {
     }
 }
 
+#[repr(C)]
+struct PollFd {
+    fd: i32,
+    events: i16,
+    revents: i16,
+}
+
+extern "C" {
+    fn poll(fds: *mut PollFd, n: u64, timeout: i32) -> i32;
+}
+
+/// The deadline for a `dispatch` timeout: negative waits forever (`None`).
+fn deadline_for(timeout_ms: i32) -> Option<Instant> {
+    (timeout_ms >= 0).then(|| Instant::now() + Duration::from_millis(timeout_ms as u64))
+}
+
+/// poll(2) on the Wayland socket and an optional second descriptor; returns (first readable, second readable).
+/// `timeout_ms < 0` waits forever. A signal or error reads as "nothing ready".
+fn poll_fds(first: i32, second: Option<i32>, timeout_ms: i32) -> (bool, bool) {
+    const POLLIN: i16 = 1;
+    let mut fds = [PollFd { fd: first, events: POLLIN, revents: 0 }, PollFd { fd: second.unwrap_or(-1), events: POLLIN, revents: 0 }];
+    // SAFETY: `fds` is a live array of two `pollfd`s; a negative fd is ignored by poll.
+    let n = unsafe { poll(fds.as_mut_ptr(), 2, timeout_ms) };
+    if n <= 0 {
+        return (false, false);
+    }
+    // POLLERR/POLLHUP also count so a closed link wakes the loop
+    (fds[0].revents != 0, fds[1].revents != 0)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_negative_timeout_has_no_deadline() {
+        assert!(super::deadline_for(-1).is_none());
+        assert!(super::deadline_for(0).is_some());
+    }
+
+    #[test]
+    fn poll_fds_sleeps_until_the_extra_fd_is_written() {
+        use std::io::Write;
+        use std::os::fd::AsRawFd;
+        use std::os::unix::net::UnixStream;
+        let (a, mut b) = UnixStream::pair().unwrap();
+        let (w, _w2) = UnixStream::pair().unwrap();
+        let t = std::time::Instant::now();
+        assert_eq!(super::poll_fds(w.as_raw_fd(), Some(a.as_raw_fd()), 30), (false, false));
+        assert!(t.elapsed() >= std::time::Duration::from_millis(25), "idle poll waits, it does not spin");
+        b.write_all(b"x").unwrap();
+        assert_eq!(super::poll_fds(w.as_raw_fd(), Some(a.as_raw_fd()), -1), (false, true));
+    }
+
     use super::*;
 
     #[test]

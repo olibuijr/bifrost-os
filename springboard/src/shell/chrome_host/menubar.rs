@@ -81,7 +81,8 @@ pub(super) fn model(shell: &Shell) -> MenuBarModel {
         }
     }
     let app_name = menus.get(1).map(|m| m.title.clone()).unwrap_or_default();
-    MenuBarModel { app_name, menus, status }
+    // the server stamps the generation when it publishes
+    MenuBarModel { app_name, menus, status, generation: 0 }
 }
 
 // the shell menus it reads are built only with the Wayland desktop
