@@ -1028,3 +1028,6 @@ pub mod frame_grab;
 pub mod render_synchronizer;
 pub mod indirect_command;
 pub mod counter_sample;
+
+pub mod object_push;
+pub mod passkey_display;
