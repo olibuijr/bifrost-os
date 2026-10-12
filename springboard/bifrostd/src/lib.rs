@@ -82,6 +82,13 @@ impl Found {
     }
 }
 
+/// True when `exec` under `dir` is a regular file whose resolved path stays inside `dir` (a symlink must not
+/// point a service at a binary elsewhere on the system).
+pub fn exec_inside(dir: &Path, exec: &str) -> bool {
+    let p = dir.join(exec);
+    p.is_file() && std::fs::canonicalize(&p).is_ok_and(|r| r.starts_with(dir))
+}
+
 pub fn scan(root: &Path) -> Vec<Found> {
     let Ok(rd) = std::fs::read_dir(root.join("apps")) else { return Vec::new() };
     let mut v: Vec<Found> = rd
@@ -90,7 +97,7 @@ pub fn scan(root: &Path) -> Vec<Found> {
             let cur = e.path().join("current");
             let dir = std::fs::canonicalize(&cur).ok()?;
             let manifest = Manifest::parse(&std::fs::read_to_string(dir.join("manifest.toml")).ok()?)?;
-            (manifest.id == e.file_name().to_string_lossy() && dir.join(&manifest.exec).is_file()).then_some(Found { manifest, dir })
+            (manifest.id == e.file_name().to_string_lossy() && exec_inside(&dir, &manifest.exec)).then_some(Found { manifest, dir })
         })
         .collect();
     v.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
@@ -431,6 +438,21 @@ fn swap(root: &Path, id: &str, old: &mut Running, new: &Found) -> Option<(Runnin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn exec_symlink_outside_the_package_is_rejected() {
+        let d = std::env::temp_dir().join(format!("bifrostd-exec-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("pkg")).unwrap();
+        let dir = std::fs::canonicalize(d.join("pkg")).unwrap();
+        std::fs::write(d.join("outside"), b"x").unwrap();
+        std::fs::write(dir.join("inside"), b"x").unwrap();
+        std::os::unix::fs::symlink(d.join("outside"), dir.join("link")).unwrap();
+        assert!(super::exec_inside(&dir, "inside"));
+        assert!(!super::exec_inside(&dir, "link"));
+        assert!(!super::exec_inside(&dir, "missing"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
