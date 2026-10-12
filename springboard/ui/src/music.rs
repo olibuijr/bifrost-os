@@ -1,10 +1,12 @@
 //! Music understanding: a session runs analyses over a mono audio buffer and returns time-stamped results
 //! (`MusicUnderstandingSession`, `SessionResult`, `RhythmResult`). Implemented: rhythm (beats, bars, BPM) from an
-//! onset-energy envelope. Pace is available from a beat grid through `analyze_pace`; it is not part of `analyze`
-//! yet. Key, loudness, structure and instrument activity are not implemented; a `SessionResult` never carries them,
-//! and asking for them fails with `Unsupported`. Times are seconds from the start of the buffer. Pure Rust, no
-//! decoding: the caller hands over samples.
+//! onset-energy envelope; key over time (`KeyResult`) from 12-bin chroma with a Krumhansl-Kessler profile match; and
+//! structure (`StructureResult`) as chroma-novelty boundaries. Pace is available from a beat grid through
+//! `analyze_pace`; it is not part of `analyze` yet. Loudness and instrument activity are not implemented; asking for
+//! them fails with `Unsupported`. Times are seconds from the start of the buffer. Pure Rust, no decoding: the caller
+//! hands over samples.
 
+use std::f64::consts::PI;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -22,7 +24,7 @@ pub enum AnalysisType {
 
 impl AnalysisType {
     /// The analyses this module runs. `analyze()` performs exactly these.
-    pub const SUPPORTED: [AnalysisType; 1] = [AnalysisType::Rhythm];
+    pub const SUPPORTED: [AnalysisType; 3] = [AnalysisType::Rhythm, AnalysisType::Key, AnalysisType::Structure];
 }
 
 /// `MusicUnderstandingError`: the cases this module can produce.
@@ -108,7 +110,19 @@ pub fn analyze_pace(beats: &[f64], beats_per_window: usize) -> PaceResult {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SessionResult {
     pub rhythm: Option<RhythmResult>,
+    pub key: Option<KeyResult>,
+    pub structure: Option<StructureResult>,
 }
+
+/// Seconds per chroma frame in a session: non-overlapping frames of this many samples.
+pub const CHROMA_FRAME: usize = 4096;
+/// The window over which a session reports one key (`KeyResult.ranges`), in seconds.
+pub const KEY_WINDOW_SECONDS: f64 = 10.0;
+/// Structure: frames on each side of a candidate boundary (about 1.5 s at 44.1 kHz with `CHROMA_FRAME`).
+pub const STRUCTURE_WINDOW_FRAMES: usize = 16;
+/// Structure: the smallest chroma-novelty value that counts as a boundary (chroma vectors are scaled to sum 1, so the
+/// largest possible distance between two of them is sqrt(2)).
+pub const STRUCTURE_MIN_NOVELTY: f64 = 0.3;
 
 /// A session over one mono buffer (`init(audioProvider:)` for a whole buffer). `analyze` and `analyze_for` run
 /// synchronously; `cancel` may be called from another thread through an `Arc` of the session.
@@ -156,12 +170,21 @@ impl MusicUnderstandingSession {
         }
         self.cancelled.store(false, Ordering::Relaxed);
         let mut out = SessionResult::default();
+        let frame_seconds = CHROMA_FRAME as f64 / self.sample_rate as f64;
+        let needs_chroma = types.iter().any(|t| matches!(t, AnalysisType::Key | AnalysisType::Structure));
+        let chroma = if needs_chroma { chroma_frames(&self.samples, self.sample_rate, CHROMA_FRAME) } else { Vec::new() };
         for kind in types {
             if self.cancelled.load(Ordering::Relaxed) {
                 return Err(MusicUnderstandingError::Cancelled);
             }
-            if *kind == AnalysisType::Rhythm {
-                out.rhythm = Some(analyze_rhythm(&self.samples, self.sample_rate));
+            match kind {
+                AnalysisType::Rhythm => out.rhythm = Some(analyze_rhythm(&self.samples, self.sample_rate)),
+                AnalysisType::Key => {
+                    let window = ((KEY_WINDOW_SECONDS / frame_seconds).round() as usize).max(1);
+                    out.key = Some(analyze_key(&chroma, frame_seconds, window));
+                }
+                AnalysisType::Structure => out.structure = Some(structure_from_chroma(&chroma, frame_seconds)),
+                _ => {}
             }
         }
         if self.cancelled.load(Ordering::Relaxed) {
@@ -268,6 +291,297 @@ fn best_phase(flux: &[f64], period: f64) -> f64 {
     best.1
 }
 
+/// `KeyResult.Mode`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Mode {
+    Major,
+    Minor,
+}
+
+/// A musical key: `tonic` is the pitch class of the root, C = 0 through B = 11, with no enharmonic spelling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Key {
+    pub tonic: u8,
+    pub mode: Mode,
+}
+
+/// `KeyResult`: the key of each time range of the song, in order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct KeyResult {
+    pub ranges: Vec<RangedValue<Key>>,
+}
+
+/// `StructureResult.segments`: consecutive time ranges that the boundaries split the buffer into, in seconds.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StructureResult {
+    pub segments: Vec<Range<f64>>,
+}
+
+/// Krumhansl and Kessler's (1982) probe-tone profiles for a major and a minor key, indexed by scale degree from the
+/// tonic (degree 0 is the tonic). Each profile is matched against chroma at every tonic.
+pub const MAJOR_PROFILE: [f64; 12] = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+pub const MINOR_PROFILE: [f64; 12] = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+
+/// The key whose profile correlates best (Pearson) with a 12-bin chroma vector, over the 12 major and 12 minor tonics.
+/// A tie goes to the earlier key in that order. Returns None when the chroma has no spread (silence or a flat
+/// spectrum), since no key can be preferred.
+pub fn key_from_chroma(chroma: &[f64; 12]) -> Option<Key> {
+    let mean = chroma.iter().sum::<f64>() / 12.0;
+    let dev: Vec<f64> = chroma.iter().map(|c| c - mean).collect();
+    let spread: f64 = dev.iter().map(|d| d * d).sum();
+    if spread <= 0.0 {
+        return None;
+    }
+    let mut best: Option<(f64, Key)> = None;
+    for (mode, profile) in [(Mode::Major, &MAJOR_PROFILE), (Mode::Minor, &MINOR_PROFILE)] {
+        let profile_mean = profile.iter().sum::<f64>() / 12.0;
+        for tonic in 0..12usize {
+            let mut cross = 0.0;
+            let mut profile_spread = 0.0;
+            for (i, d) in dev.iter().enumerate() {
+                let p = profile[(i + 12 - tonic) % 12] - profile_mean;
+                cross += d * p;
+                profile_spread += p * p;
+            }
+            let r = cross / (spread * profile_spread).sqrt();
+            if best.map_or(true, |(b, _)| r > b) {
+                best = Some((r, Key { tonic: tonic as u8, mode }));
+            }
+        }
+    }
+    best.map(|(_, key)| key)
+}
+
+/// `KeyResult` over time: the chroma frames are cut into windows of `window_frames` (the last one may be shorter), each
+/// window's chroma is summed, and its key is given over the window's time range. A window with no key (silence) gives
+/// no range. `frame_seconds` is the duration of one chroma frame.
+pub fn analyze_key(chroma: &[[f64; 12]], frame_seconds: f64, window_frames: usize) -> KeyResult {
+    let mut ranges = Vec::new();
+    if window_frames == 0 {
+        return KeyResult::default();
+    }
+    let mut start = 0;
+    while start < chroma.len() {
+        let end = (start + window_frames).min(chroma.len());
+        let mut sum = [0.0f64; 12];
+        for frame in &chroma[start..end] {
+            for (s, c) in sum.iter_mut().zip(frame) {
+                *s += c;
+            }
+        }
+        if let Some(key) = key_from_chroma(&sum) {
+            ranges.push(RangedValue { range: start as f64 * frame_seconds..end as f64 * frame_seconds, value: key });
+        }
+        start = end;
+    }
+    KeyResult { ranges }
+}
+
+/// Chroma from samples: each non-overlapping frame of `frame_len` samples (Hann-windowed) is measured at the equal
+/// tempered tones MIDI 48 (C3) to 95 (B6), each with the Goertzel algorithm, and the power of every tone is added to
+/// its pitch class. A tone at or above half the sample rate is skipped. A trailing part shorter than a frame is
+/// dropped. Frequency resolution is about one bin per `sample_rate / frame_len` Hz, so low tones blur into their
+/// neighbours; this is an approximation, not a transcription. Silence gives all-zero frames.
+pub fn chroma_frames(samples: &[f32], sample_rate: u32, frame_len: usize) -> Vec<[f64; 12]> {
+    if sample_rate == 0 || frame_len < 2 {
+        return Vec::new();
+    }
+    let rate = sample_rate as f64;
+    let window: Vec<f64> =
+        (0..frame_len).map(|n| 0.5 - 0.5 * (2.0 * PI * n as f64 / (frame_len - 1) as f64).cos()).collect();
+    let tones: Vec<(usize, f64)> = (48u32..=95)
+        .map(|m| ((m % 12) as usize, 440.0 * 2f64.powf((m as f64 - 69.0) / 12.0)))
+        .filter(|&(_, f)| f < rate / 2.0)
+        .collect();
+    samples
+        .chunks_exact(frame_len)
+        .map(|frame| {
+            let windowed: Vec<f64> = frame.iter().zip(&window).map(|(s, w)| *s as f64 * w).collect();
+            let mut chroma = [0.0f64; 12];
+            for &(pc, freq) in &tones {
+                chroma[pc] += goertzel_power(&windowed, freq, rate);
+            }
+            chroma
+        })
+        .collect()
+}
+
+/// The power of one tone in `samples`, from the Goertzel recurrence.
+fn goertzel_power(samples: &[f64], freq: f64, sample_rate: f64) -> f64 {
+    let coeff = 2.0 * (2.0 * PI * freq / sample_rate).cos();
+    let (mut s1, mut s2) = (0.0f64, 0.0f64);
+    for &x in samples {
+        let s0 = x + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    s1 * s1 + s2 * s2 - coeff * s1 * s2
+}
+
+/// Structure boundaries from per-frame feature vectors (all the same length). The novelty at frame `b` is the
+/// Euclidean distance between the mean feature of the `window` frames before `b` and the mean of the `window` frames
+/// from `b`. A boundary is a novelty peak (not lower than its left neighbour, higher than its right) of at least
+/// `min_novelty`; peaks closer than `window` frames to an earlier boundary are dropped. The buffer is cut at the
+/// boundaries. Fewer than `2 * window` frames gives one segment; no frames gives none.
+pub fn segment_frames(features: &[Vec<f64>], window: usize, min_novelty: f64) -> Vec<Range<usize>> {
+    let n = features.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    if window == 0 || n < 2 * window {
+        return vec![0..n];
+    }
+    let novelty = |b: usize| -> f64 {
+        let before = mean_of(&features[b - window..b]);
+        let after = mean_of(&features[b..b + window]);
+        before.iter().zip(&after).map(|(x, y)| (x - y) * (x - y)).sum::<f64>().sqrt()
+    };
+    let last = n - window;
+    let mut boundaries: Vec<usize> = Vec::new();
+    for b in window..=last {
+        let v = novelty(b);
+        if v < min_novelty {
+            continue;
+        }
+        let left = if b > window { novelty(b - 1) } else { 0.0 };
+        let right = if b < last { novelty(b + 1) } else { 0.0 };
+        if v < left || v <= right {
+            continue;
+        }
+        if boundaries.last().map_or(false, |&p| b - p < window) {
+            continue;
+        }
+        boundaries.push(b);
+    }
+    let mut segments = Vec::with_capacity(boundaries.len() + 1);
+    let mut from = 0;
+    for b in boundaries {
+        segments.push(from..b);
+        from = b;
+    }
+    segments.push(from..n);
+    segments
+}
+
+/// The element-wise mean of non-empty feature vectors.
+fn mean_of(frames: &[Vec<f64>]) -> Vec<f64> {
+    let mut out = vec![0.0f64; frames[0].len()];
+    for frame in frames {
+        for (o, x) in out.iter_mut().zip(frame) {
+            *o += x;
+        }
+    }
+    for o in &mut out {
+        *o /= frames.len() as f64;
+    }
+    out
+}
+
+/// `StructureResult` from chroma frames: each frame is scaled to sum 1 (silence stays zero), then `segment_frames`
+/// with the session's window and threshold, and frame ranges become seconds.
+pub fn structure_from_chroma(chroma: &[[f64; 12]], frame_seconds: f64) -> StructureResult {
+    let features: Vec<Vec<f64>> = chroma
+        .iter()
+        .map(|frame| {
+            let total: f64 = frame.iter().sum();
+            if total > 0.0 {
+                frame.iter().map(|c| c / total).collect::<Vec<f64>>()
+            } else {
+                vec![0.0; 12]
+            }
+        })
+        .collect();
+    let segments = segment_frames(&features, STRUCTURE_WINDOW_FRAMES, STRUCTURE_MIN_NOVELTY)
+        .into_iter()
+        .map(|r| r.start as f64 * frame_seconds..r.end as f64 * frame_seconds)
+        .collect();
+    StructureResult { segments }
+}
+
+#[cfg(test)]
+mod key_structure_tests {
+    use super::*;
+
+    /// A 12-bin profile rotated so that `profile[(i - tonic) mod 12]` sits at pitch class `i`.
+    fn rotated(profile: &[f64; 12], tonic: usize) -> [f64; 12] {
+        let mut out = [0.0; 12];
+        for (i, o) in out.iter_mut().enumerate() {
+            *o = profile[(i + 12 - tonic) % 12];
+        }
+        out
+    }
+
+    #[test]
+    fn the_major_profile_at_c_is_c_major() {
+        assert_eq!(key_from_chroma(&MAJOR_PROFILE), Some(Key { tonic: 0, mode: Mode::Major }));
+    }
+
+    #[test]
+    fn a_rotated_major_profile_gives_its_tonic() {
+        // Chroma built on G (pitch class 7) is the major profile shifted up seven semitones.
+        assert_eq!(key_from_chroma(&rotated(&MAJOR_PROFILE, 7)), Some(Key { tonic: 7, mode: Mode::Major }));
+    }
+
+    #[test]
+    fn a_rotated_minor_profile_gives_a_minor_key() {
+        // A minor is pitch class 9 with the minor profile.
+        assert_eq!(key_from_chroma(&rotated(&MINOR_PROFILE, 9)), Some(Key { tonic: 9, mode: Mode::Minor }));
+    }
+
+    #[test]
+    fn flat_chroma_and_silence_have_no_key() {
+        assert_eq!(key_from_chroma(&[1.0; 12]), None);
+        assert_eq!(key_from_chroma(&[0.0; 12]), None);
+    }
+
+    #[test]
+    fn key_over_time_gives_one_range_per_window() {
+        // Four frames of C major then four of G major, windows of four frames at 0.5 s each.
+        let mut chroma = vec![MAJOR_PROFILE; 4];
+        chroma.extend(vec![rotated(&MAJOR_PROFILE, 7); 4]);
+        let result = analyze_key(&chroma, 0.5, 4);
+        assert_eq!(result.ranges.len(), 2);
+        assert_eq!(result.ranges[0].range, 0.0..2.0);
+        assert_eq!(result.ranges[0].value, Key { tonic: 0, mode: Mode::Major });
+        assert_eq!(result.ranges[1].range, 2.0..4.0);
+        assert_eq!(result.ranges[1].value, Key { tonic: 7, mode: Mode::Major });
+    }
+
+    #[test]
+    fn a_pure_tone_puts_its_energy_in_its_pitch_class() {
+        // 440 Hz is A (pitch class 9); two frames of 4096 samples at 44.1 kHz.
+        let samples: Vec<f32> =
+            (0..8192).map(|n| (2.0 * PI * 440.0 * n as f64 / 44100.0).sin() as f32).collect();
+        let frames = chroma_frames(&samples, 44100, 4096);
+        assert_eq!(frames.len(), 2);
+        for frame in &frames {
+            let best = (0..12).max_by(|&a, &b| frame[a].partial_cmp(&frame[b]).unwrap()).unwrap();
+            assert_eq!(best, 9);
+        }
+        assert!(chroma_frames(&vec![0.0f32; 8192], 44100, 4096).iter().all(|f| f.iter().all(|c| *c == 0.0)));
+    }
+
+    #[test]
+    fn a_change_of_texture_is_a_boundary_at_the_change() {
+        // Ten frames of one feature then ten of another, with a window of three frames: the only novelty peak is at
+        // frame 10, where both sides are pure (distance sqrt(2)). Frames 9 and 11 score sqrt(8)/3, below the peak.
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let mut features = vec![a.clone(); 10];
+        features.extend(vec![b.clone(); 10]);
+        assert_eq!(segment_frames(&features, 3, 0.5), vec![0..10, 10..20]);
+    }
+
+    #[test]
+    fn a_threshold_above_the_peak_gives_one_segment() {
+        let mut features = vec![vec![1.0, 0.0]; 10];
+        features.extend(vec![vec![0.0, 1.0]; 10]);
+        assert_eq!(segment_frames(&features, 3, 1.5), vec![0..20]);
+        assert!(segment_frames(&[], 3, 0.5).is_empty());
+        assert_eq!(segment_frames(&features[..5], 3, 0.5), vec![0..5]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,19 +648,34 @@ mod tests {
         let s = MusicUnderstandingSession::new(click_track(120.0, 2.0, 44100), 44100).unwrap();
         assert_eq!(s.analyze_for(&[]).unwrap_err(), MusicUnderstandingError::EmptyAnalysisSet);
         assert_eq!(
-            s.analyze_for(&[AnalysisType::Rhythm, AnalysisType::Key]).unwrap_err(),
-            MusicUnderstandingError::Unsupported(AnalysisType::Key)
+            s.analyze_for(&[AnalysisType::Rhythm, AnalysisType::Loudness]).unwrap_err(),
+            MusicUnderstandingError::Unsupported(AnalysisType::Loudness)
+        );
+        assert_eq!(
+            s.analyze_for(&[AnalysisType::Structure, AnalysisType::InstrumentActivity]).unwrap_err(),
+            MusicUnderstandingError::Unsupported(AnalysisType::InstrumentActivity)
         );
     }
 
     #[test]
-    fn analyze_fills_only_the_rhythm_result() {
+    fn analyze_fills_rhythm_key_and_structure_and_nothing_else() {
         let s = MusicUnderstandingSession::new(click_track(120.0, 10.0, 44100), 44100).unwrap();
         let result = s.analyze().unwrap();
         let rhythm = result.rhythm.clone().expect("rhythm result");
         assert!((rhythm.beats_per_minute - 120.0).abs() < 0.5);
-        assert_eq!(result, SessionResult { rhythm: Some(rhythm) });
+        assert!(result.key.is_some());
+        assert!(result.structure.is_some());
+        assert_eq!(result.rhythm.as_ref(), Some(&rhythm));
         assert!((s.duration() - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rhythm_only_leaves_key_and_structure_empty() {
+        let s = MusicUnderstandingSession::new(click_track(120.0, 10.0, 44100), 44100).unwrap();
+        let result = s.analyze_for(&[AnalysisType::Rhythm]).unwrap();
+        assert!(result.rhythm.is_some());
+        assert_eq!(result.key, None);
+        assert_eq!(result.structure, None);
     }
 
     #[test]
