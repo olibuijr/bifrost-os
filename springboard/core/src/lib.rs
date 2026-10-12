@@ -28,6 +28,8 @@ pub mod progress;
 pub mod notify_center;
 pub mod disk_events;
 pub mod txt_record;
+pub mod dnssd;
+pub mod oid;
 pub mod codereq;
 pub mod biometry;
 pub mod tunnel;
