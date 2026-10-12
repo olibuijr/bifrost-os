@@ -9,18 +9,21 @@ pub mod api;
 pub mod install;
 pub mod json;
 pub mod net;
+mod sheet;
 
 use super::cache::TextCache;
 use super::glyphs::{arc, disc, paint, ring, segment};
 use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, WHITE};
-use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_TITLEBAR_SOLID};
+use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_HUD_SOLID, MATERIAL_TITLEBAR_SOLID};
 use super::Event;
 use crate::deildu::jobs::Pool;
 use crate::deildu::scroll::Scroller;
-use crate::gfx::{pack, squircle_mask, Image, Surface};
+use crate::gfx::{pack, rgba, squircle_mask, Image, Surface};
 use crate::scene::STATUS_PT;
 use api::StoreApp;
 use bifrost_ui::entitlement::Ledger;
+use bifrost_ui::purchase::Outcome;
+use sheet::{sheet_buttons, Sheet, SheetOut};
 use install::InstalledApp;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -85,6 +88,8 @@ enum Target {
     History,
     /// "Roll Back to <previous>" on a product page
     Rollback(String),
+    /// "Restore Purchases" at the foot of the Updates tab
+    Restore,
 }
 
 /// A Today card built from the catalogue.
@@ -118,6 +123,8 @@ enum Row {
     Update(usize, usize, bool),
     Chips,
     Note(String),
+    /// "Restore Purchases" at the foot of the Updates tab
+    Restore,
 }
 
 impl Row {
@@ -131,6 +138,7 @@ impl Row {
             Row::Update(_, n, _) => ROW + if *n > 0 { NOTE_LINE * *n as f32 + 6.0 } else { 0.0 },
             Row::Chips => 52.0,
             Row::Note(_) => 64.0,
+            Row::Restore => 52.0,
         }
     }
 }
@@ -209,6 +217,12 @@ pub struct AppStore {
     /// update rows whose notes are expanded ("more")
     expanded: HashSet<String>,
     dirty: bool,
+    /// purchases recorded by the purchase sheet this session (merged with the installed apps' records)
+    bought: Ledger,
+    /// the open purchase sheet of a paid app
+    sheet: Option<Sheet>,
+    /// the result line under Restore Purchases
+    restored: Option<String>,
 }
 
 /// What the product page and rows call a system package's category.
@@ -262,6 +276,9 @@ impl AppStore {
             labels: TextCache::default(),
             expanded: HashSet::new(),
             dirty: true,
+            bought: Ledger::new(),
+            sheet: None,
+            restored: None,
         }
     }
 
@@ -353,7 +370,7 @@ impl AppStore {
     /// The installed apps the customer has purchased on `day`, newest purchase first (ties by name). Every installed app
     /// (not a background service) is a free purchase recorded on its first install day, held in the entitlement ledger.
     fn purchased(&self, day: i64) -> Vec<usize> {
-        let mut ledger = Ledger::new();
+        let mut ledger = self.bought.clone();
         // a service stays hidden whether the install record or the catalogue entry says so
         for i in self.installed.iter().filter(|i| !i.is_service() && !self.catalog.iter().any(|a| a.id == i.id && a.is_service())) {
             ledger.record(&i.id, i.purchased, None);
@@ -440,6 +457,10 @@ impl AppStore {
                         }
                     }
                 }
+                if let Some(msg) = &self.restored {
+                    r.push(Row::Note(msg.clone()));
+                }
+                r.push(Row::Restore);
             }
             Tab::Search => {
                 r.push(Row::Title("Search"));
@@ -624,13 +645,41 @@ impl AppStore {
         }
     }
 
+    /// Opens the purchase sheet for a paid app: nothing is downloaded until the customer confirms.
+    fn open_sheet(&mut self, id: &str) {
+        let Some(a) = self.find(id).cloned() else { return };
+        let Some(price) = a.price.clone() else { return };
+        self.sheet = Some(Sheet::open(&self.root, &a.id, &a.name, price));
+        self.dirty = true;
+    }
+
+    /// A confirmed purchase: recorded in the entitlement ledger, then the paid package is installed.
+    fn finish_purchase(&mut self) {
+        let Some(open) = self.sheet.take() else { return };
+        let Sheet { id, mut purchase, .. } = open;
+        let tx = self.bought.record(&id, today_days(), None);
+        if purchase.complete(Outcome::Success(tx)) && purchase.may_install() {
+            self.failed.remove(&id);
+            self.start(&id);
+        }
+    }
+
+    /// Restore Purchases: re-reads the install records, which hold the purchases of this PC, and says how many there are.
+    fn restore_purchases(&mut self) {
+        self.refresh_installed();
+        self.restored = Some(match self.purchased(today_days()).len() {
+            0 => "No purchases to restore.".to_string(),
+            1 => "Restored 1 purchase.".to_string(),
+            n => format!("Restored {n} purchases."),
+        });
+        self.dirty = true;
+    }
+
     fn press_button(&mut self, id: &str) {
         match self.find(id).map(|a| self.button(a)) {
             Some(Btn::None) => {}
             // a paid app needs a purchase, and the shell has no purchase sheet yet: it is never installed here
-            Some(Btn::Get) if self.find(id).is_some_and(|a| a.is_paid()) => {
-                self.failed.insert(id.to_string(), "Purchase is not available yet".into());
-            }
+            Some(Btn::Get) if self.find(id).is_some_and(|a| a.is_paid()) => self.open_sheet(id),
             Some(Btn::Get | Btn::Update) => self.start(id),
             Some(Btn::Progress(_)) => self.cancel(id),
             Some(Btn::Open) => self.launch = self.installed.iter().find(|i| i.id == id).cloned(),
@@ -796,6 +845,7 @@ impl AppStore {
                     }
                 }
                 Row::Header(_, true) if x > self.w as f32 - ui.pt(130.0) => found = Some(Target::UpdateAll),
+                Row::Restore => found = Some(Target::Restore),
                 Row::Chips => {
                     let n = self.categories().len() + 1;
                     let cw = self.card_w(ui) / n as f32;
@@ -899,6 +949,7 @@ impl AppStore {
             }
             Target::Button(id) => self.press_button(&id),
             Target::Rollback(id) => self.rollback(&id),
+            Target::Restore => self.restore_purchases(),
             Target::UpdateAll => {
                 for i in self.update_list() {
                     let id = self.catalog[i].id.clone();
@@ -911,7 +962,30 @@ impl AppStore {
         self.dirty = true;
     }
 
+    /// While a purchase sheet is up it takes every touch; the pane's coordinates skip the sidebar on desktop.
+    fn touch_sheet(&mut self, ui: &Ui, ev: Event, t: f64) {
+        let dx = if self.desktop { self.sidebar as f32 } else { 0.0 };
+        let ev = match ev {
+            Event::Down(x, y) => Event::Down(x - dx, y),
+            Event::Move(x, y) => Event::Move(x - dx, y),
+            Event::Up(x, y) => Event::Up(x - dx, y),
+            other => other,
+        };
+        let (w, h, now) = (self.w, self.h, crate::shell::clock::tz::unix_now());
+        let out = self.sheet.as_mut().and_then(|s| s.touch(ui, w, h, ev, t, now));
+        self.dirty = true;
+        match out {
+            Some(SheetOut::Confirmed) => self.finish_purchase(),
+            Some(SheetOut::Cancelled) => self.sheet = None,
+            None => {}
+        }
+    }
+
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
+        if self.sheet.is_some() {
+            self.touch_sheet(ui, ev, t);
+            return;
+        }
         let (mut x, y) = match ev {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return,
@@ -966,7 +1040,8 @@ impl AppStore {
         if progress {
             self.progress_at = t;
         }
-        self.dirty |= was || moving || progress;
+        let shaking = self.sheet.as_ref().is_some_and(|s| s.animating(t));
+        self.dirty |= was || moving || progress || shaking;
         self.dirty
     }
 
@@ -1081,6 +1156,11 @@ impl AppStore {
                 Row::Note(t) => {
                     let t = ui.fit(t, 15.0, w);
                     self.put(&mut c, ui, &t, 15.0, Weight::Regular, SECONDARY, false, x, y + h / 2.0);
+                }
+                Row::Restore => {
+                    let text = "Restore Purchases";
+                    let tw = ui.measure(text, 17.0, Weight::Regular);
+                    self.put(&mut c, ui, text, 17.0, Weight::Regular, TINT, false, (self.w as f32 - tw) / 2.0, y + h / 2.0);
                 }
                 Row::Chips => {
                     let mut names = vec!["All".to_string()];
@@ -1395,6 +1475,41 @@ impl AppStore {
             self.draw_content(s, ui);
         }
         self.draw_bars(s, ui);
+        if self.sheet.is_some() {
+            self.draw_sheet(s, ui);
+        }
+    }
+
+    /// The purchase sheet: a card with Buy and Cancel, or the passcode keypad once Buy asked for it.
+    fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui) {
+        let (w, h, t) = (self.w, self.h, self.clock);
+        let Some(open) = self.sheet.as_ref() else { return };
+        if let Some(pad) = open.keypad() {
+            pad.draw(s, ui, w, h, MATERIAL_HUD_SOLID.now(), t);
+            return;
+        }
+        let title = format!("Buy {}", open.name);
+        let price = open.purchase.price.display();
+        let message = if open.message.is_empty() { "Confirm to buy this app.".to_string() } else { open.message.clone() };
+        let (cx, cy, cw, ch) = sheet::sheet_card(ui, w, h);
+        let (buy, cancel) = sheet_buttons(ui, w, h);
+        s.fill_rect(0, 0, w as usize, h as usize, rgba(0, 0, 0, 110));
+        s.fill_rrect(cx, cy, cw, ch, ui.pt(13.0), cell());
+        let mid = cx + cw / 2.0;
+        for (text, size, weight, color, y) in [
+            (title.as_str(), 17.0, Weight::Semibold, label(), cy + ui.pt(40.0)),
+            (price.as_str(), 22.0, Weight::Bold, label(), cy + ui.pt(84.0)),
+            (message.as_str(), 13.0, Weight::Regular, SECONDARY, cy + ui.pt(112.0)),
+        ] {
+            let tw = ui.measure(text, size, weight);
+            self.put(s, ui, text, size, weight, color, false, mid - tw / 2.0, y);
+        }
+        s.fill_rrect(buy.0, buy.1, buy.2, buy.3, CAPSULE_RADIUS, TINT);
+        s.fill_rrect(cancel.0, cancel.1, cancel.2, cancel.3, CAPSULE_RADIUS, fill());
+        for (text, r, ink) in [("Buy", buy, WHITE), ("Cancel", cancel, TINT)] {
+            let tw = ui.measure(text, 17.0, Weight::Semibold);
+            self.put(s, ui, text, 17.0, Weight::Semibold, ink, false, r.0 + (r.2 - tw) / 2.0, r.1 + r.3 / 2.0);
+        }
     }
 }
 
@@ -1670,17 +1785,52 @@ mod tests {
         s.tab = Tab::Updates;
         let rows = s.rows();
         let at = rows.iter().position(|r| *r == Row::Header("Purchased".into(), false)).expect("Purchased header");
-        assert_eq!(rows[at + 1..], [Row::App(1), Row::App(0)], "chess (bought first) then calc, both in the catalogue");
+        assert_eq!(rows[at + 1..at + 3], [Row::App(1), Row::App(0)], "chess (bought first) then calc, both in the catalogue");
+        assert_eq!(rows[at + 3], Row::Restore, "Restore Purchases closes the tab");
     }
 
     #[test]
-    fn a_paid_app_is_not_installed_without_a_purchase() {
+    fn a_paid_app_opens_the_purchase_sheet_and_installs_nothing_yet() {
         let mut s = store();
         s.catalog[1].price = Some(bifrost_ui::purchase::Price::new(990, 0, "ISK"));
         let chess = s.catalog[1].clone();
         s.press_button(&chess.id);
-        assert!(s.jobs.is_empty());
-        assert_eq!(s.failed.get(&chess.id).map(String::as_str), Some("Purchase is not available yet"));
+        assert!(s.jobs.is_empty(), "no download before the customer confirms");
+        let open = s.sheet.as_ref().expect("the sheet is up");
+        assert_eq!((open.id.as_str(), open.purchase.price.display()), ("is.o.chess", "990 ISK".to_string()));
         assert_eq!(s.button(&chess), Btn::Get);
+    }
+
+    #[test]
+    fn tapping_buy_records_the_purchase_and_cancel_records_nothing() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        s.catalog[1].price = Some(bifrost_ui::purchase::Price::new(990, 0, "ISK"));
+        let chess = s.catalog[1].clone();
+        // the pane sits right of the sidebar on desktop, so window x = sidebar + pane x
+        let sidebar = s.sidebar as f32;
+        let to_window = |r: (f32, f32, f32, f32)| (r.0 + r.2 / 2.0 + sidebar, r.1 + r.3 / 2.0);
+        s.press_button(&chess.id);
+        let (cancel_x, cancel_y) = to_window(sheet::sheet_buttons(&ui, s.w, s.h).1);
+        s.touch(&ui, Event::Up(cancel_x, cancel_y), 0.0);
+        assert!(s.sheet.is_none());
+        assert!(!s.bought.is_entitled(&chess.id, today_days()), "a cancelled sheet records nothing");
+        s.press_button(&chess.id);
+        let (buy_x, buy_y) = to_window(sheet::sheet_buttons(&ui, s.w, s.h).0);
+        s.touch(&ui, Event::Up(buy_x, buy_y), 0.0);
+        assert!(s.sheet.is_none(), "Buy closes the sheet");
+        assert!(s.bought.is_entitled(&chess.id, today_days()), "the purchase is in the ledger");
+        assert!(s.jobs.is_empty(), "the test store has no worker pool, so the install is not started");
+    }
+
+    #[test]
+    fn restore_purchases_reports_the_count_on_the_updates_tab() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        s.tab = Tab::Updates;
+        assert!(s.rows().contains(&Row::Restore));
+        s.activate(&ui, Target::Restore);
+        assert_eq!(s.restored.as_deref(), Some("No purchases to restore."));
+        assert!(s.rows().iter().any(|r| *r == Row::Note("No purchases to restore.".into())));
     }
 }
