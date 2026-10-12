@@ -71,12 +71,6 @@ impl Draft {
         Draft { uid: None, name: name.to_string(), kind, members: Vec::new(), clock_source: None }
     }
 
-    /// A draft that edits `device`, with the members and clock the server reported.
-    pub fn editing(device: &DeviceInfo, members: Vec<String>, clock_source: Option<String>) -> Draft {
-        let kind = if device.kind == Kind::MultiOutput { Kind::MultiOutput } else { Kind::Aggregate };
-        Draft { uid: Some(device.uid.clone()), name: device.name.clone(), kind, members, clock_source }
-    }
-
     pub fn is_member(&self, uid: &str) -> bool {
         self.members.iter().any(|m| m == uid)
     }
@@ -246,7 +240,7 @@ mod tests {
         assert_eq!(back.clock_source.as_deref(), Some("hdmi3"));
 
         // an edited device keeps its UID on the first line
-        let edited = Draft::editing(&DeviceInfo { kind: Kind::MultiOutput, ..hw("agg-1", 48000.0, 2) }, vec!["analog".into()], None);
+        let edited = Draft { uid: Some("agg-1".into()), kind: Kind::MultiOutput, members: vec!["analog".into()], ..Draft::new(Kind::MultiOutput, "Rack") };
         let text = edited.encode();
         assert!(text.starts_with("agg-1\nmulti-output\nanalog\n"));
         assert_eq!(Draft::decode(&text).unwrap().uid.as_deref(), Some("agg-1"));

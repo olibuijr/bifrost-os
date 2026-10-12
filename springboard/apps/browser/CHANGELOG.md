@@ -1,3 +1,8 @@
+## 0.13.2
+
+- The address field shows a star at its trailing edge: an outline for a page that is not a bookmark, filled for one. Clicking it adds or removes the bookmark.
+- Develop menu: User Agent presets (checked when chosen; applied on the next engine start), Responsive Design Mode with its size presets and device pixel ratio. The custom WxH entry is removed.
+
 ## 0.13.1 — 2026-10-12
 
 - Removed unused helpers and fields (control is_idle, page menu kind, preferences full height, perf first_frame_ms); the bench measures startup from outside the app.

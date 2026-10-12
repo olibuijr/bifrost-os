@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2
+
+- The state line used by the tests is compiled only for tests; the app has no describe hook in the SDK.
+
 ## 1.6.1
 
 - Removed the unused procedural icon module; the app uses its icon.png.

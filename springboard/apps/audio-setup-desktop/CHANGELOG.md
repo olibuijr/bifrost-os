@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- The sidebar section headers come from the device kind (`Kind::section`), and the unused draft constructor is removed.
+
 ## 0.1.0
 
 - New app. The sidebar lists the audio devices (hardware, then aggregates and multi-output devices). The detail view
