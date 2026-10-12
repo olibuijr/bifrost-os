@@ -1,5 +1,17 @@
 # BifrOSt changelog
 
+## 0.5.37 — 2026-10-12
+
+Reference-SDK parity, wave 6: 20 agents worked through the 184 remaining gap rows. 62 are now built as pure models
+with host tests (built share 82.0% -> 85.2%, coverage 46.6% -> 48.2%; `bifrost pc parity status`). The other 120
+need hardware, a network service or a proprietary format; the reasons are in `docs/parity/w6-*.md`.
+
+- New models include AES-GCM, authorization requests and an AutoFill credential provider, dispatch target queues,
+  disk image properties, DNS-SD connection lifecycle, a multi-line text view (wrap, caret, selection, scroll), media
+  trimming, 3D chart surfaces, a bag-of-words text classifier, widget search results and a compose sheet.
+- Fixes found while integrating: a duplicate embedded preview model was dropped (the SDK's `PreviewView` stays).
+- 10044 tests pass across the workspace. The models are not wired into the shell or apps yet, so the rows are Partial.
+
 ## 0.5.36 — 2026-10-12
 
 Reference-SDK parity, the wiring and connect waves: the pure models from waves 1 to 5 now run in the shell and in the apps.
