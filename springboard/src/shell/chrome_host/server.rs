@@ -5,6 +5,7 @@
 //! state says now; a model is broadcast to every client at once and stored so a new client gets it on its `Hello`.
 //! `ShowPanel` is a command, not state, so it is broadcast and not stored.
 //!
+//! The menu bar and the Dock are produced here; the Appearance and Panels models have no producer yet (IPC-8).
 //! Owner: wave G2 agent `chrome-core`. The shell loop calls `start_if_requested`, adds `fds()` to its poll set and calls
 //! `service()` after each wait.
 
@@ -127,6 +128,17 @@ impl ChromeServer {
         true
     }
 
+    /// Publishes the Dock model of the shell's Dock when it differs from the one the clients have.
+    #[cfg(feature = "desktop-wayland")]
+    fn publish_dock_now(&mut self, shell: &Shell) {
+        if let Some(dock) = shell.chrome_dock_model() {
+            let m = ToChrome::Dock(dock);
+            if self.snapshot.changed(&m) {
+                self.publish(m);
+            }
+        }
+    }
+
     /// Whether a `MenuAction` still means what the user saw: the clicked bar is the one the clients have, and the
     /// shell's bar has not changed since (a changed bar is published at once and the click is dropped), because
     /// the ids are positions in the bar (IPC-7).
@@ -144,14 +156,20 @@ impl ChromeServer {
     pub fn serve_shell(&mut self, shell: &mut Shell, t: f64) -> Vec<Effect> {
         let mut effects = Vec::new();
         for (_, msg) in self.service() {
-            if let FromChrome::MenuAction { menu, item, generation } = msg {
-                if self.action_is_current(shell, generation) {
-                    effects.extend(super::menubar::menu_action(shell, menu, item, t));
+            match msg {
+                FromChrome::MenuAction { menu, item, generation } => {
+                    if self.action_is_current(shell, generation) {
+                        effects.extend(super::menubar::menu_action(shell, menu, item, t));
+                    }
                 }
+                // the Dock client's clicks run through the same changes the shell's own Dock uses (IPC-8)
+                m @ (FromChrome::DockActivate { .. } | FromChrome::DockCommand { .. }) => effects.extend(shell.chrome_dock_message(&m, t)),
+                _ => {}
             }
         }
         if self.bar_due(t) {
             self.publish_menu_bar_now(shell);
+            self.publish_dock_now(shell);
         }
         effects
     }
