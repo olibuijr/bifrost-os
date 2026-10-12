@@ -12,6 +12,7 @@ use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, CHORD_CTRL, 
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::collections::VecDeque;
 use std::sync::OnceLock;
 
 /// `manifest.toml` of an installed package.
@@ -286,6 +287,11 @@ struct Buf {
     map: Map,
 }
 
+/// Packets queued for an app whose socket is full; past this the app is killed.
+const MAX_BACKLOG: usize = 256;
+/// How long (ms) an app may leave its socket full before it is killed.
+const STALL_MS: f64 = 5000.0;
+
 pub struct AppHost {
     pub id: String,
     /// The binary this process was started from (empty for a host on a test channel).
@@ -295,6 +301,12 @@ pub struct AppHost {
     child: Option<Child>,
     chan: Channel,
     bufs: Vec<Buf>,
+    /// Generation of the current `Buffers` set (the app's counter); `Release` carries it so the app can ignore a late one.
+    generation: u32,
+    /// Packets the app's full socket would not take yet, oldest first (bounded; see `queue`).
+    backlog: VecDeque<Vec<u8>>,
+    /// Since when (monotonic ms) the socket has been full; a long stall kills the app.
+    blocked_since: Option<f64>,
     size: (usize, usize),
     buffer_size: (usize, usize),
     /// the buffer holding the newest frame
@@ -406,6 +418,9 @@ impl AppHost {
             child,
             chan,
             bufs: Vec::new(),
+            generation: 0,
+            backlog: VecDeque::new(),
+            blocked_since: None,
             size: (cfg.w as usize, cfg.h as usize),
             buffer_size: (cfg.w as usize, cfg.h as usize),
             shown: None,
@@ -484,17 +499,101 @@ impl AppHost {
     }
 
     pub fn send(&mut self, m: &ToApp) {
-        if self.running() && self.chan.send(&m.encode(), &[]).is_err() {
-            self.reap();
+        if !self.running() {
+            return;
         }
+        // a Move is superseded by the next one, so it is the one thing that may be dropped on a full socket
+        let droppable = matches!(m, ToApp::Touch { kind: TouchKind::Move, .. });
+        self.queue(m.encode(), droppable);
+    }
+
+    /// Sends without ever blocking the shell thread (IPC-3): a full socket queues the packet (bounded) and a
+    /// stalled app is killed after `STALL_MS`.
+    fn queue(&mut self, pkt: Vec<u8>, droppable: bool) {
+        self.flush();
+        if !self.running() {
+            return;
+        }
+        if self.backlog.is_empty() {
+            match self.chan.try_send(&pkt, &[]) {
+                Ok(()) => {
+                    self.blocked_since = None;
+                    return;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    self.blocked_since.get_or_insert_with(sys::now_ms);
+                    if self.stalled() {
+                        return;
+                    }
+                }
+                Err(_) => {
+                    self.reap();
+                    return;
+                }
+            }
+        }
+        if droppable {
+            return;
+        }
+        if self.backlog.len() >= MAX_BACKLOG {
+            self.overloaded();
+            return;
+        }
+        self.backlog.push_back(pkt);
+    }
+
+    /// Sends what the socket now takes of the backlog.
+    fn flush(&mut self) {
+        while let Some(front) = self.backlog.front() {
+            match self.chan.try_send(front, &[]) {
+                Ok(()) => {
+                    self.backlog.pop_front();
+                    self.blocked_since = None;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    self.stalled();
+                    return;
+                }
+                Err(_) => {
+                    self.backlog.clear();
+                    self.reap();
+                    return;
+                }
+            }
+        }
+    }
+
+    /// True (and the app killed) once the socket has been full for `STALL_MS`.
+    fn stalled(&mut self) -> bool {
+        if self.blocked_since.is_some_and(|t| sys::now_ms() - t > STALL_MS) {
+            self.overloaded();
+            return true;
+        }
+        false
+    }
+
+    fn overloaded(&mut self) {
+        eprintln!("springboard: app {} stopped reading its socket; killing", self.id);
+        self.backlog.clear();
+        self.sigkill();
+        self.reap();
     }
 
     /// Sends `m` with one descriptor (SCM_RIGHTS): the file a document panel granted. The app gets its own copy of the
     /// descriptor; the shell's copy closes when `file` is dropped.
     pub fn send_file(&mut self, m: &ToApp, file: &std::fs::File) {
         use std::os::fd::AsRawFd;
-        if self.running() && self.chan.send(&m.encode(), &[file.as_raw_fd()]).is_err() {
-            self.reap();
+        if !self.running() {
+            return;
+        }
+        match self.chan.try_send(&m.encode(), &[file.as_raw_fd()]) {
+            Ok(()) => {}
+            // the app is not reading: this grant is dropped rather than blocking the shell (the stall timer kills it)
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                self.blocked_since.get_or_insert_with(sys::now_ms);
+                self.stalled();
+            }
+            Err(_) => self.reap(),
         }
     }
 
@@ -533,6 +632,7 @@ impl AppHost {
         if !self.running() {
             return out;
         }
+        self.flush();
         loop {
             match self.chan.recv(false) {
                 Ok(Recv::Packet(p, fds)) => {
@@ -569,7 +669,7 @@ impl AppHost {
                     self.hello = true;
                 }
             }
-            ToShell::Buffers { w, h } => {
+            ToShell::Buffers { w, h, generation } => {
                 // a direct app that sends shared-memory buffers fell back (no Vulkan device, no layer global)
                 let next = route_after_message(self.route, true);
                 if next != self.route {
@@ -579,9 +679,13 @@ impl AppHost {
                 let (w, h) = (w as usize, h as usize);
                 let bytes = w * h * 4;
                 if fds.len() == 2 && w > 0 && h > 0 && w <= 8192 && h <= 8192 {
-                    let maps: Vec<Buf> = fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect();
+                    // IPC-1: a memfd shorter than the claim would SIGBUS the shell on the first blit, and one the app can
+                    // still shrink could do the same later: require the size and seal against shrinking first.
+                    let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+                    let maps: Vec<Buf> = if safe { fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect() } else { Vec::new() };
                     if maps.len() == 2 {
                         self.bufs = maps;
+                        self.generation = generation;
                         self.buffer_size = (w, h);
                         self.shown = None;
                         self.release_after_blit = None;
@@ -594,7 +698,8 @@ impl AppHost {
                 if buf < self.bufs.len() {
                     if let Some(old) = self.shown.filter(|&o| o != buf) {
                         if let Some(prev) = self.release_after_blit.replace(old).filter(|&p| p != old && p != buf) {
-                            self.send(&ToApp::Release { buf: prev as u32 });
+                            let generation = self.generation;
+                            self.send(&ToApp::Release { buf: prev as u32, generation });
                         }
                     }
                     self.shown = Some(buf);
@@ -688,7 +793,8 @@ impl AppHost {
         }
         self.pending.clear();
         if let Some(old) = self.release_after_blit.take() {
-            self.send(&ToApp::Release { buf: old as u32 });
+            let generation = self.generation;
+            self.send(&ToApp::Release { buf: old as u32, generation });
         }
         done
     }
@@ -1463,7 +1569,7 @@ mod tests {
         let mut host=AppHost::with_channel("fixture",channel,None,cfg.clone());
         let mut pumped=Pumped::default();
         let buffers=|| vec![sys::shm_create("resize-a",48).unwrap(),sys::shm_create("resize-b",48).unwrap()];
-        host.handle(ToShell::Buffers{w:4,h:3},buffers(),&mut pumped);
+        host.handle(ToShell::Buffers{w:4,h:3,generation:1},buffers(),&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,4,3]]},vec![],&mut pumped);
         let mut resized=cfg; resized.w=8; resized.h=6;
         host.configure(resized);
@@ -1471,7 +1577,7 @@ mod tests {
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((4,3)));
         let mut pixels=vec![0;8*6];
         host.blit(&mut Surface{w:8,h:6,stride:8,px:&mut pixels,y0:0},true);
-        host.handle(ToShell::Buffers{w:8,h:6},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
+        host.handle(ToShell::Buffers{w:8,h:6,generation:2},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
         host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
         assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
     }
@@ -1706,11 +1812,61 @@ mod route_tests {
         host.handle(ToShell::Frame { buf: 0, damage: vec![] }, Vec::new(), &mut out);
         assert_eq!(host.route(), Route::Direct, "a frame from a direct app does not demote it");
         assert!(!host.take_fallback());
-        host.handle(ToShell::Buffers { w: 4, h: 3 }, Vec::new(), &mut out);
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, Vec::new(), &mut out);
         assert_eq!(host.route(), Route::Shm);
         assert!(host.take_fallback(), "the fallback is reported once");
         assert!(!host.take_fallback());
-        host.handle(ToShell::Buffers { w: 4, h: 3 }, Vec::new(), &mut out);
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, Vec::new(), &mut out);
         assert!(!host.take_fallback(), "a shared-memory app is never demoted again");
+    }
+
+    fn fixture_host() -> (AppHost, Channel) {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        (AppHost::with_channel("fixture", channel, None, cfg), peer)
+    }
+
+    #[test]
+    fn short_memfds_are_refused_and_good_ones_sealed() {
+        let (mut host, _peer) = fixture_host();
+        let mut out = Pumped::default();
+        host.handle(ToShell::Buffers { w: 8192, h: 8192, generation: 1 }, vec![sys::shm_create("s1", 4096).unwrap(), sys::shm_create("s2", 4096).unwrap()], &mut out);
+        assert!(host.bufs.is_empty(), "4 KiB files cannot back 8192 x 8192");
+        let a = sys::shm_create("g1", 48).unwrap();
+        let b = sys::shm_create("g2", 48).unwrap();
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 7 }, vec![a, b], &mut out);
+        assert_eq!(host.bufs.len(), 2);
+        assert_eq!(host.generation, 7);
+    }
+
+    #[test]
+    fn a_stale_release_never_reaches_the_new_set() {
+        let (mut host, peer) = fixture_host();
+        let mut out = Pumped::default();
+        let set = |n: &str| vec![sys::shm_create(n, 48).unwrap(), sys::shm_create(n, 48).unwrap()];
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, set("a"), &mut out);
+        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
+        host.handle(ToShell::Frame { buf: 1, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
+        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 2 }, set("b"), &mut out);
+        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
+        let mut px = vec![0; 12];
+        host.blit(&mut Surface { w: 4, h: 3, stride: 4, px: &mut px, y0: 0 }, true);
+        while let Ok(Recv::Packet(p, _)) = peer.recv(false) {
+            if let Ok(ToApp::Release { generation, .. }) = ToApp::decode(&p) {
+                assert_eq!(generation, 2, "only releases of the current set go out");
+            }
+        }
+    }
+
+    #[test]
+    fn an_app_that_never_reads_does_not_block_the_shell() {
+        let (mut host, _peer) = fixture_host();
+        for _ in 0..100_000 {
+            host.send(&ToApp::Resume);
+            if !host.running() {
+                break;
+            }
+        }
+        assert!(host.backlog.len() <= MAX_BACKLOG);
     }
 }
