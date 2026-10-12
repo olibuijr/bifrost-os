@@ -3,11 +3,14 @@
 
 mod feed;
 mod icon;
+mod media;
 mod podcasts;
 mod transport;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::now_playing;
+use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -69,7 +72,24 @@ impl App for PodcastsApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        self.podcasts.as_mut().is_some_and(|p| p.tick(&ctx.ui, t))
+        let Some(p) = &mut self.podcasts else { return false };
+        let dirty = p.tick(&ctx.ui, t);
+        p.sync_services(ctx);
+        dirty
+    }
+
+    /// The reply to one of the app's service calls (Now Playing, Dock). Replies are not retried: an older shell's
+    /// "no service" answer leaves the app as it is.
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, _result: &Result<Json, String>) -> bool {
+        self.podcasts.as_mut().is_some_and(|p| p.service_reply(request))
+    }
+
+    /// A transport tap on the Control Center tile, sent by the shell for the session the app published.
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        let (Some(p), Some(command)) = (&mut self.podcasts, now_playing::command_from_event(service, event, body)) else { return false };
+        p.remote(command);
+        p.sync_services(ctx);
+        true
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
