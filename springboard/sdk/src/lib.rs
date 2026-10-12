@@ -81,6 +81,7 @@ pub mod donations;
 pub mod extension;
 pub mod quicksearch;
 pub mod visual_search;
+pub mod data_scanner;
 pub mod peek;
 pub mod permission_kit;
 pub mod now_playing;
