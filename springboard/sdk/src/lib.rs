@@ -90,6 +90,8 @@ pub mod stream;
 pub mod external_accessory;
 pub mod error;
 pub mod coding;
+pub mod peer_session;
+pub mod peer_mesh;
 pub mod restoration;
 pub use restoration::RestorableState;
 pub mod attributed;
