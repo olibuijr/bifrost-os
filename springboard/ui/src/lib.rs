@@ -818,6 +818,8 @@ pub mod weather_stats;
 pub mod hid_report;
 pub mod linkmeta;
 pub mod captions;
+pub mod sample_attachments;
+pub mod text_markup;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
