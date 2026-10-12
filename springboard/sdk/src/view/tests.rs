@@ -1,5 +1,5 @@
 use super::*;
-use crate::kit::Font;
+use crate::kit::{Font, Surface};
 use crate::layout::ROW_PT;
 use bifrost_ui::{values, Role};
 

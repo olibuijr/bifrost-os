@@ -1,6 +1,7 @@
 //! View controllers and the `App` adapter.
 use super::{TextInputInfo, View, ViewBase, ViewEvent, Window};
-use crate::kit::{Damage, Surface, Ui};
+use crate::kit::{Damage, Ui};
+use bifrost_render::canvas::Canvas;
 use crate::proto::{AxAction, NodeExt};
 use crate::{AppMenu, AppMenuItem, Command, Commands, Ctx, Input};
 use bifrost_ui::responder::Responder;
@@ -92,7 +93,8 @@ impl<C: ViewController> View for ControllerHost<C> {
 ///     fn ax_set(&mut self, _: &Ctx, id: u64, a: proto::AxAction) -> bool { self.views.ax_set(id, a) }
 ///     fn main_menu(&self, _: &Ctx) -> Vec<AppMenu> { self.views.main_menu() }
 ///     fn menu_action(&mut self, _: &Ctx, id: u32) -> bool { self.views.menu_action(id) }
-///     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage { self.views.draw_at(ctx, s, t) }
+///     fn draws_canvas(&self) -> bool { true }
+///     fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, t: f64) -> Damage { self.views.draw_at(ctx, canvas, t) }
 /// }
 /// ```
 pub struct ViewApp<S: Responder + 'static> {
@@ -213,16 +215,18 @@ impl<S: Responder + 'static> ViewApp<S> {
     pub fn undo_titles(&self) -> (String, String) {
         self.window.undo_titles()
     }
-    pub fn draw(&mut self, ctx: &Ctx, s: &mut Surface) -> Damage {
-        let d = self.window.draw(s, &ctx.ui);
+    /// Paints the window into `canvas` (a CPU `Surface` or a display list); for `App::draw_canvas`.
+    pub fn draw(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas) -> Damage {
+        let d = self.window.draw(canvas, &ctx.ui);
         self.sync_text_input(ctx);
         d
     }
-    /// `App::draw` with animation: ticks spinners and indeterminate bars to `t` (the `draw` argument), then draws.
-    pub fn draw_at(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+    /// `App::draw_canvas` with animation: ticks spinners and indeterminate bars to `t` (the `draw_canvas` argument), then
+    /// paints into `canvas`. Apps with views forward `draw_canvas` here and return `true` from `draws_canvas`.
+    pub fn draw_at(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, t: f64) -> Damage {
         self.window.tick(t);
         self.flush_animation_actions();
-        let d = self.window.draw(s, &ctx.ui);
+        let d = self.window.draw(canvas, &ctx.ui);
         self.sync_text_input(ctx);
         d
     }

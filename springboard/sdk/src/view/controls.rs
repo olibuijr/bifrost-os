@@ -1,8 +1,9 @@
 //! Control views: thin `View`s over the bifrost-ui value models (`Slider`, `Segmented`) and the shared drawers.
 //! Sizes are named point constants, colours are the named pairs from render ui.rs, text uses `MAC_*_PT`.
-use super::{View, ViewBase, ViewEvent};
+use super::{blit, View, ViewBase, ViewEvent};
 use crate::kit::ui::{Weight, CAPSULE_BG, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SYSTEM_GREEN, TINT, TRACK_C, WHITE};
-use crate::kit::{Event, Surface, Ui};
+use crate::kit::{Event, Ui};
+use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
 use crate::proto::KeyInput;
 use bifrost_render::ui::{MAC_BODY_PT, SPACE_L, SPACE_S};
@@ -29,16 +30,16 @@ pub(super) fn is_activate(ev: &ViewEvent) -> bool {
 }
 
 /// Draws `text` inside `frame` (points), vertically centred; horizontally centred or leading.
-pub(super) fn draw_text(s: &mut Surface, ui: &Ui, frame: Rect, text: &str, pt: f32, weight: Weight, color: u32, centred: bool) {
+pub(super) fn draw_text(s: &mut dyn Canvas, ui: &Ui, frame: Rect, text: &str, pt: f32, weight: Weight, color: u32, centred: bool) {
     let img = ui.text(&ui.fit(text, pt, ui.pt(frame.w)), pt, weight, color);
     let x = if centred { ui.pt(frame.x) + (ui.pt(frame.w) - img.w as f32) / 2.0 } else { ui.pt(frame.x) };
     let y = ui.pt(frame.y) + (ui.pt(frame.h) - img.h as f32) / 2.0;
-    s.blit(&img, x as i32, y as i32, 255, 255);
+    blit(s, &img, x as i32, y as i32);
 }
 
-pub(super) fn focus_ring(s: &mut Surface, ui: &Ui, f: Rect, radius: f32) {
+pub(super) fn focus_ring(s: &mut dyn Canvas, ui: &Ui, f: Rect, radius: f32) {
     let t = ui.pt(FOCUS_RING_PT);
-    s.stroke_rrect(ui.pt(f.x) - t, ui.pt(f.y) - t, ui.pt(f.w) + 2.0 * t, ui.pt(f.h) + 2.0 * t, ui.pt(radius) + t, t, TINT);
+    s.stroke_rrect(RectF::new(ui.pt(f.x) - t, ui.pt(f.y) - t, ui.pt(f.w) + 2.0 * t, ui.pt(f.h) + 2.0 * t), ui.pt(radius) + t, t, TINT);
 }
 
 pub(super) fn node(v: &dyn View, role: Role, label: &str, value: &str) -> Option<Node> {
@@ -75,7 +76,7 @@ impl View for Label {
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (ui.measure(&self.text, self.pt, self.weight) / ui.pt(1.0), self.pt + SPACE_S)
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let c = if !self.base.enabled { LABEL_3 } else if self.secondary { LABEL_2 } else { LABEL };
         draw_text(s, ui, self.base.frame, &self.text, self.pt, self.weight, c.now(), false);
     }
@@ -117,10 +118,10 @@ impl View for Button {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         let fill = if self.pressed { CONTROL_PRESSED } else { CAPSULE_BG };
-        s.fill_rrect(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h), ui.pt(f.h / 2.0), fill.now());
+        s.fill_rrect(RectF::new(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h)), ui.pt(f.h / 2.0), fill.now());
         let c = if self.base.enabled { LABEL } else { LABEL_3 };
         draw_text(s, ui, f, &self.title, MAC_BODY_PT, Weight::Regular, c.now(), true);
         if self.base.focused {
@@ -209,16 +210,16 @@ impl View for Switch {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         let t = self.track();
         let c = if self.base.enabled { LABEL } else { LABEL_3 };
         draw_text(s, ui, Rect { w: (f.w - SWITCH_W_PT - SPACE_S).max(0.0), ..f }, &self.label, MAC_BODY_PT, Weight::Regular, c.now(), false);
         let fill = if self.on { SYSTEM_GREEN } else { TRACK_C.now() };
-        s.fill_rrect(ui.pt(t.x), ui.pt(t.y), ui.pt(t.w), ui.pt(t.h), ui.pt(t.h / 2.0), fill);
+        s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y), ui.pt(t.w), ui.pt(t.h)), ui.pt(t.h / 2.0), fill);
         let d = t.h - 2.0 * SWITCH_INSET_PT;
         let kx = if self.on { t.right() - SWITCH_INSET_PT - d } else { t.x + SWITCH_INSET_PT };
-        s.fill_rrect(ui.pt(kx), ui.pt(t.y + SWITCH_INSET_PT), ui.pt(d), ui.pt(d), ui.pt(d / 2.0), WHITE);
+        s.fill_rrect(RectF::new(ui.pt(kx), ui.pt(t.y + SWITCH_INSET_PT), ui.pt(d), ui.pt(d)), ui.pt(d / 2.0), WHITE);
         if self.base.focused {
             focus_ring(s, ui, t, t.h / 2.0);
         }
@@ -299,13 +300,13 @@ impl View for Slider {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let t = self.track();
         let kx = self.model.knob_x(t);
-        s.fill_rrect(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(t.w), ui.pt(SLIDER_TRACK_PT), ui.pt(SLIDER_TRACK_PT / 2.0), TRACK_C.now());
-        s.fill_rrect(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(kx - t.x), ui.pt(SLIDER_TRACK_PT), ui.pt(SLIDER_TRACK_PT / 2.0), TINT);
+        s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(t.w), ui.pt(SLIDER_TRACK_PT)), ui.pt(SLIDER_TRACK_PT / 2.0), TRACK_C.now());
+        s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(kx - t.x), ui.pt(SLIDER_TRACK_PT)), ui.pt(SLIDER_TRACK_PT / 2.0), TINT);
         let k = Rect { x: kx - SLIDER_KNOB_PT / 2.0, y: t.y - SLIDER_KNOB_PT / 2.0, w: SLIDER_KNOB_PT, h: SLIDER_KNOB_PT };
-        s.fill_rrect(ui.pt(k.x), ui.pt(k.y), ui.pt(k.w), ui.pt(k.h), ui.pt(k.h / 2.0), if self.base.enabled { WHITE } else { CONTROL_PRESSED.now() });
+        s.fill_rrect(RectF::new(ui.pt(k.x), ui.pt(k.y), ui.pt(k.w), ui.pt(k.h)), ui.pt(k.h / 2.0), if self.base.enabled { WHITE } else { CONTROL_PRESSED.now() });
         if self.base.focused {
             focus_ring(s, ui, k, k.h / 2.0);
         }
@@ -382,14 +383,14 @@ impl View for Segmented {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
-        s.fill_rrect(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h), ui.pt(f.h / 2.0), FIELD_BG.now());
+        s.fill_rrect(RectF::new(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h)), ui.pt(f.h / 2.0), FIELD_BG.now());
         let n = self.labels.len().max(1) as f32;
         for (i, l) in self.labels.iter().enumerate() {
             let cell = Rect { x: f.x + f.w * i as f32 / n, y: f.y, w: f.w / n, h: f.h };
             if self.model.selected() == Some(i) {
-                s.fill_rrect(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h), ui.pt(cell.h / 2.0), SEGMENT_ON.now());
+                s.fill_rrect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), ui.pt(cell.h / 2.0), SEGMENT_ON.now());
             }
             let c = if self.model.is_enabled(i) && self.base.enabled { LABEL } else { LABEL_3 };
             draw_text(s, ui, cell, l, MAC_BODY_PT, Weight::Regular, c.now(), true);

@@ -1,10 +1,11 @@
 //! More control views: Checkbox, Stepper, ProgressIndicator, TextField, PopUpButton and the grouped Form / Section.
 //! Same rules as `controls.rs`: named colours from render ui.rs, `MAC_*_PT` text sizes, `ui.pt()` for every length.
 use super::controls::{draw_text, focus_ring, is_activate, node};
-use super::{TextInputInfo, View, ViewBase, ViewEvent};
+use super::{blit, TextInputInfo, View, ViewBase, ViewEvent};
 use crate::kit::clipboard;
 use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SELECTION, SEPARATOR_C, TINT, TRACK_C, WHITE};
-use crate::kit::{Event, Surface, Ui};
+use crate::kit::{Event, Ui};
+use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
 use crate::proto::{InputTraits, KeyInput, TextState, ToApp, MAX_SURROUNDING};
 use crate::widgets::{self, MENU_PAD_PT, MENU_ROW_PT, MENU_SEPARATOR_PT};
@@ -42,17 +43,17 @@ pub(super) fn parse_bool(v: &str) -> Option<bool> {
     }
 }
 
-fn dot(s: &mut Surface, ui: &Ui, cx: f32, cy: f32, d: f32, color: u32) {
-    s.fill_rrect(ui.pt(cx - d / 2.0), ui.pt(cy - d / 2.0), ui.pt(d), ui.pt(d), ui.pt(d / 2.0), color);
+fn dot(s: &mut dyn Canvas, ui: &Ui, cx: f32, cy: f32, d: f32, color: u32) {
+    s.fill_rrect(RectF::new(ui.pt(cx - d / 2.0), ui.pt(cy - d / 2.0), ui.pt(d), ui.pt(d)), ui.pt(d / 2.0), color);
 }
 
 /// A triangle of three one-pixel-step rows, apex up or down, centred on `(cx, cy)` (pixels).
-fn chevron(s: &mut Surface, ui: &Ui, cx: f32, cy: f32, up: bool, color: u32) {
+fn chevron(s: &mut dyn Canvas, ui: &Ui, cx: f32, cy: f32, up: bool, color: u32) {
     let row = ui.pt(1.0).max(1.0);
     for k in 0..3 {
         let half = (k as f32 + 0.5) * row;
         let y = if up { cy - 1.5 * row + k as f32 * row } else { cy + 1.5 * row - (k as f32 + 1.0) * row };
-        s.fill_rrect(cx - half, y, half * 2.0, row, 0.0, color);
+        s.fill_rrect(RectF::new(cx - half, y, half * 2.0, row), 0.0, color);
     }
 }
 
@@ -93,13 +94,13 @@ impl View for Checkbox {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         let b = Rect { x: f.x, y: f.y + (f.h - CHECKBOX_PT) / 2.0, w: CHECKBOX_PT, h: CHECKBOX_PT };
         let fill = if self.checked && self.base.enabled { TINT } else if self.pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
-        s.fill_rrect(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h), ui.pt(CHECKBOX_RADIUS_PT), fill);
+        s.fill_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(CHECKBOX_RADIUS_PT), fill);
         if !self.checked {
-            s.stroke_rrect(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h), ui.pt(CHECKBOX_RADIUS_PT), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+            s.stroke_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(CHECKBOX_RADIUS_PT), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
         } else {
             // check mark: short stroke down-right, long stroke up-right, as a row of dots in box-local points
             let pts = [(3.5, 7.5), (4.5, 8.5), (5.5, 9.5), (6.5, 8.5), (7.5, 7.0), (8.5, 5.5), (9.5, 4.2), (10.5, 3.2)];
@@ -185,10 +186,10 @@ impl View for Stepper {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
-        s.fill_rrect(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h), ui.pt(FIELD_RADIUS_PT), FIELD_BG.now());
-        s.fill_rect(ui.pt(f.x + SPACE_XXS) as usize, ui.pt(f.y + f.h / 2.0) as usize, ui.pt(f.w - 2.0 * SPACE_XXS).max(1.0) as usize, 1, SEPARATOR_C.now());
+        s.fill_rrect(RectF::new(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h)), ui.pt(FIELD_RADIUS_PT), FIELD_BG.now());
+        s.fill_rect(RectF::new(ui.pt(f.x + SPACE_XXS).trunc(), ui.pt(f.y + f.h / 2.0).trunc(), ui.pt(f.w - 2.0 * SPACE_XXS).max(1.0).trunc(), 1.0), SEPARATOR_C.now());
         let c = if self.base.enabled { LABEL.now() } else { LABEL_3.now() };
         chevron(s, ui, ui.pt(f.x + f.w / 2.0), ui.pt(f.y + f.h / 4.0), true, c);
         chevron(s, ui, ui.pt(f.x + f.w / 2.0), ui.pt(f.y + 3.0 * f.h / 4.0), false, c);
@@ -294,15 +295,15 @@ impl View for ProgressIndicator {
             self.base.dirty = true;
         }
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         match self.style {
             ProgressStyle::Bar => {
                 let track = Rect { x: f.x, y: f.y + (f.h - BAR_H_PT) / 2.0, w: f.w, h: BAR_H_PT };
-                s.fill_rrect(ui.pt(track.x), ui.pt(track.y), ui.pt(track.w), ui.pt(track.h), ui.pt(BAR_H_PT / 2.0), TRACK_C.now());
+                s.fill_rrect(RectF::new(ui.pt(track.x), ui.pt(track.y), ui.pt(track.w), ui.pt(track.h)), ui.pt(BAR_H_PT / 2.0), TRACK_C.now());
                 let fill = self.model.filled(track, self.t, BAR_PERIOD_S);
                 if fill.w > 0.0 {
-                    s.fill_rrect(ui.pt(fill.x), ui.pt(fill.y), ui.pt(fill.w), ui.pt(fill.h), ui.pt(BAR_H_PT / 2.0), TINT);
+                    s.fill_rrect(RectF::new(ui.pt(fill.x), ui.pt(fill.y), ui.pt(fill.w), ui.pt(fill.h)), ui.pt(BAR_H_PT / 2.0), TINT);
                 }
             }
             ProgressStyle::Spinning => {
@@ -495,13 +496,13 @@ impl View for TextField {
     fn accepts_first_responder(&self) -> bool {
         true
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let Rect { x, y, w, h } = self.base.frame;
         let focused = self.base.focused;
         bifrost_ui::ax::record(Role::TextField, &self.placeholder, self.text(), self.base.frame, true);
-        s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(FIELD_RADIUS_PT), if focused { TINT } else { FIELD_BG.now() });
+        s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(FIELD_RADIUS_PT), if focused { TINT } else { FIELD_BG.now() });
         if focused {
-            s.fill_rrect(ui.pt(x + 1.), ui.pt(y + 1.), ui.pt(w - 2.), ui.pt(h - 2.), ui.pt(FIELD_RADIUS_PT - 1.), FIELD_BG.now());
+            s.fill_rrect(RectF::new(ui.pt(x + 1.), ui.pt(y + 1.), ui.pt(w - 2.), ui.pt(h - 2.)), ui.pt(FIELD_RADIUS_PT - 1.), FIELD_BG.now());
         }
         widgets::outline_if_borders(s, ui, self.base.frame, FIELD_RADIUS_PT);
         let room = ui.pt((w - 2. * FIELD_INSET_PT).max(0.));
@@ -537,12 +538,12 @@ impl View for TextField {
             let (a, e) = (sel.start.clamp(start, end), sel.end.clamp(start, end));
             let (sx, ex) = (px(&marks, a), px(&marks, e));
             if ex > sx {
-                s.fill_rrect(left + sx, top, ex - sx, ui.pt(17.), 0., SELECTION.now());
+                s.fill_rrect(RectF::new(left + sx, top, ex - sx, ui.pt(17.)), 0., SELECTION.now());
             }
         }
         if value.is_empty() {
             let im = ui.text(&self.placeholder, MAC_BODY_PT, Weight::Regular, LABEL_2.now());
-            s.blit(&im, left as i32, top as i32, 255, 255);
+            blit(s, &im, left as i32, top as i32);
         } else {
             // segments split at the selection and marked-range edges: selected text is white, marked text underlined
             let mut cuts = vec![start, end];
@@ -559,16 +560,16 @@ impl View for TextField {
                 let color = if selected { WHITE } else { LABEL.now() };
                 let im = ui.text(&value[a..e], MAC_BODY_PT, Weight::Regular, color);
                 let ax = left + px(&marks, a);
-                s.blit(&im, ax as i32, top as i32, 255, 255);
+                blit(s, &im, ax as i32, top as i32);
                 if marked.as_ref().is_some_and(|m| a >= m.start && e <= m.end) {
                     // the clause the IME has selected gets a heavier line, as in the native toolkit
                     let thick = if !sel.is_empty() && a >= sel.start && e <= sel.end { 2.0 } else { 1.0 };
-                    s.fill_rrect(ax, top + ui.pt(16.), px(&marks, e) - px(&marks, a), ui.pt(thick), 0., color);
+                    s.fill_rrect(RectF::new(ax, top + ui.pt(16.), px(&marks, e) - px(&marks, a), ui.pt(thick)), 0., color);
                 }
             }
         }
         if focused && sel.is_empty() {
-            s.fill_rrect(left + px(&marks, caret), top, ui.pt(1.), ui.pt(17.), 0., TINT);
+            s.fill_rrect(RectF::new(left + px(&marks, caret), top, ui.pt(1.), ui.pt(17.)), 0., TINT);
         }
         self.start = start;
         self.marks = marks;
@@ -787,14 +788,14 @@ impl View for PopUpButton {
     fn dirty_rect(&self) -> Rect {
         if self.open || self.stale { self.base.frame.union(self.menu_rect()) } else { self.base.frame }
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         self.stale = false;
         widgets::popup_button(s, ui, self.base.frame, self.selected_title(), self.open, self.base.enabled);
         if self.base.focused && !self.open {
             focus_ring(s, ui, self.base.frame, FIELD_RADIUS_PT);
         }
     }
-    fn draw_overlay(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_overlay(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         if self.open {
             let r = self.menu_rect();
             widgets::menu(s, ui, (r.x, r.y), r.w, &self.menu);
@@ -922,18 +923,18 @@ impl View for Section {
             y += rh;
         }
     }
-    fn draw(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         let c = self.card();
         if let Some(h) = &self.header {
             let r = Rect { x: f.x + SPACE_M, y: f.y, w: f.w - 2.0 * SPACE_M, h: self.header_h() };
             draw_text(s, ui, r, h, MAC_GROUP_HEADER_PT, Weight::Regular, LABEL_2.now(), false);
         }
-        s.fill_rrect(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h), ui.pt(m::CARD_RADIUS), CARD_BG.now());
+        s.fill_rrect(RectF::new(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h)), ui.pt(m::CARD_RADIUS), CARD_BG.now());
         let mut y = c.y;
         for rh in self.row_h.iter().take(self.row_h.len().saturating_sub(1)) {
             y += rh;
-            s.fill_rect(ui.pt(c.x + SPACE_M) as usize, ui.pt(y) as usize, ui.pt(c.w - 2.0 * SPACE_M).max(0.0) as usize, 1, SEPARATOR_C.now());
+            s.fill_rect(RectF::new(ui.pt(c.x + SPACE_M).trunc(), ui.pt(y).trunc(), ui.pt(c.w - 2.0 * SPACE_M).max(0.0).trunc(), 1.0), SEPARATOR_C.now());
         }
         if let Some(t) = &self.footer {
             let r = Rect { x: f.x + SPACE_M, y: c.bottom(), w: f.w - 2.0 * SPACE_M, h: self.footer_h() };
