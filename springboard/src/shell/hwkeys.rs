@@ -5,6 +5,7 @@
 //! take as `Out::Named`.
 
 use super::keyboard::Out;
+use super::desk::Tile;
 use super::{AppId, Effect, Screen, Shell};
 use crate::installer::keymaps::{Keyboard, Typed};
 use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
@@ -15,6 +16,11 @@ const KEY_W: u16 = 17;
 const KEY_Q: u16 = 16;
 const KEY_H: u16 = 35;
 const KEY_F: u16 = 33;
+const KEY_GRAVE: u16 = 41;
+const KEY_UP: u16 = 103;
+const KEY_LEFT: u16 = 105;
+const KEY_RIGHT: u16 = 106;
+const KEY_DOWN: u16 = 108;
 const KEY_Y: u16 = 21;
 const KEY_LEFTCTRL: u16 = 29;
 const KEY_A: u16 = 30;
@@ -100,6 +106,10 @@ pub enum Shortcut {
     Settings,
     /// Ctrl+Cmd+F: full screen (zoom) for the front desktop window
     FullScreen,
+    /// Ctrl+Cmd+arrows: tile the front desktop window (left, right, fill with Up, centre with Down)
+    Tile(Tile),
+    /// Cmd+`: bring the window behind the front one forward (the Window menu's Next Window)
+    CycleWindow,
 }
 
 impl Shortcut {
@@ -112,7 +122,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow => return None,
         }))
     }
 }
@@ -207,6 +217,13 @@ impl HwKeys {
             KEY_W | KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
             KEY_M | KEY_H if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Minimize),
             KEY_F if meta && ctrl && !alt => Some(Shortcut::FullScreen),
+            KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Tile(match code {
+                KEY_LEFT => Tile::Left,
+                KEY_RIGHT => Tile::Right,
+                KEY_UP => Tile::Fill,
+                _ => Tile::Center,
+            })),
+            KEY_GRAVE if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::CycleWindow),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -504,6 +521,17 @@ impl Shell {
                 vec![]
             }
             #[cfg(feature = "desktop-wayland")]
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::Tile(tile) if self.desk_active() && !self.is_locked() => {
+                self.desk_tile_front(tile);
+                vec![]
+            }
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::CycleWindow if self.desk_active() && !self.is_locked() && !in_terminal => {
+                self.desk_cycle_window();
+                self.cmdtab_release(t);
+                vec![]
+            }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
                 if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
                     self.desk_zoom_window(i);

@@ -797,6 +797,28 @@ impl Shell {
         if package.manifest.window!="native" {let slot=apphost::slot_of(&package.manifest.id).ok_or_else(||std::io::Error::other("Browser not installed"))?;self.desk_open(AppId::External(slot as u8),t);self.ext_send(slot,&bifrost_proto::ToApp::Open{url:url.into()});self.dirty=true;return Ok(());}let policy=crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)?;let mut cmd=crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)?;cmd.arg(url);let child=cmd.spawn()?;if let Some(mut old)=self.desk.as_mut().unwrap().native_children.insert(package.manifest.id.clone(),child){if matches!(old.try_wait(),Ok(None)){crate::bare::sys::spawn_named("reap-child", move||{let _=old.wait();});}}self.dirty=true;return Ok(());}
         #[cfg(not(feature="desktop-wayland"))]Err(std::io::Error::other("Desktop Wayland is unavailable"))
     }
+    /// Index of the front desktop window, for the Window menu and keyboard tiling.
+    fn desk_front_index(&self) -> Option<usize> {
+        self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
+    }
+
+    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys).
+    pub(super) fn desk_tile_front(&mut self, tile: Tile) {
+        let Some(i) = self.desk_front_index() else { return };
+        let m = self.desk_metrics();
+        if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
+        self.desk_layout(i);
+        self.dirty = true;
+    }
+
+    /// Returns the front desktop window to the size it had before its last tiling or zoom.
+    pub(super) fn desk_restore_front(&mut self) {
+        let Some(i) = self.desk_front_index() else { return };
+        if let Some(d) = self.desk.as_mut() { d.return_to_previous(i); }
+        self.desk_layout(i);
+        self.dirty = true;
+    }
+
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
 
     /// Minimizes window `i` to its Dock tile, playing the minimize effect first when it is allowed.
@@ -1202,6 +1224,15 @@ impl Shell {
                                     self.desk_fx_start(w.app, FxCall::Zoom, t);
                                 }
                             }
+                        }
+                        Some(vec![])
+                    }
+                    Some(Grab::Move { .. }) => {
+                        // a title bar dropped on a screen edge or corner tiles the window there (snap_zone)
+                        let band = self.ui.pt(8.).round() as i32;
+                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.wins.len().checked_sub(1)) {
+                            if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
+                            self.desk_layout(i);
                         }
                         Some(vec![])
                     }
@@ -1968,6 +1999,22 @@ mod tests {
         assert_eq!(d.wins[0].r, Desk::area(&m));
         d.toggle_zoom(&m, 0);
         assert_eq!(d.wins[0].r, before);
+    }
+
+    #[test]
+    fn tiling_moves_a_window_to_a_half_and_return_restores_its_size() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::Settings, (900, 600));
+        let before = d.wins[0].r;
+        d.tile(&m, 0, Tile::Left);
+        assert_eq!(d.wins[0].r, tile_rect(Desk::area(&m), Tile::Left));
+        assert!(!d.wins[0].maximized);
+        d.return_to_previous(0);
+        assert_eq!(d.wins[0].r, before);
+        d.tile(&m, 0, Tile::Fill);
+        assert!(d.wins[0].maximized);
+        assert_eq!(d.wins[0].r, Desk::area(&m));
     }
 
     #[test]
