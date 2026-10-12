@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2
+
+- The control socket answers `games.state`: the game, score, best scores, Minesweeper phase, Tic-Tac-Toe marks and the solitaire state, as key=value lines. The describe helpers that were only used by tests now serve it.
+
 ## 1.6.1
 
 - Removed unused hit-test and centre helpers.

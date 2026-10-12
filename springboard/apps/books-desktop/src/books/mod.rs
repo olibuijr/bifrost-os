@@ -5,6 +5,7 @@
 //! `engine`, pagination in `layout`, persistence in `store`.
 
 pub use springboard::shell::books::engine;
+#[cfg(test)]
 pub mod icon;
 pub mod layout;
 pub mod narrate;
@@ -1687,7 +1688,9 @@ impl Books {
         due
     }
 
-    /// key=value lines for remote inspection.
+    /// key=value lines for remote inspection. Tests read them; the app has no control method for them (that needs a
+    /// `bifrost-core` dependency for the JSON reply).
+    #[cfg(test)]
     pub fn describe(&self) -> String {
         let screen = match (&self.screen, &self.reader) {
             (Screen::Reader, Some(r)) => format!("reader:{}:{}/{}", r.book.title, r.page + 1, r.layout.pages.len()),
