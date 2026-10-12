@@ -1,19 +1,28 @@
 //! News as an installed BifrOSt app: a full-size window with a source list of feeds and a unified toolbar.
 
 mod feed;
+mod feed_cache;
 mod icon;
 mod news;
 mod pictures;
+mod reader_size;
 mod services;
 mod wire;
 
+use bifrost_app::controls::Rect;
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::share::{self, Payload};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::sync::Arc;
 
 /// Edit > Translate Article: translates the open article (see `news::News::translate`).
 const MENU_TRANSLATE: u32 = 1;
+/// Edit > Share Article: the open article's page goes to the share menu.
+const MENU_SHARE: u32 = 2;
+/// View > Larger Text and View > Smaller Text: the reader's body text size (see `reader_size`).
+const MENU_LARGER: u32 = 3;
+const MENU_SMALLER: u32 = 4;
 
 struct NewsApp {
     news: Option<news::News>,
@@ -33,7 +42,7 @@ impl App for NewsApp {
             None => {
                 // the feed cache is rebuilt by the next fetch, so the app holds no unsaved state
                 ctx.enable_sudden_termination();
-                self.news = Some(news::News::new(&ctx.ui, w, h, ctx.data_dir.clone(), Arc::new(springboard::shell::music::radio::Http::default())));
+                self.news = Some(news::News::new(&ctx.ui, w, h, ctx.data_dir.clone(), Arc::new(feed_cache::Conditional::default())));
                 // once at start: the shell pushes path changes after this
                 self.path_request = Some(services::request_path(ctx));
             }
@@ -98,23 +107,56 @@ impl App for NewsApp {
         })
     }
 
-    /// One item in the shared Edit menu, enabled while an article is open.
+    /// Edit (translate and share) and View (text size), enabled while an article is open.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let open = self.news.as_ref().is_some_and(|n| n.can_translate());
-        vec![AppMenu {
-            title: "Edit".into(),
-            items: vec![AppMenuItem::new(MENU_TRANSLATE, "Translate Article").enabled(open)],
-        }]
+        let news = self.news.as_ref();
+        let open = news.is_some_and(|n| n.can_translate());
+        let shareable = news.is_some_and(|n| n.share_link().is_some());
+        vec![
+            AppMenu {
+                title: "Edit".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_TRANSLATE, "Translate Article").enabled(open),
+                    AppMenuItem::new(MENU_SHARE, "Share Article").enabled(shareable),
+                ],
+            },
+            AppMenu {
+                title: "View".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_LARGER, "Larger Text").enabled(news.is_some_and(|n| n.can_resize(true))),
+                    AppMenuItem::new(MENU_SMALLER, "Smaller Text").enabled(news.is_some_and(|n| n.can_resize(false))),
+                ],
+            },
+        ]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        if id != MENU_TRANSLATE {
-            return false;
-        }
-        match &mut self.news {
-            Some(n) if n.can_translate() => {
-                n.translate(&ctx.ui);
-                true
+        match id {
+            MENU_TRANSLATE => match &mut self.news {
+                Some(n) if n.can_translate() => {
+                    n.translate(&ctx.ui);
+                    true
+                }
+                _ => false,
+            },
+            MENU_SHARE => match self.news.as_ref().and_then(|n| n.share_link()) {
+                Some(url) => {
+                    // a zero anchor, as the browser's Share sends it
+                    let anchor = Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
+                    let _ = share::show_picker(ctx, &[Payload::Url(url)], anchor);
+                    true
+                }
+                None => false,
+            },
+            MENU_LARGER | MENU_SMALLER => {
+                let larger = id == MENU_LARGER;
+                match &mut self.news {
+                    Some(n) if n.can_resize(larger) => {
+                        n.resize_text(&ctx.ui, larger);
+                        true
+                    }
+                    _ => false,
+                }
             }
             _ => false,
         }

@@ -15,6 +15,7 @@ use bifrost_app::widgets;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::feed::{self, Item};
+use crate::reader_size;
 use crate::wire;
 use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
@@ -125,6 +126,8 @@ pub struct News {
     top_changed: bool,
     /// the result of the last Translate command for the open article (a reason it could not run, or nothing)
     notice: Option<String>,
+    /// the reader's text size step (see `reader_size`), kept across articles
+    text_step: usize,
 }
 
 /// `c` at the nearest end of the Light/Dark fade: pictures are rounded onto it once per scheme.
@@ -190,6 +193,7 @@ impl News {
             online: true,
             top_changed: true,
             notice: None,
+            text_step: reader_size::DEFAULT_STEP,
         };
         n.rebuild();
         n
@@ -550,6 +554,35 @@ impl News {
         self.open.is_some()
     }
 
+    /// Whether an open article can be shared: its page must have a web address.
+    pub fn share_link(&self) -> Option<String> {
+        self.open.as_ref().map(|(item, ..)| item.link.clone()).filter(|link| ReadingList::supports(link))
+    }
+
+    /// Whether View > Larger Text (`larger`) or Smaller Text can act now: an article is open and the size can move.
+    pub fn can_resize(&self, larger: bool) -> bool {
+        let room = if larger { reader_size::can_grow(self.text_step) } else { reader_size::can_shrink(self.text_step) };
+        self.open.is_some() && room
+    }
+
+    /// The body text size at the current step.
+    fn body_pt(&self) -> f32 {
+        MAC_BODY_PT * reader_size::factor(self.text_step)
+    }
+
+    /// Larger Text or Smaller Text for the open article: the body is wrapped again at the new size.
+    pub fn resize_text(&mut self, ui: &Ui, larger: bool) {
+        if !self.can_resize(larger) {
+            return;
+        }
+        self.text_step = if larger { reader_size::larger(self.text_step) } else { reader_size::smaller(self.text_step) };
+        let Some((item, title, body)) = self.open.take() else { return };
+        let width = self.card_w(ui);
+        let body = ui.wrap(&body.join(" "), self.body_pt(), Weight::Regular, width);
+        self.open = Some((item, title, body));
+        self.dirty = true;
+    }
+
     /// Translate command: translates the open article into the other of English and Icelandic. On success the
     /// article shows the translation; otherwise the notice says why (for example, the language pair is not installed).
     pub fn translate(&mut self, ui: &Ui) {
@@ -558,7 +591,7 @@ impl News {
         match wire::translate_article(&item, &wire::installed(), TranslationMemory::new()) {
             Ok((title, body)) => {
                 let title = ui.wrap(&title, MAC_TITLE1_PT, Weight::Bold, width);
-                let body = ui.wrap(&body, MAC_BODY_PT, Weight::Regular, width);
+                let body = ui.wrap(&body, self.body_pt(), Weight::Regular, width);
                 self.open = Some((item, title, body));
                 self.notice = None;
             }
@@ -594,7 +627,7 @@ impl News {
                     let width = self.card_w(ui);
                     let title = ui.wrap(&item.title, MAC_TITLE1_PT, Weight::Bold, width);
                     let text = if item.body.is_empty() { "No preview in this feed.".to_string() } else { item.body.clone() };
-                    let body = ui.wrap(&text, MAC_BODY_PT, Weight::Regular, width);
+                    let body = ui.wrap(&text, self.body_pt(), Weight::Regular, width);
                     self.open = Some((item, title, body));
                 }
             }
@@ -801,11 +834,12 @@ impl News {
                 self.put(&mut c, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(LINE / 2.0));
                 y += ui.pt(LINE);
             }
+            let (body_size, line_h) = (self.body_pt(), ui.pt(LINE) * reader_size::factor(self.text_step));
             for line in &body {
-                if y + ui.pt(LINE) >= top as f32 && y <= bottom as f32 {
-                    self.put(&mut c, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), false, x, y + ui.pt(LINE / 2.0));
+                if y + line_h >= top as f32 && y <= bottom as f32 {
+                    self.put(&mut c, ui, line, body_size, Weight::Regular, LABEL.now(), false, x, y + line_h / 2.0);
                 }
-                y += ui.pt(LINE);
+                y += line_h;
             }
             // the link card: the article's own page, titled from the feed
             if let Some(card) = wire::link_card(&item) {

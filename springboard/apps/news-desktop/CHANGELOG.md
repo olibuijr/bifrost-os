@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- Faster feed refreshes: News keeps the feeds and pictures it has loaded and asks the server only whether they changed (with the ETag and Last-Modified values it was sent). A copy that the server says is still fresh is used without a request, and an unchanged feed answers "not modified" with no new download. Nothing is kept for responses the server marks as not to be stored.
+- Share Article: Edit > Share Article sends the open article's web address to the system's share menu. It is greyed out until an article with a web address is open.
+- Larger Text and Smaller Text in the View menu change the size of the article's body text in five steps. The title keeps its size, and the size stays the same when you open another article.
+
 ## 1.4.0 — 2026-10-12
 
 - Translate Article: Edit > Translate Article translates the open article's title and preview into the other of English and Icelandic. It is greyed out until an article is open. BifrOSt does not ship translation language packs yet, so for now News says that the languages are not installed on this PC; articles in other languages say that the source language is not supported.
