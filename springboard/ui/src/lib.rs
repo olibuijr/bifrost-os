@@ -897,6 +897,7 @@ pub mod language;
 pub mod segment;
 pub mod location;
 pub mod geofence;
+pub mod location_auth;
 pub mod map_overlay;
 pub mod poi_filter;
 pub mod route;
