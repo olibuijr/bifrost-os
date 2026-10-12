@@ -196,6 +196,7 @@ pub mod wireless_accessory_browser;
 pub mod bluetooth_devices;
 pub mod bluetooth_inquiry;
 pub mod bluetooth_hid;
+pub mod bluetooth_service;
 pub mod ble_error;
 pub mod central;
 pub use process_info::{Activity, ActivityOptions, ProcessInfo, ThermalState};
