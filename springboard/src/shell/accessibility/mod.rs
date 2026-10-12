@@ -15,6 +15,7 @@ pub mod actions;
 pub mod banner;
 pub mod reader;
 pub mod tree;
+pub mod walk;
 
 /// Display Zoom: geometry factor for "Standard" and "Larger".
 pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];

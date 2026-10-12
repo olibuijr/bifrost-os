@@ -114,6 +114,10 @@ pub enum Shortcut {
     InputSource,
     /// Ctrl+Alt+Right (true) and Ctrl+Alt+Left (false): the screen reader's cursor moves to the next or previous element
     ReaderStep(bool),
+    /// Ctrl+Alt+Down (true) and Ctrl+Alt+Up (false): the screen reader's next or previous rotor
+    ReaderRotor(bool),
+    /// Ctrl+Alt+Space: the screen reader presses the element under its cursor
+    ReaderActivate,
 }
 
 impl Shortcut {
@@ -126,7 +130,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate => return None,
         }))
     }
 }
@@ -231,6 +235,8 @@ impl HwKeys {
             })),
             KEY_GRAVE if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::CycleWindow),
             KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
+            KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
+            KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -547,6 +553,8 @@ impl Shell {
                 vec![]
             }
             Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
+            Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
+            Shortcut::ReaderActivate if self.screen_reader_on() => self.reader_activate(t),
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
                 if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
                     self.desk_zoom_window(i);
@@ -677,6 +685,11 @@ mod tests {
         // the screen reader's cursor: Ctrl+Alt+Right forward, Ctrl+Alt+Left back
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::ReaderStep(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_LEFT), Some(Shortcut::ReaderStep(false)));
+        // the rotor keys and the press key on the same chord family; Ctrl+Space keeps the input source
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_DOWN), Some(Shortcut::ReaderRotor(true)));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_RIGHT), None, "Alt alone is not the cursor");
     }
 
