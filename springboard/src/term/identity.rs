@@ -16,6 +16,7 @@ pub struct Login {
     pub shell: String,
 }
 
+#[cfg(feature = "desktop-wayland")]
 extern "C" {
     fn geteuid() -> u32;
 }
@@ -42,6 +43,7 @@ fn lookup(account: &Account, passwd: &str, group: &str) -> Login {
     Login { name: account.name.clone(), uid: account.uid, gid: account.gid, groups, home: account.home.clone(), shell }
 }
 
+#[cfg(any(test, feature = "desktop-wayland"))]
 /// The privilege decision: `None` keeps the current identity (we are not root, so the
 /// shell cannot be root either); a root process must have a non-root account to drop to.
 pub fn decide(euid: u32, account: io::Result<Login>) -> io::Result<Option<Login>> {

@@ -69,6 +69,7 @@ impl FRect {
     fn cy(&self) -> f32 {
         self.y + self.h / 2.0
     }
+    #[cfg(test)]
     fn overlaps(&self, o: &FRect) -> bool {
         self.x < o.x + o.w - 0.01 && o.x < self.x + self.w - 0.01 && self.y < o.y + o.h - 0.01 && o.y < self.y + self.h - 0.01
     }

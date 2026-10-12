@@ -34,8 +34,8 @@ pub const LAND_COLS: usize = 6;
 pub const LAND_ROWS: usize = 5;
 pub const PER_PAGE: usize = COLS * ROWS;
 
-// Measured on an bifrost mini (bifrost 15.7.8) home-screen capture at 2x.
-const bifrost_WIDTH_PT: f32 = 768.0;
+// Measured on the reference tablet (BifrOSt 15.7.8) home-screen capture at 2x.
+const BIFROST_WIDTH_PT: f32 = 768.0;
 const STATUS_PT: f32 = 20.0;
 const ICON_PT: f32 = 64.0;
 /// 5 columns on a 111 pt pitch, centred
@@ -114,7 +114,7 @@ pub fn user_scale() -> Option<f32> {
 /// desktop the user's choice (else the panel's auto scale), kept small enough to fit.
 pub fn base_scale(w: i32, h: i32) -> f32 {
     if !adaptive() {
-        return w.min(h) as f32 / bifrost_WIDTH_PT;
+        return w.min(h) as f32 / BIFROST_WIDTH_PT;
     }
     let auto = f32::from_bits(AUTO_SCALE.load(Relaxed));
     user_scale().unwrap_or(auto).min(w.min(h) as f32 / MIN_SHORT_PT)

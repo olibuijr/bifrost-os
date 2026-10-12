@@ -605,12 +605,15 @@ pub struct Shell {
     /// Default-app registry and its Settings view, rebuilt when the set of apps changes (keyed by the app count).
     defaults:Option<(usize,bifrost_ui::launch::Registry,Vec<defaultapps::CategoryView>)>,
     /// The highlighted row of the open bar menu (keyboard or pointer), with the menu it belongs to.
+    #[cfg(feature = "desktop-wayland")]
     desktop_menu_row:Option<(desktop_bar::Menu,usize)>,
     /// Recent Items: the apps opened last, listed in the leading system menu (`recent_items`).
     recent_list:bifrost_ui::shared_list::SharedList,
     /// Type-to-select state of the open bar menu (`NativeMenu` type-ahead): the kit model keeps the typed prefix.
+    #[cfg(feature = "desktop-wayland")]
     desktop_menu_typed:Option<bifrost_ui::menu::Menu>,
     /// Width of the open bar menu, keyed by a hash of its rows and the scale (measuring every title on each pointer move was half the hover cost).
+    #[cfg(feature = "desktop-wayland")]
     desktop_menu_width:std::cell::Cell<Option<(u64,usize)>>,
     /// the blurred menu-bar backdrop, rebuilt only when its size or wallpaper changes
     bar_backdrop:std::cell::RefCell<Option<((usize,usize,usize),Image)>>,
@@ -832,7 +835,13 @@ impl Shell {
             dirty: true,
             perf_only: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,desktop_menu_row:None,recent_list:recent_items::new(),desktop_menu_typed:None,desktop_menu_width:std::cell::Cell::new(None),desktop_context:None,
+            desktop_menu:None,defaults:None,recent_list:recent_items::new(),desktop_context:None,
+            #[cfg(feature = "desktop-wayland")]
+            desktop_menu_row:None,
+            #[cfg(feature = "desktop-wayland")]
+            desktop_menu_typed:None,
+            #[cfg(feature = "desktop-wayland")]
+            desktop_menu_width:std::cell::Cell::new(None),
             #[cfg(feature = "desktop-wayland")]
             doc_panel:None,
             #[cfg(feature = "desktop-wayland")]
