@@ -2,6 +2,7 @@
 //! unchanged, hosted through the SDK.
 
 mod calc;
+mod chrome;
 mod copy_service;
 mod convert;
 mod engine;
@@ -13,6 +14,7 @@ mod paste;
 mod sci;
 mod tape;
 
+use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{clipboard, Damage, Event, Surface};
 use bifrost_app::{App, Command, Commands, Ctx, Input, TouchKind, KeyInput};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
@@ -154,13 +156,25 @@ impl App for CalculatorApp {
         self.calc.as_ref().map(|c| c.controls(&ctx.ui)).unwrap_or_default()
     }
 
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+    /// The calculator draws through `Canvas` (see `chrome.rs`), so the same routine serves the CPU `Surface` and the
+    /// GPU canvas of the direct path.
+    fn draws_canvas(&self) -> bool {
+        true
+    }
+
+    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, t: f64) -> Damage {
+        let (w, h) = canvas.size();
         if let Some(c) = &mut self.calc {
-            c.draw(s, &ctx.ui, t);
+            c.draw(canvas, &ctx.ui, t);
         }
-        let mut d = Damage::new(s.w, s.h);
+        let mut d = Damage::new(w as usize, h as usize);
         d.all();
         d
+    }
+
+    /// The shared-memory path: the same routine on the CPU `Surface`, which implements `Canvas`.
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+        self.draw_canvas(ctx, s, t)
     }
 }
 
