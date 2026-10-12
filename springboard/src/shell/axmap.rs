@@ -3,8 +3,20 @@
 use super::list::{Accessory, Spec};
 use super::{AppId, Effect, Shell};
 use super::pages::{Action, PageId};
-use bifrost_ui::ax::Map;
+use super::accessibility::actions::{window_index, WINDOW_ACTIONS};
+use super::accessibility::tree::{self, add_app_tree, AxState};
+use bifrost_ui::ax::{Element, Map};
 use std::collections::HashSet;
+
+/// The one element a query names, cloned; a miss or an ambiguous name is an error the agent can read.
+fn resolve_one(map: &Map, query: &str) -> Result<Element, String> {
+    use bifrost_ui::ax::Resolve;
+    match map.resolve(query) {
+        Resolve::One(e) => Ok(e.clone()),
+        Resolve::None => Err(format!("no element {query:?}")),
+        Resolve::Ambiguous(c) => Err(format!("{query:?} is ambiguous: {}", c.join(" "))),
+    }
+}
 
 /// `os/settings`: every page reachable from the root by `Push`, each row named by its label. A page's address is the row that
 /// opens it (`os/settings/general`), its rows sit below (`os/settings/general/software-update`). The handle is the label
@@ -45,7 +57,13 @@ fn walk(map: &mut Map, spec: &dyn Fn(PageId) -> Spec, page: PageId, parent: &str
 impl Shell {
     /// The map of the OS as it is now: Settings (always, from its page specs) and one `os/app/<name>` entry per open window.
     pub fn ax_map(&mut self, t: f64) -> Map {
+        self.ax_state(t).0
+    }
+
+    /// The map and the state beside it (keyboard focus, checked state) that `ax list` prints.
+    pub fn ax_state(&mut self, t: f64) -> (Map, AxState) {
         let mut map = Map::new();
+        let mut st = AxState::default();
         if self.settings.is_none() {
             self.init_app(AppId::Settings, t);
         }
@@ -73,9 +91,53 @@ impl Shell {
         }
         // every running app process: the elements it declared, else the ones the kit's draw helpers recorded
         for host in self.ext.iter().flatten() {
-            map.add_nodes(&format!("app/{}", host.id), &host.controls);
+            add_app_tree(&mut map, &format!("app/{}", host.id), &host.controls, &host.controls_tree, &mut st);
         }
-        map
+        self.add_window_elements(&mut map);
+        (map, st)
+    }
+
+    /// The open windows as elements under `os/windows`, each carrying the title-bar actions in `WINDOW_ACTIONS`.
+    fn add_window_elements(&self, map: &mut Map) {
+        let Some(desk) = self.desk.as_ref() else { return };
+        for (i, w) in desk.wins.iter().enumerate() {
+            let name = super::apps::apps().iter().find(|a| a.id == w.app).map(|a| a.name.to_string()).unwrap_or_else(|| "Window".to_string());
+            let state = if w.minimized { "minimized" } else { "open" };
+            let addr = map.add("os/windows", "window", &name, state, true, None, &format!("win:{i}"));
+            for action in WINDOW_ACTIONS {
+                map.add_custom_action(&addr, action);
+            }
+        }
+    }
+
+    /// `ax list [prefix]`: the listing with parent, checked and focused columns.
+    pub fn ax_listing(&mut self, prefix: &str, t: f64) -> String {
+        let (map, st) = self.ax_state(t);
+        tree::listing(&map, &st, prefix)
+    }
+
+    /// `ax actions <element>`: the custom action names of one element, one per line.
+    pub fn ax_actions(&mut self, query: &str, t: f64) -> Result<String, String> {
+        let map = self.ax_map(t);
+        let el = resolve_one(&map, query)?;
+        Ok(map.custom_actions(&el.address).map(|n| format!("{n}\n")).collect())
+    }
+
+    /// `ax action <element> :: <name>`: runs one custom action of an element. Answers the element's address.
+    pub fn ax_action(&mut self, query: &str, name: &str, t: f64) -> Result<(String, Vec<Effect>), String> {
+        let map = self.ax_map(t);
+        let el = resolve_one(&map, query)?;
+        if !el.enabled {
+            return Err(format!("{} is disabled", el.address));
+        }
+        if !map.has_custom_action(&el.address, name) {
+            let names: Vec<&str> = map.custom_actions(&el.address).collect();
+            return Err(format!("{} has no action {name:?}; its actions: {}", el.address, names.join(", ")));
+        }
+        let i = window_index(&el.handle).ok_or("this element has no action the shell can run")?;
+        let fx = self.window_action(i, name, t)?;
+        self.dirty = true;
+        Ok((el.address, fx))
     }
 
     /// Resolves `query` in the map and acts on it. Settings rows open Settings first; the answer names what was pressed.
@@ -89,6 +151,9 @@ impl Shell {
         };
         if !el.enabled {
             return Err(format!("{} is disabled", el.address));
+        }
+        if el.handle.starts_with("win:") {
+            return Err(format!("{} is a window: list its actions with `ax actions` and run one with `ax action`", el.address));
         }
         if el.address.starts_with("os/settings") {
             let ui = &self.ui;

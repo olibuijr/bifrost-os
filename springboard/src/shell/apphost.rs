@@ -320,6 +320,8 @@ pub struct AppHost {
     pub ax_meta: Vec<bifrost_proto::AxMeta>,
     /// Announcements waiting for the accessibility bridge (`ToShell::Announce`), oldest first, at most 8.
     pub announcements: Vec<(String, bifrost_proto::AnnouncePriority)>,
+    /// The same announcements, waiting for the on-screen banner (`accessibility::banner`); the shell takes them each tick.
+    pub announce_banner: Vec<(String, bifrost_proto::AnnouncePriority)>,
     last_notification: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
@@ -412,6 +414,7 @@ impl AppHost {
             ax_text: Vec::new(),
             ax_meta: Vec::new(),
             announcements: Vec::new(),
+            announce_banner: Vec::new(),
             last_notification: None,
             badge: String::new(),
             tile: Default::default(),
@@ -594,6 +597,10 @@ impl AppHost {
                 if self.announcements.len() >= 8 {
                     self.announcements.remove(0);
                 }
+                if self.announce_banner.len() >= 8 {
+                    self.announce_banner.remove(0);
+                }
+                self.announce_banner.push((text.clone(), priority));
                 self.announcements.push((text, priority));
             }
             ToShell::TextState(t) => {
