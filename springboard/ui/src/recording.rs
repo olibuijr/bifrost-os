@@ -11,6 +11,47 @@ pub enum CameraPosition {
     Back,
 }
 
+/// The kind of sample a capture delivers, named after ReplayKit's `RPSampleBufferType`: screen video, app audio and
+/// microphone audio.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleKind {
+    Video,
+    AppAudio,
+    Microphone,
+}
+
+impl SampleKind {
+    const COUNT: usize = 3;
+
+    fn index(self) -> usize {
+        match self {
+            SampleKind::Video => 0,
+            SampleKind::AppAudio => 1,
+            SampleKind::Microphone => 2,
+        }
+    }
+}
+
+/// Why a sample was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleError {
+    /// No session is running, so samples are not kept.
+    NotRecording,
+    /// The session was started without the microphone.
+    MicrophoneOff,
+    /// The time is not finite.
+    InvalidTime,
+    /// The time is before the previous sample of the same kind.
+    OutOfOrder,
+}
+
+/// Per-kind bookkeeping for the running session: how many samples were kept and the time of the last one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SampleTrack {
+    count: u64,
+    last: Option<f64>,
+}
+
 /// A change the owner should hear about.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
@@ -61,11 +102,18 @@ pub struct Recorder {
     camera: Option<CameraPosition>,
     session: Option<Session>,
     events: Vec<Event>,
+    samples: [SampleTrack; SampleKind::COUNT],
 }
 
 impl Recorder {
     pub fn new(available: bool) -> Self {
-        Recorder { available, camera: None, session: None, events: Vec::new() }
+        Recorder {
+            available,
+            camera: None,
+            session: None,
+            events: Vec::new(),
+            samples: [SampleTrack::default(); SampleKind::COUNT],
+        }
     }
 
     pub fn is_available(&self) -> bool {
@@ -124,6 +172,7 @@ impl Recorder {
             return Err(RecordError::InvalidTime);
         }
         let camera = self.camera;
+        self.samples = [SampleTrack::default(); SampleKind::COUNT];
         self.session = Some(Session { started: now, microphone, camera });
         self.events.push(Event::Started { microphone, camera });
         Ok(())
@@ -154,6 +203,38 @@ impl Recorder {
         }
         self.events.push(Event::Failed(reason.to_string()));
         true
+    }
+
+    /// Keeps one sample of `kind` captured at `time` seconds while a session runs. Microphone samples are refused when
+    /// the session has no microphone. Within a kind, times may repeat but must not go back. The counts and the last
+    /// time stay readable after the session ends, until the next `start`.
+    pub fn push_sample(&mut self, kind: SampleKind, time: f64) -> Result<(), SampleError> {
+        let microphone = self.session.as_ref().ok_or(SampleError::NotRecording)?.microphone;
+        if kind == SampleKind::Microphone && !microphone {
+            return Err(SampleError::MicrophoneOff);
+        }
+        if !time.is_finite() {
+            return Err(SampleError::InvalidTime);
+        }
+        let track = &mut self.samples[kind.index()];
+        if let Some(last) = track.last {
+            if time < last {
+                return Err(SampleError::OutOfOrder);
+            }
+        }
+        track.last = Some(time);
+        track.count += 1;
+        Ok(())
+    }
+
+    /// How many samples of `kind` the current or last session kept.
+    pub fn sample_count(&self, kind: SampleKind) -> u64 {
+        self.samples[kind.index()].count
+    }
+
+    /// The time of the newest sample of `kind` kept by the current or last session.
+    pub fn last_sample_time(&self, kind: SampleKind) -> Option<f64> {
+        self.samples[kind.index()].last
     }
 
     /// The events since the last call, oldest first.
@@ -232,6 +313,57 @@ impl Trim {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn samples_are_refused_without_a_session() {
+        let mut rec = Recorder::new(true);
+        assert_eq!(rec.push_sample(SampleKind::Video, 0.0), Err(SampleError::NotRecording));
+        rec.start(0.0, false).unwrap();
+        rec.stop(1.0).unwrap();
+        assert_eq!(rec.push_sample(SampleKind::AppAudio, 1.5), Err(SampleError::NotRecording));
+        assert_eq!(rec.sample_count(SampleKind::AppAudio), 0);
+    }
+
+    #[test]
+    fn microphone_samples_need_the_microphone_on() {
+        let mut rec = Recorder::new(true);
+        rec.start(0.0, false).unwrap();
+        assert_eq!(rec.push_sample(SampleKind::Microphone, 0.1), Err(SampleError::MicrophoneOff));
+        assert!(rec.push_sample(SampleKind::AppAudio, 0.1).is_ok(), "app audio does not need the microphone");
+        rec.stop(1.0).unwrap();
+        rec.start(2.0, true).unwrap();
+        assert_eq!(rec.push_sample(SampleKind::Microphone, 2.1), Ok(()));
+    }
+
+    #[test]
+    fn samples_count_per_kind_and_must_not_go_back_within_a_kind() {
+        let mut rec = Recorder::new(true);
+        rec.start(0.0, true).unwrap();
+        assert_eq!(rec.push_sample(SampleKind::Video, 0.0), Ok(()));
+        assert_eq!(rec.push_sample(SampleKind::Video, 0.5), Ok(()));
+        assert_eq!(rec.push_sample(SampleKind::Video, 0.25), Err(SampleError::OutOfOrder));
+        assert_eq!(rec.push_sample(SampleKind::Video, 0.5), Ok(()), "an equal time is kept");
+        assert_eq!(rec.push_sample(SampleKind::AppAudio, 0.1), Ok(()), "kinds keep their own clocks");
+        assert_eq!(rec.push_sample(SampleKind::Video, f64::NAN), Err(SampleError::InvalidTime));
+        assert_eq!(rec.sample_count(SampleKind::Video), 3);
+        assert_eq!(rec.sample_count(SampleKind::AppAudio), 1);
+        assert_eq!(rec.sample_count(SampleKind::Microphone), 0);
+        assert_eq!(rec.last_sample_time(SampleKind::Video), Some(0.5));
+        assert_eq!(rec.last_sample_time(SampleKind::Microphone), None);
+    }
+
+    #[test]
+    fn a_new_session_starts_the_sample_counts_again() {
+        let mut rec = Recorder::new(true);
+        rec.start(0.0, false).unwrap();
+        rec.push_sample(SampleKind::Video, 4.0).unwrap();
+        rec.stop(5.0).unwrap();
+        assert_eq!(rec.sample_count(SampleKind::Video), 1, "the last session stays readable");
+        rec.start(10.0, false).unwrap();
+        assert_eq!(rec.sample_count(SampleKind::Video), 0);
+        assert_eq!(rec.last_sample_time(SampleKind::Video), None);
+        assert_eq!(rec.push_sample(SampleKind::Video, 1.0), Ok(()), "times may restart with a new session");
+    }
 
     #[test]
     fn start_is_refused_when_unavailable_and_while_a_session_runs() {
