@@ -199,6 +199,17 @@ impl RightStore {
     }
 }
 
+/// Right that a privileged helper install checks first (docs/parity-matrix, theme-20). Only the gate is modelled here;
+/// the install itself is not implemented.
+pub const RIGHT_HELPER_INSTALL: &str = "helper.install";
+/// Right that a privileged helper install checks before it changes system daemons.
+pub const RIGHT_DAEMON_MODIFY: &str = "daemon.modify";
+
+/// Whether a privileged helper may be installed at `now`: both rights must be valid in the store.
+pub fn helper_install_allowed(store: &RightStore, now: u64) -> bool {
+    store.is_valid(RIGHT_HELPER_INSTALL, now) && store.is_valid(RIGHT_DAEMON_MODIFY, now)
+}
+
 /// Whether a right granted at `granted_at` is still valid at `now`.
 fn live(r: &Right, now: u64) -> bool {
     match r.valid_for {
@@ -427,6 +438,34 @@ mod tests {
         let both = Presence { passcode: true, watch: true, ..Presence::default() };
         assert!(!policy.allows(KeyOperation::Decrypt, &passcode_only));
         assert!(policy.allows(KeyOperation::Decrypt, &both));
+    }
+
+    #[test]
+    fn helper_install_needs_both_rights() {
+        let mut store = RightStore::new();
+        store.grant(RIGHT_HELPER_INSTALL, 100, None).unwrap();
+        assert!(!helper_install_allowed(&store, 100));
+        store.grant(RIGHT_DAEMON_MODIFY, 100, None).unwrap();
+        assert!(helper_install_allowed(&store, 100));
+    }
+
+    #[test]
+    fn helper_install_rights_expire_on_their_own_clock() {
+        let mut store = RightStore::new();
+        store.grant(RIGHT_HELPER_INSTALL, 100, Some(60)).unwrap();
+        store.grant(RIGHT_DAEMON_MODIFY, 100, None).unwrap();
+        // Granted at 100 for 60 seconds: valid at 159, expired at 160.
+        assert!(helper_install_allowed(&store, 159));
+        assert!(!helper_install_allowed(&store, 160));
+    }
+
+    #[test]
+    fn revoking_one_right_blocks_the_helper_install() {
+        let mut store = RightStore::new();
+        store.grant(RIGHT_HELPER_INSTALL, 0, None).unwrap();
+        store.grant(RIGHT_DAEMON_MODIFY, 0, None).unwrap();
+        assert!(store.revoke(RIGHT_DAEMON_MODIFY));
+        assert!(!helper_install_allowed(&store, 1));
     }
 
     #[test]

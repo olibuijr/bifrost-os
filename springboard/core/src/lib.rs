@@ -81,3 +81,5 @@ pub mod serial_ports;
 pub mod imgprobe;
 pub mod gifframes;
 pub mod surface_registry;
+pub mod exception_policy;
+pub mod resource_exception;
