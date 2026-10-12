@@ -10,6 +10,7 @@
 //! `NotDetermined`, which `can_capture` treats as not allowed. Decoding is pure, so the replies can be tested without a
 //! shell. The wire names are the shell's (`springboard/src/shell/services/privacy_permissions.rs`).
 use crate::controls::capture_access::{Media, Status};
+use crate::controls::location_auth::{AuthorizationStatus, RequestOutcome};
 use crate::runtime::Ctx;
 use crate::service;
 use bifrost_core::json::Json;
@@ -70,6 +71,40 @@ pub fn decode_all(reply: &Json) -> Option<[(Media, Status); 3]> {
     Some(out)
 }
 
+/// Asks for this app's location status (the Settings switch in App Permissions). The reply decodes with
+/// [`decode_location`].
+pub fn location_status(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "location_status", &Json::Null)
+}
+
+/// Asks what a location request does now: prompt, already granted, or refused. The reply decodes with
+/// [`decode_location_outcome`]. The shell shows no sheet from this call.
+pub fn location_request(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "location_request", &Json::Null)
+}
+
+/// The location status in a `location_status` reply, or `None` for a reply of another shape.
+pub fn decode_location(reply: &Json) -> Option<AuthorizationStatus> {
+    match reply.get("status")?.as_str()? {
+        "not_determined" => Some(AuthorizationStatus::NotDetermined),
+        "restricted" => Some(AuthorizationStatus::Restricted),
+        "denied" => Some(AuthorizationStatus::Denied),
+        "authorized_always" => Some(AuthorizationStatus::AuthorizedAlways),
+        "authorized_when_in_use" => Some(AuthorizationStatus::AuthorizedWhenInUse),
+        _ => None,
+    }
+}
+
+/// The outcome in a `location_request` reply, or `None` for a reply of another shape.
+pub fn decode_location_outcome(reply: &Json) -> Option<RequestOutcome> {
+    match reply.get("outcome")?.as_str()? {
+        "prompt" => Some(RequestOutcome::Prompt),
+        "already_granted" => Some(RequestOutcome::AlreadyGranted),
+        "refused" => Some(RequestOutcome::Refused),
+        _ => None,
+    }
+}
+
 fn parse_status(name: &str) -> Option<Status> {
     match name {
         "not_determined" => Some(Status::NotDetermined),
@@ -118,5 +153,17 @@ mod tests {
         assert_eq!(all[1], (Media::Audio, Status::NotDetermined));
         assert_eq!(all[2], (Media::Screen, Status::Restricted));
         assert_eq!(decode_all(&Json::Obj(vec![("camera".into(), Json::Str("authorized".into()))])), None);
+    }
+
+    #[test]
+    fn a_location_reply_decodes_to_its_status_and_outcome() {
+        let on = Json::Obj(vec![("status".into(), Json::Str("authorized_when_in_use".into()))]);
+        assert_eq!(decode_location(&on), Some(AuthorizationStatus::AuthorizedWhenInUse));
+        let never = Json::Obj(vec![("status".into(), Json::Str("not_determined".into()))]);
+        assert_eq!(decode_location(&never), Some(AuthorizationStatus::NotDetermined));
+        assert_eq!(decode_location(&Json::Obj(vec![("status".into(), Json::Str("sometimes".into()))])), None);
+        let granted = Json::Obj(vec![("outcome".into(), Json::Str("already_granted".into()))]);
+        assert_eq!(decode_location_outcome(&granted), Some(RequestOutcome::AlreadyGranted));
+        assert_eq!(decode_location_outcome(&Json::Null), None);
     }
 }
