@@ -24,6 +24,19 @@ covers parsing, budgets and the table. Exit code 3 means a budget was exceeded.
 | audio-roundtrip | measured p50 within 1 frame of `reported_ms` (what the HAL latency properties predict) |
 | xrun-sweep (Midget) | smallest stable quantum (`extra.smallest_clean_quantum`) <= 64 |
 
+## Kernel
+
+Measured 2026-10-12 on Midget with `bifrost pc midget kab` (`kbench` on each kernel, one boot into linux-rt; `tools/midget/kbench.sh`, results in `docs/perf-history.jsonl` as `kernel-latency`).
+
+Method: `stress-ng --cpu 8 --io 2 --vm 2 --vm-bytes 256M --hdd 1 --hdd-bytes 64M --timer 4 --switch 2` as the load; `cyclictest -m -S -p 95 -i 200` for scheduling latency, idle and under the load; `aplay -D hw:0,0` (S16_LE, 48 kHz, stereo) at FIFO 80 with 2 periods of 32, 64 and 128 frames under the load, counting `underrun!!!` lines per minute. `cyclictest` needs numactl (libnuma).
+
+| Kernel | cyclictest max idle | cyclictest max under stress | aplay underruns per minute at 32 / 64 / 128 frames |
+|---|---|---|---|
+| stock 7.2.9-arch1-1 (PREEMPT_DYNAMIC full, `threadirqs`) | 206 us | 337 us | 259 / 648 / 0 |
+| linux-rt 7.2.9-rt3-arch1-1-rt (PREEMPT_RT) | 29 us | 38 us | 0 / 0 / 0 |
+
+Owner decision 2026-10-12: linux-rt becomes the default kernel (the packaging work follows). Even the stock kernel needs a period of 128 frames (2.7 ms) to play clean under load; the RT kernel is clean at 32 frames (0.67 ms).
+
 ## The physical floor
 
 "As low as the hardware allows" in numbers, at 48 kHz (1 frame = 0.0208 ms):
