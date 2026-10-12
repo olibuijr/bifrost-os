@@ -52,7 +52,20 @@ impl AssetPack {
 pub enum PackError {
     EmptyId,
     Duplicate(String),
+    /// No pack with this id in the manifest (`assetPackNotFound(withID:)`).
     UnknownPack(String),
+    /// The pack is in the manifest but not usable on this device at its current version.
+    NotAvailable(String),
+    /// A saved manifest line could not be read; the field is the 1-based line number.
+    Malformed(usize),
+}
+
+/// The result of `AssetPackManager::ensure_local_availability` (`AssetPackManager.LocalAvailabilityError`): the ids
+/// that are available locally, and for each other requested id the reason it is not. Both lists keep request order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalAvailabilityError {
+    pub successes: Vec<String>,
+    pub failures: Vec<(String, PackError)>,
 }
 
 /// The packs an app can download (`AssetPackManifest`). Ids are unique and not empty.
@@ -85,6 +98,56 @@ impl AssetPackManifest {
     pub fn asset_pack(&self, id: &str) -> Option<&AssetPack> {
         self.packs.iter().find(|pack| pack.id == id)
     }
+
+    /// Writes the manifest as one tab-separated line per pack: id, version, download bytes, file sizes separated by
+    /// commas, languages separated by commas. Ids and languages must not contain tabs, commas or newlines.
+    pub fn to_lines(&self) -> String {
+        let mut out = String::new();
+        for pack in &self.packs {
+            let files: Vec<String> = pack.file_sizes.iter().map(|b| b.to_string()).collect();
+            out.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{}\n",
+                pack.id,
+                pack.version,
+                pack.download_bytes,
+                files.join(","),
+                pack.languages.join(",")
+            ));
+        }
+        out
+    }
+
+    /// Reads a manifest written by `to_lines`. The same checks as `new` apply to the ids.
+    pub fn from_lines(text: &str) -> Result<Self, PackError> {
+        let mut packs = Vec::new();
+        for (n, line) in text.lines().enumerate() {
+            let line_no = n + 1;
+            if line.is_empty() {
+                continue;
+            }
+            let fields: Vec<&str> = line.split('\t').collect();
+            if fields.len() != 5 {
+                return Err(PackError::Malformed(line_no));
+            }
+            let version: u32 = fields[1].parse().map_err(|_| PackError::Malformed(line_no))?;
+            let download_bytes: u64 = fields[2].parse().map_err(|_| PackError::Malformed(line_no))?;
+            let file_sizes: Result<Vec<u64>, _> = split_list(fields[3]).map(|s| s.parse::<u64>()).collect();
+            let file_sizes = file_sizes.map_err(|_| PackError::Malformed(line_no))?;
+            packs.push(AssetPack {
+                id: fields[0].to_string(),
+                version,
+                download_bytes,
+                file_sizes,
+                languages: split_list(fields[4]).map(str::to_string).collect(),
+            });
+        }
+        Self::new(packs)
+    }
+}
+
+/// The items of a comma-separated field. An empty field has no items.
+fn split_list<'a>(field: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    field.split(',').filter(|s| !s.is_empty())
 }
 
 /// The state of one pack on this device (`AssetPack.Status`).
@@ -158,6 +221,22 @@ impl AssetPackManager {
             }
         }
         Ok(missing)
+    }
+
+    /// `ensureLocalAvailability(of:)` result without a download: every id that is available at its current version is
+    /// a success. An unknown id fails with `UnknownPack`, and a pack that is missing or outdated fails with
+    /// `NotAvailable`.
+    pub fn ensure_local_availability(&self, ids: &[&str]) -> LocalAvailabilityError {
+        let mut successes = Vec::new();
+        let mut failures = Vec::new();
+        for &id in ids {
+            match self.status(id) {
+                Ok(PackStatus::Available) => successes.push(id.to_string()),
+                Ok(_) => failures.push((id.to_string(), PackError::NotAvailable(id.to_string()))),
+                Err(error) => failures.push((id.to_string(), error)),
+            }
+        }
+        LocalAvailabilityError { successes, failures }
     }
 
     fn localized_for(&self, language: &str) -> bool {
@@ -291,5 +370,47 @@ mod tests {
         m.mark_downloaded("b").unwrap();
         assert_eq!(m.needed(&["a", "b", "c"]), Ok(vec!["a".to_string(), "c".to_string()]));
         assert_eq!(m.needed(&["a", "zzz"]), Err(PackError::UnknownPack("zzz".into())));
+    }
+
+    #[test]
+    fn local_availability_splits_successes_from_reasons() {
+        let mut m = manager(vec![pack("a", 1, &[], &[1]), pack("b", 1, &[], &[1]), pack("c", 1, &[], &[1])]);
+        m.mark_downloaded("a").unwrap();
+        // Installed at version 0 while the manifest is at 1: outdated, so not available.
+        m.installed.insert("c".into(), 0);
+        let result = m.ensure_local_availability(&["a", "b", "c", "zz"]);
+        assert_eq!(result.successes, vec!["a".to_string()]);
+        assert_eq!(
+            result.failures,
+            vec![
+                ("b".to_string(), PackError::NotAvailable("b".into())),
+                ("c".to_string(), PackError::NotAvailable("c".into())),
+                ("zz".to_string(), PackError::UnknownPack("zz".into())),
+            ]
+        );
+    }
+
+    #[test]
+    fn manifest_lines_round_trip_files_and_languages() {
+        // "core": download is (5000 + 10) / 2 = 2505 by the helper; "text" has no files and no languages filter.
+        let packs = vec![pack("core", 3, &[], &[5000, 10]), pack("text", 1, &["en", "is"], &[])];
+        let manifest = AssetPackManifest::new(packs).unwrap();
+        let text = manifest.to_lines();
+        assert_eq!(text, "core\t3\t2505\t5000,10\t\ntext\t1\t0\t\ten,is\n");
+        assert_eq!(AssetPackManifest::from_lines(&text), Ok(manifest));
+    }
+
+    #[test]
+    fn manifest_lines_reject_bad_fields_with_their_line_number() {
+        assert_eq!(AssetPackManifest::from_lines("a\t1\t10\t5\n"), Err(PackError::Malformed(1)));
+        assert_eq!(AssetPackManifest::from_lines("a\tx\t10\t5\t\n"), Err(PackError::Malformed(1)));
+        assert_eq!(AssetPackManifest::from_lines("a\t1\t10\t5,y\t\n"), Err(PackError::Malformed(1)));
+        // The empty second line is skipped but still counted, so the bad third line is reported as line 3.
+        assert_eq!(AssetPackManifest::from_lines("a\t1\t1\t\t\n\nb\t1\tbad\t\t\n"), Err(PackError::Malformed(3)));
+        assert_eq!(AssetPackManifest::from_lines("\t1\t10\t\t\n"), Err(PackError::EmptyId));
+        assert_eq!(
+            AssetPackManifest::from_lines("a\t1\t1\t\t\na\t2\t2\t\t\n"),
+            Err(PackError::Duplicate("a".into()))
+        );
     }
 }
