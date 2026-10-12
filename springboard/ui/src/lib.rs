@@ -963,3 +963,5 @@ pub mod remote_view;
 pub mod x25519;
 pub mod web_usage;
 pub mod browser_settings;
+pub mod window_list;
+pub mod event_tap;
