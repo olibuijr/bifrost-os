@@ -889,6 +889,7 @@ pub mod video_compression;
 pub mod media_block;
 pub mod sample_attach;
 pub mod audio_engine;
+pub mod audio_player;
 pub mod scan;
 pub mod analysis;
 pub mod docscan;
