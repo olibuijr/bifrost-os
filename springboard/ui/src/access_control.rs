@@ -282,6 +282,82 @@ impl KeyPairPolicy {
     }
 }
 
+/// Options for [`RightStore::obtain`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ObtainFlags {
+    /// The user may be asked for presence when a right is not valid yet. Without it, a missing right is refused.
+    pub interaction_allowed: bool,
+}
+
+/// Why [`RightStore::obtain`] refused the request. A refused request grants nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ObtainError {
+    /// The request named no rights.
+    NoRights,
+    /// A right name is not valid. Carries the store error.
+    Store(Error),
+    /// The right is not valid and interaction is not allowed. Carries the right name.
+    NeedsInteraction(String),
+    /// The right needs the user, and the presence given does not satisfy user presence. Carries the right name.
+    NotPresent(String),
+}
+
+impl RightStore {
+    /// Authorizes and preauthorizes the named rights and returns them in the order asked.
+    ///
+    /// A right that is already valid is returned as it is. A missing right is granted only when `flags` allows
+    /// interaction and the `presence` given satisfies user presence (a passcode or biometry). Every name is checked
+    /// and every grant is planned before the store changes, so a refused request leaves the store as it was.
+    /// Granted rights last for `valid_for` seconds, or until revoked when it is `None`.
+    pub fn obtain(
+        &mut self,
+        rights: &[&str],
+        flags: ObtainFlags,
+        now: u64,
+        presence: Option<&Presence>,
+        valid_for: Option<u64>,
+    ) -> Result<Vec<String>, ObtainError> {
+        if rights.is_empty() {
+            return Err(ObtainError::NoRights);
+        }
+        let mut out = Vec::with_capacity(rights.len());
+        let mut to_grant: Vec<&str> = Vec::new();
+        for &r in rights {
+            check_right_name(r).map_err(ObtainError::Store)?;
+            if self.is_valid(r, now) {
+                out.push(r.to_string());
+            } else if !flags.interaction_allowed {
+                return Err(ObtainError::NeedsInteraction(r.to_string()));
+            } else {
+                match presence {
+                    Some(p) if Constraint::UserPresence.satisfied(p) => {
+                        if !to_grant.contains(&r) {
+                            to_grant.push(r);
+                        }
+                        out.push(r.to_string());
+                    }
+                    _ => return Err(ObtainError::NotPresent(r.to_string())),
+                }
+            }
+        }
+        // Each name in `to_grant` is new to the store and unique, so this count is exact.
+        if self.len() + to_grant.len() > MAX_RIGHTS {
+            return Err(ObtainError::Store(Error::TooManyRights));
+        }
+        for r in to_grant {
+            self.grant(r, now, valid_for).map_err(ObtainError::Store)?;
+        }
+        Ok(out)
+    }
+
+    /// Drops every right in the store, so none of them can be reused. Returns how many were dropped.
+    pub fn invalidate_credentials(&mut self) -> usize {
+        let n = self.len();
+        self.rights.clear();
+        n
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,6 +523,91 @@ mod tests {
         assert!(!helper_install_allowed(&store, 100));
         store.grant(RIGHT_DAEMON_MODIFY, 100, None).unwrap();
         assert!(helper_install_allowed(&store, 100));
+    }
+
+    fn interactive() -> ObtainFlags {
+        ObtainFlags { interaction_allowed: true }
+    }
+
+    #[test]
+    fn a_valid_right_is_obtained_without_presence() {
+        let mut store = RightStore::new();
+        store.grant("disk.format", 100, None).unwrap();
+        let got = store.obtain(&["disk.format"], ObtainFlags::default(), 500, None, None);
+        assert_eq!(got, Ok(vec!["disk.format".to_string()]));
+        assert_eq!(store.len(), 1, "nothing new is granted");
+    }
+
+    #[test]
+    fn a_missing_right_is_refused_when_interaction_is_not_allowed() {
+        let mut store = RightStore::new();
+        let got = store.obtain(&["net.admin"], ObtainFlags::default(), 0, Some(&presence(true, false, false, false)), None);
+        assert_eq!(got, Err(ObtainError::NeedsInteraction("net.admin".to_string())));
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn user_presence_grants_a_missing_right_for_its_lifetime() {
+        let mut store = RightStore::new();
+        let got = store.obtain(&["net.admin"], interactive(), 1000, Some(&presence(false, true, true, false)), Some(60));
+        assert_eq!(got, Ok(vec!["net.admin".to_string()]));
+        assert!(store.is_valid("net.admin", 1059), "59 s after the grant is still inside 60 s");
+        assert!(!store.is_valid("net.admin", 1060), "the lifetime is exclusive, as for any right");
+    }
+
+    #[test]
+    fn a_watch_or_no_presence_does_not_grant_a_missing_right() {
+        let mut store = RightStore::new();
+        let watch_only = presence(false, false, false, true);
+        assert_eq!(
+            store.obtain(&["net.admin"], interactive(), 0, Some(&watch_only), None),
+            Err(ObtainError::NotPresent("net.admin".to_string())),
+            "a watch alone is not user presence"
+        );
+        assert_eq!(
+            store.obtain(&["net.admin"], interactive(), 0, None, None),
+            Err(ObtainError::NotPresent("net.admin".to_string()))
+        );
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn a_refused_request_grants_nothing_even_when_part_of_it_is_valid() {
+        let mut store = RightStore::new();
+        store.grant("disk.read", 0, None).unwrap();
+        // The second name is missing and needs presence, the third is malformed: the whole request fails.
+        let got = store.obtain(
+            &["disk.read", "net.admin", "Bad.Name"],
+            interactive(),
+            0,
+            Some(&presence(true, false, false, false)),
+            None,
+        );
+        assert_eq!(got, Err(ObtainError::Store(Error::BadName)));
+        assert_eq!(store.len(), 1, "net.admin was not granted when Bad.Name failed");
+        assert_eq!(store.obtain(&[], interactive(), 0, None, None), Err(ObtainError::NoRights));
+    }
+
+    #[test]
+    fn the_store_capacity_is_checked_before_any_grant() {
+        let mut store = RightStore::new();
+        for i in 0..MAX_RIGHTS {
+            store.grant(&format!("r.{}", i), 0, None).unwrap();
+        }
+        let got = store.obtain(&["one.more"], interactive(), 0, Some(&presence(true, false, false, false)), None);
+        assert_eq!(got, Err(ObtainError::Store(Error::TooManyRights)));
+        assert_eq!(store.len(), MAX_RIGHTS);
+    }
+
+    #[test]
+    fn invalidating_credentials_drops_every_right() {
+        let mut store = RightStore::new();
+        store.grant("disk.read", 0, None).unwrap();
+        store.grant("net.admin", 0, Some(60)).unwrap();
+        assert_eq!(store.invalidate_credentials(), 2);
+        assert!(store.is_empty());
+        assert_eq!(store.state("disk.read", 1), RightState::Unknown);
+        assert_eq!(store.invalidate_credentials(), 0, "a second call finds nothing");
     }
 
     #[test]
