@@ -810,3 +810,4 @@ pub mod vm_share;
 pub mod vm_error;
 pub mod smartcard_slot;
 pub mod token_watch;
+pub mod screensaver;
