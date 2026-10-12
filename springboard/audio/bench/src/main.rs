@@ -75,7 +75,7 @@ fn main() {
         }
         Err(e) => {
             eprintln!("bifrost-audio-bench: {e}");
-            std::process::exit(1);
+            std::process::exit(if e == live::NO_LOOPBACK { live::EXIT_NO_LOOPBACK } else { 1 });
         }
     }
 }

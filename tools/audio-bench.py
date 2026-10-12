@@ -16,6 +16,14 @@ BENCHES = ["midi-latency", "audio-roundtrip", "xrun-sweep", "midi-throughput"]
 QUANTA = [16, 32, 64, 128]
 REMOTE_BIN = "/usr/bin/bifrost-audio-bench"
 SLACK_MS = 0.5
+# a live latency outside 0..MAX_SANE_MS is a measurement error (mixed clocks or units), never a result
+MAX_SANE_MS = 1000.0
+# bifrost-audio-bench exit code: audio-roundtrip --live heard nothing (no cable / loopback)
+EXIT_NO_LOOPBACK = 4
+
+
+class Skipped(Exception):
+    """A bench that cannot run on this hardware (not a failure, not a result)."""
 MAX_SWEEP_QUANTUM = 64
 # benches that have a --live mode (midi-throughput measures the scheduler only)
 LIVE_BENCHES = ("midi-latency", "audio-roundtrip", "xrun-sweep")
@@ -43,8 +51,12 @@ def parse_cards(aplay_l):
     return cards
 
 
-def pick_card(cards):
-    """Prefer a real card over snd-aloop's Loopback."""
+def pick_card(cards, prefer_loopback=False):
+    """Prefer a real card over snd-aloop's Loopback (--aloop: the Loopback card, so audio-roundtrip hears itself)."""
+    if prefer_loopback:
+        loop = [c for c in cards if c.lower() == "loopback"]
+        if loop:
+            return loop[0]
     real = [c for c in cards if c.lower() != "loopback"]
     return (real or cards or [None])[0]
 
@@ -128,6 +140,8 @@ def bench_cmd(argv, bench, driver, quantum, live=False):
 def run_one(argv, bench, driver, quantum, timeout=120, live=False):
     cmd = bench_cmd(argv, bench, driver, quantum, live)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if p.returncode == EXIT_NO_LOOPBACK:
+        raise Skipped(p.stderr.strip()[:300] or "no loopback: connect line out to line in, or run with --aloop")
     if p.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)}: exit {p.returncode}: {p.stderr.strip()[:300]}")
     if "usage" in p.stderr.lower() and "bench" not in p.stdout:
@@ -140,11 +154,15 @@ def result_problem(r):
     if r.get("bench") in ("midi-latency", "audio-roundtrip"):
         if all(not r.get(k) for k in ("p50_ms", "p99_ms", "max_ms")):
             return "no measurements (p50, p99 and max are all 0)"
+        for k in ("min_ms", "p50_ms", "p99_ms", "max_ms"):
+            v = r.get(k)
+            if isinstance(v, (int, float)) and not (0 <= v <= MAX_SANE_MS):
+                return f"measurement error: {k} {v} outside 0..{MAX_SANE_MS:g} ms (clock or unit mix-up)"
     return None
 
 
-def collect(argv, driver, benches, quanta, live=False):
-    """(results, failures): a bench that fails (exit code, usage text, no JSON, timeout, empty statistics) is a
+def collect(argv, driver, benches, quanta, live=False, skipped=None):
+    """(results, failures): skipped (a list, if given) collects "bench qN: reason" for benches that cannot run here. A bench that fails (exit code, usage text, no JSON, timeout, empty statistics) is a
     failure string and never a result, so it cannot be compared, budget-checked or appended to the history."""
     out, failures = [], []
     for b in benches:
@@ -152,6 +170,10 @@ def collect(argv, driver, benches, quanta, live=False):
         for q in ([min(quanta)] if b == "xrun-sweep" else quanta):
             try:
                 r = run_one(argv, b, driver, q, live=live)
+            except Skipped as e:
+                if skipped is not None:
+                    skipped.append(f"{b} q{q}: {e}")
+                continue
             except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError) as e:
                 failures.append(f"{b} q{q}: {e}")
                 continue
@@ -163,7 +185,7 @@ def collect(argv, driver, benches, quanta, live=False):
     return out, failures
 
 
-def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
+def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False, skipped=None):
     """Run the benches for 'host' or 'midget'. Returns (results, breaches, failures)."""
     midget = mode == "midget"
     if midget:
@@ -176,13 +198,13 @@ def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
         ssh = list(lab.SSH)
         if aloop:
             subprocess.run(ssh + ["modprobe snd-aloop"], check=False)
-        card = pick_card(parse_cards(subprocess.run(ssh + ["aplay -l"], capture_output=True, text=True).stdout))
+        card = pick_card(parse_cards(subprocess.run(ssh + ["aplay -l"], capture_output=True, text=True).stdout), prefer_loopback=aloop)
         if not card:
             sys.exit("audio-bench: no sound card on Midget (aplay -l)")
         argv, driver = ssh + [REMOTE_BIN], "alsa:" + card
     else:
         argv, driver = [find_local_bin()], "loopback"
-    results, failures = collect(argv, driver, benches, quanta, live=midget)
+    results, failures = collect(argv, driver, benches, quanta, live=midget, skipped=skipped)
     return results, [x for r in results for x in budget_breaches(r, midget)], failures
 
 
@@ -211,7 +233,8 @@ def main():
         earlier = [h for h in hist if last[(h["bench"], h["quantum"], h.get("host"))] is not h]
         print(compare_table(latest, earlier))
         return
-    results, breaches, failures = run_mode(mode, quanta, benches, "--aloop" in args)
+    skipped = []
+    results, breaches, failures = run_mode(mode, quanta, benches, "--aloop" in args, skipped)
     if results:
         print(compare_table(results, hist))
     # a failed bench never reaches the history, even when others succeeded
@@ -224,6 +247,10 @@ def main():
         print("\nover budget:")
         for b in breaches:
             print("  " + b)
+    if skipped:
+        print("\nSKIPPED (not failed, not appended):")
+        for x in skipped:
+            print("  " + x)
     if failures:
         print("\nfailed benches:", file=sys.stderr)
         for f in failures:
