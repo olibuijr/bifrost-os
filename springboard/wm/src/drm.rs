@@ -107,8 +107,13 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
     libinput.udev_assign_seat(&seat).map_err(|_| "libinput: cannot assign seat")?;
     event_loop.handle().insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, state| {
-        if !matches!(event, InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }) {
-            state.process_input_event(event);
+        match event {
+            // a new device takes the shell's pointer and trackpad settings (input.rs)
+            InputEvent::DeviceAdded { mut device } => {
+                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()))
+            }
+            InputEvent::DeviceRemoved { .. } => {}
+            event => state.process_input_event(event),
         }
     })?;
 
