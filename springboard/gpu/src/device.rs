@@ -153,8 +153,7 @@ impl Device {
 
     /// A buffer of `len` bytes.
     pub fn new_buffer(&self, len: usize, usage: BufferUsage) -> Result<Buffer> {
-        let _ = (len, usage);
-        todo!("gpu-memory")
+        crate::memory::new_buffer(self, len, usage)
     }
 
     /// A render pipeline (vertex + fragment shader, blend, vertex layout).
@@ -177,7 +176,7 @@ impl Device {
 
     /// A timeline semaphore starting at 0.
     pub fn new_shared_event(&self) -> Result<SharedEvent> {
-        todo!("gpu-sync")
+        crate::sync::create(self)
     }
 
     /// Waits until the device has finished all submitted work (teardown and tests only).
