@@ -221,7 +221,7 @@ impl super::Shell {
     }
 
     /// Brings `app` up the way the share sheet does: a window on the desktop, else the app process.
-    fn desk_open_or_start(&mut self, app: super::AppId, t: f64) {
+    pub(super) fn desk_open_or_start(&mut self, app: super::AppId, t: f64) {
         if self.desk_active() {
             self.desk_open(app, t);
         } else if let super::AppId::External(slot) = app {

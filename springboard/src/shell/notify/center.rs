@@ -67,11 +67,13 @@ pub struct Center {
     desk_press: Option<DeskHit>,
     /// the desktop column shows the Edit Widgets gallery instead of its widgets and cards
     editing: bool,
+    /// the gallery row (listing index) whose Options are open in the gallery's place
+    configuring: Option<usize>,
 }
 
 impl Default for Center {
     fn default() -> Self {
-        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false }
+        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None }
     }
 }
 
@@ -461,10 +463,16 @@ enum DeskHit {
     Toggle(usize),
     /// the gallery row's Small (false) or Large (true) chip
     Size(usize, bool),
+    /// the gallery row's Options chip (listing index): the widget's options replace the gallery
+    Options(usize),
+    /// an option row (option index) and the side tapped: -1 left half, +1 right half
+    Param(usize, i64),
+    /// a widget row in the column (index into `center_widget_rects`)
+    Widget(usize),
 }
 
 /// One gallery row: (index in the listing, row rect, add/remove disc, Small chip, Large chip).
-type GalleryRow = (usize, R4, R4, R4, R4);
+type GalleryRow = (usize, R4, R4, R4, R4, Option<R4>);
 
 type R4 = (f32, f32, f32, f32);
 
@@ -551,7 +559,8 @@ impl Shell {
         let pad = ui.pt(NC_PAD_PT);
         let mut y = top + ui.pt(NC_TITLE_PT);
         let mut rows = vec![];
-        for i in 0..widgets_timeline::gallery(self.notify.now()).len() {
+        let list = widgets_timeline::gallery(self.notify.now());
+        for i in 0..list.len() {
             let h = ui.pt(NC_WIDGET_PT);
             if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
                 break;
@@ -560,7 +569,9 @@ impl Shell {
             let toggle = (x + w - pad - disc, cy - disc / 2.0, disc, disc);
             let large = (toggle.0 - gap - chip, cy - disc / 2.0, chip, disc);
             let small = (large.0 - gap - chip, cy - disc / 2.0, chip, disc);
-            rows.push((i, (x, y, w, h), toggle, small, large));
+            // a widget with options offers an Options chip to the left of Small
+            let opts = list[i].configurable.then(|| (small.0 - gap - 2.0 * chip, cy - disc / 2.0, 2.0 * chip, disc));
+            rows.push((i, (x, y, w, h), toggle, small, large, opts));
             y += h + ui.pt(NC_GAP_PT);
         }
         (title, done, rows)
@@ -573,7 +584,12 @@ impl Shell {
         }
         if self.notify.center.editing {
             let (t, _, rows) = self.center_gallery_layout();
-            let bottom = rows.last().map(|r| r.1 .1 + r.1 .3).unwrap_or(t.1 + t.3);
+            let bottom = if self.notify.center.configuring.is_some() {
+                self.center_options_layout().last().map(|(_, r)| r.1 + r.3)
+            } else {
+                rows.last().map(|r| r.1 .1 + r.1 .3)
+            }
+            .unwrap_or(t.1 + t.3);
             return Some((t.0, t.1, t.2, bottom - t.1));
         }
         let (t, _, cards) = self.center_desk_layout();
@@ -592,7 +608,10 @@ impl Shell {
         if within(done, x, y) {
             return Some(DeskHit::Done);
         }
-        for (i, _, toggle, small, large) in rows {
+        for (i, _, toggle, small, large, opts) in rows {
+            if opts.is_some_and(|o| within(o, x, y)) {
+                return Some(DeskHit::Options(i));
+            }
             if within(toggle, x, y) {
                 return Some(DeskHit::Toggle(i));
             }
@@ -608,7 +627,10 @@ impl Shell {
 
     fn center_desk_hit(&self, x: f32, y: f32) -> Option<DeskHit> {
         if self.notify.center.editing {
-            return self.center_gallery_hit(x, y);
+            return if self.notify.center.configuring.is_some() { self.center_options_hit(x, y) } else { self.center_gallery_hit(x, y) };
+        }
+        if let Some(i) = self.center_widget_rects().iter().position(|(r, _)| within(*r, x, y)) {
+            return Some(DeskHit::Widget(i));
         }
         if within(self.center_edit_rect(), x, y) {
             return Some(DeskHit::EditWidgets);
@@ -619,6 +641,65 @@ impl Shell {
         }
         let groups = self.notify.store().groups();
         cards.iter().find(|c| within(c.1, x, y)).map(|&(i, _, close)| if within(close, x, y) { DeskHit::Close(groups[i].app) } else { DeskHit::Card(groups[i].app) })
+    }
+
+    /// The option rows of the widget being configured: (option index, row rect), as many as fit above the dock.
+    fn center_options_layout(&self) -> Vec<(usize, R4)> {
+        let ui = &self.ui;
+        let w = ui.pt(NC_W_PT);
+        let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
+        let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
+        let mut rows = vec![];
+        for j in 0..self.configuring_count() {
+            let h = ui.pt(NC_WIDGET_PT);
+            if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+                break;
+            }
+            rows.push((j, (x, y, w, h)));
+            y += h + ui.pt(NC_GAP_PT);
+        }
+        rows
+    }
+
+    /// How many options the widget being configured has (0 when none is being configured).
+    fn configuring_count(&self) -> usize {
+        self.notify.center.configuring.and_then(|i| self.gallery_item(i)).and_then(|item| widgets_timeline::configuration(&item.app, &item.kind)).map_or(0, |c| c.params().len())
+    }
+
+    /// The app, kind and key of option `j` of the widget being configured.
+    fn option_at(&self, j: usize) -> Option<(String, String, String)> {
+        let item = self.gallery_item(self.notify.center.configuring?)?;
+        let key = widgets_timeline::configuration(&item.app, &item.kind)?.params().get(j)?.key().to_string();
+        Some((item.app, item.kind, key))
+    }
+
+    /// The hit in the options view: Done, or an option row with the side of the row that was pressed.
+    fn center_options_hit(&self, x: f32, y: f32) -> Option<DeskHit> {
+        let (_, done, _) = self.center_gallery_layout();
+        if within(done, x, y) {
+            return Some(DeskHit::Done);
+        }
+        for (j, r) in self.center_options_layout() {
+            if within(r, x, y) {
+                let dir = if x < r.0 + r.2 / 2.0 { -1 } else { 1 };
+                return Some(DeskHit::Param(j, dir));
+            }
+        }
+        None
+    }
+
+    /// Opens the app of a widget row. A widget with a link opens the app at it: the app gets `Open` with the link.
+    fn open_widget(&mut self, i: usize, t: f64) {
+        let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
+        let Some((app, kind)) = row.widget else { return };
+        let link = widgets_timeline::link(&app, &kind).map(|l| l.to_url());
+        let Some(def) = apps::apps().iter().find(|a| a.icon == app.as_str()).map(|a| a.id) else { return };
+        self.notify.center.hide();
+        self.desk_open_or_start(def, t);
+        if let (AppId::External(slot), Some(url)) = (def, link) {
+            self.ext_send(slot as usize, &bifrost_proto::ToApp::Open { url });
+        }
+        self.dirty = true;
     }
 
     /// Opens the desktop column (the menu bar clock, as on Golden Gate).
@@ -632,6 +713,7 @@ impl Shell {
         c.backdrop = None;
         // it opens on the widgets, not on the gallery of an earlier visit
         c.editing = false;
+        c.configuring = None;
         c.settle(0.0, true, t);
         self.dirty = true;
     }
@@ -661,7 +743,20 @@ impl Shell {
                             self.open_from_notification(app, t);
                         }
                         DeskHit::EditWidgets => self.notify.center.editing = true,
-                        DeskHit::Done => self.notify.center.editing = false,
+                        DeskHit::Done => {
+                            if self.notify.center.configuring.is_some() {
+                                self.notify.center.configuring = None;
+                            } else {
+                                self.notify.center.editing = false;
+                            }
+                        }
+                        DeskHit::Options(i) => self.notify.center.configuring = Some(i),
+                        DeskHit::Param(j, dir) => {
+                            if let Some((app, kind, key)) = self.option_at(j) {
+                                widgets_timeline::step_option(&app, &kind, &key, dir);
+                            }
+                        }
+                        DeskHit::Widget(i) => self.open_widget(i, t),
                         DeskHit::Toggle(i) => {
                             if let Some(item) = self.gallery_item(i) {
                                 widgets_timeline::place(&item.app, &item.kind, !item.placed);
@@ -769,6 +864,43 @@ impl Shell {
 
     /// The Edit Widgets gallery in the column's place: the title with Done, then a row per widget with a disc that adds
     /// it to or removes it from the column, and Small and Large chips for its size.
+    /// The options of the widget being configured: one glass row per option, its name on the left and its value in
+    /// `LINK` on the right. A tap on the right half of a row steps the value up, a tap on the left half steps it down.
+    fn draw_option_rows(&self, s: &mut Surface, slide: f32, alpha: u32) {
+        use super::super::control_center::desk_glass;
+        use super::super::ui::{LABEL, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT};
+        use bifrost_ui::widget_config::Value;
+        let ui = &self.ui;
+        let label = LABEL.now();
+        let r = ui.pt(NC_CARD_R_PT);
+        let pad = ui.pt(NC_PAD_PT);
+        let Some(i) = self.notify.center.configuring else { return };
+        let Some(item) = self.gallery_item(i) else { return };
+        let Some(c) = widgets_timeline::configuration(&item.app, &item.kind) else { return };
+        for (j, (x, y, w, h)) in self.center_options_layout() {
+            let Some(param) = c.params().get(j) else { continue };
+            let key = param.key();
+            let value = match c.value(key) {
+                Some(Value::Choice(_)) => c.choice_label(key).unwrap_or_default().to_string(),
+                Some(Value::Flag(on)) => {
+                    if on {
+                        "On".to_string()
+                    } else {
+                        "Off".to_string()
+                    }
+                }
+                Some(Value::Number(n)) => n.to_string(),
+                None => String::new(),
+            };
+            let x = x + slide;
+            desk_glass(s, (x, y, w, h), r, alpha);
+            let vt = ui.text(&value, MAC_SUBHEAD_PT, Weight::Semibold, LINK);
+            let name = ui.text(&ui.fit(key, MAC_HEADLINE_PT, w - 3.0 * pad - vt.w as f32), MAC_HEADLINE_PT, Weight::Semibold, label);
+            s.blit(&name, (x + pad) as i32, (y + (h - name.h as f32) / 2.0) as i32, 255, alpha);
+            s.blit(&vt, (x + w - pad - vt.w as f32) as i32, (y + (h - vt.h as f32) / 2.0) as i32, 255, alpha);
+        }
+    }
+
     fn draw_desk_gallery(&self, s: &mut Surface, p: f32) {
         use super::super::control_center::desk_glass;
         use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA};
@@ -781,7 +913,8 @@ impl Shell {
         let r = ui.pt(NC_CARD_R_PT);
         let pad = ui.pt(NC_PAD_PT);
         // the title sits on the wallpaper like the column's title: white with a soft shadow
-        let tm = ui.text("Edit Widgets", MAC_TITLE3_PT, Weight::Bold, WHITE);
+        let heading = if self.notify.center.configuring.is_some() { "Options" } else { "Edit Widgets" };
+        let tm = ui.text(heading, MAC_TITLE3_PT, Weight::Bold, WHITE);
         let ty = (title.1 + (title.3 - tm.h as f32) / 2.0) as i32;
         s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * alpha / 255);
         s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, alpha);
@@ -790,16 +923,20 @@ impl Shell {
         desk_glass(s, (dx, dy, dw, dh), dh / 2.0, alpha);
         let dl = ui.text("Done", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
         s.blit(&dl, (dx + (dw - dl.w as f32) / 2.0) as i32, (dy + (dh - dl.h as f32) / 2.0) as i32, 255, alpha);
+        if self.notify.center.configuring.is_some() {
+            return self.draw_option_rows(s, slide, alpha);
+        }
         if list.is_empty() {
             let none = ui.text("No widgets yet", MAC_SUBHEAD_PT, Weight::Regular, secondary);
             s.blit(&none, (title.0 + slide) as i32, (title.1 + title.3 + ui.pt(NC_GAP_PT)) as i32, 255, alpha);
         }
-        for (i, (x, y, w, h), toggle, small, large) in rows {
+        for (i, (x, y, w, h), toggle, small, large, opts) in rows {
             let item = &list[i];
             let x = x + slide;
             desk_glass(s, (x, y, w, h), r, alpha);
             // the name, and the search view's description under it, as far as the room between the pad and the controls
-            let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - 3.0 * ui.pt(NC_CHIP_GAP_PT) - 2.0 * ui.pt(NC_CHIP_W_PT);
+            let options_room = if opts.is_some() { 2.0 * ui.pt(NC_CHIP_W_PT) + ui.pt(NC_CHIP_GAP_PT) } else { 0.0 };
+            let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - 3.0 * ui.pt(NC_CHIP_GAP_PT) - 2.0 * ui.pt(NC_CHIP_W_PT) - options_room;
             let name = ui.text(&ui.fit(&item.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
             let desc = item.description.as_ref().map(|d| ui.text(&ui.fit(d, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary));
             let block = name.h as f32 + desc.as_ref().map_or(0.0, |d| d.h as f32);
@@ -818,6 +955,13 @@ impl Shell {
             s.fill_rect((cx - arm) as usize, (cy - bar / 2.0) as usize, (2.0 * arm) as usize, bar as usize, crate::gfx::scale(ink, alpha));
             if !item.placed {
                 s.fill_rect((cx - bar / 2.0) as usize, (cy - arm) as usize, bar as usize, (2.0 * arm) as usize, crate::gfx::scale(ink, alpha));
+            }
+            // the Options chip: a plate with a link-coloured label, when the widget has options
+            if let Some((ox, oy, ow, oh)) = opts {
+                let (ox, oy) = (ox + slide, oy);
+                s.fill_rrect(ox, oy, ow, oh, oh / 2.0, crate::gfx::scale(field, alpha));
+                let ot = ui.text("Options", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
+                s.blit(&ot, (ox + (ow - ot.w as f32) / 2.0) as i32, (oy + (oh - ot.h as f32) / 2.0) as i32, 255, alpha);
             }
             // the size chips: the chosen one has a plate and the label colour
             for (rect, text, selected) in [(small, "Small", !item.large), (large, "Large", item.large)] {
