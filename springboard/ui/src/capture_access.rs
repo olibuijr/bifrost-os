@@ -1,5 +1,5 @@
-//! Capture permission for one app: whether it may use the camera and whether it may use the microphone. Each media
-//! type has its own status, as the system keeps them. The person answers the prompt once per media type; after that
+//! Capture permission for one app: whether it may use the camera, the microphone, or the screen contents (screen
+//! recording and screenshots of other windows). Each media type has its own status, as the system keeps them. The person answers the prompt once per media type; after that
 //! the answer changes only through Settings (`set_by_user`). A system restriction, such as one from parental controls,
 //! blocks the prompt and every change until the system lifts it (`set_restricted`).
 //! Pure state: the shell shows the prompt, calls `request` with the answer, and asks `can_capture` before it opens a
@@ -12,6 +12,8 @@ pub enum Media {
     Video,
     /// Microphone samples.
     Audio,
+    /// Screen contents: screen recording and frames of content the app did not draw itself.
+    Screen,
 }
 
 /// What the person, or the system, has decided for one media type.
@@ -39,6 +41,7 @@ pub enum Error {
 pub struct CaptureAccess {
     video: Status,
     audio: Status,
+    screen: Status,
 }
 
 impl Default for CaptureAccess {
@@ -50,13 +53,14 @@ impl Default for CaptureAccess {
 impl CaptureAccess {
     /// A new app: nothing is answered yet.
     pub fn new() -> Self {
-        CaptureAccess { video: Status::NotDetermined, audio: Status::NotDetermined }
+        CaptureAccess { video: Status::NotDetermined, audio: Status::NotDetermined, screen: Status::NotDetermined }
     }
 
     fn slot(&self, media: Media) -> Status {
         match media {
             Media::Video => self.video,
             Media::Audio => self.audio,
+            Media::Screen => self.screen,
         }
     }
 
@@ -64,6 +68,7 @@ impl CaptureAccess {
         match media {
             Media::Video => &mut self.video,
             Media::Audio => &mut self.audio,
+            Media::Screen => &mut self.screen,
         }
     }
 
@@ -175,5 +180,35 @@ mod tests {
         a.set_restricted(Media::Video, true);
         assert_eq!(a.request(Media::Audio, true), Status::Authorized);
         assert_eq!(a.status(Media::Video), Status::Restricted);
+    }
+
+    #[test]
+    fn screen_recording_starts_undetermined_and_is_asked_once() {
+        let mut a = CaptureAccess::new();
+        assert_eq!(a.status(Media::Screen), Status::NotDetermined);
+        assert!(!a.can_capture(Media::Screen));
+        assert_eq!(a.request(Media::Screen, true), Status::Authorized);
+        assert_eq!(a.request(Media::Screen, false), Status::Authorized);
+        assert!(a.can_capture(Media::Screen));
+    }
+
+    #[test]
+    fn a_screen_answer_does_not_grant_the_camera_or_microphone() {
+        let mut a = CaptureAccess::new();
+        a.request(Media::Screen, true);
+        assert_eq!(a.status(Media::Video), Status::NotDetermined);
+        assert_eq!(a.status(Media::Audio), Status::NotDetermined);
+        assert!(!a.can_capture(Media::Video));
+    }
+
+    #[test]
+    fn a_system_restriction_blocks_screen_recording_settings_changes() {
+        let mut a = CaptureAccess::new();
+        a.request(Media::Screen, false);
+        assert_eq!(a.set_restricted(Media::Screen, true), Status::Restricted);
+        assert_eq!(a.set_by_user(Media::Screen, true), Err(Error::Restricted));
+        assert_eq!(a.set_restricted(Media::Screen, false), Status::NotDetermined);
+        assert_eq!(a.set_by_user(Media::Screen, true), Ok(Status::Authorized));
+        assert!(a.can_capture(Media::Screen));
     }
 }
