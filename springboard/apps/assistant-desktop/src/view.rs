@@ -6,6 +6,7 @@ use crate::api::{self, Event, Running};
 use crate::connect::{self, Link};
 use crate::model::{self, Block, Conversation, Message, Span};
 use crate::safety;
+use crate::session;
 use bifrost_app::controls::guardrail::Guardrail;
 use bifrost_app::controls::text_classifier::TextClassifier;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -428,7 +429,7 @@ impl Assistant {
         }
         // The request goes out with the instructions of its skill, if a skill word is in it.
         let skill = safety::route(self.router.as_ref(), &text);
-        let system = skill.and_then(safety::skill_prompt).map(str::to_string);
+        let system = skill.and_then(safety::skill_prompt);
         // Offline: keep the composer text and say why, instead of sending a request that cannot leave the machine.
         if self.link.offline() {
             self.error = Some(connect::OFFLINE.into());
@@ -447,7 +448,8 @@ impl Assistant {
         conv.messages.push(Message { user: true, text });
         conv.retitle();
         conv.updated = unix_ms();
-        let history = conv.history();
+        // The request is a session of this conversation under the skill's profile, fitted to the context budget.
+        let request = session::request(&session::session(&conv.messages, session::profile(skill, system)));
         conv.messages.push(Message { user: false, text: String::new() });
         self.stream_conv = conv.id.clone();
         self.convs.insert(0, conv);
@@ -459,7 +461,7 @@ impl Assistant {
         self.stream_raw.clear();
         self.last_skill = skill;
         let wake = self.wake_tx.as_ref().and_then(|w| w.try_clone().ok());
-        self.streaming = Some(api::spawn(self.gen, key, self.model.clone(), system, history, self.tx.clone(), wake));
+        self.streaming = Some(api::spawn(self.gen, key, self.model.clone(), request.system, request.messages, self.tx.clone(), wake));
         self.persist();
         self.dirty = true;
     }

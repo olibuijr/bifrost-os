@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- Each request is now built as a session of its conversation: the messages you sent and got back, under the instructions of the skill the request was routed to. A general request still goes out with no instructions, as before.
+- A long conversation keeps its newest messages within the model's context budget. Older messages past that budget are not sent, and the rest of the chat stays on screen as before.
+- Tool calls are not listed in replies yet: the Assistant does not offer any tools to the model.
+
 ## 1.2.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
