@@ -540,6 +540,7 @@ impl Settings {
                 s
             }
             PageId::Graphics => super::gpu_page::spec(&self.gpus),
+            PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
@@ -1035,6 +1036,20 @@ impl Settings {
             };
             self.rebuild(ui);
             frame = true;
+        }
+        // an open controller test refreshes its rows when a controller's state moves
+        if let Some(PageId::GameController(id)) = self.stack.last().map(|e| e.id) {
+            if super::game_controllers_page::take_change() {
+                let rows = super::game_controllers_page::live_rows_for(&super::services::gamepad_service::snapshot(), id);
+                if let Some(p) = self.list_mut() {
+                    for (label, value) in rows {
+                        if let Some((g, i)) = p.find(label) {
+                            p.set_value(ui, g, i, &value);
+                        }
+                    }
+                }
+                frame = true;
+            }
         }
         let (changed, search_frame) = self.search.tick(ui, t);
         if changed {
@@ -1659,6 +1674,11 @@ impl Settings {
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::GameController(edit) => {
+                let _ = super::game_controllers_page::apply(prefs, &edit);
                 self.rebuild_visible(ui);
                 vec![]
             }
@@ -2556,6 +2576,7 @@ mod tests {
             (vec!["General", "Date & Time"], PageId::DateTime),
             (vec!["General", "Default Apps"], PageId::DefaultApps),
             (vec!["General", "Login Items"], PageId::LoginItems),
+            (vec!["General", "Game Controllers"], PageId::GameControllers),
             (vec!["General", "Fonts"], PageId::Fonts),
             (vec!["General", "Fonts", "System Font"], PageId::FontPick(bifrost_render::fontprefs::FontRole::System)),
             (vec!["General", "Keyboard"], PageId::Keyboard),

@@ -4,21 +4,28 @@
 //! Discovery reads the kernel's sysfs view of each `eventN` node (its capability bitmaps and name), so no ioctl and no
 //! `unsafe` are needed. A node that `bifrost_core::gamepad` accepts gets a reader thread that reads its 24-byte
 //! `input_event` records and hands them to the tick through a channel; the tick feeds them to a per-controller
-//! `bifrost_ui::gamepad::Gamepad` and sends each change to the focused app.
+//! `bifrost_ui::gamepad::Gamepad`, applies the controller's saved button remap and sends each change to the focused app.
 //!
 //! Methods: `list` (the connected controllers) and `state` (`{"id": n}`: pressed buttons, axis values, direction pad).
 //! Events: `connected` and `disconnected` (a controller, sent to every running app) and `input` (`{"id", "kind": ...}`,
 //! sent to the focused app only; `kind` is `button`, `axis` or `dpad`).
+//!
+//! The Settings page (`game_controllers_page`) reads a snapshot the tick publishes: each controller with its battery,
+//! its live state (the physical buttons) and its remap. See `snapshot` and `generation`.
 use super::super::apphost;
+use super::super::game_controllers_page::{self, Remap};
+use super::super::prefs::Prefs;
 use super::super::AppId;
 use super::{Event, Shell, SystemService};
 use bifrost_core::gamepad::{Capabilities, Controller, Event as PadEvent, Registry};
 use bifrost_core::json::Json;
+use bifrost_ui::controller_power::{Battery, BatteryState};
 use bifrost_ui::gamepad::{Axis, Button, Change, Gamepad};
 use std::collections::{BTreeSet, HashMap};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Mutex;
 
 const SYSFS_INPUT: &str = "/sys/class/input";
 const DEV_INPUT: &str = "/dev/input";
@@ -79,11 +86,56 @@ struct Raw {
     value: i32,
 }
 
+/// One connected controller as the Settings page shows it: its name, battery, live state and remap.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PadView {
+    pub id: u32,
+    pub name: String,
+    pub battery: Battery,
+    /// the physical buttons and axes as the controller sends them now
+    pub pad: Gamepad,
+    pub remap: Remap,
+}
+
+/// The published snapshot of the controllers, and a generation that moves on every change of it.
+static VIEWS: Mutex<(u64, Vec<PadView>)> = Mutex::new((0, Vec::new()));
+
+/// The controllers as last published.
+pub fn snapshot() -> Vec<PadView> {
+    VIEWS.lock().map(|g| g.1.clone()).unwrap_or_default()
+}
+
+/// Moves on every change of the snapshot.
+pub fn generation() -> u64 {
+    VIEWS.lock().map(|g| g.0).unwrap_or(0)
+}
+
+fn store(pads: Vec<PadView>) {
+    if let Ok(mut g) = VIEWS.lock() {
+        if g.1 != pads {
+            g.0 += 1;
+            g.1 = pads;
+        }
+    }
+}
+
+/// Replaces the remap a controller shows, after the Settings page saved one.
+pub fn set_remap(name: &str, remap: Remap) {
+    if let Ok(mut g) = VIEWS.lock() {
+        for v in g.1.iter_mut().filter(|v| v.name == name) {
+            v.remap = remap.clone();
+        }
+        g.0 += 1;
+    }
+}
+
 pub struct GamepadService {
     sysfs: PathBuf,
     dev: PathBuf,
     registry: Registry,
     pads: HashMap<u32, Gamepad>,
+    /// the sysfs device directory of each controller, read for its battery
+    devices: HashMap<u32, PathBuf>,
     /// the `eventN` names seen by the last scans, controller or not
     seen: BTreeSet<String>,
     last_scan: Option<f64>,
@@ -106,6 +158,7 @@ impl GamepadService {
             dev: dev.to_path_buf(),
             registry: Registry::default(),
             pads: HashMap::new(),
+            devices: HashMap::new(),
             seen: BTreeSet::new(),
             last_scan: None,
             raw_tx,
@@ -136,6 +189,7 @@ impl GamepadService {
             let node = self.node(&name);
             if let Some(PadEvent::Disconnected(c)) = self.registry.disconnected(&node) {
                 self.pads.remove(&c.id);
+                self.devices.remove(&c.id);
                 out.push(lifecycle("disconnected", &c));
             }
         }
@@ -151,6 +205,7 @@ impl GamepadService {
             let node = self.node(&name);
             if let Some(PadEvent::Connected(c)) = self.registry.connected(&node, &label, &caps) {
                 self.pads.insert(c.id, Gamepad::new());
+                self.devices.insert(c.id, device.clone());
                 spawn_reader(c.id, PathBuf::from(&node), self.raw_tx.clone());
                 out.push(lifecycle("connected", &c));
             }
@@ -169,6 +224,19 @@ impl GamepadService {
             }
         }
         out
+    }
+
+    /// The controllers in arrival order, with their battery, live state and the remap saved for each name.
+    pub fn views(&self, prefs: &Prefs) -> Vec<PadView> {
+        self.registry
+            .controllers()
+            .iter()
+            .filter_map(|c| {
+                let pad = self.pads.get(&c.id)?;
+                let battery = self.devices.get(&c.id).map_or_else(Battery::unknown, |d| read_battery(d));
+                Some(PadView { id: c.id, name: c.name.clone(), battery, pad: pad.clone(), remap: game_controllers_page::load(prefs, &c.name) })
+            })
+            .collect()
     }
 
     /// The answer to `list` and `state`. Needs no shell, so tests call it directly.
@@ -199,24 +267,57 @@ impl SystemService for GamepadService {
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let mut out = Vec::new();
-        if self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY) {
+        let scanned = self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY);
+        if scanned {
             self.last_scan = Some(t);
             out.extend(self.scan());
         }
         let changes = self.drain();
-        if changes.is_empty() {
-            return out;
-        }
+        let changed = !changes.is_empty();
         // input goes to the focused app only; with no SDK app in front the changes are dropped
         let ids: Vec<String> = apphost::installed().iter().map(|a| a.manifest.id.clone()).collect();
         let front = shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app);
         if let Some(app) = front.and_then(|app| focused_app(app, &ids)) {
             for (id, change) in changes {
+                // the app receives the output its button is remapped to; the snapshot keeps the physical buttons
+                let remap = self.registry.get(id).map(|c| game_controllers_page::load(&shell.prefs, &c.name)).unwrap_or_default();
+                let change = remap_change(&remap, change);
                 out.push(Event { app: Some(app.clone()), event: "input".into(), body: change_json(id, &change) });
             }
         }
+        if scanned || changed {
+            store(self.views(&shell.prefs));
+        }
         out
     }
+}
+
+/// A button change through a remap: the button becomes the output it is mapped to. Axes and the direction pad pass.
+pub fn remap_change(remap: &Remap, change: Change) -> Change {
+    match change {
+        Change::Button { button, pressed } => Change::Button { button: remap.target(button), pressed },
+        other => other,
+    }
+}
+
+/// The battery of a wireless controller. Its input node hangs off the HID device that owns the `power_supply` entry,
+/// so the device directory and its parents are searched. No entry (a wired pad): unknown.
+pub fn read_battery(device: &Path) -> Battery {
+    for base in [device.to_path_buf(), device.join(".."), device.join("../.."), device.join("../../..")] {
+        let Ok(rd) = std::fs::read_dir(base.join("power_supply")) else { continue };
+        for entry in rd.flatten() {
+            let dir = entry.path();
+            let Ok(percent) = read_text(&dir.join("capacity")).parse::<u8>() else { continue };
+            let state = match read_text(&dir.join("status")).as_str() {
+                "Charging" => BatteryState::Charging,
+                "Discharging" => BatteryState::Discharging,
+                "Full" => BatteryState::Full,
+                _ => BatteryState::Unknown,
+            };
+            return Battery::from_percent(percent, state);
+        }
+    }
+    Battery::unknown()
 }
 
 /// The app id of a window: only an installed (SDK) app has one; the shell's own windows get no input.
@@ -375,6 +476,7 @@ mod tests {
         assert_eq!(gone.len(), 1);
         assert_eq!(gone[0].event, "disconnected");
         assert!(svc.pads.is_empty());
+        assert!(svc.devices.is_empty());
         let _ = std::fs::remove_dir_all(&sysfs);
     }
 
@@ -438,5 +540,49 @@ mod tests {
         assert_eq!(focused_app(AppId::External(1), &ids), Some("is.example.b".to_string()));
         assert_eq!(focused_app(AppId::External(4), &ids), None);
         assert_eq!(focused_app(AppId::Settings, &ids), None);
+    }
+
+    #[test]
+    fn a_remap_changes_only_the_button_it_names() {
+        let mut r = Remap::identity();
+        r.assign(Button::South, Button::East);
+        assert_eq!(remap_change(&r, Change::Button { button: Button::South, pressed: true }), Change::Button { button: Button::East, pressed: true });
+        assert_eq!(remap_change(&r, Change::Button { button: Button::North, pressed: true }), Change::Button { button: Button::North, pressed: true });
+        assert_eq!(remap_change(&r, Change::Dpad { x: 1, y: 0 }), Change::Dpad { x: 1, y: 0 });
+    }
+
+    #[test]
+    fn the_battery_is_read_from_the_power_supply_of_the_hid_device() {
+        let root = temp_root("battery");
+        // the HID device owns power_supply/; the input device hangs under it at hid/input/input1
+        let bat = root.join("hid/power_supply/ps-controller-battery-1");
+        std::fs::create_dir_all(&bat).unwrap();
+        std::fs::write(bat.join("capacity"), "72\n").unwrap();
+        std::fs::write(bat.join("status"), "Discharging\n").unwrap();
+        let device = root.join("hid/input/input1");
+        std::fs::create_dir_all(&device).unwrap();
+        assert_eq!(read_battery(&device), Battery::from_percent(72, BatteryState::Discharging));
+        // a wired pad has no entry
+        assert_eq!(read_battery(&root.join("wired/input/input2")), Battery::unknown());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn views_carry_the_name_the_live_state_and_the_saved_remap() {
+        let sysfs = temp_root("views");
+        make_pad(&sysfs, "event5", "Test Pad");
+        let mut svc = GamepadService::with_roots(&sysfs, Path::new("/nonexistent-dev-input"));
+        let _ = svc.scan();
+        svc.pads.get_mut(&1).unwrap().feed(0x01, 0x130, 1);
+        let mut prefs = Prefs::memory();
+        prefs.set("gamepad_remap.test_pad", "south>east,east>south").unwrap();
+        let views = svc.views(&prefs);
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].id, 1);
+        assert_eq!(views[0].name, "Test Pad");
+        assert_eq!(views[0].battery, Battery::unknown());
+        assert!(views[0].pad.is_pressed(Button::South));
+        assert_eq!(views[0].remap.target(Button::South), Button::East);
+        let _ = std::fs::remove_dir_all(&sysfs);
     }
 }
