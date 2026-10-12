@@ -13,6 +13,7 @@ use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::{clipboard, Event, Surface, TextCache};
 use crate::convert::{Category, Converter};
+use crate::copy_service::CopyRequest;
 use crate::engine::{Engine, Key, Operator};
 use crate::eval::Angle;
 use crate::format::{format_number, localize};
@@ -209,6 +210,8 @@ pub struct Calculator {
     cache_style: (u32, u32, bool),
     /// Convert mode while set; the keypad then enters a conversion instead of a calculation.
     convert: Option<Converter>,
+    /// The last Copy, waiting for the app to send it to the shell's pasteboard (taken with `take_copy`).
+    copy_request: Option<CopyRequest>,
 }
 
 /// Typographic operators for the scientific expression line.
@@ -261,6 +264,7 @@ impl Calculator {
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
             convert: None,
+            copy_request: None,
         }
     }
 
@@ -789,11 +793,18 @@ impl Calculator {
         true
     }
 
-    /// Edit > Copy (Cmd+C): the same copy as the Copy item of the touch menu.
-    pub fn copy(&self, ui: &Ui) {
-        if let Some(text) = self.copy_text(ui) {
-            clipboard::set_text(&text);
+    /// Edit > Copy (Cmd+C): the same copy as the Copy item of the touch menu. The copy is handed to the app
+    /// (`take_copy`), which sends it to the shell's pasteboard.
+    pub fn copy(&mut self, ui: &Ui) {
+        if let Some(number) = self.copy_text(ui) {
+            let shown = localize(&number, self.settings.locale);
+            self.copy_request = Some(CopyRequest { number, shown });
         }
+    }
+
+    /// The copy made since the last call, if any (each Copy is taken once).
+    pub fn take_copy(&mut self) -> Option<CopyRequest> {
+        self.copy_request.take()
     }
 
     /// Edit > Paste (Cmd+V): the same paste as the Paste item of the touch menu.
