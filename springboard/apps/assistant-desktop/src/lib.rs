@@ -2,6 +2,7 @@
 pub mod api;
 pub mod connect;
 pub mod model;
+pub mod safety;
 pub mod view;
 
 use bifrost_core::json::Json;

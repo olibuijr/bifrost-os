@@ -23,13 +23,14 @@ pub enum Event {
     Error(String),
 }
 
-/// The JSON request body. `messages` are `(is_user, text)` pairs in order.
-pub fn request_body(model: &str, messages: &[(bool, String)]) -> String {
+/// The JSON request body. `messages` are `(is_user, text)` pairs in order; `system` is the skill's instructions, if any.
+pub fn request_body(model: &str, system: Option<&str>, messages: &[(bool, String)]) -> String {
     let list: Vec<String> = messages
         .iter()
         .map(|(user, text)| format!("{{\"role\":\"{}\",\"content\":{}}}", if *user { "user" } else { "assistant" }, quote(text)))
         .collect();
-    format!("{{\"model\":{},\"max_tokens\":{MAX_TOKENS},\"messages\":[{}],\"stream\":true}}", quote(model), list.join(","))
+    let system = system.map_or(String::new(), |s| format!("\"system\":{},", quote(s)));
+    format!("{{\"model\":{},\"max_tokens\":{MAX_TOKENS},{system}\"messages\":[{}],\"stream\":true}}", quote(model), list.join(","))
 }
 
 /// Incremental Server-Sent Events reader for the Messages stream.
@@ -87,8 +88,8 @@ pub fn error_message(status: u16, body: &str) -> String {
 
 /// Runs one streaming request, blocking; call it from a background thread. Always ends with `Done` or `Error`
 /// unless `cancel` is set (then it just returns). Send failures (the app is gone) end the request quietly.
-pub fn stream(key: &str, model: &str, messages: &[(bool, String)], cancel: &AtomicBool, send: &dyn Fn(Event) -> bool) {
-    let result = run(key, model, messages, cancel, send);
+pub fn stream(key: &str, model: &str, system: Option<&str>, messages: &[(bool, String)], cancel: &AtomicBool, send: &dyn Fn(Event) -> bool) {
+    let result = run(key, model, system, messages, cancel, send);
     if cancel.load(Ordering::Relaxed) {
         return;
     }
@@ -97,8 +98,8 @@ pub fn stream(key: &str, model: &str, messages: &[(bool, String)], cancel: &Atom
     }
 }
 
-fn run(key: &str, model: &str, messages: &[(bool, String)], cancel: &AtomicBool, send: &dyn Fn(Event) -> bool) -> Result<(), String> {
-    let mut req = URLRequest::post(&format!("https://{HOST}/v1/messages"), request_body(model, messages).into_bytes());
+fn run(key: &str, model: &str, system: Option<&str>, messages: &[(bool, String)], cancel: &AtomicBool, send: &dyn Fn(Event) -> bool) -> Result<(), String> {
+    let mut req = URLRequest::post(&format!("https://{HOST}/v1/messages"), request_body(model, system, messages).into_bytes());
     req.set_header("x-api-key", key);
     req.set_header("anthropic-version", VERSION);
     req.set_header("content-type", "application/json");
@@ -154,7 +155,7 @@ pub struct Running {
 
 /// Starts [`stream`] on a background thread; events arrive on `tx` tagged with `generation`.
 /// `wake` is written to after every event so the app loop reads `tx` at once.
-pub fn spawn(generation: u64, key: String, model: String, messages: Vec<(bool, String)>, tx: Sender<(u64, Event)>, wake: Option<UnixStream>) -> Running {
+pub fn spawn(generation: u64, key: String, model: String, system: Option<String>, messages: Vec<(bool, String)>, tx: Sender<(u64, Event)>, wake: Option<UnixStream>) -> Running {
     let cancel = Arc::new(AtomicBool::new(false));
     let flag = cancel.clone();
     DispatchQueue::global(Qos::UserInitiated).async_(move || {
@@ -165,7 +166,7 @@ pub fn spawn(generation: u64, key: String, model: String, messages: Vec<(bool, S
             }
             delivered
         };
-        stream(&key, &model, &messages, &flag, &emit);
+        stream(&key, &model, system.as_deref(), &messages, &flag, &emit);
     });
     Running { generation, cancel }
 }
@@ -184,11 +185,20 @@ mod tests {
 
     #[test]
     fn body_has_model_messages_and_stream() {
-        let b = request_body("claude-sonnet-5-5", &[(true, "hi \"x\"".into()), (false, "yo".into())]);
+        let b = request_body("claude-sonnet-5-5", None, &[(true, "hi \"x\"".into()), (false, "yo".into())]);
         let v = json::parse(&b).unwrap();
         assert_eq!(v.get("stream"), Some(&Json::Bool(true)));
         assert_eq!(v.get("model").and_then(Json::as_str), Some("claude-sonnet-5-5"));
         assert_eq!(v.get("messages").and_then(Json::as_array).map(|m| m.len()), Some(2));
+        assert_eq!(v.get("system"), None, "no skill, no system prompt");
+    }
+
+    #[test]
+    fn a_skill_adds_its_system_prompt() {
+        let b = request_body("claude-haiku-5-5", Some("Be \"brief\"."), &[(true, "hi".into())]);
+        let v = json::parse(&b).unwrap();
+        assert_eq!(v.get("system").and_then(Json::as_str), Some("Be \"brief\"."));
+        assert_eq!(v.get("messages").and_then(Json::as_array).map(|m| m.len()), Some(1));
     }
 
     #[test]

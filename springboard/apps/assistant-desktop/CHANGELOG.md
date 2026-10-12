@@ -1,4 +1,10 @@
 # Changelog
+## 1.2.0 — 2026-10-12
+
+- Every answer is checked before you see it. An answer longer than 20,000 characters is cut, and the chat says so. Phrases you list in `guardrail.txt` in the app's data folder (one per line, lines starting with `#` are notes) are masked as `[removed]`. A part of a listed phrase is never shown while the answer is still arriving.
+- Each request is routed to a skill by the words in it. A request about code, writing, a summary or a translation is sent with the instructions for that skill; a request with none of those words goes out as before.
+- Chat > Diagnostics (Cmd+Shift+D) scores the newest answers of the open chat. Two rule checks always run (not empty, within the guardrail). With an API key, the model also rates each answer on helpfulness and clarity, from 1 to 5. The sheet shows the mean, median and range of each score and which skill the last request went to. Run Evaluation makes one request per answer and rating, so it costs a little; Escape closes the sheet.
+
 ## 1.1.0 — 2026-10-12
 
 - When the machine has no network, a message is not sent: the composer keeps the text and the chat says "You are offline. Connect to a network to send this message." The empty chat says so too. The chat asks the desktop once for its connection state and then follows its changes.
