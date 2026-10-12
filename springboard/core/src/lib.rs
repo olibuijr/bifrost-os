@@ -45,3 +45,5 @@ pub mod dns_record_set;
 pub mod app_metrics;
 pub mod mediaext;
 pub mod midi_endpoints;
+pub mod disk_image;
+pub mod guest_vm;
