@@ -101,6 +101,12 @@ def load_entries():
     return out, bad
 
 
+def built_pct(rows):
+    """Share of applicable rows that are built (partial or parity): the owner's 80% gate before deploying."""
+    n = sum(rows[s] for s in WEIGHT)
+    return (100 * (rows["partial"] + rows["parity"]) / n) if n else None
+
+
 def pct(score, n):
     return f"{100 * score / n:.1f}%" if n else "n/a"
 
@@ -142,7 +148,8 @@ def cmd_status(a):
     print(f"Assessed: {len(entries)} frameworks/parts; not yet assessed: {len(missing_slugs(entries))}; unreadable: {len(bad)}")
     print(f"Created (parity/partial/os): {built}  [parity {fw['parity']}, partial {fw['partial']}, os {fw['os']}]")
     print(f"Remaining: gap {fw['gap']} frameworks, plus missing features in {fw['partial']} partial ones; n/a {fw['n/a']}")
-    print(f"Feature rows: {sum(rows.values())}; applicable {n}; coverage {pct(score, n)}")
+    print(f"Feature rows: {sum(rows.values())}; applicable {n}; coverage {pct(score, n)}; built {built_pct(rows):.1f}% "
+          f"(gate 80%: partial or parity over applicable rows)")
     print()
     print(f"{'Group':<22} {'Cov':>7} {'Parity':>6} {'Part':>5} {'OS':>4} {'Gap':>4} {'n/a':>4}")
     for g, es in by_group(entries).items():
@@ -280,6 +287,7 @@ def cmd_build(a):
     w("## Summary: created vs remaining")
     w("")
     w(f"- Coverage over all applicable feature rows: **{pct(score, n)}** ({n} applicable of {sum(rows.values())} rows).")
+    w(f"- Built (Partial or Parity) share of applicable rows: **{built_pct(rows):.1f}%**; the deploy gate is 80%.")
     w(f"- Frameworks and parts assessed: **{len(entries)}**.")
     w(f"- Created: **{fw['parity'] + fw['partial'] + fw['os']}** (Parity {fw['parity']}, Partial {fw['partial']}, OS only {fw['os']}).")
     w(f"- Remaining: **{fw['gap']}** Gap, plus the missing features inside the {fw['partial']} Partial ones.")
@@ -417,6 +425,7 @@ def cmd_db_export(a):
                      "coverage": round(100 * s2 / n2, 1) if n2 else None}
     summary = {"frameworks": len(entries), "status": {s: fw[s] for s in STATUSES}, "rows": {s: rows[s] for s in STATUSES},
                "applicable": n, "coverage": round(100 * score / n, 1) if n else None, "groups": groups,
+               "built": round(built_pct(rows), 1) if n else None, "gate": 80,
                "not_assessed": missing_slugs(entries), "generated_by": "bifrost pc parity db-export",
                "source": "developer.apple.com official documentation + bifrost-os repo"}
     p = os.path.join(a.dir, "meta", "summary.json")
