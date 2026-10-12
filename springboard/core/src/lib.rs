@@ -30,6 +30,7 @@ pub mod disk_events;
 pub mod txt_record;
 pub mod codereq;
 pub mod biometry;
+pub mod auth_context;
 pub mod tunnel;
 pub mod proxy;
 pub mod rfcomm_frame;
