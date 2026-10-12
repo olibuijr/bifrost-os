@@ -63,6 +63,7 @@ pub mod auth_context;
 pub mod auth_session;
 pub mod session_events;
 pub mod tunnel;
+pub mod vpn_manager;
 pub mod proxy;
 pub mod rfcomm_frame;
 pub mod sdp_element;
