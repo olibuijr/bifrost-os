@@ -20,7 +20,7 @@ INJECT = r'''
 _make_bootmode_uefi.bifrost() {
     _msg_info "Setting up the BifrOSt EFI loader..."
     local splash="${BIFROST_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/packaging/archiso/bootweave.efi"
-    local extra="quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0"
+    local extra="quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs"
     # debug builds put their own command line (journal diagnostics with graphical splash) in <profile>/bifrost-cmdline
     [[ -s "${profile}/bifrost-cmdline" ]] && extra="$(cat "${profile}/bifrost-cmdline")"
     local line="initrd=\\${install_dir}\\boot\\${arch}\\initramfs-linux.img archisobasedir=${install_dir} archisosearchuuid=${iso_uuid} ${extra}"

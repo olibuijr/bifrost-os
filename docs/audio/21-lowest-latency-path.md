@@ -36,11 +36,43 @@ Packaging: `bifrost-audiod.service` allows `/dev/cpu_dma_latency`; `tmpfiles-bif
 - `AlsaDriver` is still not pushed into `main.rs`'s driver list (its comment says it lands there); no change to avoid
   a merge conflict with the wiring task.
 - Capture-side `PCM_DELAY` (only the FIFO counts for input).
-- Threaded IRQs need the `threadirqs` kernel parameter; setting it is a boot-config decision, not made here.
+
+## Threaded IRQs on every boot (task 29)
+
+`threadirqs` is on every kernel command line BifrOSt builds:
+
+| Command line | Where | Test |
+|---|---|---|
+| Installed system, `EFI\BIFROST\boot.cfg` | `src/installer/plan.rs` `cmdline_with` (it was already there, B1) | `config_files`: exactly one `threadirqs` token |
+| Loader fallback when no boot.cfg or cmdline.txt is readable | `bootweave/efi/src/cmdline.rs` `DEFAULT_CMDLINE` (added) | `default_runs_threaded_irqs_and_a_verbose_boot_keeps_them`: one token, not a text-free key, kept by the Ctrl+V verbose transform (`verbose(DEFAULT_CMDLINE)` is the initrd, `threadirqs`, then the verbose set) |
+| ISO / USB / netboot (`EFI\BOOT\cmdline.txt`, `boot.cfg`, Boot Loader Spec entries iVentoy reads) | `tools/prepare-mkarchiso.py` `extra` (added) | none (shell text) |
+| Lab debug ISO (`<profile>/bifrost-cmdline`) | `tools/build-iso.sh` `DBG` (added) | none |
+
+The text-free options of boot task 05 are unchanged; `threadirqs` is not in `TEXT_FREE_KEYS`.
+
+Why on every boot rather than an opt-in: the IRQ-thread raise in `rt.rs` and the boot-time `bifrost-irq-priority`
+unit both need it, and without it the scan is empty and the sound interrupt runs in hard-IRQ context at whatever
+moment it lands. Cost: every interrupt handler (not only audio) runs as a kernel thread, so each interrupt pays a
+wake-up and a context switch (a few microseconds) and its work is scheduled like a SCHED_FIFO 50 thread instead of
+running at once. Interrupts marked `IRQF_NO_THREAD` (timer, IPIs) are unaffected. On Midget's loads this is
+well below the 333 us of a 16 frame quantum; the throughput cost shows only under very high interrupt rates
+(10 GbE line rate, NVMe at full queue depth), which BifrOSt desktops do not run.
+
+`tools/arch-vm.sh` passes its own short `-append` line to a host VM and was left as is.
+
+## Left
+
+- Installed systems keep their old options until they are reinstalled: the OTA's image rebuild
+  (`packaging/arch/recovery/system.rs`, `build_uki`) reuses the options already in `boot.cfg` and adds none.
+  Midget has `threadirqs` from B1 if it was installed after that change; check with step 1 below. An OTA step that
+  adds missing tokens to `boot.cfg` is not done.
+- `docs/installer-and-boot.md` section 3 still shows an older command line (with `splash` and Plymouth); not owned
+  here.
 
 ## Midget verification (lead)
 
-1. Kernel: `cat /proc/cmdline` (add `threadirqs` to test the IRQ path), `pgrep -a irq/` shows `irq/NN-snd_hda_intel`.
+1. Kernel: `cat /proc/cmdline` contains `threadirqs` (if not, add it to `EFI\BIFROST\boot.cfg` on the ESP and reboot),
+   `pgrep -a irq/` shows `irq/NN-snd_hda_intel`; after a fresh ISO boot, the live `/proc/cmdline` carries it too.
 2. Start `bifrost-audiod` as the `audio` user, run a client at 64 frames; check the journal for
    `irq N thread T raised to SCHED_FIFO 89`, `converter latency: playback X frames`, and
    `chrt -p $(pgrep -f audio-io)` (88), `grep Cpus_allowed_list /proc/$(pgrep bifrost-audiod)/task/*/status`.

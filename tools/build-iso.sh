@@ -60,7 +60,7 @@ else
   rm -rf "$AIROOT/root/.ssh" "$AIROOT/etc/bifrost/lab.token" "$W/multi-user.target.wants/bifrost-lab.service" "$AIROOT/usr/local/bin/bifrost-lab" "$AIROOT/usr/lib/systemd/system/bifrost-lab.service"
 fi
 # debug trace (lab only)
-DBG="quiet loglevel=3 log_buf_len=16M systemd.log_level=debug systemd.log_target=journal systemd.show_status=0 rd.systemd.show_status=0 rd.udev.log_level=3 vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0"
+DBG="quiet loglevel=3 log_buf_len=16M systemd.log_level=debug systemd.log_target=journal systemd.show_status=0 rd.systemd.show_status=0 rd.udev.log_level=3 vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0 threadirqs"
 if [ "$DEBUG" = 1 ]; then
   mkdir -p "$AIROOT/etc/bifrost" "$AIROOT/etc/systemd/system/bifrost-installer.service.d"
   : > "$AIROOT/etc/bifrost/debug"
