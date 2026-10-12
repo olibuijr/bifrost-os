@@ -1041,7 +1041,7 @@ impl VoiceMemos {
         }
         let keep = format!("Keeps {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
         let (px, pw) = self.pane(ui);
-        self.centred(s, ui, &keep, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, wave.1 + wave.3 + ui.pt(SPACE_XXL), pw, ui.pt(20.0)));
+        self.centred(s, ui, &keep, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, wave.1 + wave.3 + ui.pt(SPACE_XXL), pw, ui.pt(SPACE_XL)));
     }
 
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui, t: f64) {

@@ -648,7 +648,7 @@ impl Freeform {
             self.outline(s, ui, top as f32, b);
         }
         if self.lassoing {
-            let d = ui.pt(2.0);
+            let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS);
             for &(x, y) in self.lasso.points().iter().step_by(2) {
                 s.fill_rrect(x, y + top as f32, d, d, d / 2.0, TINT);
             }
@@ -798,6 +798,8 @@ mod model_tests {
             ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
             points: vec![StrokePoint::at(5.0, 5.0)],
         }]);
+        // the selection is dragged with the lasso tool active, as a user does
+        app.tool = Tool::Lasso;
         app.selection = Some(Selection::default());
         app.lassoing = true;
         for (x, y) in [(0.0, 0.0), (30.0, 0.0), (30.0, 30.0), (0.0, 30.0)] {

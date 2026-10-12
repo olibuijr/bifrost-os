@@ -33,12 +33,12 @@ fn find_steps_wrap_at_both_ends() {
 fn whole_word_keeps_only_matches_on_word_edges() {
     let blocks = vec![Block::Para("the cat concatenates cat.".into()), Block::Heading(1, "Cats".into())];
     let all = search(&blocks, "cat", 100);
-    // "cat" inside "concatenates" is a hit too: offsets 4, 11 and 21
-    assert_eq!(all.iter().map(|h| h.offset).collect::<Vec<_>>(), [4, 11, 21]);
+    // "cat" inside "concatenates" is a hit too: offsets 4, 11 and 21; the search ignores case, so "Cats" counts
+    assert_eq!(all.iter().map(|h| (h.block, h.offset)).collect::<Vec<_>>(), [(0, 4), (0, 11), (0, 21), (1, 0)]);
     let whole = keep_whole_words(&blocks, "cat", all);
     assert_eq!(whole.iter().map(|h| (h.block, h.offset)).collect::<Vec<_>>(), [(0, 4), (0, 21)]);
-    // a plural is not a whole word match
-    let plural = keep_whole_words(&blocks, "cat", search(&blocks, "cats", 100));
+    // the plural is not a whole "cat" (dropped above), but it is a whole "cats"
+    let plural = keep_whole_words(&blocks, "cats", search(&blocks, "cats", 100));
     assert_eq!(plural.iter().map(|h| h.block).collect::<Vec<_>>(), [1]);
 }
 

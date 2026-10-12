@@ -2,7 +2,7 @@
 //! a scientific keypad (landscape or toggled), a persisted history,
 //! clipboard copy/paste and Icelandic decimal-comma formatting.
 
-use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXXL};
+use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
@@ -661,7 +661,7 @@ impl Calculator {
             let rect = self.category_rect(ui, index);
             let (x, y, w, h) = rect;
             if *category == conv.category {
-                let inset = ui.pt(2.0);
+                let inset = ui.pt(SPACE_XXS);
                 s.fill_rrect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset, capsule(w, h), scientific());
             }
             self.label(s, ui, category.title(), MAC_CALLOUT_PT, LABEL.now(), rect);

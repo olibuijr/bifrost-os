@@ -223,9 +223,18 @@ const LETTER_CUES: &[(char, Language, f64)] = &[
 ];
 
 /// Raw evidence per language, indexed by `Language as usize`. Text is lowercased first.
+/// True for a whitespace-separated token that is an address rather than a word: a link, an email address or a
+/// dotted host name. Its parts ("com", "www") say nothing about the language of the text around it.
+fn is_address(token: &str) -> bool {
+    token.contains("://") || token.contains('@') || token.starts_with("www.") || {
+        let t = token.trim_matches(|c: char| !c.is_alphanumeric());
+        t.contains('.') && t.split('.').filter(|p| !p.is_empty()).count() >= 2 && !t.ends_with('.')
+    }
+}
+
 fn evidence(text: &str) -> [f64; LANGUAGE_COUNT] {
     let mut s = [0.0f64; LANGUAGE_COUNT];
-    let lower = text.to_lowercase();
+    let lower: String = text.to_lowercase().split_whitespace().filter(|t| !is_address(t)).collect::<Vec<_>>().join(" ");
     for word in lower.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()) {
         for language in Language::ALL {
             if stopwords(language).contains(&word) {
@@ -351,6 +360,15 @@ mod tests {
 
     fn prob(h: &[(Language, f64)], l: Language) -> f64 {
         h.iter().find(|(x, _)| *x == l).map_or(0.0, |(_, p)| *p)
+    }
+
+    #[test]
+    fn links_and_addresses_are_not_evidence() {
+        // "com" is a Portuguese function word; inside a link or an address it must not count
+        assert_eq!(dominant_language("https://example.com"), None);
+        assert_eq!(dominant_language("mail anna@example.com or www.example.com"), None);
+        assert_eq!(dominant_language("see the notes on example.com"), Some(Language::English));
+        assert!(is_address("example.com,") && !is_address("end.") && !is_address("com"));
     }
 
     #[test]

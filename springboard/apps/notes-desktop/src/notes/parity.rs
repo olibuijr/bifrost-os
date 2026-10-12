@@ -41,9 +41,16 @@ pub fn language_name(l: Language) -> &'static str {
     }
 }
 
-/// The language the note is written in, or None when its text has no letters to judge by.
+/// The smallest share the top guess needs before the note counts as written in that language.
+const LANGUAGE_CONFIDENCE: f64 = 0.6;
+
+/// The language the note is written in, or None when its text has no letters to judge by or the guess is unsure
+/// (a short note with a link and a date gives the recognizer little to go on). Spelling then falls back to English,
+/// as the reference checker falls back to the user's language.
 pub fn note_language(text: &str) -> Option<Language> {
-    language::dominant_language(text)
+    let mut r = language::LanguageRecognizer::new();
+    r.process(text);
+    r.hypotheses(1).into_iter().next().filter(|(_, p)| *p >= LANGUAGE_CONFIDENCE).map(|(l, _)| l)
 }
 
 /// The note's language for the date line, e.g. "Icelandic".

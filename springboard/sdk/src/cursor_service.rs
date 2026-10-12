@@ -80,11 +80,19 @@ mod tests {
         Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
     }
 
+    /// Every service call sent so far, as ("service.method", body); take_sent drains, so read them all at once.
+    fn sent_calls(ctx: &Ctx) -> Vec<(String, String)> {
+        ctx.take_sent()
+            .into_iter()
+            .map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } => (format!("{service}.{method}"), body),
+                other => panic!("not a service call: {other:?}"),
+            })
+            .collect()
+    }
+
     fn sent_call(ctx: &Ctx, i: usize) -> (String, String) {
-        match &ctx.take_sent()[i] {
-            ToShell::ServiceCall { service, method, body, .. } => (format!("{service}.{method}"), body.clone()),
-            other => panic!("not a service call: {other:?}"),
-        }
+        sent_calls(ctx).swap_remove(i)
     }
 
     #[test]
@@ -100,8 +108,9 @@ mod tests {
         hide_until_moved(&ctx);
         show_now(&ctx);
         pop(&ctx);
-        assert_eq!(sent_call(&ctx, 0), ("cursor.set_hidden_until_mouse_moves".into(), "true".into()));
-        assert_eq!(sent_call(&ctx, 1), ("cursor.set_hidden_until_mouse_moves".into(), "false".into()));
-        assert_eq!(sent_call(&ctx, 2), ("cursor.pop".into(), "null".into()));
+        let calls = sent_calls(&ctx);
+        assert_eq!(calls[0], ("cursor.set_hidden_until_mouse_moves".into(), "true".into()));
+        assert_eq!(calls[1], ("cursor.set_hidden_until_mouse_moves".into(), "false".into()));
+        assert_eq!(calls[2], ("cursor.pop".into(), "null".into()));
     }
 }

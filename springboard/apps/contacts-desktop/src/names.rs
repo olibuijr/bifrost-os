@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(section("Anna Þórsson"), 'Þ');
         assert_eq!(section("Acme Inc"), 'I', "the last word is the family name");
         assert_eq!(section("Acme"), 'A', "a one-word name sorts by that word");
-        assert_eq!(section("1800 Taxi"), '#');
+        assert_eq!(section("Taxi 1800"), '#', "a family name that starts with a digit goes under #");
         assert_eq!(section(""), '#');
     }
 }
