@@ -1058,13 +1058,11 @@ impl Music {
     /// Replaces the queue with `ids` and plays `ids[start]`; with `shuffle` the
     /// songs after it are put in random order.
     fn play_songs(&mut self, ids: Vec<usize>, start: usize, shuffle: bool) {
-        // MIDI files are listed but have no sound yet: they are left out of the queue, and the start follows the song
-        let start_id = ids.get(start).copied();
-        let ids: Vec<usize> = ids.into_iter().filter(|&id| !self.library.songs[id].is_midi()).collect();
+        // MIDI files queue like any song: the audio decoder renders them with the synth (media::audiofile::Midi).
         if ids.is_empty() {
             return;
         }
-        let start = start_id.and_then(|s| ids.iter().position(|&id| id == s)).unwrap_or(0);
+        let start = start.min(ids.len() - 1);
         let paths = ids.iter().map(|&id| self.library.songs[id].path.clone()).collect();
         let mut queue = UpNext::new(paths, start);
         if shuffle {

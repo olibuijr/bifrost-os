@@ -7,7 +7,69 @@ use super::mp4::{Codec, Demuxer, Kind};
 use super::source::{FileSource, Source};
 use super::aacstream::AacStream;
 use super::{aac, codec, id3, ilst, mp3, symfile, Error};
+use bifrost_core::midi_synth::Renderer;
+use bifrost_core::smf::{Smf, SmfError};
 use std::path::Path;
+
+/// The largest Standard MIDI File that is read whole (the Music scan skips bigger ones too).
+const MAX_MIDI_BYTES: u64 = 16 << 20;
+/// Frames per packet the MIDI renderer hands the player (about 85 ms at 48 kHz).
+const MIDI_PACKET_FRAMES: usize = 4096;
+
+/// Whether a path names a Standard MIDI File (`.mid` or `.midi`, any case).
+pub fn is_midi(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mid") || e.eq_ignore_ascii_case("midi"))
+}
+
+/// A Standard MIDI File rendered by the synth in `bifrost_core::midi_synth` (additive tones, noise drums, no sound
+/// bank). It renders at the player's output rate, so the player does not resample it.
+pub struct Midi {
+    renderer: Renderer,
+    duration_ms: f64,
+}
+
+impl Midi {
+    pub fn open(path: &Path) -> Result<Self, Error> {
+        if std::fs::metadata(path)?.len() > MAX_MIDI_BYTES {
+            return Err(Error::Invalid("MIDI file is too large"));
+        }
+        let bytes = std::fs::read(path)?;
+        let smf = Smf::parse(&bytes).map_err(midi_error)?;
+        Ok(Midi { renderer: Renderer::new(&smf, aac::OUT_RATE), duration_ms: smf.duration() * 1000.0 })
+    }
+}
+
+fn midi_error(e: SmfError) -> Error {
+    match e {
+        SmfError::NotMidi => Error::Invalid("not a Standard MIDI File"),
+        SmfError::Truncated => Error::Invalid("MIDI file ends early"),
+        SmfError::Unsupported(what) => Error::Invalid(what),
+    }
+}
+
+impl AudioDecoder for Midi {
+    fn rate(&self) -> u32 {
+        self.renderer.rate()
+    }
+
+    fn channels(&self) -> usize {
+        bifrost_core::midi_synth::CHANNELS
+    }
+
+    fn duration_ms(&self) -> Option<f64> {
+        Some(self.duration_ms)
+    }
+
+    fn next(&mut self, out: &mut Vec<i16>) -> Result<bool, Error> {
+        Ok(self.renderer.next_block(out, MIDI_PACKET_FRAMES) > 0)
+    }
+
+    fn seek_ms(&mut self, ms: f64) -> Result<f64, Error> {
+        let at = ms.clamp(0.0, self.duration_ms);
+        self.renderer.seek(at / 1000.0);
+        Ok(at)
+    }
+}
 
 /// What a file says about itself; every field is optional.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -53,6 +115,9 @@ fn detect(path: &Path) -> Result<Format, Error> {
 
 /// Opens a file for decoding.
 pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, Error> {
+    if is_midi(path) {
+        return Ok(Box::new(Midi::open(path)?));
+    }
     match detect(path)? {
         Format::Mp3 => Ok(Box::new(mp3::Mp3::open(path)?)),
         Format::M4a => Ok(Box::new(M4a::open(Box::new(FileSource::open(path)?))?)),
@@ -169,6 +234,47 @@ pub(crate) mod tests {
             s1 = s;
         }
         (s1 * s1 + s2 * s2 - 2.0 * k.cos() * s1 * s2) / n as f64
+    }
+
+    /// A format 0 Standard MIDI File with one track: 96 ticks a quarter, 120 beats a minute.
+    fn midi_bytes(track: &[u8]) -> Vec<u8> {
+        let mut b = b"MThd".to_vec();
+        b.extend(6u32.to_be_bytes());
+        b.extend(0u16.to_be_bytes());
+        b.extend(1u16.to_be_bytes());
+        b.extend(96u16.to_be_bytes());
+        b.extend(b"MTrk");
+        b.extend((track.len() as u32).to_be_bytes());
+        b.extend(track);
+        b
+    }
+
+    #[test]
+    fn a_midi_file_opens_by_extension_and_renders_at_the_output_rate() {
+        // A4 on at 0 s, off at 0.5 s, then the 0.2 s release: about 0.7 s of stereo at 48 kHz.
+        let track = [0x00, 0x90, 69, 100, 0x60, 0x80, 69, 0, 0x00, 0xFF, 0x2F, 0x00];
+        let path = std::env::temp_dir().join(format!("bifrost-midi-test-{}.MIDI", std::process::id()));
+        std::fs::write(&path, midi_bytes(&track)).unwrap();
+        assert!(is_midi(&path) && !is_midi(Path::new("x.mp3")));
+        let mut d = open(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!((d.rate(), d.channels()), (48_000, 2));
+        assert!((d.duration_ms().unwrap() - 500.0).abs() < 1.0, "{:?}", d.duration_ms());
+        let pcm = drain(&mut *d);
+        let frames = pcm.len() / 2;
+        assert!((33_590..=33_610).contains(&frames), "{frames} frames");
+        let peak = pcm.iter().map(|s| s.abs()).max().unwrap_or(0);
+        assert!(peak > 3_000, "peak {peak}");
+        assert!(d.seek_ms(250.0).unwrap() == 250.0);
+    }
+
+    #[test]
+    fn a_damaged_midi_file_is_an_error_not_a_panic() {
+        let path = std::env::temp_dir().join(format!("bifrost-midi-bad-{}.mid", std::process::id()));
+        std::fs::write(&path, b"not a midi file at all").unwrap();
+        let r = open(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(r.is_err());
     }
 
     #[test]
