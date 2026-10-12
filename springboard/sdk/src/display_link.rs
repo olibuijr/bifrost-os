@@ -82,6 +82,23 @@ impl DisplayLink {
         self.missed
     }
 
+    /// Re-anchors the link to the compositor's presentation feedback (`wp_presentation`, or the layer protocol's
+    /// `presented` event). `host_time` is when a frame was shown, in host nanoseconds; `refresh_ns` is the output's
+    /// refresh period, or 0 when unknown (the period is kept). The refresh grid moves so that a refresh starts at
+    /// `host_time`, which corrects the phase of later ticks without reporting anything. A stopped link stays stopped.
+    /// Refresh indices already reported are kept, so no refresh is reported twice.
+    pub fn presented(&mut self, host_time: u64, refresh_ns: u64) {
+        if refresh_ns > 0 {
+            self.period_ns = refresh_ns;
+        }
+        let Some(start) = self.started_at else {
+            return;
+        };
+        let k = host_time.saturating_sub(start) / self.period_ns;
+        // `host_time - k * period` never underflows: when host_time >= start it is >= start, otherwise k is 0.
+        self.started_at = Some(host_time - k * self.period_ns);
+    }
+
     /// Reports the newest refresh at or before `host_time`, once per refresh. None when the link is stopped, or when
     /// no new refresh has begun since the last report. Times before the start count as refresh 0.
     pub fn tick(&mut self, host_time: u64) -> Option<TimeStamp> {
@@ -170,6 +187,67 @@ mod tests {
         let again = link.tick(1_000_000_000).unwrap();
         assert_eq!(again.frame_number, 0);
         assert_eq!(link.missed_refreshes(), 0);
+    }
+
+    #[test]
+    fn presented_moves_the_grid_to_the_shown_time() {
+        let mut link = DisplayLink::new(100).unwrap();
+        link.start(0);
+        link.tick(0).unwrap();
+        // A frame shown at 25 ms: the grid moves to 5 ms, so refresh 2 (25 ms) has begun and nothing else has.
+        link.presented(25_000_000, 0);
+        assert!(link.is_running());
+        assert_eq!(link.refresh_period(), 10_000_000);
+        let shown = link.tick(34_000_000).unwrap();
+        assert_eq!(shown.frame_number, 2);
+        assert_eq!(shown.host_time, 25_000_000);
+        // Refresh 1 (15 ms) had no tick.
+        assert_eq!(link.missed_refreshes(), 1);
+        assert_eq!(link.tick(34_900_000), None);
+        let next = link.tick(35_000_000).unwrap();
+        assert_eq!(next.frame_number, 3);
+        assert_eq!(next.host_time, 35_000_000);
+        assert_eq!(link.missed_refreshes(), 1);
+    }
+
+    #[test]
+    fn presented_on_the_grid_keeps_the_phase() {
+        let mut link = DisplayLink::new(100).unwrap();
+        link.start(0);
+        link.presented(30_000_000, 0);
+        let ts = link.tick(40_000_000).unwrap();
+        assert_eq!(ts.frame_number, 4);
+        assert_eq!(ts.host_time, 40_000_000);
+    }
+
+    #[test]
+    fn presented_takes_the_output_refresh_period() {
+        let mut link = DisplayLink::new(60).unwrap();
+        link.start(0);
+        link.presented(0, 10_000_000);
+        assert_eq!(link.refresh_period(), 10_000_000);
+        let ts = link.tick(10_000_000).unwrap();
+        assert_eq!(ts.video_refresh_period, 10_000_000);
+        assert_eq!(ts.frame_number, 1);
+    }
+
+    #[test]
+    fn presented_on_a_stopped_link_only_sets_the_period() {
+        let mut link = DisplayLink::new(100).unwrap();
+        link.presented(5_000_000, 10_000_000);
+        assert!(!link.is_running());
+        assert_eq!(link.tick(5_000_000), None);
+        assert_eq!(link.refresh_period(), 10_000_000);
+    }
+
+    #[test]
+    fn presented_before_the_start_time_does_not_underflow() {
+        let mut link = DisplayLink::new(100).unwrap();
+        link.start(1_000_000_000);
+        link.presented(500, 0);
+        let ts = link.tick(500).unwrap();
+        assert_eq!(ts.frame_number, 0);
+        assert_eq!(ts.host_time, 500);
     }
 
     #[test]

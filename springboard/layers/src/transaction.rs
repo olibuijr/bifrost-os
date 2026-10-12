@@ -58,3 +58,58 @@ impl Transaction {
         self.changes.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layer::LayerId;
+
+    #[test]
+    fn new_transaction_carries_its_sequence_and_no_changes() {
+        let tx = Transaction::new(7);
+        assert_eq!(tx.seq, 7);
+        assert!(tx.is_empty());
+        assert_eq!(tx.implicit, None);
+    }
+
+    #[test]
+    fn default_transaction_is_sequence_zero_and_empty() {
+        let tx = Transaction::default();
+        assert_eq!(tx.seq, 0);
+        assert!(tx.is_empty());
+    }
+
+    #[test]
+    fn push_appends_in_order_and_chains() {
+        let mut tx = Transaction::new(1);
+        tx.push(Change::Create(LayerId(1))).push(Change::SetRoot(LayerId(1)));
+        assert!(!tx.is_empty());
+        assert_eq!(tx.changes, vec![Change::Create(LayerId(1)), Change::SetRoot(LayerId(1))]);
+    }
+
+    #[test]
+    fn implicit_animation_settings_are_kept_on_the_transaction() {
+        let mut tx = Transaction::new(2);
+        tx.implicit = Some((0.3, TimingFunction::EaseInEaseOut));
+        let copy = tx.clone();
+        assert_eq!(copy, tx);
+        assert_eq!(copy.implicit, Some((0.3, TimingFunction::EaseInEaseOut)));
+    }
+
+    #[test]
+    fn changes_compare_by_their_fields() {
+        let a = Change::Insert { parent: LayerId(1), child: LayerId(2), index: 0 };
+        let b = Change::Insert { parent: LayerId(1), child: LayerId(2), index: 1 };
+        assert_ne!(a, b);
+        assert_eq!(a, a.clone());
+    }
+
+    #[test]
+    fn an_empty_transaction_is_still_a_transaction() {
+        let mut tx = Transaction::new(3);
+        assert!(tx.is_empty());
+        tx.push(Change::RemoveAllAnimations(LayerId(4)));
+        assert!(!tx.is_empty());
+        assert_eq!(tx.changes.len(), 1);
+    }
+}

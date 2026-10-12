@@ -19,6 +19,8 @@ pub mod shader;
 pub mod sync;
 pub mod texture;
 
+/// Re-exported so the drawing crates can name `vk::Format` for vertex layouts without their own `ash` dependency.
+pub use ash;
 pub use command::{CommandBuffer, CommandQueue, ComputeEncoder, LoadAction, RenderEncoder, RenderPassDescriptor, StoreAction, Submission};
 pub use device::{Device, DeviceInfo};
 pub use dmabuf::{DmaBuf, DmaBufFormat, DmaBufPlane};

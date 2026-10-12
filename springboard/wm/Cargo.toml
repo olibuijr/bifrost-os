@@ -18,6 +18,8 @@ default = ["nested", "drm"]
 drm = ["smithay/backend_drm", "smithay/backend_gbm", "smithay/backend_libinput", "smithay/backend_udev", "smithay/backend_session_libseat"]
 # a window on another Wayland or X11 desktop, for development
 nested = ["smithay/backend_winit"]
+# tests that render on a real Vulkan device
+gpu-tests = ["bifrost-gpu/gpu-tests"]
 
 [dependencies]
 smithay = { version = "0.7", default-features = false, features = ["wayland_frontend", "desktop", "renderer_gl", "backend_egl"] }
