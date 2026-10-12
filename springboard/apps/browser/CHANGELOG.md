@@ -1,3 +1,7 @@
+## 0.13.4 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 0.13.3
 
 - Build fix: the Develop menu actions (user agent, responsive size and pixel ratio) and the bookmark star now sit in the Browser impl, not the App trait impl, so the shell builds again.
