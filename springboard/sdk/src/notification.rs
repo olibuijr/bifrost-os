@@ -80,6 +80,11 @@ impl NotificationCenter {
     pub fn remove_observer(&self, token: ObserverToken) {
         drop(token);
     }
+
+    /// Whether any observer is registered for `name` on this thread (the runtime asks before it repaints for a post).
+    pub(crate) fn has_observer(&self, name: &str) -> bool {
+        REGISTRY.with(|r| r.borrow().observers.iter().any(|o| o.name == name))
+    }
 }
 
 fn deliver(n: &Notification) {
@@ -136,6 +141,9 @@ impl DistributedNotificationCenter {
 }
 
 /// A post relayed by the shell from another app.
-pub(crate) fn distributed_incoming(name: &str, user_info: HashMap<String, String>) {
+/// Returns whether an observer heard it (no observer: nothing can have changed, so the app need not repaint).
+pub(crate) fn distributed_incoming(name: &str, user_info: HashMap<String, String>) -> bool {
+    let heard = NotificationCenter.has_observer(&format!("dist:{name}"));
     DistributedNotificationCenter.post(name, user_info);
+    heard
 }

@@ -374,7 +374,7 @@ impl<S: Responder> Window<S> {
 
     /// When the next animation frame is due, in the clock of `t` (seconds); `None` when nothing animates.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty()).then_some(t + FRAME)
+        (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty() || super::any_wants_tick(self.root.as_ref())).then_some(t + FRAME)
     }
 
     /// Advances the tracks to `t` (seconds). Called by [`Window::tick`].

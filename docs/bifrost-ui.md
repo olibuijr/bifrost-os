@@ -1670,3 +1670,19 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 `settings::tests::the_restart_alert_offers_reopen_windows_and_remembers_the_choice`,
 `settings::tests::close_windows_when_quitting_is_a_general_setting`, and Notes'
 `the_open_note_and_the_folder_view_come_back_after_a_relaunch`.
+
+## App runtime frame loop (audit 2026-10-12, SDK-1 to SDK-7, SDK-16, SDK-18 to SDK-20)
+
+- `Configure` updates the live `Ctx` in place (`reconfigure`): the font is parsed once, Bold Text, the glyph cache,
+  the defaults and the queued `ctx.out` messages survive a resize. New memfds are made (and a `Buffers` with the next
+  generation sent) only when the size really changes. Contract C1: `Buffers.generation` counts the sets (wrapping,
+  from 1) and the runtime ignores a `Release` whose generation is not the current one.
+- Copy-up: an app whose last frame was `Damage::is_all()` is drawn first and only `stale minus damage` is copied
+  afterwards (`copy_up`, `copy_rect_except`), so a full repaint pays no memcpy. `full_redraw()` still skips it.
+- Apps with `draws_canvas() == true` are drawn through `draw_canvas`; consecutive `Move`s of one touch in a drain
+  batch are delivered as the last one; `DistNotify`, workspace replies and events only ask for a frame when someone
+  listens; the controls/menus/titles comparison runs only on turns where something happened.
+- `BIFROST_FRAME_STATS=1` turns on the once-a-second "app frames" line in the shell log.
+- `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
+- Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
+  layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).

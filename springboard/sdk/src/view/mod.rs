@@ -244,6 +244,10 @@ pub trait View: 'static {
     }
     /// Frame time in seconds (called by `Window::tick` before drawing); mark the view dirty to animate.
     fn tick(&mut self, _t: f64) {}
+    /// True while the view advances on `tick` by itself (a fling, a spinner), so the window asks for the next wake.
+    fn wants_tick(&self) -> bool {
+        false
+    }
     /// True when the view paints an opaque backdrop of its own (a grouped card). A dirty descendant then repaints this
     /// view as a whole instead of clearing its own frame to the window background (the nearest-opaque-ancestor rule
     /// that replaces clipping, see docs/bifrost-ui.md).
@@ -552,6 +556,11 @@ fn draw_overlays(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
     }
     v.draw_overlay(c, ui);
     scrolled(v, |v| v.children_mut().iter_mut().for_each(|ch| draw_overlays(ch.as_mut(), c, ui)));
+}
+
+/// Whether any visible view in the subtree advances on `tick` (`View::wants_tick`).
+pub(super) fn any_wants_tick(v: &dyn View) -> bool {
+    !v.base().hidden && (v.wants_tick() || v.children().iter().any(|c| any_wants_tick(c.as_ref())))
 }
 
 fn tick_all(v: &mut dyn View, t: f64) {

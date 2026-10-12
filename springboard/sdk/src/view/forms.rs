@@ -289,6 +289,9 @@ impl View for ProgressIndicator {
             ProgressStyle::Spinning => (SPINNER_PT, SPINNER_PT),
         }
     }
+    fn wants_tick(&self) -> bool {
+        self.animating && self.model.fraction().is_none()
+    }
     fn tick(&mut self, t: f64) {
         if self.animating && self.model.fraction().is_none() && (self.t - t).abs() > f64::EPSILON {
             self.t = t;
