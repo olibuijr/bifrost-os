@@ -630,6 +630,7 @@ pub mod gradient;
 pub mod workflow;
 pub mod scripting;
 pub mod subscription;
+pub mod auth_view;
 pub mod entitlement;
 pub mod download;
 pub mod nav_policy;
