@@ -7,15 +7,42 @@
 mod clock;
 #[allow(dead_code)]
 mod icon;
+#[allow(dead_code)]
+mod system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::widgets_timeline as wt;
+use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::bare::sys::wall_time;
 
 struct ClockApp {
     clock: Option<clock::Clock>,
     last_wall: f64,
+    system: system::System,
+}
+
+impl ClockApp {
+    /// Running timers in the list (the shell removes a timer once it has fired).
+    fn running_timers(&self) -> usize {
+        self.clock.as_ref().map_or(0, |c| c.timers().list.iter().filter(|item| item.running()).count())
+    }
+
+    /// Sends the World Clock timeline when the chosen cities changed, or when `force` is set.
+    fn sync_world(&mut self, ctx: &Ctx, force: bool) {
+        let Some(c) = &self.clock else { return };
+        let cities = c.cities();
+        let unix = c.wall().now(bifrost_proto::sys::now_ms());
+        self.system.sync_world(ctx, &cities, unix, force);
+    }
+
+    /// Input and the state it can change: the cities and the Dock bar for a running timer.
+    fn after_input(&mut self, ctx: &Ctx) {
+        self.sync_world(ctx, false);
+        let running = self.running_timers() > 0;
+        self.system.timers(ctx, running, false);
+    }
 }
 
 impl App for ClockApp {
@@ -36,11 +63,68 @@ impl App for ClockApp {
                 c.set_wall(unix, offset, t);
                 c.load(&ctx.data_dir.join("clock.ini").to_string_lossy(), t);
                 self.clock = Some(c);
+                self.sync_world(ctx, true);
             }
         }
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let handled = self.input(ctx, ev);
+        self.after_input(ctx);
+        handled
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // a shell without the service answers with an error; the Clock works without it
+        if let Err(error) = result {
+            eprintln!("clock: service request {request} failed: {error}");
+        }
+        false
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        // the shell's widget asks for a new timeline once the last one has run out
+        if let Some(wt::Event::Reload { .. }) = wt::parse_event(service, event, body) {
+            self.sync_world(ctx, true);
+        }
+        false
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let before = self.running_timers();
+        let Some(c) = &mut self.clock else { return false };
+        if t - self.last_wall >= 1000.0 {
+            self.last_wall = t;
+            let (unix, offset) = wall_time();
+            c.set_wall(unix, offset, t);
+        }
+        let dirty = c.tick(&ctx.ui, t);
+        // the shell removes a timer when it fires; a drop in the running count is a finished timer
+        let after = self.running_timers();
+        self.system.timers(ctx, after > 0, after < before);
+        dirty
+    }
+
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        self.clock.as_ref().and_then(|c| c.next_wake(t, true))
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
+        self.clock.as_ref().map(|c| c.controls(&ctx.ui)).unwrap_or_default()
+    }
+
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+        if let Some(c) = &mut self.clock {
+            c.draw(s, &ctx.ui, t);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+}
+
+impl ClockApp {
+    fn input(&mut self, ctx: &Ctx, ev: Input) -> bool {
         if let Input::Key(key) = &ev {
             let out = match key {
                 KeyInput::Text(text) => Out::Text(text.clone()),
@@ -63,43 +147,16 @@ impl App for ClockApp {
         c.touch(&ctx.ui, e, t);
         true
     }
-
-    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        let Some(c) = &mut self.clock else { return false };
-        if t - self.last_wall >= 1000.0 {
-            self.last_wall = t;
-            let (unix, offset) = wall_time();
-            c.set_wall(unix, offset, t);
-        }
-        c.tick(&ctx.ui, t)
-    }
-
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        self.clock.as_ref().and_then(|c| c.next_wake(t, true))
-    }
-
-    fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
-        self.clock.as_ref().map(|c| c.controls(&ctx.ui)).unwrap_or_default()
-    }
-
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
-        if let Some(c) = &mut self.clock {
-            c.draw(s, &ctx.ui, t);
-        }
-        let mut d = Damage::new(s.w, s.h);
-        d.all();
-        d
-    }
 }
 
 /// The app as the compliance test hosts it, with no shell behind it.
 #[doc(hidden)]
 pub fn app() -> impl App {
-    ClockApp { clock: None, last_wall: 0.0 }
+    ClockApp { clock: None, last_wall: 0.0, system: Default::default() }
 }
 
 fn main() {
-    bifrost_app::run(ClockApp { clock: None, last_wall: 0.0 });
+    bifrost_app::run(ClockApp { clock: None, last_wall: 0.0, system: Default::default() });
 }
 
 #[cfg(test)]
