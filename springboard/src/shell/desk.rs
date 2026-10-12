@@ -999,6 +999,7 @@ impl Shell {
 
     /// Opens `app` in a window (or raises it) and makes it the focused app.
     pub(super) fn desk_open(&mut self, app: AppId, t: f64) {
+        self.recent_note(app);
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         #[cfg(feature = "desktop-wayland")]
         if app == AppId::Browser {
