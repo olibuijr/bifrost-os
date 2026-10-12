@@ -704,6 +704,7 @@ pub mod auth_view;
 pub mod one_time_code;
 pub mod authorization_request;
 pub mod credential_identity;
+pub mod credential_exchange;
 pub mod entitlement;
 pub mod purchase;
 pub mod store_test;
