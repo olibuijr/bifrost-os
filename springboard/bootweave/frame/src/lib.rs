@@ -60,7 +60,7 @@ pub struct Frame {
 impl Frame {
     /// The loader's frame: the mark and the bar at 0 (the first thing every stage shows), in Dark.
     pub fn boot(width: u32, height: u32) -> Frame {
-        Frame { width, height, appearance: Appearance::Dark, progress: Some(0.0), screen: Screen::Boot }
+        Frame { width, height, appearance: Appearance::Dark, progress: None, screen: Screen::Boot }
     }
 }
 
@@ -101,8 +101,7 @@ pub fn fade(frame: &mut [u32], splash: &[u32], k: f32) {
     }
 }
 
-/// The boot frame's hand-off to the first screen: the bar fills to the end over `FILL_MS`, then the frame
-/// cross-fades into the screen over `FADE_MS`, the reference desktop's boot-to-login order. Frames are `w` pixels
+/// The boot frame's hand-off to the first screen: the frame (no bar) cross-fades into the screen over `FADE_MS`, the reference desktop's boot-to-login order. Frames are `w` pixels
 /// per row (stride `w`).
 pub struct Handoff {
     splash: Vec<u32>,
@@ -120,10 +119,9 @@ impl Handoff {
     /// The frame to hand over from: the loader's frame (`Frame::boot`) rendered at this size.
     pub fn new(width: u32, height: u32, appearance: Appearance, order: PixelOrder) -> Handoff {
         let mut splash = alloc::vec![0u32; (width as usize) * (height as usize)];
-        let frame = Frame { width, height, appearance, progress: Some(0.0), screen: Screen::Boot };
+        let frame = Frame { width, height, appearance, progress: None, screen: Screen::Boot };
         render(&frame, &mut splash, width as usize, order);
-        let mut full = splash.clone();
-        render_bar(width, height, 1.0, appearance, full.as_mut_slice(), width as usize, order);
+        let full = splash.clone();
         Handoff { splash, full, w: width, h: height, appearance, order, start: None }
     }
 
@@ -136,30 +134,21 @@ impl Handoff {
     /// yet (reveal once). Does not start the hand-off.
     pub fn hold(&self, out: &mut Vec<u32>, boot_ms: f32) {
         out.clear();
+        let _ = boot_ms;
         out.extend_from_slice(&self.splash);
-        render_bar(self.w, self.h, first_fill(boot_ms), self.appearance, out.as_mut_slice(), self.w as usize, self.order);
     }
 
     /// Writes into `out` what to show at `now` (ms) over the screen `ui`, `boot_ms` the boot clock at the first call.
     /// Returns false once the hand-off is over: show `ui` as it is.
     pub fn compose(&mut self, ui: &[u32], out: &mut Vec<u32>, now: f32, boot_ms: f32) -> bool {
-        let (from, fill0) = *self.start.get_or_insert((now, first_fill(boot_ms)));
+        let (from, _) = *self.start.get_or_insert((now, first_fill(boot_ms)));
         let t = now - from;
-        if t >= FILL_MS + FADE_MS {
+        if t >= FADE_MS {
             return false;
         }
         out.clear();
-        let stride = self.w as usize;
-        if t < FILL_MS {
-            // ease-out: the bar arrives at the end gently
-            let r = 1.0 - t / FILL_MS;
-            let e = 1.0 - r * r * r;
-            out.extend_from_slice(&self.splash);
-            render_bar(self.w, self.h, fill0 + (1.0 - fill0) * e, self.appearance, out.as_mut_slice(), stride, self.order);
-        } else {
-            out.extend_from_slice(ui);
-            fade(out.as_mut_slice(), &self.full, (t - FILL_MS) / FADE_MS);
-        }
+        out.extend_from_slice(ui);
+        fade(out.as_mut_slice(), &self.full, t / FADE_MS);
         true
     }
 }
@@ -177,9 +166,7 @@ mod tests {
         hand.hold(&mut held, 1700.0);
         assert_eq!(held.len(), (w * h) as usize);
         assert!(!hand.started());
-        let mut expect = hand.splash.clone();
-        render_bar(w, h, first_fill(1700.0), Appearance::Dark, expect.as_mut_slice(), w as usize, PixelOrder::Bgrx);
-        assert_eq!(held, expect);
+        assert_eq!(held, hand.splash);
     }
 
     #[test]
@@ -216,33 +203,23 @@ mod tests {
     fn frame_boot_is_the_loader_frame_in_dark() {
         let f = Frame::boot(1920, 1080);
         assert_eq!(f.appearance, Appearance::Dark);
-        assert_eq!(f.progress, Some(0.0));
+        assert_eq!(f.progress, None);
         assert_eq!(f.screen, Screen::Boot);
         assert_eq!(Appearance::default(), Appearance::Dark);
     }
 
     #[test]
-    fn handoff_fills_the_bar_then_fades_into_the_screen() {
+    fn handoff_fades_the_boot_frame_into_the_screen() {
         let (w, h) = (640u32, 360u32);
         let ui = vec![0xff10_2030u32; (w * h) as usize];
         let mut hand = Handoff::new(w, h, Appearance::Dark, PixelOrder::Bgrx);
         let mut out = Vec::new();
         assert!(!hand.started());
-        // the bar at 640x360 is x 290..350, rows 207..209 (bh clamped to 2)
-        let (bx, by, bw, _) = bar_rect(w, h);
-        assert_eq!((bx, by, bw), (290, 207, 60));
-        let bar_px = |out: &[u32], frac: f32| out[by as usize * w as usize + bx as usize + (bw as f32 * frac) as usize];
         assert!(hand.compose(&ui, &mut out, 1000.0, 1700.0));
-        let f0 = first_fill(1700.0);
-        assert!(f0 > 0.6 && f0 < 0.95, "{f0}");
-        assert_eq!(bar_px(&out, f0 - 0.05), 0xffe5_e5ea, "already filled up to the boot so far");
-        assert_eq!(bar_px(&out, 0.99), 0xff3a_3a3c, "the end still empty");
-        assert!(hand.compose(&ui, &mut out, 1000.0 + FILL_MS - 1.0, 0.0));
-        assert_eq!(bar_px(&out, 0.99), 0xffe5_e5ea, "full by the end of the fill");
-        assert_eq!(out[0], 0xff00_0000, "still the boot frame, no screen yet");
-        assert!(hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS - 1.0, 0.0));
+        assert_eq!(out[0], 0xff00_0000, "starts on the boot frame");
+        assert!(hand.compose(&ui, &mut out, 1000.0 + FADE_MS - 1.0, 0.0));
         assert_ne!(out[0], 0xff00_0000, "fading into the screen");
-        assert!(!hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS, 0.0), "done: show the screen");
+        assert!(!hand.compose(&ui, &mut out, 1000.0 + FADE_MS, 0.0), "done: show the screen");
     }
 
     #[test]
@@ -254,7 +231,7 @@ mod tests {
         let mut out = Vec::new();
         hand.compose(&ui, &mut out, 0.0, 0.0);
         let mut boot = vec![0u32; (w * h) as usize];
-        render(&Frame { width: w, height: h, appearance: Appearance::Light, progress: Some(0.0), screen: Screen::Boot }, &mut boot, w as usize, PixelOrder::Bgrx);
+        render(&Frame { width: w, height: h, appearance: Appearance::Light, progress: None, screen: Screen::Boot }, &mut boot, w as usize, PixelOrder::Bgrx);
         // at t = 0 the fill is first_fill(0) = 0, so the bar matches the track only
         assert_eq!(out[0], boot[0]);
         assert_eq!(out[(w * h / 2) as usize], boot[(w * h / 2) as usize]);

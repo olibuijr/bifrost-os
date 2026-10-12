@@ -17,7 +17,6 @@ mod unlock;
 mod screen;
 use alloc::vec::Vec;
 use bootweave_frame::progress::Progress;
-use bootweave_frame::render::{bar_rect, render_bar};
 use bootweave_frame::timing::{BootTiming, Handoff, Stage};
 use bootweave_frame::{render, Appearance, Frame, PixelOrder, Screen};
 use uefi::boot::{self, LoadImageSource, ScopedProtocol};
@@ -176,23 +175,8 @@ impl Display {
         });
     }
 
-    /// Moves only the progress bar: re-renders its rectangle and blits that rectangle.
-    fn tick(&mut self, progress: f32) {
-        render_bar(self.width, self.height, progress, self.appearance, &mut self.pixels, self.width as usize, PixelOrder::Bgrx);
-        let (x, y, bw, bh) = bar_rect(self.width, self.height);
-        let stride = self.width as usize;
-        let mut px = Vec::with_capacity((bw * bh) as usize);
-        for row in 0..bh as usize {
-            let start = (y as usize + row) * stride + x as usize;
-            px.extend(self.pixels[start..start + bw as usize].iter().map(|&v| to_blt(v)));
-        }
-        let _ = self.gop.blt(BltOp::BufferToVideo {
-            buffer: &px,
-            src: BltRegion::Full,
-            dest: (x as usize, y as usize),
-            dims: (bw as usize, bh as usize),
-        });
-    }
+    /// The boot frame has no progress bar: nothing to move.
+    fn tick(&mut self, _progress: f32) {}
 }
 
 /// The boot options (held Shift): the user picks one of `entries` with the arrow keys and Enter. `None` when the
@@ -296,7 +280,7 @@ impl Session {
                 display.draw(&frame);
             }
             None => {
-                screen::show(Screen::Rollback);
+                screen::show(Screen::Rollback, self.progress.timing.appearance);
             }
         }
         Some(self.boot_line(line))
