@@ -1,5 +1,26 @@
 # BifrOSt changelog
 
+## 0.5.39 — 2026-10-12
+
+Parity wiring, wave 3.
+
+- Desktop: the Window menu has Left Half, Right Half, Fill, Center, Return to Previous Size and Next Window, also on
+  Ctrl+Cmd+arrow keys and Cmd+`; a window dropped on a screen edge or corner snaps to it.
+- Screen saver: Settings > Screen Saver offers Clock, Colours or Black, starting after 1 to 30 minutes or never, with
+  a preview. A key or click returns to the desktop or the lock screen.
+- Permission prompts: when an app asks for location or media access, the system shows an Allow / Don't Allow sheet.
+- Share: Compose Post is a share destination (a 280-character sheet; Post copies the text, nothing is sent online).
+- Search: filters such as "pdf", "photos", "last week" or "past 3 days", with content type labels and thumbnails.
+- Text: a system spelling service with learned words, and Settings > Keyboard > Text Replacements.
+- Focus: apps can keep settings per Focus and hear when it changes. Widgets can say when they are most relevant,
+  and Notification Center orders them by it.
+- MIDI: .mid and .midi files play through a built-in synthesizer (Music plays them in the queue).
+- Apps: Files 1.19 (Go > Connect to Server for ftp://), Browser 0.11 (View > Show Reader, File > Share), Notes 1.12
+  (Insert Sketch), Books 1.4 (Read Aloud highlighting; no voice is installed yet), News 1.4 (Translate Article),
+  Calendar 1.9 (an address in the notes can become the location), Reminders 1.11 (first-use tip), Calculator 1.5
+  (Copy Tape), Contacts 1.5 (labelled detail rows).
+- Dark appearance: the content area of 14 apps is dark grey instead of pure black.
+
 ## 0.5.38 — 2026-10-12
 
 Parity wiring, wave 2: the models from the parity waves are now reachable in 13 apps and the shell.
