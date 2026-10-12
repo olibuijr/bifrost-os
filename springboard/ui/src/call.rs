@@ -47,7 +47,8 @@ pub enum CallState {
     Ended,
 }
 
-/// One active call (`NativeCall`). `muted` is the local microphone state and survives hold.
+/// One active call (`NativeCall`). `muted` is the local microphone state and survives hold. `video` and
+/// `contact_identifier` come from the start action of an outgoing call; other calls keep `false` and `None`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Call {
     pub id: u64,
@@ -55,6 +56,17 @@ pub struct Call {
     pub outgoing: bool,
     pub state: CallState,
     pub muted: bool,
+    pub video: bool,
+    pub contact_identifier: Option<String>,
+}
+
+/// A request to start an outgoing call (`NativeStartCallAction`): the recipient, whether the call is a video call,
+/// and the identifier of the contact the recipient was picked from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StartCallAction {
+    pub handle: Handle,
+    pub is_video: bool,
+    pub contact_identifier: Option<String>,
 }
 
 /// One request to change a call (`NativeCallAction`). A transaction applies a list of them in order.
@@ -113,6 +125,19 @@ impl CallCenter {
     pub fn start_outgoing(&mut self, handle: Handle) -> Result<u64, CallError> {
         handle.validate()?;
         Ok(self.add(handle, true, CallState::Dialing))
+    }
+
+    /// Starts an outgoing call from a start action. The call keeps the video flag and the contact identifier. A refused
+    /// handle starts nothing.
+    pub fn start_action(&mut self, action: StartCallAction) -> Result<u64, CallError> {
+        let StartCallAction { handle, is_video, contact_identifier } = action;
+        handle.validate()?;
+        let id = self.add(handle, true, CallState::Dialing);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.id == id) {
+            call.video = is_video;
+            call.contact_identifier = contact_identifier;
+        }
+        Ok(id)
     }
 
     /// Reports an incoming call that rings until it is answered or ended (`reportNewIncomingCall`).
@@ -175,7 +200,7 @@ impl CallCenter {
     fn add(&mut self, handle: Handle, outgoing: bool, state: CallState) -> u64 {
         self.next_id += 1;
         let id = self.next_id;
-        self.calls.push(Call { id, handle, outgoing, state, muted: false });
+        self.calls.push(Call { id, handle, outgoing, state, muted: false, video: false, contact_identifier: None });
         self.events.push(CallEvent::Added(id));
         id
     }
@@ -242,6 +267,36 @@ mod tests {
             vec![CallEvent::Added(id), CallEvent::Changed(id), CallEvent::Ended(id)]
         );
         assert!(center.take_events().is_empty());
+    }
+
+    #[test]
+    fn start_action_keeps_video_and_contact_and_refuses_a_bad_handle() {
+        let mut center = CallCenter::new();
+        let id = center
+            .start_action(StartCallAction {
+                handle: phone("5551234"),
+                is_video: true,
+                contact_identifier: Some("contact-7".into()),
+            })
+            .unwrap();
+        let call = center.call(id).unwrap();
+        assert_eq!(call.state, CallState::Dialing);
+        assert!(call.outgoing);
+        assert!(call.video);
+        assert_eq!(call.contact_identifier.as_deref(), Some("contact-7"));
+
+        let refused = center.start_action(StartCallAction {
+            handle: phone("12"),
+            is_video: false,
+            contact_identifier: None,
+        });
+        assert_eq!(refused, Err(CallError::InvalidHandle));
+        assert_eq!(center.calls().len(), 1);
+
+        // A plain outgoing call has no video and no contact.
+        let plain = center.start_outgoing(phone("5559999")).unwrap();
+        assert!(!center.call(plain).unwrap().video);
+        assert_eq!(center.call(plain).unwrap().contact_identifier, None);
     }
 
     #[test]
