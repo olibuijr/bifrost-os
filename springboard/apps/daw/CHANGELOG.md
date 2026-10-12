@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 0.5.2 — 2026-10-12
 
 - The subtractive synths drop state nothing read: the oscillator ratio and pan, the voice pitch, the song origin and the
