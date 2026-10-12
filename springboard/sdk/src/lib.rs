@@ -90,7 +90,7 @@ pub mod hitch_ratio;
 pub mod daily_metric_report;
 pub mod status_item;
 pub mod share;
-pub mod print;
+pub use bifrost_ui::print;
 pub mod print_panel;
 pub mod usb_printer;
 pub mod pasteboard;

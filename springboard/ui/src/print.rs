@@ -155,7 +155,7 @@ pub struct PrintOperation {
     pub info: PrintInfo,
     pub destination: Destination,
     pub job_name: String,
-    /// Extra `lp` option pairs (`-o key=value`) from print dialog plug-ins; see [`crate::print_panel::PlugIns::lp_options`].
+    /// Extra `lp` option pairs (`-o key=value`) from print dialog plug-ins; see the SDK's `print_panel::PlugIns::lp_options`.
     pub options: Vec<String>,
 }
 

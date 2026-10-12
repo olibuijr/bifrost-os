@@ -354,7 +354,8 @@ impl AppStore {
     /// (not a background service) is a free purchase recorded on its first install day, held in the entitlement ledger.
     fn purchased(&self, day: i64) -> Vec<usize> {
         let mut ledger = Ledger::new();
-        for i in self.installed.iter().filter(|i| !i.is_service()) {
+        // a service stays hidden whether the install record or the catalogue entry says so
+        for i in self.installed.iter().filter(|i| !i.is_service() && !self.catalog.iter().any(|a| a.id == i.id && a.is_service())) {
             ledger.record(&i.id, i.purchased, None);
         }
         let mut out: Vec<(i64, String, usize)> = ledger
@@ -1663,7 +1664,7 @@ mod tests {
             InstalledApp { purchased: 120, ..local("is.o.chess", "1.0.0") },
             InstalledApp { purchased: 100, ..local("is.o.calc", "1.1.0") },
             InstalledApp { kind: "service".into(), purchased: 90, ..local("is.o.update", "1.0.0") },
-            InstalledApp { purchased: 300, ..local("is.o.later", "1.0.0") },
+            InstalledApp { purchased: 9_999_999, ..local("is.o.later", "1.0.0") },
         ];
         assert_eq!(s.purchased(200), vec![0, 1], "the service and the purchase after today are left out");
         s.tab = Tab::Updates;

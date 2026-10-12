@@ -3,7 +3,7 @@
 //! The sheet prints the desktop as the document. It captures the frame (the same drawing the screenshot uses), splits it
 //! into pages that fit the paper's printable area ([`layout`], the model behind `NativePrintInfo.imageableBounds` and the
 //! page scale), and shows the first page in a preview with Previous and Next. The printer list comes from CUPS
-//! (`bifrost_app::print::printers`), and "Save as PDF" is always last. Print writes the pages into one PDF
+//! (`bifrost_ui::print::printers`), and "Save as PDF" is always last. Print writes the pages into one PDF
 //! ([`write_pdf`]; raw RGB image pages, std only) and sends it through `PrintOperation` to the chosen queue, or copies it
 //! to Documents for Save as PDF. Print submits in the background so the desktop does not wait for CUPS.
 //!
@@ -12,7 +12,7 @@
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
 use super::Shell;
 use crate::gfx::{Image, Surface};
-use bifrost_app::print::{Destination, Orientation, PaperSize, PrintError, PrintInfo, PrintOperation, Printer};
+use bifrost_ui::print::{Destination, Orientation, PaperSize, PrintError, PrintInfo, PrintOperation, Printer};
 use std::path::{Path, PathBuf};
 
 /// The last printer choice; it writes a PDF rather than sending the job to a queue.
@@ -489,7 +489,7 @@ impl Shell {
         self.drawn = super::Drawn::Nothing;
         self.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
         self.drawn = super::Drawn::Nothing;
-        let printers = bifrost_app::print::printers();
+        let printers = bifrost_ui::print::printers();
         self.print_sheet = Some(PrintSheet::new(&self.ui, img, &printers));
         self.dirty = true;
     }

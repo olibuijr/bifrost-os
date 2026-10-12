@@ -21,8 +21,6 @@ pub enum PageId {
     Root,
     Network,
     Ethernet,
-    /// Settings > Network > VPN: the saved VPN configurations
-    Vpn,
     Wifi,
     WifiDetail,
     KnownNetworks,
@@ -739,14 +737,6 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Dictionary",
             false,
             vec![Group::new(dictionaries().into_iter().map(|d| Item::new(d).check(true, Action::None)).collect())],
-        ),
-        PageId::Vpn => page(
-            "VPN & Device Management",
-            false,
-            vec![
-                Group::new(vec![Item::new("VPN").value("Not Connected")]),
-                Group::new(vec![Item::new("Sign In to Work or School Account…").tint(Tint::Dim)]),
-            ],
         ),
         PageId::Legal => page(
             "Legal & Regulatory",
@@ -1566,14 +1556,14 @@ mod tests {
         let mut info = info();
         info.bt = Status { state: State::On, scanning: false, devices: vec![bt_device("B", "Speaker", false, false)], ..Status::default() };
         let s = spec(PageId::Bluetooth, &model(&info, &opts));
-        let nearby = &s.groups[2].items;
+        let nearby = &s.groups[1].items;
         assert_eq!(nearby.len(), 2);
         assert_eq!(nearby[0].action, Action::Bluetooth(Cmd::Pair("B".into())));
         assert_eq!(nearby[1].label.as_str(), "Scan for Devices");
         assert!(nearby[1].action == Action::Bluetooth(Cmd::Scan));
         info.bt.scanning = true;
         let s = spec(PageId::Bluetooth, &model(&info, &opts));
-        assert_eq!(s.groups[2].items.len(), 1, "no scan row while a scan runs");
+        assert_eq!(s.groups[1].items.len(), 1, "no scan row while a scan runs");
     }
 
     #[test]
