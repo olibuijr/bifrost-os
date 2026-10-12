@@ -2,9 +2,21 @@
 //! `SSRandomPointForSizeWithinRect`, `SSCenteredRectInRect`). The view is a pure state machine: the caller's clock
 //! drives the frame timer, so the lifecycle is testable without a window or a screen saver engine. Nothing here loads a
 //! module bundle, draws, or reads idle state. Random utilities take unit values in [0, 1) that the caller samples, so
-//! the generator and its seed stay with the caller.
+//! the generator and its seed stay with the caller. The view also keeps the preferred backing store, the gamma fade
+//! request and the configuration sheet flag (`ConfigureSheet` holds the saver's options and checks their values). The
+//! gamma ramp itself is in `render/src/gamma_fade.rs`; `preview_rect` fits a screen into a preview thumbnail.
 
 use crate::Rect;
+
+/// The backing store a saver window asks for (`backingStoreType()`). The shell draws every window into a buffer, so
+/// `Buffered` is the default; the other two are kept as the view's stated preference.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackingStoreType {
+    Retained,
+    Nonretained,
+    #[default]
+    Buffered,
+}
 
 /// Default time between frames in seconds (30 frames a second).
 pub const DEFAULT_FRAME_INTERVAL: f64 = 1.0 / 30.0;
@@ -23,11 +35,15 @@ pub struct ScreenSaverView {
     animating: bool,
     next_frame_at: f64,
     frames: u64,
+    backing_store: BackingStoreType,
+    gamma_fade: bool,
+    configure_sheet: bool,
 }
 
 impl ScreenSaverView {
     /// `init(frame:isPreview:)`: a view that is not animating yet. `is_preview` is set when the view shows a small
-    /// preview thumbnail instead of the full screen.
+    /// preview thumbnail instead of the full screen. The backing store is `Buffered`, no gamma fade is requested and
+    /// the view has no configuration sheet until the module sets one.
     pub fn new(frame: Rect, is_preview: bool) -> Self {
         ScreenSaverView {
             frame,
@@ -36,6 +52,9 @@ impl ScreenSaverView {
             animating: false,
             next_frame_at: 0.0,
             frames: 0,
+            backing_store: BackingStoreType::Buffered,
+            gamma_fade: false,
+            configure_sheet: false,
         }
     }
 
@@ -46,6 +65,37 @@ impl ScreenSaverView {
     /// `isPreview`.
     pub fn is_preview(&self) -> bool {
         self.is_preview
+    }
+
+    /// `backingStoreType()`: the backing store the saver window asks for.
+    pub fn backing_store_type(&self) -> BackingStoreType {
+        self.backing_store
+    }
+
+    /// Sets the backing store the module asks for (the override of `backingStoreType()`).
+    pub fn set_backing_store_type(&mut self, kind: BackingStoreType) {
+        self.backing_store = kind;
+    }
+
+    /// `performGammaFade()`: whether the screen fades gradually when the animation starts and stops. The reference
+    /// page gives no default, so the model starts with `false`.
+    pub fn perform_gamma_fade(&self) -> bool {
+        self.gamma_fade
+    }
+
+    /// Sets the gamma fade request (the override of `performGammaFade()`).
+    pub fn set_perform_gamma_fade(&mut self, on: bool) {
+        self.gamma_fade = on;
+    }
+
+    /// `hasConfigureSheet`: true when the module ships a configuration sheet.
+    pub fn has_configure_sheet(&self) -> bool {
+        self.configure_sheet
+    }
+
+    /// Sets the configuration sheet flag (the override of `hasConfigureSheet`).
+    pub fn set_has_configure_sheet(&mut self, on: bool) {
+        self.configure_sheet = on;
     }
 
     /// `isAnimating`.
@@ -162,6 +212,128 @@ pub fn ss_centered_rect_in_rect(inner: Rect, outer: Rect) -> Rect {
     }
 }
 
+/// Fits a screen's frame into a preview thumbnail: the largest rectangle with the screen's aspect that fits in `thumb`,
+/// centred in it. A screen or thumbnail with no area gives an empty rectangle centred in the thumbnail.
+pub fn preview_rect(screen: Rect, thumb: Rect) -> Rect {
+    if screen.w <= 0.0 || screen.h <= 0.0 || thumb.w <= 0.0 || thumb.h <= 0.0 {
+        return ss_centered_rect_in_rect(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 }, thumb);
+    }
+    let scale = (thumb.w / screen.w).min(thumb.h / screen.h);
+    let fitted = Rect { x: 0.0, y: 0.0, w: screen.w * scale, h: screen.h * scale };
+    ss_centered_rect_in_rect(fitted, thumb)
+}
+
+/// The value an option in a configuration sheet holds.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SaverValue {
+    Bool(bool),
+    Int(i64),
+    Choice(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum OptionKind {
+    Bool,
+    Int { min: i64, max: i64 },
+    Choice(Vec<String>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct SheetOption {
+    key: String,
+    kind: OptionKind,
+    value: SaverValue,
+}
+
+/// The options a saver's configuration sheet edits (the controls behind `configureSheet`). Each option has a key, a kind
+/// (on or off, a whole number in a closed range, or one of a list of choices) and a current value. `set` checks the
+/// value, so the sheet never holds one the saver does not accept. Saving is the caller's job: write `values` to the
+/// module's preferences.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ConfigureSheet {
+    options: Vec<SheetOption>,
+}
+
+impl ConfigureSheet {
+    pub fn new() -> Self {
+        ConfigureSheet { options: Vec::new() }
+    }
+
+    /// Adds an on or off option. Returns false when the key is empty or already used.
+    pub fn add_bool(&mut self, key: &str, default: bool) -> bool {
+        self.add(key, OptionKind::Bool, SaverValue::Bool(default))
+    }
+
+    /// Adds a whole-number option in `min..=max`. Returns false when the key is empty or used, the range is empty, or
+    /// the default is outside the range.
+    pub fn add_int(&mut self, key: &str, min: i64, max: i64, default: i64) -> bool {
+        if min > max || default < min || default > max {
+            return false;
+        }
+        self.add(key, OptionKind::Int { min, max }, SaverValue::Int(default))
+    }
+
+    /// Adds a choice option. Returns false when the key is empty or used, there are no choices, or the default is not
+    /// one of them.
+    pub fn add_choice(&mut self, key: &str, choices: &[&str], default: &str) -> bool {
+        if choices.is_empty() || !choices.contains(&default) {
+            return false;
+        }
+        let list: Vec<String> = choices.iter().map(|c| c.to_string()).collect();
+        self.add(key, OptionKind::Choice(list), SaverValue::Choice(default.to_string()))
+    }
+
+    fn add(&mut self, key: &str, kind: OptionKind, value: SaverValue) -> bool {
+        if key.is_empty() || self.options.iter().any(|o| o.key == key) {
+            return false;
+        }
+        self.options.push(SheetOption { key: key.to_string(), kind, value });
+        true
+    }
+
+    /// The current value of an option, or None for an unknown key.
+    pub fn get(&self, key: &str) -> Option<&SaverValue> {
+        self.options.iter().find(|o| o.key == key).map(|o| &o.value)
+    }
+
+    /// Sets an option's value. Returns false and changes nothing for an unknown key, a value of the wrong kind, an
+    /// integer outside its range, or a choice that is not in the list.
+    pub fn set(&mut self, key: &str, value: SaverValue) -> bool {
+        let Some(opt) = self.options.iter_mut().find(|o| o.key == key) else {
+            return false;
+        };
+        let ok = match (&opt.kind, &value) {
+            (OptionKind::Bool, SaverValue::Bool(_)) => true,
+            (OptionKind::Int { min, max }, SaverValue::Int(v)) => v >= min && v <= max,
+            (OptionKind::Choice(list), SaverValue::Choice(c)) => list.iter().any(|x| x == c),
+            _ => false,
+        };
+        if ok {
+            opt.value = value;
+        }
+        ok
+    }
+
+    /// The option keys in the order they were added.
+    pub fn keys(&self) -> Vec<&str> {
+        self.options.iter().map(|o| o.key.as_str()).collect()
+    }
+
+    /// The (key, value) pairs in the order they were added, for saving to the module's preferences.
+    pub fn values(&self) -> Vec<(String, SaverValue)> {
+        self.options.iter().map(|o| (o.key.clone(), o.value.clone())).collect()
+    }
+
+    /// Number of options.
+    pub fn len(&self) -> usize {
+        self.options.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.options.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +431,81 @@ mod tests {
         assert!(near(v.animation_time_interval(), DEFAULT_FRAME_INTERVAL));
         v.set_animation_time_interval(0.1);
         assert!(near(v.animation_time_interval(), 0.1));
+    }
+
+    #[test]
+    fn view_reports_backing_store_gamma_fade_and_sheet_flags() {
+        let mut v = ScreenSaverView::new(Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }, false);
+        // Defaults: a buffered store, no gamma fade and no configuration sheet.
+        assert_eq!(v.backing_store_type(), BackingStoreType::Buffered);
+        assert!(!v.perform_gamma_fade());
+        assert!(!v.has_configure_sheet());
+        v.set_backing_store_type(BackingStoreType::Retained);
+        v.set_perform_gamma_fade(true);
+        v.set_has_configure_sheet(true);
+        assert_eq!(v.backing_store_type(), BackingStoreType::Retained);
+        assert!(v.perform_gamma_fade());
+        assert!(v.has_configure_sheet());
+    }
+
+    #[test]
+    fn preview_fits_screen_aspect_and_centres() {
+        // A 1600x1000 screen (1.6:1) in a 200x200 box: scale is min(0.125, 0.2) = 0.125, so 200x125, centred at y 37.5.
+        let thumb = Rect { x: 0.0, y: 0.0, w: 200.0, h: 200.0 };
+        assert_eq!(
+            preview_rect(Rect { x: 0.0, y: 0.0, w: 1600.0, h: 1000.0 }, thumb),
+            Rect { x: 0.0, y: 37.5, w: 200.0, h: 125.0 }
+        );
+        // A square screen in a 300x100 box: scale 0.1, so 100x100 at x 10 + 100, y 20.
+        let wide = Rect { x: 10.0, y: 20.0, w: 300.0, h: 100.0 };
+        assert_eq!(
+            preview_rect(Rect { x: 0.0, y: 0.0, w: 1000.0, h: 1000.0 }, wide),
+            Rect { x: 110.0, y: 20.0, w: 100.0, h: 100.0 }
+        );
+        // A screen with no area gives an empty rectangle at the centre of the box.
+        assert_eq!(
+            preview_rect(Rect { x: 0.0, y: 0.0, w: 0.0, h: 1000.0 }, thumb),
+            Rect { x: 100.0, y: 100.0, w: 0.0, h: 0.0 }
+        );
+    }
+
+    #[test]
+    fn configure_sheet_checks_values_on_set() {
+        let mut sheet = ConfigureSheet::new();
+        assert!(sheet.add_bool("fade", true));
+        // A duplicate key is refused and the first option is kept.
+        assert!(!sheet.add_bool("fade", false));
+        assert_eq!(sheet.get("fade"), Some(&SaverValue::Bool(true)));
+        // A default outside the range is refused; an in-range default is accepted.
+        assert!(!sheet.add_int("count", 1, 10, 12));
+        assert!(sheet.add_int("count", 1, 10, 4));
+        assert!(sheet.set("count", SaverValue::Int(10)));
+        assert!(!sheet.set("count", SaverValue::Int(11)));
+        assert_eq!(sheet.get("count"), Some(&SaverValue::Int(10)));
+        assert!(sheet.add_choice("style", &["clock", "photos"], "photos"));
+        assert!(!sheet.add_choice("bad", &["a"], "b"));
+        assert!(sheet.set("style", SaverValue::Choice("clock".to_string())));
+        assert!(!sheet.set("style", SaverValue::Choice("ocean".to_string())));
+        // A value of the wrong kind, or for an unknown key, changes nothing.
+        assert!(!sheet.set("style", SaverValue::Bool(true)));
+        assert!(!sheet.set("missing", SaverValue::Bool(true)));
+        assert_eq!(sheet.get("style"), Some(&SaverValue::Choice("clock".to_string())));
+        assert_eq!(sheet.keys(), vec!["fade", "count", "style"]);
+        assert_eq!(sheet.len(), 3);
+    }
+
+    #[test]
+    fn configure_sheet_values_keep_insertion_order() {
+        let mut sheet = ConfigureSheet::new();
+        assert!(sheet.is_empty());
+        assert!(sheet.add_int("speed", 0, 5, 2));
+        assert!(sheet.add_bool("stars", false));
+        assert!(sheet.set("stars", SaverValue::Bool(true)));
+        assert_eq!(
+            sheet.values(),
+            vec![("speed".to_string(), SaverValue::Int(2)), ("stars".to_string(), SaverValue::Bool(true))]
+        );
+        // An empty key is refused.
+        assert!(!sheet.add_bool("", true));
     }
 }

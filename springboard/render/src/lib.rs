@@ -45,6 +45,7 @@ pub mod guided;
 pub mod blend;
 pub mod blur_kernels;
 pub mod effect_chain;
+pub mod gamma_fade;
 
 #[cfg(test)]
 mod tests {
