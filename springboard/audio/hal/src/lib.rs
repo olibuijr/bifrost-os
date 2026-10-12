@@ -117,3 +117,6 @@ impl Device {
 /// The device workgroup: real-time threads that share the device's deadline (SCHED_FIFO through the server,
 /// `sched_util_min` while the device runs, CPU affinity hints). Owner: task 06.
 pub mod workgroup;
+
+/// Hog mode requests (owner: task 10).
+pub mod hog;
