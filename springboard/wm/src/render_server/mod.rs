@@ -20,6 +20,7 @@ pub mod layers;
 pub mod layers_dispatch;
 pub mod material;
 pub mod output;
+pub mod scene_build;
 pub mod server;
 pub mod stats;
 
