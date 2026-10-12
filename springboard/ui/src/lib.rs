@@ -614,6 +614,8 @@ pub mod shading;
 pub mod composition;
 pub mod audio_mix;
 pub mod audio_render;
+pub mod plugin_host;
+pub mod plugin_view;
 pub mod state_machine;
 pub mod agents;
 pub mod grid_graph;
