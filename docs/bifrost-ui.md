@@ -1853,3 +1853,15 @@ Pure models in `springboard/ui/src/call_ui.rs` and `springboard/ui/src/call_apps
 - Default calling app: `CallingApps` keeps the apps that registered for calling, in registration order, and one default.
   Only a registered app can be chosen. Unregistering the default clears it. The Settings page that lets the user pick the
   default is not built yet (the decision is recorded here; the page belongs to the shell).
+
+## Core MIDI (`bifrost_app::midi`)
+
+The MIDI models are shared by the shell, the MIDI daemon and apps. `bifrost_midi` owns them; `sdk/src/midi.rs` re-exports
+`clock`, `endpoints`, `events`, `hub`, `thru` and `ump` so an app uses the same `Hub`, `Registry`, `Ump` and `MidiEvent` types as
+the server. Apple parity: the vocabulary follows MIDI Services (clients, virtual sources and destinations, source connections,
+received packets with host-clock timestamps). Decided: the SDK exposes the pure models only. An app does not open a device here;
+the daemon owns the hub and delivers to apps.
+
+Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
+daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
+tests in `sdk/src/midi.rs` are unrun.

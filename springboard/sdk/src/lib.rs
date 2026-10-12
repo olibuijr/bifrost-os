@@ -123,6 +123,7 @@ pub mod power_sources;
 pub mod hid_devices;
 pub mod serial_ports;
 pub mod ble_midi;
+pub mod midi;
 pub mod device_registry;
 pub mod script_value;
 pub mod script_syntax;
