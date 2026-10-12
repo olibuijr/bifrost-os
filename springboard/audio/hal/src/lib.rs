@@ -5,7 +5,9 @@
 //! Owner: task 06. The public API below is the lead's contract for the clients (tasks 07, 08, 09, 13 to 18).
 //!
 //! Real-time rules for an [`IoProc`]: no allocation, no locks, no syscalls other than the futex. In debug builds an
-//! app (or test binary) can enforce them by installing [`RtGuardAllocator`] as its global allocator.
+//! app (or test binary) can enforce them by installing [`RtGuardAllocator`] as its global allocator: an allocation
+//! inside the IOProc is counted ([`RtScope::violations`]) and reported on stderr, and aborts the process only with
+//! `BIFROST_RT_STRICT=1`.
 
 mod conn;
 mod iothread;

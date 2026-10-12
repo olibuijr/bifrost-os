@@ -230,6 +230,84 @@ mod tests {
         assert_eq!((n, buf[0]), (1, 7));
     }
 
+    /// A scripted peer: for each request it receives it sends the next batch of replies.
+    fn script(sock: OwnedFd, batches: Vec<Vec<Reply>>) -> std::thread::JoinHandle<()> {
+        use bifrost_audio_types::control::encode_reply;
+        std::thread::spawn(move || {
+            let mut buf = vec![0u8; MAX_LEN];
+            for batch in batches {
+                match recv_packet(sock.as_raw_fd(), &mut buf) {
+                    Ok(Some(_)) => {}
+                    _ => return,
+                }
+                for r in batch {
+                    if send_packet(sock.as_raw_fd(), &encode_reply(&r), &[]).is_err() {
+                        return;
+                    }
+                }
+            }
+        })
+    }
+
+    fn ping() -> Request {
+        Request::Unlisten { object: ObjectId(1), address: PropertyAddress::global(bifrost_audio_types::props::NAME) }
+    }
+
+    #[test]
+    fn an_error_reply_is_an_err() {
+        let (a, b) = socket_pair();
+        let _srv = script(b, vec![vec![Reply::Error(AudioError::NotSettable)], vec![Reply::Done]]);
+        let c = Conn::new(a);
+        assert_eq!(c.request(&ping(), &[]).err(), Some(AudioError::NotSettable));
+        // the connection stays usable after an error reply
+        assert!(matches!(c.request(&ping(), &[]), Ok((Reply::Done, _))));
+    }
+
+    #[test]
+    fn a_reply_larger_than_a_small_buffer_arrives_whole() {
+        let (a, b) = socket_pair();
+        let ids: Vec<ObjectId> = (0..8000).map(ObjectId).collect();
+        let _srv = script(b, vec![vec![Reply::Objects(ids.clone())]]);
+        let c = Conn::new(a);
+        match c.request(&ping(), &[]) {
+            Ok((Reply::Objects(got), _)) => assert_eq!(got, ids),
+            _ => panic!("the large reply did not arrive as Objects"),
+        }
+    }
+
+    #[test]
+    fn notifications_interleaved_with_a_reply_do_not_disturb_it() {
+        let (a, b) = socket_pair();
+        let key = (ObjectId(4), PropertyAddress::global(bifrost_audio_types::props::NAME));
+        let _srv = script(b, vec![vec![Reply::Changed(vec![key]), Reply::Done, Reply::Changed(vec![key])]]);
+        let c = Conn::new(a);
+        let (tx, rx) = channel();
+        let tx = Mutex::new(tx);
+        let f: Arc<ListenerFn> = Arc::new(move |o, _| {
+            let _ = tx.lock().unwrap().send(o);
+        });
+        c.shared.listeners.lock().unwrap().insert(key, vec![(1, f)]);
+        assert!(matches!(c.request(&ping(), &[]), Ok((Reply::Done, _))));
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), ObjectId(4));
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), ObjectId(4));
+    }
+
+    #[test]
+    fn a_new_connection_works_after_the_server_restarts() {
+        let (a, b) = socket_pair();
+        let srv = script(b, vec![vec![Reply::Done]]);
+        let c = Conn::new(a);
+        assert!(c.request(&ping(), &[]).is_ok());
+        srv.join().unwrap(); // the old server is gone: its end of the socket is closed
+        assert_eq!(c.request(&ping(), &[]).err(), Some(AudioError::NoServer));
+        assert!(c.shared.dead.load(Ordering::Acquire) || c.request(&ping(), &[]).is_err());
+        // the "restarted" server: a fresh socket and a fresh Conn
+        let (a2, b2) = socket_pair();
+        let _srv2 = script(b2, vec![vec![Reply::Done]]);
+        let c2 = Conn::new(a2);
+        assert!(matches!(c2.request(&ping(), &[]), Ok((Reply::Done, _))));
+    }
+
     #[test]
     fn end_of_stream_is_none() {
         let (a, b) = socket_pair();
