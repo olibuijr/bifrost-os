@@ -12,7 +12,7 @@ use super::*;
 use springboard::gfx::pack;
 use bifrost_app::controls::prefs_layout::m;
 use springboard::shell::cache::TextCache;
-use springboard::shell::ui::{centred, Weight, CARD_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, TRACK_C, WHITE};
+use springboard::shell::ui::{centred, Weight, CARD_BG, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, TRACK_C, WHITE};
 use bifrost_app::kit::ui::{AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_ORANGE, SYSTEM_YELLOW, TINT};
 use bifrost_app::kit::ui::{READER_DARK_BG, READER_DARK_DIM, READER_DARK_INK, READER_DARK_SEP, READER_SEPIA_ACCENT, READER_SEPIA_BG, READER_SEPIA_DIM, READER_SEPIA_INK, READER_SEPIA_RAISED, READER_SEPIA_SEP, READER_WHITE_ACCENT, READER_WHITE_DIM, READER_WHITE_INK, READER_WHITE_RAISED, READER_WHITE_SEP};
 
@@ -88,7 +88,8 @@ impl Books {
 
     pub(super) fn draw_library(&mut self, s: &mut Surface, ui: &Ui) {
         let (w, h) = (self.w as usize, self.h as usize);
-        s.fill_rect(0, 0, w, h, DETAIL_BG.now());
+        // the main content of the window: white in Light, the dark content grey in Dark (not the black of DETAIL_BG)
+        s.fill_rect(0, 0, w, h, CONTENT_BG.now());
         let side = self.side(ui);
         let m = side + ui.pt(MARGIN_PT);
         let mid = side + (self.w as f32 - side) / 2.0;
@@ -211,7 +212,27 @@ impl Books {
         } else if chrome {
             self.draw_bottom(s, ui);
         }
+        self.draw_banner(s, ui);
         self.draw_toolbar(s, ui);
+    }
+
+    /// A one-line card at the top of the page: the notice of Look Up or Translate, or the Read Aloud note while a
+    /// chapter is read. A tap dismisses a notice.
+    fn draw_banner(&mut self, s: &mut Surface, ui: &Ui) {
+        let reading = self.reader.as_ref().is_some_and(|r| r.narration.is_some());
+        let text = match (&self.notice, reading) {
+            (Some(n), _) => n.clone(),
+            (None, true) => narrate::READ_ALOUD_NOTE.to_string(),
+            (None, false) => return,
+        };
+        let pad_x = ui.pt(SPACE_XL);
+        let pad_y = ui.pt(SPACE_S);
+        let w = ui.measure(&text, MAC_CALLOUT_PT, Weight::Regular) + pad_x * 2.0;
+        let h = ui.pt(MAC_CALLOUT_PT) * 2.0 + pad_y * 2.0;
+        let x = (self.w as f32 - w) / 2.0;
+        let y = ui.pt(super::nav_bottom_pt()) + pad_y;
+        s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
+        put_mid(&mut self.labels, s, ui, &text, MAC_CALLOUT_PT, Weight::Regular, LABEL.now(), self.w as f32 / 2.0, y + h / 2.0);
     }
 
     fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32) {
@@ -248,6 +269,20 @@ impl Books {
                                 let x0 = left + ui.measure(&prefix, pt, weight);
                                 let x1 = x0 + ui.measure(&word, pt, weight);
                                 s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(SYSTEM_YELLOW, 110));
+                            }
+                        }
+                    }
+                    // the sentence being read aloud: the one tint, lighter than the yellow of a highlight
+                    if let Some(span) = r.narration.as_ref().and_then(|n| n.current()) {
+                        if span.block == line.block {
+                            let text = r.book.blocks.get(span.block).and_then(|b| b.text()).unwrap_or("");
+                            let (a, b) = layout::line_cols(text, line.offset, &line.text, span.offset, span.offset + span.len);
+                            if a < b {
+                                let prefix: String = line.text.chars().take(a).collect();
+                                let word: String = line.text.chars().skip(a).take(b - a).collect();
+                                let x0 = left + ui.measure(&prefix, pt, weight);
+                                let x1 = x0 + ui.measure(&word, pt, weight);
+                                s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 70));
                             }
                         }
                     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0
+
+- Find menu: Read Aloud starts reading the chapter from the page you are on to its end. The sentence being read is
+  shaded and the book turns its pages to follow it. Pause Reading and Resume Reading continue it, and Stop Reading
+  ends it. No voice is installed on this PC yet, so nothing is spoken: each sentence is held for the time it takes to
+  read it aloud, and a note on the page says so.
+- Find menu: Look Up and Translate act on the text the last find went to. Look Up names the word and the language the
+  sentence is in; there is no dictionary on this PC yet, so it gives no definition. Translate says why a translation
+  cannot run: no language packs are installed yet. A tap on the page clears the note.
+- The library's main area uses the window's content colour (white in Light, dark grey in Dark) instead of black.
+
 ## 1.3.0
 
 - Find menu: Find Next (⌘G) and Find Previous (⇧⌘G) step through the matches of the book's search in order and wrap at
