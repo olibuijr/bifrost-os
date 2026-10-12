@@ -670,6 +670,8 @@ pub mod affine;
 pub mod pdfpage;
 pub mod pdfselect;
 pub mod pdfannot;
+pub mod pdfview;
+pub mod pdfform;
 pub mod transform3d;
 pub mod scene3d;
 pub mod path;
