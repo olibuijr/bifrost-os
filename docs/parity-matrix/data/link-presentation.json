@@ -38,9 +38,9 @@
     {
       "feature": "Sharing a URL with metadata to the share sheet",
       "apple": "LPLinkMetadata used as an activity item (share sheet rich preview)",
-      "bifrost": "springboard/sdk/src/share.rs (show_picker), springboard/proto/src/rich.rs (Payload::Url); wired: springboard/apps/browser/src/main.rs (share_page, via bifrost_app::share::show_picker with Payload::Url)",
+      "bifrost": "springboard/sdk/src/share.rs (show_picker), springboard/proto/src/rich.rs (Payload::Url); wired: springboard/apps/browser/src/main.rs (share_page, via bifrost_app::share::show_picker with Payload::Url); wired: springboard/apps/news-desktop/src/main.rs (MENU_SHARE, share::show_picker with Payload::Url), springboard/apps/news-desktop/src/news.rs (share_link)",
       "status": "partial",
-      "note": "a URL is shared as plain text or URL; the picker shows no rich preview of the link Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "a URL is shared as plain text or URL; the picker shows no rich preview of the link Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Receiving a shared URL",

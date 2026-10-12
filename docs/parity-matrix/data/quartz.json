@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/quartz",
   "macos_since": "10.4",
   "status": "partial",
-  "bifrost": "springboard/src/shell/photos/ (viewer, edit, slideshow, thumbs), springboard/sdk/src/peek.rs, springboard/sdk/src/print.rs, springboard/src/shell/books/engine/pdf/, springboard/render/src/imgdec.rs, springboard/src/shell/camera/mod.rs",
+  "bifrost": "springboard/src/shell/photos/ (viewer, edit, slideshow, thumbs), springboard/sdk/src/peek.rs, springboard/ui/src/print.rs, springboard/src/shell/books/engine/pdf/, springboard/render/src/imgdec.rs, springboard/src/shell/camera/mod.rs",
   "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, and PDF text extraction for Books. No app-facing SDK API exists for image views, slideshows, Core Image filters, PDF documents, PDF annotations or Quartz Composer.",
   "rea_evidence": "ev_785e790b371318807d1dd7aa7f8f22ed4ec659d31eb5ce193106fc12c14d19a5",
   "features": [
@@ -87,9 +87,9 @@
     {
       "feature": "PDF display view (PDFView, PDFThumbnailView)",
       "apple": "PDFView, PDFThumbnailView",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the shared page model)",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the shared page model); wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages)",
       "status": "partial",
-      "note": "PDF pages are reflowed into the Books page model rather than drawn at fixed layout. No fixed-layout page view, thumbnail view, zoom or selection for apps. PDFCraft is a third-party upstream binary (apps/pdfcraft-desktop/upstream.toml), not an SDK API."
+      "note": "PDF pages are reflowed into the Books page model rather than drawn at fixed layout. No fixed-layout page view, thumbnail view, zoom or selection for apps. PDFCraft is a third-party upstream binary (apps/pdfcraft-desktop/upstream.toml), not an SDK API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
@@ -101,9 +101,9 @@
     {
       "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",
       "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
-      "bifrost": "springboard/sdk/src/print.rs (PrintOperation, Destination::Pdf)",
+      "bifrost": "springboard/ui/src/print.rs (PrintOperation, Destination::Pdf); wired: springboard/src/shell/print_sheet.rs (write_pdf); no filters",
       "status": "partial",
-      "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet."
+      "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",

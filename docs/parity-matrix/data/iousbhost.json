@@ -81,7 +81,7 @@
   "gaps": [
     "No app-facing API to claim a USB device, read descriptors or send control, bulk, interrupt or isochronous requests (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
     "The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.",
-    "No scanner API and no USB transport for printers (springboard/sdk/src/print.rs).",
+    "No scanner API and no USB transport for printers (springboard/ui/src/print.rs).",
     "Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap."
   ]
 }

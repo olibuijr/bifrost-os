@@ -59,9 +59,9 @@
     {
       "feature": "URL schemes and document types declared by the app",
       "apple": "CFBundleURLTypes and CFBundleDocumentTypes in Info.plist; Launch Services handler registry",
-      "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open)",
+      "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open); wired: springboard/src/shell/defaultapps.rs (manifest_handler, Email category)",
       "status": "partial",
-      "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url."
+      "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Universal links service (applinks)",

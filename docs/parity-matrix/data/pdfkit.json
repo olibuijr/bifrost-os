@@ -3,23 +3,23 @@
   "doc": "https://developer.apple.com/documentation/pdfkit",
   "macos_since": "10.4",
   "status": "partial",
-  "bifrost": "springboard/src/shell/books/engine/pdf/ (reader), springboard/sdk/src/print.rs (Save as PDF, lp submission)",
+  "bifrost": "springboard/src/shell/books/engine/pdf/ (reader), springboard/ui/src/print.rs (Save as PDF, lp submission)",
   "summary": "BifrOSt has an internal PDF reader inside the Books app that loads a file, walks the page tree, extracts text, images and the outline, and reflows the result into the Books page model. Printing a PDF goes through the SDK print API. There is no app-facing PDF document, page, view, annotation, form, selection or thumbnail API.",
   "rea_evidence": "ev_1e800ce4155bafe135d5af0c8f46309700cd1a9b225b9d6354b17be54c6f57a2",
   "features": [
     {
       "feature": "PDFView (display and navigation)",
       "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
-      "bifrost": "springboard/ui/src/pdfview.rs",
+      "bifrost": "springboard/ui/src/pdfview.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, goto_page)",
       "status": "partial",
-      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's"
+      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "PDFThumbnailView and page thumbnails",
       "apple": "PDFThumbnailView, PDFPage.thumbnail(of:for:)",
-      "bifrost": "springboard/ui/src/pdfpage.rs",
+      "bifrost": "springboard/ui/src/pdfpage.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, panel_rows, activate Row); springboard/apps/books-desktop/src/books/draw.rs (draw_rows Pages arm)",
       "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PDF page thumbnail generator"
+      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PDF page thumbnail generator Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "PDFDocument loading (URL, data)",
@@ -59,9 +59,9 @@
     {
       "feature": "Annotations",
       "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
-      "bifrost": "springboard/ui/src/annotation.rs (Annotation",
+      "bifrost": "springboard/ui/src/annotation.rs (Annotation; wired: springboard/apps/books-desktop/src/books/store.rs (Entry::notes, set_note, note_of, N lines); springboard/apps/books-desktop/src/books/mod.rs (add_note, save_note, notes_list, Panel::Notes)",
       "status": "partial",
-      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked"
+      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Widgets and form fields",
@@ -94,7 +94,7 @@
     {
       "feature": "Printing PDF documents",
       "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)",
-      "bifrost": "springboard/sdk/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)",
+      "bifrost": "springboard/ui/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)",
       "status": "partial",
       "note": "The file is sent to CUPS as is. No page-level pagination, no print sheet, and no page range applied to PDF pages. Whether the Midget image ships CUPS is unchecked"
     },

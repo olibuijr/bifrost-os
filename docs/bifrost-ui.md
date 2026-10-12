@@ -1352,7 +1352,7 @@ multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes
 
 ## Printing (NSPrintInfo / NSPrintOperation parity)
 
-`bifrost_app::print` (`springboard/sdk/src/print.rs`): `PrintInfo` (paper size, orientation, margins, copies, page range;
+`bifrost_app::print` (`springboard/ui/src/print.rs`): `PrintInfo` (paper size, orientation, margins, copies, page range;
 `paper_size()` and `imageable()` as `paperSize` and `imageablePageBounds`), `printers()` (CUPS via `lpstat -p -d`),
 `available()`, and `PrintOperation::new(file).with_info(..).to(Destination::Printer(name) | Destination::Pdf(path)).run()`,
 which submits with `lp` (info mapped to `-n`, `media=`, `landscape`, `page-*`, `-P`) or, for Save as PDF, copies the

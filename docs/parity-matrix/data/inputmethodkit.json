@@ -24,16 +24,16 @@
     {
       "feature": "Marked text (composition) set and clear",
       "apple": "IMKServerInput setMarkedText / unmarkText (via inputText and handle)",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined",
+      "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined; wired: springboard/src/shell/textfield.rs (set_marked, unmark, underline in draw)",
       "status": "partial",
-      "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client)."
+      "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Commit composition",
       "apple": "IMKServerInput commitComposition, IMKServerInput unmark with commit",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark",
+      "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark; wired: springboard/src/shell/textfield.rs (unmark with commit)",
       "status": "partial",
-      "note": "Commit and cancel work at the field. No commitComposition request from a provider."
+      "note": "Commit and cancel work at the field. No commitComposition request from a provider. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Key binding and text events to the input method",
@@ -73,9 +73,9 @@
     {
       "feature": "Input method state",
       "apple": "IMKStateSetting (input mode, state values)",
-      "bifrost": "springboard/ui/src/input_method.rs (State",
+      "bifrost": "springboard/ui/src/input_method.rs (State; wired: springboard/src/shell/kb_layouts.rs (cycle, next_in) and the menu bar input menu (desktop_bar.rs Menu::Input)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. InputTraits describe the field, not the input method state. No per-method mode is stored."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. InputTraits describe the field, not the input method state. No per-method mode is stored. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Input method registration and Info dictionary",

@@ -10,23 +10,23 @@
     {
       "feature": "Product catalogue and metadata",
       "apple": "Product, Product.SubscriptionInfo, SubscriptionInfo",
-      "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch)",
+      "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch); wired: springboard/src/shell/store/api.rs",
       "status": "partial",
-      "note": "StoreApp has id, name, version, size, sha256, category, changelog; no price, currency, product type or subscription fields"
+      "note": "StoreApp has id, name, version, size, sha256, category, changelog; no price, currency, product type or subscription fields Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Purchase flow",
       "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
-      "bifrost": "springboard/ui/src/purchase.rs",
+      "bifrost": "springboard/ui/src/purchase.rs; wired: springboard/src/shell/store/mod.rs (press_button refuses paid apps)",
       "status": "partial",
-      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path"
+      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Transactions and entitlements",
       "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
-      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs; wired: springboard/src/shell/store/mod.rs (AppStore::purchased), springboard/ui/src/entitlement.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Signed transaction verification (JWS)",
@@ -59,16 +59,16 @@
     {
       "feature": "App Store product page and overlay",
       "apple": "SKStoreProductViewController, SKOverlay (Offering media for sale)",
-      "bifrost": "springboard/src/shell/store/mod.rs (browse, app detail, GET and OPEN actions)",
+      "bifrost": "springboard/src/shell/store/mod.rs (browse, app detail, GET and OPEN actions); wired: springboard/src/shell/store/mod.rs",
       "status": "partial",
-      "note": "the built-in store shows app detail and changelog; no embedded product sheet for other apps and no App Clip overlay"
+      "note": "the built-in store shows app detail and changelog; no embedded product sheet for other apps and no App Clip overlay Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Store catalogue install and update",
       "apple": "No direct StoreKit equivalent (App Store download and update); closest is StoreDownloaderExtension",
-      "bifrost": "springboard/src/shell/store/install.rs, springboard/src/shell/store/mod.rs (Updates)",
+      "bifrost": "springboard/src/shell/store/install.rs, springboard/src/shell/store/mod.rs (Updates); wired: springboard/src/shell/store/install.rs",
       "status": "partial",
-      "note": "installs resume and verify sha256; no background asset-pack downloads for apps"
+      "note": "installs resume and verify sha256; no background asset-pack downloads for apps Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "App transaction (purchase of the app itself)",

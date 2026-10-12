@@ -10,9 +10,9 @@
     {
       "feature": "Pasteboard (NSPasteboard)",
       "apple": "Pasteboard class, NSPasteboard.general, UTType items",
-      "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs; wired: springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs; wired: springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs; wired: springboard/apps/clock-desktop/src/clock/mod.rs (Copy Laps toolbar item, Target::Export, take_export), springboard/apps/clock-desktop/src/main.rs (hands the text to NativePasteboard::general().set_string), springboard/sdk/src/pasteboard.rs",
       "status": "partial",
-      "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)",
@@ -45,9 +45,9 @@
     {
       "feature": "Core Printing (PMPageFormat, PMPrintSettings, PMSession)",
       "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect",
-      "bifrost": "springboard/sdk/src/print.rs (PrintInfo, PrintOperation, printers, available)",
+      "bifrost": "springboard/ui/src/print.rs (PrintInfo, PrintOperation, printers, available); wired: springboard/src/shell/print_sheet.rs (PrintSheet, Setup, Job) over springboard/ui/src/print.rs",
       "status": "partial",
-      "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked."
+      "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",

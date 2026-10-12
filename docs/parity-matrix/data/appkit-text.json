@@ -59,9 +59,9 @@
     {
       "feature": "TextKit: custom layout, text attachments, text lists, find bar",
       "apple": "NSTextAttachment, NSTextList, NSTextFinder",
-      "bifrost": "springboard/ui/src/textfind.rs, springboard/ui/src/textlist.rs",
+      "bifrost": "springboard/ui/src/textfind.rs, springboard/ui/src/textlist.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (start_replacing, replace_one, replace_all, draw_replacing); springboard/apps/notes-desktop/src/notes/parity.rs (find_ranges, replace_ranges)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Fonts: font panel",

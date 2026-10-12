@@ -17,16 +17,16 @@
     {
       "feature": "Asset retrieval and fetch options",
       "apple": "PHAsset, PHAssetCollection, PHCollectionList, PHFetchResult, PHFetchOptions, PHObject",
-      "bifrost": "springboard/ui/src/photo_fetch.rs",
+      "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker)",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Smart albums (screenshots, recents, recently deleted)",
       "apple": "PHAssetCollection smart album subtypes, PHFetchOptions predicates",
-      "bifrost": "springboard/ui/src/photo_smart_albums.rs",
+      "bifrost": "springboard/ui/src/photo_smart_albums.rs; wired: springboard/src/shell/photos/models.rs (smart album rules of springboard/ui/src/photo_smart_albums.rs)",
       "status": "partial",
-      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Built-in albums only; purge after 30 days. Not exposed through an API."
+      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Built-in albums only; purge after 30 days. Not exposed through an API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Favorites",

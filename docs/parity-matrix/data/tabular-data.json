@@ -31,9 +31,9 @@
     {
       "feature": "Statistical summaries",
       "apple": "NumericSummary, CategoricalSummary, AnyCategoricalSummary",
-      "bifrost": "springboard/ui/src/column_summary.rs",
+      "bifrost": "springboard/ui/src/column_summary.rs; wired: springboard/apps/calculator-desktop/src/tape.rs (statistics_lines, via bifrost_app::controls::column_summary::NumericSummary)",
       "status": "partial",
-      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer"
+      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Sorting order",

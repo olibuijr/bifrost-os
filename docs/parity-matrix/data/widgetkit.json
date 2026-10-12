@@ -17,16 +17,16 @@
     {
       "feature": "Configurable widgets (AppIntentConfiguration, WidgetInfo)",
       "apple": "AppIntentConfiguration, WidgetInfo, Migrating widgets from SiriKit Intents",
-      "bifrost": "springboard/ui/src/widget_config.rs",
+      "bifrost": "springboard/ui/src/widget_config.rs; wired: springboard/src/shell/services/widgets_timeline.rs (configure, set_option, options, step_option); springboard/src/shell/notify/center.rs (draw_option_rows, center_options_hit, Options chip)",
       "status": "partial",
-      "note": "Wave 4 (w4-widgetkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents exist for the control socket, but they do not feed a widget configuration UI. Shell widgets have fixed options set in the shell."
+      "note": "Wave 4 (w4-widgetkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents exist for the control socket, but they do not feed a widget configuration UI. Shell widgets have fixed options set in the shell. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Timeline updates (TimelineProvider, TimelineEntry, Timeline, WidgetCenter reload)",
       "apple": "TimelineProvider, AppIntentTimelineProvider, TimelineEntry, Timeline, WidgetCenter",
-      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs",
+      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload keeps options and carries the link)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell refreshes its own tiles on a schedule. Apps have no timeline or reload call."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell refreshes its own tiles on a schedule. Apps have no timeline or reload call. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Widget families and sizes (systemSmall, systemMedium, systemLarge)",
@@ -87,9 +87,9 @@
     {
       "feature": "Deep links from widgets (widgetURL, Link)",
       "apple": "widgetURL(_:), Link, Linking to specific app scenes from your widget",
-      "bifrost": "springboard/ui/src/widget_link.rs",
+      "bifrost": "springboard/ui/src/widget_link.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload link, set_link, link); springboard/src/shell/notify/center.rs (open_widget)",
       "status": "partial",
-      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tile taps open fixed destinations. Apps cannot give a widget a URL or scene target."
+      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tile taps open fixed destinations. Apps cannot give a widget a URL or scene target. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Live Activities (ActivityConfiguration, DynamicIsland, ActivityKit)",

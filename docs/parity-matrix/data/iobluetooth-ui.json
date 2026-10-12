@@ -52,9 +52,9 @@
     {
       "feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)",
       "apple": "IOBluetoothUI Enumerations, Constants, Functions; struct BluetoothKeyboardReturnType; IOBluetoothUIUserLib.h",
-      "bifrost": "springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth)",
+      "bifrost": "springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth); wired: springboard/src/shell/pages.rs (bluetooth_spec: Scan for Devices row under OTHER DEVICES, sends Cmd::Scan when the radio is on and no scan is running)",
       "status": "partial",
-      "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart."
+      "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     }
   ],
   "gaps": [

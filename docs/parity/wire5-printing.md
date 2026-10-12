@@ -1,6 +1,6 @@
 # Wiring wave 5: printing (File > Print…)
 
-Branch `wire5/printing`. Builds on the printing models of waves 1 to 4 (`springboard/sdk/src/print.rs`,
+Branch `wire5/printing`. Builds on the printing models of waves 1 to 4 (`springboard/ui/src/print.rs`,
 `print_panel.rs`) and on `appkit-graphics-printing.md`. The matrix data under `docs/parity-matrix/data/` is not
 edited in this round; the rows below are for the lead to update after the Midget check.
 
@@ -68,10 +68,10 @@ pages to a PDF.
 
 | Slug | Feature (exactly as in `docs/parity-matrix/data/<slug>.json`) | BifrOSt path |
 |---|---|---|
-| appkit-graphics-printing | Printing: print info and operation | `springboard/src/shell/print_sheet.rs` (Job, Layout, paper and scale) over `springboard/sdk/src/print.rs` |
+| appkit-graphics-printing | Printing: print info and operation | `springboard/src/shell/print_sheet.rs` (Job, Layout, paper and scale) over `springboard/ui/src/print.rs` |
 | appkit-graphics-printing | Printing: print panel, page layout, accessory views | `springboard/src/shell/print_sheet.rs` (sheet: printer, paper, orientation, scale, copies); accessory views not done |
-| appkit-graphics-printing | Printing: printer discovery | `springboard/src/shell/print_sheet.rs` (`printers` and `targets`) over `springboard/sdk/src/print.rs` |
-| application-services | Core Printing (PMPageFormat, PMPrintSettings, PMSession) | `springboard/src/shell/print_sheet.rs` (`PrintSheet`, `Setup`, `Job`) over `springboard/sdk/src/print.rs` |
+| appkit-graphics-printing | Printing: printer discovery | `springboard/src/shell/print_sheet.rs` (`printers` and `targets`) over `springboard/ui/src/print.rs` |
+| application-services | Core Printing (PMPageFormat, PMPrintSettings, PMSession) | `springboard/src/shell/print_sheet.rs` (`PrintSheet`, `Setup`, `Job`) over `springboard/ui/src/print.rs` |
 | core-graphics | PDF creation and printing (CGPDFContext, print to PDF) | `springboard/src/shell/print_sheet.rs` (`write_pdf`, Save as PDF) |
 | quartz | PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager) | `springboard/src/shell/print_sheet.rs` (`write_pdf`); no filters |
 

@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/appkit",
   "macos_since": "10.0",
   "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/sdk/src/print.rs",
+  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs",
   "summary": "Semantic colours, a colour panel, PNG/JPEG decoding, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage-like object model, no Bezier path or gradient API for apps, no colour spaces or colour lists, and no print sheet.",
   "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
   "features": [
@@ -45,9 +45,9 @@
     {
       "feature": "Drawing: Bezier paths, gradients, shadows",
       "apple": "NSBezierPath, NSGradient, NSShadow",
-      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs",
+      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Drawing: materials and vibrancy",
@@ -94,23 +94,23 @@
     {
       "feature": "Printing: print info and operation",
       "apple": "NSPrintInfo, NSPrintOperation",
-      "bifrost": "springboard/sdk/src/print.rs",
+      "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (Job, Layout, paper and scale) over springboard/ui/src/print.rs",
       "status": "partial",
-      "note": "paper, orientation, margins, copies, page range; submits a PDF or image file via lp; Save as PDF copies the file; printing a view's drawing is not supported"
+      "note": "paper, orientation, margins, copies, page range; submits a PDF or image file via lp; Save as PDF copies the file; printing a view's drawing is not supported Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Printing: print panel, page layout, accessory views",
       "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
-      "bifrost": "springboard/sdk/src/print_panel.rs",
+      "bifrost": "springboard/sdk/src/print_panel.rs; wired: springboard/src/shell/print_sheet.rs (sheet rows: printer, paper, orientation, scale, copies); accessory views not done",
       "status": "partial",
-      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel"
+      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Printing: printer discovery",
       "apple": "NSPrinter",
-      "bifrost": "springboard/sdk/src/print.rs",
+      "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs",
       "status": "partial",
-      "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list"
+      "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     }
   ],
   "gaps": [

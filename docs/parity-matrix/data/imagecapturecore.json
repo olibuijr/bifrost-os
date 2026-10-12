@@ -47,7 +47,7 @@
       "apple": "ICScannerDevice, ICScannerDeviceDelegate, availableFunctionalUnitTypes, requestSelect",
       "bifrost": "springboard/ui/src/scan_job.rs, springboard/ui/src/device_browser.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SANE or scanner transport and no scanner SDK API. springboard/sdk/src/print.rs covers printing only."
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SANE or scanner transport and no scanner SDK API. springboard/ui/src/print.rs covers printing only."
     },
     {
       "feature": "Scanning (overview, scan, transfer mode, document type)",

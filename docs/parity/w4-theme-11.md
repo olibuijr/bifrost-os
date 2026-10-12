@@ -14,7 +14,7 @@ Theme: "Print dialog plug-ins (PDEPlugIn, PDEPanel)" (docs/parity-matrix/themes.
     writes (`copies`, `media`, `landscape`, `page-top`, and so on), and refuses a plug-in whole when any check fails.
   - `PlugIns::set` checks the key, the kind and the range, and changes nothing on error.
   - `PlugIns::lp_options` renders every option as `-o key=value` in registration and panel order.
-- `springboard/sdk/src/print.rs`: `PrintOperation` gains `options` and `with_options(..)`. `lp_args` appends them after the
+- `springboard/ui/src/print.rs`: `PrintOperation` gains `options` and `with_options(..)`. `lp_args` appends them after the
   print info options and before `--`. Existing argument order is unchanged when no options are set.
 - `springboard/sdk/src/lib.rs`: one `pub mod print_panel;` line.
 

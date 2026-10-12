@@ -10,9 +10,9 @@
     {
       "feature": "HTTP and URL-based loading",
       "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)",
-      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
       "status": "partial",
-      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2"
+      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2 Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Connections (NWConnection) to a remote endpoint",

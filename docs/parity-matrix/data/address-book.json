@@ -45,9 +45,9 @@
     {
       "feature": "vCard import and export",
       "apple": "ABPersonCopyVCardRepresentation, ABPersonCreateWithVCardRepresentation",
-      "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export)",
+      "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export); wired: springboard/apps/contacts-desktop/src/exchange.rs (File menu: Import vCards..., Export vCard 3.0..., Export vCard 4.0...)",
       "status": "partial",
-      "note": "Export only, for sharing; no vCard import"
+      "note": "Export only, for sharing; no vCard import Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Contact photos",

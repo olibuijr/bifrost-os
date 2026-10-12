@@ -17,9 +17,9 @@
     {
       "feature": "URL Loading: caching",
       "apple": "URLCache, CachePolicy",
-      "bifrost": "springboard/sdk/src/url.rs (URLCache)",
+      "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional)",
       "status": "partial",
-      "note": "memory cache honouring Cache-Control and ETag; no disk cache or per-request cache policies"
+      "note": "memory cache honouring Cache-Control and ETag; no disk cache or per-request cache policies Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "URL Loading: cookies, credentials, authentication challenges",

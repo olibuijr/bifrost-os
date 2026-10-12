@@ -22,7 +22,7 @@ parser (`springboard/core/src/usb_descriptors.rs`), the pipe model (`usb_pipe.rs
 - `pub mod` lines in `springboard/core/src/lib.rs` and `springboard/sdk/src/lib.rs`.
 
 Not built: opening the device, sending the requests, and scanners. The app sandbox binds no USB device nodes
-(`springboard/src/bare/app_policy.rs`), and there is no transport. Print jobs still go through `springboard/sdk/src/print.rs`
+(`springboard/src/bare/app_policy.rs`), and there is no transport. Print jobs still go through `springboard/ui/src/print.rs`
 (CUPS). No scanner class is built: there is no USB scanner class in the framework's own documentation, so scanners
 stay a gap.
 

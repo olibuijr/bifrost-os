@@ -74,9 +74,9 @@
     {
       "feature": "Open and share targets by type",
       "apple": "Document types and handled types in Info.plist",
-      "bifrost": "springboard/sdk/src/share.rs (manifest handles), springboard/src/shell/sharing.rs:35 (open_types)",
+      "bifrost": "springboard/sdk/src/share.rs (manifest handles), springboard/src/shell/sharing.rs:35 (open_types); wired: springboard/src/shell/defaultapps.rs (CATEGORIES); springboard/src/shell/sharing.rs",
       "status": "partial",
-      "note": "receiving works from the manifest list; no per-app rank or default-handler API from the type"
+      "note": "receiving works from the manifest list; no per-app rank or default-handler API from the type Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Document read and write by type",

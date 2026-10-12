@@ -66,9 +66,9 @@
     {
       "feature": "Weather alerts",
       "apple": "WeatherAlert, WeatherSeverity, WeatherAvailability",
-      "bifrost": "springboard/ui/src/weather_alert.rs",
+      "bifrost": "springboard/ui/src/weather_alert.rs; wired: springboard/apps/weather-desktop/src/insights.rs (footer_lines alert availability via WeatherAvailability; alert_banner via most_severe, not drawn)",
       "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL requests no alert data, and no code in the repo models alerts. The notification layer (springboard/src/shell/usernotif.rs) has no weather source."
+      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL requests no alert data, and no code in the repo models alerts. The notification layer (springboard/src/shell/usernotif.rs) has no weather source. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Sun and moon events",
@@ -94,9 +94,9 @@
     {
       "feature": "Data attribution",
       "apple": "WeatherAttribution",
-      "bifrost": "springboard/ui/src/weather_attribution.rs",
+      "bifrost": "springboard/ui/src/weather_attribution.rs; wired: springboard/apps/weather-desktop/src/insights.rs (footer_lines, WeatherAttribution); springboard/apps/weather-desktop/src/weather.rs (footer loop after the MAP card)",
       "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI."
+      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     }
   ],
   "gaps": [

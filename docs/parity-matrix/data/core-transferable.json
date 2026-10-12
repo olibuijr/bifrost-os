@@ -31,9 +31,9 @@
     {
       "feature": "Copy and paste of typed items",
       "apple": "NSPasteboard-backed Transferable items, PasteButton",
-      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item); springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs (best method)",
+      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item); springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs (best method); wired: springboard/apps/clock-desktop/src/clock/stopwatch.rs (Stopwatch::export_text), springboard/sdk/src/pasteboard.rs",
       "status": "partial",
-      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Drag and drop of typed items",

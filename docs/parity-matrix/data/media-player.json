@@ -17,9 +17,9 @@
     {
       "feature": "Player queues",
       "apple": "MPMusicPlayerControllerQueue, MPMusicPlayerControllerMutableQueue, MPMusicPlayerApplicationController, queue descriptors",
-      "bifrost": "springboard/src/media/queue.rs, springboard/apps/music-desktop/src/music.rs (queue_add, play next/last)",
+      "bifrost": "springboard/src/media/queue.rs, springboard/apps/music-desktop/src/music.rs (queue_add, play next/last); wired: springboard/apps/music-desktop/src/music/upnext.rs (clear_upcoming); springboard/apps/music-desktop/src/music.rs (queue_clear, Target::QClear, draw_queue)",
       "status": "partial",
-      "note": "one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK"
+      "note": "one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Media library synchronization",
@@ -80,16 +80,16 @@
     {
       "feature": "Track navigation and seeking",
       "apple": "MPChangePlaybackPositionCommand, MPSeekCommandEvent, MPSkipIntervalCommand",
-      "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md",
+      "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md; wired: springboard/src/shell/control_center.rs, springboard/src/shell/services/now_playing.rs",
       "status": "partial",
-      "note": "seek and next or previous exist on the audio service; no skip-interval command object and no app-side command events"
+      "note": "seek and next or previous exist on the audio service; no skip-interval command object and no app-side command events Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Playback mode: repeat and shuffle",
       "apple": "MPChangeRepeatModeCommand, MPChangeShuffleModeCommand, MPRepeatType, MPShuffleType",
-      "bifrost": "springboard/src/svc.rs (SetShuffle, SetRepeat, Repeat, Live), springboard/src/media/queue.rs",
+      "bifrost": "springboard/src/svc.rs (SetShuffle, SetRepeat, Repeat, Live), springboard/src/media/queue.rs; wired: springboard/apps/music-desktop/src/music/upnext.rs (set_shuffle, shuffled order kept through a clear)",
       "status": "partial",
-      "note": "repeat and shuffle modes exist on the service; apps reach them through the audio client only"
+      "note": "repeat and shuffle modes exist on the service; apps reach them through the audio client only Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Playback rate and language options",

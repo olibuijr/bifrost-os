@@ -66,9 +66,9 @@
     {
       "feature": "Seek to position and scrubbing",
       "apple": "seekToPosition(_:), seekForward(beginAction:endAction:), seekBackward(beginAction:endAction:)",
-      "bifrost": "springboard/proto/src/svc.rs (Cmd::SeekMs); springboard/src/shell/audiosvc.rs:168 (Target::Scrubber hit test); springboard/sdk/src/widgets.rs (PlayerLayout.progress seek)",
+      "bifrost": "springboard/proto/src/svc.rs (Cmd::SeekMs); springboard/src/shell/audiosvc.rs:168 (Target::Scrubber hit test); springboard/sdk/src/widgets.rs (PlayerLayout.progress seek); wired: springboard/src/shell/control_center.rs (Touch::Scrub, media_bar), springboard/src/shell/services/now_playing.rs (seek, seek_length_ms, scrub_target_ms)",
       "status": "partial",
-      "note": "Absolute seek works through the lock card scrubber and the floating player progress track. Press-and-hold fast forward and rewind (begin and end actions) is not implemented."
+      "note": "Absolute seek works through the lock card scrubber and the floating player progress track. Press-and-hold fast forward and rewind (begin and end actions) is not implemented. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Playback rate",
@@ -94,9 +94,9 @@
     {
       "feature": "Playback state snapshot",
       "apple": "MediaPlaybackSnapshot",
-      "bifrost": "springboard/proto/src/svc.rs (Snapshot: playing, position_ms, duration_ms, shuffle, repeat, queue_len, volume, muted, error, live); springboard/sdk/src/lib.rs:87 (audio::Client subscription)",
+      "bifrost": "springboard/proto/src/svc.rs (Snapshot: playing, position_ms, duration_ms, shuffle, repeat, queue_len, volume, muted, error, live); springboard/sdk/src/lib.rs:87 (audio::Client subscription); wired: springboard/src/shell/services/now_playing.rs (extrapolate, Store::progress)",
       "status": "partial",
-      "note": "Apps can subscribe to the service snapshot through the audio client. The snapshot is the service's own state, not a Now Playing snapshot an app publishes, and it has no rate field."
+      "note": "Apps can subscribe to the service snapshot through the audio client. The snapshot is the service's own state, not a Now Playing snapshot an app publishes, and it has no rate field. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     }
   ],
   "gaps": [

@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/paperkit",
   "macos_since": "26.0",
   "status": "partial",
-  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor), springboard/apps/freeform-desktop/src/freeform.rs (canvas app), springboard/sdk/src/print.rs and springboard/sdk/src/share.rs (no markup API)",
+  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor), springboard/apps/freeform-desktop/src/freeform.rs (canvas app), springboard/ui/src/print.rs and springboard/sdk/src/share.rs (no markup API)",
   "summary": "PaperKit is an app-facing markup framework: view controllers, a vector-style markup data model with shapes, text, images, links and a loupe, and a feature set. BifrOSt has freehand drawing only (pen, marker, pencil, eraser, colours, undo) in the shell's screenshot editor and in the Freeform app, both flattened to PNG; neither exposes an SDK markup API, and no shape, text, image, link, loupe or editable data model exists.",
   "rea_evidence": "ev_a61684a00e10c784cc74a052a0be74a0d8fbc2e196f4f9b28c6df2b203c298c4",
   "features": [

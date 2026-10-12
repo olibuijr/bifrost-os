@@ -17,9 +17,9 @@
     {
       "feature": "Sessions and prompts",
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
-      "bifrost": "springboard/ui/src/model_session.rs (Session::prompt",
+      "bifrost": "springboard/ui/src/model_session.rs (Session::prompt; wired: springboard/apps/assistant-desktop/src/session.rs (session, request) used by src/view.rs send; model springboard/ui/src/model_session.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app"
+      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Streaming responses",
@@ -52,16 +52,16 @@
     {
       "feature": "Context window and token budget",
       "apple": "ContextOptions, managing the context window",
-      "bifrost": "springboard/ui/src/context_window.rs, springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs",
+      "bifrost": "springboard/ui/src/context_window.rs, springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs; wired: springboard/apps/assistant-desktop/src/session.rs (request_within, BUDGET_TOKENS) over springboard/ui/src/context_window.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no token counting or context management in the SDK; the Assistant sends its full message list"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no token counting or context management in the SDK; the Assistant sends its full message list Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Session transcripts",
       "apple": "Transcripts, transcript entries, segments and attachments",
-      "bifrost": "springboard/apps/assistant-desktop/src/model.rs (conversations as JSON files)",
+      "bifrost": "springboard/apps/assistant-desktop/src/model.rs (conversations as JSON files); wired: springboard/apps/assistant-desktop/src/session.rs (session) over springboard/ui/src/transcript.rs",
       "status": "partial",
-      "note": "the Assistant stores conversation history itself; there is no framework-level transcript type"
+      "note": "the Assistant stores conversation history itself; there is no framework-level transcript type Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Multimodal prompt attachments",
@@ -73,9 +73,9 @@
     {
       "feature": "Dynamic instructions and profiles",
       "apple": "LanguageModelSession.Profile, DynamicProfile, DynamicInstructions",
-      "bifrost": "springboard/ui/src/model_session.rs (Profile",
+      "bifrost": "springboard/ui/src/model_session.rs (Profile; wired: springboard/apps/assistant-desktop/src/session.rs (profile, fixed instructions only) over springboard/ui/src/model_session.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent"
+      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Custom language model provider",

@@ -10,30 +10,30 @@
     {
       "feature": "Locating the default app for a file or type",
       "apple": "LSCopyDefaultApplicationURLForURL, LSCopyDefaultApplicationURLForContentType, NSWorkspace.urlForApplication(toOpen:)",
-      "bifrost": "springboard/ui/src/launch.rs (Registry, Handler, Choice); springboard/src/shell/defaultapps.rs (default_app_for_file)",
+      "bifrost": "springboard/ui/src/launch.rs (Registry, Handler, Choice); springboard/src/shell/defaultapps.rs (default_app_for_file); wired: springboard/ui/src/launch.rs; springboard/src/shell/defaultapps.rs (default_app_for_file); springboard/src/shell/services/launch_services.rs (default_for_file)",
       "status": "parity",
-      "note": "Best declaration wins (most specific type, then rank, then registration order); the user's choice is kept per type. No Apple role-handler mask."
+      "note": "Best declaration wins (most specific type, then rank, then registration order); the user's choice is kept per type. No Apple role-handler mask. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Listing every app that can open an item",
       "apple": "LSCopyApplicationURLsForURL, LSCanURLAcceptURL, LSCopyApplicationURLsForBundleIdentifier",
-      "bifrost": "springboard/ui/src/launch.rs (Registry candidates for an Open With menu); springboard/src/shell/defaultapps.rs (views)",
+      "bifrost": "springboard/ui/src/launch.rs (Registry candidates for an Open With menu); springboard/src/shell/defaultapps.rs (views); wired: springboard/src/shell/services/launch_services.rs (open_with); springboard/sdk/src/launch_services.rs; springboard/ui/src/launch.rs",
       "status": "parity",
-      "note": "Candidate list exists for Open With. No LSCanURLAcceptURL-style acceptance check by bundle id."
+      "note": "Candidate list exists for Open With. No LSCanURLAcceptURL-style acceptance check by bundle id. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Opening items in an app",
       "apple": "LSOpenCFURLRef, LSOpenFromURLSpec, NSWorkspace.open(_:), open(_:withApplicationAt:configuration:)",
-      "bifrost": "springboard/sdk/src/workspace.rs (open, open_file, open_with); springboard/src/shell/workspace.rs (route_file, route_url)",
+      "bifrost": "springboard/sdk/src/workspace.rs (open, open_file, open_with); springboard/src/shell/workspace.rs (route_file, route_url); wired: springboard/src/shell/defaultapps.rs (desktop_open_link); springboard/src/shell/workspace.rs (route_url)",
       "status": "parity",
-      "note": "Apps pass document grants, never paths; links open only as web URLs or in an app that declares the scheme. Launch configuration (activation, arguments) is not in the API."
+      "note": "Apps pass document grants, never paths; links open only as web URLs or in an app that declares the scheme. Launch configuration (activation, arguments) is not in the API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Registering apps and URL schemes",
       "apple": "LSRegisterURL, LSSetDefaultHandlerForURLScheme, CFBundleURLTypes",
-      "bifrost": "springboard/src/shell/defaultapps.rs (manifest_handler, registry); docs/default-apps.md",
+      "bifrost": "springboard/src/shell/defaultapps.rs (manifest_handler, registry); docs/default-apps.md; wired: springboard/src/shell/defaultapps.rs; springboard/src/shell/services/launch_services.rs; springboard/src/bare/control.rs",
       "status": "partial",
-      "note": "Registration comes from installed manifests (handles, schemes), not a database API an app can call. Default scheme handler is set by the user in Settings only."
+      "note": "Registration comes from installed manifests (handles, schemes), not a database API an app can call. Default scheme handler is set by the user in Settings only. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Role handlers (viewer, editor, shell)",

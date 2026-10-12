@@ -66,23 +66,23 @@
     {
       "feature": "Formatting names and addresses",
       "apple": "CNContactFormatter, CNPostalAddressFormatter",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing)",
+      "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing); wired: springboard/apps/contacts-desktop/src/names.rs (NameOrder, shown); View menu in src/contacts.rs (main_menu, set_name_order)",
       "status": "partial",
-      "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "vCard serialization",
       "apple": "CNContactVCardSerialization",
-      "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card)",
+      "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu",
       "status": "partial",
-      "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API."
+      "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Predefined display preferences",
       "apple": "CNContactsUserDefaults",
-      "bifrost": "springboard/ui/src/contact_display.rs",
+      "bifrost": "springboard/ui/src/contact_display.rs; wired: springboard/apps/contacts-desktop/src/display_file.rs (name line in display.txt)",
       "status": "partial",
-      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order."
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Search index for system search",
