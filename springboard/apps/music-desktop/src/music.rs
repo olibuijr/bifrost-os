@@ -48,6 +48,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use upnext::UpNext;
+use bifrost_app::controls::media_changes::{MediaLibrary, Stamp};
+use bifrost_app::controls::media_sources::LoadOptions;
 
 /// Music's accent is the system tint like every other app (links and bar buttons are `LINK`).
 pub use bifrost_app::kit::ui::LINK as PINK;
@@ -167,7 +169,10 @@ struct Menu {
 }
 
 enum Done {
-    Scanned(Library),
+    /// A full scan: the library and the change stamps of its files.
+    Scanned(Library, Vec<Stamp>),
+    /// A check of the files on disk against the last scan (`MediaLibrary::observe`).
+    Stamps(Vec<Stamp>),
     Art { album: usize, kind: u8, image: Option<Image> },
     Stations(Result<Vec<Station>, String>),
     Logo { id: u64, kind: u8, image: Option<Image> },
@@ -251,6 +256,13 @@ pub struct Music {
     dirty: bool,
     /// a song to play once the scan has found it
     pending_open: Option<PathBuf>,
+    /// the music folders the library is scanned from, and the load options that choose their folders
+    roots: Vec<PathBuf>,
+    load: LoadOptions,
+    /// change observation of the library: the last scan's stamps, reported only while notifications are on
+    watch: MediaLibrary,
+    /// the clock time of the next check of the files on disk
+    next_check: f64,
 }
 
 /// Which player surface a scrub belongs to.
@@ -263,6 +275,32 @@ fn within(x: f32, y: f32, r: R) -> bool {
     r.contains(x, y)
 }
 
+/// How often the music folders are checked for added, removed or changed files.
+const LIBRARY_CHECK_SECS: f64 = 5.0;
+
+/// Scans the music folders: the library, and the stamps of its files for change observation.
+fn scan_now(roots: &[PathBuf], load: &LoadOptions) -> Done {
+    let files = library_files(roots, load);
+    let stamps = library::stamps_of(&files);
+    Done::Scanned(Library::build(library::scan_all(&files)), stamps)
+}
+
+/// The stamps of the files the music folders hold now.
+fn stamp_now(roots: &[PathBuf], load: &LoadOptions) -> Done {
+    Done::Stamps(library::stamps_of(&library_files(roots, load)))
+}
+
+/// The files the load options keep under `roots`.
+fn library_files(roots: &[PathBuf], load: &LoadOptions) -> Vec<PathBuf> {
+    let (walk, skip) = library::plan(roots, load);
+    library::find_files_except(&walk, &skip)
+}
+
+/// Unix seconds now, 0 when the clock is before the epoch.
+fn unix_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
 impl Music {
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, w: i32, h: i32) {
@@ -271,15 +309,15 @@ impl Music {
     }
 
     /// Starts scanning `roots`; playback goes through the audio service `client`.
-    pub fn new(w: i32, h: i32, roots: Vec<PathBuf>, client: Client) -> std::io::Result<Self> {
+    pub fn new(w: i32, h: i32, roots: Vec<PathBuf>, load: LoadOptions, client: Client) -> std::io::Result<Self> {
         let player = AudioPlayer::new(client);
         let volume = player.snapshot().volume;
         let pool = Jobs::new(Qos::Utility);
         let net = Jobs::new(Qos::Utility);
-        pool.spawn(move || {
-            let files = library::find_files(&roots);
-            Done::Scanned(Library::build(library::scan_all(&files)))
-        });
+        let (scan_roots, scan_load) = (roots.clone(), load.clone());
+        pool.spawn(move || scan_now(&scan_roots, &scan_load));
+        let mut watch = MediaLibrary::new();
+        watch.begin_generating();
         let snap = player.snapshot();
         Ok(Music {
             now_playing: nowplay::session(),
@@ -329,6 +367,10 @@ impl Music {
             np_swipe: None,
             dirty: true,
             pending_open: None,
+            roots,
+            load,
+            watch,
+            next_check: 0.0,
         })
     }
 
@@ -442,15 +484,23 @@ impl Music {
 
     fn apply(&mut self, done: Done) {
         match done {
-            Done::Scanned(lib) => {
+            Done::Scanned(lib, stamps) => {
                 self.album_of = (0..lib.songs.len()).map(|s| lib.album_of(s).unwrap_or(0)).collect();
                 self.path_id = lib.songs.iter().map(|s| (s.path.clone(), s.id)).collect();
                 self.library = lib;
                 self.scanning = false;
+                let _ = self.watch.observe(&stamps, unix_now());
                 self.rebuild_view();
                 self.restore_queue();
                 if let Some(path) = self.pending_open.take() {
                     self.play_path(&path);
+                }
+            }
+            Done::Stamps(stamps) => {
+                // a file was added, removed or changed since the last scan: scan again
+                if !self.scanning && self.watch.observe(&stamps, unix_now()).is_some() {
+                    self.start_scan();
+                    self.dirty = true;
                 }
             }
             Done::Art { album, kind, image } => {
@@ -1008,6 +1058,13 @@ impl Music {
     /// Replaces the queue with `ids` and plays `ids[start]`; with `shuffle` the
     /// songs after it are put in random order.
     fn play_songs(&mut self, ids: Vec<usize>, start: usize, shuffle: bool) {
+        // MIDI files are listed but have no sound yet: they are left out of the queue, and the start follows the song
+        let start_id = ids.get(start).copied();
+        let ids: Vec<usize> = ids.into_iter().filter(|&id| !self.library.songs[id].is_midi()).collect();
+        if ids.is_empty() {
+            return;
+        }
+        let start = start_id.and_then(|s| ids.iter().position(|&id| id == s)).unwrap_or(0);
         let paths = ids.iter().map(|&id| self.library.songs[id].path.clone()).collect();
         let mut queue = UpNext::new(paths, start);
         if shuffle {
@@ -1056,6 +1113,20 @@ impl Music {
     /// The app's Now Playing session, as published to Control Center (`app.rs`).
     pub fn session(&self) -> Option<&bifrost_app::now_playing::MediaSession> {
         self.now_playing.as_ref()
+    }
+
+    /// Starts a scan of the music folders in the background; the library is replaced when it finishes.
+    fn start_scan(&mut self) {
+        self.scanning = true;
+        let (roots, load) = (self.roots.clone(), self.load.clone());
+        self.pool.spawn(move || scan_now(&roots, &load));
+    }
+
+    /// Drops the library and scans the music folders again. Change observation starts again from the new scan.
+    pub fn reload_library(&mut self) {
+        self.watch.unload();
+        self.start_scan();
+        self.dirty = true;
     }
 
     /// Whether the library is still being scanned (the Dock tile shows progress meanwhile).
@@ -1398,6 +1469,11 @@ impl Music {
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         let mut moving = self.scroll.tick(t);
         self.fit_scroll(ui);
+        if !self.scanning && t >= self.next_check {
+            self.next_check = t + LIBRARY_CHECK_SECS;
+            let (roots, load) = (self.roots.clone(), self.load.clone());
+            self.pool.spawn(move || stamp_now(&roots, &load));
+        }
         if let Some((_, to, start)) = self.np_anim {
             moving = true;
             if springboard::shell::gestures::progress(start, t, SHEET_MS) >= 1.0 {

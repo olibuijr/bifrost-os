@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0
+
+- The library follows the music folders. Every few seconds Music checks the files it holds: a song that was added,
+  removed or changed (its size or modification time) starts a new scan, and the Songs, Albums and Artists lists update
+  on their own. Nothing needs a restart.
+- MIDI files (.mid, .midi) are listed in the library with their length, read from the file. They are shown under the
+  artist "MIDI file". Music cannot play them yet: there is no sound bank, so a MIDI song is not put in the queue.
+- Music folders can be left out of the library. A folder directly inside ~/Music can be excluded, and the folders
+  loaded can be limited to a list. The options are the defaults keys `music.library.loadFolders`,
+  `music.library.include` and `music.library.exclude` (one folder path per line).
+
 ## 1.3.0
 
 - Now Playing: Music keeps a system Now Playing session in step with what is playing. The current song (title, artist,

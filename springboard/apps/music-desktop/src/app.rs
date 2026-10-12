@@ -336,7 +336,8 @@ impl App for MusicApp {
             return;
         }
         let roots = vec![PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Music")];
-        let Ok(mut m) = music::Music::new(w, h, roots, Client::for_root(&shell_dir())) else { return };
+        let load = music::library::library_load_options(&ctx.defaults());
+        let Ok(mut m) = music::Music::new(w, h, roots, load, Client::for_root(&shell_dir())) else { return };
         m.enable_library_store(ctx.data_dir.join("Music"));
         m.enable_radio(ctx.data_dir.join("Radio"), Arc::new(Http::default()));
         self.app = Some(m);
