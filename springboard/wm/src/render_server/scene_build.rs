@@ -33,6 +33,7 @@ use smithay::{
     wayland::{
         compositor::{with_surface_tree_downward, TraversalAction},
         dmabuf::get_dmabuf,
+        seat::WaylandFocus,
         shell::wlr_layer::Layer as ShellLayer,
     },
 };

@@ -1675,7 +1675,6 @@
     #[test]
     fn a_drag_that_started_on_the_empty_desktop_is_swallowed() {
         let mut sh = desktop_shell();
-        sh.desk.as_mut().unwrap().grab = None;
         assert_eq!(sh.desk_event(Event::Move(600.0, 900.0), 10.0), Some(vec![]));
     }
 

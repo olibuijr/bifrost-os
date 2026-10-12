@@ -5,7 +5,7 @@
 //! Files are named by document grants the app already holds (`GrantId`), never by path: the shell resolves the grant
 //! and refuses a grant the app does not own. Every list and string is capped on encode and refused on decode.
 
-use super::{str_, u32_, DecodeError, Reader, ToApp, ToShell};
+use super::{str_, u32_, DecodeError, GrantId, Reader, ToApp, ToShell};
 
 pub const MAX_GRANTS: usize = 16;
 pub const MAX_ARG: usize = 1024;
