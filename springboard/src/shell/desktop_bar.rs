@@ -57,6 +57,8 @@ pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 impl Row {fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None}}}
+/// Accessors the chrome menu bar model reads (chrome_host/menubar.rs): the separator flag and the shortcut text.
+impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
 /// Rows of one app-published menu (`ToShell::AppMenus`): disabled items and submenu headers are labels, a checked item
 /// starts with a check mark, a submenu's children are indented. Invalid key equivalents are dropped.
 pub(super) fn app_menu_rows(slot:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
