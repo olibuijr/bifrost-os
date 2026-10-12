@@ -76,6 +76,9 @@ Task file: `tasks/boot/03-loader-progress.md` (git-ignored). Contract: `docs/boo
 
 ## Todo left
 
+- BLOCKER for the merge order: `bootweave-frame`'s `render`, `render_bar` and `bar_rect` are still `todo!("boot-02")`
+  stubs on this branch (task 02 fills them in `frame/src/render.rs`). The loader calls them at frame 0, so the loader
+  panics until task 02 is merged. Merge 02 before 03 is booted on Midget.
 - Animation during the loader itself. The loader does not wait for the bar (its budget is loader start to kernel start
   under 0.3 s), so the bar is drawn at the moments the loader is in control and then holds through S2 at the handed-off
   position. A periodic GOP timer event could animate the bar during the kernel stub's read, but the stub blocks inside
@@ -91,18 +94,20 @@ Task file: `tasks/boot/03-loader-progress.md` (git-ignored). Contract: `docs/boo
 
 ## Verification
 
-Host (done in this worktree, private target dir):
+Not built in this round (owner rule: no compiler in the task worktrees). The earlier session's `cargo check` of
+`bootweave-frame --tests` and of `bootweave/efi` for `x86_64-unknown-uefi` passed before the last commit. This round
+re-read the code by hand instead:
 
-```
-cd springboard
-CARGO_TARGET_DIR=/home/olibuijr/Projects/bifrost-os/springboard/target-agents-boot-03 cargo check --offline -j 2 -p bootweave-frame --tests
-CARGO_TARGET_DIR=/home/olibuijr/Projects/bifrost-os/springboard/target-agents-boot-03 cargo check --offline -j 2 --manifest-path bootweave/efi/Cargo.toml --target x86_64-unknown-uefi
-```
+- Every `#[test]` in `timing.rs` and `progress.rs` was worked out by hand against the code (the FNV-1a vectors,
+  the default record bytes, the averaging `(100*4+200)/5 = 120` and `(120*4+200)/5 = 136`, the kernel segment at
+  2500 ms, the Userspace hold at 3800 ms). The default record's checksum `0x71ea2db3` was recomputed with an
+  independent FNV-1a script, and it matches the bytes in step 1 below.
+- The UEFI calls in `efi/src/main.rs` were checked against the `uefi` 0.41.0 source: `Input::wait_for_key_event`
+  (`&self`, returns `Result<Event>`), `boot::wait_for_event(&[Event])`, `InputEx::read_key`,
+  `KeyState::key_shift_state: Option<KeyShiftState>`, `From<Char16> for u16`, and `runtime::set_variable`.
 
-Both pass. The name guard was not run in full: `tools/check-names.py` walks the whole springboard tree (including
-the assets symlink) and took more than two minutes here. A targeted scan of the changed files found no hits:
-`grep -inP "(?<![A-Za-z0-9])(apple|mac ?os|finder|safari|spotlight|appkit|uikit|ipad|iphone|ipados|xcode|siri|icloud|cupertino)" springboard/bootweave/frame/src/progress.rs springboard/bootweave/frame/src/timing.rs springboard/bootweave/efi/src/main.rs springboard/bootweave/efi/Cargo.toml`
-returns nothing. The lead should run `python3 tools/check-names.py` once after the merge.
+The name guard: `python3 tools/check-names.py` is run by the lead after the merge (it walks the whole springboard
+tree, including the assets symlink, and takes minutes). A targeted scan of the changed code found no platform names.
 
 Midget (lead, after `tools/build-efi-boot.sh` and install):
 
@@ -111,7 +116,7 @@ Midget (lead, after `tools/build-efi-boot.sh` and install):
    the 24 bytes below):
 
    ```
-   printf '\x42\x42\x54\x31\x2c\x01\x00\x00\xdc\x05\x00\x00\xd0\x07\x00\x00\x00\x00\x00\x00\xb3\x2d\xea\x71' > /tmp/boot-timing
+   printf '\x42\x42\x54\x31\x2c\x01\x00\x00\xdc\x05\x00\x00\xd0\x07\x00\x00\x00\x00\x00\x00\xb3\x2d\xea\x71' > <scratchpad>/boot-timing
    ```
 
    The bytes are `BBT1`, loader 300, kernel 1500, userspace 2000, samples 0, Dark, reserved, checksum `0x71ea2db3`.
@@ -121,7 +126,8 @@ Midget (lead, after `tools/build-efi-boot.sh` and install):
 3. Read the hand-off after the kernel is up:
    `ssh midget 'sudo dd if=/sys/firmware/efi/efivars/BifrostBootProgress-d1f0b07c-5b2e-4a8d-9c3f-6e4a2b7d9f10 bs=1 skip=4 2>/dev/null | xxd'`.
    Expected: 32 bytes, the first four `42 42 54 31`, loader_ms at 24 about 1 to 20 ms, shown_permille at 28 is 78
-   (the loader checkpoint, 300 / 3800 = 7.9 %, truncated). A corrupt record is a failed check.
+   (the loader checkpoint, 300 / 3800 = 7.9 %, truncated). If the loader ran past 300 ms, the value is a little
+   higher, because the kernel segment creeps from the checkpoint. A corrupt record is a failed check.
 4. Shift: power on, hold Shift and press a key during the firmware screens (before the loader), then look for the options
    screen (Current, Previous if `rollback.txt` exists). Choose with Down and Enter. Without a buffered key the screen
    does not open (see todo_left). Record the result in the report.
