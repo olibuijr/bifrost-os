@@ -5,13 +5,14 @@
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXXL};
 use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
-use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::{clipboard, Event, Surface, TextCache};
+use crate::convert::{Category, Converter};
 use crate::engine::{Engine, Key, Operator};
 use crate::eval::Angle;
 use crate::format::{format_number, localize};
@@ -34,6 +35,7 @@ const BAR_HISTORY: u32 = 1;
 const BAR_BASIC: u32 = 2;
 const BAR_SCIENTIFIC: u32 = 3;
 const BAR_DECIMAL: u32 = 4;
+const BAR_CONVERT: u32 = 5;
 
 /// How long a touch on the display must stay down to open Copy/Paste.
 const HOLD_MS: f64 = 500.0;
@@ -48,7 +50,17 @@ const ID_DISPLAY: u32 = 201;
 const ID_CLEAR_HISTORY: u32 = 202;
 const ID_COPY: u32 = 210;
 const ID_PASTE: u32 = 211;
+const ID_CATEGORY: u32 = 300;
+const ID_FROM: u32 = 310;
+const ID_SWAP: u32 = 311;
+const ID_TO: u32 = 312;
 const ID_HISTORY: u32 = 1000;
+
+/// Convert's two rows (categories, then units), in points, between the toolbar and the entry line.
+const CATEGORY_TOP_PT: f32 = 60.0;
+const CATEGORY_H_PT: f32 = 26.0;
+const UNITS_TOP_PT: f32 = 94.0;
+const UNITS_H_PT: f32 = 26.0;
 
 /// Corner radius of a key or capsule: half its shorter side, so it stays a capsule at any size.
 fn capsule(w: f32, h: f32) -> f32 {
@@ -155,6 +167,12 @@ enum Target {
     MenuCopy,
     MenuPaste,
     MenuDismiss,
+    ShowConvert,
+    LeaveConvert,
+    Category(usize),
+    From,
+    Swap,
+    To,
 }
 
 #[derive(Clone, Copy)]
@@ -189,6 +207,8 @@ pub struct Calculator {
     dirty: bool,
     cache: TextCache,
     cache_style: (u32, u32, bool),
+    /// Convert mode while set; the keypad then enters a conversion instead of a calculation.
+    convert: Option<Converter>,
 }
 
 /// Typographic operators for the scientific expression line.
@@ -240,6 +260,7 @@ impl Calculator {
             dirty: true,
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
+            convert: None,
         }
     }
 
@@ -258,7 +279,7 @@ impl Calculator {
     }
 
     fn sci_active(&self, ui: &Ui) -> bool {
-        self.w as f32 >= ui.pt(520.0) && (self.settings.scientific || self.w > self.h)
+        self.convert.is_none() && self.w as f32 >= ui.pt(520.0) && (self.settings.scientific || self.w > self.h)
     }
 
     fn save_settings(&self) {
@@ -360,8 +381,9 @@ impl Calculator {
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
             ToolbarItem::flexible_space(),
-            ToolbarItem::button(BAR_BASIC, "Basic").in_group(1).selected(!sci),
+            ToolbarItem::button(BAR_BASIC, "Basic").in_group(1).selected(!sci && self.convert.is_none()),
             ToolbarItem::button(BAR_SCIENTIFIC, "Scientific").in_group(1).selected(sci),
+            ToolbarItem::button(BAR_CONVERT, "Convert").in_group(1).selected(self.convert.is_some()),
             ToolbarItem::button(BAR_DECIMAL, sample),
         ])
     }
@@ -459,6 +481,16 @@ impl Calculator {
             nodes.push(node(ID_CLEAR_HISTORY, Role::Button, "Clear History".into(), String::new(), (px, py + ph - ui.pt(64.0), pw, ui.pt(64.0)), true));
             return nodes;
         }
+        if let Some(conv) = &self.convert {
+            for (index, category) in Category::ALL.iter().enumerate() {
+                let value = if *category == conv.category { "selected" } else { "" };
+                nodes.push(node(ID_CATEGORY + index as u32, Role::Button, category.title().into(), value.into(), self.category_rect(ui, index), true));
+            }
+            let [from, swap, to] = self.unit_rects(ui);
+            nodes.push(node(ID_FROM, Role::Button, format!("From: {}", conv.from_unit().name), String::new(), from, true));
+            nodes.push(node(ID_SWAP, Role::Button, "Swap Units".into(), String::new(), swap, true));
+            nodes.push(node(ID_TO, Role::Button, format!("To: {}", conv.to_unit().name), String::new(), to, true));
+        }
         for index in 0..self.key_count(ui) {
             nodes.push(node(ID_KEY + index as u32, Role::Button, self.key_name(index), String::new(), self.key_rect(ui, index), true));
         }
@@ -546,6 +578,8 @@ impl Calculator {
             let p = ui.pt(1.0);
             return match self.bar_layout(ui).hit(x / p, y / p)? {
                 BAR_HISTORY => Some(if self.history_open { Target::Done } else { Target::History }),
+                BAR_CONVERT => Some(if self.convert.is_some() { Target::LeaveConvert } else { Target::ShowConvert }),
+                BAR_BASIC | BAR_SCIENTIFIC if self.convert.is_some() => Some(Target::LeaveConvert),
                 BAR_BASIC if self.sci_active(ui) => Some(Target::Scientific),
                 BAR_SCIENTIFIC if !self.sci_active(ui) => Some(Target::Scientific),
                 BAR_DECIMAL => Some(Target::Decimal),
@@ -566,6 +600,11 @@ impl Calculator {
             }
             return (!Self::contains(self.panel(ui), x, y)).then_some(Target::Done);
         }
+        if self.convert.is_some() {
+            if let Some(target) = self.convert_hit(ui, x, y) {
+                return Some(target);
+            }
+        }
         if Self::contains(self.backspace_button(ui), x, y) {
             return Some(Target::Backspace);
         }
@@ -575,6 +614,66 @@ impl Calculator {
             }
         }
         Self::contains(self.display_rect(ui), x, y).then_some(Target::Display)
+    }
+
+    /// The five category segments of Convert, across the keypad's width.
+    fn category_rect(&self, ui: &Ui, index: usize) -> (f32, f32, f32, f32) {
+        let l = self.layout(ui);
+        let n = Category::ALL.len() as f32;
+        (l.x + l.width * index as f32 / n, ui.pt(CATEGORY_TOP_PT), l.width / n, ui.pt(CATEGORY_H_PT))
+    }
+
+    /// The From unit, the Swap control and the To unit, left to right, across the keypad's width.
+    fn unit_rects(&self, ui: &Ui) -> [(f32, f32, f32, f32); 3] {
+        let l = self.layout(ui);
+        let gap = ui.pt(SPACE_M);
+        let swap = ui.pt(96.0);
+        let chip = (l.width - swap - 2.0 * gap) / 2.0;
+        let (y, h) = (ui.pt(UNITS_TOP_PT), ui.pt(UNITS_H_PT));
+        [(l.x, y, chip, h), (l.x + chip + gap, y, swap, h), (l.x + l.width - chip, y, chip, h)]
+    }
+
+    fn convert_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        for index in 0..Category::ALL.len() {
+            if Self::contains(self.category_rect(ui, index), x, y) {
+                return Some(Target::Category(index));
+            }
+        }
+        let [from, swap, to] = self.unit_rects(ui);
+        if Self::contains(from, x, y) {
+            Some(Target::From)
+        } else if Self::contains(swap, x, y) {
+            Some(Target::Swap)
+        } else if Self::contains(to, x, y) {
+            Some(Target::To)
+        } else {
+            None
+        }
+    }
+
+    /// Convert's chrome: the category segments, then the From, Swap and To controls.
+    fn draw_convert(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some(conv) = self.convert.clone() else { return };
+        let l = self.layout(ui);
+        let (rx, ry, rw, rh) = (l.x, ui.pt(CATEGORY_TOP_PT), l.width, ui.pt(CATEGORY_H_PT));
+        s.fill_rrect(rx, ry, rw, rh, capsule(rw, rh), utility());
+        for (index, category) in Category::ALL.iter().enumerate() {
+            let rect = self.category_rect(ui, index);
+            let (x, y, w, h) = rect;
+            if *category == conv.category {
+                let inset = ui.pt(2.0);
+                s.fill_rrect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset, capsule(w, h), scientific());
+            }
+            self.label(s, ui, category.title(), MAC_CALLOUT_PT, LABEL.now(), rect);
+        }
+        let [from, swap, to] = self.unit_rects(ui);
+        let from_text = ui.fit(&format!("From: {}", conv.from_unit().name), MAC_BODY_PT, from.2 - ui.pt(SPACE_L));
+        s.fill_rrect(from.0, from.1, from.2, from.3, capsule(from.2, from.3), utility());
+        self.label(s, ui, &from_text, MAC_BODY_PT, LABEL.now(), from);
+        self.label(s, ui, "Swap", MAC_BODY_PT, LINK, swap);
+        let to_text = ui.fit(&format!("To: {}", conv.to_unit().name), MAC_BODY_PT, to.2 - ui.pt(SPACE_L));
+        s.fill_rrect(to.0, to.1, to.2, to.3, capsule(to.2, to.3), utility());
+        self.label(s, ui, &to_text, MAC_BODY_PT, LABEL.now(), to);
     }
 
     /// The scientific action behind `index` (0-based among scientific keys).
@@ -613,6 +712,17 @@ impl Calculator {
 
     /// Presses a basic key on whichever keypad is active.
     fn press_basic(&mut self, ui: &Ui, key: Key) {
+        if let Some(conv) = &mut self.convert {
+            match key {
+                Key::Digit(digit) => conv.digit(digit),
+                Key::Decimal => conv.decimal(),
+                Key::Sign => conv.sign(),
+                Key::Backspace => conv.backspace(),
+                Key::Clear => conv.clear(),
+                _ => {}
+            }
+            return;
+        }
         if !self.sci_active(ui) {
             self.engine.press(key);
             self.mirror_engine_history();
@@ -652,6 +762,9 @@ impl Calculator {
 
     /// The raw number text for the clipboard (ASCII, no separators).
     pub fn copy_text(&self, ui: &Ui) -> Option<String> {
+        if let Some(conv) = &self.convert {
+            return conv.result().map(format_number);
+        }
         if self.sci_active(ui) {
             return self.sci.current_value().map(format_number);
         }
@@ -664,6 +777,10 @@ impl Calculator {
         let Some(value) = paste::parse(text, self.settings.locale) else {
             return false;
         };
+        if let Some(conv) = &mut self.convert {
+            conv.set_value(value);
+            return true;
+        }
         if self.sci_active(ui) {
             self.sci.set_value(value);
         } else {
@@ -697,6 +814,10 @@ impl Calculator {
         let Some(value) = self.store.get(index).map(|e| e.value) else {
             return;
         };
+        if let Some(conv) = &mut self.convert {
+            conv.set_value(value);
+            return;
+        }
         if self.sci_active(ui) {
             self.sci.set_value(value);
         } else {
@@ -711,6 +832,9 @@ impl Calculator {
     }
 
     fn display_text(&self, ui: &Ui) -> String {
+        if let Some(conv) = &self.convert {
+            return conv.result().map_or_else(|| "Error".into(), format_number);
+        }
         if self.sci_active(ui) {
             pretty(&self.sci.display())
         } else {
@@ -719,6 +843,9 @@ impl Calculator {
     }
 
     fn expression_text(&self, ui: &Ui) -> String {
+        if let Some(conv) = &self.convert {
+            return format!("{} {}", conv.entry_text(), conv.from_unit().symbol);
+        }
         if self.sci_active(ui) {
             pretty(self.sci.expression_line())
         } else {
@@ -729,11 +856,27 @@ impl Calculator {
     fn activate(&mut self, ui: &Ui, target: Target) {
         match target {
             Target::Key(i) => self.press_index(ui, i),
-            Target::Backspace => {
-                if self.sci_active(ui) {
-                    self.sci_press(SciKey::Backspace);
-                } else {
-                    self.engine.press(Key::Backspace);
+            Target::Backspace => self.press_basic(ui, Key::Backspace),
+            Target::ShowConvert => self.convert = Some(Converter::default()),
+            Target::LeaveConvert => self.convert = None,
+            Target::Category(index) => {
+                if let (Some(conv), Some(category)) = (self.convert.as_mut(), Category::ALL.get(index)) {
+                    conv.select_category(*category);
+                }
+            }
+            Target::From => {
+                if let Some(conv) = self.convert.as_mut() {
+                    conv.next_from();
+                }
+            }
+            Target::To => {
+                if let Some(conv) = self.convert.as_mut() {
+                    conv.next_to();
+                }
+            }
+            Target::Swap => {
+                if let Some(conv) = self.convert.as_mut() {
+                    conv.swap();
                 }
             }
             Target::History => {
@@ -829,12 +972,13 @@ impl Calculator {
 
     pub fn describe(&self) -> String {
         format!(
-            "calculator_display={:?} calculator_history={} calculator_history_open={} calculator_scientific={} calculator_locale={}",
+            "calculator_display={:?} calculator_history={} calculator_history_open={} calculator_scientific={} calculator_locale={} calculator_convert={:?}",
             self.display(),
             self.store.len(),
             self.history_open,
             self.settings.scientific || self.w > self.h,
-            self.settings.locale.code()
+            self.settings.locale.code(),
+            self.convert.as_ref().map_or_else(|| "off".to_string(), Converter::describe)
         )
     }
 
@@ -911,7 +1055,7 @@ impl Calculator {
             return;
         }
         let key = KEYS[index];
-        let selected = !sci_layout
+        let selected = !sci_layout && self.convert.is_none()
             && matches!(key, Key::Operator(op) if self.engine.selected_operator() == Some(op));
         let pressed = self.pressed == Some(Target::Key(index));
         let is_utility = index < 3;
@@ -1053,7 +1197,10 @@ impl Calculator {
         let sci_on = self.sci_active(ui);
         let l = self.layout(ui);
         let locale = self.settings.locale;
-        let display = localize(&self.display_text(ui), locale);
+        let display = match &self.convert {
+            Some(conv) => conv.result_text(locale),
+            None => localize(&self.display_text(ui), locale),
+        };
         let mut pt = DISPLAY_LARGE_PT;
         let room = l.width - ui.pt(SPACE_XL);
         while ui.measure(&display, pt, Weight::Regular) > room && pt > MAC_LARGE_TITLE_PT {
@@ -1089,6 +1236,9 @@ impl Calculator {
         for i in 0..self.key_count(ui) {
             self.draw_key(s, ui, i);
         }
+        if self.convert.is_some() {
+            self.draw_convert(s, ui);
+        }
         if self.history_open {
             self.draw_history(s, ui);
         }
@@ -1106,12 +1256,16 @@ impl Calculator {
         let pressed = match self.pressed {
             Some(Target::History) | Some(Target::Done) => Some(BAR_HISTORY),
             Some(Target::Decimal) => Some(BAR_DECIMAL),
+            Some(Target::ShowConvert) | Some(Target::LeaveConvert) => Some(BAR_CONVERT),
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
             _ => None,
         };
         widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed);
     }
 }
+
+#[cfg(test)]
+mod convert_tests;
 
 #[cfg(test)]
 mod tests {

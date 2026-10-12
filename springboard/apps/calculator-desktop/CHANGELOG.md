@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- New Convert mode: a Convert segment in the toolbar, next to Basic and Scientific. Pick a category (Length, Mass,
+  Temperature, Speed or Volume), then the From and To units. Type the amount on the keypad; the converted value
+  shows on the display, and Swap exchanges the two units.
+- Length, mass and temperature are converted by the system's measurement model. Speed and volume use fixed factors.
+- Numbers in Convert use the calculator's language: grouping and decimal separators follow the Decimal button.
+- Copy and Paste work in Convert: Copy takes the converted value, Paste sets the amount.
+- Convert is not kept across a restart; the calculator opens as before.
+- Every Convert control is published as a named control for accessibility.
+
 ## 1.3.2 — 2026-10-11
 
 - Edit menu: the app no longer adds its own Edit menu (it duplicated the shell's). Copy and Paste are offered to the

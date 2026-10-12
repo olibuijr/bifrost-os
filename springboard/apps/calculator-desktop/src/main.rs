@@ -2,6 +2,7 @@
 //! unchanged, hosted through the SDK.
 
 mod calc;
+mod convert;
 mod engine;
 mod eval;
 mod format;
