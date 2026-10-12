@@ -12,6 +12,7 @@
 
 use crate::multipart::MultipartBody;
 use crate::url::URLRequest;
+use std::collections::BTreeMap;
 
 /// `SLRequestMethod`: the HTTP methods the request object supports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,9 +116,101 @@ fn encode(s: &str, form: bool) -> String {
     out
 }
 
+/// The service types the system has registered, each with whether it can take a request now. This answers the same
+/// question as the framework's `isAvailable(forServiceType:)`. No service type is registered by default, so every
+/// check is false until a service is added. This is the model only: nothing in the shell registers services yet.
+#[derive(Clone, Debug, Default)]
+pub struct ServiceTypes {
+    services: BTreeMap<String, bool>,
+}
+
+impl ServiceTypes {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a service type, or replaces its availability when it is already registered.
+    pub fn register(&mut self, service_type: &str, available: bool) {
+        self.services.insert(service_type.to_string(), available);
+    }
+
+    /// Changes the availability of a registered type. Returns false when the type is not registered.
+    pub fn set_available(&mut self, service_type: &str, available: bool) -> bool {
+        match self.services.get_mut(service_type) {
+            Some(value) => {
+                *value = available;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Removes a registered type. Returns false when it was not registered.
+    pub fn remove(&mut self, service_type: &str) -> bool {
+        self.services.remove(service_type).is_some()
+    }
+
+    /// Whether a request can be sent for the type now. An unregistered type is not available.
+    pub fn is_available(&self, service_type: &str) -> bool {
+        self.services.get(service_type).copied().unwrap_or(false)
+    }
+
+    /// Number of registered service types, available or not.
+    pub fn len(&self) -> usize {
+        self.services.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_registry_reports_no_service_available() {
+        let services = ServiceTypes::new();
+        assert_eq!(services.len(), 0);
+        assert!(!services.is_available("mail"));
+    }
+
+    #[test]
+    fn a_registered_type_is_available_only_when_marked_so() {
+        let mut services = ServiceTypes::new();
+        services.register("mail", true);
+        services.register("notes", false);
+        assert!(services.is_available("mail"));
+        assert!(!services.is_available("notes"));
+        assert_eq!(services.len(), 2);
+    }
+
+    #[test]
+    fn set_available_changes_only_a_registered_type() {
+        let mut services = ServiceTypes::new();
+        services.register("mail", true);
+        assert!(services.set_available("mail", false));
+        assert!(!services.is_available("mail"));
+        assert!(!services.set_available("ghost", true));
+        assert!(!services.is_available("ghost"));
+        assert_eq!(services.len(), 1);
+    }
+
+    #[test]
+    fn registering_again_replaces_the_availability() {
+        let mut services = ServiceTypes::new();
+        services.register("mail", true);
+        services.register("mail", false);
+        assert_eq!(services.len(), 1);
+        assert!(!services.is_available("mail"));
+    }
+
+    #[test]
+    fn remove_forgets_the_type_and_reports_whether_it_was_there() {
+        let mut services = ServiceTypes::new();
+        services.register("mail", true);
+        assert!(services.remove("mail"));
+        assert!(!services.is_available("mail"));
+        assert!(!services.remove("mail"));
+        assert_eq!(services.len(), 0);
+    }
 
     #[test]
     fn get_puts_parameters_in_the_query_string() {
