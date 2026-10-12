@@ -1121,8 +1121,7 @@ impl ToApp {
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -1238,11 +1237,10 @@ impl ToApp {
                 }
                 ToApp::DocBatch { request, count }
             }
-            t @ 50..=59 => rich::decode_app(t, &mut r)?,
+            t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
             t @ 100..=109 => workspace::decode_app(t, &mut r)?,
-            t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })
     }
@@ -1365,8 +1363,7 @@ impl ToShell {
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);
@@ -1749,13 +1746,12 @@ impl ToShell {
                 }
                 ToShell::Materials(list)
             }
-            t @ 0x140..=0x14f => rich::decode_shell(t, &mut r)?,
+            t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_shell(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_shell(t, &mut r)?,
             t @ 0x230..=0x23f => workspace::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
             t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
-            t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })
     }
@@ -1764,6 +1760,35 @@ impl ToShell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tag_of(p: &[u8]) -> u32 {
+        u32::from_le_bytes(p[..4].try_into().unwrap())
+    }
+
+    /// Each rich message owns one tag and decodes back to itself; the 0x1d0 block is shared by both directions, so a
+    /// tag must decode as the variant that encodes to it (ToShell 0x1d0/0x1d2, ToApp 0x1d1..0x1d3).
+    #[test]
+    fn distributed_and_service_messages_round_trip_on_their_tags() {
+        let post = ToShell::DistPost { name: "n".into(), user_info: vec![("k".into(), "v".into())] };
+        assert_eq!(tag_of(&post.encode()), 0x1d0);
+        assert_eq!(ToShell::decode(&post.encode()), Ok(post));
+
+        let call = ToShell::ServiceCall { request: 7, service: "dock".into(), method: "badge".into(), body: "null".into() };
+        assert_eq!(tag_of(&call.encode()), 0x1d2);
+        assert_eq!(ToShell::decode(&call.encode()), Ok(call));
+
+        let dist = ToApp::DistNotify { name: "n".into(), user_info: vec![] };
+        assert_eq!(tag_of(&dist.encode()), 0x1d1);
+        assert_eq!(ToApp::decode(&dist.encode()), Ok(dist));
+
+        let reply = ToApp::ServiceReply { request: 7, ok: false, body: "no such method".into() };
+        assert_eq!(tag_of(&reply.encode()), 0x1d2);
+        assert_eq!(ToApp::decode(&reply.encode()), Ok(reply));
+
+        let event = ToApp::ServiceEvent { service: "now-playing".into(), event: "command".into(), body: "{}".into() };
+        assert_eq!(tag_of(&event.encode()), 0x1d3);
+        assert_eq!(ToApp::decode(&event.encode()), Ok(event));
+    }
 
     #[test]
     fn keychain_messages_round_trip() {
