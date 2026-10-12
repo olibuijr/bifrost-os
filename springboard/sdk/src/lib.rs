@@ -149,6 +149,8 @@ pub mod auth_events;
 pub mod identity_events;
 pub mod route_events;
 pub mod bluetooth_events;
+pub mod bluetooth_picker;
+pub mod wireless_accessory_browser;
 pub use process_info::{Activity, ActivityOptions, ProcessInfo, ThermalState};
 /// Mach-style host statistics (`host_statistics64`, `task_info`, `os_proc_available_memory`); see `docs/bifrost-ui.md`.
 pub use bifrost_core::host;
