@@ -963,3 +963,8 @@ pub mod remote_view;
 pub mod x25519;
 pub mod web_usage;
 pub mod browser_settings;
+
+// Media export, frame grab and render timeline models (parity wave 5, AVFoundation playback and editing)
+pub mod export_session;
+pub mod frame_grab;
+pub mod render_synchronizer;
