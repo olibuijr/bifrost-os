@@ -4,6 +4,7 @@
 use crate::cursor;
 use crate::model::{Buffer, Levels, LogEntry, Query, MAX_ENTRIES};
 use crate::signposts;
+use crate::security::{self, Security};
 use crate::source::{Coredumps, Follow, Journal, LogFile, Sink, Source};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -45,6 +46,7 @@ const PENDING_MAX: usize = 20_000;
 const ROW_LIVE: u32 = 1;
 const ROW_CRASH: u32 = 2;
 const ROW_SIGNPOST: u32 = 3;
+const ROW_SECURITY: u32 = 4;
 const FILE_ROW: u32 = 100;
 
 // Toolbar item ids (also the published control ids).
@@ -60,6 +62,7 @@ pub enum View {
     Live,
     Crashes,
     Signposts,
+    Security,
     File(usize),
 }
 
@@ -181,6 +184,7 @@ impl Console {
             View::Live => Box::new(Journal),
             View::Crashes => Box::new(Coredumps),
             View::Signposts => Box::new(Journal),
+            View::Security => Box::new(Security),
             View::File(i) => Box::new(LogFile { path: self.files.get(i).cloned().unwrap_or_default() }),
         };
         self.view = view;
@@ -200,6 +204,9 @@ impl Console {
                 }
             }
             Err(err) => self.status = err,
+        }
+        if view == View::Security {
+            self.status = security::NOTE.to_string();
         }
         self.rebuild();
         self.stick = self.is_live() && self.streaming;
@@ -332,6 +339,7 @@ impl Console {
         items.push(SidebarItem::header("Reports"));
         items.push(SidebarItem::row(ROW_CRASH, "Crash Reports").with_symbol("xmark.circle.fill"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
+        items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
         items.push(SidebarItem::header("Log Files"));
         for (i, f) in self.files.iter().enumerate() {
             let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -342,6 +350,7 @@ impl Console {
             View::Live => ROW_LIVE,
             View::Crashes => ROW_CRASH,
             View::Signposts => ROW_SIGNPOST,
+            View::Security => ROW_SECURITY,
             View::File(i) => FILE_ROW + i as u32,
         }));
         list
@@ -360,6 +369,7 @@ impl Console {
             ROW_LIVE => View::Live,
             ROW_CRASH => View::Crashes,
             ROW_SIGNPOST => View::Signposts,
+            ROW_SECURITY => View::Security,
             id if id >= FILE_ROW && ((id - FILE_ROW) as usize) < self.files.len() => View::File((id - FILE_ROW) as usize),
             _ => return,
         };
@@ -691,6 +701,7 @@ impl Console {
             View::Live => "No Messages",
             View::Crashes => "No Crash Reports",
             View::Signposts => "No Signposts",
+            View::Security => "No Security Events",
             View::File(_) => "No Log Entries",
         }
     }

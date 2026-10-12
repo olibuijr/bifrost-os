@@ -123,6 +123,15 @@ impl Source for Journal {
         });
         Ok(Some(Follow { child, reader, done }))
     }
+
+    /// The process's code requirements (`identity::detail_for_pid`): its executable, hash and checks. The testing
+    /// kit's fixed rows have no live process, so they get no detail.
+    fn detail(&mut self, e: &LogEntry) -> Option<String> {
+        if bifrost_app::testing::pinned() {
+            return None;
+        }
+        crate::identity::detail_for_pid(e.pid)
+    }
 }
 
 /// The crash reports systemd-coredump kept, from `coredumpctl`.
