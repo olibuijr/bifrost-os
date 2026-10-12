@@ -125,6 +125,7 @@ pub mod markup;
 pub mod log;
 pub mod signpost;
 pub mod dispatch;
+pub mod actor;
 pub mod synchronization;
 pub mod fswatch;
 pub mod file_coordination;
