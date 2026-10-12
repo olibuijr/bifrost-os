@@ -43,6 +43,8 @@ pub mod keychain;
 pub mod gss_status;
 pub mod gss_oid;
 pub mod gss_buffer;
+pub mod dispatch_data;
+pub mod csv_writer;
 pub mod accounts;
 pub mod testing;
 pub mod usernotif;
