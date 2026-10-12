@@ -268,12 +268,11 @@ mod tests {
     #[test]
     fn the_bluetooth_sink_is_the_connected_audio_device() {
         use crate::bare::bluetooth::{Device, State, Status};
-        let dev = |name: &str, connected: bool, audio: bool| Device { addr: "AA:BB:CC:DD:EE:01".into(), kind: 0, name: name.into(), paired: true, connected, audio, rssi: None };
+        let dev = |name: &str, connected: bool, audio: bool| Device { addr: "AA:BB:CC:DD:EE:01".into(), kind: 0, name: name.into(), paired: true, connected, audio, rssi: None, class: None };
         let mut bt = Status { state: State::On, devices: vec![dev("Keyboard", true, false), dev("Buds", false, true)], ..Status::default() };
         assert_eq!(bluetooth_sink(&bt), None, "a keyboard or a disconnected headset is not a sink");
         bt.devices[1].connected = true;
-        assert_eq!(bluetooth_sink(&bt), Some("Buds"));
-    }
+        assert_eq!(bluetooth_sink(&bt), Some("Buds"));    }
 
     fn cand(name: &str, items: &[&str]) -> Candidate {
         Candidate { name: name.into(), items: items.iter().map(|s| s.to_string()).collect() }

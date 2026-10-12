@@ -295,6 +295,16 @@ mod tests {
     }
 
     #[test]
+    fn a_connected_bluetooth_audio_device_takes_the_output_default() {
+        let mut d = Defaults::new();
+        sync(&mut d, &present(Route::Speaker, None, false));
+        assert_eq!(d.set_default(Role::Output, BLUETOOTH), Err(DeviceError::NotFound), "not connected, so not listed");
+        sync(&mut d, &present(Route::Speaker, Some("Buds"), false));
+        d.set_default(Role::Output, BLUETOOTH).unwrap();
+        assert_eq!(d.default_for(Role::Output).map(|x| x.id.as_str()), Some(BLUETOOTH));
+    }
+
+    #[test]
     fn a_microphone_is_never_the_output_default() {
         let mut d = Defaults::new();
         sync(&mut d, &present(Route::Speaker, None, true));

@@ -1870,6 +1870,7 @@ impl Settings {
                 vec![]
             }
             Action::Bluetooth(c) => vec![Effect::Bluetooth(c)],
+            Action::AudioOutput => vec![Effect::BluetoothOutput],
             Action::OpenFile(path) => {
                 self.view_request = Some(path);
                 vec![]

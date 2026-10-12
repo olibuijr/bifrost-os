@@ -274,6 +274,8 @@ pub enum Action {
     Wifi(WifiAction),
     /// a Bluetooth change straight from a row (pair, connect, disconnect)
     Bluetooth(crate::bare::bluetooth::Cmd),
+    /// make the connected Bluetooth audio device the sound output (audio-devices `set_default`)
+    AudioOutput,
     /// shows a text file in Files' viewer (a crash log)
     OpenFile(std::path::PathBuf),
     /// Default Apps: make this app (key) the default for the category (index)
@@ -567,13 +569,22 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 (true, _) => Item::new("Disconnect").tint(Tint::Blue).action(Action::Bluetooth(Cmd::Disconnect(d.addr.clone()))),
                 (false, _) => Item::new("Connect").tint(Tint::Blue).action(Action::Bluetooth(Cmd::Connect(d.addr.clone()))),
             };
+            // A connected headset, speaker or headphones can take the sound: the audio-devices service makes it the output.
+            let mut head = vec![link];
+            if d.connected && d.audio && !busy {
+                head.push(Item::new("Use for Sound Output").tint(Tint::Blue).action(Action::AudioOutput));
+            }
             page(
                 d.label(),
                 false,
                 vec![
-                    Group::new(vec![link]),
+                    Group::new(head),
                     Group::new(vec![Item::new("Forget This Device").tint(Tint::Blue).action(Action::Run(Command::ForgetBluetooth(d.addr.clone())))]),
-                    rows(vec![("Address", d.addr.clone()), ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string())]),
+                    rows(vec![
+                        ("Address", d.addr.clone()),
+                        ("Type", d.type_label().to_string()),
+                        ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string()),
+                    ]),
                     // The service browser model: no service records are read yet, so the list is empty and says so.
                     Group::new(vec![Item::new("Services").value("None listed")]).header("SERVICES").footer(super::services::bluetooth_service::SERVICE_NOTE),
                 ],
@@ -1525,7 +1536,7 @@ mod tests {
     }
 
     fn bt_device(addr: &str, name: &str, paired: bool, connected: bool) -> crate::bare::bluetooth::Device {
-        crate::bare::bluetooth::Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: true, rssi: None }
+        crate::bare::bluetooth::Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: true, rssi: None, class: None }
     }
 
     #[test]
@@ -1581,6 +1592,11 @@ mod tests {
         let m = Model { detail: "Buds", ..model(&info, &opts) };
         let detail = spec(PageId::BluetoothDetail, &m);
         assert_eq!(detail.groups[0].items[0].action, Action::Bluetooth(Cmd::Disconnect("A".into())));
+        // a connected audio device can take the sound; the type row says what the class says, and "Unknown" with no class
+        assert_eq!(detail.groups[0].items[1].label.as_str(), "Use for Sound Output");
+        assert_eq!(detail.groups[0].items[1].action, Action::AudioOutput);
+        let kind = &detail.groups[2].items[1];
+        assert_eq!((kind.label.as_str(), kind.value.as_str()), ("Type", "Unknown"));
         let services = &detail.groups[3];
         assert_eq!((services.items[0].label.as_str(), services.items[0].value.as_str()), ("Services", "None listed"));
         assert_eq!(services.header.as_deref(), Some("SERVICES"));

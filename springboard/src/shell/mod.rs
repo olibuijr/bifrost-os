@@ -280,6 +280,8 @@ pub enum Effect {
     Wifi(WifiAction),
     /// a Bluetooth change: power, scan, pair, connect, forget
     Bluetooth(crate::bare::bluetooth::Cmd),
+    /// Settings › Bluetooth: send the sound to the connected Bluetooth audio device (`Shell::use_bluetooth_output`)
+    BluetoothOutput,
     /// media volume 0..=1 from the Control Center slider
     Volume(f32),
     /// a timer or alarm went off: sound it
@@ -1383,6 +1385,13 @@ impl Shell {
     /// The media volume 0..=1 the Control Center slider shows.
     pub fn volume(&self) -> f32 {
         self.cc.volume
+    }
+
+    /// Makes the connected Bluetooth audio device the default output through the audio-devices service. An error
+    /// (no such device connected) comes back as text for the log.
+    pub fn use_bluetooth_output(&mut self, t: f64) -> Result<(), String> {
+        let body = format!("{{\"role\":\"output\",\"id\":\"{}\"}}", services::audio_devices::BLUETOOTH);
+        self.service_call("bifrost-shell", "audio-devices", "set_default", &body, t).map(|_| ())
     }
 
     /// Syncs the slider to a level set elsewhere (the persisted one at
