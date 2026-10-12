@@ -124,6 +124,7 @@ enum Hit {
     TrimStart,
     TrimEnd,
     Export,
+    ExportCd,
     Nothing,
 }
 
@@ -375,6 +376,9 @@ impl Daw {
                 }
                 if rect_contains((w - 770.0, 16.0, 100.0, 32.0), x, y) {
                     return Hit::Export;
+                }
+                if self.trim.is_none() && rect_contains((w - 880.0, 16.0, 100.0, 32.0), x, y) {
+                    return Hit::ExportCd;
                 }
                 if self.trim.is_some() {
                     if rect_contains((w - 880.0, 16.0, 100.0, 32.0), x, y) {
@@ -643,6 +647,7 @@ impl Daw {
             Hit::TrimStart => self.nudge_trim(true),
             Hit::TrimEnd => self.nudge_trim(false),
             Hit::Export => self.export(),
+            Hit::ExportCd => self.export_cd(),
             Hit::Arrange => self.view = View::Arrangement,
             Hit::Rack => {
                 if let Some((r, _)) = self.selected_clip {
@@ -778,15 +783,39 @@ impl Daw {
     /// Exports the trimmed region, or the whole song when not trimming, as a 32-bit float WAV in `exports/`. The
     /// render runs here, so a long song takes a moment.
     fn export(&mut self) {
+        self.export_region(false);
+    }
+
+    /// Exports the same region as a 16-bit WAV at 44.1 kHz, the CD rate, through the PCM conversion model.
+    fn export_cd(&mut self) {
+        self.export_region(true);
+    }
+
+    fn export_region(&mut self, cd: bool) {
         let Some(p) = self.project.as_ref() else { return };
         let (start, end) = match self.trim.take() {
             Some(mut session) => session.finish(TrimResult::Ok).unwrap_or((0.0, song_seconds(p))),
             None => (0.0, song_seconds(p)),
         };
         let rendered = render::render(p, &RenderOpts::default());
-        let bytes = export::region_wav(&rendered, start, end);
+        let (bytes, tag) = if cd {
+            match export::converted_wav(&rendered, start, end, export::CD_RATE) {
+                Ok(b) => (b, "-cd"),
+                Err(e) => {
+                    self.status = format!("Export failed: {e}");
+                    return;
+                }
+            }
+        } else {
+            (export::region_wav(&rendered, start, end), "")
+        };
         let dir = self.store_dir.join("exports");
-        let file = dir.join(format!("{}-{}-{}.wav", p.id, (start * 1000.0).round() as u64, (end * 1000.0).round() as u64));
+        let file = dir.join(format!(
+            "{}-{}-{}{tag}.wav",
+            p.id,
+            (start * 1000.0).round() as u64,
+            (end * 1000.0).round() as u64
+        ));
         let result = std::fs::create_dir_all(&dir).and_then(|()| wav::write_file(&file, &bytes));
         self.status = match result {
             Ok(()) => format!("Exported {}", file.display()),
@@ -895,6 +924,8 @@ impl Daw {
         if trimming {
             trim_buttons.push((w - 880.0, "Start +1 Bar", false));
             trim_buttons.push((w - 990.0, "End -1 Bar", false));
+        } else {
+            trim_buttons.push((w - 880.0, "Export CD", false));
         }
         for (x, label, on) in trim_buttons {
             s.fill_rect(x as usize, 16, 100, 32, if on { ui::TINT } else { ui::FIELD_BG.now() });
@@ -1159,6 +1190,9 @@ impl Daw {
                     (7, if self.trim.is_some() { "Cancel Trim" } else { "Trim" }, (w - 660.0, 16.0, 100.0, 32.0)),
                     (8, "Export", (w - 770.0, 16.0, 100.0, 32.0)),
                 ];
+                if self.trim.is_none() {
+                    buttons.push((11, "Export CD", (w - 880.0, 16.0, 100.0, 32.0)));
+                }
                 if self.trim.is_some() {
                     buttons.push((9, "Start +1 Bar", (w - 880.0, 16.0, 100.0, 32.0)));
                     buttons.push((10, "End -1 Bar", (w - 990.0, 16.0, 100.0, 32.0)));
