@@ -623,6 +623,8 @@ pub mod shading;
 pub mod composition;
 pub mod candidates;
 pub mod audio_mix;
+pub mod video_settings;
+pub mod video_transition;
 pub mod audio_render;
 pub mod plugin_host;
 pub mod plugin_view;
