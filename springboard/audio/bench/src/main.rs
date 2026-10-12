@@ -57,8 +57,15 @@ fn main() {
         println!("{USAGE}");
         return;
     }
-    let result = args::parse(&argv).and_then(|a| run(&a).map(|r| (a, r)));
-    match result {
+    let parsed = match args::parse(&argv) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("bifrost-audio-bench: {e}\n{USAGE}");
+            std::process::exit(2);
+        }
+    };
+    // a run that fails is not a usage error: say why, without the usage text
+    match run(&parsed).map(|r| (parsed, r)) {
         Ok((a, report)) => {
             if a.json {
                 println!("{}", report.to_json().to_string());
@@ -67,8 +74,8 @@ fn main() {
             }
         }
         Err(e) => {
-            eprintln!("bifrost-audio-bench: {e}\n{USAGE}");
-            std::process::exit(2);
+            eprintln!("bifrost-audio-bench: {e}");
+            std::process::exit(1);
         }
     }
 }

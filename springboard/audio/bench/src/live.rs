@@ -190,7 +190,7 @@ struct ProcRun<R> {
 impl LiveDevice {
     /// Connects to `bifrost-audiod` and picks the device (`want`: a uid; default: the default output).
     pub fn connect(want: Option<&str>, fallback_rate: u32) -> Result<LiveDevice, String> {
-        let system = System::connect(CLIENT).map_err(|e| format!("cannot reach bifrost-audiod: {e:?}"))?;
+        let system = System::connect_detailed(bifrost_audio_types::control::CONTROL_SOCKET, CLIENT).map_err(|e| format!("cannot reach bifrost-audiod: {e}"))?;
         let devices = system.devices().map_err(|e| format!("bifrost-audiod device list: {e:?}"))?;
         let uids: Vec<String> = devices.iter().map(uid_of).collect();
         let default = system.default_device(Role::Output).ok().and_then(|d| devices.iter().position(|x| x.id == d.id));

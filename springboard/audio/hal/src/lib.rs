@@ -38,6 +38,31 @@ struct Inner {
     next_listener: AtomicU64,
 }
 
+/// Why [`System::connect_detailed`] failed: the step, the socket path, the audio error and the OS error if any.
+#[derive(Debug)]
+pub struct ConnectError {
+    pub path: String,
+    /// "socket", "path", "connect" or "hello".
+    pub stage: &'static str,
+    pub error: AudioError,
+    pub os: Option<std::io::Error>,
+}
+
+impl std::fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}: ", self.stage, self.path)?;
+        match (&self.os, self.stage, self.error) {
+            (Some(e), _, _) => write!(f, "{e}"),
+            (None, "hello", AudioError::Io) => write!(f, "connected, but the server sent no Welcome within {} s", conn::REPLY_TIMEOUT.as_secs()),
+            (None, "hello", AudioError::NoServer) => write!(f, "connected, but the server closed the connection during the handshake"),
+            (None, "hello", AudioError::Protocol) => write!(f, "handshake refused (this client speaks protocol {PROTOCOL_VERSION}; the server another)"),
+            (None, _, e) => write!(f, "{e:?}"),
+        }
+    }
+}
+
+impl std::error::Error for ConnectError {}
+
 /// One IO procedure's client side.
 struct ProcEntry {
     region: Arc<Region>,
@@ -125,10 +150,16 @@ impl System {
 
     /// Like [`System::connect`] with another socket path (tests, a private server).
     pub fn connect_path(path: &str, client: &str) -> Result<System, AudioError> {
+        System::connect_detailed(path, client).map_err(|e| e.error)
+    }
+
+    /// Like [`System::connect_path`], but a failure says which step failed, the path and the OS error.
+    pub fn connect_detailed(path: &str, client: &str) -> Result<System, ConnectError> {
+        let fail = |stage: &'static str, error: AudioError, os: Option<std::io::Error>| ConnectError { path: path.to_string(), stage, error, os };
         // SAFETY: plain socket(2); a negative result is an error.
         let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
         if fd < 0 {
-            return Err(AudioError::Io);
+            return Err(fail("socket", AudioError::Io, Some(std::io::Error::last_os_error())));
         }
         // SAFETY: socket returned a fresh fd.
         let sock = unsafe { OwnedFd::from_raw_fd(fd) };
@@ -137,7 +168,7 @@ impl System {
         addr.sun_family = libc::AF_UNIX as _;
         let bytes = path.as_bytes();
         if bytes.len() >= addr.sun_path.len() {
-            return Err(AudioError::BadValue);
+            return Err(fail("path", AudioError::BadValue, None));
         }
         for (d, s) in addr.sun_path.iter_mut().zip(bytes) {
             *d = *s as _;
@@ -145,9 +176,9 @@ impl System {
         // SAFETY: `addr` is a valid sockaddr_un and the length is its size.
         let r = unsafe { libc::connect(sock.as_raw_fd(), &addr as *const _ as *const libc::sockaddr, std::mem::size_of::<libc::sockaddr_un>() as u32) };
         if r < 0 {
-            return Err(AudioError::NoServer);
+            return Err(fail("connect", AudioError::NoServer, Some(std::io::Error::last_os_error())));
         }
-        System::from_socket(sock, client)
+        System::from_socket(sock, client).map_err(|e| fail("hello", e, None))
     }
 
     /// Takes an already connected SEQPACKET socket and says hello on it.
