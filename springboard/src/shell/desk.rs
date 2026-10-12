@@ -53,6 +53,7 @@ pub enum Tile {
 
 /// Whether the Wayland compositor owns window positions (the desktop session): the shell can maximize and restore a
 /// window there, but cannot move it to a half or the centre.
+#[cfg(feature = "desktop-wayland")]
 pub fn compositor_places_windows() -> bool {
     cfg!(feature = "desktop-wayland") && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
 }
@@ -185,6 +186,7 @@ pub struct Desk {
     icon_cache: std::cell::RefCell<std::collections::HashMap<(usize, usize), Image>>,
     buf: Vec<u32>,
     /// scratch for drawing one window in the Wayland path
+    #[cfg(feature = "desktop-wayland")]
     window_buf: Vec<u32>,
     /// how many windows have been opened, to cascade them
     opened: usize,
@@ -493,6 +495,7 @@ impl Desk {
     }
 
     /// Goes back to the size before the last tiling or zoom.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub fn return_to_previous(&mut self, i: usize) {
         let w = &mut self.wins[i];
         w.r = w.restore;
@@ -574,6 +577,7 @@ pub(super) fn calendar_face_text(wday: i32, mday: i32) -> (&'static str, String)
     (DAYS[wday.rem_euclid(7) as usize], mday.to_string())
 }
 
+#[cfg(test)]
 pub fn dock_rects(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep_after: Option<usize>, sep: i32) -> (Rect, Vec<Rect>) {
     let seps: Vec<usize> = sep_after.into_iter().collect();
     dock_rects_seps(m, icon, pad, gap, n, &seps, sep)
@@ -803,6 +807,7 @@ impl Shell {
     }
     pub fn desktop_export_apps(&self){if !self.desk_active(){return;}let root=std::path::Path::new("/run/bifrost/user/share/applications");if std::fs::create_dir_all(root).is_err(){return;}for app in apps(){if app.icon=="is.olibuijr.browser.desktop"{continue;}if !app.icon.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)){continue;}let text=format!("[Desktop Entry]\nType=Application\nName={}\nExec=/usr/bin/bifrost-open-url --app {}\nIcon=application-x-executable\nTerminal=false\nCategories=Utility;\n",app.name.replace('\n'," "),app.icon);let _=std::fs::write(root.join(format!("{}.desktop",app.icon)),text);}}
     pub fn desktop_open_url(&mut self,url:&str,t:f64)->std::io::Result<()> {
+        let _ = t; // only the Wayland desktop opens the page with a time
         if !self.desk_active()||!(url.starts_with("http://")||url.starts_with("https://"))||url.chars().any(char::is_control){return Err(std::io::Error::other("Unsupported web URL"));}
         #[cfg(feature="desktop-wayland")]{let package=apphost::installed().iter().find(|p|p.manifest.id=="is.olibuijr.browser.desktop").cloned().ok_or_else(||std::io::Error::other("Install BifrOSt Browser from App Store"))?;
         // an SDK Browser (0.3+) opens the page in a tab of its window; only a native build takes the URL on its command line
@@ -838,6 +843,7 @@ impl Shell {
         true
     }
 
+    #[cfg(feature = "desktop-wayland")]
     fn desk_front_index(&self) -> Option<usize> {
         self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
     }
@@ -845,6 +851,7 @@ impl Shell {
     /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys). In the Wayland session the
     /// compositor places windows, so only Fill (maximize) applies here; the halves and Center are compositor key
     /// bindings (packaging/arch/wayland/rc.xml).
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_tile_front(&mut self, tile: Tile) {
         let Some(i) = self.desk_front_index() else { return };
         if compositor_places_windows() {
@@ -871,6 +878,7 @@ impl Shell {
     }
 
     /// Returns the front desktop window to the size it had before its last tiling or zoom.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_restore_front(&mut self) {
         let Some(i) = self.desk_front_index() else { return };
         if compositor_places_windows() {
@@ -1111,6 +1119,7 @@ impl Shell {
 
     /// Alt/Ctrl/Meta+Tab on the desktop: raises the visible window behind the front one,
     /// so repeated presses toggle between the two most recent windows.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn desk_cycle_window(&mut self) {
         if let Some(d) = &mut self.desk {
             match &mut d.cmdtab {
@@ -2362,6 +2371,7 @@ impl Shell {
 }
 
 /// The presenter's glass kind for a window material an app declared (`NativeVisualEffectView.Material`).
+#[cfg(feature = "desktop-wayland")]
 fn glass_kind(k: bifrost_proto::MaterialKind) -> bifrost_render::glass::Kind {
     use bifrost_proto::MaterialKind as M;
     use bifrost_render::glass::Kind;
@@ -2374,6 +2384,7 @@ fn glass_kind(k: bifrost_proto::MaterialKind) -> bifrost_render::glass::Kind {
 }
 
 /// `NativeVisualEffectView.State` for the presenter: `None` follows the window's active state.
+#[cfg(feature = "desktop-wayland")]
 fn glass_active(s: bifrost_proto::MaterialState) -> Option<bool> {
     match s {
         bifrost_proto::MaterialState::FollowsWindowActiveState => None,

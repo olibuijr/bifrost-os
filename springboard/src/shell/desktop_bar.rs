@@ -3,15 +3,19 @@ use super::Shell;
 #[cfg(feature = "desktop-wayland")]
 use super::hwkeys::TermKey;
 #[cfg(feature = "desktop-wayland")]
-use super::{AppId,Screen,Effect,Event,apphost,desktop_network,ui::{Weight,WHITE,SECONDARY,CELL,LABEL,MENU_TINT,MENU_SOLID,MENU_RADIUS_PT}};
+use super::{AppId,Screen,Effect,Event,desktop_network,ui::{Weight,WHITE,SECONDARY,CELL,LABEL,MENU_TINT,MENU_SOLID,MENU_RADIUS_PT}};
 #[cfg(feature = "desktop-wayland")]
 use crate::gfx::{Image,Surface};
 /// Width of a menu extra's button, in pt (Golden Gate spaces menu extras about 8 pt apart).
+#[cfg(feature = "desktop-wayland")]
 const STATUS_ICON_PT:f32=30.;
+#[cfg(feature = "desktop-wayland")]
 const STATUS_PAD_PT:f32=10.;
 /// Width of the leading system-menu button (the BifrOSt mark), in pt.
+#[cfg(feature = "desktop-wayland")]
 const SYSTEM_MENU_PT:f32=34.;
 /// How far (pt) a status glyph's ink centre sits below its drawing origin: battery 0, plug 1, ethernet 1.5, Wi-Fi 1.
+#[cfg(feature = "desktop-wayland")]
 fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethernet{1.5}else{1.}}
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug)] pub(super) enum Menu {
@@ -32,19 +36,29 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     NowPlaying,
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
+#[cfg(feature = "desktop-wayland")]
 #[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,Media(bifrost_ui::media_session::RemoteCommand)}
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
+#[cfg(feature = "desktop-wayland")]
 pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>}
 /// Row, separator and edge padding of a bar menu, in pt (the HIG groups menu items with separators).
-const MENU_ROW_PT:f32=24.;const MENU_SEP_PT:f32=11.;const MENU_PAD_PT:f32=5.;
+#[cfg(feature = "desktop-wayland")]
+const MENU_ROW_PT:f32=24.;
+#[cfg(feature = "desktop-wayland")]
+const MENU_SEP_PT:f32=11.;
+#[cfg(feature = "desktop-wayland")]
+const MENU_PAD_PT:f32=5.;
 /// The gap between the menu bar and an open menu (Golden Gate).
+#[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
 /// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z").
+#[cfg(feature = "desktop-wayland")]
 fn shortcut_spaced(k:&str)->String {let mut c:Vec<char>=k.chars().collect();match c.pop(){Some(last) if !c.is_empty()=>format!("{} {last}",c.into_iter().collect::<String>()),_=>k.to_string()}}
 /// The screen rectangle (x, y, w, h in px) an open desktop popup owes a repaint: the popup and its shadow
 /// `reach` px out on the sides and bottom, and `reach` px up on top, clamped to the bottom of the menu bar
 /// (the bar repaints its own strip). The shadow above the popup lies in the gap under the bar, so a
 /// rectangle that starts at the popup's top edge would leave a thin shadow line behind when the menu closes.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:i32,lip:i32)->(i32,i32,i32,i32) {
     let (x,y,w,h)=(popup.0 as i32,popup.1 as i32,popup.2 as i32,popup.3 as i32);
     let left=(x-reach).max(0);let right=x+w+reach;
@@ -52,15 +66,20 @@ pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:
     (left,top,right-left,bottom-top)
 }
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
+#[cfg(feature = "desktop-wayland")]
 pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
+#[cfg(feature = "desktop-wayland")]
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
+#[cfg(feature = "desktop-wayland")]
 impl Row {fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None}}}
 /// Accessors the chrome menu bar model reads (chrome_host/menubar.rs): the separator flag and the shortcut text.
+#[cfg(feature = "desktop-wayland")]
 impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
 /// Rows of one app-published menu (`ToShell::AppMenus`): disabled items and submenu headers are labels, a checked item
 /// starts with a check mark, a submenu's children are indented. Invalid key equivalents are dropped.
+#[cfg(feature = "desktop-wayland")]
 pub(super) fn app_menu_rows(slot:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
     menu.items.iter().map(|i|{
         if i.separator {return Row::separator();}
@@ -78,6 +97,7 @@ pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->
     }).map(|i|i.id)
 }
 /// Header plus the five largest app groups by `key`; empty when there are no app readings.
+#[cfg(feature = "desktop-wayland")]
 fn top_app_rows(apps:&[super::desktop_metrics::AppUsage],header:&str,key:impl Fn(&super::desktop_metrics::AppUsage)->u64,show:impl Fn(u64)->String)->Vec<Row> {
     let mut sorted:Vec<_>=apps.iter().collect();sorted.sort_by_key(|a|std::cmp::Reverse(key(a)));
     if sorted.is_empty() {return Vec::new();}
@@ -472,6 +492,7 @@ impl Shell {
 pub(super) fn shell_menu(title:&str)->Option<Menu> {
     [(Menu::File,"File"),(Menu::Edit,"Edit"),(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].into_iter().find(|(_,t)|t.eq_ignore_ascii_case(title.trim())).map(|(m,_)|m)
 }
+#[cfg(feature = "desktop-wayland")]
 const AX_MENUS: [(Menu, &str); 7] = [(Menu::System, "System"), (Menu::App, "App"), (Menu::File, "File"), (Menu::Edit, "Edit"), (Menu::View, "View"), (Menu::Window, "Window"), (Menu::Help, "Help")];
 /// Without the desktop there is no menu bar to map.
 #[cfg(not(feature = "desktop-wayland"))]
@@ -511,6 +532,7 @@ impl Shell {
 
 /// Colours of the menu bar's titles, status items and open-title capsule.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg(feature = "desktop-wayland")]
 pub(super) struct BarInk { pub text: u32, pub text_alpha: u32, pub shadow: u32, pub shadow_alpha: u32, pub capsule: u32 }
 
 /// True when the wallpaper behind the menu bar (its top `rows` rows) is light enough that the bar needs dark text.
@@ -614,6 +636,7 @@ mod menu_damage_tests {
 }
 
 /// A panel's overlay rectangle in whole px: the panel grown by its shadow reach `g`, clipped at the screen's top-left.
+#[cfg(any(test, feature = "desktop-wayland"))]
 fn panel_overlay_rect((x,y,w,h):(f32,f32,f32,f32),g:f32)->(usize,usize,usize,usize) {
     let (x0,y0)=((x-g).max(0.),(y-g).max(0.));
     (x0 as usize,y0 as usize,(x+w+g-x0).max(0.).ceil() as usize,(y+h+g-y0).max(0.).ceil() as usize)

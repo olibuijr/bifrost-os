@@ -9,6 +9,8 @@
 //! `service()` after each wait.
 
 use bifrost_chrome::link::{ClientId, HostLink};
+#[cfg(feature = "desktop-wayland")]
+use crate::shell::{Effect, Shell};
 use bifrost_chrome::model::{FromChrome, ToChrome};
 use std::os::fd::RawFd;
 
@@ -34,6 +36,12 @@ impl Snapshot {
             Some(slot) => *slot = m.clone(),
             None => self.models.push(m.clone()),
         }
+    }
+
+    /// Whether `m` is not the model of its kind that is kept now: a model is sent again only when it changed.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn changed(&self, m: &ToChrome) -> bool {
+        !self.models.contains(m)
     }
 
     /// The models a new client needs, in the order they were first recorded.
@@ -84,6 +92,29 @@ impl ChromeServer {
     pub fn publish(&mut self, m: ToChrome) {
         self.host.broadcast(&m);
         self.snapshot.record(&m);
+    }
+
+    /// Publishes the menu bar model of the shell's current menus, when it differs from the one the clients have.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn publish_menu_bar(&mut self, shell: &Shell) {
+        let m = ToChrome::MenuBar(super::menubar::model(shell));
+        if self.snapshot.changed(&m) {
+            self.publish(m);
+        }
+    }
+
+    /// One pass of the chrome socket in the shell loop: runs the menu items the clients chose on the shell, then
+    /// publishes the menu bar. Returns the effects the shell must run; other client messages are not acted on yet.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn serve_shell(&mut self, shell: &mut Shell, t: f64) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        for (_, msg) in self.service() {
+            if let FromChrome::MenuAction { menu, item } = msg {
+                effects.extend(super::menubar::menu_action(shell, menu, item, t));
+            }
+        }
+        self.publish_menu_bar(shell);
+        effects
     }
 }
 
@@ -169,6 +200,17 @@ mod tests {
         snap.record(&dock(40.0));
         snap.record(&appearance(false));
         assert_eq!(snap.models(), &[appearance(false), dock(40.0)]);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_menu_bar_is_sent_again_only_when_it_changes() {
+        let mut snap = Snapshot::default();
+        let bar = |name: &str| ToChrome::MenuBar(MenuBarModel { app_name: name.into(), menus: vec![], status: vec![] });
+        assert!(snap.changed(&bar("Files")));
+        snap.record(&bar("Files"));
+        assert!(!snap.changed(&bar("Files")));
+        assert!(snap.changed(&bar("Notes")));
     }
 
     #[test]

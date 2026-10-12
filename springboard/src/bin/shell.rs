@@ -473,9 +473,16 @@ fn run() -> std::io::Result<()> {
             bifrost_core::host::pressure_relief();
         }
         kms::wait_precise(&fds, wait_ms, &mut ready);
-        if let Some(server) = chrome_server.as_mut() { let _ = server.service(); }
         let ready = &ready;
         let t = sys::now_ms();
+        // the chrome clients: their menu items run on the shell, and the menu bar follows the shell's menus
+        #[cfg(feature = "desktop-wayland")]
+        let chrome_fx = chrome_server.as_mut().map_or_else(Vec::new, |s| s.serve_shell(&mut shell, t));
+        #[cfg(not(feature = "desktop-wayland"))]
+        let chrome_fx: Vec<Effect> = {
+            if let Some(s) = chrome_server.as_mut() { let _ = s.service(); }
+            Vec::new()
+        };
         if ready[4..shell_fds_end].contains(&true) {
             shell.pump();
         }
@@ -511,7 +518,7 @@ fn run() -> std::io::Result<()> {
         if !events.is_empty() && trace {
             eprintln!("springboard: input {events:?}");
         }
-        let mut effects = Vec::new();
+        let mut effects = chrome_fx;
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             let (active,resumed)=disp.wayland_activity();
