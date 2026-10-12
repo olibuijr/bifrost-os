@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0
+
+- Winning a game now shows a short burst of confetti over the board. It plays once for each win: a game that is already won does not repeat it, and the next game's win shows it again. The burst lasts about two seconds and fades out.
+- The confetti uses a small 3D particle model, so pieces spread a little toward the viewer and shrink as they move away. Nothing else on the board moves.
+- The Games details dump reports how many confetti dots are on screen, so a test can check the burst.
+- Sound for the win is not added yet: the audio service plays queued files at one volume and cannot place a sound left or right.
+
 ## 1.3.0
 
 - Games use the shared random source from the core crate for every shuffle and spawn. The numbers are the same as before, so a seeded deal and the 2048 tile placement do not change.

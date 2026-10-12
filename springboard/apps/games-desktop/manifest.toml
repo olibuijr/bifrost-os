@@ -1,6 +1,6 @@
 id = "is.olibuijr.games.desktop"
 name = "Games"
-version = "1.3.0"
+version = "1.4.0"
 exec = "bifrost-games"
 icon = "icon.png"
 min_shell = "0.4.84"
