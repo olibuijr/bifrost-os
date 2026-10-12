@@ -3,8 +3,10 @@
 //!
 //! The kinds mirror the reference platform's visual-effect materials (titlebar, menu, popover, sidebar, header view,
 //! sheet, window background, HUD, full-screen UI, tooltip, content background, under-window and under-page
-//! background) plus the two Liquid Glass variants. The tint colours are the shell's own `MATERIAL_*` pairs
-//! (`render/src/ui.rs`) so a client region and a shell window of one kind look the same.
+//! background) plus the two Liquid Glass variants. The numbers (blur, saturation, brightness, luminance mapping) are
+//! measured from the platform's material recipes (`docs/reference/materials-macos27.md`); the opaque plates equal the
+//! flat colours of the shell's `MATERIAL_*` pairs (`render/src/ui.rs`) so a client region and a shell window of one
+//! kind look the same.
 //!
 //! Rules (reference behaviour):
 //! - Behind-window blending samples everything composited below the window (other clients, layers, the wallpaper);
@@ -15,6 +17,7 @@
 //! - The blur is bounded: the number of dual-Kawase passes drops until the pyramid fits `BLUR_TEXEL_BUDGET`, which
 //!   keeps one blurred window well under 2 ms on a Skylake HD 530 at 2560x1440.
 
+use crate::material_filter::Tone;
 use crate::render_server::material::{kawase_passes, pyramid_sizes};
 
 /// The material kinds a client can ask for (`bifrost_material_surface_v1.kind`).
@@ -169,16 +172,26 @@ impl MaterialSpec {
 /// A straight (not premultiplied) RGBA colour, 0..=1.
 pub type Rgba = [f32; 4];
 
-/// The recipe of one kind: blur, saturation, tints for Dark and Light, and the opaque inactive plate.
+/// The recipe of one kind: blur, saturation and tone for Dark and Light, a tint, and the opaque inactive plate.
+///
+/// The numbers of the measured kinds come from the macOS 27 material recipes (`docs/reference/materials-macos27.md`);
+/// kinds without a recipe (clear glass, selection, the plain blur) keep their designed values and are marked below.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Recipe {
-    /// Blur radius in logical px.
+    /// Blur radius in logical px (the recipe's `blurRadius`).
     pub blur: f32,
-    /// 1.0 keeps the backdrop's colours.
-    pub saturation: f32,
+    /// The scale the backdrop is blurred at, relative to the output (the recipe's `backdropScale`).
+    pub backdrop_scale: f32,
+    pub saturation_dark: f32,
+    pub saturation_light: f32,
+    /// Luminance mapping and brightness (`material_filter`).
+    pub tone_dark: Tone,
+    pub tone_light: Tone,
+    /// A veil over the filtered blur. The measured recipes carry none (alpha 0); glass and selection do.
     pub tint_dark: Rgba,
     pub tint_light: Rgba,
-    /// The opaque plate shown instead of the blur when inactive (and for within-window blending).
+    /// The opaque plate shown instead of the blur when inactive (and for within-window blending, and Reduce
+    /// Transparency): the recipe's tone applied to a neutral backdrop (`NEUTRAL_DARK`, `NEUTRAL_LIGHT`).
     pub plate_dark: Rgba,
     pub plate_light: Rgba,
     /// Luminosity grain over the blur, 0..1 of full scale (the reference materials carry a faint noise).
@@ -191,44 +204,120 @@ const fn c(r: u8, g: u8, b: u8, a: u8) -> Rgba {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0]
 }
 
-const SIDEBAR_PLATE: (Rgba, Rgba) = (c(20, 20, 22, 255), c(235, 235, 235, 255));
-const TITLEBAR_PLATE: (Rgba, Rgba) = (c(28, 28, 30, 255), c(246, 246, 246, 255));
-const WINDOW_PLATE: (Rgba, Rgba) = (c(30, 30, 32, 255), c(240, 240, 240, 255));
-const HUD_PLATE: (Rgba, Rgba) = (c(12, 12, 14, 255), c(12, 12, 14, 255));
+/// The luma of the neutral backdrop the opaque plates are computed over: a typical wallpaper under each appearance
+/// (our choice; the recipes themselves have no fixed backdrop).
+pub const NEUTRAL_DARK: f32 = 0.15;
+pub const NEUTRAL_LIGHT: f32 = 0.85;
 
-/// The recipe of `kind` (pure). Tints equal the shell's `MATERIAL_*` pairs where the shell has one.
-pub fn recipe(kind: MaterialKind) -> Recipe {
-    use MaterialKind::*;
-    let r = |blur, saturation, tint_dark, tint_light, plate: (Rgba, Rgba), noise, always_active| Recipe {
+// Measured tones (platform recipe files; brightness, luminance amount, the four luminance values).
+const CHROME_DARK: Tone = Tone::new(-0.1, 0.75, [0.23, 0.52, 0.27, 0.255]);
+const CHROME_LIGHT: Tone = Tone::new(0.1, 0.75, [0.8, 0.9, 1.1, 0.825]);
+/// Reduce Transparency variants of the chrome (the backdrop is replaced by its average colour).
+pub const CHROME_DARK_REDUCED: Tone = Tone::new(-0.1, 0.85, [0.225, 0.31, 0.25, 0.2]);
+pub const CHROME_LIGHT_REDUCED: Tone = Tone::new(0.1, 0.75, [0.95, 0.9, 1.1, 0.825]);
+const REGULAR_DARK: Tone = Tone::new(0.0, 0.75, [0.16, 0.26, 0.1, 0.1]);
+const REGULAR_LIGHT: Tone = Tone::new(0.1, 0.75, [0.9, 0.83, 0.925, 0.815]);
+const THICK_DARK: Tone = Tone::new(0.0, 0.88, [0.14, 0.16, 0.1, 0.03]);
+const THICK_LIGHT: Tone = Tone::new(0.045, 0.88, [0.99, 0.95, 0.98, 0.905]);
+const THIN_DARK: Tone = Tone::new(0.0, 0.6, [0.2, 0.21, 0.1, 0.15]);
+const THIN_LIGHT: Tone = Tone::new(0.12, 0.6, [0.725, 0.825, 0.76, 0.73]);
+const ULTRA_THIN_DARK: Tone = Tone::new(0.0, 0.5, [0.24, 0.24, 0.3, 0.39]);
+const ULTRA_THIN_LIGHT: Tone = Tone::new(0.12, 0.5, [0.45, 0.55, 0.65, 0.68]);
+const DOCK_DARK: Tone = Tone::new(0.0, 0.5, [0.29, -0.2, 0.375, 0.65]);
+const DOCK_LIGHT: Tone = Tone::new(0.08, 0.5, [0.3, 0.5, 1.0, 0.77]);
+
+/// The opaque grey a tone gives the neutral backdrop of an appearance.
+pub fn plate_of(tone: Tone, dark: bool) -> Rgba {
+    let n = if dark { NEUTRAL_DARK } else { NEUTRAL_LIGHT };
+    let g = tone.apply([n; 3]);
+    [g[0], g[1], g[2], 1.0]
+}
+
+/// A measured recipe: no veil, the plates from the plate tones (the Reduce Transparency tones where the platform has
+/// them).
+fn measured(blur: f32, saturation: (f32, f32), tone: (Tone, Tone), plate_tone: (Tone, Tone), always_active: bool) -> Recipe {
+    let (pd, pl) = (plate_of(plate_tone.0, true), plate_of(plate_tone.1, false));
+    Recipe {
         blur,
-        saturation,
+        backdrop_scale: 0.25,
+        saturation_dark: saturation.0,
+        saturation_light: saturation.1,
+        tone_dark: tone.0,
+        tone_light: tone.1,
+        tint_dark: [pd[0], pd[1], pd[2], 0.0],
+        tint_light: [pl[0], pl[1], pl[2], 0.0],
+        plate_dark: pd,
+        plate_light: pl,
+        noise: 0.02,
+        always_active,
+    }
+}
+
+/// A recipe that stays dark in both appearances (HUD, tool tip, full-screen UI).
+fn measured_dark(blur: f32, saturation: f32, tone: Tone) -> Recipe {
+    measured(blur, (saturation, saturation), (tone, tone), (tone, tone), true)
+}
+
+/// A designed recipe (no platform recipe): constant tone, explicit tints and plates.
+fn designed(blur: f32, saturation: f32, tint_dark: Rgba, tint_light: Rgba, plate: (Rgba, Rgba), noise: f32, always_active: bool) -> Recipe {
+    Recipe {
+        blur,
+        backdrop_scale: 0.25,
+        saturation_dark: saturation,
+        saturation_light: saturation,
+        tone_dark: Tone::NONE,
+        tone_light: Tone::NONE,
         tint_dark,
         tint_light,
         plate_dark: plate.0,
         plate_light: plate.1,
         noise,
         always_active,
-    };
-    match kind {
-        Sidebar => r(24.0, 1.8, c(24, 24, 27, 190), c(236, 236, 236, 200), SIDEBAR_PLATE, 0.02, false),
-        Titlebar | HeaderView => r(20.0, 1.6, c(28, 28, 30, 200), c(246, 246, 246, 205), TITLEBAR_PLATE, 0.02, false),
-        Menu | Popover | Sheet => r(30.0, 1.8, c(28, 28, 30, 236), c(246, 246, 246, 238), TITLEBAR_PLATE, 0.02, true),
-        WindowBackground | ContentBackground => r(20.0, 1.4, c(30, 30, 32, 228), c(240, 240, 240, 228), WINDOW_PLATE, 0.015, false),
-        HudWindow | ToolTip | FullScreenUi => r(30.0, 1.6, c(12, 12, 14, 170), c(12, 12, 14, 170), HUD_PLATE, 0.02, true),
-        UnderWindowBackground | UnderPageBackground => r(28.0, 1.8, c(24, 24, 27, 170), c(236, 236, 236, 175), SIDEBAR_PLATE, 0.02, false),
-        GlassRegular => r(18.0, 1.8, c(255, 255, 255, 38), c(255, 255, 255, 70), TITLEBAR_PLATE, 0.0, false),
-        Selection => r(12.0, 1.6, c(10, 95, 214, 170), c(10, 132, 255, 150), TITLEBAR_PLATE, 0.0, false),
-        GlassClear => r(10.0, 1.4, c(255, 255, 255, 18), c(255, 255, 255, 36), TITLEBAR_PLATE, 0.0, false),
-        // the plain ext-background-effect blur keeps its old look (a white veil at 25 %) and never falls back to a plate
-        Plain => r(20.0, 1.8, c(255, 255, 255, 64), c(255, 255, 255, 64), WINDOW_PLATE, 0.0, true),
     }
+}
+
+const TITLEBAR_PLATE: (Rgba, Rgba) = (c(28, 28, 30, 255), c(246, 246, 246, 255));
+const WINDOW_PLATE: (Rgba, Rgba) = (c(30, 30, 32, 255), c(240, 240, 240, 255));
+
+/// The recipe of `kind` (pure). Which platform recipe each kind takes is in `docs/reference/materials-macos27.md`.
+pub fn recipe(kind: MaterialKind) -> Recipe {
+    use MaterialKind::*;
+    match kind {
+        Sidebar => measured(30.0, (1.35, 1.35), (THIN_DARK, THIN_LIGHT), (THIN_DARK, THIN_LIGHT), false),
+        Titlebar | HeaderView => measured(22.5, (2.0, 1.1), (CHROME_DARK, CHROME_LIGHT), (CHROME_DARK_REDUCED, CHROME_LIGHT_REDUCED), false),
+        Menu | Popover | Sheet => measured(30.0, (1.5, 1.5), (REGULAR_DARK, REGULAR_LIGHT), (REGULAR_DARK, REGULAR_LIGHT), true),
+        WindowBackground | ContentBackground => measured(45.0, (1.5, 1.5), (THICK_DARK, THICK_LIGHT), (THICK_DARK, THICK_LIGHT), false),
+        HudWindow | ToolTip | FullScreenUi => measured_dark(45.0, 1.5, THICK_DARK),
+        UnderWindowBackground => measured(22.5, (1.1, 1.1), (ULTRA_THIN_DARK, ULTRA_THIN_LIGHT), (ULTRA_THIN_DARK, ULTRA_THIN_LIGHT), false),
+        UnderPageBackground => measured(30.0, (1.35, 1.35), (THIN_DARK, THIN_LIGHT), (THIN_DARK, THIN_LIGHT), false),
+        // Regular glass: the platform's glass recipe is a blur of 45 and a colour matrix, which decomposes exactly into
+        // saturation 1.5885, then a grey veil (0.6343) at alpha 0.3705 (gain 0.6295, offset 0.235).
+        GlassRegular => {
+            let veil = [0.6343, 0.6343, 0.6343, 0.3705];
+            let mut r = designed(45.0, 1.5885, veil, veil, TITLEBAR_PLATE, 0.0, false);
+            r.plate_dark = plate_of(CHROME_DARK_REDUCED, true);
+            r.plate_light = plate_of(CHROME_LIGHT_REDUCED, false);
+            r
+        }
+        // Not in any recipe file (designed): the accent plate, clear glass and the plain ext-background-effect blur.
+        Selection => designed(12.0, 1.6, c(10, 95, 214, 170), c(10, 132, 255, 150), TITLEBAR_PLATE, 0.0, false),
+        GlassClear => designed(10.0, 1.4, c(255, 255, 255, 18), c(255, 255, 255, 36), TITLEBAR_PLATE, 0.0, false),
+        // the plain ext-background-effect blur keeps its old look (a white veil at 25 %) and never falls back to a plate
+        Plain => designed(20.0, 1.8, c(255, 255, 255, 64), c(255, 255, 255, 64), WINDOW_PLATE, 0.0, true),
+    }
+}
+
+/// The recipe of the shell's dock (`ShellSurface::Dock`, which is `UnderWindowBackground` in the shared model): the
+/// platform has a dedicated dock recipe pair.
+pub fn dock_recipe() -> Recipe {
+    measured(30.0, (1.6, 1.8), (DOCK_DARK, DOCK_LIGHT), (DOCK_DARK, DOCK_LIGHT), true)
 }
 
 /// What the compositor draws for a region.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Resolved {
-    /// Blur what is below, saturate, tint (straight RGBA tint).
-    Glass { blur: f32, saturation: f32, tint: Rgba, noise: f32 },
+    /// Blur what is below, saturate, map the luminance, add the brightness, tint (straight RGBA tint).
+    Glass { blur: f32, saturation: f32, tone: Tone, tint: Rgba, noise: f32 },
     /// A flat opaque plate (inactive window, or within-window blending with nothing of its own below).
     Plate(Rgba),
 }
@@ -255,8 +344,9 @@ pub fn resolve(spec: &MaterialSpec, window_active: bool, dark: bool) -> Resolved
         return Resolved::Plate(plate);
     }
     let tint = if dark { rc.tint_dark } else { rc.tint_light };
-    let (tint, saturation) = if spec.emphasized { emphasize(tint, rc.saturation) } else { (tint, rc.saturation) };
-    Resolved::Glass { blur: rc.blur, saturation, tint, noise: rc.noise }
+    let (base_saturation, tone) = if dark { (rc.saturation_dark, rc.tone_dark) } else { (rc.saturation_light, rc.tone_light) };
+    let (tint, saturation) = if spec.emphasized { emphasize(tint, base_saturation) } else { (tint, base_saturation) };
+    Resolved::Glass { blur: rc.blur, saturation, tone, tint, noise: rc.noise }
 }
 
 /// Premultiplies a straight colour.
@@ -357,11 +447,93 @@ mod tests {
     }
 
     #[test]
-    fn the_sidebar_tint_is_the_shell_pair() {
+    fn the_sidebar_is_the_thin_recipe() {
         let rc = recipe(MaterialKind::Sidebar);
-        assert_eq!(rc.tint_dark, c(24, 24, 27, 190));
-        assert_eq!(rc.tint_light, c(236, 236, 236, 200));
+        assert_eq!((rc.blur, rc.backdrop_scale), (30.0, 0.25));
+        assert_eq!((rc.saturation_dark, rc.saturation_light), (1.35, 1.35));
+        assert_eq!(rc.tone_dark, Tone::new(0.0, 0.6, [0.2, 0.21, 0.1, 0.15]));
+        assert_eq!(rc.tone_light, Tone::new(0.12, 0.6, [0.725, 0.825, 0.76, 0.73]));
+        assert_eq!(rc.tint_dark[3], 0.0, "the measured recipes carry no veil");
         assert_eq!(rc.plate_dark[3], 1.0, "the inactive plate is opaque");
+    }
+
+    /// The recipe table against the documented values (`docs/reference/materials-macos27.md`, section "Recipes per
+    /// material kind"): blur, saturation Dark/Light, tone Dark/Light.
+    #[test]
+    fn the_recipe_table_matches_the_document() {
+        use MaterialKind::*;
+        let chrome = (Tone::new(-0.1, 0.75, [0.23, 0.52, 0.27, 0.255]), Tone::new(0.1, 0.75, [0.8, 0.9, 1.1, 0.825]));
+        let regular = (Tone::new(0.0, 0.75, [0.16, 0.26, 0.1, 0.1]), Tone::new(0.1, 0.75, [0.9, 0.83, 0.925, 0.815]));
+        let thick = (Tone::new(0.0, 0.88, [0.14, 0.16, 0.1, 0.03]), Tone::new(0.045, 0.88, [0.99, 0.95, 0.98, 0.905]));
+        let thin = (Tone::new(0.0, 0.6, [0.2, 0.21, 0.1, 0.15]), Tone::new(0.12, 0.6, [0.725, 0.825, 0.76, 0.73]));
+        let ultra = (Tone::new(0.0, 0.5, [0.24, 0.24, 0.3, 0.39]), Tone::new(0.12, 0.5, [0.45, 0.55, 0.65, 0.68]));
+        let rows: [(MaterialKind, f32, (f32, f32), (Tone, Tone)); 11] = [
+            (Titlebar, 22.5, (2.0, 1.1), chrome),
+            (HeaderView, 22.5, (2.0, 1.1), chrome),
+            (Menu, 30.0, (1.5, 1.5), regular),
+            (Popover, 30.0, (1.5, 1.5), regular),
+            (Sheet, 30.0, (1.5, 1.5), regular),
+            (WindowBackground, 45.0, (1.5, 1.5), thick),
+            (ContentBackground, 45.0, (1.5, 1.5), thick),
+            (Sidebar, 30.0, (1.35, 1.35), thin),
+            (UnderPageBackground, 30.0, (1.35, 1.35), thin),
+            (UnderWindowBackground, 22.5, (1.1, 1.1), ultra),
+            (HudWindow, 45.0, (1.5, 1.5), (thick.0, thick.0)),
+        ];
+        for (k, blur, sat, tone) in rows {
+            let rc = recipe(k);
+            assert_eq!(rc.blur, blur, "{k:?}");
+            assert_eq!((rc.saturation_dark, rc.saturation_light), sat, "{k:?}");
+            assert_eq!((rc.tone_dark, rc.tone_light), tone, "{k:?}");
+            assert_eq!(rc.backdrop_scale, 0.25, "{k:?}");
+        }
+        // the always-dark kinds use the dark recipe in Light too
+        for k in [HudWindow, ToolTip, FullScreenUi] {
+            assert_eq!(recipe(k).tone_light, recipe(k).tone_dark, "{k:?}");
+        }
+        let dock = dock_recipe();
+        assert_eq!((dock.saturation_dark, dock.saturation_light), (1.6, 1.8));
+        assert_eq!(dock.tone_light, Tone::new(0.08, 0.5, [0.3, 0.5, 1.0, 0.77]));
+    }
+
+    /// The opaque plates are the recipe tone on the neutral backdrop, hand-computed (0..255).
+    #[test]
+    fn the_plates_match_the_hand_computed_tones() {
+        let at = |rc: Rgba| (rc[0] * 255.0, rc[1] * 255.0, rc[2] * 255.0);
+        let near = |got: f32, want: f32| (got - want).abs() < 0.2;
+        // (kind, dark, light)
+        for (k, d, l) in [
+            (MaterialKind::Titlebar, 35.3, 255.0),
+            (MaterialKind::Menu, 45.7, 242.6),
+            (MaterialKind::WindowBackground, 36.9, 246.7),
+            (MaterialKind::Sidebar, 45.5, 231.3),
+            (MaterialKind::UnderWindowBackground, 50.2, 223.4),
+        ] {
+            let rc = recipe(k);
+            let (dr, dg, db) = at(rc.plate_dark);
+            let (lr, lg, lb) = at(rc.plate_light);
+            assert!(near(dr, d) && near(dg, d) && near(db, d), "{k:?} dark {dr}");
+            assert!(near(lr, l) && near(lg, l) && near(lb, l), "{k:?} light {lr}");
+        }
+        assert!(near(at(dock_recipe().plate_dark).0, 36.6) && near(at(dock_recipe().plate_light).0, 234.3));
+    }
+
+    #[test]
+    fn regular_glass_is_the_decomposed_colour_matrix() {
+        let rc = recipe(MaterialKind::GlassRegular);
+        assert_eq!((rc.blur, rc.saturation_dark), (45.0, 1.5885));
+        assert_eq!(rc.tint_dark, [0.6343, 0.6343, 0.6343, 0.3705]);
+        // gain 1 - alpha, offset alpha * veil: 0.6295 and 0.235
+        assert!((1.0 - rc.tint_dark[3] - 0.6295).abs() < 1e-4 && (rc.tint_dark[3] * rc.tint_dark[0] - 0.235).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_resolved_glass_carries_the_appearance_tone() {
+        let s = spec(MaterialKind::Titlebar);
+        let Resolved::Glass { tone: d, saturation: sd, .. } = resolve(&s, true, true) else { panic!() };
+        let Resolved::Glass { tone: l, saturation: sl, .. } = resolve(&s, true, false) else { panic!() };
+        assert_eq!((sd, sl), (2.0, 1.1));
+        assert_eq!((d.brightness, l.brightness), (-0.1, 0.1));
     }
 
     #[test]
@@ -369,7 +541,8 @@ mod tests {
         for v in 0..=15 {
             let rc = recipe(MaterialKind::from_wire(v).unwrap());
             assert!(rc.blur > 0.0 && rc.blur <= 64.0);
-            assert!(rc.saturation >= 1.0 && rc.saturation <= 2.5);
+            assert!(rc.saturation_dark >= 1.0 && rc.saturation_dark <= 2.5);
+            assert!(rc.saturation_light >= 1.0 && rc.saturation_light <= 2.5);
             assert_eq!(rc.plate_dark[3], 1.0);
             assert_eq!(rc.plate_light[3], 1.0);
             assert!(rc.tint_dark[3] <= 1.0 && rc.tint_light[3] <= 1.0);
@@ -379,8 +552,8 @@ mod tests {
     #[test]
     fn a_sidebar_in_an_inactive_window_is_the_opaque_plate() {
         let s = spec(MaterialKind::Sidebar);
-        assert_eq!(resolve(&s, false, true), Resolved::Plate(c(20, 20, 22, 255)));
-        assert_eq!(resolve(&s, false, false), Resolved::Plate(c(235, 235, 235, 255)));
+        assert_eq!(resolve(&s, false, true), Resolved::Plate(recipe(MaterialKind::Sidebar).plate_dark));
+        assert_eq!(resolve(&s, false, false), Resolved::Plate(recipe(MaterialKind::Sidebar).plate_light));
         assert!(matches!(resolve(&s, true, true), Resolved::Glass { .. }));
     }
 
