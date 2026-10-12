@@ -126,6 +126,7 @@ pub mod cache {
 pub mod process_info;
 pub mod process_events;
 pub mod file_metadata;
+pub mod file_stat;
 pub mod auth_events;
 pub mod identity_events;
 pub mod route_events;
