@@ -14,9 +14,12 @@
 
 use crate::model::{self, Shortcut, MAX_NAME};
 use crate::widget::PALETTE;
+use bifrost_app::actor::Actor;
 use bifrost_app::control::{RpcError, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::controls::intent_resolve as ir;
+use bifrost_app::controls::onscreen_entity::{EntityRef, OnscreenContext};
 use bifrost_app::controls::scripting as sc;
+use bifrost_app::controls::value_query::{QueryError, ValueItem, ValueQueryResult};
 use bifrost_app::controls::workflow::{Step, Workflow, WorkflowController, WorkflowError};
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult, Param, ParamType};
 use bifrost_core::json::Json;
@@ -31,13 +34,71 @@ pub const PLAN: &str = "plan-shortcut";
 
 /// The intents this app declares. `manifest.toml` lists the same ids (checked by a unit test).
 pub fn declared() -> Vec<Intent> {
-    let shortcut = || Param::new("shortcut", "Shortcut", ParamType::Entity(SHORTCUT.into()));
+    // Optional at the protocol level: when the parameter is missing, the shortcut in front of the window is used.
+    let shortcut = || Param::new("shortcut", "Shortcut", ParamType::Entity(SHORTCUT.into())).optional();
     vec![
         Intent::new(RUN, "Run Shortcut", "Runs a shortcut's actions. Pass its id, or its name when only one shortcut has it.")
             .param(shortcut()),
         Intent::new(PLAN, "Plan Shortcut", "Lists the steps a shortcut would run, in order, without running them.")
             .param(shortcut()),
     ]
+}
+
+/// Runs the plans on the planner's own thread, so a plan never runs on the thread that handles the window. The caller
+/// waits for the answer; the window does not.
+pub struct Planner {
+    actor: Actor<()>,
+}
+
+impl Planner {
+    pub fn new() -> Planner {
+        Planner { actor: Actor::new(()) }
+    }
+
+    /// The dry-run text of `s` (see `plan_text`), computed on the planner's thread.
+    pub fn plan(&self, s: Shortcut) -> Result<String, String> {
+        self.actor.ask(move |_| plan_text(&s)).unwrap_or_else(|| Err("the planner has stopped".to_string()))
+    }
+}
+
+impl Default for Planner {
+    fn default() -> Self {
+        Planner::new()
+    }
+}
+
+/// The shortcuts as a parameter-picker result: the id is the list index, the title the name, and the properties
+/// `color` (palette index) and `actions` (count of steps).
+pub fn picker(list: &[Shortcut]) -> Result<ValueQueryResult, QueryError> {
+    let items = list
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            ValueItem::new(&i.to_string(), &s.name)
+                .map(|item| item.with_property("color", &s.color.to_string()).with_property("actions", &s.actions.len().to_string()))
+        })
+        .collect::<Result<Vec<ValueItem>, QueryError>>()?;
+    ValueQueryResult::new(items)
+}
+
+/// The annotations for the shortcuts the window shows: each shown one is a view, and the one in front is selected.
+pub fn onscreen_context(shown: &[(usize, bool)]) -> OnscreenContext {
+    let mut ctx = OnscreenContext::new();
+    for &(i, front) in shown {
+        // the type and the index are never empty, so the annotation is always accepted
+        let _ = ctx.annotate(i as u64, EntityRef { type_name: SHORTCUT.into(), id: i.to_string() }, front);
+    }
+    ctx
+}
+
+/// The index of the shortcut in front, from the onscreen annotations (an open editor or picker).
+pub fn frontmost(ctx: &OnscreenContext) -> Option<usize> {
+    let annotations = ctx.view_annotations();
+    let found = annotations
+        .iter()
+        .find(|a| a.is_selected && a.entity.type_name == SHORTCUT)
+        .and_then(|a| a.entity.id.parse::<usize>().ok());
+    found
 }
 
 /// The list as the app should see it when no window is open: the saved file, or the first-launch shortcuts.
@@ -51,16 +112,28 @@ pub fn stored(data_dir: &Path) -> Vec<Shortcut> {
 }
 
 /// Performs one of the declared intents on `list`.
-pub fn perform(list: &[Shortcut], id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+///
+/// Without a `shortcut` parameter the shortcut in front (`frontmost`, an index into `list`) is used.
+pub fn perform(
+    list: &[Shortcut],
+    id: &str,
+    params: &Json,
+    front: Option<usize>,
+    planner: &Planner,
+) -> Result<IntentResult, RpcError> {
     if id != RUN && id != PLAN {
         return Err(RpcError::new(METHOD_NOT_FOUND, format!("no intent {id}")));
     }
-    let index = resolve(list, params)?;
+    let index = match (params.get("shortcut"), front) {
+        (None | Some(Json::Null), Some(i)) if i < list.len() => i,
+        (None | Some(Json::Null), _) => return Err(RpcError::new(INVALID_PARAMS, "Shortcut is required")),
+        _ => resolve(list, params)?,
+    };
     let s = &list[index];
     if id == RUN {
         return Err(intents::failed(format!("{} cannot run on this device yet", s.name)));
     }
-    let steps = plan_text(s).map_err(|why| intents::failed(format!("{} {why}", s.name)))?;
+    let steps = planner.plan(s.clone()).map_err(|why| intents::failed(format!("{} {why}", s.name)))?;
     let n = s.actions.len();
     let plural = if n == 1 { "" } else { "s" };
     Ok(IntentResult::value(Json::Str(steps)).with_dialog(&format!("{} runs {n} step{plural}.", s.name)))
@@ -121,10 +194,11 @@ pub fn entities(list: &[Shortcut], ty: &str, query: &EntityQuery) -> Result<Vec<
     if ty != SHORTCUT {
         return Err(RpcError::new(INVALID_PARAMS, format!("unknown entity type {ty}")));
     }
-    let all = list.iter().enumerate().map(|(i, s)| {
-        let n = s.actions.len();
+    let result = picker(list).map_err(|e| RpcError::new(INVALID_PARAMS, format!("{e:?}")))?;
+    let all = result.items().iter().map(|item| {
+        let n: usize = item.property("actions").and_then(|v| v.parse().ok()).unwrap_or(0);
         let steps = if n == 1 { "1 action".to_string() } else { format!("{n} actions") };
-        Entity::new(SHORTCUT, &i.to_string(), &s.name).subtitle(&steps)
+        Entity::new(SHORTCUT, item.id(), item.title()).subtitle(&steps)
     });
     Ok(match query {
         EntityQuery::Suggested => all.collect(),
@@ -270,7 +344,7 @@ mod tests {
     }
 
     fn app() -> ShortcutsApp {
-        ShortcutsApp { w: None, reminders: None, asked_login: false }
+        ShortcutsApp { w: None, reminders: None, asked_login: false, planner: Planner::new() }
     }
 
     fn obj(pairs: &[(&str, &str)]) -> Json {
@@ -433,5 +507,78 @@ mod tests {
         script_set(&mut list, &params).expect("the rename is allowed");
         assert_eq!(list[1].name, "Power Saver");
         assert_eq!(list[0].actions, vec![Action::LowPower(true)]);
+    }
+
+    #[test]
+    fn picker_gives_each_shortcut_its_index_name_colour_and_action_count() {
+        let list = two_saves();
+        let r = picker(&list).unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r.get("0").map(|i| i.title()), Some("Save Battery"));
+        assert_eq!(r.get("0").and_then(|i| i.property("color")), Some("3"));
+        assert_eq!(r.get("1").and_then(|i| i.property("actions")), Some("0"));
+        let by_colour: Vec<&str> = r.with_property_value("color", "2").iter().map(|i| i.id()).collect();
+        assert_eq!(by_colour, vec!["1"]);
+    }
+
+    #[test]
+    fn the_entity_query_reads_its_subtitles_from_the_picker() {
+        let q = EntityQuery::Suggested;
+        let got = entities(&two_saves(), SHORTCUT, &q).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].title, "Save Battery");
+        assert_eq!(got[1].title, "Save Power");
+    }
+
+    #[test]
+    fn the_shortcut_in_front_is_the_selected_annotation() {
+        let mut ctx = OnscreenContext::new();
+        assert_eq!(frontmost(&ctx), None);
+        ctx.annotate(0, EntityRef { type_name: SHORTCUT.into(), id: "0".into() }, false).unwrap();
+        assert_eq!(frontmost(&ctx), None, "shown but not in front");
+        ctx.annotate(1, EntityRef { type_name: SHORTCUT.into(), id: "1".into() }, true).unwrap();
+        assert_eq!(frontmost(&ctx), Some(1));
+        assert!(ctx.set_visible(1, false));
+        assert_eq!(frontmost(&ctx), None, "a hidden view is not on screen");
+    }
+
+    #[test]
+    fn a_grid_shows_every_tile_and_an_editor_shows_one_in_front() {
+        let grid = onscreen_context(&[(0, false), (1, false)]);
+        assert_eq!(frontmost(&grid), None);
+        assert_eq!(grid.view_annotations().len(), 2);
+        let editor = onscreen_context(&[(1, true)]);
+        assert_eq!(frontmost(&editor), Some(1));
+    }
+
+    #[test]
+    fn with_no_parameter_the_shortcut_in_front_is_used() {
+        let list = two_saves();
+        let planner = Planner::new();
+        let r = perform(&list, RUN, &Json::Obj(Vec::new()), Some(0), &planner).err().map(|e| e.message);
+        assert_eq!(r, Some("Save Battery cannot run on this device yet".to_string()));
+        let plan = perform(&list, PLAN, &Json::Obj(Vec::new()), Some(0), &planner).unwrap();
+        assert_eq!(plan.dialog.as_deref(), Some("Save Battery runs 1 step."));
+    }
+
+    #[test]
+    fn with_no_parameter_and_nothing_in_front_the_parameter_is_asked_for() {
+        let list = two_saves();
+        let err = perform(&list, PLAN, &Json::Obj(Vec::new()), None, &Planner::new()).err();
+        assert_eq!(err.map(|e| e.message), Some("Shortcut is required".to_string()));
+    }
+
+    #[test]
+    fn an_explicit_parameter_wins_over_the_shortcut_in_front() {
+        let list = two_saves();
+        let plan = perform(&list, PLAN, &obj(&[("shortcut", "Save Power")]), Some(0), &Planner::new());
+        assert_eq!(plan.err().map(|e| e.message), Some("Save Power has no actions".to_string()));
+    }
+
+    #[test]
+    fn the_planner_gives_the_same_text_as_planning_on_this_thread() {
+        let s = two_saves()[0].clone();
+        assert_eq!(Planner::new().plan(s.clone()), plan_text(&s));
+        assert_eq!(Planner::default().plan(two_saves()[1].clone()), Err("has no actions".to_string()));
     }
 }
