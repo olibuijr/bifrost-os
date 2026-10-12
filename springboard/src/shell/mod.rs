@@ -85,6 +85,7 @@ pub mod passcode;
 pub mod rotate;
 pub mod settings;
 pub mod settings_search;
+pub mod screensaver;
 pub mod storage;
 pub mod storage_page;
 pub mod gpu_page;
@@ -496,6 +497,8 @@ pub struct Shell {
     disk_check_ms: f64,
     /// Display & Brightness › Auto-Lock, ms; 0 never sleeps
     idle_off_ms: f64,
+    /// Settings > Screen Saver: idle activation and the saver on screen (see `screensaver`)
+    saver: screensaver::ScreenSaver,
     clock_24h: bool,
     lock_time: Option<Image>,
     lock_date: Option<Image>,
@@ -737,6 +740,7 @@ impl Shell {
             ota: None,
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
+            saver: screensaver::ScreenSaver::new(),
             clock_24h: true,
             lock_time: None,
             lock_date: None,
@@ -1088,6 +1092,7 @@ impl Shell {
             self.drawn = Drawn::Nothing;
         }
         self.idle_off_ms = low_battery::auto_lock_ms(o.auto_lock_ms, o.low_power) as f64;
+        self.saver.configure(o.screensaver_module, o.screensaver_minutes);
         if self.clock_24h != o.clock_24h {
             self.clock_24h = o.clock_24h;
             self.chrome.time = None;
@@ -2019,6 +2024,10 @@ impl Shell {
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         self.last_input = t;
         self.dirty = true;
+        // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)
+        if ev != Event::Power && self.saver_wake(t) {
+            return vec![];
+        }
         self.size_current_player_app();
         if ev == Event::Power {
             return if self.screen_on {
@@ -2350,6 +2359,7 @@ impl Shell {
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
                 let login_approved = st.take_login_approved();
+                let preview = st.take_screensaver_preview();
                 for change in changes {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
@@ -2375,6 +2385,9 @@ impl Shell {
                 }
                 if changed || matches!(ev, Event::Up(..)) {
                     self.apply_options();
+                }
+                if preview {
+                    self.saver_preview(t);
                 }
                 return fx;
             }
@@ -2467,6 +2480,7 @@ impl Shell {
         if self.screen_on && !self.is_locked() {
             self.dirty |= self.assistive_touch.tick(t);
         }
+        self.saver_tick(t);
         if self.screen_on && self.idle_off_ms > 0.0 && t - self.last_input > self.idle_off_ms && self.last_input > 0.0 {
             return self.sleep_screen();
         }
@@ -2624,6 +2638,13 @@ impl Shell {
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);
         damage.clear();
+        if self.saver_draw(s, t) {
+            damage.all();
+            self.drawn = Drawn::Nothing;
+            self.damage = damage;
+            self.rows = rows;
+            return &self.damage;
+        }
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()

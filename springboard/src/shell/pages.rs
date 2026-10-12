@@ -27,6 +27,8 @@ pub enum PageId {
     Bluetooth,
     BluetoothDetail,
     Wallpaper,
+    /// Settings > Screen Saver: the saver, Preview and Start After (see `screensaver`)
+    ScreenSaver,
     Sounds,
     Focus,
     Notifications,
@@ -184,6 +186,12 @@ pub enum Pick {
     SidebarIcons(usize),
     /// Appearance > Show scroll bars: index into `SCROLL_BAR_MODES`
     ScrollBars(usize),
+    /// Settings > Screen Saver: the index into `screensaver::SAVERS`
+    ScreenSaverModule(usize),
+    /// Settings > Screen Saver > Start After: the index into `screensaver::START_AFTER`
+    ScreenSaverStart(usize),
+    /// Settings > Screen Saver > Preview: the saver starts full screen (the shell does it, see `Settings::take_screensaver_preview`)
+    ScreenSaverPreview,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -468,6 +476,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
                     Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
                     Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
+                    Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
@@ -564,6 +573,19 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             page("Known Networks", false, vec![Group::new(rows).header("MY NETWORKS").footer("Networks higher in the list are joined first. Open a network to change its priority, turn off Auto-Join or forget it.")])
         }
         PageId::Wallpaper => page("Wallpaper", false, vec![]),
+        PageId::ScreenSaver => page(
+            "Screen Saver",
+            false,
+            vec![
+                Group::new(super::screensaver::SAVERS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.screensaver_module, Action::Pick(Pick::ScreenSaverModule(i)))).collect())
+                    .header("SCREEN SAVER"),
+                Group::new(vec![Item::new("Preview").tint(Tint::Blue).action(Action::Pick(Pick::ScreenSaverPreview))])
+                    .footer("Shows the screen saver full screen. Touch the screen or press a key to return."),
+                Group::new(super::screensaver::START_AFTER.iter().enumerate().map(|(i, (l, min))| Item::new(*l).check(*min == o.screensaver_minutes, Action::Pick(Pick::ScreenSaverStart(i)))).collect())
+                    .header("START AFTER")
+                    .footer("The screen saver starts once the computer has been idle for this long. The display still turns off at the Auto-Lock time."),
+            ],
+        ),
         PageId::Sounds => page(
             "Sounds",
             false,
@@ -1330,7 +1352,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Battery", "Privacy", "Passcode", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         assert_eq!(s.groups[2].items[8].value, "Lake Day");
         assert_eq!(s.groups[2].items[9].value, "63%");
@@ -1420,6 +1442,16 @@ mod tests {
         assert_eq!(e.groups[0].items.len(), SYSTEM_SLEEP.len());
         assert_eq!(e.groups[0].items[3].accessory, Accessory::Check(true));
         assert_eq!(e.groups[0].items[6].accessory, Accessory::Check(false));
+        let saver_opts = Options { screensaver_module: 1, screensaver_minutes: 5, ..Options::default() };
+        let ss = spec(PageId::ScreenSaver, &Model { opts: &saver_opts, ..model(&info, &opts) });
+        assert_eq!(ss.groups.len(), 3);
+        assert_eq!(ss.groups[0].items.len(), super::super::screensaver::SAVERS.len());
+        assert_eq!(ss.groups[0].items[1].accessory, Accessory::Check(true));
+        assert_eq!(ss.groups[0].items[0].accessory, Accessory::Check(false));
+        assert_eq!(ss.groups[1].items[0].label, "Preview");
+        assert_eq!(ss.groups[2].items.len(), super::super::screensaver::START_AFTER.len());
+        assert_eq!(ss.groups[2].items[2].accessory, Accessory::Check(true));
+        assert_eq!(ss.groups[2].items[6].accessory, Accessory::Check(false));
         let a = spec(PageId::AutoLock, &m);
         assert_eq!(a.groups[0].items.len(), AUTO_LOCK.len());
         assert_eq!(a.groups[0].items[4].accessory, Accessory::Check(true));

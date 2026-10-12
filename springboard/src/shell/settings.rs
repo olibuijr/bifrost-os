@@ -282,6 +282,8 @@ pub struct Settings {
     diag_rx: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     /// a crash log the user tapped, for the shell to show (see `take_view_request`)
     view_request: Option<PathBuf>,
+    /// Settings > Screen Saver > Preview was tapped; the shell starts the saver (see `take_screensaver_preview`)
+    screensaver_preview: bool,
     /// last download percent drawn, so the page rebuilds only when it moves
     update_pct: u64,
     /// stack depth when only the top page was last re-rendered: pages beneath it are stale, and
@@ -453,6 +455,7 @@ impl Settings {
             diag_note: String::new(),
             diag_rx: None,
             view_request: None,
+            screensaver_preview: false,
             update_pct: 0,
             stale_depth: 0,
             passcode: None,
@@ -650,6 +653,11 @@ impl Settings {
     /// The crash log the user tapped, for the shell to open in Files' viewer.
     pub(super) fn take_view_request(&mut self) -> Option<PathBuf> {
         self.view_request.take()
+    }
+
+    /// Settings > Screen Saver > Preview: true once after the row is tapped.
+    pub(super) fn take_screensaver_preview(&mut self) -> bool {
+        std::mem::take(&mut self.screensaver_preview)
     }
 
     /// Edits made on the notification pages, for the shell to apply.
@@ -897,6 +905,7 @@ impl Settings {
             "Display & Brightness" => PageId::Display,
             "Night Shift" => PageId::NightShift,
             "Wallpaper" => PageId::Wallpaper,
+            "Screen Saver" => PageId::ScreenSaver,
             "About" => PageId::About,
             "Battery" => PageId::Battery,
             "Focus" | "Do Not Disturb" => PageId::Focus,
@@ -1686,6 +1695,20 @@ impl Settings {
             Action::Pick(pick) => {
                 self.list_mut().expect("list").set_check(g, i);
                 match pick {
+                    Pick::ScreenSaverModule(k) => {
+                        self.opts.screensaver_module = k.min(super::screensaver::SAVERS.len() - 1);
+                        self.opts.save(prefs);
+                        vec![]
+                    }
+                    Pick::ScreenSaverStart(k) => {
+                        self.opts.screensaver_minutes = super::screensaver::START_AFTER[k.min(super::screensaver::START_AFTER.len() - 1)].1;
+                        self.opts.save(prefs);
+                        vec![]
+                    }
+                    Pick::ScreenSaverPreview => {
+                        self.screensaver_preview = true;
+                        vec![]
+                    }
                     Pick::AutoLock(k) => {
                         self.opts.auto_lock_ms = AUTO_LOCK[k].1;
                         self.opts.save(prefs);
@@ -2548,6 +2571,7 @@ mod tests {
             (vec!["Keyboard Shortcuts"], PageId::Shortcuts),
             (vec!["Accessibility"], PageId::Accessibility),
             (vec!["Wallpaper"], PageId::Wallpaper),
+            (vec!["Screen Saver"], PageId::ScreenSaver),
             (vec!["Battery"], PageId::Battery),
             (vec!["Privacy"], PageId::Privacy),
             (vec!["Privacy", "App Permissions"], PageId::PrivacyPermissions),
@@ -2893,6 +2917,22 @@ mod tests {
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
+    }
+
+    #[test]
+    fn screen_saver_picks_persist_and_preview_is_queued_once() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
+        assert_eq!(st.page(), PageId::ScreenSaver);
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Colours"), vec![]);
+        assert_eq!(prefs.get("screensaver_module"), Some("1"));
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "10 minutes"), vec![]);
+        assert_eq!(prefs.get("screensaver_minutes"), Some("10"));
+        assert!(!st.take_screensaver_preview());
+        tap_row(&mut st, &ui, &mut prefs, "Preview");
+        assert!(st.take_screensaver_preview(), "Preview asks the shell to start the saver");
+        assert!(!st.take_screensaver_preview(), "the request is taken once");
     }
 
     fn drag_slider(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label_row_above: Option<&str>, g: usize, i: usize, from: f32, to: f32) -> Vec<Effect> {
