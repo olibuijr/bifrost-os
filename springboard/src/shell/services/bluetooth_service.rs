@@ -16,7 +16,14 @@ use std::sync::Mutex;
 use super::{Event, Shell, SystemService};
 use crate::bare::bluetooth::{Cmd, Device, State, Status};
 use bifrost_core::bt_address::BdAddr;
+use bifrost_core::bt_service_browser::{Service, ServiceBrowser};
 use bifrost_core::json::Json;
+use bifrost_core::sdp_element::Uuid;
+
+/// Where a device's service records come from. BifrOSt runs no service query on the radio yet, so no record exists.
+pub const SERVICE_SOURCE: &str = "none";
+/// The note an app and the Settings page show with an empty service list.
+pub const SERVICE_NOTE: &str = "BifrOSt does not query a device's service records yet, so none are listed.";
 
 /// Most queued commands kept. The radio thread drains them on every shell tick, so this only bounds a flood.
 const QUEUE_CAP: usize = 256;
@@ -54,6 +61,9 @@ impl SystemService for BluetoothService {
     fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         if method == "status" {
             return Ok(status_json(&shell.info.bt));
+        }
+        if method == "services" {
+            return services_reply(&shell.info.bt, params, &[], SERVICE_SOURCE);
         }
         if let Some(cmd) = command(&shell.info.bt, method, params)? {
             queue(cmd);
@@ -171,6 +181,35 @@ pub(crate) fn connection_events(prev: &mut Option<Vec<String>>, bt: &Status) -> 
     out
 }
 
+/// A device's service list, as the service browser shows it: the records the allow list keeps (all of them with no
+/// list). `records` is what a service query returned; with none, the list is empty and `source` says so.
+pub(crate) fn services_reply(bt: &Status, params: &Json, records: &[Service], source: &str) -> Result<Json, String> {
+    let addr = address(params)?;
+    let device = bt.devices.iter().find(|d| d.addr.parse::<BdAddr>().ok() == Some(addr)).ok_or_else(|| format!("no device {addr}"))?;
+    let mut browser = ServiceBrowser::new();
+    browser.set_title(device.label());
+    let shown = browser.visible(records);
+    Ok(Json::Obj(vec![
+        ("device".to_string(), Json::Str(device.addr.clone())),
+        ("source".to_string(), Json::Str(source.to_string())),
+        ("note".to_string(), Json::Str(SERVICE_NOTE.to_string())),
+        ("services".to_string(), Json::Arr(shown.iter().map(service_json).collect())),
+    ]))
+}
+
+fn service_json(s: &Service) -> Json {
+    Json::Obj(vec![("uuid".to_string(), Json::Str(uuid_text(s.class_uuid))), ("name".to_string(), Json::Str(s.name.clone()))])
+}
+
+/// A service class UUID in hex: four, eight or thirty-two digits for the 16-, 32- and 128-bit forms.
+fn uuid_text(u: Uuid) -> String {
+    match u {
+        Uuid::U16(v) => format!("{v:04X}"),
+        Uuid::U32(v) => format!("{v:08X}"),
+        Uuid::U128(bytes) => bytes.iter().map(|b| format!("{b:02X}")).collect(),
+    }
+}
+
 fn event(kind: &str, addr: &str, name: &str) -> Event {
     Event {
         app: None,
@@ -263,5 +302,30 @@ mod tests {
         queue(Cmd::Enable(false));
         assert_eq!(take_commands(), vec![Cmd::Scan, Cmd::Enable(false)]);
         assert!(take_commands().is_empty());
+    }
+
+    #[test]
+    fn services_of_a_known_device_are_empty_and_labelled_none_without_a_query() {
+        let bt = radio(State::On, vec![dev("AA:BB:CC:DD:EE:01", "Buds", true, true)]);
+        let j = services_reply(&bt, &Json::Str("AA:BB:CC:DD:EE:01".into()), &[], SERVICE_SOURCE).unwrap();
+        assert_eq!(j.get("device").and_then(Json::as_str), Some("AA:BB:CC:DD:EE:01"));
+        assert_eq!(j.get("source").and_then(Json::as_str), Some("none"));
+        assert_eq!(j.get("services").and_then(Json::as_array).map(|a| a.len()), Some(0));
+        assert!(services_reply(&bt, &Json::Str("AA:BB:CC:DD:EE:99".into()), &[], SERVICE_SOURCE).is_err());
+    }
+
+    #[test]
+    fn services_list_every_record_when_there_is_no_allow_list() {
+        let bt = radio(State::On, vec![dev("AA:BB:CC:DD:EE:01", "Buds", true, true)]);
+        let records = vec![
+            Service { class_uuid: Uuid::U16(0x110B), name: "Audio Sink".into() },
+            Service { class_uuid: Uuid::U16(0x1124), name: "Keyboard".into() },
+        ];
+        let j = services_reply(&bt, &Json::Str("AA:BB:CC:DD:EE:01".into()), &records, "sdp").unwrap();
+        let shown = j.get("services").and_then(Json::as_array).unwrap();
+        assert_eq!(shown.len(), 2);
+        assert_eq!(shown[0].get("uuid").and_then(Json::as_str), Some("110B"));
+        assert_eq!(shown[1].get("name").and_then(Json::as_str), Some("Keyboard"));
+        assert_eq!(uuid_text(Uuid::U32(0x0000_1101)), "00001101");
     }
 }

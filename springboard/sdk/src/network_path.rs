@@ -54,6 +54,38 @@ pub fn path_event(service: &str, event: &str, body: &Json) -> Option<Result<Path
     Some(wire::path_from_json(body))
 }
 
+/// Opens a DNS-SD browse for a service type such as `_http._tcp` in the `local.` domain. Reply: [`reference_from_reply`].
+/// The shell has no DNS-SD daemon yet, so a browse finds no instances (its reply says `source` is `"none"`).
+pub fn dnssd_browse(ctx: &Ctx, service_type: &str) -> u32 {
+    crate::service::call(ctx, SERVICE, "dnssdBrowse", &Json::Str(service_type.to_string()))
+}
+
+/// Asks an open browse for its instance names. Reply: [`instances_from_reply`].
+pub fn dnssd_instances(ctx: &Ctx, reference: u32) -> u32 {
+    crate::service::call(ctx, SERVICE, "dnssdInstances", &Json::Num(f64::from(reference)))
+}
+
+/// Takes the next change of an open browse. Reply: `{added}`, `{removed}` or `null` when none is waiting.
+pub fn dnssd_next(ctx: &Ctx, reference: u32) -> u32 {
+    crate::service::call(ctx, SERVICE, "dnssdNext", &Json::Num(f64::from(reference)))
+}
+
+/// Closes a browse. Its reference number is retired and never handed out again. Reply: `{dropped}`.
+pub fn dnssd_close(ctx: &Ctx, reference: u32) -> u32 {
+    crate::service::call(ctx, SERVICE, "dnssdClose", &Json::Num(f64::from(reference)))
+}
+
+/// The reference number a `dnssdBrowse` reply carries.
+pub fn reference_from_reply(reply: &Json) -> Result<u32, String> {
+    reply.get("ref").and_then(Json::as_u64).and_then(|n| u32::try_from(n).ok()).ok_or_else(|| "browse reply has no reference".to_string())
+}
+
+/// The instance names an `dnssdInstances` reply lists.
+pub fn instances_from_reply(reply: &Json) -> Result<Vec<String>, String> {
+    let items = reply.get("instances").and_then(Json::as_array).ok_or("instances reply has no instances")?;
+    items.iter().map(|i| i.as_str().map(str::to_string).ok_or_else(|| "instance name is not text".to_string())).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,6 +95,17 @@ mod tests {
             r#"{{"status":"{status}","interfaces":[{{"name":"eth0","kind":"wired"}}],"expensive":{expensive},"ipv4":true,"ipv6":false}}"#
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn dns_sd_replies_carry_the_reference_and_the_instance_names() {
+        let open = bifrost_core::json::parse(r#"{"ref":4,"name":"_http._tcp.local.","domain":"local.","source":"none"}"#).unwrap();
+        assert_eq!(reference_from_reply(&open), Ok(4));
+        let listed = bifrost_core::json::parse(r#"{"ref":4,"source":"none","instances":["Nas","Printer"]}"#).unwrap();
+        assert_eq!(instances_from_reply(&listed), Ok(vec!["Nas".to_string(), "Printer".to_string()]));
+        assert!(reference_from_reply(&Json::Null).is_err());
+        let bad = bifrost_core::json::parse(r#"{"instances":[1]}"#).unwrap();
+        assert!(instances_from_reply(&bad).is_err());
     }
 
     #[test]

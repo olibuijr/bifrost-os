@@ -157,6 +157,34 @@ fn flag(v: &Json, key: &str) -> bool {
     matches!(v.get(key), Some(Json::Bool(true)))
 }
 
+/// Asks for a device's service list. Reply: [`services_from_reply`]. The shell runs no service query yet, so the
+/// list is empty and `source` is `"none"`.
+pub fn services(ctx: &Ctx, address: BdAddr) -> u32 {
+    service::call(ctx, SERVICE, "services", &Json::Str(address.to_string()))
+}
+
+/// A device's service list. Each service is `(uuid, name)`, the UUID in hex.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServiceList {
+    pub device: String,
+    /// Where the records came from: `"none"` when no query has run.
+    pub source: String,
+    pub note: String,
+    pub services: Vec<(String, String)>,
+}
+
+/// Reads a `services` reply. A missing field or a malformed service is an `Err`, never a guessed list.
+pub fn services_from_reply(reply: &Json) -> Result<ServiceList, String> {
+    let text = |key: &str| reply.get(key).and_then(Json::as_str).map(str::to_string).ok_or_else(|| format!("services reply has no {key}"));
+    let mut services = Vec::new();
+    for item in reply.get("services").and_then(Json::as_array).ok_or("services reply has no services")? {
+        let uuid = item.get("uuid").and_then(Json::as_str).ok_or("service has no uuid")?;
+        let name = item.get("name").and_then(Json::as_str).ok_or("service has no name")?;
+        services.push((uuid.to_string(), name.to_string()));
+    }
+    Ok(ServiceList { device: text("device")?, source: text("source")?, note: text("note")?, services })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,5 +262,25 @@ mod tests {
         assert!(!bt.apply_event("connected", &obj(vec![("addr", Json::Str("nope".into()))])));
         assert!(!bt.apply_event("dock_changed", &Json::Null));
         assert!(bt.take_events().is_empty());
+    }
+
+    #[test]
+    fn a_services_reply_is_read_with_its_source_and_list() {
+        let body = bifrost_core::json::parse(
+            r#"{"device":"AA:BB:CC:DD:EE:01","source":"none","note":"n","services":[{"uuid":"110B","name":"Audio Sink"}]}"#,
+        )
+        .unwrap();
+        let list = services_from_reply(&body).unwrap();
+        assert_eq!(list.device, "AA:BB:CC:DD:EE:01");
+        assert_eq!(list.source, "none");
+        assert_eq!(list.services, vec![("110B".to_string(), "Audio Sink".to_string())]);
+    }
+
+    #[test]
+    fn a_malformed_services_reply_is_an_error() {
+        let no_list = bifrost_core::json::parse(r#"{"device":"A","source":"none","note":"n"}"#).unwrap();
+        assert!(services_from_reply(&no_list).is_err());
+        let no_name = bifrost_core::json::parse(r#"{"device":"A","source":"none","note":"n","services":[{"uuid":"1101"}]}"#).unwrap();
+        assert!(services_from_reply(&no_name).is_err());
     }
 }
