@@ -556,6 +556,15 @@ impl Desk {
 }
 
 /// Dock icon rectangles (px) for `n` icons and the capsule behind them.
+/// The Calendar app's package id: its Dock tile shows today's weekday and date over the package icon.
+const CALENDAR_TILE: &str = "is.olibuijr.calendar.desktop";
+
+/// The weekday and day of the month on the Calendar tile: ("Mon", "12") for Monday the 12th.
+pub(super) fn calendar_face_text(wday: i32, mday: i32) -> (&'static str, String) {
+    const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    (DAYS[wday.rem_euclid(7) as usize], mday.to_string())
+}
+
 pub fn dock_rects(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep_after: Option<usize>, sep: i32) -> (Rect, Vec<Rect>) {
     let seps: Vec<usize> = sep_after.into_iter().collect();
     dock_rects_seps(m, icon, pad, gap, n, &seps, sep)
@@ -1535,6 +1544,21 @@ impl Shell {
         self.label(&name, 13.0, Weight::Semibold, if focused { super::ui::LABEL.now() } else { super::ui::LABEL_2.now() }, |im| s.blit(im, r.x + (r.w - im.w as i32) / 2, r.y + (m.title - im.h as i32) / 2, 255, 255));
     }
 
+    /// The Calendar tile's face. The package icon is a fixed picture, so the Dock repaints its paper and sets today's
+    /// weekday (red) over the day number (black), as the Dock shows the date. `(x, y, w, h)` is the tile.
+    fn calendar_tile_face(&self, s: &mut Surface, scale: f32, (x, y, w, h): (f32, f32, f32, f32), (wday, mday): (i32, i32)) {
+        let (day, num) = calendar_face_text(wday, mday);
+        // the paper covers the baked picture between the squircle's rounded sides
+        s.fill_rrect(x + w * 0.16, y, w * 0.68, h, 0.0, WHITE);
+        let cx = x + w / 2.0;
+        self.label(day, 0.2 * h / scale, Weight::Semibold, SYSTEM_RED, |im| {
+            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.06 * h) as i32, 255, 255);
+        });
+        self.label(&num, 0.5 * h / scale, Weight::Regular, BLACK, |im| {
+            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.34 * h) as i32, 255, 255);
+        });
+    }
+
     fn draw_desk_dock(&self, s: &mut Surface, m: &Metrics, t: f64) {
         if !self.dock_is_visible(){return;}
         let (list, bar0, rects0) = self.desk_dock(m);
@@ -1631,6 +1655,9 @@ impl Shell {
                 let mut cache = desk.icon_cache.borrow_mut(); if cache.len() > 48 { cache.retain(|k, _| k.1 == r.w as usize); if cache.len() > 48 { cache.clear(); } }
                 let icon = cache.entry((base.px.as_ptr() as usize, r.w as usize)).or_insert_with(|| base.resized(r.w as usize, r.h as usize));
                 s.blit(icon, r.x, r.y, 255, if pressed { 150 } else { 255 });
+            }
+            if apps()[i].icon == CALENDAR_TILE {
+                self.calendar_tile_face(s, ui.s, (r.x as f32, r.y as f32, r.w as f32, r.h as f32), (self.info.wday, self.info.mday));
             }
             let id = apps()[i].id;
             #[cfg(feature = "desktop-wayland")]
@@ -2203,5 +2230,20 @@ fn glass_active(s: bifrost_proto::MaterialState) -> Option<bool> {
         bifrost_proto::MaterialState::FollowsWindowActiveState => None,
         bifrost_proto::MaterialState::Active => Some(true),
         bifrost_proto::MaterialState::Inactive => Some(false),
+    }
+}
+
+#[cfg(test)]
+mod calendar_tile_tests {
+    use super::calendar_face_text;
+
+    #[test]
+    fn the_calendar_tile_shows_the_day_it_is_not_a_fixed_picture() {
+        // Monday 12 October 2026: the tile reads "Mon" over "12", never the baked "Tue 1"
+        assert_eq!(calendar_face_text(1, 12), ("Mon", "12".to_string()));
+        assert_eq!(calendar_face_text(2, 1), ("Tue", "1".to_string()));
+        // weekday 0 is Sunday; a negative index wraps to Saturday rather than panicking
+        assert_eq!(calendar_face_text(0, 4), ("Sun", "4".to_string()));
+        assert_eq!(calendar_face_text(-1, 31), ("Sat", "31".to_string()));
     }
 }
