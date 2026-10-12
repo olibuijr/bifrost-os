@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-audio-setup"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-audio-hal = { path = "../../audio/hal" }
+bifrost-audio-types = { path = "../../audio/types" }

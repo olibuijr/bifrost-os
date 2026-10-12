@@ -353,6 +353,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-audio-setup"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
+]
+
+[[package]]
 name = "bifrost-audio-shm"
 version = "0.1.0"
 dependencies = [
