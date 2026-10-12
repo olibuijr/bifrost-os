@@ -483,10 +483,16 @@ python3 tools/midget.py qa-install [--disk /dev/nvme0n1] [--shots DIR] [--timeou
 It removes a stale `/boot/EFI/BIFROST/unattended.toml`, sets BootNext to PXE and reboots into the live lab ISO. The installer
 publishes the visible screen to `/run/bifrost-installer/state` (`size=`, `screen=`, `stage=`, `percent=`, one `button=<id> x y w h`
 per button and `field=<id> x y w h <focused>` per text field, panel pixels, written by rename). qa-install reads it per screen,
-saves a screenshot, and taps through Welcome, Language, Account (full name, username and the password from `login_password()` typed
-into the tapped fields, never printed), Disk (`--disk`, else the one internal NVMe), Confirm, Progress (logs stage and percent) and
-Restart, using a temporary uinput absolute pointer and keyboard over ssh. Then it follows the first boot as `reinstall` does
-(`phase=accepted`, the account's session, MCP). The report with each step, time and screenshot is
+saves a screenshot, and taps through Welcome, Language (English, and the keyboard layout `keyboard=` from `out/lab/account.conf`, picked
+with Tab, Up and Down in the keyboard column), Account (full name, username and the password from `login_password()` typed into the
+tapped fields, never printed), Disk (`--disk`, else the one internal NVMe), Confirm, Progress (logs stage and percent) and Restart.
+Taps use a temporary uinput absolute pointer over ssh. Typing goes through the installer's input FIFO `/run/bifrost-input`
+(`key CODE 1|0` lines; a fresh uinput keyboard is not picked up in time), using the installer's own keymap tables
+(`springboard/src/installer/keymaps_data.rs`): accented letters are typed as dead key then letter, AltGr is held where the layout
+needs it, and each field is cleared with Backspace first (the installer pre-fills the account name from the full name). So the
+lab account is `keyboard=is` for `full_name=Ólafur Búi Ólafsson`: U.S. has no key for Ó. If the Restart tap does not reboot,
+Return presses it; the reboot is seen as a new kernel boot id. Then it follows the first boot as `reinstall` does (the account's
+session, MCP; a fresh install has no update probation, so `recovery` shows an empty `phase=` until the first OTA). The report with each step, time and screenshot is
 `out/lab/logs/<stamp>-qa-install/report.md`; a screen that does not appear in its bound fails with the last screenshot.
 `reinstall` (below) stays for unattended runs.
 
