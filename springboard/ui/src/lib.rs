@@ -759,3 +759,6 @@ pub mod vertex_descriptor;
 pub mod gatt;
 pub mod pip_window;
 pub mod content_proposal;
+pub mod route_auth;
+pub mod route_action;
+pub mod route_picker;
