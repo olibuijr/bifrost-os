@@ -97,6 +97,19 @@ impl UpNext {
         true
     }
 
+    /// Takes every upcoming song out of the queue; the current song and what has played stay. Returns how many
+    /// songs were taken out (0 when nothing was upcoming).
+    pub fn clear_upcoming(&mut self) -> usize {
+        let from = (self.current + 1).min(self.items.len());
+        let gone: Vec<PathBuf> = self.items.drain(from..).collect();
+        for path in &gone {
+            if let Some(p) = self.original.iter().position(|q| q == path) {
+                self.original.remove(p);
+            }
+        }
+        gone.len()
+    }
+
     /// Moves the `from`-th upcoming song to the `to`-th place.
     pub fn move_upcoming(&mut self, from: usize, to: usize) -> bool {
         let n = self.upcoming().len();
@@ -289,5 +302,35 @@ mod tests {
         assert!(UpNext::from_text("junk").is_none());
         assert!(UpNext::from_text("springboard-queue 1\ncurrent 3\nq /m/a.mp3\n").is_none(), "current out of range");
         assert!(UpNext::from_text("springboard-queue 1\ncurrent 0\n").is_none(), "no songs");
+    }
+
+    #[test]
+    fn clear_up_next_keeps_the_current_song_and_what_played() {
+        let mut q = UpNext::new(paths(&["a", "b", "c", "d", "e"]), 1);
+        assert_eq!(q.clear_upcoming(), 3);
+        assert_eq!(names(q.items()), ["a", "b"]);
+        assert_eq!((q.current(), q.current_path().cloned()), (1, Some(PathBuf::from("/m/b.mp3"))));
+        assert!(q.upcoming().is_empty());
+        assert_eq!(q.clear_upcoming(), 0, "nothing left to clear");
+    }
+
+    #[test]
+    fn clear_up_next_with_nothing_upcoming_changes_nothing() {
+        let mut empty = UpNext::default();
+        assert_eq!(empty.clear_upcoming(), 0);
+        let mut last = UpNext::new(paths(&["a", "b"]), 1);
+        assert_eq!(last.clear_upcoming(), 0);
+        assert_eq!(names(last.items()), ["a", "b"]);
+    }
+
+    #[test]
+    fn clear_up_next_while_shuffled_restores_the_played_order_when_shuffle_goes_off() {
+        let mut q = UpNext::new(paths(&["a", "b", "c", "d", "e"]), 1);
+        q.set_shuffle(true, 7);
+        assert_eq!(q.clear_upcoming(), 3);
+        assert_eq!(names(q.items()), ["a", "b"]);
+        q.set_shuffle(false, 0);
+        assert_eq!(names(q.items()), ["a", "b"]);
+        assert_eq!(q.current(), 1);
     }
 }
