@@ -241,6 +241,11 @@ impl Default for CanvasState {
 }
 
 impl CanvasState {
+    /// Whether every stack is back at its start (no clip, transform or opacity pushed).
+    pub fn is_empty(&self) -> bool {
+        self.transforms.is_empty() && self.clips.is_empty() && self.alphas.is_empty()
+    }
+
     pub fn transform(&self) -> Transform2D {
         self.t
     }
@@ -346,7 +351,9 @@ static FACES: Mutex<Vec<(u64, &'static [u8])>> = Mutex::new(Vec::new());
 
 thread_local! {
     static FONTS: RefCell<HashMap<u64, Font<'static>>> = RefCell::new(HashMap::new());
-    static SURFACE_STATE: RefCell<CanvasState> = RefCell::new(CanvasState::default());
+    /// Canvas state of each `Surface` being drawn on this thread, keyed by its pixel buffer's address, so a scratch
+    /// or band surface never sees another surface's clips and transforms. An entry goes when its stacks are empty.
+    static SURFACE_STATE: RefCell<HashMap<usize, CanvasState>> = RefCell::new(HashMap::new());
 }
 
 /// Registers font data and returns the face id a `TextRun` uses: the address of the data. Registering the same data
@@ -397,14 +404,32 @@ pub(crate) fn text_extent(run: &TextRun) -> Option<(f32, f32)> {
     })
 }
 
-/// The state of the `Surface` canvas on this thread.
-pub(crate) fn surface_state() -> CanvasState {
-    SURFACE_STATE.with(|c| c.borrow().clone())
+/// The identity of a surface's canvas state: the address of its first pixel.
+fn surface_key(s: &Surface<'_>) -> usize {
+    s.px.as_ptr() as usize
 }
 
-/// Resets the `Surface` canvas state on this thread (for tests and for callers that abandon a half-finished frame).
+/// The canvas state of `s` on this thread.
+pub(crate) fn surface_state(s: &Surface<'_>) -> CanvasState {
+    SURFACE_STATE.with(|c| c.borrow().get(&surface_key(s)).cloned().unwrap_or_default())
+}
+
+/// Changes the canvas state of `s`; the entry is dropped once every stack is empty again.
+fn edit_surface_state(s: &Surface<'_>, f: impl FnOnce(&mut CanvasState)) {
+    let key = surface_key(s);
+    SURFACE_STATE.with(|c| {
+        let mut map = c.borrow_mut();
+        let st = map.entry(key).or_default();
+        f(st);
+        if st.is_empty() {
+            map.remove(&key);
+        }
+    });
+}
+
+/// Resets every `Surface` canvas state on this thread (for tests and for callers that abandon a half-finished frame).
 pub fn reset_surface_state() {
-    SURFACE_STATE.with(|c| *c.borrow_mut() = CanvasState::default());
+    SURFACE_STATE.with(|c| c.borrow_mut().clear());
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -822,8 +847,8 @@ fn run(s: &mut Surface, st: &CanvasState, local: RectF, map: Map, lerp: bool, ba
 }
 
 /// The current state, with the map for its transform. `None` when the transform is singular.
-fn current() -> Option<(CanvasState, Map)> {
-    let st = surface_state();
+fn current(s: &Surface<'_>) -> Option<(CanvasState, Map)> {
+    let st = surface_state(s);
     let map = map_of(st.transform())?;
     Some((st, map))
 }
@@ -834,7 +859,7 @@ impl Canvas for Surface<'_> {
     }
 
     fn fill_rect(&mut self, r: RectF, color: u32) {
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         run(self, &st, r, map, false, false, &|s, o| {
             if let Some((x, y, w, h)) = pixel_rect(s, r, o) {
                 s.fill_rect(x, y, w, h, color);
@@ -843,12 +868,12 @@ impl Canvas for Surface<'_> {
     }
 
     fn fill_rrect(&mut self, r: RectF, radius: f32, color: u32) {
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         run(self, &st, r, map, false, false, &|s, o| s.fill_rrect(r.x + o.0, r.y + o.1, r.w, r.h, radius, color));
     }
 
     fn stroke_rrect(&mut self, r: RectF, radius: f32, width: f32, color: u32) {
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         run(self, &st, r, map, false, false, &|s, o| s.stroke_rrect(r.x + o.0, r.y + o.1, r.w, r.h, radius, width, color));
     }
 
@@ -856,7 +881,7 @@ impl Canvas for Surface<'_> {
         if stops.is_empty() {
             return;
         }
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         run(self, &st, r, map, false, false, &|s, o| {
             shape_fill(s, r, radius, o, &|lx, ly| ramp(stops, linear_t(start, end, lx, ly)));
         });
@@ -866,7 +891,7 @@ impl Canvas for Surface<'_> {
         if color >> 24 == 0 {
             return;
         }
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         let sigma = blur.max(0.0) / 2.0;
         let rb = sigma.round() as usize;
         let pad = 3.0 * sigma.round() + 2.0 + offset.0.abs().max(offset.1.abs());
@@ -925,7 +950,7 @@ impl Canvas for Surface<'_> {
 
     fn text(&mut self, run_: &TextRun, color: u32) {
         let Some(img) = render_text(run_, crate::appearance::contrast(color)) else { return };
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         let r = RectF::new(run_.x, run_.y, img.w as f32, img.h as f32);
         run(self, &st, r, map, false, false, &|s, o| {
             s.blit(&img, (run_.x + o.0).round() as i32, (run_.y + o.1).round() as i32, 255, 255);
@@ -947,7 +972,7 @@ impl Canvas for Surface<'_> {
             PathPaint::Stroke(w) => w.max(0.0) / 2.0,
             _ => 0.0,
         };
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         let local = RectF::new(x0 - hw - 1.0, y0 - hw - 1.0, x1 - x0 + 2.0 * hw + 2.0, y1 - y0 + 2.0 * hw + 2.0);
         run(self, &st, local, map, false, false, &|s, o| {
             let shifted: Vec<(Vec<(f32, f32)>, bool)> =
@@ -961,7 +986,7 @@ impl Canvas for Surface<'_> {
     }
 
     fn material(&mut self, r: RectF, radius: f32, style: MaterialStyle) {
-        let Some((st, map)) = current() else { return };
+        let Some((st, map)) = current(self) else { return };
         let tint = style.tint;
         let blur = style.blur.max(0.0).round() as usize;
         // A material under a rotation or scale covers the device box of its rectangle.
@@ -975,27 +1000,27 @@ impl Canvas for Surface<'_> {
     }
 
     fn push_clip(&mut self, r: RectF, radius: f32) {
-        SURFACE_STATE.with(|c| c.borrow_mut().push_clip(r, radius));
+        edit_surface_state(self, |st| st.push_clip(r, radius));
     }
 
     fn pop_clip(&mut self) {
-        SURFACE_STATE.with(|c| c.borrow_mut().pop_clip());
+        edit_surface_state(self, |st| st.pop_clip());
     }
 
     fn push_transform(&mut self, t: Transform2D) {
-        SURFACE_STATE.with(|c| c.borrow_mut().push_transform(t));
+        edit_surface_state(self, |st| st.push_transform(t));
     }
 
     fn pop_transform(&mut self) {
-        SURFACE_STATE.with(|c| c.borrow_mut().pop_transform());
+        edit_surface_state(self, |st| st.pop_transform());
     }
 
     fn push_opacity(&mut self, alpha: f32) {
-        SURFACE_STATE.with(|c| c.borrow_mut().push_opacity(alpha));
+        edit_surface_state(self, |st| st.push_opacity(alpha));
     }
 
     fn pop_opacity(&mut self) {
-        SURFACE_STATE.with(|c| c.borrow_mut().pop_opacity());
+        edit_surface_state(self, |st| st.pop_opacity());
     }
 }
 
@@ -1006,7 +1031,7 @@ fn draw_image(s: &mut Surface, img: ImageRef<'_>, dst: RectF, alpha: f32, tint: 
     if w == 0 || h == 0 || img.image.w == 0 || img.image.h == 0 {
         return;
     }
-    let Some((st, map)) = current() else { return };
+    let Some((st, map)) = current(s) else { return };
     let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
     let scaled = if img.image.w == w && img.image.h == h { None } else { Some(img.image.resized(w, h)) };
     let src: &Image = scaled.as_ref().unwrap_or(img.image);
@@ -1262,5 +1287,24 @@ mod tests {
         }
         assert_eq!(px[3 * 8 + 3], RED);
         assert_eq!(px[4], 0);
+    }
+
+    /// Each surface has its own clip stack: a clip pushed on one surface must not cut drawing on another (the scratch
+    /// surfaces the impl composites through, nested layers).
+    #[test]
+    fn clips_do_not_leak_between_surfaces() {
+        reset_surface_state();
+        let mut a_px = vec![0u32; 8 * 8];
+        let mut b_px = vec![0u32; 8 * 8];
+        let mut a = Surface { w: 8, h: 8, stride: 8, px: &mut a_px[..], y0: 0 };
+        let mut b = Surface { w: 8, h: 8, stride: 8, px: &mut b_px[..], y0: 0 };
+        Canvas::push_clip(&mut a, RectF::new(0.0, 0.0, 2.0, 2.0), 0.0);
+        Canvas::fill_rect(&mut b, RectF::new(0.0, 0.0, 8.0, 8.0), 0xff00_00ff);
+        Canvas::fill_rect(&mut a, RectF::new(0.0, 0.0, 8.0, 8.0), 0xff00_00ff);
+        Canvas::pop_clip(&mut a);
+        drop((a, b));
+        assert_eq!(b_px.iter().filter(|&&p| p != 0).count(), 64, "b is not clipped by a's clip");
+        assert_eq!(a_px.iter().filter(|&&p| p != 0).count(), 4, "a is clipped to its 2x2 clip");
+        SURFACE_STATE.with(|c| assert!(c.borrow().is_empty(), "balanced pushes and pops leave no state behind"));
     }
 }
