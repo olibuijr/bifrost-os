@@ -794,3 +794,6 @@ pub mod photo_request;
 pub mod fs_volume;
 pub mod fs_probe;
 pub mod fs_maintenance;
+pub mod keychain_save;
+pub mod keychain_settings;
+pub mod certificate_trust;
