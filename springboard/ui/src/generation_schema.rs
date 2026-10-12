@@ -3,6 +3,8 @@
 //! constrains a model while it writes. An app uses `validate` to learn whether a reply fits, and `describe` to put the
 //! shape in its prompt.
 
+use std::fmt;
+
 /// A value as a model returns it: the content of a structured response.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -190,6 +192,294 @@ fn check_object(props: &[Property], fields: &[(String, Value)], path: &str, issu
         if !props.iter().any(|p| p.name == *key) {
             problem(issues, &format!("{path}.{key}"), "not in the schema");
         }
+    }
+}
+
+/// Why a text is not a JSON value: the byte offset where the reading stopped, and what was expected there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParseError {
+    pub at: usize,
+    pub message: &'static str,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid JSON at byte {}: {}", self.at, self.message)
+    }
+}
+
+/// Nesting deeper than this is refused, so a hostile reply cannot exhaust the stack.
+const MAX_DEPTH: usize = 64;
+
+/// Reads one JSON value from `text`. Surrounding white space is allowed; anything else after the value is an error.
+/// Object members keep their order, and a repeated key is kept twice, as it arrived.
+pub fn parse(text: &str) -> Result<Value, ParseError> {
+    let mut p = Parser { src: text, bytes: text.as_bytes(), pos: 0 };
+    p.skip_space();
+    let value = p.value(0)?;
+    p.skip_space();
+    if p.pos != p.bytes.len() {
+        return Err(p.error("text after the value"));
+    }
+    Ok(value)
+}
+
+struct Parser<'a> {
+    src: &'a str,
+    bytes: &'a [u8],
+    pos: usize,
+}
+
+impl Parser<'_> {
+    fn error(&self, message: &'static str) -> ParseError {
+        ParseError { at: self.pos, message }
+    }
+
+    fn skip_space(&mut self) {
+        while matches!(self.bytes.get(self.pos), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            self.pos += 1;
+        }
+    }
+
+    fn eat(&mut self, byte: u8) -> bool {
+        if self.bytes.get(self.pos) == Some(&byte) {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn literal(&mut self, word: &str, value: Value) -> Result<Value, ParseError> {
+        if self.bytes[self.pos..].starts_with(word.as_bytes()) {
+            self.pos += word.len();
+            Ok(value)
+        } else {
+            Err(self.error("expected a value"))
+        }
+    }
+
+    fn value(&mut self, depth: usize) -> Result<Value, ParseError> {
+        match self.bytes.get(self.pos) {
+            Some(b'{') => self.object(depth),
+            Some(b'[') => self.array(depth),
+            Some(b'"') => self.string().map(Value::Text),
+            Some(b't') => self.literal("true", Value::Bool(true)),
+            Some(b'f') => self.literal("false", Value::Bool(false)),
+            Some(b'n') => self.literal("null", Value::Null),
+            Some(b'-' | b'0'..=b'9') => self.number(),
+            _ => Err(self.error("expected a value")),
+        }
+    }
+
+    fn object(&mut self, depth: usize) -> Result<Value, ParseError> {
+        if depth >= MAX_DEPTH {
+            return Err(self.error("nesting is too deep"));
+        }
+        self.pos += 1;
+        let mut members = Vec::new();
+        self.skip_space();
+        if self.eat(b'}') {
+            return Ok(Value::Object(members));
+        }
+        loop {
+            self.skip_space();
+            if self.bytes.get(self.pos) != Some(&b'"') {
+                return Err(self.error("expected a member name"));
+            }
+            let key = self.string()?;
+            self.skip_space();
+            if !self.eat(b':') {
+                return Err(self.error("expected ':' after a member name"));
+            }
+            self.skip_space();
+            members.push((key, self.value(depth + 1)?));
+            self.skip_space();
+            if self.eat(b'}') {
+                return Ok(Value::Object(members));
+            }
+            if !self.eat(b',') {
+                return Err(self.error("expected ',' or '}'"));
+            }
+        }
+    }
+
+    fn array(&mut self, depth: usize) -> Result<Value, ParseError> {
+        if depth >= MAX_DEPTH {
+            return Err(self.error("nesting is too deep"));
+        }
+        self.pos += 1;
+        let mut items = Vec::new();
+        self.skip_space();
+        if self.eat(b']') {
+            return Ok(Value::Array(items));
+        }
+        loop {
+            self.skip_space();
+            items.push(self.value(depth + 1)?);
+            self.skip_space();
+            if self.eat(b']') {
+                return Ok(Value::Array(items));
+            }
+            if !self.eat(b',') {
+                return Err(self.error("expected ',' or ']'"));
+            }
+        }
+    }
+
+    fn string(&mut self) -> Result<String, ParseError> {
+        self.pos += 1;
+        let mut out = String::new();
+        loop {
+            match self.bytes.get(self.pos) {
+                None => return Err(self.error("unterminated string")),
+                Some(b'"') => {
+                    self.pos += 1;
+                    return Ok(out);
+                }
+                Some(b'\\') => {
+                    self.pos += 1;
+                    out.push(self.escape()?);
+                }
+                Some(&b) if b < 0x20 => return Err(self.error("control character in a string")),
+                Some(_) => {
+                    // The position is always on a character boundary here: multi-byte characters are copied whole.
+                    let ch = self.src[self.pos..].chars().next().ok_or(self.error("unterminated string"))?;
+                    out.push(ch);
+                    self.pos += ch.len_utf8();
+                }
+            }
+        }
+    }
+
+    fn escape(&mut self) -> Result<char, ParseError> {
+        let byte = self.bytes.get(self.pos).copied();
+        self.pos += 1;
+        match byte {
+            Some(b'"') => Ok('"'),
+            Some(b'\\') => Ok('\\'),
+            Some(b'/') => Ok('/'),
+            Some(b'b') => Ok('\u{8}'),
+            Some(b'f') => Ok('\u{c}'),
+            Some(b'n') => Ok('\n'),
+            Some(b'r') => Ok('\r'),
+            Some(b't') => Ok('\t'),
+            Some(b'u') => {
+                let high = self.hex4()?;
+                if (0xD800..0xDC00).contains(&high) {
+                    if !(self.eat(b'\\') && self.eat(b'u')) {
+                        return Err(self.error("lone surrogate in a string"));
+                    }
+                    let low = self.hex4()?;
+                    if !(0xDC00..0xE000).contains(&low) {
+                        return Err(self.error("lone surrogate in a string"));
+                    }
+                    char::from_u32(0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00))
+                        .ok_or(self.error("invalid code point"))
+                } else {
+                    char::from_u32(high).ok_or(self.error("invalid code point"))
+                }
+            }
+            _ => Err(self.error("invalid escape in a string")),
+        }
+    }
+
+    fn hex4(&mut self) -> Result<u32, ParseError> {
+        let mut value = 0;
+        for _ in 0..4 {
+            let digit = self.bytes.get(self.pos).and_then(|&b| (b as char).to_digit(16));
+            value = value * 16 + digit.ok_or(self.error("expected four hex digits"))?;
+            self.pos += 1;
+        }
+        Ok(value)
+    }
+
+    fn number(&mut self) -> Result<Value, ParseError> {
+        let start = self.pos;
+        self.eat(b'-');
+        if self.eat(b'0') {
+            // A leading zero ends the integer part.
+        } else if !self.digits() {
+            return Err(self.error("expected a digit"));
+        }
+        if self.eat(b'.') && !self.digits() {
+            return Err(self.error("expected a digit after '.'"));
+        }
+        if self.eat(b'e') || self.eat(b'E') {
+            if !self.eat(b'+') {
+                self.eat(b'-');
+            }
+            if !self.digits() {
+                return Err(self.error("expected a digit in the exponent"));
+            }
+        }
+        // Only ASCII bytes were consumed, so the slice is on character boundaries.
+        let text = &self.src[start..self.pos];
+        match text.parse::<f64>() {
+            Ok(n) if n.is_finite() => Ok(Value::Number(n)),
+            _ => Err(ParseError { at: start, message: "number out of range" }),
+        }
+    }
+
+    /// Consumes one or more ASCII digits. Returns false when there is none.
+    fn digits(&mut self) -> bool {
+        let start = self.pos;
+        while matches!(self.bytes.get(self.pos), Some(b'0'..=b'9')) {
+            self.pos += 1;
+        }
+        self.pos > start
+    }
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+
+    #[test]
+    fn objects_arrays_and_scalars_parse_in_order() {
+        let v = parse(" { \"a\": [1, -0.5e2, true, null], \"b\": \"x\" } ").unwrap();
+        assert_eq!(
+            v,
+            Value::Object(vec![
+                ("a".into(), Value::Array(vec![Value::Number(1.0), Value::Number(-50.0), Value::Bool(true), Value::Null])),
+                ("b".into(), Value::Text("x".into())),
+            ])
+        );
+        assert_eq!(parse("[]").unwrap(), Value::Array(vec![]));
+        assert_eq!(parse("{}").unwrap(), Value::Object(vec![]));
+    }
+
+    #[test]
+    fn string_escapes_and_surrogate_pairs_decode() {
+        assert_eq!(parse("\"a\\n\\\"b\\\\\"").unwrap(), Value::Text("a\n\"b\\".into()));
+        assert_eq!(parse("\"\\u00f0\"").unwrap(), Value::Text("\u{f0}".into()));
+        assert_eq!(parse("\"\\ud83d\\ude00\"").unwrap(), Value::Text("\u{1F600}".into()));
+        assert_eq!(parse("\"\u{f0}\"").unwrap(), Value::Text("\u{f0}".into()), "non-ASCII is copied whole");
+    }
+
+    #[test]
+    fn a_leading_zero_ends_the_number_and_the_rest_is_an_error() {
+        let err = parse("[01]").unwrap_err();
+        assert_eq!(err, ParseError { at: 2, message: "expected ',' or ']'" });
+        assert_eq!(parse("01").unwrap_err().message, "text after the value");
+    }
+
+    #[test]
+    fn malformed_text_reports_the_offset_of_the_problem() {
+        assert_eq!(parse("{\"a\" 1}").unwrap_err(), ParseError { at: 5, message: "expected ':' after a member name" });
+        assert_eq!(parse("[1, 2").unwrap_err(), ParseError { at: 5, message: "expected ',' or ']'" });
+        assert_eq!(parse("\"abc").unwrap_err().message, "unterminated string");
+        assert_eq!(parse("\"\\ud83d x\"").unwrap_err().message, "lone surrogate in a string");
+        assert_eq!(parse("1e999").unwrap_err().message, "number out of range");
+        assert_eq!(parse("").unwrap_err(), ParseError { at: 0, message: "expected a value" });
+    }
+
+    #[test]
+    fn nesting_beyond_the_limit_is_refused() {
+        let ok = format!("{}{}", "[".repeat(MAX_DEPTH), "]".repeat(MAX_DEPTH));
+        assert!(parse(&ok).is_ok());
+        let deep = format!("{}{}", "[".repeat(MAX_DEPTH + 1), "]".repeat(MAX_DEPTH + 1));
+        assert_eq!(parse(&deep).unwrap_err().message, "nesting is too deep");
     }
 }
 
