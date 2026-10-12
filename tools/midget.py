@@ -1543,13 +1543,17 @@ def cmd_qa_install(args):
     if not s or s["screen"] != "done":
         return fail(f"install did not reach Done (screen={s['screen'] if s else 'none'}, {last})")
     step("Done screen", snap("done"))
+    # a reboot shows as a new kernel boot id (Midget can be down for less than a ping interval, and the installer first
+    # syncs and unmounts, so a ping gap is not a reliable sign)
+    live_boot = ssh("cat /proc/sys/kernel/random/boot_id", 10).strip()
+    rebooted = lambda: (b := ssh("cat /proc/sys/kernel/random/boot_id", 5).strip()) != "" and b != live_boot
     c = find_button(s, "restart")
-    if c and qa_tap(s, c) and wait(lambda: not ping(), 30, 1):
+    if c and qa_tap(s, c) and wait(lambda: not ping() or rebooted(), 90, 2):
         step("tapped Restart")
     else:
         # Restart is the default button: Return presses it
         qa_keys(["key 28 1", "key 28 0"])
-        if not wait(lambda: not ping(), 60, 1):
+        if not wait(lambda: not ping() or rebooted(), 90, 2):
             return fail("Restart (tap and Return) did not reboot")
         step("pressed Return on Restart")
     rc = qa_first_boot(step)
