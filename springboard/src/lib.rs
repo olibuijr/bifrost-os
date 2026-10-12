@@ -5,6 +5,7 @@ pub mod bootsplash;
 pub mod catalog;
 pub mod cff;
 pub mod emoji;
+pub mod first_frame_cache;
 pub mod font;
 pub mod gfx;
 pub mod gpu;

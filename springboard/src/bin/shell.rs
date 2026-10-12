@@ -36,6 +36,10 @@ fn run() -> std::io::Result<()> {
     use std::fs;
 
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--first-frame-cache") {
+        // run by the updater after an OS update: the first frame's caches for this panel (src/first_frame_cache.rs)
+        return springboard::first_frame_cache::rebuild_default();
+    }
     if args.get(1).map(String::as_str) == Some("--version") {
         // build stamp for `bifrost pc` diagnostics
         let b = springboard::shell::pages::BUILD;
@@ -141,7 +145,11 @@ fn run() -> std::io::Result<()> {
         }
     };
     let wallpaper = View::from_raw(mapped).ok_or_else(|| std::io::Error::other("bad wallpaper"))?;
-    let icon = |name: &str, size: usize| fs::read(format!("{dir}/icons/{name}.raw")).ok().and_then(|b| Image::from_raw(&b)).map(|i| i.resized(size, size));
+    // the first frame's icons come from the cache when it was built for this panel (boot-08), else they are decoded
+    let icon = |name: &str, size: usize| {
+        springboard::first_frame_cache::cached_icon(name, size)
+            .or_else(|| fs::read(format!("{dir}/icons/{name}.raw")).ok().and_then(|b| Image::from_raw(&b)).map(|i| i.resized(size, size)))
+    };
 
     // SPRINGBOARD_VIRTUAL=1200x1920: an emulated panel with no KMS, evdev or power files (headless
     // emulator on a dev host); input and screenshots go through the control socket
@@ -288,6 +296,10 @@ fn run() -> std::io::Result<()> {
     springboard::shell::keyboard::set_predictive_default(true);
     // the PC has a hardware keyboard: no on-screen keyboard in the shell or in apps
     springboard::shell::keyboard::set_disabled(true);
+    // the first frame's wallpaper is the cache's cover-fitted copy when it was built for this panel and this still (boot-08)
+    let wallpaper_file = springboard::first_frame_cache::wallpaper_path(&dir, &current_wallpaper).unwrap_or_default();
+    springboard::first_frame_cache::activate((w as u32, h as u32), &dir, &wallpaper_file);
+    let wallpaper = springboard::first_frame_cache::wallpaper().map_or(wallpaper, |i| View { w: i.w, h: i.h, px: &i.px[..] });
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
     shell.set_route(router.route(), vol.level(), false, 0.0);
@@ -815,6 +827,10 @@ fn run() -> std::io::Result<()> {
                 Effect::Wallpaper(id) => match map_wallpaper(&dir, &id).and_then(|m| View::from_raw(m).map(|v| (m, v))) {
                     Some((m, view)) => {
                         shell.set_wallpaper(view);
+                        // the first-frame caches follow the new still (boot-08): rebuilt in the background
+                        if let Some(path) = springboard::first_frame_cache::wallpaper_path(&dir, &id) {
+                            springboard::first_frame_cache::spawn_build_here((w as u32, h as u32), &dir, &path);
+                        }
                         unmap(std::mem::replace(&mut mapped, m));
                         current_wallpaper = id;
                     }

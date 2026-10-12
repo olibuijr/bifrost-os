@@ -599,6 +599,13 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // the unified kernel image (EFI/BIFROST/bifrost.efi); a failure keeps the kernel-plus-initramfs boot line
         let _ = r.chroot(&["bifrost-update-guard", "uki"]);
 
+        // the first frame's caches for this machine's panel, written into the target before it is unmounted (boot-08)
+        if let (Some((panel, scale)), Some(wp)) = (crate::first_frame_cache::installed_panel(), crate::first_frame_cache::wallpaper_path(LIVE_DIRS[0], &cfg.wallpaper)) {
+            let dir = std::path::Path::new("/mnt").join(crate::first_frame_cache::CACHE_DIR.trim_start_matches('/'));
+            if let Err(e) = crate::first_frame_cache::build_into(&dir, panel, scale, LIVE_DIRS[0], &wp) {
+                r.log(format!("first-frame cache skipped: {e}"));
+            }
+        }
         r.set(3, 98, "Finishing");
         let _ = r.cmd(&["sync"]);
         let _ = r.cmd(&["fuser", "-k", "-m", "/mnt"]);
