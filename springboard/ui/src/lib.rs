@@ -707,6 +707,7 @@ pub mod contact_card;
 pub mod contact_picker;
 pub mod contact_access;
 pub mod contact_fetch;
+pub mod contact_photo;
 pub mod postal_address;
 pub mod fetch;
 pub mod history;
