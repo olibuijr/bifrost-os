@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+
+- New game: Tic-Tac-Toe. You play X and move first; the computer plays O. It picks its move by searching every reply, so it never misses a win and never gives one away. A game it cannot lose ends in a draw.
+- Click a square to play it, or move the cursor with a controller's direction pad and press South to mark the square under it.
+- The computer answers at once after your move. A win celebrates like the other games, and the message row says who won or that it is a draw.
+- The sidebar has a new Tic-Tac-Toe row. The other games are unchanged.
+- The Games details dump reports how many squares are marked and the game's phase, so a test can check a game.
+
 ## 1.5.0
 
 - 2048 tiles now move. When a slide merges two tiles, the merged tile swells a little and settles back; the new tile grows in from half size. Each tile's motion is a short sequence of animation steps from the shared animation model, so the timing is the same one the rest of the desktop uses.

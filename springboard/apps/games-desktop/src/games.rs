@@ -7,6 +7,7 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_
 use crate::celebration::Celebration;
 use crate::phase::{Flow, Phase};
 use crate::solitaire;
+use crate::tictactoe::{Mark, TicTacToe};
 use crate::tile_motion::{scaled, TileMotion};
 use bifrost_core::random::{RandomSource, Xorshift64};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -56,7 +57,11 @@ enum Game {
     G2048,
     Mines,
     Solitaire,
+    TicTacToe,
 }
+
+/// The games in sidebar order: a row's index is the game's discriminant.
+const GAME_ORDER: [Game; 4] = [Game::G2048, Game::Mines, Game::Solitaire, Game::TicTacToe];
 
 #[derive(Clone, Copy, Default)]
 struct Cell {
@@ -86,6 +91,8 @@ pub struct Games {
     elapsed: u32,
     best_mines: u32,
     sol: solitaire::Solitaire,
+    // tic-tac-toe against the computer (see `tictactoe`)
+    ttt: TicTacToe,
     // touch
     down: (f32, f32),
     dirty: bool,
@@ -99,8 +106,8 @@ pub struct Games {
     notice: Option<String>,
     /// The win celebration in progress, if any (see `celebration`).
     burst: Option<Celebration>,
-    /// Whether each game was won at the last check (2048, Minesweeper, Solitaire), so a win celebrates once.
-    won_seen: [bool; 3],
+    /// Whether each game was won at the last check (2048, Minesweeper, Solitaire, Tic-Tac-Toe), so a win celebrates once.
+    won_seen: [bool; 4],
     /// Window pixels at the centre of the board, from the last draw: where a celebration starts.
     board_centre: (f32, f32),
     /// The 2048 tiles moving now (a merge swells, a new tile grows). See `tile_motion`.
@@ -137,6 +144,7 @@ impl Games {
             elapsed: 0,
             best_mines: 0,
             sol: solitaire::Solitaire::new((seed >> 32) as u32),
+            ttt: TicTacToe::new(),
             down: (0.0, 0.0),
             dirty: true,
             cache: TextCache::default(),
@@ -145,7 +153,7 @@ impl Games {
             display: None,
             notice: None,
             burst: None,
-            won_seen: [false; 3],
+            won_seen: [false; 4],
             board_centre: (0.0, 0.0),
             motion: TileMotion::default(),
             now: 0.0,
@@ -436,7 +444,7 @@ impl Games {
 
     /// The source list: one row per game, the open one selected.
     fn sidebar(&self) -> SourceList {
-        let rows = [("2048", "square.grid.2x2"), ("Minesweeper", "rectangle.split.3x1"), ("Solitaire", "doc")];
+        let rows = [("2048", "square.grid.2x2"), ("Minesweeper", "rectangle.split.3x1"), ("Solitaire", "doc"), ("Tic-Tac-Toe", "xmark")];
         let items = rows.iter().enumerate().map(|(k, (l, sym))| SidebarItem::row(ROW_GAME + k as u32, l).with_symbol(sym)).collect();
         let mut list = SourceList::new(items, 32.0, 30.0);
         list.set_selected(Some(ROW_GAME + self.game as u32));
@@ -448,6 +456,7 @@ impl Games {
             Game::G2048 => "2048",
             Game::Mines => "Minesweeper",
             Game::Solitaire => "Solitaire",
+            Game::TicTacToe => "Tic-Tac-Toe",
         }
     }
 
@@ -456,7 +465,7 @@ impl Games {
         let tw = ui.measure(self.title(), MAC_TITLE3_PT, Weight::Bold) / ui.pt(1.0) + SPACE_XS;
         let mut items = vec![ToolbarItem::custom(BAR_TITLE, self.title(), tw), ToolbarItem::flexible_space()];
         match self.game {
-            Game::G2048 => {}
+            Game::G2048 | Game::TicTacToe => {}
             Game::Mines => items.push(ToolbarItem::button(BAR_FLAG, "Flag").selected(self.flag_mode)),
             Game::Solitaire => {
                 items.push(ToolbarItem::button(BAR_UNDO, "Undo").in_group(1).enabled(self.sol.can_undo()));
@@ -500,6 +509,7 @@ impl Games {
             (BAR_NEW, Game::G2048) => self.new_2048(),
             (BAR_NEW, Game::Mines) => self.new_mines(),
             (BAR_NEW, Game::Solitaire) => self.sol.deal(seed),
+            (BAR_NEW, Game::TicTacToe) => self.ttt = TicTacToe::new(),
             (BAR_FLAG, Game::Mines) => self.flag_mode = !self.flag_mode,
             (BAR_UNDO, Game::Solitaire) => self.sol.undo(),
             (BAR_DRAW, Game::Solitaire) => {
@@ -513,25 +523,54 @@ impl Games {
     }
 
     /// A slide from a controller's direction pad or left stick (`dir` as `shift`: 0 left, 1 right, 2 up, 3 down).
-    /// Only 2048 slides; the other games have no cursor for a controller yet.
+    /// 2048 slides its tiles; Tic-Tac-Toe moves its cursor. The other games have no cursor for a controller yet.
     pub fn gamepad_slide(&mut self, dir: u8) {
-        if self.game == Game::G2048 {
-            self.shift(dir);
-            self.dirty = true;
+        match self.game {
+            Game::G2048 => self.shift(dir),
+            Game::TicTacToe => self.ttt.move_cursor(dir),
+            Game::Mines | Game::Solitaire => return,
         }
+        self.dirty = true;
     }
 
-    /// The controller's South button: a new game, but only once the current one is over, so a game in progress is
-    /// never dropped by a stray press. A won 2048 board can still be played on, so only a lost one counts as over.
+    /// The controller's South button. In Tic-Tac-Toe it marks the square under the cursor while the game is on. In the
+    /// other games it starts a new game, but only once the current one is over, so a game in progress is never dropped
+    /// by a stray press. A won 2048 board can still be played on, so only a lost one counts as over.
     pub fn gamepad_new_game(&mut self) {
+        if self.game == Game::TicTacToe && !self.ttt.over() {
+            let cell = self.ttt.cursor();
+            self.ttt_play(cell);
+            self.dirty = true;
+            return;
+        }
         let over = match self.game {
             Game::G2048 => self.p2048.phase() == Phase::Lost,
             Game::Mines => self.pm.phase() != Phase::Playing,
             Game::Solitaire => self.sol.won(),
+            Game::TicTacToe => self.ttt.over(),
         };
         if over {
             self.command(BAR_NEW);
         }
+    }
+
+    /// The player's X on `cell`, then the computer's O at once when the game is still on.
+    fn ttt_play(&mut self, cell: usize) {
+        if self.ttt.play(cell) {
+            self.ttt.computer_move();
+        }
+    }
+
+    /// The square under window point (x, y) on the Tic-Tac-Toe board, if the point is on the board.
+    fn ttt_cell_at(&self, ui: &Ui, x: f32, y: f32) -> Option<usize> {
+        let (bx, by, side) = self.board(ui);
+        if x < bx || y < by || x >= bx + side || y >= by + side {
+            return None;
+        }
+        let cs = side / 3.0;
+        let c = (((x - bx) / cs) as usize).min(2);
+        let r = (((y - by) / cs) as usize).min(2);
+        Some(r * 3 + c)
     }
 
     /// The board sits under the status and message rows, centred in what is left of the content area.
@@ -566,6 +605,7 @@ impl Games {
             Game::G2048 => self.p2048.phase() == Phase::Won,
             Game::Mines => self.pm.phase() == Phase::Won,
             Game::Solitaire => self.sol.won(),
+            Game::TicTacToe => self.ttt.phase() == Phase::Won,
         }
     }
 
@@ -615,7 +655,7 @@ impl Games {
                         let (list, b) = (self.sidebar(), self.sidebar_bounds(ui));
                         let hit = list.hit(b, SIDEBAR_SCROLL, d0 / pt, d1 / pt);
                         if hit.is_some() && hit == list.hit(b, SIDEBAR_SCROLL, x / pt, y / pt) {
-                            self.game = [Game::G2048, Game::Mines, Game::Solitaire][(hit.unwrap() - ROW_GAME) as usize % 3];
+                            self.game = GAME_ORDER[(hit.unwrap() - ROW_GAME) as usize % GAME_ORDER.len()];
                         }
                     } else {
                         let l = self.bar_layout(ui);
@@ -632,6 +672,14 @@ impl Games {
                     let (dx, dy) = (x - d0, y - d1);
                     if dx.abs().max(dy.abs()) > ui.pt(30.0) {
                         self.shift(if dx.abs() > dy.abs() { if dx < 0.0 { 0 } else { 1 } } else if dy < 0.0 { 2 } else { 3 });
+                    }
+                } else if self.game == Game::TicTacToe {
+                    // a square counts only when the press and the release are on the same square
+                    if let (Some(a), Some(b)) = (self.ttt_cell_at(ui, d0, d1), self.ttt_cell_at(ui, x, y)) {
+                        if a == b {
+                            self.ttt.set_cursor(a);
+                            self.ttt_play(a);
+                        }
                     }
                 } else if let Some(i) = self.mine_at(ui, x, y) {
                     if (x - d0).abs().max((y - d1).abs()) <= ui.pt(SPACE_XL) {
@@ -702,7 +750,7 @@ impl Games {
             None => "none".to_string(),
         };
         format!(
-            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\ngames_burst={}\ngames_tiles_moving={}\n{}",
+            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\ngames_burst={}\ngames_tiles_moving={}\ngames_ttt_marks={}\ngames_ttt_phase={:?}\n{}",
             self.game,
             self.score,
             self.best_2048,
@@ -712,6 +760,8 @@ impl Games {
             display,
             self.burst.as_ref().map_or(0, |b| b.live()),
             self.motion.live(self.now),
+            self.ttt.marks(),
+            self.ttt.phase(),
             self.sol.describe()
         )
     }
@@ -770,6 +820,7 @@ impl Games {
         let status = match self.game {
             Game::G2048 => format!("Score {}   Best {}", self.score, self.best_2048),
             Game::Solitaire => String::new(),
+            Game::TicTacToe => "You are X   Computer is O".to_string(),
             Game::Mines => {
                 let flags = self.cells.iter().filter(|c| c.flag).count();
                 let best = if self.best_mines == 0 { "-".to_string() } else { format!("{}s", self.best_mines) };
@@ -781,12 +832,14 @@ impl Games {
         let result = match (self.game, self.p2048.phase(), self.pm.phase()) {
             (Game::G2048, Phase::Won, _) => Some("You made 2048!"),
             (Game::G2048, Phase::Lost, _) => Some("No moves left"),
+            (Game::TicTacToe, _, _) => self.ttt.result(),
             (Game::Mines, _, Phase::Won) => Some("Cleared!"),
             (Game::Mines, _, Phase::Lost) => Some("Boom"),
             _ => None,
         };
         let hint = match self.game {
             Game::G2048 => "Swipe or drag to slide tiles",
+            Game::TicTacToe => "Click a square to play X",
             _ => if self.flag_mode { "Flag mode: click to mark" } else { "Click to dig" },
         };
         // a result always wins the row; a system notice (a controller) replaces only the hint
@@ -801,6 +854,7 @@ impl Games {
         match self.game {
             Game::G2048 => self.draw_2048(s, ui),
             Game::Mines => self.draw_mines(s, ui),
+            Game::TicTacToe => self.draw_ttt(s, ui),
             Game::Solitaire => {}
         }
         self.draw_burst(s, ui);
@@ -832,6 +886,25 @@ impl Games {
                     let pt = if v < 100 { MAC_LARGE_TITLE_PT } else if v < 1000 { MAC_TITLE1_PT } else { MAC_TITLE2_PT };
                     self.text_c(s, ui, &v.to_string(), pt, Weight::Bold, fg, rect);
                 }
+            }
+        }
+    }
+
+    /// The 3 by 3 board: X in the tint, O in the label colour, the cursor square on the field grey.
+    fn draw_ttt(&mut self, s: &mut Surface, ui: &Ui) {
+        let (bx, by, side) = self.board(ui);
+        s.fill_rrect(bx, by, side, side, ui.pt(CARD_RADIUS_PT), SEPARATOR_C.now());
+        let gap = ui.pt(SPACE_S);
+        let cs = (side - gap * 4.0) / 3.0;
+        for i in 0..9 {
+            let (r, c) = (i / 3, i % 3);
+            let rect = (bx + gap + c as f32 * (cs + gap), by + gap + r as f32 * (cs + gap), cs, cs);
+            let bg = if i == self.ttt.cursor() { FIELD_BG.now() } else { CARD_BG.now() };
+            s.fill_rrect(rect.0, rect.1, rect.2, rect.3, ui.pt(SPACE_S), bg);
+            match self.ttt.cell(i) {
+                Some(Mark::X) => self.text_c(s, ui, "X", MAC_LARGE_TITLE_PT, Weight::Bold, SYSTEM_BLUE, rect),
+                Some(Mark::O) => self.text_c(s, ui, "O", MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), rect),
+                None => {}
             }
         }
     }
@@ -1139,6 +1212,36 @@ mod tile_tests {
         g.shift(0);
         assert_eq!(g.grid[0][0], 4);
         assert_eq!(g.motion.live(1.01), 0);
+    }
+
+    #[test]
+    fn a_controller_moves_the_tic_tac_toe_cursor_and_marks_the_square_under_it() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.game = Game::TicTacToe;
+        g.gamepad_slide(0);
+        assert_eq!(g.ttt.cursor(), 3, "left of the centre square");
+        assert_eq!(g.ttt.marks(), 0, "a move of the cursor marks nothing");
+        g.gamepad_slide(1);
+        assert_eq!(g.ttt.cursor(), 4);
+        g.gamepad_new_game();
+        assert_eq!(g.ttt.cell(4), Some(Mark::X), "South marks the square under the cursor");
+        // after a centre opening the computer's first best square is the top left corner
+        assert_eq!(g.ttt.cell(0), Some(Mark::O));
+        assert_eq!(g.ttt.marks(), 2);
+        assert!(g.describe().contains("games_ttt_marks=2\ngames_ttt_phase=Playing\n"));
+    }
+
+    #[test]
+    fn a_tic_tac_toe_board_is_not_restarted_by_a_stray_press() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.game = Game::TicTacToe;
+        g.gamepad_new_game();
+        assert_eq!(g.ttt.marks(), 2);
+        g.gamepad_new_game();
+        assert_eq!(g.ttt.marks(), 2, "the square under the cursor is taken, and the game goes on");
+        assert_eq!(g.ttt.cell(4), Some(Mark::X));
     }
 }
 
