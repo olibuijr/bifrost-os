@@ -692,6 +692,8 @@ pub mod features;
 pub mod compute;
 pub mod postal;
 pub mod recordsearch;
+pub mod file_sync;
+pub mod item_attrs;
 #[cfg(test)]
 mod bench;
 
