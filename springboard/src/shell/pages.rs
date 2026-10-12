@@ -434,7 +434,11 @@ fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> S
                 Item::new(d.label()).value(value).action(Action::Bluetooth(Cmd::Pair(d.addr.clone())))
             })
             .collect();
-        let nearby = if nearby.is_empty() { vec![Item::new(if bt.scanning { "Searching…" } else { "No Devices Found" }).tint(Tint::Dim)] } else { nearby };
+        let mut nearby = if nearby.is_empty() { vec![Item::new(if bt.scanning { "Searching…" } else { "No Devices Found" }).tint(Tint::Dim)] } else { nearby };
+        // Search again: the page scans when it opens, this lets the user repeat the search without leaving it.
+        if !bt.scanning {
+            nearby.push(Item::new("Scan for Devices").tint(Tint::Blue).action(Action::Bluetooth(Cmd::Scan)));
+        }
         let mut other = Group::new(nearby).header("OTHER DEVICES");
         if let Some(e) = &bt.error {
             other = other.footer(e);
@@ -1550,6 +1554,23 @@ mod tests {
         info.bt.state = State::Unavailable;
         let none = spec(PageId::Bluetooth, &model(&info, &opts));
         assert!(none.groups[0].footer.as_deref().unwrap().contains("not available"));
+    }
+
+    #[test]
+    fn bluetooth_page_offers_a_scan_row_only_when_not_scanning() {
+        use crate::bare::bluetooth::{Cmd, State, Status};
+        let opts = Options::default();
+        let mut info = info();
+        info.bt = Status { state: State::On, scanning: false, devices: vec![bt_device("B", "Speaker", false, false)], ..Status::default() };
+        let s = spec(PageId::Bluetooth, &model(&info, &opts));
+        let nearby = &s.groups[2].items;
+        assert_eq!(nearby.len(), 2);
+        assert_eq!(nearby[0].action, Action::Bluetooth(Cmd::Pair("B".into())));
+        assert_eq!(nearby[1].label.as_str(), "Scan for Devices");
+        assert!(nearby[1].action == Action::Bluetooth(Cmd::Scan));
+        info.bt.scanning = true;
+        let s = spec(PageId::Bluetooth, &model(&info, &opts));
+        assert_eq!(s.groups[2].items.len(), 1, "no scan row while a scan runs");
     }
 
     #[test]
