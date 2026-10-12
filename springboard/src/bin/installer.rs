@@ -35,16 +35,19 @@ fn run() -> std::io::Result<()> {
     // Unattended lab reinstall: a preset on the target's ESP (written by `midget.py reinstall` or the MCP `lifecycle
     // reinstall`), docs/installer.md. It runs on the progress page below (headless only when no display opens).
     // BIFROST_NO_UNATTENDED=1 skips the search. A refused preset falls through to the on-screen installer.
-    let mut preset = None;
-    if std::env::var_os("BIFROST_NO_UNATTENDED").is_none() && std::env::var_os("BIFROST_AUTO").is_none() {
-        if let Some((text, disk)) = unattended::find_stash() {
-            eprintln!("bifrost-installer: unattended preset found on {disk}");
-            match unattended::prepare(&text, &disk) {
-                Ok(cfg) => preset = Some((text, disk, cfg)),
-                Err(e) => eprintln!("bifrost-installer: unattended install refused or failed: {e}"),
+    let find_preset = || {
+        let mut preset = None;
+        if std::env::var_os("BIFROST_NO_UNATTENDED").is_none() && std::env::var_os("BIFROST_AUTO").is_none() {
+            if let Some((text, disk)) = unattended::find_stash() {
+                eprintln!("bifrost-installer: unattended preset found on {disk}");
+                match unattended::prepare(&text, &disk) {
+                    Ok(cfg) => preset = Some((text, disk, cfg)),
+                    Err(e) => eprintln!("bifrost-installer: unattended install refused or failed: {e}"),
+                }
             }
         }
-    }
+        preset
+    };
     // BIFROST_AUTO=user:password:/dev/vda runs the whole install without a display (VM and CI tests)
     if let Ok(spec) = std::env::var("BIFROST_AUTO") {
         let mut it = spec.splitn(3, ':');
@@ -81,10 +84,13 @@ fn run() -> std::io::Result<()> {
     let opened = if wayland { kms::Display::wayland() } else { kms::Display::open_best(8000) };
     #[cfg(not(feature = "desktop-wayland"))]
     let opened = kms::Display::open_best(8000);
-    let mut disp = match (opened, &preset) {
-        (Ok(d), _) => d,
-        // no display: the preset still installs, headless
-        (Err(e), Some((text, disk, _))) => {
+    // the preset search mounts disks (seconds): it runs after the boot frame is on screen, never before the display opens
+    let mut disp = match opened {
+        Ok(d) => d,
+        Err(e) => {
+            // no display: the preset still installs, headless
+            let preset = find_preset();
+            let Some((text, disk, _)) = &preset else { return Err(e) };
             eprintln!("bifrost-installer: no display ({e}); unattended install without one");
             return match unattended::run(text, disk) {
                 Ok(()) => {
@@ -95,7 +101,6 @@ fn run() -> std::io::Result<()> {
                 Err(e) => Err(std::io::Error::other(format!("unattended install refused or failed: {e}"))),
             };
         }
-        (Err(e), None) => return Err(e),
     };
     let (w, h) = disp.size();
     // the first KMS frame is the loader's boot frame, so taking the display over from simpledrm changes nothing visible
@@ -109,6 +114,7 @@ fn run() -> std::io::Result<()> {
         disp.present(&splash, &dmg);
     }
     let mut fade_from: Option<f64> = None;
+    let preset = find_preset();
     let ui = Ui::new(font, (h as f32 / 720.0).clamp(1.0, 4.0));
     let mut inputs = if wayland { input::InputSet::none() } else { input::InputSet::desktop(w as f32, h as f32, unsafe { geteuid() } == 0) };
     let image = |name: &str| std::fs::read(format!("{branding}/{name}")).ok().and_then(|b| springboard::imgdec::decode(&b));
