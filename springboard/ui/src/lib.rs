@@ -720,6 +720,7 @@ pub enum Event {
     Screenshot,
 }
 pub mod ax;
+pub mod text_marker;
 pub mod speech;
 pub mod recognition;
 pub mod voice_activity;

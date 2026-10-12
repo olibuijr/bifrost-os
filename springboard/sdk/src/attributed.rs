@@ -199,6 +199,17 @@ fn char_to_byte(s: &str, c: usize) -> usize {
     s.char_indices().nth(c).map_or(s.len(), |(i, _)| i)
 }
 
+/// One run of an [`AttributedString`] as the accessibility text export sees it (`AXTextAttributedString`). The range is in
+/// UTF-16 units, the unit of the platform's range type, not in chars.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AxAttrRun {
+    /// first UTF-16 unit of the run
+    pub utf16_start: usize,
+    /// UTF-16 units in the run
+    pub utf16_len: usize,
+    pub attrs: Attrs,
+}
+
 impl AttributedString {
     pub fn new() -> Self {
         Self::default()
@@ -397,6 +408,21 @@ impl AttributedString {
     /// Runs as `(text, attrs)` for drawing.
     pub fn runs(&self) -> impl Iterator<Item = (&str, &Attrs)> {
         self.runs.iter().map(|r| (r.text.as_str(), &r.attrs))
+    }
+    /// The runs for accessibility: each with its UTF-16 start and length. Runs are merged on every edit, so an
+    /// attribute change always starts a new run.
+    pub fn ax_runs(&self) -> Vec<AxAttrRun> {
+        let mut out = Vec::with_capacity(self.runs.len());
+        let mut at = 0usize;
+        for r in &self.runs {
+            let n = r.text.encode_utf16().count();
+            if n == 0 {
+                continue;
+            }
+            out.push(AxAttrRun { utf16_start: at, utf16_len: n, attrs: r.attrs.clone() });
+            at += n;
+        }
+        out
     }
 
     // ---- RTF (basic subset: \b \i \ul \strike \fs, colour table, hyperlink fields, \par, \' and \u escapes) ----
@@ -1075,5 +1101,36 @@ mod tests {
         v.key_command('z', false);
         assert_eq!(v.text.content.string(), "ab");
         assert!(!v.undo.can_undo());
+    }
+
+    #[test]
+    fn ax_runs_of_a_plain_string_is_one_run() {
+        let s = AttributedString::plain("abc");
+        assert_eq!(s.ax_runs(), vec![AxAttrRun { utf16_start: 0, utf16_len: 3, attrs: Attrs::default() }]);
+    }
+
+    #[test]
+    fn ax_runs_count_utf16_units_and_keep_attributes() {
+        // "a" (1 unit) is bold, the emoji (2 units) is plain, "b" (1 unit) is a link
+        let mut s = AttributedString::with_attrs("a", bold());
+        s.append("\u{1F600}", Attrs::default());
+        let link = Attrs { link: Some("https://example.org/".to_string()), ..Default::default() };
+        s.append("b", link.clone());
+        let runs = s.ax_runs();
+        assert_eq!(runs.len(), 3);
+        assert_eq!((runs[0].utf16_start, runs[0].utf16_len), (0, 1));
+        assert!(runs[0].attrs.bold);
+        assert_eq!((runs[1].utf16_start, runs[1].utf16_len), (1, 2));
+        assert_eq!((runs[2].utf16_start, runs[2].utf16_len), (3, 1));
+        assert_eq!(runs[2].attrs, link);
+    }
+
+    #[test]
+    fn ax_runs_merge_equal_neighbours_and_skip_empty_text() {
+        let mut s = AttributedString::plain("ab");
+        s.append("c", Attrs::default());
+        assert_eq!(s.ax_runs().len(), 1);
+        assert_eq!(s.ax_runs()[0].utf16_len, 3);
+        assert!(AttributedString::new().ax_runs().is_empty());
     }
 }
