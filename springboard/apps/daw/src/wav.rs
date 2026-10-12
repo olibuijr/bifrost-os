@@ -28,6 +28,19 @@ pub fn encode_f32(left: &[f32], right: &[f32], sr: u32) -> Vec<u8> {
     header(data, sr, 2, 32, 3)
 }
 
+/// Encodes stereo f32 samples as 16-bit PCM WAV without dither, for converted exports. Each float is clamped and
+/// rounded by the PCM conversion model.
+pub fn encode_s16(left: &[f32], right: &[f32], sr: u32) -> Vec<u8> {
+    let frames = left.len().min(right.len());
+    let mut data = Vec::with_capacity(frames * 4);
+    for i in 0..frames {
+        for x in [left[i], right[i]] {
+            data.extend_from_slice(&bifrost_app::controls::pcm_convert::f32_to_s16(x).to_le_bytes());
+        }
+    }
+    header(data, sr, 2, 16, 1)
+}
+
 fn header(data: Vec<u8>, sr: u32, channels: u16, bits: u16, format: u16) -> Vec<u8> {
     let block = channels * bits / 8;
     let mut out = Vec::with_capacity(44 + data.len());

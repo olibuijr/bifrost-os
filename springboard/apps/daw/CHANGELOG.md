@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 — 2026-10-12
+
+- Export CD: the "Export CD" button in the Session header writes the song (or the trimmed part) as a 16-bit WAV at 44.1 kHz, the CD rate. The file is in the song store's exports folder with "-cd" in its name, and the status line shows its path. The 32-bit float "Export" is unchanged. The button is shown when not trimming.
+
 ## 0.4.0 — 2026-10-12
 
 - Rack inspector: the Rack view shows each parameter of the track's instrument and effects as a slider with its value in the device's unit. Click a slider to set the value; click a parameter's name to open it for automation as before.
