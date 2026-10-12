@@ -1,9 +1,11 @@
-//! Named pixel filters and a chain that runs them in order. A `Filter` is made by name with
-//! `Filter::named`. Its inputs are read and set by key (`get`, `set`), and the names and defaults
-//! are fixed here. A `Chain` applies its filters one after another to a buffer of packed pixels.
-//! Each effect is a per-pixel colour function from `colorfx`, so a chain runs without a GPU. Pixels
-//! are packed as the renderer packs them (red in the low byte, alpha in the top byte). Colour is
-//! read as straight RGB and the alpha of each pixel is kept.
+//! Named pixel filters, a filter catalogue and a chain that runs filters in order. A `Filter` is made
+//! by name with `Filter::named`. Its inputs are read and set by key (`get`, `set`, `set_clamped`),
+//! and each input has a range and an identity value (`attribute`, `attributes`). The catalogue groups
+//! the names into categories (`filter_names`) and searches them by name or title (`search`), the way
+//! a filter browser lists them. A `Chain` applies its filters one after another to a buffer of packed
+//! pixels. Each effect is a per-pixel colour function from `colorfx`, so a chain runs without a GPU.
+//! Pixels are packed as the renderer packs them (red in the low byte, alpha in the top byte). Colour
+//! is read as straight RGB and the alpha of each pixel is kept.
 
 use crate::colorfx;
 
@@ -21,7 +23,7 @@ enum Kind {
     Vignette,
 }
 
-/// The names a filter can be made from, with their effect.
+/// The names a filter can be made from, with their effect, in catalogue order.
 const NAMES: [(&str, Kind); 9] = [
     ("exposure", Kind::Exposure),
     ("saturation", Kind::Saturation),
@@ -34,66 +36,87 @@ const NAMES: [(&str, Kind); 9] = [
     ("vignette", Kind::Vignette),
 ];
 
-/// The inputs of each effect, with their defaults. An effect with no inputs has an empty list.
-fn defaults(kind: Kind) -> Vec<(&'static str, f32)> {
-    match kind {
-        Kind::Exposure => vec![("ev", 0.0)],
-        Kind::Saturation => vec![("amount", 1.0)],
-        Kind::Contrast => vec![("amount", 1.0)],
-        Kind::HueRotate => vec![("degrees", 0.0)],
-        Kind::TemperatureTint => vec![("temperature", 0.0), ("tint", 0.0)],
-        Kind::Sepia => vec![("amount", 1.0)],
-        Kind::Invert => Vec::new(),
-        Kind::Posterize => vec![("levels", 6.0)],
-        Kind::Vignette => vec![("strength", 0.5)],
+/// The groups the catalogue sorts the filters into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Category {
+    ColorAdjustment,
+    ColorEffect,
+}
+
+impl Category {
+    /// The heading the catalogue shows for the category.
+    pub fn title(self) -> &'static str {
+        match self {
+            Category::ColorAdjustment => "Color Adjustment Filters",
+            Category::ColorEffect => "Color Effect Filters",
+        }
     }
 }
 
-/// A named filter with its inputs. Build one with `Filter::named`, then set inputs by key.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Filter {
-    name: &'static str,
-    kind: Kind,
-    inputs: Vec<(&'static str, f32)>,
+/// One input of a filter: its key, its default, the range a browser slider covers, and the value
+/// that leaves pixels unchanged (`None` when no single value does).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InputAttribute {
+    pub key: &'static str,
+    pub default: f32,
+    pub min: f32,
+    pub max: f32,
+    pub identity: Option<f32>,
 }
 
-impl Filter {
-    /// The filter called `name`, with default inputs. Returns `None` for an unknown name.
-    pub fn named(name: &str) -> Option<Filter> {
-        let (name, kind) = NAMES.iter().find(|e| e.0 == name).copied()?;
-        Some(Filter { name, kind, inputs: defaults(kind) })
-    }
-
-    /// The name the filter was made from.
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    /// The input keys this filter takes, in their fixed order.
-    pub fn input_keys(&self) -> Vec<&'static str> {
-        self.inputs.iter().map(|e| e.0).collect()
-    }
-
-    /// The value of input `key`, or `None` when the filter has no such input.
-    pub fn get(&self, key: &str) -> Option<f32> {
-        self.inputs.iter().find(|e| e.0 == key).map(|e| e.1)
-    }
-
-    /// Sets input `key`. Returns `false` when the filter has no such input.
-    pub fn set(&mut self, key: &str, value: f32) -> bool {
-        match self.inputs.iter_mut().find(|e| e.0 == key) {
-            Some(slot) => {
-                slot.1 = value;
-                true
+impl Kind {
+    fn category(self) -> Category {
+        match self {
+            Kind::Exposure | Kind::Saturation | Kind::Contrast | Kind::HueRotate | Kind::TemperatureTint => {
+                Category::ColorAdjustment
             }
-            None => false,
+            Kind::Sepia | Kind::Invert | Kind::Posterize | Kind::Vignette => Category::ColorEffect,
         }
     }
 
-    /// Applies the effect to the pixel at (x, y) of a `w` by `h` buffer.
-    fn apply_pixel(&self, px: u32, x: usize, y: usize, w: usize, h: usize) -> u32 {
-        let input = |key: &str| self.get(key).unwrap_or(0.0);
-        match self.kind {
+    /// The name shown to people for the effect.
+    fn title(self) -> &'static str {
+        match self {
+            Kind::Exposure => "Exposure Adjust",
+            Kind::Saturation => "Saturation",
+            Kind::Contrast => "Contrast",
+            Kind::HueRotate => "Hue Rotate",
+            Kind::TemperatureTint => "Temperature and Tint",
+            Kind::Sepia => "Sepia Tone",
+            Kind::Invert => "Invert",
+            Kind::Posterize => "Posterize",
+            Kind::Vignette => "Vignette",
+        }
+    }
+
+    /// The inputs of the effect with their range and identity. An effect with no inputs has an empty list.
+    fn specs(self) -> Vec<InputAttribute> {
+        let a = |key: &'static str, default: f32, min: f32, max: f32, identity: Option<f32>| InputAttribute {
+            key,
+            default,
+            min,
+            max,
+            identity,
+        };
+        match self {
+            Kind::Exposure => vec![a("ev", 0.0, -10.0, 10.0, Some(0.0))],
+            Kind::Saturation => vec![a("amount", 1.0, 0.0, 2.0, Some(1.0))],
+            Kind::Contrast => vec![a("amount", 1.0, 0.0, 4.0, Some(1.0))],
+            Kind::HueRotate => vec![a("degrees", 0.0, -180.0, 180.0, Some(0.0))],
+            Kind::TemperatureTint => vec![
+                a("temperature", 0.0, -100.0, 100.0, Some(0.0)),
+                a("tint", 0.0, -100.0, 100.0, Some(0.0)),
+            ],
+            Kind::Sepia => vec![a("amount", 1.0, 0.0, 1.0, Some(0.0))],
+            Kind::Invert => Vec::new(),
+            Kind::Posterize => vec![a("levels", 6.0, 2.0, 256.0, None)],
+            Kind::Vignette => vec![a("strength", 0.5, 0.0, 1.0, Some(0.0))],
+        }
+    }
+
+    fn apply_pixel_with(self, inputs: &[(&'static str, f32)], px: u32, x: usize, y: usize, w: usize, h: usize) -> u32 {
+        let input = |key: &str| inputs.iter().find(|e| e.0 == key).map(|e| e.1).unwrap_or(0.0);
+        match self {
             Kind::Exposure => {
                 let ev = input("ev");
                 colorfx::map_pixel(px, |c| colorfx::exposure(c, ev))
@@ -130,6 +153,115 @@ impl Filter {
                 colorfx::map_pixel(px, |c| colorfx::vignette(c, fx, fy, fw, fh, strength))
             }
         }
+    }
+}
+
+/// The names of the filters in `category`, or of every filter when `category` is `None`, in catalogue order.
+pub fn filter_names(category: Option<Category>) -> Vec<&'static str> {
+    NAMES
+        .iter()
+        .filter(|e| category.map_or(true, |c| e.1.category() == c))
+        .map(|e| e.0)
+        .collect()
+}
+
+/// The display name of the filter called `name`, or `None` for an unknown name.
+pub fn title_of(name: &str) -> Option<&'static str> {
+    NAMES.iter().find(|e| e.0 == name).map(|e| e.1.title())
+}
+
+/// The filters whose name or display name contains `query`, ignoring case, in catalogue order.
+/// An empty query lists every filter.
+pub fn search(query: &str) -> Vec<&'static str> {
+    let q = query.to_lowercase();
+    NAMES
+        .iter()
+        .filter_map(|&(name, kind)| {
+            let hit = name.to_lowercase().contains(&q) || kind.title().to_lowercase().contains(&q);
+            hit.then_some(name)
+        })
+        .collect()
+}
+
+/// A named filter with its inputs. Build one with `Filter::named`, then set inputs by key.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Filter {
+    name: &'static str,
+    kind: Kind,
+    inputs: Vec<(&'static str, f32)>,
+}
+
+impl Filter {
+    /// The filter called `name`, with default inputs. Returns `None` for an unknown name.
+    pub fn named(name: &str) -> Option<Filter> {
+        let (name, kind) = NAMES.iter().find(|e| e.0 == name).copied()?;
+        let inputs = kind.specs().iter().map(|a| (a.key, a.default)).collect();
+        Some(Filter { name, kind, inputs })
+    }
+
+    /// The name the filter was made from.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// The display name of the filter.
+    pub fn title(&self) -> &'static str {
+        self.kind.title()
+    }
+
+    /// The category the filter is listed under.
+    pub fn category(&self) -> Category {
+        self.kind.category()
+    }
+
+    /// The input keys this filter takes, in their fixed order.
+    pub fn input_keys(&self) -> Vec<&'static str> {
+        self.inputs.iter().map(|e| e.0).collect()
+    }
+
+    /// The range, default and identity of input `key`, or `None` when the filter has no such input.
+    pub fn attribute(&self, key: &str) -> Option<InputAttribute> {
+        self.kind.specs().into_iter().find(|a| a.key == key)
+    }
+
+    /// The range, default and identity of every input, in the order of `input_keys`.
+    pub fn attributes(&self) -> Vec<InputAttribute> {
+        self.kind.specs()
+    }
+
+    /// The value of input `key`, or `None` when the filter has no such input.
+    pub fn get(&self, key: &str) -> Option<f32> {
+        self.inputs.iter().find(|e| e.0 == key).map(|e| e.1)
+    }
+
+    /// Sets input `key`. Returns `false` when the filter has no such input.
+    pub fn set(&mut self, key: &str, value: f32) -> bool {
+        match self.inputs.iter_mut().find(|e| e.0 == key) {
+            Some(slot) => {
+                slot.1 = value;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Sets input `key` to `value` limited to the input's range. Returns the stored value, or `None`
+    /// when the filter has no such input.
+    pub fn set_clamped(&mut self, key: &str, value: f32) -> Option<f32> {
+        let attr = self.attribute(key)?;
+        let stored = value.max(attr.min).min(attr.max);
+        self.set(key, stored);
+        Some(stored)
+    }
+
+    /// Puts every input back to its default.
+    pub fn reset_inputs(&mut self) {
+        self.inputs = self.kind.specs().iter().map(|a| (a.key, a.default)).collect();
+    }
+
+    /// Applies the effect to the pixel at (x, y) of a `w` by `h` buffer.
+    fn apply_pixel(&self, px: u32, x: usize, y: usize, w: usize, h: usize) -> u32 {
+        self.kind.apply_pixel_with(&self.inputs, px, x, y, w, h)
     }
 }
 
@@ -250,5 +382,65 @@ mod tests {
         let out = chain.apply(&[white; 4], 2, 2).unwrap();
         assert_eq!(out[0], 0xff00_0000);
         assert_eq!(out[3], white);
+    }
+
+    #[test]
+    fn catalogue_sorts_filters_into_their_categories_in_order() {
+        assert_eq!(
+            filter_names(Some(Category::ColorAdjustment)),
+            vec!["exposure", "saturation", "contrast", "hueRotate", "temperatureTint"]
+        );
+        assert_eq!(filter_names(Some(Category::ColorEffect)), vec!["sepia", "invert", "posterize", "vignette"]);
+        assert_eq!(filter_names(None).len(), 9);
+        assert_eq!(Filter::named("exposure").unwrap().category(), Category::ColorAdjustment);
+        assert_eq!(Category::ColorEffect.title(), "Color Effect Filters");
+    }
+
+    #[test]
+    fn search_matches_name_or_display_name_ignoring_case() {
+        assert_eq!(search("tone"), vec!["sepia"]);
+        assert_eq!(search("ADJUST"), vec!["exposure"]);
+        assert_eq!(search("").len(), 9);
+        assert!(search("zzz").is_empty());
+        assert_eq!(title_of("hueRotate"), Some("Hue Rotate"));
+        assert_eq!(title_of("gain"), None);
+    }
+
+    #[test]
+    fn attributes_report_range_default_and_identity() {
+        let amount = Filter::named("saturation").unwrap().attribute("amount").unwrap();
+        assert_eq!(
+            amount,
+            InputAttribute { key: "amount", default: 1.0, min: 0.0, max: 2.0, identity: Some(1.0) }
+        );
+        // Posterize has no single value that leaves pixels unchanged.
+        assert_eq!(Filter::named("posterize").unwrap().attribute("levels").unwrap().identity, None);
+        assert_eq!(Filter::named("saturation").unwrap().attribute("gain"), None);
+        assert!(Filter::named("invert").unwrap().attributes().is_empty());
+    }
+
+    #[test]
+    fn set_clamped_stops_at_the_range_and_refuses_unknown_keys() {
+        let mut f = Filter::named("exposure").unwrap();
+        assert_eq!(f.set_clamped("ev", 99.0), Some(10.0));
+        assert_eq!(f.get("ev"), Some(10.0));
+        assert_eq!(f.set_clamped("ev", -20.0), Some(-10.0));
+        assert_eq!(f.set_clamped("ev", 3.5), Some(3.5));
+        assert_eq!(f.set_clamped("gain", 1.0), None);
+    }
+
+    #[test]
+    fn reset_inputs_restores_the_defaults() {
+        let mut tt = Filter::named("temperatureTint").unwrap();
+        tt.set("temperature", 40.0);
+        tt.set("tint", -20.0);
+        tt.reset_inputs();
+        assert_eq!(tt.get("temperature"), Some(0.0));
+        assert_eq!(tt.get("tint"), Some(0.0));
+        // Sepia defaults to a full amount, which is not its identity of 0.
+        let mut sepia = Filter::named("sepia").unwrap();
+        sepia.set("amount", 0.0);
+        sepia.reset_inputs();
+        assert_eq!(sepia.get("amount"), Some(1.0));
     }
 }
