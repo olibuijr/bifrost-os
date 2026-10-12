@@ -523,7 +523,7 @@ impl Browser {
         (url.starts_with("http://") || url.starts_with("https://")).then_some(url)
     }
 
-    /// File > Share and View > Show Reader: the shell merges these into its own File and View menus.
+    /// File > Share, View > Show Reader and the History menu (Back and Forward entries of the selected tab).
     fn menus(&self) -> Vec<AppMenu> {
         let reader_ok = self.view().is_some_and(|v| self.reader.button(v));
         let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
@@ -536,6 +536,7 @@ impl Browser {
                 title: "View".into(),
                 items: vec![AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok)],
             },
+            AppMenu { title: "History".into(), items: self.history_menu() },
         ]
     }
 
@@ -949,7 +950,13 @@ impl App for Browser {
                 true
             }
             MENU_SHARE => self.share_page(ctx),
-            _ => false,
+            _ => match tabdiscard::history_target(id) {
+                Some(target) => {
+                    self.jump_to(target);
+                    true
+                }
+                None => false,
+            },
         }
     }
 

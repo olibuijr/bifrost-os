@@ -1,3 +1,12 @@
+## 0.12.0 — 2026-10-12
+
+- History menu: the menu has Back and Forward submenus with the pages before and after the current page in the selected
+  tab, nearest first, up to ten on each side. Choosing one moves the tab there one page at a time, the same way the Back
+  and Forward buttons work. A new page you open drops the forward pages, as before.
+- Long addresses in the menu are shortened (scheme and trailing slash removed, cut to 60 characters).
+- Not yet: website data. Cookies and site storage cannot be listed or removed per site, because the engine does not
+  expose its cookie store. Clear Website Data in Settings still removes everything.
+
 ## 0.11.0 — 2026-10-12
 
 - Reader from the page's structure: the reader page is now rebuilt from a snapshot of the article's element tree instead of the page's raw HTML. Only paragraphs, headings, lists, quotes, code, tables, images and links come through, with their text escaped, and scripts, forms and navigation stay out.

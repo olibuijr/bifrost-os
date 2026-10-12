@@ -13,11 +13,46 @@
 use std::collections::HashMap;
 
 use bifrost_app::webview::{WebViewEvent, WebViewId};
+use bifrost_app::AppMenuItem;
 
 use crate::{perf, Browser, START};
 
 /// Prefix of the scroll probe's eval result.
 pub const SCROLL_PREFIX: &str = "bifrost-scroll:";
+/// First menu item id of the History menu: item `HISTORY_BASE + i` goes to entry `i` of the tab's list.
+pub const HISTORY_BASE: u32 = 1000;
+/// Entries shown on each side of the current one in the History menu.
+const MENU_LIMIT: usize = 10;
+/// Characters of a URL kept in a History menu label.
+const LABEL_CHARS: usize = 60;
+
+/// The History menu entry for an item id, when the id is one of ours.
+pub fn history_target(id: u32) -> Option<usize> {
+    let i = id.checked_sub(HISTORY_BASE)? as usize;
+    (i < MAX_HIST).then_some(i)
+}
+
+/// The entries the History menu offers around the current one: `(index, url)` pairs, nearest first, at most `limit`
+/// on each side. Back entries come before the current one, forward entries after it.
+pub fn menu_entries(list: &[String], index: usize, limit: usize) -> (Vec<(usize, String)>, Vec<(usize, String)>) {
+    let back = (0..index.min(list.len())).rev().take(limit).map(|i| (i, list[i].clone())).collect();
+    let forward = (index + 1..list.len()).take(limit).map(|i| (i, list[i].clone())).collect();
+    (back, forward)
+}
+
+/// A menu label for a URL: the address without the scheme and the trailing slash, cut to `LABEL_CHARS` characters.
+pub fn history_label(url: &str) -> String {
+    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).unwrap_or(url);
+    let rest = rest.trim_end_matches('/');
+    if rest.is_empty() {
+        return url.to_string();
+    }
+    let mut out: String = rest.chars().take(LABEL_CHARS).collect();
+    if rest.chars().count() > LABEL_CHARS {
+        out.push('\u{2026}');
+    }
+    out
+}
 /// Seconds between sweeps.
 const SWEEP_S: f64 = 30.0;
 /// Seconds to wait for a scroll probe before discarding without it.
@@ -95,6 +130,8 @@ pub struct Discarder {
     /// App-side history per tab: entries and the index of the current one. A revived view only has its last URL in
     /// the engine (Servo 0.7.0 cannot inject history), so Back past it loads the entry before it from here.
     hist: HashMap<WebViewId, (Vec<String>, usize)>,
+    /// A History menu jump in progress: the entry index the tab is moving to, one engine step per finished load.
+    jumps: HashMap<WebViewId, usize>,
     last_sweep: f64,
     /// Views waiting for their scroll probe: (id, sent at).
     probing: Vec<(WebViewId, f64)>,
@@ -110,24 +147,29 @@ impl Discarder {
         self.scroll.remove(&id);
         self.restore.remove(&id);
         self.hist.remove(&id);
+        self.jumps.remove(&id);
         self.probing.retain(|(v, _)| *v != id);
     }
 
     /// Follows the tab's URL: the same URL is a no-op, the previous or next entry moves the index (engine back or
-    /// forward), anything else is a new entry that drops the forward ones.
-    pub fn track(&mut self, id: WebViewId, url: &str) {
+    /// forward), anything else is a new entry that drops the forward ones. Returns true when a new entry was made.
+    pub fn track(&mut self, id: WebViewId, url: &str) -> bool {
         if url.is_empty() || url.starts_with("data:") {
-            return;
+            return false;
         }
         let (list, i) = self.hist.entry(id).or_default();
         if list.is_empty() {
             list.push(url.to_string());
             *i = 0;
+            false
         } else if list[*i] == url {
+            false
         } else if *i > 0 && list[*i - 1] == url {
             *i -= 1;
+            false
         } else if list.get(*i + 1).is_some_and(|u| u == url) {
             *i += 1;
+            false
         } else {
             list.truncate(*i + 1);
             list.push(url.to_string());
@@ -135,7 +177,26 @@ impl Discarder {
                 list.remove(0);
             }
             *i = list.len() - 1;
+            true
         }
+    }
+
+    /// The tab's app-side list and the index of its current entry.
+    pub fn entries(&self, id: WebViewId) -> Option<(&[String], usize)> {
+        let (list, i) = self.hist.get(&id)?;
+        Some((list.as_slice(), *i))
+    }
+
+    pub fn set_jump(&mut self, id: WebViewId, target: usize) {
+        self.jumps.insert(id, target);
+    }
+
+    pub fn jump_target(&self, id: WebViewId) -> Option<usize> {
+        self.jumps.get(&id).copied()
+    }
+
+    pub fn clear_jump(&mut self, id: WebViewId) {
+        self.jumps.remove(&id);
     }
 
     /// The URL Back should load when the engine has nothing behind the current page (a revived tab).
@@ -183,13 +244,95 @@ impl Browser {
     pub(crate) fn discard_event(&mut self, ev: &WebViewEvent) {
         if let WebViewEvent::UrlChanged(v) = ev {
             let url = self.pool.as_ref().and_then(|p| p.state(*v)).map(|s| s.url.clone()).unwrap_or_default();
-            self.discard.track(*v, &url);
+            // a page the user went to from here (not a Back or Forward step) ends a History menu jump
+            if self.discard.track(*v, &url) {
+                self.discard.clear_jump(*v);
+            }
+        }
+        if let WebViewEvent::LoadFinished(v) = ev {
+            self.jump_step(*v);
         }
         if let Some((id, js)) = self.discard.on_event(ev) {
             if let Some(p) = &mut self.pool {
                 p.eval(id, &js);
             }
         }
+    }
+
+    /// One Back step: the engine's previous entry, or for a revived tab the app-side previous entry (the Back
+    /// button's rule).
+    pub(crate) fn step_back(&mut self, v: WebViewId) {
+        let engine = self.pool.as_ref().and_then(|p| p.state(v)).is_some_and(|s| s.can_go_back);
+        let fallback = self.discard.back_target(v).map(str::to_string);
+        let Some(p) = self.pool.as_mut() else { return };
+        match fallback.filter(|_| !engine) {
+            Some(url) => p.load(v, &url),
+            None => p.go_back(v),
+        }
+    }
+
+    /// History menu: moves the selected tab to entry `target` of its app-side list, one engine step at a time.
+    pub(crate) fn jump_to(&mut self, target: usize) {
+        let Some(v) = self.view() else { return };
+        let len = self.discard.entries(v).map_or(0, |(list, _)| list.len());
+        if target >= len {
+            return;
+        }
+        self.discard.set_jump(v, target);
+        self.jump_step(v);
+    }
+
+    /// Takes the next engine step of a History menu jump. Called when the jump starts and after each finished load;
+    /// the jump ends at its target, or when the engine has no step left in that direction.
+    pub(crate) fn jump_step(&mut self, v: WebViewId) {
+        let Some(target) = self.discard.jump_target(v) else { return };
+        let Some(cur) = self.discard.entries(v).map(|(_, i)| i) else {
+            self.discard.clear_jump(v);
+            return;
+        };
+        if cur == target {
+            self.discard.clear_jump(v);
+            return;
+        }
+        let (engine_back, engine_fwd) = match self.pool.as_ref().and_then(|p| p.state(v)) {
+            Some(s) => (s.can_go_back, s.can_go_forward),
+            None => (false, false),
+        };
+        let back = cur > target;
+        let can = if back { engine_back || self.discard.back_target(v).is_some() } else { engine_fwd };
+        if !can {
+            self.discard.clear_jump(v);
+            return;
+        }
+        if back {
+            self.step_back(v);
+        } else if let Some(p) = self.pool.as_mut() {
+            p.go_forward(v);
+        }
+    }
+
+    /// The History menu: Back and Forward submenus of the selected tab's entries, nearest first. Item ids are
+    /// `HISTORY_BASE` plus the entry index (see `jump_to`).
+    pub(crate) fn history_menu(&self) -> Vec<AppMenuItem> {
+        let none: &[String] = &[];
+        let (list, index) = self.view().and_then(|v| self.discard.entries(v)).unwrap_or((none, 0));
+        let (back, forward) = menu_entries(list, index, MENU_LIMIT);
+        let mut items = vec![AppMenuItem::submenu("Back")];
+        if back.is_empty() {
+            items.push(AppMenuItem::new(0, "No Earlier Pages").enabled(false).depth(1));
+        }
+        for (i, url) in back {
+            items.push(AppMenuItem::new(HISTORY_BASE + i as u32, &history_label(&url)).depth(1));
+        }
+        items.push(AppMenuItem::separator());
+        items.push(AppMenuItem::submenu("Forward"));
+        if forward.is_empty() {
+            items.push(AppMenuItem::new(0, "No Later Pages").enabled(false).depth(1));
+        }
+        for (i, url) in forward {
+            items.push(AppMenuItem::new(HISTORY_BASE + i as u32, &history_label(&url)).depth(1));
+        }
+        items
     }
 
     /// Called from `tick`: discards tabs whose probe answered or timed out, and every `SWEEP_S` picks new ones.
@@ -314,5 +457,77 @@ mod tests {
         d.restore.insert(7, (12.0, 340.0));
         assert_eq!(d.on_event(&WebViewEvent::LoadFinished(7)), Some((7, "window.scrollTo(12,340)".into())));
         assert!(d.on_event(&WebViewEvent::LoadFinished(7)).is_none());
+    }
+
+    fn s(list: &[&str]) -> Vec<String> {
+        list.iter().map(|u| u.to_string()).collect()
+    }
+
+    #[test]
+    fn menu_lists_back_nearest_first_and_forward_after_current() {
+        let list = s(&["a", "b", "c", "d"]);
+        // current is "b" (index 1): one back entry, two forward entries
+        let (back, fwd) = menu_entries(&list, 1, 2);
+        assert_eq!(back, vec![(0, "a".to_string())]);
+        assert_eq!(fwd, vec![(2, "c".to_string()), (3, "d".to_string())]);
+        // current is "d" with a limit of one: the nearest back entry only
+        let (back, fwd) = menu_entries(&list, 3, 1);
+        assert_eq!(back, vec![(2, "c".to_string())]);
+        assert!(fwd.is_empty());
+        // no list: both sides empty
+        let (back, fwd) = menu_entries(&[], 0, 10);
+        assert!(back.is_empty() && fwd.is_empty());
+    }
+
+    #[test]
+    fn menu_limit_keeps_the_nearest_entries() {
+        let list = s(&["a", "b", "c", "d", "e"]);
+        let (back, _) = menu_entries(&list, 4, 2);
+        assert_eq!(back, vec![(3, "d".to_string()), (2, "c".to_string())]);
+    }
+
+    #[test]
+    fn menu_labels_drop_scheme_and_trailing_slash() {
+        assert_eq!(history_label("https://example.com/a/"), "example.com/a");
+        assert_eq!(history_label("http://x"), "x");
+        assert_eq!(history_label("https://"), "https://");
+        let long = format!("https://{}", "a".repeat(70));
+        assert_eq!(history_label(&long), format!("{}\u{2026}", "a".repeat(60)));
+    }
+
+    #[test]
+    fn history_menu_ids_map_back_to_entries() {
+        assert_eq!(history_target(HISTORY_BASE), Some(0));
+        assert_eq!(history_target(HISTORY_BASE + 49), Some(49));
+        assert_eq!(history_target(HISTORY_BASE + 50), None);
+        assert_eq!(history_target(HISTORY_BASE - 1), None);
+        assert_eq!(history_target(1), None);
+    }
+
+    #[test]
+    fn track_reports_only_new_entries() {
+        let mut d = Discarder::default();
+        assert!(!d.track(1, "a")); // first page: the list starts
+        assert!(d.track(1, "b")); // a new entry
+        assert!(!d.track(1, "a")); // Back step
+        assert!(!d.track(1, "b")); // Forward step
+        assert!(d.track(1, "c"));
+        assert_eq!(d.entries(1), Some((s(&["a", "b", "c"]).as_slice(), 2)));
+        assert!(!d.track(1, "")); // empty and data URLs are never entries
+        assert!(!d.track(1, "data:text/html,x"));
+        assert_eq!(d.entries(2), None);
+    }
+
+    #[test]
+    fn jump_target_is_kept_until_cleared_or_forgotten() {
+        let mut d = Discarder::default();
+        assert_eq!(d.jump_target(1), None);
+        d.set_jump(1, 0);
+        assert_eq!(d.jump_target(1), Some(0));
+        d.clear_jump(1);
+        assert_eq!(d.jump_target(1), None);
+        d.set_jump(1, 2);
+        d.forget(1);
+        assert_eq!(d.jump_target(1), None);
     }
 }
