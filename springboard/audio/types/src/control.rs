@@ -335,7 +335,8 @@ impl<'a> R<'a> {
             }
             10 => PropertyValue::Format(self.format()?),
             11 => {
-                let n = self.count(37)?;
+                // one encoded StreamFormat: f64 + tag u8 + six u32 = 33 bytes
+                let n = self.count(33)?;
                 let mut v = Vec::with_capacity(n);
                 for _ in 0..n {
                     v.push(self.format()?);
