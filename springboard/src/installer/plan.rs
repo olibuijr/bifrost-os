@@ -596,6 +596,8 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // one initramfs: the fallback image is a second full build nobody boots on a fresh install
         r.write(&sys("/etc/mkinitcpio.d/linux.preset"), "ALL_config=\"/etc/mkinitcpio.conf\"\nALL_kver=\"/boot/vmlinuz-linux\"\nPRESETS=('default')\ndefault_image=\"/boot/initramfs-linux.img\"\n")?;
         r.chroot(&["mkinitcpio", "-p", "linux"])?;
+        // the unified kernel image (EFI/BIFROST/bifrost.efi); a failure keeps the kernel-plus-initramfs boot line
+        let _ = r.chroot(&["bifrost-update-guard", "uki"]);
 
         r.set(3, 98, "Finishing");
         let _ = r.cmd(&["sync"]);

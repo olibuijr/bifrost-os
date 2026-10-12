@@ -5,6 +5,7 @@
 #![no_std]
 extern crate alloc;
 mod boot_policy;
+mod uki;
 use alloc::vec::Vec;
 use uefi::boot::{self, LoadImageSource};
 use uefi::prelude::*;
@@ -191,7 +192,8 @@ fn main() -> Status {
             .unwrap_or(Status::LOAD_ERROR);
     }
     let status = boot_line(image, dev, &current);
-    if marker.is_some() && status != Status::SUCCESS {
+    // A unified image that will not start falls back to the previous generation even without a pending update.
+    if (marker.is_some() || uki::target(&current).is_some()) && status != Status::SUCCESS {
         return previous
             .as_deref()
             .map(|line| boot_line(image, dev, line))
@@ -199,7 +201,22 @@ fn main() -> Status {
     }
     status
 }
+/// Starts the boot line: a unified image (`uki=`) directly, otherwise the kernel next to the initramfs named by
+/// `initrd=` (the older install layout).
 fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
+    if let Some(file) = uki::target(line) {
+        return start_file(image, dev, file, &uki::options(line));
+    }
+    let dir = line
+        .split_whitespace()
+        .find_map(|t| t.strip_prefix("initrd="))
+        .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
+        .unwrap_or("\\arch\\boot\\x86_64");
+    start_file(image, dev, &alloc::format!("{dir}\\vmlinuz-linux"), line)
+}
+
+/// Loads the PE image at `file` (a path on the loader's volume) and starts it with `options` as its command line.
+fn start_file(image: Handle, dev: Handle, file: &str, options: &str) -> Status {
     let Ok(dp) = boot::open_protocol_exclusive::<DevicePath>(dev) else {
         return Status::LOAD_ERROR;
     };
@@ -208,13 +225,7 @@ fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
     for n in dp.node_iter() {
         b = b.push(&n).unwrap();
     }
-    let dir = line
-        .split_whitespace()
-        .find_map(|t| t.strip_prefix("initrd="))
-        .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
-        .unwrap_or("\\arch\\boot\\x86_64");
-    let kernel_path =
-        uefi::CString16::try_from(alloc::format!("{dir}\\vmlinuz-linux").as_str()).unwrap();
+    let kernel_path = uefi::CString16::try_from(file).unwrap();
     let full = b
         .push(&FilePath {
             path_name: &kernel_path,
@@ -231,7 +242,7 @@ fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
     ) else {
         return Status::NOT_FOUND;
     };
-    let mut opts: Vec<u16> = line.encode_utf16().collect();
+    let mut opts: Vec<u16> = options.encode_utf16().collect();
     opts.push(0);
     let Ok(mut kli) = boot::open_protocol_exclusive::<LoadedImage>(k) else {
         return Status::LOAD_ERROR;

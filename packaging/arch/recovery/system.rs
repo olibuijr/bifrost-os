@@ -87,21 +87,13 @@ pub fn prepare() -> io::Result<()> {
     save(&store.join("previous-cmdline"), line.as_bytes())?;
     save(&store.join("previous-bootid"), bootid()?.as_bytes())?;
     save(&store.join("previous-version"), installed()?.as_bytes())?;
-    let fallback = line
-        .split_whitespace()
-        .map(|s| {
-            if s.starts_with("initrd=") {
-                "initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img"
-            } else if s.starts_with("rootflags=") {
-                "rootflags=subvol=@rollback"
-            } else {
-                s
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-        + " bifrost.recovery=1\n";
-    save(&Path::new(ESP).join("rollback.txt"), fallback.as_bytes())?;
+    // The running unified image becomes the rollback generation (bifrost-previous.efi), the kernel files above stay
+    // for installs that still boot the kernel plus initramfs.
+    let running = Path::new(ESP).join("bifrost.efi");
+    if running.exists() {
+        copy(&running, &Path::new(ESP).join("bifrost-previous.efi"))?;
+    }
+    save(&Path::new(ESP).join("rollback.txt"), fallback_line(&line).as_bytes())?;
     // A power failure during pacman must boot the previous generation immediately.
     save(&Path::new(ESP).join("pending"), b"1")?;
     phase(store, "system-prepared")
@@ -176,6 +168,11 @@ pub fn restore() -> io::Result<()> {
             &Path::new("/boot").join(file),
         )?;
     }
+    // The previous unified image goes back to bifrost.efi (the boot line below names it).
+    let previous_image = Path::new(ESP).join("bifrost-previous.efi");
+    if previous_image.exists() {
+        copy(&previous_image, &Path::new(ESP).join("bifrost.efi"))?;
+    }
     let previous = fs::read(store.join("previous-cmdline"))?;
     // The loader prefers EFI/BIFROST/boot.cfg, so restore whichever copies exist.
     for path in [Path::new(ESP).join("boot.cfg"), "/boot/EFI/BOOT/cmdline.txt".into()] {
@@ -190,6 +187,256 @@ pub fn restore() -> io::Result<()> {
     phase(store, "rolled-back")?;
     run("sync", &[])?;
     run("systemctl", &["reboot"])
+}
+
+// ---- Unified kernel image and per-machine initramfs (docs/boot-architecture.md, "Prepared, not probed") ----
+
+/// The unified kernel image the loader starts, relative to the ESP root (the loader's `uki=` token).
+const UKI_PATH: &str = "\\EFI\\BIFROST\\bifrost.efi";
+/// The previous generation's image, the rollback target.
+const UKI_PREVIOUS: &str = "\\EFI\\BIFROST\\bifrost-previous.efi";
+/// The mkinitcpio drop-in that replaces the generic MODULES set with the modules this machine used.
+const MODULES_DROPIN: &str = "/etc/mkinitcpio.conf.d/bifrost-modules.conf";
+
+/// The boot line's options for the image: every `initrd=` and `uki=` token dropped (the image carries the initramfs
+/// and the microcode), everything else kept in order.
+pub fn cmdline_options(line: &str) -> String {
+    line.split_whitespace()
+        .filter(|t| !t.starts_with("initrd=") && !t.starts_with("uki="))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The boot line for the unified image: `uki=` first, then the options.
+pub fn uki_line(line: &str) -> String {
+    format!("uki={UKI_PATH} {}\n", cmdline_options(line))
+}
+
+/// The fallback boot line written to `rollback.txt`: the previous image (or, for an older install, the previous
+/// kernel and initramfs), the previous root subvolume, and the recovery marker.
+pub fn fallback_line(line: &str) -> String {
+    line.split_whitespace()
+        .map(|s| {
+            if s.starts_with("uki=") {
+                format!("uki={UKI_PREVIOUS}")
+            } else if s.starts_with("initrd=") {
+                "initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img".to_owned()
+            } else if s.starts_with("rootflags=") {
+                "rootflags=subvol=@rollback".to_owned()
+            } else {
+                s.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        + " bifrost.recovery=1\n"
+}
+
+/// Module names from `/proc/modules` text: sorted, unique, plain identifiers only.
+pub fn module_names(proc_modules: &str) -> Vec<String> {
+    let mut names: Vec<String> = proc_modules
+        .lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
+        .map(str::to_owned)
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// The mkinitcpio drop-in for a module list. It overrides the generic `MODULES=` of `/etc/mkinitcpio.conf`.
+pub fn modules_conf(names: &[String]) -> String {
+    format!("MODULES=({})\n", names.join(" "))
+}
+
+/// FNV-1a (64 bit) over the sorted, unique hardware ids: changes when a device is added, removed or swapped.
+pub fn hardware_fingerprint(ids: &[String]) -> String {
+    let mut sorted: Vec<&str> = ids.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for id in sorted {
+        for byte in id.bytes().chain(std::iter::once(b'\n')) {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")
+}
+
+/// `vendor:device` for every PCI function, and the board name: the input of the hardware fingerprint.
+fn hardware_ids() -> Vec<String> {
+    let mut ids = Vec::new();
+    if let Ok(dir) = fs::read_dir("/sys/bus/pci/devices") {
+        for entry in dir.flatten() {
+            let read = |f: &str| fs::read_to_string(entry.path().join(f)).unwrap_or_default();
+            ids.push(format!("{}:{}", read("vendor").trim(), read("device").trim()));
+        }
+    }
+    ids.push(format!(
+        "board:{}",
+        fs::read_to_string("/sys/class/dmi/id/board_name").unwrap_or_default().trim()
+    ));
+    ids
+}
+
+fn hardware_now() -> String {
+    hardware_fingerprint(&hardware_ids())
+}
+
+/// The recorded module list, if it was recorded on this hardware. `None` after a hardware change: generic set.
+fn recorded_modules() -> Option<Vec<String>> {
+    let store = Path::new(STORE);
+    let stored = fs::read_to_string(store.join("hardware")).ok()?;
+    if stored.trim() != hardware_now() {
+        return None;
+    }
+    let names = module_names(&fs::read_to_string(store.join("modules")).ok()?);
+    (!names.is_empty()).then_some(names)
+}
+
+/// Brings the mkinitcpio drop-in in line with the recorded modules. Returns whether it changed, in which case the
+/// initramfs must be rebuilt before the image.
+pub fn reconcile_modules() -> io::Result<bool> {
+    let wanted = recorded_modules().map(|names| modules_conf(&names));
+    let path = Path::new(MODULES_DROPIN);
+    match (wanted, fs::read_to_string(path).ok()) {
+        (Some(w), Some(c)) if w == c => Ok(false),
+        (Some(w), _) => {
+            fs::create_dir_all(path.parent().unwrap())?;
+            save(path, w.as_bytes())?;
+            Ok(true)
+        }
+        (None, Some(_)) => {
+            fs::remove_file(path)?;
+            Ok(true)
+        }
+        (None, None) => Ok(false),
+    }
+}
+
+/// Records the modules loaded now (called after desktop-ready). The image is rebuilt only when the list or the
+/// hardware changed, so a steady machine never touches the previous generation.
+pub fn record_modules() -> io::Result<bool> {
+    let store = Path::new(STORE);
+    let names = module_names(&fs::read_to_string("/proc/modules")?);
+    if names.is_empty() {
+        return Err(err("No loaded modules to record"));
+    }
+    let hardware = hardware_now();
+    let same = fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names)
+        && fs::read_to_string(store.join("hardware")).is_ok_and(|s| s.trim() == hardware);
+    if same {
+        return Ok(false);
+    }
+    save(&store.join("modules"), names.join("\n").as_bytes())?;
+    save(&store.join("hardware"), hardware.as_bytes())?;
+    build_boot_image()?;
+    Ok(true)
+}
+
+/// The initramfs for this machine (rebuilt only when the drop-in changed), then the unified image from it.
+pub fn build_boot_image() -> io::Result<()> {
+    if reconcile_modules()? {
+        run("mkinitcpio", &["-p", "linux"])?;
+    }
+    build_uki().map(|_| ())
+}
+
+/// Builds `EFI/BIFROST/bifrost.efi` from the kernel, the microcode and the initramfs, with the boot line's options.
+/// The old image becomes `bifrost-previous.efi`. `boot.cfg` is rewritten only after the new image exists, so a
+/// failed build leaves the last good boot line in place. Returns whether the image changed.
+pub fn build_uki() -> io::Result<bool> {
+    let esp = Path::new(ESP);
+    let line = fs::read_to_string(boot_config())?;
+    let mut microcode: Vec<String> = fs::read_dir("/boot")?
+        .flatten()
+        .map(|e| e.path().to_string_lossy().into_owned())
+        .filter(|p| p.ends_with("-ucode.img"))
+        .collect();
+    microcode.sort();
+    let out = esp.join("bifrost.efi");
+    let tmp = esp.join("bifrost.efi.new");
+    let mut args: Vec<String> = vec!["build".into(), "--linux=/boot/vmlinuz-linux".into()];
+    args.extend(microcode.iter().map(|m| format!("--initrd={m}")));
+    args.push("--initrd=/boot/initramfs-linux.img".into());
+    args.push(format!("--cmdline={}", cmdline_options(&line)));
+    args.push(format!("--output={}", tmp.display()));
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    if let Err(e) = run("ukify", &refs) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if out.exists() && fs::read(&out)? == fs::read(&tmp)? {
+        fs::remove_file(&tmp)?;
+        return Ok(false);
+    }
+    if out.exists() {
+        copy(&out, &esp.join("bifrost-previous.efi"))?;
+    } else if !esp.join("rollback.txt").exists() {
+        // The first image on an older install: the boot line it replaces is the rollback.
+        save(&esp.join("rollback.txt"), line.as_bytes())?;
+    }
+    fs::File::open(&tmp)?.sync_all()?;
+    fs::rename(&tmp, &out)?;
+    save(&esp.join("boot.cfg"), uki_line(&line).as_bytes())?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod uki_tests {
+    use super::*;
+
+    const LINE: &str = "initrd=\\initramfs-linux.img root=UUID=abc rootflags=subvol=@system rw quiet loglevel=3";
+
+    #[test]
+    fn uki_line_drops_initramfs_and_leads_with_the_image() {
+        assert_eq!(
+            uki_line(LINE),
+            "uki=\\EFI\\BIFROST\\bifrost.efi root=UUID=abc rootflags=subvol=@system rw quiet loglevel=3\n"
+        );
+        // already converted: converting again changes nothing
+        assert_eq!(uki_line(&uki_line(LINE)), uki_line(LINE));
+        assert_eq!(cmdline_options(LINE), "root=UUID=abc rootflags=subvol=@system rw quiet loglevel=3");
+    }
+
+    #[test]
+    fn fallback_line_points_at_previous_image_and_rollback_subvolume() {
+        assert_eq!(
+            fallback_line(&uki_line(LINE)),
+            "uki=\\EFI\\BIFROST\\bifrost-previous.efi root=UUID=abc rootflags=subvol=@rollback rw quiet loglevel=3 bifrost.recovery=1\n"
+        );
+        // an install still on the kernel plus initramfs keeps the previous files
+        assert!(fallback_line(LINE).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img "));
+    }
+
+    #[test]
+    fn module_names_are_sorted_unique_and_plain() {
+        let text = "i915 3072 0 - Live 0x0\nbtrfs 1 0 - Live\nuas 2 0 - Live\ni915 3072 0 - Live\nbad-name 1 0\n";
+        assert_eq!(module_names(text), vec!["btrfs", "i915", "uas"]);
+        assert!(module_names("").is_empty());
+    }
+
+    #[test]
+    fn modules_conf_overrides_the_generic_set() {
+        assert_eq!(modules_conf(&module_names("uas 1 0\nbtrfs 1 0\n")), "MODULES=(btrfs uas)\n");
+    }
+
+    #[test]
+    fn hardware_fingerprint_is_order_free_and_changes_with_hardware() {
+        let a = vec!["8086:1234".to_string(), "10de:5678".to_string(), "board:x".to_string()];
+        let b = vec!["board:x".to_string(), "8086:1234".to_string(), "10de:5678".to_string()];
+        let c = vec!["8086:1234".to_string(), "1002:0001".to_string(), "board:x".to_string()];
+        assert_eq!(hardware_fingerprint(&a), hardware_fingerprint(&b));
+        assert_ne!(hardware_fingerprint(&a), hardware_fingerprint(&c));
+        assert_eq!(hardware_fingerprint(&a).len(), 16);
+    }
+
+    #[test]
+    fn empty_hardware_has_the_fnv_offset_fingerprint() {
+        assert_eq!(hardware_fingerprint(&[]), "cbf29ce484222325");
+    }
 }
 
 pub fn fallback_reset() -> io::Result<()> {

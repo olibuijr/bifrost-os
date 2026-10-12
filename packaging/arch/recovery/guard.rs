@@ -353,6 +353,10 @@ fn main() {
                     run("systemctl", &["restart", "springboard.service"])
                 }
             }
+            // Unified kernel image and per-machine initramfs (docs/boot-architecture.md): pacman's hook and the installer
+            // build it, the record unit (after desktop-ready) rebuilds it when the loaded modules change.
+            "uki" => system::build_boot_image(),
+            "record-modules" => system::record_modules().map(|_| ()),
             "rollback" if Path::new(STORE).join("previous-bootid").exists() => system::restore(),
             "rollback" => {
                 let _ = run("systemctl", &["stop", "springboard.service"]);
