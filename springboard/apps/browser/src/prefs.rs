@@ -3,9 +3,10 @@
 //! drawn over the window like the script dialogs, because SDK apps have a single window.
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Rect, TextField};
-use bifrost_app::kit::ui::{AlertCard, SECONDARY, MAC_FOOTNOTE_PT, Weight, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, MAC_BODY_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, SEGMENT_ON, SEPARATOR_C, TINT, WHITE};
+use bifrost_app::kit::ui::{AlertCard, MAC_FOOTNOTE_PT, Weight, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, SEGMENT_ON, SEPARATOR_C, TINT};
+use crate::tokens;
 use bifrost_app::layout::UNIFIED_BAR_PT;
-use bifrost_app::kit::{rgba, Surface, Ui};
+use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::webview::url_for_input;
 use bifrost_app::{Ctx, KeyInput};
 
@@ -118,6 +119,8 @@ pub enum Action {
     Changed,
     ClearHistory,
     ClearData,
+    /// Settings > Import Bookmarks: the newest bookmark export in Downloads.
+    ImportBookmarks,
     Close,
 }
 
@@ -155,6 +158,7 @@ struct Geo {
     segs: [Rect; 4],
     restore_row: Rect,
     toggle: Rect,
+    import_row: Rect,
     clear_history: Rect,
     clear_data: Rect,
     done: Rect,
@@ -185,7 +189,7 @@ impl Sheet {
         let wpt = w as f32 / ui.pt(1.0);
         let pw = W.min(wpt - 16.0).max(0.0);
         let hpt = h as f32 / ui.pt(1.0);
-        let full_h = PAD + TITLE_H + PAD + 3.0 * ROW + FOOT_H + GROUP_GAP + 2.0 * ROW + FOOT_H + PAD;
+        let full_h = PAD + TITLE_H + PAD + 4.0 * ROW + FOOT_H + GROUP_GAP + 2.0 * ROW + FOOT_H + PAD;
         let top = UNIFIED_BAR_PT + 6.0;
         // a short window shrinks the panel to fit and the content scrolls inside it
         let ph = full_h.min((hpt - top - 8.0).max(0.0));
@@ -196,7 +200,7 @@ impl Sheet {
         let gw = panel.w - 2.0 * PAD;
         let title_y = panel.y + PAD - scroll;
         let g1y = title_y + TITLE_H + PAD;
-        let group1 = Rect { x: gx, y: g1y, w: gw, h: 3.0 * ROW };
+        let group1 = Rect { x: gx, y: g1y, w: gw, h: 4.0 * ROW };
         let row = |g: &Rect, i: f32| Rect { x: g.x, y: g.y + ROW * i, w: g.w, h: ROW };
         let r0 = row(&group1, 0.0);
         let fx = r0.x + ROW_PAD + LABEL_W.min(gw * 0.3);
@@ -206,13 +210,14 @@ impl Sheet {
         let segs = [0, 1, 2, 3].map(|i| Rect { x: fx + sw * i as f32, y: r1.y + (ROW - 28.0) / 2.0, w: sw, h: 28.0 });
         let restore_row = row(&group1, 2.0);
         let toggle = Rect { x: restore_row.x + restore_row.w - ROW_PAD - 40.0, y: restore_row.y + (ROW - 24.0) / 2.0, w: 40.0, h: 24.0 };
+        let import_row = row(&group1, 3.0);
         let foot1_y = group1.y + group1.h + 3.0;
         let group2 = Rect { x: gx, y: group1.y + group1.h + FOOT_H + GROUP_GAP, w: gw, h: 2.0 * ROW };
         let clear_history = row(&group2, 0.0);
         let clear_data = row(&group2, 1.0);
         let foot2_y = group2.y + group2.h + 3.0;
         let done = Rect { x: panel.x + panel.w - PAD - 56.0, y: title_y - 3.0, w: 56.0, h: TITLE_H + 6.0 };
-        Geo { panel, title_y, group1, group2, home, segs, restore_row, toggle, clear_history, clear_data, done, foot1_y, foot2_y, full_h, max_scroll }
+        Geo { panel, title_y, group1, group2, home, segs, restore_row, toggle, import_row, clear_history, clear_data, done, foot1_y, foot2_y, full_h, max_scroll }
     }
 
     fn ask(&mut self, ui: &Ui, action: Action, title: &str, message: &str, confirm: &str) {
@@ -266,6 +271,9 @@ impl Sheet {
         if g.restore_row.contains(px, py) {
             p.restore = !p.restore;
             return Action::Changed;
+        }
+        if g.import_row.contains(px, py) {
+            return Action::ImportBookmarks;
         }
         if g.clear_history.contains(px, py) {
             self.ask(ui, Action::ClearHistory, "Clear History?", "Every page you visited is removed from this browser. This cannot be undone.", "Clear History");
@@ -326,7 +334,7 @@ impl Sheet {
         let g = Self::geo(ui, w, h, self.scroll);
         // dim only the page: the toolbar stays visible above the sheet
         let top = ui.pt(UNIFIED_BAR_PT);
-        s.fill_rrect(0.0, top, s.w as f32, s.h as f32 - top, 0.0, rgba(0, 0, 0, 110));
+        s.fill_rrect(0.0, top, s.w as f32, s.h as f32 - top, 0.0, tokens::scrim(110));
         s.fill_rrect(ui.pt(g.panel.x), ui.pt(g.panel.y), ui.pt(g.panel.w), ui.pt(g.panel.h), ui.pt(m::WINDOW_RADIUS), CARD_BG.now());
         // everything below draws into the panel's rows only, so scrolled content never leaves the card
         let (clip_top, clip_bot) = (ui.pt(g.panel.y) as usize, ui.pt(g.panel.y + g.panel.h) as usize);
@@ -346,7 +354,7 @@ impl Sheet {
         text(s, "Settings", MAC_TITLE2_PT, Weight::Semibold, LABEL.now(), g.panel.x + PAD, g.title_y + TITLE_H / 2.0);
         text(s, "Done", MAC_BODY_PT, Weight::Semibold, TINT, g.done.x + 8.0, g.done.y + g.done.h / 2.0);
 
-        group(s, &g.group1, 3);
+        group(s, &g.group1, 4);
         let lx = g.group1.x + ROW_PAD;
         text(s, "Homepage", MAC_BODY_PT, Weight::Regular, LABEL.now(), lx, g.home.y + g.home.h / 2.0);
         bifrost_app::widgets::text_field(s, ui, &self.home, g.home, "Blank page", self.focus_home);
@@ -367,7 +375,8 @@ impl Sheet {
         s.fill_rrect(ui.pt(t.x), ui.pt(t.y), ui.pt(t.w), ui.pt(t.h), ui.pt(t.h / 2.0), if p.restore { TINT } else { CARD_BG.now() });
         let knob = t.h - 4.0;
         let kx = if p.restore { t.x + t.w - knob - 2.0 } else { t.x + 2.0 };
-        s.fill_rrect(ui.pt(kx), ui.pt(t.y + 2.0), ui.pt(knob), ui.pt(knob), ui.pt(knob / 2.0), WHITE);
+        s.fill_rrect(ui.pt(kx), ui.pt(t.y + 2.0), ui.pt(knob), ui.pt(knob), ui.pt(knob / 2.0), tokens::KNOB);
+        text(s, "Import Bookmarks\u{2026}", MAC_BODY_PT, Weight::Regular, LINK, lx, g.import_row.y + ROW / 2.0);
         let fx = g.group1.x + ROW_PAD;
         left_footer(s, ui, FOOTER_HOME, fx, g.group1.w - 2.0 * ROW_PAD, g.foot1_y);
 
@@ -419,6 +428,6 @@ fn left_footer(s: &mut Surface, ui: &Ui, text: &str, x: f32, max_w: f32, y: f32)
         while t.pop().is_some() && ui.measure(&format!("{t}\u{2026}"), MAC_FOOTNOTE_PT, Weight::Regular) > ui.pt(max_w) {}
         t.push('\u{2026}');
     }
-    let img = ui.text(&t, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY);
+    let img = ui.text(&t, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
     s.blit(&img, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
 }

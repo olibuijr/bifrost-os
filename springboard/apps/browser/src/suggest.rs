@@ -1,8 +1,9 @@
 //! Browser-style address suggestions: Top Hits from bookmarks and history ranked by frecency, then
 //! "Search for ...". Ranking is pure; drawing uses named tokens only.
 use crate::store::{Entry, Store};
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::Rect;
-use bifrost_app::kit::ui::{Weight, CARD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, SELECTION, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{Weight, CARD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, SELECTION, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXL, SPACE_XXS, WHITE};
 use bifrost_app::glyphs;
 use bifrost_app::kit::{Surface, Ui};
 
@@ -93,13 +94,13 @@ pub fn draw(s: &mut Surface, ui: &Ui, field: Rect, list: &[Suggestion], selected
     }
     let (x, y) = (ui.pt(field.x), ui.pt(field.y + field.h + 4.0));
     let (w, h) = (ui.pt(field.w), ui.pt(height(list.len())));
-    s.fill_rrect(x, y, w, h, ui.pt(13.0), CARD_BG.now());
+    s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
     for (i, sg) in list.iter().enumerate() {
         let ry = y + ui.pt(i as f32 * ROW_PT);
         if selected == Some(i) {
-            s.fill_rrect(x + ui.pt(4.0), ry + ui.pt(2.0), w - ui.pt(8.0), ui.pt(ROW_PT - 4.0), ui.pt(9.0), SELECTION.now());
+            s.fill_rrect(x + ui.pt(SPACE_XS), ry + ui.pt(SPACE_XXS), w - ui.pt(SPACE_S), ui.pt(ROW_PT - 4.0), ui.pt(m::SELECTION_RADIUS), SELECTION.now());
         } else if i > 0 {
-            s.fill_rect(x as usize + ui.pt(12.0) as usize, ry as usize, (w - ui.pt(24.0)) as usize, 1, SEPARATOR_C.now());
+            s.fill_rect(x as usize + ui.pt(SPACE_M) as usize, ry as usize, (w - ui.pt(SPACE_XXL)) as usize, 1, SEPARATOR_C.now());
         }
         let room = w - ui.pt(28.0);
         // selected rows sit on the selection colour: white text in both appearances (named pair, no tint-on-label)

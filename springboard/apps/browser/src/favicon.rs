@@ -8,8 +8,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::{rgba, Image};
 use bifrost_app::webview::WebViewId;
 
@@ -38,8 +39,8 @@ pub struct Favicons {
     cache: HashMap<String, Option<Icon>>,
     views: HashMap<WebViewId, String>,
     pending: HashSet<String>,
-    tx: Sender<Fetched>,
-    rx: Receiver<Fetched>,
+    /// Fetches finished on the global queue, taken by `tick`.
+    inbox: Arc<Mutex<Vec<Fetched>>>,
 }
 
 impl Default for Favicons {
@@ -72,8 +73,7 @@ fn file_stem(host: &str) -> String {
 
 impl Favicons {
     pub fn new(dir: Option<PathBuf>) -> Favicons {
-        let (tx, rx) = channel();
-        Favicons { dir, cache: HashMap::new(), views: HashMap::new(), pending: HashSet::new(), tx, rx }
+        Favicons { dir, cache: HashMap::new(), views: HashMap::new(), pending: HashSet::new(), inbox: Arc::new(Mutex::new(Vec::new())) }
     }
 
     /// A private window keeps its icons in memory only.
@@ -145,8 +145,8 @@ impl Favicons {
             return true;
         }
         self.pending.insert(host.clone());
-        let (tx, dir) = (self.tx.clone(), self.dir.clone());
-        std::thread::spawn(move || {
+        let (sink, dir) = (self.inbox.clone(), self.dir.clone());
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let found = cands.iter().find_map(|u| fetch(u).map(|rgba| (rgba, u.clone())));
             if let (Some((px, url)), Some(dir)) = (&found, &dir) {
                 let stem = file_stem(&host);
@@ -155,8 +155,10 @@ impl Favicons {
                     let _ = std::fs::write(dir.join(format!("{stem}.url")), url);
                 }
             }
-            let _ = tx.send((host, found));
-            bifrost_app::dispatch::DispatchQueue::main().async_(|| {});
+            if let Ok(mut q) = sink.lock() {
+                q.push((host, found));
+            }
+            DispatchQueue::main().async_(|| {});
         });
         true
     }
@@ -164,7 +166,8 @@ impl Favicons {
     /// Collects finished fetches; true when something new can be drawn.
     pub fn tick(&mut self) -> bool {
         let mut changed = false;
-        while let Ok((host, found)) = self.rx.try_recv() {
+        let done = self.inbox.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        for (host, found) in done {
             self.pending.remove(&host);
             match found {
                 Some((px, url)) => {
@@ -217,7 +220,8 @@ fn decode_png(bytes: &[u8]) -> Option<(usize, usize, Vec<u8>)> {
     d.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);
     let mut r = d.read_info().ok()?;
     let (w, h) = (r.info().width as usize, r.info().height as usize);
-    if w == 0 || h == 0 || w > 1024 || h > 1024 {
+    const MAX_SIDE_PX: usize = 1024;
+    if w == 0 || h == 0 || w > MAX_SIDE_PX || h > MAX_SIDE_PX {
         return None;
     }
     let mut buf = vec![0u8; r.output_buffer_size()?];
@@ -256,7 +260,8 @@ fn decode_ico(b: &[u8]) -> Option<(usize, usize, Vec<u8>)> {
             Some(((if w == 0 { 256 } else { w }), le32(b, e + 8)?, le32(b, e + 12)?))
         })
         .collect();
-    frames.sort_by_key(|&(w, _, _)| if w >= STORE_PX { w - STORE_PX } else { 1000 + STORE_PX - w });
+    // sizes at or above the store size first (smallest first), then the ones below it (largest first)
+    frames.sort_by_key(|&(w, _, _)| if w >= STORE_PX { (0, w - STORE_PX) } else { (1, STORE_PX - w) });
     frames.into_iter().find_map(|(_, size, off)| {
         let data = b.get(off..off.checked_add(size)?)?;
         if data.starts_with(&PNG_MAGIC) {

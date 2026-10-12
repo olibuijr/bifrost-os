@@ -8,6 +8,8 @@ use std::{collections::HashMap, fs, io};
 pub const SAVE_INTERVAL: Duration = Duration::from_secs(5);
 
 pub const MAX_HISTORY: usize = 5000;
+/// The bundle identifier the history visits are recorded under (the web_history model keys visits by app).
+const WEB_BUNDLE: &str = "is.olibuijr.browser.desktop";
 /// Longest URL or title kept per history entry, bytes (a page cannot bloat the file with a huge `data:`-like URL).
 pub const MAX_FIELD: usize = 2048;
 
@@ -240,6 +242,43 @@ impl Store {
         true
     }
 
+    /// Adds the links that are not bookmarks yet (blank and about:blank are skipped), with one save. Returns how many
+    /// were added; a link already bookmarked keeps its name and position.
+    pub fn import_bookmarks(&mut self, items: &[(String, String)], at: u64) -> usize {
+        let mut added = 0;
+        for (url, title) in items {
+            if url.is_empty() || url == "about:blank" || self.is_bookmarked(url) {
+                continue;
+            }
+            self.bookmarks.push(Entry { url: clip(url), title: clip(title), visits: 0, last: at });
+            added += 1;
+        }
+        if added > 0 {
+            self.save();
+        }
+        added
+    }
+
+    /// Removes the history entries whose last visit is in `from..to` (half-open, seconds since the epoch). Each entry
+    /// stands for its last visit, so an entry is removed whole. Returns how many were removed.
+    pub fn clear_history_during(&mut self, from: u64, to: u64) -> usize {
+        let mut visits = bifrost_app::controls::web_history::WebHistory::new();
+        for e in &self.history {
+            visits.record(WEB_BUNDLE, &e.url, e.last);
+        }
+        visits.delete_during(from, to);
+        let kept: std::collections::HashSet<String> = visits.fetch_all().into_iter().map(|v| v.url).collect();
+        let before = self.history.len();
+        // an entry without a URL has no visit to match, so it is kept
+        self.history.retain(|e| e.url.is_empty() || kept.contains(&e.url));
+        let removed = before - self.history.len();
+        if removed > 0 {
+            self.reindex();
+            self.save();
+        }
+        removed
+    }
+
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.index.clear();
@@ -287,5 +326,40 @@ mod bookmark_tests {
         st.visit("https://b.test/", "B", 3);
         assert_eq!(st.history.len(), 1);
         assert_eq!(st.history[0].visits, 2);
+    }
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+
+    #[test]
+    fn import_adds_new_links_and_keeps_existing_ones() {
+        let mut s = Store::in_memory();
+        s.add_bookmark("https://a.test/", "A", 1);
+        let items = vec![
+            ("https://a.test/".to_string(), "A renamed".to_string()),
+            ("https://b.test/".to_string(), "B".to_string()),
+            (String::new(), "no address".to_string()),
+            ("about:blank".to_string(), "blank".to_string()),
+        ];
+        assert_eq!(s.import_bookmarks(&items, 5), 1);
+        assert_eq!(s.bookmarks.len(), 2);
+        assert_eq!(s.bookmark("https://a.test/").map(|b| b.title.as_str()), Some("A"));
+        assert_eq!(s.bookmark("https://b.test/").map(|b| b.last), Some(5));
+    }
+
+    #[test]
+    fn clear_during_removes_only_the_range() {
+        let mut s = Store::in_memory();
+        s.visit("https://a.test/", "A", 100);
+        s.visit("https://b.test/", "B", 200);
+        s.visit("https://c.test/", "C", 300);
+        // 200 is inside 200..300 (half-open), 300 is not
+        assert_eq!(s.clear_history_during(200, 300), 1);
+        let urls: Vec<&str> = s.history.iter().map(|e| e.url.as_str()).collect();
+        assert_eq!(urls, vec!["https://a.test/", "https://c.test/"]);
+        assert_eq!(s.clear_history_during(0, 1), 0);
+        assert_eq!(s.history.len(), 2);
     }
 }
