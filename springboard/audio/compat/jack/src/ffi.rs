@@ -820,7 +820,7 @@ unsafe fn mbuf<'a>(p: *mut c_void) -> &'a mut [u8] {
 }
 
 fn current_frames() -> u32 {
-    runtime().map_or(MAX_FRAMES as u32, |rt| rt.sh.buffer_size.load(Relaxed))
+    driver::CURRENT_FRAMES.load(Relaxed)
 }
 
 #[no_mangle]
