@@ -38,6 +38,7 @@ pub mod replicator;
 pub mod emitter;
 pub mod plane_stats;
 pub mod plane_arith;
+pub mod kernel;
 
 #[cfg(test)]
 mod tests {
