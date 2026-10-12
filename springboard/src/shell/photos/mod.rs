@@ -3,7 +3,7 @@
 //! grids with month headers and a month filter, a full-screen viewer with
 //! paging, pinch/double-tap zoom with rubber-band edges and an EXIF info
 //! sheet, multi-select, a Recently Deleted album (purged after 30 days), a
-//! simple editor (rotate, straighten, crop, filters, brightness, contrast, revert, saved as a copy) and
+//! simple editor (rotate, straighten, crop, filters, blur, vignette, brightness, contrast, exposure, saturation, warmth, revert, saved as a copy) and
 //! Share › Set as Wallpaper. Scanning and decoding run on worker threads
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
@@ -138,16 +138,88 @@ pub enum Target {
     EditAspect(Aspect),
     EditFilter(Filter),
     EditRevert,
+    EditPane(EditPane),
     Slide(Slider),
 }
+
+/// The edit mode's tool pages: a tab row picks one, and its sliders fill the rows below.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditPane {
+    Adjust,
+    Effects,
+    Crop,
+}
+
+impl EditPane {
+    pub const ALL: [EditPane; 3] = [EditPane::Adjust, EditPane::Effects, EditPane::Crop];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            EditPane::Adjust => "Adjust",
+            EditPane::Effects => "Effects",
+            EditPane::Crop => "Crop",
+        }
+    }
+
+    /// The sliders of the page, top to bottom. No page has more than `EDIT_SLIDER_ROWS`.
+    pub fn sliders(self) -> &'static [Slider] {
+        match self {
+            EditPane::Adjust => &[Slider::Brightness, Slider::Contrast, Slider::Exposure, Slider::Saturation, Slider::Warmth],
+            EditPane::Effects => &[Slider::Blur, Slider::Vignette],
+            EditPane::Crop => &[Slider::Straighten, Slider::Crop],
+        }
+    }
+}
+
+/// Rows of sliders under the tab row.
+const EDIT_SLIDER_ROWS: usize = 5;
+
+/// The editor panel's height in rows: aspect, filters, tabs, then the sliders.
+const EDIT_PANEL_ROWS: f32 = 3.0 + EDIT_SLIDER_ROWS as f32;
 
 /// The edit mode's sliders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slider {
     Brightness,
     Contrast,
+    Exposure,
+    Saturation,
+    Warmth,
+    Blur,
+    Vignette,
     Crop,
     Straighten,
+}
+
+impl Slider {
+    pub fn label(self) -> &'static str {
+        match self {
+            Slider::Brightness => "Brightness",
+            Slider::Contrast => "Contrast",
+            Slider::Exposure => "Exposure",
+            Slider::Saturation => "Saturation",
+            Slider::Warmth => "Warmth",
+            Slider::Blur => "Blur",
+            Slider::Vignette => "Vignette",
+            Slider::Crop => "Crop",
+            Slider::Straighten => "Straighten",
+        }
+    }
+
+    /// The slider's current value in `edit`.
+    pub fn value(self, edit: &Edit) -> f32 {
+        match self {
+            Slider::Brightness => edit.brightness,
+            Slider::Contrast => edit.contrast,
+            Slider::Exposure => edit.exposure,
+            Slider::Saturation => edit.saturation,
+            Slider::Warmth => edit.warmth,
+            Slider::Blur => edit.blur,
+            Slider::Vignette => edit.vignette,
+            Slider::Crop => edit.crop_zoom,
+            Slider::Straighten => edit.straighten,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,6 +263,7 @@ struct Editor {
     src: Image,
     edit: Edit,
     preview: Image,
+    pane: EditPane,
 }
 
 impl Editor {
@@ -1172,7 +1245,7 @@ impl Photos {
                 if let Some(p) = self.viewing().cloned() {
                     if let Some(src) = self.full.get(&p.key()).cloned() {
                         self.sheet = None;
-                        self.editor = Some(Editor { photo: p, preview: src.clone(), src, edit: Edit::default() });
+                        self.editor = Some(Editor { photo: p, preview: src.clone(), src, edit: Edit::default(), pane: EditPane::Adjust });
                     }
                 }
             }
@@ -1199,6 +1272,11 @@ impl Photos {
                 if let Some(ed) = &mut self.editor {
                     ed.edit = Edit::default();
                     ed.refresh();
+                }
+            }
+            Target::EditPane(pane) => {
+                if let Some(ed) = &mut self.editor {
+                    ed.pane = pane;
                 }
             }
             Target::EditSave => {
@@ -1439,7 +1517,7 @@ impl Photos {
     // --- editor ---
 
     fn edit_panel_top(&self, ui: &Ui) -> f32 {
-        self.h as f32 - home_zone(ui) - ui.pt(EDIT_ROW_PT * 6.0)
+        self.h as f32 - home_zone(ui) - ui.pt(EDIT_ROW_PT * EDIT_PANEL_ROWS)
     }
 
     /// The slider track's left and right ends in px.
@@ -1459,26 +1537,26 @@ impl Photos {
             });
         }
         let top = self.edit_panel_top(ui);
-        if y < top || y >= top + ui.pt(EDIT_ROW_PT * 6.0) {
+        if y < top || y >= top + ui.pt(EDIT_ROW_PT * EDIT_PANEL_ROWS) {
             return None;
         }
+        let pane = self.editor.as_ref().map_or(EditPane::Adjust, |e| e.pane);
         match ((y - top) / ui.pt(EDIT_ROW_PT)) as usize {
             0 => match (x / (w / 7.0)) as usize {
                 0 => Some(Target::EditRotate),
                 col => Aspect::ALL.get(col - 1).map(|&a| Target::EditAspect(a)),
             },
-            1 => Filter::ALL.get((x / (w / 5.0)) as usize).map(|&f| Target::EditFilter(f)),
-            2 => Some(Target::Slide(Slider::Straighten)),
-            3 => Some(Target::Slide(Slider::Brightness)),
-            4 => Some(Target::Slide(Slider::Contrast)),
-            _ => Some(Target::Slide(Slider::Crop)),
+            1 => Filter::ALL.get((x / (w / Filter::ALL.len() as f32)) as usize).map(|&f| Target::EditFilter(f)),
+            2 => EditPane::ALL.get((x / (w / EditPane::ALL.len() as f32)) as usize).map(|&p| Target::EditPane(p)),
+            row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
         }
     }
 
-    /// The slider's range and current value in the editor.
+    /// The slider's range in the editor.
     fn slider_range(slider: Slider) -> (f32, f32) {
         match slider {
-            Slider::Brightness | Slider::Contrast => (-1.0, 1.0),
+            Slider::Brightness | Slider::Contrast | Slider::Exposure | Slider::Saturation | Slider::Warmth => (-1.0, 1.0),
+            Slider::Blur | Slider::Vignette => (0.0, 1.0),
             Slider::Crop => (1.0, 4.0),
             Slider::Straighten => (-edit::STRAIGHTEN_MAX, edit::STRAIGHTEN_MAX),
         }
@@ -1496,6 +1574,11 @@ impl Photos {
             match slider {
                 Slider::Brightness => ed.edit.brightness = v,
                 Slider::Contrast => ed.edit.contrast = v,
+                Slider::Exposure => ed.edit.exposure = v,
+                Slider::Saturation => ed.edit.saturation = v,
+                Slider::Warmth => ed.edit.warmth = v,
+                Slider::Blur => ed.edit.blur = v,
+                Slider::Vignette => ed.edit.vignette = v,
                 Slider::Crop => ed.edit.crop_zoom = v,
                 Slider::Straighten => ed.edit.straighten = v,
             }
@@ -1881,17 +1964,23 @@ impl Photos {
             self.label(s, ui, a.label(), 15.0, if cur.aspect == a { Weight::Semibold } else { Weight::Regular }, tint(Target::EditAspect(a), color), col * (i as f32 + 1.5), panel + row / 2.0);
         }
         let (x0, x1) = self.slider_track(ui);
+        let chips = Filter::ALL.len() as f32;
         for (i, f) in Filter::ALL.into_iter().enumerate() {
             let color = if cur.filter == f { BLUE } else { WHITE };
-            self.label(s, ui, f.label(), 15.0, if cur.filter == f { Weight::Semibold } else { Weight::Regular }, tint(Target::EditFilter(f), color), w / 5.0 * (i as f32 + 0.5), panel + row * 1.5);
+            self.label(s, ui, f.label(), 15.0, if cur.filter == f { Weight::Semibold } else { Weight::Regular }, tint(Target::EditFilter(f), color), w / chips * (i as f32 + 0.5), panel + row * 1.5);
         }
-        let sliders = [("Straighten", Slider::Straighten, cur.straighten), ("Brightness", Slider::Brightness, cur.brightness), ("Contrast", Slider::Contrast, cur.contrast), ("Crop", Slider::Crop, cur.crop_zoom)];
-        for (i, (name, slider, value)) in sliders.into_iter().enumerate() {
-            let cy = panel + row * (i as f32 + 2.5);
-            self.label_left(s, ui, name, 15.0, Weight::Regular, WHITE, m, cy);
+        let pane = self.editor.as_ref().map_or(EditPane::Adjust, |e| e.pane);
+        let pane_count = EditPane::ALL.len() as f32;
+        for (i, p) in EditPane::ALL.into_iter().enumerate() {
+            let color = if pane == p { BLUE } else { WHITE };
+            self.label(s, ui, p.label(), 15.0, if pane == p { Weight::Semibold } else { Weight::Regular }, tint(Target::EditPane(p), color), w / pane_count * (i as f32 + 0.5), panel + row * 2.5);
+        }
+        for (i, &slider) in pane.sliders().iter().enumerate().take(EDIT_SLIDER_ROWS) {
+            let cy = panel + row * (i as f32 + 3.5);
+            self.label_left(s, ui, slider.label(), 15.0, Weight::Regular, WHITE, m, cy);
             s.fill_rect(x0 as usize, cy as usize - 1, (x1 - x0) as usize, 2, SEPARATOR);
             let (lo, hi) = Self::slider_range(slider);
-            let kx = edit::slider_pos(value, x0, x1, lo, hi);
+            let kx = edit::slider_pos(slider.value(&cur), x0, x1, lo, hi);
             s.fill_rrect(kx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(22.0), flat(ui), WHITE);
         }
     }
@@ -2531,6 +2620,11 @@ mod tests {
         let (_, x1) = p.slider_track(&ui);
         tap(&mut p, &ui, x1, top + row * 3.5, 2300.0);
         assert_eq!(p.editor.as_ref().map(|e| e.edit.brightness), Some(1.0));
+        // the Effects tab: its first slider is blur, and the right end is the full radius
+        tap(&mut p, &ui, 1200.0 / 3.0 * 1.5, top + row * 2.5, 2350.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Effects));
+        tap(&mut p, &ui, x1, top + row * 3.5, 2360.0);
+        assert_eq!(p.editor.as_ref().map(|e| (e.edit.blur, e.edit.brightness)), Some((1.0, 1.0)));
         frame(&mut p, &ui);
         // Save
         tap(&mut p, &ui, 1100.0, ui.pt(STATUS_PT) + 5.0, 2400.0);
