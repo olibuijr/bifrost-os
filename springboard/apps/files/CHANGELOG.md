@@ -1,3 +1,7 @@
+## 1.21.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.21.2
 
 - The label cache's length is compiled only for its tests.
