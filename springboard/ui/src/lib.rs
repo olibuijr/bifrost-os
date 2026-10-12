@@ -785,3 +785,6 @@ pub mod route_action;
 pub mod route_picker;
 pub mod webauth_session;
 pub mod verification_codes;
+pub mod photo_changes;
+pub mod photo_media;
+pub mod photo_request;
