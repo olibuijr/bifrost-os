@@ -23,6 +23,7 @@ pub mod dock_tile;
 pub mod now_playing;
 pub mod notification_schedule;
 pub mod screens;
+pub mod cursor_service;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -66,6 +67,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(now_playing::NowPlaying),
         Box::new(notification_schedule::NotificationSchedule::default()),
         Box::new(screens::Displays::default()),
+        Box::new(cursor_service::CursorService),
     ]
 }
 
