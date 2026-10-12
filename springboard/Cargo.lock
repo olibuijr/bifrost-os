@@ -417,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-books"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.11.0"
+version = "1.11.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -500,7 +500,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.21.0"
+version = "1.21.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -520,7 +520,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-games"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -564,6 +564,7 @@ dependencies = [
 name = "bifrost-layers"
 version = "0.1.0"
 dependencies = [
+ "bifrost-wire",
  "wayland-backend",
  "wayland-client",
  "wayland-scanner",
@@ -610,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -619,7 +620,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -646,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.13.0"
+version = "1.13.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -675,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-shortcuts"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -691,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -700,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
