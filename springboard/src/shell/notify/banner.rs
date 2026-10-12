@@ -36,11 +36,19 @@ pub struct Banner {
     /// when the phase began
     since: f64,
     pull: Option<Pull>,
+    /// an alert style banner (Settings > Notifications > Alerts): it rests until the person dismisses it
+    persistent: bool,
 }
 
 impl Banner {
     pub fn new(id: u64, t: f64) -> Self {
-        Banner { id, phase: Phase::In, since: t, pull: None }
+        Banner { id, phase: Phase::In, since: t, pull: None, persistent: false }
+    }
+
+    /// The same banner, resting until it is dismissed when `on` (the Alerts style of an app).
+    pub fn persistent(mut self, on: bool) -> Self {
+        self.persistent = on;
+        self
     }
 
     pub fn phase(&self) -> Phase {
@@ -59,7 +67,7 @@ impl Banner {
     /// When the rest ends and the slide out starts, unless a finger holds it.
     pub fn next_wake(&self) -> Option<f64> {
         match (self.phase, self.pull) {
-            (Phase::Hold, None) => Some(self.since + HOLD_MS),
+            (Phase::Hold, None) if !self.persistent => Some(self.since + HOLD_MS),
             _ => None,
         }
     }
@@ -70,7 +78,7 @@ impl Banner {
         loop {
             let (next, len) = match self.phase {
                 Phase::In => (Phase::Hold, SLIDE_MS),
-                Phase::Hold if self.pull.is_none() => (Phase::Out, HOLD_MS),
+                Phase::Hold if self.pull.is_none() && !self.persistent => (Phase::Out, HOLD_MS),
                 Phase::Out => (Phase::Gone, SLIDE_MS),
                 _ => return changed,
             };
@@ -149,6 +157,18 @@ impl Banner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_alerts_banner_rests_until_it_is_dismissed() {
+        let mut b = Banner::new(3, 0.0).persistent(true);
+        assert!(b.tick(SLIDE_MS));
+        assert_eq!(b.phase(), Phase::Hold);
+        assert_eq!(b.next_wake(), None, "no timer ends a persistent banner");
+        assert!(!b.tick(SLIDE_MS + HOLD_MS * 10.0));
+        assert_eq!(b.phase(), Phase::Hold);
+        b.dismiss(100_000.0);
+        assert_eq!(b.phase(), Phase::Out);
+    }
 
     #[test]
     fn slides_in_rests_five_seconds_and_leaves() {

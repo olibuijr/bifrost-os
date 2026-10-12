@@ -28,6 +28,7 @@ enum Section {
     Item,
     Mute,
     Dnd,
+    Asked,
 }
 
 impl Notification {
@@ -67,13 +68,15 @@ pub struct Store {
     next_id: u64,
     /// apps whose notifications are stored and badged but never shown or woken for
     muted: Vec<AppId>,
+    /// apps the person has answered the first-time permission prompt for (never asked again)
+    asked: Vec<AppId>,
     /// the Do Not Disturb schedule
     schedule: Schedule,
 }
 
 impl Default for Store {
     fn default() -> Self {
-        Store { path: None, items: Vec::new(), next_id: 1, muted: Vec::new(), schedule: Schedule::default() }
+        Store { path: None, items: Vec::new(), next_id: 1, muted: Vec::new(), asked: Vec::new(), schedule: Schedule::default() }
     }
 }
 
@@ -99,6 +102,7 @@ impl Store {
         }
         let mut items: Vec<Notification> = Vec::new();
         let mut muted: Vec<AppId> = Vec::new();
+        let mut asked: Vec<AppId> = Vec::new();
         let mut schedule = Schedule::default();
         let mut current: Option<Notification> = None;
         let mut section = Section::Item;
@@ -111,6 +115,7 @@ impl Store {
                 finish(current.take(), &mut items);
                 section = match id {
                     "mute" => Section::Mute,
+                    "asked" => Section::Asked,
                     "dnd" => Section::Dnd,
                     _ => Section::Item,
                 };
@@ -126,6 +131,13 @@ impl Store {
                     if let (true, Some(app)) = (k == "app", app_from_key(v)) {
                         if !muted.contains(&app) {
                             muted.push(app);
+                        }
+                    }
+                }
+                Section::Asked => {
+                    if let (true, Some(app)) = (k == "app", app_from_key(v)) {
+                        if !asked.contains(&app) {
+                            asked.push(app);
                         }
                     }
                 }
@@ -157,7 +169,7 @@ impl Store {
             items.drain(..items.len() - KEEP);
         }
         let next_id = items.last().map_or(1, |n| n.id + 1);
-        Store { path: None, items, next_id, muted, schedule }
+        Store { path: None, items, next_id, muted, asked, schedule }
     }
 
     fn serialize(&self) -> String {
@@ -170,6 +182,12 @@ impl Store {
         if !self.muted.is_empty() {
             out.push_str("[mute]\n");
             for &app in &self.muted {
+                out.push_str(&format!("app={}\n", app_key(app)));
+            }
+        }
+        if !self.asked.is_empty() {
+            out.push_str("[asked]\n");
+            for &app in &self.asked {
                 out.push_str(&format!("app={}\n", app_key(app)));
             }
         }
@@ -219,6 +237,19 @@ impl Store {
             self.muted.retain(|&a| a != app);
         }
         self.save();
+    }
+
+    /// Whether the first-time permission prompt was answered for `app`.
+    pub fn is_asked(&self, app: AppId) -> bool {
+        self.asked.contains(&app)
+    }
+
+    /// Records that the prompt was answered for `app` and saves.
+    pub fn set_asked(&mut self, app: AppId) {
+        if !self.is_asked(app) {
+            self.asked.push(app);
+            self.save();
+        }
     }
 
     pub fn schedule(&self) -> Schedule {
@@ -440,6 +471,23 @@ mod tests {
         s.clear();
         let cleared = Store::load(&path);
         assert!(cleared.is_muted(AppId::Files), "clearing notifications keeps the mutes");
+    }
+
+    #[test]
+    fn the_permission_answer_is_kept_once_and_apart_from_the_mute() {
+        let path = scratch("asked-in-store.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut s = Store::load(&path);
+        assert!(!s.is_asked(AppId::Files));
+        s.set_asked(AppId::Files);
+        s.set_asked(AppId::Files);
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text.matches("[asked]").count(), 1, "{text}");
+        assert_eq!(text.matches("bifrost.files").count(), 1, "{text}");
+        let again = Store::load(&path);
+        assert!(again.is_asked(AppId::Files) && !again.is_asked(AppId::Terminal));
+        assert!(!again.is_muted(AppId::Files), "asking is not muting");
+        assert!(Store::parse("[asked]\napp=bifrost.files\napp=nope\n").is_asked(AppId::Files));
     }
 
     #[test]

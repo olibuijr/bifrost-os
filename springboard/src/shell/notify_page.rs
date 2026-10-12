@@ -34,6 +34,18 @@ pub struct AppNotif {
     pub grouping: u8,
 }
 
+impl AppNotif {
+    /// The Alert Style index (see `ALERT_STYLES`): 0 None when banners are off, 2 Alerts for a persistent banner,
+    /// 1 Banners otherwise.
+    pub fn style(&self) -> u8 {
+        match (self.banners, self.persistent) {
+            (false, _) => 0,
+            (true, false) => 1,
+            (true, true) => 2,
+        }
+    }
+}
+
 impl Default for AppNotif {
     fn default() -> Self {
         AppNotif { lock_screen: true, center: true, banners: true, persistent: false, sounds: true, badges: true, previews: 0, grouping: 0 }
@@ -51,10 +63,15 @@ pub enum AppField {
     Badges,
     Previews,
     Grouping,
+    /// the Alert Style row chosen: 0 None, 1 Banners, 2 Alerts
+    Style(u8),
 }
 
 pub const PREVIEWS: [&str; 3] = ["Always", "When Unlocked", "Never"];
 pub const GROUPING: [&str; 3] = ["Automatic", "By App", "Off"];
+/// The Alert Style choices, in the order of `AppField::Style`: None (no banner), Banners (a banner that goes away on
+/// its own), Alerts (a banner that stays until it is dismissed). These are the `UNAlertStyle` cases none, banner and alert.
+pub const ALERT_STYLES: [&str; 3] = ["None", "Banners", "Alerts"];
 
 impl AppNotif {
     /// `prefs` value: eight digits, one per field; anything malformed is the default.
@@ -81,6 +98,17 @@ impl AppNotif {
             AppField::Badges => self.badges = !self.badges,
             AppField::Previews => self.previews = (self.previews + 1) % 3,
             AppField::Grouping => self.grouping = (self.grouping + 1) % 3,
+            AppField::Style(s) => match s {
+                0 => self.banners = false,
+                1 => {
+                    self.banners = true;
+                    self.persistent = false;
+                }
+                _ => {
+                    self.banners = true;
+                    self.persistent = true;
+                }
+            },
         }
     }
 }
@@ -166,16 +194,20 @@ pub fn app_spec(p: &NotifyPrefs, name: &str) -> Spec {
             Group::new(vec![
                 Item::new("Lock Screen").check(n.lock_screen, f(AppField::LockScreen)),
                 Item::new("Notification Centre").check(n.center, f(AppField::Center)),
-                Item::new("Banners").check(n.banners, f(AppField::Banners)),
             ])
             .header("ALERTS"),
         );
-        if n.banners {
-            groups.push(Group::new(vec![
-                Item::new("Temporary").check(!n.persistent, f(AppField::Persistent(false))),
-                Item::new("Persistent").check(n.persistent, f(AppField::Persistent(true))),
-            ]).header("BANNER STYLE"));
-        }
+        let style = n.style();
+        groups.push(
+            Group::new(
+                ALERT_STYLES
+                    .iter()
+                    .enumerate()
+                    .map(|(i, label)| Item::new(*label).check(style == i as u8, f(AppField::Style(i as u8))))
+                    .collect(),
+            )
+            .header("ALERT STYLE"),
+        );
         groups.push(Group::new(vec![
             Item::new("Sounds").switch(n.sounds, f(AppField::Sounds)),
             Item::new("Badges").switch(n.badges, f(AppField::Badges)),
@@ -231,6 +263,32 @@ mod tests {
         n.apply(AppField::Previews);
         assert_eq!(AppNotif::decode(&n.encode()), n);
         assert_eq!(AppNotif::decode("zz"), AppNotif::default());
+    }
+
+    #[test]
+    fn the_alert_style_is_none_banners_or_alerts() {
+        let mut n = AppNotif::default();
+        assert_eq!(n.style(), 1, "banners is the default");
+        n.apply(AppField::Style(0));
+        assert!(!n.banners && n.style() == 0);
+        n.apply(AppField::Style(2));
+        assert!(n.banners && n.persistent && n.style() == 2);
+        n.apply(AppField::Style(1));
+        assert!(n.banners && !n.persistent && n.style() == 1);
+        assert_eq!(AppNotif::decode(&n.encode()), n);
+    }
+
+    #[test]
+    fn the_alert_style_rows_mark_the_current_style() {
+        let p = NotifyPrefs { apps: vec![(AppId::Photos, AppNotif { persistent: true, ..AppNotif::default() })], ..Default::default() };
+        let s = app_spec(&p, "Photos");
+        let style = &s.groups[2];
+        assert_eq!(style.header.as_deref(), Some("ALERT STYLE"));
+        let checks: Vec<bool> = style.items.iter().map(|i| i.accessory == super::super::list::Accessory::Check(true)).collect();
+        assert_eq!(checks, [false, false, true]);
+        assert_eq!(style.items[0].action, Action::Notify(NotifyEdit::App(AppId::Photos, AppField::Style(0))));
+        let off = app_spec(&NotifyPrefs { muted: vec![AppId::Photos], ..Default::default() }, "Photos");
+        assert_eq!(off.groups.len(), 1, "a muted app shows no alert style");
     }
 
     #[test]
