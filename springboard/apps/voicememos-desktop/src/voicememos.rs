@@ -76,6 +76,8 @@ pub const MENU_TRIM: u32 = 1;
 pub const MENU_NOTES: u32 = 2;
 pub const MENU_RENAME: u32 = 3;
 pub const MENU_EXPORT: u32 = 4;
+pub const MENU_SPLIT: u32 = 5;
+pub const MENU_SKIP: u32 = 6;
 /// Line height of the notes text (points), about 1.3 times the body size.
 const NOTES_LINE_PT: f32 = 17.0;
 /// Corner radius of the rename field card (prefs layout card radius, points).
@@ -238,6 +240,12 @@ pub struct VoiceMemos {
     volume: f32,
     /// a press on the volume slider is dragging it
     volume_drag: bool,
+    /// playback jumps over silence (the Recording menu's Skip Silence)
+    skip_silence: bool,
+    /// the speech spans of the playing memo, in milliseconds, sorted (empty when not skipping)
+    spans: Vec<(f64, f64)>,
+    /// playback does not look for silence before this position: a skip is in flight
+    skip_guard: f64,
 }
 
 impl VoiceMemos {
@@ -289,6 +297,9 @@ impl VoiceMemos {
             input_level: 0.0,
             volume: 1.0,
             volume_drag: false,
+            skip_silence: false,
+            spans: Vec::new(),
+            skip_guard: 0.0,
         }
     }
 
@@ -432,6 +443,8 @@ impl VoiceMemos {
             return;
         }
         self.playing = Some(memo.path.clone());
+        self.load_spans();
+        self.skip_guard = 0.0;
         self.play_seen = false;
         self.started_at = self.now;
         self.position_ms = 0.0;
@@ -451,7 +464,33 @@ impl VoiceMemos {
             self.audio.stop();
             self.publish_playback();
         }
+        self.spans.clear();
         self.position_ms = 0.0;
+    }
+
+    /// The speech spans of the playing memo, when Skip Silence is on; none otherwise.
+    fn load_spans(&mut self) {
+        self.spans = match &self.playing {
+            Some(path) if self.skip_silence => store::speech_spans(path),
+            _ => Vec::new(),
+        };
+    }
+
+    /// Flips Skip Silence. Playback that is running picks up the spans of its memo at once.
+    fn toggle_skip_silence(&mut self) {
+        self.skip_silence = !self.skip_silence;
+        self.load_spans();
+    }
+
+    /// While the memo plays in silence, jumps the service to the next speech. Waits out a jump still in flight.
+    fn skip_silence_from(&mut self, position: f64) {
+        if !self.skip_silence || position < self.skip_guard {
+            return;
+        }
+        let Some(to) = store::next_speech_ms(&self.spans, position) else { return };
+        self.audio.seek_ms(to);
+        self.skip_guard = to;
+        self.position_ms = to;
     }
 
     /// Playback is over, or its memo went away: stop it and take the session off the media tile.
@@ -543,6 +582,7 @@ impl VoiceMemos {
             } else if ours && playing {
                 self.play_seen = true;
                 self.position_ms = position;
+                self.skip_silence_from(position);
             } else if self.play_seen {
                 // finished, paused elsewhere, or another app took the speaker
                 self.end_playback();
@@ -666,21 +706,59 @@ impl VoiceMemos {
         self.selected.is_some() && !self.recording && self.editor.is_none() && self.trim.is_none() && self.notes.is_none()
     }
 
+    /// Whether the selected recording is the one playing, so a split can be made at the playhead.
+    pub fn can_split(&self) -> bool {
+        let selected = self.selected.and_then(|i| self.memos.get(i));
+        self.has_selection() && selected.is_some_and(|m| self.playing.as_deref() == Some(m.path.as_path()))
+    }
+
+    /// Whether Skip Silence is on (the menu's check mark).
+    pub fn skip_silence_on(&self) -> bool {
+        self.skip_silence
+    }
+
     /// Runs a "Recording" menu item. False for an id this app does not declare.
     pub fn menu(&mut self, ui: &Ui, id: u32) -> bool {
-        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT) {
+        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT | MENU_SPLIT | MENU_SKIP) {
             return false;
         }
-        if self.has_selection() {
+        if id == MENU_SKIP {
+            self.toggle_skip_silence();
+        } else if self.has_selection() {
             match id {
                 MENU_TRIM => self.begin_trim(),
                 MENU_NOTES => self.begin_notes(ui),
                 MENU_RENAME => self.begin_rename(ui),
+                MENU_SPLIT => self.split_selected(),
                 _ => self.export_selected(),
             }
         }
         self.dirty = true;
         true
+    }
+
+    /// Splits the playing recording at the playhead into two recordings, and selects the first part. The original
+    /// stays. Playback stops, as a split changes the list.
+    fn split_selected(&mut self) {
+        if !self.can_split() {
+            return;
+        }
+        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
+        let at = self.position_ms / 1000.0;
+        self.stop_playback();
+        match store::save_split(&memo, at) {
+            Ok((first, second)) => {
+                self.error.clear();
+                self.reload();
+                self.selected = self.memos.iter().position(|m| m.path == first);
+                let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.notice = format!("Split into {} and {}", name(&first), name(&second));
+            }
+            Err(e) => {
+                self.reload();
+                self.error = format!("Cannot split: {e}");
+            }
+        }
     }
 
     /// Copies the selected recording to the Downloads folder; the original stays.
@@ -1613,6 +1691,50 @@ mod tests {
         assert_eq!(kept.duration_ms, 250);
         assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
         let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn split_at_the_playhead_writes_two_parts_and_selects_the_first() {
+        let (mut app, ui) = app("split");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(8000, 1, &samples), 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+        assert!(!app.can_split(), "a split needs the selected take to be playing");
+        app.playing = Some(app.memos[0].path.clone());
+        app.position_ms = 250.0;
+        assert!(app.can_split());
+        assert!(app.menu(&ui, MENU_SPLIT));
+        assert!(app.playing.is_none(), "a split stops playback");
+        let mut durations: Vec<u64> = app.memos.iter().map(|m| m.duration_ms).collect();
+        durations.sort();
+        assert_eq!(durations, vec![250, 750, 1000], "two parts and the original");
+        let first = &app.memos[app.selected.unwrap()];
+        assert!(first.title.ends_with(" part 1"), "{}", first.title);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn skip_silence_is_a_menu_check_and_jumps_over_the_quiet_part() {
+        let (mut app, ui) = app("skip");
+        assert!(!app.skip_silence_on());
+        assert!(app.menu(&ui, MENU_SKIP));
+        assert!(app.skip_silence_on(), "the first pick turns it on");
+        assert!(app.menu(&ui, MENU_SKIP));
+        assert!(!app.skip_silence_on(), "the second pick turns it off");
+
+        app.skip_silence = true;
+        app.spans = vec![(500.0, 1000.0)];
+        app.skip_silence_from(0.0);
+        assert_eq!(app.position_ms, 500.0, "silence before the speech is skipped");
+        assert_eq!(app.skip_guard, 500.0);
+        app.skip_silence_from(100.0);
+        assert_eq!(app.position_ms, 500.0, "a jump still in flight is waited for");
+        app.skip_silence_from(600.0);
+        assert_eq!(app.position_ms, 500.0, "inside speech nothing moves");
+        app.skip_silence = false;
+        app.skip_silence_from(1200.0);
+        assert_eq!(app.position_ms, 500.0, "off means off");
     }
 
     #[test]
