@@ -8,7 +8,7 @@
 
 use std::collections::BTreeSet;
 
-use bifrost_core::bt_address::{BdAddr, ClassOfDevice, MajorClass};
+use bifrost_core::bt_address::{BdAddr, MajorClass};
 
 use crate::bluetooth_devices::{DeviceList, RemoteDevice};
 
@@ -76,6 +76,7 @@ pub fn counts(list: &DeviceList, ignore: &IgnoreList) -> HidCounts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_core::bt_address::ClassOfDevice;
 
     fn addr(n: u8) -> BdAddr {
         BdAddr([0, 0, 0, 0, 0, n])

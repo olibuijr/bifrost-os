@@ -560,7 +560,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     if !restore_tried {
                         restore_tried = true;
                         if crate::restoration::restore_requested() {
-                            need_frame |= crate::restoration::restore_app(&mut app, c);
+                            // the Configure below sets `need_frame` anyway, so the restore's "changed" flag is not needed here
+                            crate::restoration::restore_app(&mut app, c);
                         }
                     }
                     if size != (cfg.w, cfg.h) || slots.is_none() {
@@ -969,7 +970,6 @@ fn serve_rpc<A: App>(
     data_dir: &std::path::Path,
 ) -> Result<bifrost_core::json::Json, crate::control::RpcError> {
     use bifrost_core::json::Json;
-    use crate::control::RpcError;
     match method {
         "app.info" => Ok(Json::Obj(vec![
             ("id".into(), Json::Str(app.id().into())),

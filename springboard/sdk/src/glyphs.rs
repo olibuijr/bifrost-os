@@ -441,12 +441,6 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
                 poly(s, &[(0.42, v), (0.92, v)], false);
             }
         }
-        "arrow.clockwise" => {
-            arcd(s, 0.5, 0.54, 0.36, -PI, -PI / 2.0 + 0.25);
-            arcd(s, 0.5, 0.54, 0.36, 0.0, PI);
-            arcd(s, 0.5, 0.54, 0.36, -PI / 2.0 + 0.25, -0.35);
-            poly(s, &[(0.62, 0.06), (0.74, 0.22), (0.56, 0.3)], false);
-        }
         "newspaper" => {
             rbox(s, 0.16, 0.14, 0.76, 0.72, 0.08);
             poly(s, &[(0.16, 0.36), (0.06, 0.36), (0.06, 0.78), (0.14, 0.86)], false);

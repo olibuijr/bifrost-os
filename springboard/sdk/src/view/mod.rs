@@ -743,7 +743,7 @@ impl<S: Responder> Window<S> {
             ViewEvent::Pointer(_) | ViewEvent::Cancel => {
                 let t = self.tracking;
                 let mut p = Vec::new();
-                if let Some(id) = t.filter(|&id| path_to(self.root(), id, &mut p)) {
+                if t.is_some_and(|id| path_to(self.root(), id, &mut p)) {
                     self.dispatch_at(&p, ev, state);
                 }
                 if matches!(ev, ViewEvent::Pointer(Event::Up(..)) | ViewEvent::Cancel) {
