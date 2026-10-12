@@ -767,3 +767,5 @@ pub mod content_proposal;
 pub mod route_auth;
 pub mod route_action;
 pub mod route_picker;
+pub mod webauth_session;
+pub mod verification_codes;
