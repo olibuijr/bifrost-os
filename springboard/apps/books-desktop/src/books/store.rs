@@ -80,6 +80,8 @@ pub struct Entry {
     pub bookmarks: Vec<Pos>,
     /// highlighted text, sorted by place
     pub highlights: Vec<Span>,
+    /// the note written on a highlight, sorted by place; every note's span is also in `highlights`
+    pub notes: Vec<(Span, String)>,
     /// order of last opening (higher = more recent); 0 = never opened
     pub opened: u64,
     /// how far through the book, in thousandths
@@ -118,6 +120,17 @@ impl Store {
                     e.opened = opened;
                     e.progress = f.get(6).and_then(|p| p.parse::<u16>().ok()).unwrap_or(0).min(1000);
                 }
+                ["N", path, block, offset, len, ..] => {
+                    let span = Span { block: block.parse().unwrap_or(0), offset: offset.parse().unwrap_or(0), len: len.parse().unwrap_or(0) };
+                    // the note text is written with tabs and line breaks removed, so it is the field after `len`
+                    let text = f.get(5).copied().unwrap_or("").trim().to_string();
+                    if span.len > 0 && !text.is_empty() {
+                        let e = s.entry_mut(Path::new(path));
+                        e.notes.retain(|(x, _)| *x != span);
+                        e.notes.push((span, text));
+                        e.notes.sort_by_key(|(x, _)| *x);
+                    }
+                }
                 ["H", path, block, offset, len] => {
                     let span = Span { block: block.parse().unwrap_or(0), offset: offset.parse().unwrap_or(0), len: len.parse().unwrap_or(0) };
                     if span.len > 0 {
@@ -142,6 +155,10 @@ impl Store {
             for h in &e.highlights {
                 out.push_str(&format!("H\t{}\t{}\t{}\t{}\n", clean(&e.path), h.block, h.offset, h.len));
             }
+            for (span, text) in &e.notes {
+                let text = text.replace(['\t', '\n', '\r'], " ");
+                out.push_str(&format!("N\t{}\t{}\t{}\t{}\t{}\n", clean(&e.path), span.block, span.offset, span.len, text));
+            }
         }
         if let Some(dir) = self.file.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -161,7 +178,7 @@ impl Store {
         if let Some(i) = self.entries.iter().position(|e| e.path == path) {
             return &mut self.entries[i];
         }
-        self.entries.push(Entry { path: path.to_path_buf(), pos: Pos::default(), bookmarks: vec![], highlights: vec![], opened: 0, progress: 0 });
+        self.entries.push(Entry { path: path.to_path_buf(), pos: Pos::default(), bookmarks: vec![], highlights: vec![], notes: vec![], opened: 0, progress: 0 });
         self.entries.last_mut().expect("just pushed")
     }
 
@@ -204,6 +221,30 @@ impl Store {
             e.highlights.push(span);
             e.highlights.sort();
             true
+        }
+    }
+
+    /// The note on a highlight, if it has one.
+    pub fn note_of(&self, path: &Path, span: Span) -> Option<String> {
+        self.entry(path)?.notes.iter().find(|(s, _)| *s == span).map(|(_, t)| t.clone())
+    }
+
+    /// Sets the note on a highlight. The span is highlighted too. Line breaks and tabs become spaces, and the text is
+    /// trimmed; an empty note removes the note and keeps the highlight. A zero-length span is ignored.
+    pub fn set_note(&mut self, path: &Path, span: Span, text: &str) {
+        if span.len == 0 {
+            return;
+        }
+        let text = text.replace(['\t', '\n', '\r'], " ").trim().to_string();
+        let e = self.entry_mut(path);
+        if !e.highlights.contains(&span) {
+            e.highlights.push(span);
+            e.highlights.sort();
+        }
+        e.notes.retain(|(s, _)| *s != span);
+        if !text.is_empty() {
+            e.notes.push((span, text));
+            e.notes.sort_by_key(|(s, _)| *s);
         }
     }
 

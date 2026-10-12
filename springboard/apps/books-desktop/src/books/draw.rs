@@ -356,12 +356,24 @@ impl Books {
         let Some(panel) = self.reader.as_ref().and_then(|r| r.panel) else { return };
         match panel {
             Panel::Display => self.draw_display(s, ui, pal),
-            Panel::Contents | Panel::Bookmarks => {
+            Panel::Contents | Panel::Bookmarks | Panel::Pages | Panel::Notes => {
                 for (p, (x, y, w, h)) in self.tab_rects(ui) {
                     let on = p == panel;
                     s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), if on { pal.raised } else { pal.bg });
-                    let name = if p == Panel::Contents { "Contents" } else { "Bookmarks" };
+                    let name = match p {
+                        Panel::Contents => "Contents",
+                        Panel::Bookmarks => "Bookmarks",
+                        Panel::Pages => "Pages",
+                        _ => "Notes",
+                    };
                     put_mid(&mut self.labels, s, ui, name, MAC_BODY_PT, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.fg } else { pal.dim }, x + w / 2.0, y + h / 2.0);
+                }
+                if panel == Panel::Notes {
+                    let (fx, fy, fw, fh) = self.note_field_rect(ui);
+                    s.fill_rrect(fx, fy, fw, fh, ui.pt(RADIUS_PT), FIELD_BG.now());
+                    if let Some(r) = &self.reader {
+                        r.note.draw(s, ui, (fx + ui.pt(SPACE_M), fy, fw - ui.pt(SPACE_XXL), fh), t);
+                    }
                 }
                 self.draw_rows(s, ui, pal, panel);
             }
@@ -385,6 +397,8 @@ impl Books {
             let (title, hint) = match panel {
                 Panel::Contents => ("No Contents", "This book has no table of contents."),
                 Panel::Bookmarks => ("No Bookmarks", "Tap Bookmark to mark a page."),
+                Panel::Pages => ("No Pages", "This book has no pages."),
+                Panel::Notes => ("No Notes", "Choose Add Note in the Find menu to write a note on a highlight."),
                 _ if !r.searched => ("Search the Book", "Type a word and press return."),
                 _ => ("No Results", ""),
             };
@@ -398,6 +412,7 @@ impl Books {
         let block_now = r.layout.pos_of(r.page).block;
         let current = r.book.toc.iter().rposition(|e| e.block <= block_now);
         let marks: Vec<Pos> = self.store.entry(&r.path).map_or(vec![], |e| e.bookmarks.clone());
+        let notes = self.notes_list();
         for i in 0..rows {
             let (rx, ry, rw, rh) = self.row_rect(ui, i);
             if ry + rh < top || ry > bottom as f32 {
@@ -412,6 +427,16 @@ impl Books {
                     let p = marks[i];
                     let text = r.book.blocks.get(p.block).and_then(|b| b.text()).map(|t| t.chars().skip(p.offset).take(80).collect::<String>()).filter(|t| !t.trim().is_empty()).unwrap_or_else(|| "Picture".to_string());
                     (text, r.layout.page_of(p) + 1, Weight::Regular)
+                }
+                Panel::Pages => {
+                    // the text thumbnail: the first line of text on the page
+                    let text = r.layout.pages[i].lines.iter().find(|l| !l.text.trim().is_empty()).map_or_else(|| "Picture".to_string(), |l| l.text.chars().take(80).collect());
+                    (text, i + 1, if i == r.page { Weight::Bold } else { Weight::Regular })
+                }
+                Panel::Notes => {
+                    let (span, text) = &notes[i];
+                    let weight = if r.note_target == Some(*span) { Weight::Bold } else { Weight::Regular };
+                    (text.clone(), r.layout.page_of(Pos { block: span.block, offset: span.offset }) + 1, weight)
                 }
                 _ => (r.hits[i].snippet.clone(), r.layout.page_of(Pos { block: r.hits[i].block, offset: r.hits[i].offset }) + 1, Weight::Regular),
             };

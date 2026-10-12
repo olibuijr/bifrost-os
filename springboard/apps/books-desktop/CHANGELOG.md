@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0
+
+- Find menu: Add Note writes a note on the text the last find went to. The text is highlighted if it was not, and the
+  Notes panel opens with the note field ready. Press Return to save the note, or Escape to stop editing. An empty note
+  removes the note and keeps the highlight. Notes are kept with the book, across restarts.
+- The reader's Contents panel has two new tabs. Pages lists every page with the first line of its text, so you can
+  jump to a page by its opening words. The current page is bold. Notes lists the notes in reading order with their page
+  numbers; tap one to go to it.
+
 ## 1.4.0
 
 - Find menu: Read Aloud starts reading the chapter from the page you are on to its end. The sentence being read is

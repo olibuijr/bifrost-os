@@ -94,3 +94,33 @@ fn state_without_highlights_loads_empty() {
     assert!(s.entry(Path::new("/a/old.epub")).unwrap().highlights.is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn notes_are_trimmed_ordered_and_saved_with_their_highlights() {
+    let dir = scratch("notes");
+    let file = dir.join("state.tsv");
+    let book = Path::new("/a/one.pdf");
+    let late = Span { block: 1, offset: 0, len: 2 };
+    let early = Span { block: 0, offset: 5, len: 1 };
+    let mut s = Store::load(file.clone());
+    // tabs and line breaks become spaces, and the ends are trimmed: "  second\tline\n " -> "second line"
+    s.set_note(book, late, "  second\tline\n ");
+    s.set_note(book, early, "first");
+    // the notes are kept in reading order, and each note's span is also a highlight
+    assert_eq!(s.entry(book).unwrap().notes, vec![(early, "first".to_string()), (late, "second line".to_string())]);
+    assert_eq!(s.entry(book).unwrap().highlights, vec![early, late]);
+    assert_eq!(s.note_of(book, late).as_deref(), Some("second line"));
+    s.save();
+    let mut t = Store::load(file);
+    assert_eq!(t.note_of(book, early).as_deref(), Some("first"));
+    assert_eq!(t.note_of(book, late).as_deref(), Some("second line"));
+    // an empty note removes the note and keeps the highlight
+    t.set_note(book, late, "   ");
+    assert_eq!(t.note_of(book, late), None);
+    assert!(t.entry(book).unwrap().highlights.contains(&late));
+    // a zero-length span takes no note
+    let none = Span { block: 2, offset: 0, len: 0 };
+    t.set_note(book, none, "x");
+    assert_eq!(t.note_of(book, none), None);
+    let _ = std::fs::remove_dir_all(dir);
+}
