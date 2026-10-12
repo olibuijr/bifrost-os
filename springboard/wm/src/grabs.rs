@@ -51,7 +51,7 @@ impl PointerGrab<WmState> for MoveGrab {
         handle.motion(data, None, event);
         let Some(r) = data.wm.motion(&self.grab, event.location.x as i32, event.location.y as i32) else { return };
         if let Some(window) = data.window(self.id) {
-            data.space.map_element(window, (r.x, r.y), true);
+            data.place(&window, (r.x, r.y));
         }
     }
 

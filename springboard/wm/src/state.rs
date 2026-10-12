@@ -35,6 +35,10 @@ struct Id(WindowId);
 
 pub struct WmState {
     pub start: Instant,
+    /// The scene may have changed (a client request, input): the backend composes once and clears it (WM-4).
+    pub dirty: bool,
+    /// Importer keys of destroyed `wl_buffer`s, drained by the backend that owns the importer (WM-7).
+    pub destroyed_buffers: Vec<u64>,
     pub socket_name: OsString,
     pub dh: DisplayHandle,
     pub space: Space<Window>,
@@ -113,12 +117,15 @@ impl WmState {
             .insert_source(Generic::new(display, Interest::READ, Mode::Level), |_, display, state| {
                 // SAFETY: the display is never dropped while the loop runs.
                 unsafe { display.get_mut().dispatch_clients(state).expect("dispatch clients") };
+                state.dirty = true;
                 Ok(PostAction::Continue)
             })
             .expect("display source");
 
         WmState {
             start: Instant::now(),
+            dirty: true,
+            destroyed_buffers: Vec::new(),
             socket_name,
             space: Space::default(),
             loop_signal: event_loop.get_signal(),
@@ -191,6 +198,16 @@ impl WmState {
 
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
         self.space.elements().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)).cloned()
+    }
+
+    /// Moves `window` to `loc` without changing its place in the stacking order or the activation of any window
+    /// (`Space::map_element` raises the element, so the order is restored afterwards). Only `focus` raises (WM-2).
+    pub fn place(&mut self, window: &Window, loc: impl Into<Point<i32, Logical>>) {
+        let order: Vec<Window> = self.space.elements().cloned().collect();
+        self.space.map_element(window.clone(), loc, false);
+        for w in &order {
+            self.space.raise_element(w, false);
+        }
     }
 
     /// Moves every mapped window to the frame `wm` holds for it, in `wm` stacking order.

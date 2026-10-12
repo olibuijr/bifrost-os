@@ -4,13 +4,13 @@
 //! Per output: the scanout buffers are GBM buffer objects in a format and modifier that both the primary plane and
 //! Vulkan accept (`pick_scanout_format`), imported as render targets (`OutputTargets::from_gbm`, with `SAMPLED` usage
 //! so live glass can read them) and given KMS framebuffers. Each frame acquires a free buffer, asks the render server
-//! for the scene (`scene_nodes`) over the damage of the buffer's age (`Pacing`), and presents it with an atomic commit
+//! for the scene (`scene_build::build`) over the damage of the buffer's age (`Pacing`), and presents it with an atomic commit
 //! whose IN_FENCE_FD is the submission's sync_file (`PlaneConfig::fence`). The page flip's vblank time feeds
 //! `FrameClock`, and the flip frees the previously shown buffer (`OutputTargets::flipped`).
 //!
-//! What is not wired yet (see docs/graphics/g2-wm-drm-vulkan.md): the scene builder (`scene_nodes` returns no nodes
-//! until wm-scene's builder exists, so the output is the clear colour), the cursor, the boot fade, presentation
-//! feedback and the scheduling of composition at `FrameClock::start_at` (frames are paced by vblank for now).
+//! The scene is `scene_build::build` (Wayland and X11 windows, layers, glass); a frame is drawn only when
+//! `diff_damage` against the last frame is not empty. What is not wired yet (see docs/graphics/g2-wm-drm-vulkan.md):
+//! the cursor, the boot fade, and the scheduling of composition at `FrameClock::start_at` (frames are paced by vblank).
 
 use std::{
     collections::VecDeque,
@@ -28,14 +28,17 @@ use smithay::{
         },
         drm::{gbm::{framebuffer_from_bo, GbmFramebuffer}, DrmDeviceFd, DrmSurface, PlaneConfig, PlaneState},
     },
+    output::Output,
     utils::{Buffer as BufferCoords, Physical, Rectangle, Size, Transform},
 };
 
 use crate::{
     drm::CLEAR,
+    state::WmState,
     render_server::{
         compose::{DamageRects, SceneNode},
         output::{OutputTargets, RING},
+        scene_build,
         server::Server,
     },
 };
@@ -96,12 +99,6 @@ pub fn refresh_period(refresh_mhz: i32) -> Duration {
         return Duration::ZERO;
     }
     Duration::from_nanos(1_000_000_000_000 / refresh_mhz as u64)
-}
-
-/// The scene for this frame. The window server's scene builder (wm-scene: surface trees, layer contexts, cursor,
-/// boot fade) is not in this tree yet, so the output is the clear colour alone.
-pub fn scene_nodes() -> Vec<SceneNode> {
-    Vec::new()
 }
 
 /// Which pixels a frame must redraw, from the age of the buffer it renders into (pure, host-tested).
@@ -177,6 +174,8 @@ pub struct Vulkan {
     width: u32,
     height: u32,
     shown_first: bool,
+    /// The scene of the last frame that went out; `None` until one did, and after a reset (then the next frame is full).
+    prev: Option<Vec<SceneNode>>,
 }
 
 /// Starts the Vulkan scanout on `card` for an output of `size` at `refresh_mhz`, on the CRTC `surface` drives. Opens
@@ -221,21 +220,30 @@ pub fn start(card: &Path, surface: &DrmSurface, size: (i32, i32), refresh_mhz: i
         width,
         height,
         shown_first: false,
+        prev: None,
     })
 }
 
 impl Vulkan {
     /// Renders and queues one frame when a buffer is free and no flip is pending. Returns whether a frame was queued.
     /// On failure the buffer is released and the caller falls back to retrying on the next timer tick.
-    pub fn frame(&mut self, surface: &DrmSurface) -> Result<bool, String> {
+    pub fn frame(&mut self, surface: &DrmSurface, state: &WmState, output: &Output) -> Result<bool, String> {
         if self.in_flight.is_some() {
             return Ok(false);
         }
-        let Some((slot, target)) = self.targets.acquire() else { return Ok(false) };
         let started = Instant::now();
         let full = [0, 0, self.width as i32, self.height as i32];
-        let (damage, load) = self.pacing.plan(slot, &[full], full);
-        let nodes = scene_nodes();
+        // the real scene, and what changed since the last frame that went out (WM-3, WM-4)
+        let nodes = scene_build::build(state, output, state.start.elapsed().as_secs_f64(), &mut self.server);
+        let changed = match &self.prev {
+            Some(prev) => scene_build::diff_damage(prev, &nodes),
+            None => vec![full],
+        };
+        if changed.is_empty() {
+            return Ok(false);
+        }
+        let Some((slot, target)) = self.targets.acquire() else { return Ok(false) };
+        let (damage, load) = self.pacing.plan(slot, &changed, full);
         let submission = match self.server.frame(&nodes, &target, &damage, load) {
             Ok(s) => s,
             Err(e) => return Err(self.fail(slot, format!("render: {e}"))),
@@ -262,6 +270,7 @@ impl Vulkan {
             return Err(self.fail(slot, format!("kms: {e}")));
         }
         self.in_flight = Some(slot);
+        self.prev = Some(nodes);
         self.clock.frame_took(started.elapsed());
         Ok(true)
     }
@@ -281,9 +290,17 @@ impl Vulkan {
         }
     }
 
+    /// Drops the importer's cache of destroyed client buffers (WM-7).
+    pub fn forget_buffers(&mut self, keys: &[u64]) {
+        for &k in keys {
+            self.server.importer.forget(k);
+        }
+    }
+
     /// Session resume: nothing is on screen or queued, so every buffer is rewritten.
     pub fn reset(&mut self) {
         self.in_flight = None;
+        self.prev = None;
         self.pacing.forget_all();
         self.targets = OutputTargets::from_textures(self.width, self.height, self.targets.targets.clone());
     }
@@ -492,7 +509,9 @@ mod tests {
     }
 
     #[test]
-    fn the_scene_is_empty_until_the_builder_lands() {
-        assert!(scene_nodes().is_empty());
+    fn an_unchanged_scene_has_no_damage() {
+        let a = vec![SceneNode::solid([0.0, 0.0, 10.0, 10.0], [1.0; 4])];
+        assert!(scene_build::diff_damage(&a, &a.clone()).is_empty());
+        assert!(!scene_build::diff_damage(&[], &a).is_empty());
     }
 }

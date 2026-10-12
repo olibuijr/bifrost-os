@@ -158,7 +158,7 @@ impl XwmHandler for WmState {
         let id = self.id_of(&window);
         let r = self.wm.map(id, size.w.max(1), size.h.max(1));
         let _ = surface.configure(geo(r));
-        self.space.map_element(window, (r.x, r.y), true);
+        self.space.map_element(window, (r.x, r.y), false);
         self.focus(Some(id), SERIAL_COUNTER.next_serial());
     }
 
@@ -170,7 +170,7 @@ impl XwmHandler for WmState {
             Some(w) => w,
             None => Window::new_x11_window(surface),
         };
-        self.space.map_element(window, loc, true);
+        self.space.map_element(window, loc, false);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) { self.forget_x11(&surface); }
@@ -209,7 +209,7 @@ impl XwmHandler for WmState {
     fn configure_notify(&mut self, _xwm: XwmId, surface: X11Surface, geometry: Rectangle<i32, Logical>, _above: Option<u32>) {
         let Some(window) = self.window_for_x11(&surface) else { return };
         if surface.is_override_redirect() {
-            self.space.map_element(window, geometry.loc, true);
+            self.place(&window, geometry.loc);
             return;
         }
         let Some(id) = WmState::known_id(&window) else { return };
@@ -217,7 +217,7 @@ impl XwmHandler for WmState {
         if (geometry.size.w, geometry.size.h) != (frame.w, frame.h) && geometry.size.w > 0 && geometry.size.h > 0 {
             let r = Rect::new(frame.x, frame.y, geometry.size.w, geometry.size.h);
             self.wm.set_frame(id, r);
-            self.space.map_element(window, (r.x, r.y), false);
+            self.place(&window, (r.x, r.y));
         }
     }
 

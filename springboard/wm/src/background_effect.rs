@@ -51,11 +51,21 @@ pub fn commit(surface: &WlSurface) {
 }
 
 /// A `wl_region` as plain rectangles: the added ones, with every subtracted rectangle cut out.
+///
+/// A client controls the input, so it is bounded (WM-6): at most `MAX_INPUT` rectangles are read, rectangles whose
+/// far edge overflows are dropped (WM-17), and a result of more than `MAX_RECTS` pieces becomes its bounding box.
 pub fn resolve(rects: &[(RectangleKind, Rectangle<i32, Logical>)]) -> Vec<Rectangle<i32, Logical>> {
+    const MAX_INPUT: usize = 1024;
+    const MAX_RECTS: usize = 16;
+    // while resolving, the list may fragment up to here before it is collapsed (keeps the cuts cheap)
+    const WORKING: usize = 256;
     let mut out: Vec<Rectangle<i32, Logical>> = Vec::new();
-    for &(kind, r) in rects {
-        if r.size.w <= 0 || r.size.h <= 0 {
+    for &(kind, r) in rects.iter().take(MAX_INPUT) {
+        if r.size.w <= 0 || r.size.h <= 0 || r.loc.x.checked_add(r.size.w).is_none() || r.loc.y.checked_add(r.size.h).is_none() {
             continue;
+        }
+        if out.len() > WORKING {
+            out = bounding(&out);
         }
         match kind {
             // only the part not already covered is added, so the list never overlaps
@@ -69,7 +79,17 @@ pub fn resolve(rects: &[(RectangleKind, Rectangle<i32, Logical>)]) -> Vec<Rectan
             RectangleKind::Subtract => out = out.into_iter().flat_map(|p| cut(p, r)).collect(),
         }
     }
+    if out.len() > MAX_RECTS {
+        out = bounding(&out);
+    }
     out
+}
+
+/// The bounding box of `rects` as a one-element list (empty for an empty list).
+fn bounding(rects: &[Rectangle<i32, Logical>]) -> Vec<Rectangle<i32, Logical>> {
+    let Some(first) = rects.first() else { return Vec::new() };
+    let all = rects.iter().fold(*first, |a, b| a.merge(*b));
+    vec![all]
 }
 
 /// `a` without `b`: up to four rectangles (above, below, left and right of the overlap).
@@ -175,6 +195,20 @@ mod tests {
             (RectangleKind::Add, r(0, 0, 10, 10)),
         ]);
         assert_eq!(area(&out), 100 * 50 + 10 * 10);
+    }
+
+    #[test]
+    fn a_flood_of_rectangles_is_bounded() {
+        let many: Vec<_> = (0..20_000).map(|i| (RectangleKind::Add, r((i % 200) * 20, (i / 200) * 20, 10, 10))).collect();
+        let t = std::time::Instant::now();
+        let out = resolve(&many);
+        assert!(out.len() <= 16, "{} rects", out.len());
+        assert!(t.elapsed() < std::time::Duration::from_millis(200));
+    }
+
+    #[test]
+    fn a_rectangle_that_overflows_is_dropped() {
+        assert!(resolve(&[(RectangleKind::Add, r(i32::MAX, 0, 1, 1))]).is_empty());
     }
 
     #[test]

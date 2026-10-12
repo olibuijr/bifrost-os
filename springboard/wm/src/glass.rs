@@ -11,10 +11,10 @@ use smithay::{
         renderer::{
             element::{
                 texture::{TextureRenderBuffer, TextureRenderElement},
-                Kind, RenderElement,
+                Element, Id, Kind, RenderElement,
             },
             gles::{GlesError, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType},
-            utils::draw_render_elements,
+            utils::{draw_render_elements, CommitCounter},
             Bind, Color32F, Frame, Offscreen, Renderer,
         },
     },
@@ -104,6 +104,24 @@ pub fn source_in_texture(rect: Rectangle<i32, Logical>, tex: (i32, i32), out: (i
 
 struct Entry {
     buffer: TextureRenderBuffer<GlesTexture>,
+    /// What the blur was built from; while it is unchanged the cached texture is reused (WM-1), so the buffer's damage
+    /// stays empty on an idle frame and no page flip is queued.
+    sig: Signature,
+    src_size: (i32, i32),
+}
+
+/// The identity of a backdrop: output size and every element below with its commit and place.
+#[derive(PartialEq)]
+struct Signature {
+    output: (i32, i32),
+    below: Vec<(Id, CommitCounter, Rectangle<i32, Physical>)>,
+}
+
+fn signature<E: Element>(output: Size<i32, Physical>, below: &[E]) -> Signature {
+    Signature {
+        output: (output.w, output.h),
+        below: below.iter().map(|e| (e.id().clone(), e.current_commit(), e.geometry(1.0f64.into()))).collect(),
+    }
 }
 
 pub struct Glass {
@@ -138,6 +156,12 @@ impl Glass {
             return Ok(Vec::new());
         }
         let (bw, bh) = ((output.w / DIV).max(2), (output.h / DIV).max(2));
+        let sig = signature(output, below);
+        if let Some(entry) = self.entries.get(&key) {
+            if entry.sig == sig {
+                return Ok(Self::elements(entry, regions, entry.src_size, output));
+            }
+        }
         // 1. what lies under the surface, at a quarter of the output size
         let mut base: GlesTexture = renderer.create_buffer(Fourcc::Abgr8888, (bw, bh).into())?;
         {
@@ -174,11 +198,28 @@ impl Glass {
             src_size = (w, h);
         }
         // 3. one element per region rectangle, sampling its part of the blurred texture
-        let entry = self.entries.entry(key).or_insert_with(|| Entry {
-            buffer: TextureRenderBuffer::from_texture(renderer, src.clone(), 1, Transform::Normal, None),
-        });
-        entry.buffer.update_from_texture(renderer, src, 1, Transform::Normal, None);
-        Ok(regions
+        match self.entries.get_mut(&key) {
+            Some(entry) => {
+                entry.buffer.update_from_texture(renderer, src, 1, Transform::Normal, None);
+                entry.sig = sig;
+                entry.src_size = src_size;
+            }
+            None => {
+                let buffer = TextureRenderBuffer::from_texture(renderer, src, 1, Transform::Normal, None);
+                self.entries.insert(key, Entry { buffer, sig, src_size });
+            }
+        }
+        let entry = &self.entries[&key];
+        Ok(Self::elements(entry, regions, src_size, output))
+    }
+
+    fn elements(
+        entry: &Entry,
+        regions: &[Rectangle<i32, Logical>],
+        src_size: (i32, i32),
+        output: Size<i32, Physical>,
+    ) -> Vec<TextureRenderElement<GlesTexture>> {
+        regions
             .iter()
             .map(|r| {
                 let loc: Point<f64, Physical> = (r.loc.x as f64, r.loc.y as f64).into();
@@ -191,7 +232,7 @@ impl Glass {
                     Kind::Unspecified,
                 )
             })
-            .collect())
+            .collect()
     }
 
     /// Forgets surfaces that no longer ask for blur.

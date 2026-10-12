@@ -447,6 +447,26 @@ pub struct Blur {
     pyramids: std::collections::HashMap<(u32, u32, u32), Vec<Texture>>,
 }
 
+/// `[x, y, w, h]` clipped to a `width` x `height` target: the origin is clamped and the far edge stays where it was
+/// (a region starting at x = -10 loses its first 10 px, WM-14). Sizes may come out zero or negative: empty.
+pub fn clip_region(r: [i32; 4], width: i32, height: i32) -> [i32; 4] {
+    let [x, y, w, h] = r;
+    let (x0, y0) = (x.max(0), y.max(0));
+    let (x1, y1) = (x.saturating_add(w).min(width), y.saturating_add(h).min(height));
+    [x0, y0, x1 - x0, y1 - y0]
+}
+
+#[cfg(test)]
+mod clip_tests {
+    use super::clip_region;
+
+    #[test]
+    fn a_region_off_the_left_edge_loses_its_overhang() {
+        assert_eq!(clip_region([-10, 0, 100, 50], 200, 200), [0, 0, 90, 50]);
+        assert_eq!(clip_region([150, 10, 100, 50], 200, 200), [150, 10, 50, 50]);
+    }
+}
+
 impl Blur {
     pub fn new(device: &Device) -> Result<Blur> {
         Ok(Blur { pipelines: Pipelines::new(device)?, device: device.clone(), pyramids: std::collections::HashMap::new() })
@@ -456,9 +476,7 @@ impl Blur {
 impl crate::render_server::compose::MaterialPass for Blur {
     fn blur(&mut self, cb: &mut CommandBuffer, backdrop: &Texture, region: &MaterialRegion) -> Result<Texture> {
         let [x, y, w, h] = device_region(region.rect);
-        let (x, y) = (x.max(0), y.max(0));
-        let w = w.min(backdrop.width() as i32 - x);
-        let h = h.min(backdrop.height() as i32 - y);
+        let [x, y, w, h] = clip_region([x, y, w, h], backdrop.width() as i32, backdrop.height() as i32);
         if w <= 0 || h <= 0 {
             return Err(bifrost_gpu::Error::Invalid("material region is outside the target".into()));
         }

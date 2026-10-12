@@ -114,7 +114,7 @@ impl WmState {
             toplevel.with_pending_state(|s| s.size = Some((r.w, r.h).into()));
         }
         window.user_data().insert_if_missing(ResizeTarget::default);
-        self.space.map_element(window, (r.x, r.y), true);
+        self.space.map_element(window, (r.x, r.y), false);
         self.focus(Some(id), smithay::utils::SERIAL_COUNTER.next_serial());
     }
 
@@ -135,7 +135,7 @@ impl WmState {
             None => return,
         };
         self.wm.set_frame(id, rect);
-        self.space.map_element(window.clone(), (rect.x, rect.y), false);
+        self.place(window, (rect.x, rect.y));
     }
 
     /// Layer surfaces: initial configure, arrangement, and the usable area their exclusive zones leave.
@@ -156,7 +156,11 @@ impl WmState {
 }
 
 impl BufferHandler for WmState {
-    fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {}
+    fn buffer_destroyed(&mut self, buffer: &wl_buffer::WlBuffer) {
+        if self.destroyed_buffers.len() < 65_536 {
+            self.destroyed_buffers.push(crate::render_server::scene_build::buffer_key(buffer));
+        }
+    }
 }
 
 impl ShmHandler for WmState {
@@ -228,7 +232,7 @@ impl XdgShellHandler for WmState {
                 s.size = Some((r.w, r.h).into());
             });
             surface.send_pending_configure();
-            self.space.map_element(window.clone(), (r.x, r.y), true);
+            self.place(&window, (r.x, r.y));
         }
         let pointer = seat.get_pointer().expect("pointer");
         pointer.set_grab(self, MoveGrab { start, id, grab }, serial, Focus::Clear);
@@ -304,7 +308,7 @@ impl WmState {
             s.size = Some((r.w, r.h).into());
         });
         surface.send_pending_configure();
-        self.space.map_element(window.clone(), (r.x, r.y), true);
+        self.place(window, (r.x, r.y));
         self.sync_toplevels();
     }
 }
