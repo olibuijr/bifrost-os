@@ -578,6 +578,7 @@ pub mod identity;
 pub mod directory_node;
 pub mod directory_query;
 pub mod access_control;
+pub mod permission_question;
 pub mod trust;
 pub mod focus;
 pub mod pane;
