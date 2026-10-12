@@ -123,7 +123,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs codec::decode (layers-codec)"]
     fn commit_of_a_bad_blob_is_bad_transaction_and_queues_nothing() {
         let mut s = ContextStore::default();
         get_context(&mut s, 1).unwrap();
@@ -134,7 +133,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs codec::decode (layers-codec)"]
     fn commit_of_an_encoded_transaction_queues_it() {
         let mut s = ContextStore::default();
         get_context(&mut s, 1).unwrap();

@@ -381,15 +381,14 @@ pub fn shadow_push(item: &DrawItem, s: &ShadowSpec, out: (i32, i32)) -> Push {
     p
 }
 
-/// The push block of glass: the quad is the material's rect, sampling the blurred backdrop at the same place (the
-/// blur is target-sized, so the source is the rect normalised by the blur's size).
-pub fn material_push(item: &DrawItem, m: &MaterialRegion, out: (i32, i32), blur_size: (f32, f32)) -> Push {
+/// The push block of glass: the quad is the material's rect, sampling the whole blurred backdrop (`MaterialPass`
+/// returns a texture covering exactly the rect).
+pub fn material_push(item: &DrawItem, m: &MaterialRegion, out: (i32, i32), _blur_size: (f32, f32)) -> Push {
     let mut p = Push::base(out);
     p.corners = rect_corners(m.rect);
     p.opacity = item.opacity;
     p.flags = FLAG_TEXTURED | FLAG_MATERIAL;
-    let (tw, th) = blur_size;
-    p.src = [m.rect[0] / tw, m.rect[1] / th, m.rect[2] / tw, m.rect[3] / th];
+    p.src = [0.0, 0.0, 1.0, 1.0];
     p.color = m.tint;
     p.saturation = m.saturation;
     p.clip = m.rect;
@@ -435,7 +434,8 @@ impl ComposePipelines {
 /// Blurs the backdrop under a material, the way `material` does it (compute passes, recorded into `cb` while no
 /// render pass is open).
 pub trait MaterialPass {
-    /// Returns the blurred backdrop, the same size as `backdrop`.
+    /// Returns the blurred backdrop of `region.rect` as a texture covering exactly that rectangle (at any
+    /// resolution; `material::Blur` returns half resolution).
     fn blur(&mut self, cb: &mut CommandBuffer, backdrop: &Texture, region: &MaterialRegion) -> Result<Texture>;
 }
 
@@ -708,12 +708,12 @@ mod tests {
     }
 
     #[test]
-    fn material_push_samples_the_blur_at_the_glass_rect() {
+    fn material_push_samples_the_whole_region_sized_blur() {
         let m = MaterialRegion { rect: [100.0, 50.0, 200.0, 100.0], radius: 13.0, blur: 20.0, tint: [0.1, 0.1, 0.1, 0.4], saturation: 1.8 };
         let item = DrawItem { texture: None, quad: [[0.0; 2]; 4], src: [0.0; 4], opacity: 1.0, color: [0.0; 4], clip: [0.0; 5], material: Some(m), shadow: None };
         let p = material_push(&item, &m, (1000, 500), (1000.0, 500.0));
         assert_eq!(p.flags, FLAG_TEXTURED | FLAG_MATERIAL);
-        assert_eq!(p.src, [0.1, 0.1, 0.2, 0.2]);
+        assert_eq!(p.src, [0.0, 0.0, 1.0, 1.0], "the blur covers exactly the glass rect");
         assert_eq!(p.corners[3], [300.0, 150.0]);
         assert_eq!(p.clip, [100.0, 50.0, 200.0, 100.0]);
         assert_eq!(p.clip_radius, 13.0);

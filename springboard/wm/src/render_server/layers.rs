@@ -280,7 +280,6 @@ mod tests {
     // The tests below need the tree model (`Tree::apply`, layers-model); they are ignored until that lands.
 
     #[test]
-    #[ignore = "needs Tree::apply (layers-model)"]
     fn apply_pending_applies_batches_in_order_and_records_seqs() {
         let mut s = ContextStore::default();
         s.create(1);
@@ -296,7 +295,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs Tree::apply (layers-model)"]
     fn bindings_apply_atomically_with_the_transaction() {
         let mut s = ContextStore::default();
         s.create(1);
@@ -313,7 +311,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs Tree::apply (layers-model)"]
     fn a_failing_context_keeps_its_old_state_and_others_still_apply() {
         let mut s = ContextStore::default();
         s.create(1);

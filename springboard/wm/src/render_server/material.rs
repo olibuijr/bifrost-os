@@ -334,6 +334,54 @@ impl Pipelines {
         self.dispatch(cb, &self.up, first, target, &push, w as u32, h as u32)
     }
 
+    /// The down and up passes only: T_0 (the `rect` of `target`) down to T_n and back up to T_1, which then holds
+    /// the blurred backdrop of the region at half resolution.
+    pub fn record_pyramid(&self, cb: &mut CommandBuffer, target: &Texture, rect: [i32; 4], region: &MaterialRegion, pyramid: &[Texture]) -> Result<()> {
+        let [x, y, w, h] = rect;
+        let n = pyramid.len();
+        if n == 0 {
+            return Err(bifrost_gpu::Error::Invalid("empty blur pyramid".into()));
+        }
+        let offset = kawase_offset(region.blur, n as u32);
+        let dims = |t: &Texture| (t.width() as f32, t.height() as f32);
+        let base = PushBlock {
+            rect: [x as f32, y as f32, (x + w) as f32, (y + h) as f32],
+            tint: [0.0; 4],
+            src_size: [0.0; 2],
+            src_origin: [0.0; 2],
+            src_extent: [0.0; 2],
+            dst_origin: [0.0; 2],
+            dst_size: [0.0; 2],
+            offset,
+            saturation: 1.0,
+            radius: 0.0,
+            final_pass: 0,
+        };
+        for k in 1..=n {
+            let (src, src_origin, src_extent) = if k == 1 {
+                (target, [x as f32, y as f32], [w as f32, h as f32])
+            } else {
+                let s = &pyramid[k - 2];
+                let (sw, sh) = dims(s);
+                (s, [0.0, 0.0], [sw, sh])
+            };
+            let (src_w, src_h) = dims(src);
+            let dst = &pyramid[k - 1];
+            let (dw, dh) = dims(dst);
+            let push = PushBlock { src_size: [src_w, src_h], src_origin, src_extent, dst_size: [dw, dh], ..base };
+            self.dispatch(cb, &self.down, src, dst, &push, dw as u32, dh as u32)?;
+        }
+        for k in (1..n).rev() {
+            let src = &pyramid[k];
+            let dst = &pyramid[k - 1];
+            let (sw, sh) = dims(src);
+            let (dw, dh) = dims(dst);
+            let push = PushBlock { src_size: [sw, sh], src_origin: [0.0, 0.0], src_extent: [sw, sh], dst_size: [dw, dh], ..base };
+            self.dispatch(cb, &self.up, src, dst, &push, dw as u32, dh as u32)?;
+        }
+        Ok(())
+    }
+
     /// Records one compute dispatch covering `groups` 8x8 tiles of `dst_w` x `dst_h` texels.
     #[allow(clippy::too_many_arguments)]
     fn dispatch(
@@ -385,6 +433,43 @@ impl Pipelines {
         enc.draw(3, 1, 0, 0);
         enc.end();
         Ok(())
+    }
+}
+
+/// The blur step of live glass as the compositor uses it (`compose::MaterialPass`): down and up dual-Kawase passes
+/// over the backdrop region into a pyramid kept per region size, returning the finest level T_1 (half the region's
+/// resolution, covering exactly the region). Tint, saturation and the rounded clip are drawn by the compose shader
+/// in the ordinary render pass, so the target only needs to be sampled, never written as a storage image (scanout
+/// buffers are BGRA and often refuse storage).
+pub struct Blur {
+    pub pipelines: Pipelines,
+    device: Device,
+    pyramids: std::collections::HashMap<(u32, u32, u32), Vec<Texture>>,
+}
+
+impl Blur {
+    pub fn new(device: &Device) -> Result<Blur> {
+        Ok(Blur { pipelines: Pipelines::new(device)?, device: device.clone(), pyramids: std::collections::HashMap::new() })
+    }
+}
+
+impl crate::render_server::compose::MaterialPass for Blur {
+    fn blur(&mut self, cb: &mut CommandBuffer, backdrop: &Texture, region: &MaterialRegion) -> Result<Texture> {
+        let [x, y, w, h] = device_region(region.rect);
+        let (x, y) = (x.max(0), y.max(0));
+        let w = w.min(backdrop.width() as i32 - x);
+        let h = h.min(backdrop.height() as i32 - y);
+        if w <= 0 || h <= 0 {
+            return Err(bifrost_gpu::Error::Invalid("material region is outside the target".into()));
+        }
+        let passes = kawase_passes(region.blur);
+        let key = (w as u32, h as u32, passes);
+        if !self.pyramids.contains_key(&key) {
+            self.pyramids.insert(key, blur_pyramid(&self.device, w as u32, h as u32, passes)?);
+        }
+        let pyramid = &self.pyramids[&key];
+        self.pipelines.record_pyramid(cb, backdrop, [x, y, w, h], region, pyramid)?;
+        Ok(pyramid[0].clone())
     }
 }
 
