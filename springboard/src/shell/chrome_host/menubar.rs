@@ -51,6 +51,8 @@ pub(super) fn items_from(rows: &[RowView]) -> Vec<MenuItem> {
         .collect()
 }
 
+// the shell menus it reads are built only with the Wayland desktop
+#[cfg(feature = "desktop-wayland")]
 /// The menu bar model for the shell's current state. Index 0 is the system menu (its title is empty: the chrome
 /// draws the mark), the rest of the menus follow the bar order, and everything else on the bar is a status item.
 pub(super) fn model(shell: &Shell) -> MenuBarModel {
@@ -76,6 +78,8 @@ pub(super) fn model(shell: &Shell) -> MenuBarModel {
     MenuBarModel { app_name, menus, status }
 }
 
+// the shell menus it reads are built only with the Wayland desktop
+#[cfg(feature = "desktop-wayland")]
 /// The shell's answer to a `MenuAction`: runs the chosen row's action. Unknown ids do nothing.
 pub(super) fn menu_action(shell: &mut Shell, menu: u32, item: u32, t: f64) -> Vec<Effect> {
     let Some((kind, _, _, _)) = shell.menu_buttons().into_iter().nth(menu as usize) else {
