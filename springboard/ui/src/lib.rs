@@ -638,6 +638,8 @@ pub mod nn;
 pub mod save_sync;
 pub mod ubiquitous_store;
 pub mod gamepad;
+pub mod input_method;
+pub mod vertical_text;
 pub mod affine;
 pub mod pdfpage;
 pub mod pdfselect;
