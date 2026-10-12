@@ -108,6 +108,7 @@ pub mod social;
 pub mod url_components;
 pub mod network_path;
 pub mod http_cookies;
+pub mod passkey_client_data;
 pub mod http_auth;
 pub mod stream;
 pub mod websocket;
