@@ -637,6 +637,8 @@ pub mod translation;
 pub mod timeline;
 pub mod relevance;
 pub mod intent_resolve;
+pub mod intent_vocab;
+pub mod intent_access;
 pub mod reading_list;
 pub mod content_rules;
 pub mod tips;
