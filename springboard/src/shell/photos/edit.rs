@@ -1,9 +1,12 @@
 //! The edit mode's pixel work: rotate by quarter turns, crop to an aspect
-//! preset, brightness and contrast, and saving the result as a copy. Photos
-//! are opaque, so the colour ops treat the packed pixels as straight RGB
-//! and leave alpha alone.
+//! preset, filters, blur, brightness and contrast, exposure, saturation,
+//! warmth and vignette, and saving the result as a copy. Photos are opaque,
+//! so the colour ops treat the packed pixels as straight RGB and leave alpha
+//! alone. The blur and the colour effects come from the renderer's own filter
+//! models (`blur_kernels`, `effect_chain`), not separate code.
 
 use crate::gfx::Image;
+use bifrost_render::{blur_kernels, effect_chain};
 use std::path::{Path, PathBuf};
 
 /// Crop presets of the edit bar.
@@ -55,10 +58,11 @@ pub enum Filter {
     Mono,
     Noir,
     Warm,
+    Sepia,
 }
 
 impl Filter {
-    pub const ALL: [Filter; 5] = [Filter::Original, Filter::Vivid, Filter::Mono, Filter::Noir, Filter::Warm];
+    pub const ALL: [Filter; 6] = [Filter::Original, Filter::Vivid, Filter::Mono, Filter::Noir, Filter::Warm, Filter::Sepia];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -67,6 +71,7 @@ impl Filter {
             Filter::Mono => "Mono",
             Filter::Noir => "Noir",
             Filter::Warm => "Warm",
+            Filter::Sepia => "Sepia",
         }
     }
 
@@ -92,22 +97,72 @@ impl Filter {
                 (l, l, l)
             }
             Filter::Warm => (c(rf * 1.08 + 6.0), c(gf * 1.02 + 2.0), c(bf * 0.88)),
+            // sepia runs through the effect chain in `apply`; this arm is never reached
+            Filter::Sepia => (r, g, b),
         }
     }
 
     pub fn apply(self, img: &mut Image) {
-        if self == Filter::Original {
-            return;
-        }
-        for p in &mut img.px {
-            let (r, g, b) = self.pixel(*p as u8, (*p >> 8) as u8, (*p >> 16) as u8);
-            *p = crate::gfx::pack(r, g, b, (*p >> 24) as u8);
+        match self {
+            Filter::Original => {}
+            Filter::Sepia => tone(img, vec![named("sepia", &[("amount", 1.0)])]),
+            _ => {
+                for p in &mut img.px {
+                    let (r, g, b) = self.pixel(*p as u8, (*p >> 8) as u8, (*p >> 16) as u8);
+                    *p = crate::gfx::pack(r, g, b, (*p >> 24) as u8);
+                }
+            }
         }
     }
 }
 
+/// A filter of the core-image catalogue, made by name with the given inputs set.
+fn named(name: &str, inputs: &[(&str, f32)]) -> Option<effect_chain::Filter> {
+    let mut f = effect_chain::Filter::named(name)?;
+    for &(key, value) in inputs {
+        f.set(key, value);
+    }
+    Some(f)
+}
+
+/// Runs catalogue filters over the picture, one after another. Missing names are skipped.
+fn tone(img: &mut Image, filters: Vec<Option<effect_chain::Filter>>) {
+    let mut chain = effect_chain::Chain::new();
+    for f in filters.into_iter().flatten() {
+        chain.push(f);
+    }
+    if chain.is_empty() {
+        return;
+    }
+    if let Some(px) = chain.apply(&img.px, img.w, img.h) {
+        img.px = px;
+    }
+}
+
+/// Stops of exposure at the ends of the exposure slider.
+pub const EXPOSURE_STOPS: f32 = 2.0;
+
+/// The blur radius in pixels at the top of the blur slider.
+pub const BLUR_RADIUS_MAX: f32 = 3.0;
+
+/// The disc radius for a blur slider value in 0..=1.
+pub fn blur_radius(amount: f32) -> usize {
+    (amount.clamp(0.0, 1.0) * BLUR_RADIUS_MAX).round() as usize
+}
+
+/// Averages each pixel with its disc of neighbours `radius` pixels wide. Radius 0 leaves the picture.
+pub fn blur(img: &mut Image, radius: usize) {
+    if radius == 0 {
+        return;
+    }
+    if let Some(px) = blur_kernels::disc_blur(&img.px, img.w, img.h, radius) {
+        img.px = px;
+    }
+}
+
 /// Everything the edit mode changes, applied in this order: rotate,
-/// straighten, crop, filter, brightness and contrast.
+/// straighten, crop, filter, blur, brightness and contrast, exposure,
+/// saturation, warmth and vignette.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Edit {
     /// clockwise quarter turns, 0..=3
@@ -124,17 +179,52 @@ pub struct Edit {
     pub brightness: f32,
     /// -1..=1
     pub contrast: f32,
+    /// -1..=1, scaled to `EXPOSURE_STOPS` stops either way
+    pub exposure: f32,
+    /// -1..=1: -1 is grey, 1 doubles the colour
+    pub saturation: f32,
+    /// -1..=1: cool to warm
+    pub warmth: f32,
+    /// 0..=1, see `blur_radius`
+    pub blur: f32,
+    /// 0..=1: darkens the corners
+    pub vignette: f32,
 }
 
 impl Default for Edit {
     fn default() -> Self {
-        Edit { turns: 0, aspect: Aspect::Free, crop_zoom: 1.0, crop_center: (0.5, 0.5), straighten: 0.0, filter: Filter::Original, brightness: 0.0, contrast: 0.0 }
+        Edit {
+            turns: 0,
+            aspect: Aspect::Free,
+            crop_zoom: 1.0,
+            crop_center: (0.5, 0.5),
+            straighten: 0.0,
+            filter: Filter::Original,
+            brightness: 0.0,
+            contrast: 0.0,
+            exposure: 0.0,
+            saturation: 0.0,
+            warmth: 0.0,
+            blur: 0.0,
+            vignette: 0.0,
+        }
     }
 }
 
 impl Edit {
     pub fn is_identity(&self) -> bool {
-        self.turns % 4 == 0 && self.aspect == Aspect::Free && self.crop_zoom <= 1.0 && self.straighten == 0.0 && self.filter == Filter::Original && self.brightness == 0.0 && self.contrast == 0.0
+        self.turns % 4 == 0
+            && self.aspect == Aspect::Free
+            && self.crop_zoom <= 1.0
+            && self.straighten == 0.0
+            && self.filter == Filter::Original
+            && self.brightness == 0.0
+            && self.contrast == 0.0
+            && self.exposure == 0.0
+            && self.saturation == 0.0
+            && self.warmth == 0.0
+            && self.blur == 0.0
+            && self.vignette == 0.0
     }
 
     /// Turns a quarter clockwise (or back).
@@ -165,7 +255,22 @@ impl Edit {
             out = out.crop(x, y, w, h);
         }
         self.filter.apply(&mut out);
+        blur(&mut out, blur_radius(self.blur));
         adjust(&mut out, self.brightness, self.contrast);
+        let mut looks = Vec::new();
+        if self.exposure != 0.0 {
+            looks.push(named("exposure", &[("ev", self.exposure * EXPOSURE_STOPS)]));
+        }
+        if self.saturation != 0.0 {
+            looks.push(named("saturation", &[("amount", 1.0 + self.saturation)]));
+        }
+        if self.warmth != 0.0 {
+            looks.push(named("temperatureTint", &[("temperature", self.warmth)]));
+        }
+        if self.vignette > 0.0 {
+            looks.push(named("vignette", &[("strength", self.vignette)]));
+        }
+        tone(&mut out, looks);
         out
     }
 }
@@ -488,7 +593,7 @@ mod tests {
         let mut warm = Image { w: 1, h: 1, px: vec![pack(100, 100, 100, 255)] };
         Filter::Warm.apply(&mut warm);
         assert!(warm.px[0] as u8 > (warm.px[0] >> 16) as u8, "warm pushes red over blue");
-        assert_eq!(Filter::ALL.len(), 5);
+        assert_eq!(Filter::ALL.len(), 6);
         assert!(!Edit { filter: Filter::Vivid, ..Edit::default() }.is_identity());
     }
 
@@ -523,5 +628,58 @@ mod tests {
         assert_eq!((back.w, back.h), (4, 2));
         assert_eq!(back.px[5], img.px[5]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exposure_saturation_and_warmth_use_the_catalogue_maths() {
+        // one stop up doubles 64 to 128 (64/255 * 2 * 255 = 128.0)
+        let up = Edit { exposure: 0.5, ..Edit::default() }.apply(&Image { w: 1, h: 1, px: vec![pack(64, 64, 64, 255)] });
+        assert_eq!(up.px[0], pack(128, 128, 128, 255));
+        // saturation -1 is amount 0: red becomes its luma, 0.299 * 255 = 76.2, rounds to 76
+        let grey = Edit { saturation: -1.0, ..Edit::default() }.apply(&Image { w: 1, h: 1, px: vec![pack(255, 0, 0, 255)] });
+        assert_eq!(grey.px[0], pack(76, 76, 76, 255));
+        // warmth 1 is temperature 1: red up by a quarter, blue down by a quarter
+        let warm = Edit { warmth: 1.0, ..Edit::default() }.apply(&Image { w: 1, h: 1, px: vec![pack(100, 100, 100, 255)] });
+        assert_eq!(warm.px[0], pack(125, 100, 75, 255));
+        assert!(!Edit { warmth: 0.1, ..Edit::default() }.is_identity());
+        assert!(!Edit { blur: 0.1, ..Edit::default() }.is_identity());
+        assert!(!Edit { vignette: 0.1, ..Edit::default() }.is_identity());
+        assert!(!Edit { exposure: -0.1, ..Edit::default() }.is_identity());
+        assert!(!Edit { saturation: 0.1, ..Edit::default() }.is_identity());
+    }
+
+    #[test]
+    fn blur_radius_steps_and_the_disc_average() {
+        assert_eq!(blur_radius(0.0), 0);
+        assert_eq!(blur_radius(0.5), 2, "1.5 rounds up");
+        assert_eq!(blur_radius(1.0), 3);
+        assert_eq!(blur_radius(3.0), 3, "clamped");
+        // radius 1 is the centre and its four neighbours: 255 in five pixels, so the centre is 255 / 5 = 51
+        let mut img = Image { w: 3, h: 3, px: vec![pack(0, 0, 0, 255); 9] };
+        img.px[4] = pack(255, 255, 255, 255);
+        blur(&mut img, 1);
+        assert_eq!(img.px[4], pack(51, 51, 51, 255));
+        assert_eq!(img.px[4] >> 24, 255, "alpha stays opaque");
+        let mut keep = Image { w: 1, h: 1, px: vec![pack(9, 9, 9, 255)] };
+        blur(&mut keep, 0);
+        assert_eq!(keep.px[0], pack(9, 9, 9, 255));
+    }
+
+    #[test]
+    fn vignette_darkens_the_corners_not_the_centre() {
+        let white = pack(255, 255, 255, 255);
+        let out = Edit { vignette: 1.0, ..Edit::default() }.apply(&Image { w: 4, h: 4, px: vec![white; 16] });
+        assert_eq!(out.px[0] & 0x00ff_ffff, 0, "the corner at strength 1 is black");
+        assert_eq!(out.px[2 * 4 + 2], white, "the centre is untouched");
+        assert_eq!(out.px[0] >> 24, 255, "alpha kept");
+    }
+
+    #[test]
+    fn sepia_turns_white_into_the_warm_tone() {
+        // the sepia blue row for white is 0.937, so 0.937 * 255 = 238.9 rounds to 239
+        let out = Edit { filter: Filter::Sepia, ..Edit::default() }.apply(&Image { w: 1, h: 1, px: vec![pack(255, 255, 255, 255)] });
+        assert_eq!(out.px[0], pack(255, 255, 239, 255));
+        assert!(!Edit { filter: Filter::Sepia, ..Edit::default() }.is_identity());
+        assert_eq!(Filter::Sepia.label(), "Sepia");
     }
 }
