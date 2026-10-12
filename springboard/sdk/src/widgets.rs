@@ -1267,7 +1267,13 @@ mod tests {
         let b = Rect { x: 4.0, y: 4.0, w: 30.0, h: 30.0 };
         visual_effect(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, b, 8.0, Material::Popover, Blending::BehindWindow, State::Active);
         let got = take_frame_materials();
-        assert_eq!(got, vec![{ let mut m = crate::proto::Material::new(crate::proto::MaterialKind::Popover, b, 8.0); m.state = State::Active; m }]);
+        // the shared request carries per-corner radii since the material reconcile (wire version 2)
+        assert_eq!(got, vec![{
+            let mut m = crate::proto::Material::new(crate::proto::MaterialKind::Popover, b, 8.0);
+            m.state = State::Active;
+            m.corners = Some(crate::proto::Corners { tl: 8.0, tr: 8.0, br: 8.0, bl: 8.0 });
+            m
+        }]);
         assert_eq!(px[20 * w + 20], Material::Popover.tint(), "the inside is replaced by the translucent tint");
         assert_eq!(px[4 * w + 4], pack(9, 9, 9, 255), "outside the rounded corner the content stays");
         assert_eq!(px[0], pack(9, 9, 9, 255));
