@@ -60,6 +60,16 @@ def parse_analyze(line):
     return out
 
 
+def parse_loader_var(hexdump):
+    """A Boot Loader Interface variable's value (after the 4 attribute bytes) as hex of a UTF-16LE decimal string,
+    e.g. '31003200...' -> 12. None when empty or not a plain number; never a guess."""
+    try:
+        text = bytes.fromhex("".join(hexdump.split())).decode("utf-16-le").rstrip("\x00").strip()
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return int(text) if text.isdigit() else None
+
+
 def loader_ms(init_us, exec_us):
     """The loader's own run time from the two Boot Loader Interface timestamps (microseconds, both absolute).
     None when exec is before init: the pair is bogus (systemd discards it too), so it is NO DATA, never a PASS."""
@@ -149,16 +159,16 @@ def load_midget():
 def collect(midget):
     """Reads everything one boot leaves behind, over ssh. Returns the run record (no derived keys)."""
     analyze = parse_analyze(midget.ssh("systemd-analyze 2>/dev/null | head -1", 20).strip())
-    # efivarfs file: 4 attribute bytes, then the value as a little-endian u64 (od prints it in decimal)
-    init = midget.ssh(f"od -An -tu8 -j4 -N8 {LOADER_VARS.format('LoaderTimeInitUSec')} 2>/dev/null", 10).strip()
-    exe = midget.ssh(f"od -An -tu8 -j4 -N8 {LOADER_VARS.format('LoaderTimeExecUSec')} 2>/dev/null", 10).strip()
+    # efivarfs file: 4 attribute bytes, then the value as a UTF-16LE decimal string (Boot Loader Interface)
+    init = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeInitUSec')} 2>/dev/null | xxd -p", 10))
+    exe = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeExecUSec')} 2>/dev/null | xxd -p", 10))
     marks = parse_marks(midget.ssh("cat /run/bifrost/boot-marks 2>/dev/null", 10))
     modesets = int(midget.ssh("journalctl -b -o cat --no-pager 2>/dev/null | grep -acE "
                               "'Modesetting with|display mode .*\\(selected\\)'", 60).strip() or 0)
     prev = midget.ssh("journalctl -b -1 -o cat --no-pager 2>/dev/null | grep '^boot-mark shutdown-start' | tail -1", 60)
     prev_start = parse_boot_mark(prev.strip())
     last = midget.ssh("journalctl -b -1 -o json -n 1 --no-pager 2>/dev/null", 60).strip()
-    loader = loader_ms(int(init), int(exe)) if init.isdigit() and exe.isdigit() else None
+    loader = loader_ms(init, exe) if init is not None and exe is not None else None
     return {"analyze_s": analyze, "marks_ms": marks, "loader_ms": loader, "modesets": modesets,
             "prev_shutdown_start": prev_start, "prev_last_journal_ms": journal_unix_ms(last) if last else None}
 
@@ -253,6 +263,13 @@ class Tests(unittest.TestCase):
     def test_parse_analyze_without_firmware(self):
         line = "Startup finished in 2.000s (kernel) + 1.000s (userspace) = 3.000s"
         self.assertEqual(parse_analyze(line), {"kernel": 2.0, "userspace": 1.0})
+
+    def test_loader_var_is_utf16_decimal_text(self):
+        self.assertEqual(parse_loader_var("3100320033000000"), 123)
+        self.assertEqual(parse_loader_var("310032003300"), 123)
+        self.assertIsNone(parse_loader_var(""))
+        self.assertIsNone(parse_loader_var("zz"))
+        self.assertIsNone(parse_loader_var("2d003100"))
 
     def test_loader_ms_is_the_difference_of_the_two_timestamps(self):
         self.assertEqual(loader_ms(1_000_000, 1_250_500), 250.5)

@@ -254,6 +254,42 @@ pub fn module_names(proc_modules: &str) -> Vec<String> {
     names
 }
 
+/// Directories (under `/lib/modules/<release>/`) whose modules the initramfs must carry: storage, the root
+/// filesystem and its crypto, and the display driver for the first KMS frame. mkinitcpio adds each module's
+/// `depends` itself. Everything else (sound, radio, input, sensors, watchdogs, kvm) loads later through udev.
+const BOOT_MODULE_DIRS: &[&str] = &[
+    "kernel/drivers/nvme/",
+    "kernel/drivers/ata/",
+    "kernel/drivers/scsi/",
+    "kernel/drivers/block/",
+    "kernel/drivers/md/",
+    "kernel/drivers/gpu/",
+    "kernel/fs/btrfs/",
+    "kernel/crypto/",
+    "kernel/arch/x86/crypto/",
+    "kernel/lib/",
+];
+
+/// Whether a module file (as `modinfo -F filename` prints it) belongs in the initramfs. Built-ins print
+/// `(builtin)` and need nothing.
+pub fn is_boot_module(path: &str) -> bool {
+    let rel = match path.split_once("/kernel/") {
+        Some((_, r)) => format!("kernel/{r}"),
+        None => path.to_owned(),
+    };
+    BOOT_MODULE_DIRS.iter().any(|d| rel.starts_with(d))
+}
+
+/// The recorded modules reduced to the boot allowlist. `path_of` maps a module to its file.
+pub fn boot_modules(names: &[String], path_of: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    names.iter().filter(|n| path_of(n).is_some_and(|p| is_boot_module(&p))).cloned().collect()
+}
+
+fn module_path(name: &str) -> Option<String> {
+    let out = Command::new("modinfo").args(["-F", "filename", name]).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+}
+
 /// The mkinitcpio drop-in for a module list. It overrides the generic `MODULES=` of `/etc/mkinitcpio.conf`.
 pub fn modules_conf(names: &[String]) -> String {
     format!("MODULES=({})\n", names.join(" "))
@@ -301,7 +337,7 @@ fn recorded_modules() -> Option<Vec<String>> {
     if stored.trim() != hardware_now() {
         return None;
     }
-    let names = module_names(&fs::read_to_string(store.join("modules")).ok()?);
+    let names = boot_modules(&module_names(&fs::read_to_string(store.join("modules")).ok()?), module_path);
     (!names.is_empty()).then_some(names)
 }
 
@@ -426,6 +462,30 @@ mod uki_tests {
         let text = "i915 3072 0 - Live 0x0\nbtrfs 1 0 - Live\nuas 2 0 - Live\ni915 3072 0 - Live\nbad-name 1 0\n";
         assert_eq!(module_names(text), vec!["btrfs", "i915", "uas"]);
         assert!(module_names("").is_empty());
+    }
+
+    #[test]
+    fn boot_modules_keep_storage_filesystem_and_gpu_only() {
+        let p = |n: &str| -> Option<String> {
+            Some(match n {
+                "nvme" => "/lib/modules/7.2.9-rt3/kernel/drivers/nvme/host/nvme.ko.zst",
+                "i915" => "/lib/modules/7.2.9-rt3/kernel/drivers/gpu/drm/i915/i915.ko.zst",
+                "btrfs" => "/lib/modules/7.2.9-rt3/kernel/fs/btrfs/btrfs.ko.zst",
+                "snd_hda_intel" => "/lib/modules/7.2.9-rt3/kernel/sound/pci/hda/snd-hda-intel.ko.zst",
+                "bluetooth" => "/lib/modules/7.2.9-rt3/kernel/net/bluetooth/bluetooth.ko.zst",
+                "kvm_intel" => "/lib/modules/7.2.9-rt3/kernel/arch/x86/kvm/kvm-intel.ko.zst",
+                "ext4" => "(builtin)",
+                _ => return None,
+            }
+            .to_owned())
+        };
+        let all: Vec<String> = ["nvme", "i915", "btrfs", "snd_hda_intel", "bluetooth", "kvm_intel", "ext4", "unknown"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(boot_modules(&all, p), vec!["nvme", "i915", "btrfs"]);
+        assert!(is_boot_module("/lib/modules/x/kernel/crypto/xxhash_generic.ko.zst"));
+        assert!(!is_boot_module("/lib/modules/x/kernel/drivers/usb/storage/uas.ko.zst"));
     }
 
     #[test]

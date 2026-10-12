@@ -102,7 +102,32 @@ At install and on every update (`packaging/arch/recovery/system.rs`, the updater
 - A unified kernel image `EFI/BIFROST/bifrost.efi`: kernel, initramfs, command line and microcode in one signed-ready
   PE image. The loader starts it directly.
 - A minimal initramfs for this machine: the modules this hardware used on the previous boot (`/proc/modules` recorded
-  after desktop-ready), not a generic set; no udev coldplug walk for devices already known.
+  after desktop-ready), reduced to an allowlist by module class; no udev coldplug walk for devices already known.
+  Measured 2026-10-12 (Midget, linux-rt 7.2.9-rt3): recording every loaded module put sound, bluetooth, wifi, kvm,
+  input, watchdog and sensor modules in `MODULES=`, giving an 18 MB initramfs (35 MB UKI) and 5.5 s from kernel to
+  bootweave (budget 1.5 s). `boot_modules` in `system.rs` now keeps only modules whose file (`modinfo -F filename`)
+  is under `drivers/{nvme,ata,scsi,block,md,gpu}`, `fs/btrfs`, `crypto`, `arch/x86/crypto` or `lib`; mkinitcpio adds
+  their `depends`, `autodetect` stays. Everything else loads through udev after the root mount. The full list is
+  still recorded (change detection); only the drop-in is filtered. A root on USB storage is not covered (add
+  `drivers/usb/storage` there when such installs matter). The installer's own `MODULES=(btrfs virtio_gpu)` is
+  already minimal and unchanged. Unverified until a Midget rebuild: image size and the stage time.
+
+### i915 eDP probe on desktops (finding, no fix shipped)
+
+Midget logs `[ENCODER:110:DDI A/PHY A] failed to retrieve link info, disabling eDP` and loses about 1.25 s: the
+VBT declares an internal eDP panel the desktop does not have. A `video=eDP-1:d` parameter would not help. The AUX
+DPCD read that times out runs in `intel_dp_init_connector` -> `intel_edp_init_connector` (drivers/gpu/drm/i915/
+display/intel_dp.c) while the driver creates its encoders at probe, before any connector `force` state from `video=`
+is applied (`drm_get_connector_force`, drivers/gpu/drm/drm_modes.c / drm_probe_helper.c, acts on later probing).
+So it only hides a connector that has already cost the time. Not shipped. Options that remain, none vendor neutral
+enough yet: a corrected VBT via `i915.vbt_firmware=` (per machine, needs the file in the initramfs), or a kernel
+patch skipping eDP init when the VBT panel has no power sequencer data. Reasoned from source knowledge, not tested.
+
+### Bench loader time
+
+`LoaderTimeInitUSec` and `LoaderTimeExecUSec` are UTF-16 decimal strings (as written by `bootweave-efi`
+`loader_var`), not binary u64. `tools/boot-bench.py` read them as u64 and reported nonsense (1407379178258.4 ms) or
+nothing. It now decodes the text (`parse_loader_var`); a missing or malformed value gives NO DATA.
 - Caches the first frame needs: the wallpaper decoded at the panel size, the Dock and menu bar icons rasterised, the
   system font's glyph atlas for the menu bar. The shell and the chrome clients load them instead of decoding at boot.
 
