@@ -31,6 +31,11 @@ package_bifrost_files() {
   fi
   install -Dm644 "$here/bifrost-privd.service" "$pkgdir/usr/lib/systemd/system/bifrost-privd.service"
   install -Dm644 "$here/pam-bifrost-login" "$pkgdir/etc/pam.d/bifrost-login"
+  # ALSA compatibility plug-in for third-party apps (audio task 08): the default PCM goes to bifrost-audiod
+  if [[ -n ${PC_ALSA_PLUGIN:-} && -f ${PC_ALSA_PLUGIN} ]]; then
+    install -Dm755 "$PC_ALSA_PLUGIN" "$pkgdir/usr/lib/alsa-lib/libasound_module_pcm_bifrost.so"
+    install -Dm644 "$here/alsa/50-bifrost.conf" "$pkgdir/etc/alsa/conf.d/50-bifrost.conf"
+  fi
   install -Dm644 "$here/sysusers-bifrost.conf" "$pkgdir/usr/lib/sysusers.d/bifrost.conf"
   # audio server (docs/audio-architecture.md): own `audio` user, /run/bifrost/audio, CAP_SYS_NICE unit
   audiod=${PC_AUDIOD:-$(dirname "$binary")/bifrost-audiod}
