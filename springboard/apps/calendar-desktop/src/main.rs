@@ -17,6 +17,13 @@ struct CalendarApp {
     connect: Connect,
 }
 
+/// Writes a phone number the editor asked to copy to the pasteboard.
+fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {
+    if let Some(text) = c.take_copied() {
+        ctx.set_pasteboard_string(&text);
+    }
+}
+
 impl App for CalendarApp {
     fn id(&self) -> &str {
         "is.olibuijr.calendar.desktop"
@@ -44,7 +51,8 @@ impl App for CalendarApp {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let Some(c) = &self.cal else { return Vec::new() };
-        // "Event" and "Go" are the app's own menus: File, Edit, View and Window are the shell's, so none is repeated.
+        // "Event" and "Go" are the app's own menus. "File" holds only New Event from Text: the shell's File menu takes
+        // the app's File items, so Edit, View and Window are not repeated.
         let item = |cmd: Command| {
             let base = AppMenuItem::new(cmd.id(), c.command_title(cmd)).enabled(c.enabled(cmd)).checked(c.checked(cmd));
             match cmd.key() {
@@ -53,6 +61,10 @@ impl App for CalendarApp {
             }
         };
         vec![
+            AppMenu {
+                title: "File".into(),
+                items: vec![item(Command::NewEventFromText)],
+            },
             AppMenu {
                 title: "Event".into(),
                 items: vec![
@@ -88,6 +100,11 @@ impl App for CalendarApp {
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {
+            // the sentence is the pasteboard's text, read when the command runs
+            Some(c) if cmd == Command::NewEventFromText => {
+                let text = ctx.pasteboard_string().unwrap_or_default();
+                c.enabled(cmd) && c.new_event_from_text(&ctx.ui, &text, t)
+            }
             Some(c) => c.perform(&ctx.ui, cmd, t),
             None => false,
         }
@@ -101,6 +118,7 @@ impl App for CalendarApp {
             let t = bifrost_app::proto::sys::now_ms();
             c.touch(&ctx.ui, Event::Down(x, y), t);
             c.touch(&ctx.ui, Event::Up(x, y), t);
+            share_copy(c, ctx);
             return true;
         }
         if let Input::Key(key) = &ev {
@@ -139,6 +157,7 @@ impl App for CalendarApp {
             TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
         };
         c.touch(&ctx.ui, e, t);
+        share_copy(c, ctx);
         true
     }
 
@@ -163,6 +182,7 @@ impl App for CalendarApp {
                 ctx.notify(&alert.title, &alert.body);
             }
         }
+        share_copy(c, ctx);
         c.tick(&ctx.ui, t)
     }
 

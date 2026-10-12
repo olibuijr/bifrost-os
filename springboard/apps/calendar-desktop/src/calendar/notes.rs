@@ -8,6 +8,11 @@ pub fn address(notes: &str) -> Option<String> {
     detect::find(notes, &[Kind::Address]).first().map(|m| m.text(notes).to_string())
 }
 
+/// The first phone number in `notes`, as it is written there (for example "+354 555 1234"), offered as a copy action.
+pub fn phone(notes: &str) -> Option<String> {
+    detect::find(notes, &[Kind::Phone]).first().map(|m| m.text(notes).to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -21,5 +26,14 @@ mod tests {
     fn notes_without_an_address_offer_nothing() {
         assert_eq!(address("Bring the slides"), None);
         assert_eq!(address(""), None);
+    }
+
+    #[test]
+    fn the_first_phone_number_is_offered_as_written() {
+        // ten digits with spaces and a country code: inside the 7 to 15 digit range
+        assert_eq!(phone("Call +354 555 1234 before lunch"), Some("+354 555 1234".to_string()));
+        assert_eq!(phone("Bring the slides"), None);
+        // a short run of digits is an address number, not a phone number
+        assert_eq!(phone("Laugavegur 12"), None);
     }
 }

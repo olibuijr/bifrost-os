@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.0
+
+- File > New Event from Text: copy a sentence and choose the command. The editor opens on a new event read from it: "Lunch with Ana next Tuesday at 12:30 at Laugavegur 5" gives the title "Lunch with Ana", the next Tuesday, 12:30 and the location "Laugavegur 5". Also understood: today, tonight (19:00 if no time), tomorrow, weekdays, "on" and "next" before a weekday, dates as 2026-10-20 or 20.10.2026, and times as 9:00, 3pm or noon. Nothing is saved until Save. With nothing copied, it opens a plain New Event.
+- Event notes: a phone number in the notes (for example "+354 555 1234") is offered as "Copy +354 555 1234" under Notes. Tapping it copies the number to the pasteboard and confirms it.
+- Still open, listed in `docs/parity/wire4-calendar-detect.md`: notes do not offer a new event from a date or time they mention, and the sentence parser is English only.
+
 ## 1.9.0
 
 - Event notes: when the notes contain a street address (for example "Laugavegur 12"), the editor offers "Use ... as Location" under the notes. Tapping it fills the Location field. The address is found with the same detector the Notes app uses.
