@@ -127,6 +127,8 @@ pub struct Console {
     pub stick: bool,
     /// The last load or stream error, or a note, for the footer.
     pub status: String,
+    /// The power service's line (thermal state, battery, Low Power Mode), shown after the count. Empty when unknown.
+    pub power_note: String,
     pub labels: TextCache,
     press: Press,
 }
@@ -156,6 +158,7 @@ impl Console {
             scroll: Scroller::new(),
             stick: false,
             status: String::new(),
+            power_note: String::new(),
             labels: TextCache::default(),
             press: Press::None,
         }
@@ -654,8 +657,17 @@ impl Console {
         self.search_changed();
     }
 
-    /// The footer's count and streaming state.
+    /// The footer's count and streaming state, then the power line when the power service has answered.
     pub fn footer_text(&self) -> String {
+        let base = self.footer_base();
+        if self.power_note.is_empty() {
+            base
+        } else {
+            format!("{base} · {}", self.power_note)
+        }
+    }
+
+    fn footer_base(&self) -> String {
         let shown = self.visible.len();
         let total = self.buffer.len();
         let count = match (shown, total) {
@@ -752,6 +764,8 @@ pub const MENU_CLEAR: u32 = 4;
 pub const MENU_FIND: u32 = 5;
 pub const MENU_AFTER: u32 = 6;
 pub const MENU_SUBSYSTEM: u32 = 7;
+/// Log menu: Copy Message. Handled by the app (it needs the shell's pasteboard service), not by `menu`.
+pub const MENU_COPY: u32 = 8;
 
 #[cfg(test)]
 mod tests {
