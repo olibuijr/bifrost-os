@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 0.1.1
 
 - The sidebar section headers come from the device kind (`Kind::section`), and the unused draft constructor is removed.
