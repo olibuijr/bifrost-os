@@ -243,6 +243,14 @@ pub use proto::ContextItem;
 /// The audio service client (`audio::Client`): playback state and transport over `bifrost_proto::svc::audio`.
 pub use springboard::svc::audio;
 
+/// The AVAudioPlayer shape (`audio_player::AudioPlayer`): play, pause and stop, volume with fade, stereo pan, playback
+/// rate, loops, seeking and rendered stereo blocks. Shared with the shell through `bifrost_ui`.
+pub use bifrost_ui::audio_player;
+
+/// The AVAudioEngine shape (`audio_engine::Engine`): the node graph of players, mixers, units and taps, offline or on
+/// the audio device through the HAL.
+pub use bifrost_audio_engine as audio_engine;
+
 /// Microphone consent, the mute switch and the one recording owner (`microphone::Microphone`). The shell answers the
 /// prompt; an app asks `begin` before it sends `RecordStart` to the audio service.
 pub use bifrost_ui::mic_consent as microphone;

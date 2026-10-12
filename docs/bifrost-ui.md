@@ -1881,3 +1881,23 @@ the daemon owns the hub and delivers to apps.
 Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
 daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
 tests in `sdk/src/midi.rs` are unrun.
+
+## AVFAudio: AVAudioPlayer shape and the node graph (`bifrost_app::audio_player`, `bifrost_app::audio_engine`)
+
+Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `rate`, `numberOfLoops`, `currentTime`,
+`duration`) and `AVAudioEngine` (attach, connect, taps). Decisions, made in this round:
+
+- `ui/src/audio_player.rs` (`AudioPlayer`) is the pure model: play, pause, stop, volume with a linear fade, stereo pan,
+  rate 0.5 to 2 by linear interpolation, loops (0 once, N extra, -1 until stopped), seek and `render` of stereo blocks.
+  Pan uses the equal-power law of `panner.rs`. A mono source is placed by the pan; a stereo source keeps both channels
+  and the pan scales each side (a balance). Rate keeps the source sample rate and does not change `duration`. Pause keeps
+  the time; stop keeps the time too; a player that finishes stops and rewinds to 0. Out-of-range values are refused,
+  not clamped. The `enableRate` switch of AVAudioPlayer is not modelled: the rate always applies.
+- `audio/engine` (`bifrost-audio-engine`, `Engine`) is the node graph: players, mixer, units, connections, detach and
+  taps (`attach_tap`), offline and device rendering. The SDK now re-exports it as `bifrost_app::audio_engine`. The older
+  pure model in `ui/src/audio_engine.rs` is superseded by it; the shell may use either until it is removed.
+- Not done here: the player is not yet connected to the audio service (`audiod`), so pan, rate and fade do not reach the
+  speaker; apps still play through `bifrost_app::audio` (queue, volume, mute). Session categories, interruptions and
+  speech stay gaps. Verify the audio path on Midget before any row is `parity`.
+
+Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
