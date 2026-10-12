@@ -8,6 +8,7 @@
 use super::Shell;
 use bifrost_core::json::Json;
 
+pub mod search_ranking;
 pub mod system;
 
 /// A named service in the shell.
@@ -34,6 +35,7 @@ pub struct Event {
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
         Box::new(system::System),
+        Box::new(search_ranking::SearchRanking::default()),
     ]
 }
 
