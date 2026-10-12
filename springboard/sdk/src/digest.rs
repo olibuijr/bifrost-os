@@ -1,4 +1,5 @@
-//! Security transforms for apps: SHA-256 digests, HMAC-SHA256 message authentication and a constant-time comparison.
+//! Security transforms for apps: SHA-256 digests, HMAC-SHA256 message authentication and a constant-time comparison,
+//! plus the legacy digests MD5 and SHA-1 in [`insecure`] for checksums an older service still publishes.
 //!
 //! The hash is the shell's own SHA-256 (`bifrost_core::sha256`), so an app and the shell agree on every byte. The
 //! functions are pure: no key store, no network and no hardware. Encryption and signatures with key objects are not
@@ -6,6 +7,20 @@
 //! [`constant_time_eq`] to compare the result without leaking where the first mismatch is.
 
 use bifrost_core::sha256::Sha256;
+
+/// Legacy digests for compatibility only. MD5 and SHA-1 are not collision resistant, so they must not authenticate
+/// data or stand in for a signature; new services should use [`sha256`](super::sha256).
+pub mod insecure {
+    /// MD5 digest of `data`, 16 bytes (RFC 1321).
+    pub fn md5(data: &[u8]) -> [u8; 16] {
+        bifrost_core::md5::digest(data)
+    }
+
+    /// SHA-1 digest of `data`, 20 bytes (FIPS 180-4).
+    pub fn sha1(data: &[u8]) -> [u8; 20] {
+        bifrost_core::sha1::digest(data)
+    }
+}
 
 /// SHA-256 block size in bytes. HMAC pads or hashes its key to this length.
 pub const BLOCK_SIZE: usize = 64;
@@ -91,6 +106,25 @@ mod tests {
     #[test]
     fn a_different_key_gives_a_different_tag() {
         assert_ne!(hmac_sha256(b"key one", b"data"), hmac_sha256(b"key two", b"data"));
+    }
+
+    #[test]
+    fn insecure_md5_matches_the_rfc_1321_vector() {
+        assert_eq!(hex(&insecure::md5(b"abc")), "900150983cd24fb0d6963f7d28e17f72");
+        assert_eq!(hex(&insecure::md5(b"")), "d41d8cd98f00b204e9800998ecf8427e");
+    }
+
+    #[test]
+    fn insecure_sha1_matches_the_fips_180_vector() {
+        assert_eq!(hex(&insecure::sha1(b"abc")), "a9993e364706816aba3e25717850c26c9cd0d89d");
+    }
+
+    #[test]
+    fn insecure_digests_have_their_own_lengths() {
+        // MD5 is 16 bytes and SHA-1 is 20 bytes, so a checksum of the wrong algorithm cannot be mistaken for the other.
+        assert_eq!(insecure::md5(b"x").len(), 16);
+        assert_eq!(insecure::sha1(b"x").len(), 20);
+        assert_ne!(hex(&insecure::md5(b"x")), hex(&sha256(b"x"))[..32].to_string());
     }
 
     #[test]
