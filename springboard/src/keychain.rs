@@ -101,7 +101,16 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-type Items = BTreeMap<(String, String), Vec<u8>>;
+/// One item's secret and the Unix time it was last written (0 when the file predates the time column).
+type Items = BTreeMap<(String, String), (Vec<u8>, u64)>;
+
+/// One item in a listing: its `(service, account)` and the time it was last written, with no secret.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Listing {
+    pub service: String,
+    pub account: String,
+    pub modified: u64,
+}
 
 /// One app's items, loaded from and written to its file. Reads reload, so the shell keeps no secrets in memory
 /// between calls.
@@ -172,14 +181,19 @@ impl Store {
         if items.len() >= MAX_ITEMS {
             return Err(Error::Param);
         }
-        items.insert(key, value.to_vec());
+        items.insert(key, (value.to_vec(), now()));
         self.save(&items)
     }
 
     /// `SecItemCopyMatching` (`kSecReturnData`): `ItemNotFound` when there is no such item.
     pub fn get(&self, service: &str, account: &str) -> Result<Vec<u8>, Error> {
         check(service, account, None)?;
-        self.load()?.remove(&(service.to_string(), account.to_string())).ok_or(Error::ItemNotFound)
+        self.load()?.remove(&(service.to_string(), account.to_string())).map(|(v, _)| v).ok_or(Error::ItemNotFound)
+    }
+
+    /// Every item's `(service, account)` and modified time, sorted by service then account. No secrets are read out.
+    pub fn list(&self) -> Result<Vec<Listing>, Error> {
+        Ok(self.load()?.into_iter().map(|((service, account), (_, modified))| Listing { service, account, modified }).collect())
     }
 
     /// `SecItemUpdate`: replaces the value; `ItemNotFound` when there is no such item.
@@ -187,7 +201,7 @@ impl Store {
         check(service, account, Some(value))?;
         let mut items = self.load()?;
         let slot = items.get_mut(&(service.to_string(), account.to_string())).ok_or(Error::ItemNotFound)?;
-        *slot = value.to_vec();
+        *slot = (value.to_vec(), now());
         self.save(&items)
     }
 
@@ -250,8 +264,8 @@ fn file_for(root: &Path, app_id: &str) -> Result<PathBuf, Error> {
 
 fn render(items: &Items) -> Vec<u8> {
     let mut out = String::new();
-    for ((s, a), v) in items {
-        out.push_str(&format!("{}\t{}\t{}\n", hex(s.as_bytes()), hex(a.as_bytes()), hex(v)));
+    for ((s, a), (v, t)) in items {
+        out.push_str(&format!("{}\t{}\t{}\t{t}\n", hex(s.as_bytes()), hex(a.as_bytes()), hex(v)));
     }
     out.into_bytes()
 }
@@ -262,12 +276,25 @@ fn parse(text: &[u8]) -> Result<Items, Error> {
     let mut items = Items::new();
     for line in text.lines().filter(|l| !l.is_empty()) {
         let mut f = line.split('\t');
-        let (Some(s), Some(a), Some(v), None) = (f.next(), f.next(), f.next(), f.next()) else { return Err(bad()) };
+        let (Some(s), Some(a), Some(v)) = (f.next(), f.next(), f.next()) else { return Err(bad()) };
+        // the modified time is optional, so a file written before it was added still reads
+        let modified = match f.next() {
+            None => 0,
+            Some(t) => t.parse::<u64>().map_err(|_| bad())?,
+        };
+        if f.next().is_some() {
+            return Err(bad());
+        }
         let s = String::from_utf8(unhex(s).ok_or_else(bad)?).map_err(|_| bad())?;
         let a = String::from_utf8(unhex(a).ok_or_else(bad)?).map_err(|_| bad())?;
-        items.insert((s, a), unhex(v).ok_or_else(bad)?);
+        items.insert((s, a), (unhex(v).ok_or_else(bad)?, modified));
     }
     Ok(items)
+}
+
+/// Unix time now, in seconds (0 if the clock is before 1970).
+fn now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Lowercase hex of `b`: the form a secret takes in the service JSON.
@@ -584,6 +611,35 @@ mod tests {
         assert_eq!(s.apply(&KeychainOp::Delete { service: "s".into(), account: "x".into() }).unwrap_err().status(), KeychainStatus::NotFound);
         assert_eq!(Error::from_status(KeychainStatus::Ok), None);
         assert_eq!(Error::from_status(KeychainStatus::Duplicate), Some(Error::DuplicateItem));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn listing_names_each_item_with_its_time_and_no_secret() {
+        let d = dir("listing");
+        let s = enc(&d, "is.example.list");
+        assert_eq!(s.list(), Ok(Vec::new()));
+        s.add("b.example", "me", b"two").unwrap();
+        s.add("a.example", "me", b"one").unwrap();
+        let rows = s.list().unwrap();
+        let names: Vec<(&str, &str)> = rows.iter().map(|r| (r.service.as_str(), r.account.as_str())).collect();
+        assert_eq!(names, vec![("a.example", "me"), ("b.example", "me")], "sorted by service");
+        assert!(rows.iter().all(|r| r.modified > 0), "a write stamps the time");
+        // an update moves the time forward or keeps it, and the secret still reads back
+        s.update("a.example", "me", b"uno").unwrap();
+        assert_eq!(s.get("a.example", "me"), Ok(b"uno".to_vec()));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_file_without_the_time_column_still_reads() {
+        let d = dir("legacy");
+        let path = d.join("old.kc");
+        let line = format!("{}\t{}\t{}\n", hex(b"svc"), hex(b"me"), hex(b"v"));
+        std::fs::write(&path, [MAGIC_PLAIN.as_slice(), line.as_bytes()].concat()).unwrap();
+        let s = Store::plain(path);
+        assert_eq!(s.get("svc", "me"), Ok(b"v".to_vec()));
+        assert_eq!(s.list().unwrap()[0].modified, 0);
         let _ = std::fs::remove_dir_all(&d);
     }
 

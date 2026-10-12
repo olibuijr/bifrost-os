@@ -56,6 +56,7 @@ pub mod locale;
 pub mod bundle_resources;
 pub mod keychain;
 pub mod keychain_groups;
+pub mod passwords;
 pub mod entropy;
 pub mod passkey;
 pub mod password_gen;

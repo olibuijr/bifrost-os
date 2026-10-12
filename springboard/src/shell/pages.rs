@@ -80,6 +80,8 @@ pub enum PageId {
     /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
     Graphics,
     Passcode,
+    /// Settings > Passwords: saved website logins, revealed after the passcode (see `passwords_page`)
+    Passwords,
     Developer,
     ScreenTime,
     StDowntime,
@@ -286,6 +288,8 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// a tap on a Settings > Passwords row (see `passwords_page::Act`)
+    Passwords(super::passwords_page::Act),
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -494,6 +498,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
+                    Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
                 ]),
                 Group::new(vec![Item::new("Developer").icon(Icon::General).link(PageId::Developer)]),
             ],
@@ -953,7 +958,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
-        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
         PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
@@ -1391,7 +1396,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Passwords", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         assert_eq!(s.groups[2].items[8].value, "Lake Day");
         assert_eq!(s.groups[2].items[9].value, "Never", "the screen saver is off by default");
