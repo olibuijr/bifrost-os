@@ -1,6 +1,6 @@
 id = "is.olibuijr.assistant.desktop"
 name = "Assistant"
-version = "1.4.0"
+version = "1.4.1"
 exec = "bifrost-assistant"
 icon = "icon.png"
 min_shell = "0.4.84"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.4.0 — 2026-10-12
 
 - The Assistant can use two tools while it answers: the current date and time (in UTC), and a word count. The model decides when to use them.
