@@ -1,7 +1,8 @@
 //! Login items (`SMAppService`) and menu-bar extras (`NativeStatusItem`) on the shell side.
 //!
 //! `Registry` is plain data: the login-items list (app ids, kept in the `login.items` pref and launched once per
-//! session) and the status items the running apps published. `Shell` feeds it from the app sockets (`apphost.rs`); the
+//! session), the requests waiting for the user's approval in Settings > General > Login Items (in memory), the status
+//! changes to report to apps, and the status items the running apps published. `Shell` feeds it from the app sockets (`apphost.rs`); the
 //! menu bar draws `status_entries()` in its extras area and sends a chosen entry back as `ToApp::StatusItemAction`.
 //!
 //! Identity is always the app id or slot of the connection, never anything in the message.
@@ -25,6 +26,10 @@ pub struct StatusEntry {
 #[derive(Default)]
 pub struct Registry {
     login: Vec<String>,
+    /// registered by an app and not yet allowed by the user: `RequiresApproval` until `approve` (in memory; the app asks again at its next start)
+    pending: Vec<String>,
+    /// status changes the `login-items` service reports to apps, drained by `take_changes`
+    changes: Vec<(String, LoginStatus)>,
     status: Vec<StatusEntry>,
     /// the login items were launched for this session
     pub launched: bool,
@@ -47,7 +52,7 @@ impl Registry {
         &self.login
     }
 
-    /// True when the list changed.
+    /// Adds an approved login item (a list entry the user allowed). True when the list changed.
     pub fn register(&mut self, app: &str) -> bool {
         if self.login.iter().any(|a| a == app) {
             return false;
@@ -56,29 +61,65 @@ impl Registry {
         true
     }
 
-    /// True when the list changed.
+    /// An app asks to open at login: it waits for the user's approval. True when the request is new.
+    pub fn request(&mut self, app: &str) -> bool {
+        if self.login.iter().any(|a| a == app) || self.pending.iter().any(|a| a == app) {
+            return false;
+        }
+        self.pending.push(app.to_string());
+        self.changes.push((app.to_string(), LoginStatus::RequiresApproval));
+        true
+    }
+
+    /// The user allows a pending request: it becomes a login item and the app is told `Enabled`. True when it was pending.
+    pub fn approve(&mut self, app: &str) -> bool {
+        let Some(i) = self.pending.iter().position(|a| a == app) else { return false };
+        self.pending.remove(i);
+        self.register(app);
+        self.changes.push((app.to_string(), LoginStatus::Enabled));
+        true
+    }
+
+    /// The requests waiting for approval, in the order they asked.
+    pub fn pending_ids(&self) -> &[String] {
+        &self.pending
+    }
+
+    /// Removes an app from the login items and from the pending requests. True when either changed.
     pub fn unregister(&mut self, app: &str) -> bool {
-        let before = self.login.len();
+        let before = self.login.len() + self.pending.len();
         self.login.retain(|a| a != app);
-        self.login.len() != before
+        self.pending.retain(|a| a != app);
+        let changed = self.login.len() + self.pending.len() != before;
+        if changed {
+            self.changes.push((app.to_string(), LoginStatus::NotRegistered));
+        }
+        changed
     }
 
     pub fn login_status(&self, app: &str) -> LoginStatus {
         if self.login.iter().any(|a| a == app) {
             LoginStatus::Enabled
+        } else if self.pending.iter().any(|a| a == app) {
+            LoginStatus::RequiresApproval
         } else {
             LoginStatus::NotRegistered
         }
     }
 
-    /// Applies a `LoginItem` call of `app`; returns the status to answer with and whether the list changed.
+    /// Applies a `LoginItem` or `login-items` call of `app`; returns the status to answer with and whether the lists changed.
     pub fn login_op(&mut self, app: &str, op: LoginOp) -> (LoginStatus, bool) {
         let changed = match op {
-            LoginOp::Register => self.register(app),
+            LoginOp::Register => self.request(app),
             LoginOp::Unregister => self.unregister(app),
             LoginOp::Query => false,
         };
         (self.login_status(app), changed)
+    }
+
+    /// The status changes since the last call, in order, for the `login-items` service to report.
+    pub fn take_changes(&mut self) -> Vec<(String, LoginStatus)> {
+        std::mem::take(&mut self.changes)
     }
 
     /// `StatusItemSet`: creates or updates item `item` of `slot`. An app may hold `MAX_STATUS_ITEMS_PER_APP`; more are ignored.
@@ -115,7 +156,7 @@ impl super::Shell {
         super::apphost::installed().get(slot as usize).map(|a| a.manifest.id.clone())
     }
 
-    fn login_save(&mut self) {
+    pub(super) fn login_save(&mut self) {
         let _ = self.prefs.set(PREF_KEY, &self.extras.to_pref());
     }
 
@@ -178,12 +219,38 @@ impl super::Shell {
 
     /// Login Items page rows: (app id, display name) of every login item, installed or not.
     pub(super) fn login_item_views(&self) -> Vec<(String, String)> {
+        Self::login_id_views(self.extras.login_ids())
+    }
+
+    /// Login Items page rows waiting for approval: (app id, display name).
+    pub(super) fn login_pending_views(&self) -> Vec<(String, String)> {
+        Self::login_id_views(self.extras.pending_ids())
+    }
+
+    fn login_id_views(ids: &[String]) -> Vec<(String, String)> {
         let registered = super::apphost::installed();
-        self.extras
-            .login_ids()
-            .iter()
+        ids.iter()
             .map(|id| (id.clone(), registered.iter().find(|a| &a.manifest.id == id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| id.clone())))
             .collect()
+    }
+
+    /// The user allowed pending login items in Settings: they start at the next login, and a running app is told `Enabled`.
+    pub(super) fn login_items_approve(&mut self, ids: Vec<String>) {
+        let mut changed = false;
+        for id in &ids {
+            if self.extras.approve(id) {
+                changed = true;
+                if let Some(slot) = super::apphost::installed().iter().position(|a| &a.manifest.id == id) {
+                    if self.ext.get(slot).is_some_and(|h| h.is_some()) {
+                        self.ext_send(slot, &ToApp::LoginItemStatus { request: 0, status: LoginStatus::Enabled });
+                    }
+                }
+            }
+        }
+        if changed {
+            self.login_save();
+            self.dirty = true;
+        }
     }
 
     /// The user removed login items in Settings.
@@ -216,12 +283,41 @@ mod tests {
         let mut r = Registry::from_pref(Some("a, b,,a"));
         assert_eq!(r.login_ids(), ["a", "b"]);
         assert_eq!(r.login_op("c", LoginOp::Query), (LoginStatus::NotRegistered, false));
-        assert_eq!(r.login_op("c", LoginOp::Register), (LoginStatus::Enabled, true));
-        assert_eq!(r.login_op("c", LoginOp::Register), (LoginStatus::Enabled, false));
+        assert_eq!(r.login_op("c", LoginOp::Register), (LoginStatus::RequiresApproval, true));
+        assert_eq!(r.login_op("c", LoginOp::Register), (LoginStatus::RequiresApproval, false));
+        assert_eq!(r.to_pref(), "a,b", "a pending request is not saved until the user allows it");
+        assert!(r.approve("c"));
+        assert_eq!(r.login_status("c"), LoginStatus::Enabled);
         assert_eq!(r.to_pref(), "a,b,c");
         assert_eq!(r.login_op("a", LoginOp::Unregister), (LoginStatus::NotRegistered, true));
         assert_eq!(Registry::from_pref(Some(&r.to_pref())).login_ids(), ["b", "c"]);
         assert_eq!(Registry::from_pref(None).login_ids().len(), 0);
+    }
+
+    #[test]
+    fn a_registration_requires_approval_until_the_user_allows_it() {
+        let mut r = Registry::from_pref(Some("b"));
+        assert_eq!(r.login_op("x", LoginOp::Query), (LoginStatus::NotRegistered, false));
+        assert_eq!(r.login_op("x", LoginOp::Register), (LoginStatus::RequiresApproval, true));
+        assert_eq!(r.pending_ids(), ["x"]);
+        assert_eq!(r.take_changes(), vec![("x".to_string(), LoginStatus::RequiresApproval)]);
+        assert!(r.take_changes().is_empty(), "changes are drained once");
+        assert!(r.approve("x"));
+        assert!(!r.approve("x"), "only a pending request can be approved");
+        assert!(r.pending_ids().is_empty());
+        assert_eq!(r.take_changes(), vec![("x".to_string(), LoginStatus::Enabled)]);
+        assert_eq!(r.login_ids(), ["b", "x"]);
+        assert_eq!(r.login_op("b", LoginOp::Register), (LoginStatus::Enabled, false), "an approved item is not asked again");
+    }
+
+    #[test]
+    fn withdrawing_a_pending_request_reports_not_registered() {
+        let mut r = Registry::default();
+        r.request("p");
+        assert_eq!(r.login_op("p", LoginOp::Unregister), (LoginStatus::NotRegistered, true));
+        assert!(r.pending_ids().is_empty());
+        assert!(!r.approve("p"));
+        assert_eq!(r.take_changes(), vec![("p".to_string(), LoginStatus::RequiresApproval), ("p".to_string(), LoginStatus::NotRegistered)]);
     }
 
     #[test]

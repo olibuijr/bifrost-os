@@ -2327,8 +2327,9 @@ impl Shell {
             _ if app == AppId::Settings => {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
+                let pending = self.login_pending_views();
                 let Some(st) = &mut self.settings else { return vec![] };
-                st.set_login_items(logins);
+                st.set_login_items(logins, pending);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
                     st.set_dock(dock);
                 }
@@ -2343,6 +2344,7 @@ impl Shell {
                 let dock_changes = st.take_dock_changes();
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
+                let login_approved = st.take_login_approved();
                 for change in changes {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
@@ -2360,6 +2362,7 @@ impl Shell {
                 }
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
+                self.login_items_approve(login_approved);
                 if self.desk.is_some() {
                     for change in dock_changes {
                         let _ = self.dock_change(change, t);

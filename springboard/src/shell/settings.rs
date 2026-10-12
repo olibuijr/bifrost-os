@@ -239,6 +239,9 @@ pub struct Settings {
     defaults_out: Vec<(usize, String)>,
     /// the Login Items page's rows as the shell holds them, and the ids removed there
     login_items: Vec<(String, String)>,
+    /// the Login Items page's requests waiting for approval, and the ids the user allowed there
+    login_pending: Vec<(String, String)>,
+    login_approve_out: Vec<String>,
     /// Settings > Fonts, loaded when the page opens
     fonts: super::pages::FontsView,
     login_out: Vec<String>,
@@ -423,6 +426,8 @@ impl Settings {
             defaults: Vec::new(),
             defaults_out: Vec::new(),
             login_items: Vec::new(),
+            login_pending: Vec::new(),
+            login_approve_out: Vec::new(),
             login_out: Vec::new(),
             fonts: Default::default(),
             notify_edge: None,
@@ -499,7 +504,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, fonts: &self.fonts }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, fonts: &self.fonts }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -671,12 +676,18 @@ impl Settings {
         self.defaults = v;
     }
 
-    pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>) {
+    pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>, pending: Vec<(String, String)>) {
         self.login_items = v;
+        self.login_pending = pending;
     }
 
     pub(super) fn take_login_removed(&mut self) -> Vec<String> {
         std::mem::take(&mut self.login_out)
+    }
+
+    /// The Login Items requests the user allowed since the last call.
+    pub(super) fn take_login_approved(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.login_approve_out)
     }
 
     pub(super) fn take_defaults_changes(&mut self) -> Vec<(usize, String)> {
@@ -1637,6 +1648,15 @@ impl Settings {
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::LoginItemApprove(id) => {
+                if let Some(i) = self.login_pending.iter().position(|(a, _)| *a == id) {
+                    let (a, name) = self.login_pending.remove(i);
+                    self.login_items.push((a, name));
+                    self.login_approve_out.push(id);
+                }
                 self.rebuild_visible(ui);
                 vec![]
             }
