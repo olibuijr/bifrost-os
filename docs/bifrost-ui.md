@@ -467,7 +467,13 @@ Secrets an app must not keep in `defaults.txt` or anywhere in its own (app-reada
 - Tests (written, not yet run): `src/keychain.rs` (HMAC vector, round trip, duplicate/not-found, per-app isolation,
   tamper detection, modes), `proto` `keychain_messages_round_trip`, `sdk/src/keychain.rs`.
 
-Parity gaps, not matched yet: no `kSecAttrAccessGroup` (apps cannot share items; each app sees only its own), no
+Access groups (`kSecAttrAccessGroup`) are wired through the `keychain-groups` service (`docs/parity/wire-svc-keychain.md`).
+An app lists `keychain_groups = ["is.example.group"]` in its manifest, with the `keychain` permission, and then
+`bifrost_app::keychain_groups` (`add`, `get`, `update`, `delete`, each naming the group) reads and writes items that
+every app in the group shares. Members get a `changed` event after another member writes. A group is one file under
+`keychain/groups/`, and a call never searches across groups, unlike Apple's default search.
+
+Parity gaps, not matched yet: no access-group search when the group is omitted (every call names one), no
 biometric or user-presence access control (`SecAccessControl`, Touch ID), no `kSecAttrAccessible` classes (items are
 available whenever the shell runs), only `kSecClassGenericPassword` (no internet passwords, keys or certificates), no
 attributes beyond service and account (labels, comments, dates), no `kSecMatchLimitAll` listing, no iCloud sync, and
