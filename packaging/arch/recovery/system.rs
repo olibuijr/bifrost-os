@@ -375,6 +375,13 @@ pub fn record_modules() -> io::Result<bool> {
     let same = fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names)
         && fs::read_to_string(store.join("hardware")).is_ok_and(|s| s.trim() == hardware);
     if same {
+        // the list is the same, but an update can change how the drop-in is made from it (0.6.3 kept only the boot
+        // modules): rebuild only when the drop-in on disk is not the one wanted now
+        if reconcile_modules()? {
+            run("mkinitcpio", &["-p", kernel()])?;
+            build_uki()?;
+            return Ok(true);
+        }
         return Ok(false);
     }
     save(&store.join("modules"), names.join("\n").as_bytes())?;
