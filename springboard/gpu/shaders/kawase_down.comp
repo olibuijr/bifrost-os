@@ -1,0 +1,44 @@
+#version 450
+// Dual-Kawase down pass (the reference platform's blur idea): one output texel is the weighted average of the centre
+// sample and four diagonal samples at `offset` texels. Used for the first pass too, which reads the target region
+// through the sampler, so it is also the copy of the region behind the material.
+// The push block is `PushBlock` in render_server/material.rs (88 bytes, shared with kawase_up.comp).
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform texture2D src_tex;
+layout(set = 0, binding = 1) uniform sampler src_smp;
+layout(set = 0, binding = 2, rgba8) uniform writeonly image2D dst_img;
+
+layout(push_constant) uniform Push {
+    vec4 rect;        // unused by this pass (std430: vec4s first)
+    vec4 tint;        // unused by this pass
+    vec2 src_size;    // full size of the source texture, texels
+    vec2 src_origin;  // top-left of the source region, texels
+    vec2 src_extent;  // size of the source region, texels
+    vec2 dst_origin;  // top-left of the destination region in dst_img, texels
+    vec2 dst_size;    // size of the destination region, texels
+    float offset;     // kernel offset, source texels
+    float saturation; // unused by this pass
+    float radius;     // unused by this pass
+    uint final_pass;  // unused by this pass
+} pc;
+
+vec4 fetch_src(vec2 texel) {
+    return texture(sampler2D(src_tex, src_smp), texel / pc.src_size);
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.dst_size.x) || p.y >= int(pc.dst_size.y)) {
+        return;
+    }
+    vec2 c = pc.src_origin + (vec2(p) + 0.5) * (pc.src_extent / pc.dst_size);
+    vec2 h = vec2(pc.offset);
+    vec4 sum = fetch_src(c) * 4.0;
+    sum += fetch_src(c - h);
+    sum += fetch_src(c + h);
+    sum += fetch_src(c + vec2(h.x, -h.y));
+    sum += fetch_src(c - vec2(h.x, -h.y));
+    imageStore(dst_img, ivec2(pc.dst_origin) + p, sum / 8.0);
+}

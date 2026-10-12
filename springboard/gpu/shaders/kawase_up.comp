@@ -1,0 +1,67 @@
+#version 450
+// Dual-Kawase up pass: a 3x3 tent kernel (the reference platform's up sample) over the next coarser level. With
+// `final_pass` set it is the last step of the material: it writes the region of the target at full resolution,
+// saturates the blur, adds the tint and keeps only the pixels inside the rounded rect (SDF coverage, 1 px AA), and
+// blends the result over what the target already holds there (the server's rounded-rect clip for live glass).
+// The push block is `PushBlock` in render_server/material.rs (88 bytes, shared with kawase_down.comp).
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform texture2D src_tex;
+layout(set = 0, binding = 1) uniform sampler src_smp;
+layout(set = 0, binding = 2, rgba8) uniform image2D dst_img;
+
+layout(push_constant) uniform Push {
+    vec4 rect;        // clip rectangle in target texels: x0, y0, x1, y1 (std430: vec4s first)
+    vec4 tint;        // premultiplied tint drawn over the blur
+    vec2 src_size;    // full size of the source texture, texels
+    vec2 src_origin;  // top-left of the source region, texels
+    vec2 src_extent;  // size of the source region, texels
+    vec2 dst_origin;  // top-left of the destination region in dst_img, texels
+    vec2 dst_size;    // size of the destination region, texels
+    float offset;     // kernel offset, source texels
+    float saturation; // saturation of the blurred backdrop (1 keeps colours)
+    float radius;     // corner radius of the clip, target texels
+    uint final_pass;  // 1: saturate, tint and clip into the target; 0: plain up sample into a pyramid level
+} pc;
+
+vec4 fetch_src(vec2 texel) {
+    return texture(sampler2D(src_tex, src_smp), texel / pc.src_size);
+}
+
+float rounded_box_distance(vec2 p, vec2 centre, vec2 half_size, float r) {
+    vec2 q = abs(p - centre) - half_size + vec2(r);
+    return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.dst_size.x) || p.y >= int(pc.dst_size.y)) {
+        return;
+    }
+    vec2 c = pc.src_origin + (vec2(p) + 0.5) * (pc.src_extent / pc.dst_size);
+    vec2 h = vec2(pc.offset);
+    vec4 sum = fetch_src(c + vec2(-2.0 * h.x, 0.0)) + fetch_src(c + vec2(2.0 * h.x, 0.0));
+    sum += fetch_src(c + vec2(0.0, -2.0 * h.y)) + fetch_src(c + vec2(0.0, 2.0 * h.y));
+    sum += 2.0 * (fetch_src(c + vec2(-h.x, h.y)) + fetch_src(c + vec2(h.x, h.y)));
+    sum += 2.0 * (fetch_src(c + vec2(h.x, -h.y)) + fetch_src(c + vec2(-h.x, -h.y)));
+    vec4 blurred = sum / 12.0;
+    ivec2 out_px = ivec2(pc.dst_origin) + p;
+
+    if (pc.final_pass == 0u) {
+        imageStore(dst_img, out_px, blurred);
+        return;
+    }
+
+    float lum = dot(blurred.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 sat = clamp(mix(vec3(lum), blurred.rgb, pc.saturation), 0.0, blurred.a);
+    vec4 glass = pc.tint + vec4(sat, blurred.a) * (1.0 - pc.tint.a);
+
+    vec2 centre = 0.5 * (pc.rect.xy + pc.rect.zw);
+    vec2 half_size = 0.5 * (pc.rect.zw - pc.rect.xy);
+    float d = rounded_box_distance(vec2(out_px) + 0.5, centre, half_size, pc.radius);
+    float coverage = clamp(0.5 - d, 0.0, 1.0);
+
+    vec4 below = imageLoad(dst_img, out_px);
+    imageStore(dst_img, out_px, mix(below, glass, coverage));
+}
