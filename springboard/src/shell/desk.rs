@@ -674,15 +674,7 @@ impl Shell {
             }
             let (ww, wh) = (w.r.w as f32, w.r.h as f32);
             let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active)| {
-                if w.maximized {
-                    return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active };
-                }
-                let e = 0.5;
-                let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
-                let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
-                let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
-                let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
-                bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active }
+                expand_material((x, y, rw, rh, r, kind, active), (w.r.w as f32, w.r.h as f32), w.maximized, corner)
             }).collect();
             out.push((id, glass));
         }
@@ -2365,6 +2357,39 @@ impl Shell {
     pub(super) fn label<R>(&self, text: &str, pt: f32, weight: Weight, color: u32, f: impl FnOnce(&Image) -> R) -> R {
         let mut cache = self.chrome_text.borrow_mut();
         f(cache.get(&self.ui, text, pt, weight, color))
+    }
+}
+
+/// One material region (window px) as the blur region of its window: unless maximized, each side that lies inside the
+/// window grows by the window radius (the extra blur sits under opaque pixels) and the corner takes the window radius.
+#[cfg(feature = "desktop-wayland")]
+fn expand_material((x, y, rw, rh, r, kind, active): (f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>), (ww, wh): (f32, f32), maximized: bool, corner: f32) -> bifrost_render::glass::Rect {
+    if maximized {
+        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active };
+    }
+    let e = 0.5;
+    let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
+    let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
+    let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
+    let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
+    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active }
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod material_rect_tests {
+    use super::*;
+    use bifrost_render::glass::Kind;
+    #[test]
+    fn an_app_sidebar_region_reaches_the_window_edge_and_grows_inside() {
+        // sidebar at the window's left edge under a 28 px title bar, window 400x300, radius 10
+        let g = expand_material((0.0, 28.0, 120.0, 272.0, 0.0, Kind::Sidebar, None), (400.0, 300.0), false, 10.0);
+        assert_eq!((g.x, g.y, g.w, g.h), (0.0, 18.0, 130.0, 282.0));
+        assert_eq!(g.r, 10.0);
+    }
+    #[test]
+    fn a_maximized_window_keeps_the_declared_rect() {
+        let g = expand_material((0.0, 28.0, 120.0, 272.0, 6.0, Kind::Sidebar, None), (400.0, 300.0), true, 10.0);
+        assert_eq!((g.x, g.y, g.w, g.h, g.r), (0.0, 28.0, 120.0, 272.0, 6.0));
     }
 }
 
