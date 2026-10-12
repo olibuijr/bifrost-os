@@ -183,8 +183,9 @@ pub fn layout_popup(items: &[MenuItem], anchor_x: f32, bar_h: f32, screen_w: f32
         content_w = content_w.max(ROW_LEFT_PT + measure(&item.label, TEXT_PT) + gap + ROW_RIGHT_PT);
     }
     let w = content_w.max(MIN_WIDTH_PT);
+    // only a row with a shortcut has a shortcut position; the others stay at 0
     for (row, sw) in rows.iter_mut().zip(shortcut_w) {
-        row.shortcut_x = w - ROW_RIGHT_PT - sw;
+        row.shortcut_x = if sw > 0.0 { w - ROW_RIGHT_PT - sw } else { 0.0 };
     }
     let h = y + PAD_PT;
     let x = anchor_x.min(screen_w - w).max(0.0);

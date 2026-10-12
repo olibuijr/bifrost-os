@@ -665,10 +665,13 @@
         sh.set_wall(1_000_000, 0, 4300.0);
         sh.tick(4300.0 + 60_000.0);
         assert!(sh.today.gen() > g, "a minute later the clocks move");
-        // taps: the search bar reaches the (stub) Search hook, Edit enters edit mode
+        // taps: the search bar opens quick search (a modal overlay that takes the next touches), so it is dismissed
+        // before Edit, which enters edit mode
         let sr = sh.today.search_rect();
         tap(&mut sh, sr.x as f32 + 50.0, sr.y as f32 + 10.0, 70_000.0);
         assert_eq!(sh.screen, Screen::Home);
+        assert!(sh.quicksearch.active(), "the search bar opens quick search");
+        sh.quicksearch.hide();
         let er = sh.today.edit_rect();
         tap(&mut sh, er.x as f32 + er.w as f32 / 2.0, er.y as f32 + er.h as f32 / 2.0, 71_000.0);
         assert!(sh.today.editing());

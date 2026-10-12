@@ -410,17 +410,21 @@ mod tests {
         let mut tree = LayerTree::new(Path::Direct);
         tree.sync(9, None, frame(0.0, 0.0, 10.0, 10.0), true);
         tree.flush();
+        // one frame per state: transactions group consecutive immediate changes, so hover and press in the same
+        // frame would share one transaction (see `into_transactions`)
         assert!(tree.set_highlight(9, Highlight::Hover, tint));
         assert!(!tree.set_highlight(9, Highlight::Hover, tint), "the same state records nothing");
+        let hover = tree.flush();
         assert!(tree.set_highlight(9, Highlight::Pressed, tint));
-        let txs = tree.flush();
-        assert_eq!(txs.len(), 2);
+        let pressed = tree.flush();
+        assert_eq!(hover.len(), 1);
+        assert_eq!(pressed.len(), 1);
         let alpha = |tx: &Transaction| match tx.changes[0] {
             Change::Set { key: Property::BackgroundColor, value: Value::Color(c), .. } => c.a,
             _ => panic!("expected a background change"),
         };
-        assert!((alpha(&txs[0]) - 0.06).abs() < 1e-6);
-        assert!((alpha(&txs[1]) - 0.12).abs() < 1e-6);
+        assert!((alpha(&hover[0]) - 0.06).abs() < 1e-6);
+        assert!((alpha(&pressed[0]) - 0.12).abs() < 1e-6);
     }
 
     #[test]
