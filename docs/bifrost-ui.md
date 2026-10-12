@@ -775,7 +775,15 @@ the windows behind the window. Ours, end to end:
   Apple's exact per-level vibrant values are private; the strengths above are the documented label alphas.
 - Backdrops: every window whose materials look active (focused, or `State::Active`) gets its own backdrop of the
   windows under it; a rebuild the 30 Hz cap skipped wakes the main loop when due (`Presenter::retry_in_ms`).
-- Not matched yet: `isEmphasized`, `maskImage`, and vibrant fills (`vibrancy-fill` levels) as separate API; the
+- Model: `bifrost_ui::visual_effect` (`MaterialKind`, `BlendingMode`, `MaterialState::looks_active`,
+  `BackgroundStyle` = `interiorBackgroundStyle`, `Mask` = `maskImage` (rounded rect with per-corner `Corners`, or an
+  alpha mask), and `MaterialRequest`, the per-view request the window server consumes). The SDK draws one with
+  `widgets::visual_effect_request`. Tints per material and scheme are `MATERIAL_*` in `render/src/ui.rs`; the new ones
+  (menu, sheet, tool tip, header, content, under-window, under-page, full-screen) are derived from the measured
+  neighbours, not yet measured. `isEmphasized` changes the `.selection` tint (full accent); an inactive selection is grey.
+  Decision: the wire (`proto::Material`) still carries kind, rect, uniform radius and state only; emphasis, per-corner
+  radii and alpha masks are drawn app-side (largest corner, bounding rounded rect) until the wire gains them.
+- Not matched yet: alpha-mask and per-corner shapes on the wire, and vibrant fills (`vibrancy-fill` levels) as separate API; the
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
 
