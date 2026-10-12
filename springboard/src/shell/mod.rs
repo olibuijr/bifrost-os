@@ -3245,7 +3245,7 @@ impl Shell {
     /// The overlays that paint over the app or home frame on the CPU, which the GPU
     /// compositors (zoom, switcher) cannot reproduce.
     pub(super) fn overlay_blocker(&self) -> Option<&'static str> {
-        let checks: [(&'static str, bool); 15] = [
+        let checks: [(&'static str, bool); 17] = [
             ("markup", self.markup.is_some()),
             ("shield", self.shield.is_some()),
             ("control-center", self.cc_active()),
@@ -3259,6 +3259,7 @@ impl Shell {
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
+            ("compose-sheet", self.compose.is_some()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
             ("clock-alert", self.clock.alert().is_some()),

@@ -727,6 +727,7 @@ mod appearance_guard {
         ("shell/browser/", "legacy: Browser-style dark chrome, gap"),
         ("shell/clock/", "legacy: full-screen clock, gap"),
         ("shell/power_menu.rs", "legacy: full-screen power alert, gap"),
+        ("shell/screensaver.rs", "the Black screen saver and the saver backdrop are black in both appearances by design"),
         ("apps/remote/", "legacy: dark remote, gap"),
     ];
 
