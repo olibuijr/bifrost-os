@@ -192,6 +192,18 @@ pub trait Canvas {
     fn image(&mut self, img: ImageRef<'_>, dst: RectF, alpha: f32);
     /// An image used as a coverage mask and filled with `color` (symbols, pre-rendered text).
     fn image_tinted(&mut self, img: ImageRef<'_>, dst: RectF, color: u32);
+    /// `image_tinted` for a glyph on a translucent material: the colour is blended into the RGB under the coverage
+    /// and the destination alpha is kept, so the material's translucency survives under the text. Canvases that
+    /// do not write alpha fall back to `image_tinted`.
+    fn image_tinted_keep_alpha(&mut self, img: ImageRef<'_>, dst: RectF, color: u32) {
+        self.image_tinted(img, dst, color);
+    }
+    /// A rounded rectangle written over the destination: inside it the pixels become `color` exactly, alpha included
+    /// (no source-over). A material's translucent tint is written, so the window server's blur shows through it.
+    /// Canvases that do not write fall back to `fill_rrect`.
+    fn write_rrect(&mut self, r: RectF, radius: f32, color: u32) {
+        self.fill_rrect(r, radius, color);
+    }
     fn text(&mut self, run: &TextRun, color: u32);
     fn path(&mut self, path: &PathData, paint: PathPaint, color: u32);
     fn material(&mut self, r: RectF, radius: f32, style: MaterialStyle);
@@ -878,6 +890,11 @@ impl Canvas for Surface<'_> {
         run(self, &st, r, map, false, false, &|s, o| s.fill_rrect(r.x + o.0, r.y + o.1, r.w, r.h, radius, color));
     }
 
+    fn write_rrect(&mut self, r: RectF, radius: f32, color: u32) {
+        let Some((st, map)) = current(self) else { return };
+        run(self, &st, r, map, false, false, &|s, o| s.write_rrect(r.x + o.0, r.y + o.1, r.w, r.h, radius, color));
+    }
+
     fn stroke_rrect(&mut self, r: RectF, radius: f32, width: f32, color: u32) {
         let Some((st, map)) = current(self) else { return };
         run(self, &st, r, map, false, false, &|s, o| s.stroke_rrect(r.x + o.0, r.y + o.1, r.w, r.h, radius, width, color));
@@ -951,7 +968,11 @@ impl Canvas for Surface<'_> {
     }
 
     fn image_tinted(&mut self, img: ImageRef<'_>, dst: RectF, color: u32) {
-        draw_image(self, img, dst, 1.0, Some(color));
+        draw_image(self, img, dst, 1.0, Some((color, false)));
+    }
+
+    fn image_tinted_keep_alpha(&mut self, img: ImageRef<'_>, dst: RectF, color: u32) {
+        draw_image(self, img, dst, 1.0, Some((color, true)));
     }
 
     fn text(&mut self, run_: &TextRun, color: u32) {
@@ -1031,7 +1052,9 @@ impl Canvas for Surface<'_> {
 }
 
 /// Shared by `image` and `image_tinted`: the image is scaled to `dst` and blitted, or blitted in colour.
-fn draw_image(s: &mut Surface, img: ImageRef<'_>, dst: RectF, alpha: f32, tint: Option<u32>) {
+/// Draws an image scaled into `dst`. `tint` is the colour of a coverage mask and whether it keeps the destination
+/// alpha (`image_tinted_keep_alpha`); `None` draws the image itself at `alpha`.
+fn draw_image(s: &mut Surface, img: ImageRef<'_>, dst: RectF, alpha: f32, tint: Option<(u32, bool)>) {
     let w = dst.w.round().max(0.0) as usize;
     let h = dst.h.round().max(0.0) as usize;
     if w == 0 || h == 0 || img.image.w == 0 || img.image.h == 0 {
@@ -1045,7 +1068,8 @@ fn draw_image(s: &mut Surface, img: ImageRef<'_>, dst: RectF, alpha: f32, tint: 
         let x = (dst.x + o.0).round() as i32;
         let y = (dst.y + o.1).round() as i32;
         match tint {
-            Some(c) => s.blit_colored(src, x, y, c, 255),
+            Some((c, false)) => s.blit_colored(src, x, y, c, 255),
+            Some((c, true)) => s.blit_colored_keep_alpha(src, x, y, c),
             None => s.blit(src, x, y, 255, a),
         }
     });
@@ -1153,6 +1177,26 @@ mod tests {
         assert_eq!(ramp(&stops, 2.0), WHITE);
         let hard = [Stop { at: 0.0, color: 0 }, Stop { at: 0.5, color: 0 }, Stop { at: 0.5, color: WHITE }];
         assert_eq!(ramp(&hard, 0.6), WHITE);
+    }
+
+    #[test]
+    fn write_rrect_replaces_the_pixels_alpha_included_with_hand_worked_edges() {
+        fresh();
+        // a 3 x 2 rectangle from x = 0.5: columns 0 and 3 are half covered (127/255), columns 1-2 fully covered
+        let mut px = vec![WHITE; 6 * 3];
+        {
+            let mut s = surf(&mut px, 6, 3);
+            Canvas::write_rrect(&mut s, RectF::new(0.5, 0.0, 3.0, 2.0), 0.0, 0x40_00_00_00);
+        }
+        // full coverage writes the colour as it is: alpha 64 replaces the opaque white (source-over would not)
+        assert_eq!(px[6 + 1], 0x40_00_00_00);
+        assert_eq!(px[6 + 2], 0x40_00_00_00);
+        // half coverage: 127/255 of the colour (alpha 32) mixed with 128/255 of white (alpha 128, channels 128)
+        assert_eq!(px[0], 0xa0_80_80_80);
+        assert_eq!(px[3], 0xa0_80_80_80);
+        // outside the rectangle, and the row below it, stay white
+        assert_eq!(px[4], WHITE);
+        assert_eq!(px[12], WHITE);
     }
 
     #[test]

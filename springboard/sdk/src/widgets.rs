@@ -168,9 +168,9 @@ fn window_material(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, mater
     }
     let tint = material.tint();
     let (x, y, w, h, r) = (ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(bounds.w), ui.pt(bounds.h), ui.pt(radius));
-    // The translucent tint goes over what is drawn there (the window's own pixels are transparent under a behind-window
-    // material), so the window server's blur shows through it on every path.
-    s.fill_rrect(RectF::new(x, y, w, h), r, tint);
+    // The translucent tint is written, replacing what is drawn there with its alpha (the window's own pixels are
+    // transparent under a behind-window material), so the window server's blur shows through it on every path.
+    s.write_rrect(RectF::new(x, y, w, h), r, tint);
     let (kind, state) = if ALL_MATERIALS.with(|v| v.get()) { (material.kind(), state) } else { (material.kind().legacy(), State::default()) };
     FRAME_MATERIALS.with(|m| {
         let mut m = m.borrow_mut();
@@ -241,12 +241,14 @@ pub fn blit_vibrant_px(s: &mut Surface, img: &crate::kit::Image, x: i32, y: i32,
 }
 
 /// `blit_vibrant` on a `Canvas`. The canvas vocabulary has no plus-lighter or plus-darker blend, so the coverage of the
-/// text is drawn over the material in white (Dark) or black (Light) at the level's strength. That keeps the material's
-/// alpha and reads as the same label; the exact additive blend stays in `blit_vibrant_px` (see g2-kit-canvas.md).
+/// text is blended toward white (Dark) or black (Light) at the level's strength, through `image_tinted_keep_alpha`: the
+/// RGB takes the light or dark and the material's alpha under the glyph is kept. The exact additive blend stays in
+/// `blit_vibrant_px` (see g2-kit-canvas.md).
 pub fn blit_vibrant(c: &mut dyn Canvas, img: &crate::kit::Image, x: i32, y: i32, level: Vibrant) {
     let a = (level.strength().clamp(0.0, 1.0) * 255.0).round() as u8;
     let tint = if crate::kit::appearance::scheme() >= 0.5 { rgba(0, 0, 0, a) } else { rgba(255, 255, 255, a) };
-    image_tinted_at(c, img, x, y, tint);
+    let dst = RectF::new(x as f32, y as f32, img.w as f32, img.h as f32);
+    c.image_tinted_keep_alpha(ImageRef { id: image_id(img), image: img }, dst, tint);
 }
 
 /// The stable id of a rasterised image for the GPU cache: a hash of its size and pixels.

@@ -754,6 +754,49 @@ impl Surface<'_> {
         }
     }
 
+    /// `blit_colored` that keeps each destination pixel's alpha. The colour is blended into the RGB under the glyph
+    /// coverage (the image's alpha times the colour's alpha), so a glyph on a translucent material tints what is
+    /// there without changing how opaque it is. The colour is premultiplied (`rgba`); its target is un-premultiplied
+    /// and then scaled by the destination alpha, so a white target lifts a translucent pixel to the same level as an
+    /// opaque one would be lifted by its own amount.
+    pub fn blit_colored_keep_alpha(&mut self, img: &Image, x: i32, y: i32, color: u32) {
+        let x0 = x.max(0);
+        let y0 = y.max(self.y0 as i32);
+        let x1 = (x + img.w as i32).min(self.w as i32);
+        let y1 = (y + img.h as i32).min(self.h as i32);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let n = (x1 - x0) as usize;
+        let ca = color >> 24;
+        if ca == 0 {
+            return;
+        }
+        // un-premultiplied target channel, 0..255
+        let target = |c: u32| (((color >> c) & 255) * 255 / ca).min(255);
+        let (tr, tg, tb) = (target(0), target(8), target(16));
+        for dy in y0..y1 {
+            let src = &img.px[(dy - y) as usize * img.w + (x0 - x) as usize..][..n];
+            let dst = &mut self.px[(dy as usize - self.y0) * self.stride + x0 as usize..][..n];
+            for (d, &s) in dst.iter_mut().zip(src) {
+                let g = s >> 24;
+                if g == 0 {
+                    continue;
+                }
+                // coverage of the colour at this pixel, 0..255
+                let k = div255(g * ca);
+                let inv = 255 - k;
+                let a = *d >> 24;
+                let mix = |sh: u32, t: u32| {
+                    let dc = (*d >> sh) & 255;
+                    let pt = div255(t * a);
+                    div255(dc * inv + pt * k) << sh
+                };
+                *d = mix(0, tr) | mix(8, tg) | mix(16, tb) | (a << 24);
+            }
+        }
+    }
+
     /// Copies opaque rows straight in; the fast path for the wallpaper.
     pub fn copy(&mut self, img: View, x: i32, y: i32) {
         if x >= self.w as i32 || x.saturating_neg() >= img.w as i32 {
@@ -780,6 +823,34 @@ impl Surface<'_> {
     /// Fills an anti-aliased rounded rectangle with a premultiplied colour.
     pub fn fill_rrect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
         self.rrect(x, y, w, h, r, None, color);
+    }
+
+    /// Writes an anti-aliased rounded rectangle: inside it the pixels become `color` exactly, alpha included (no
+    /// source-over, so a translucent material replaces what is under it). An edge pixel becomes the
+    /// coverage-weighted mix of `color` and the pixel that was there.
+    pub fn write_rrect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
+        let r = r.min(w / 2.0).min(h / 2.0);
+        let (ix0, iy0) = (x.floor().max(0.0) as usize, (y.floor().max(0.0) as usize).max(self.y0));
+        let ix1 = ((x + w).ceil().max(0.0) as usize).min(self.w);
+        let iy1 = ((y + h).ceil().max(0.0) as usize).min(self.h);
+        if ix0 >= ix1 || iy0 >= iy1 {
+            return;
+        }
+        for py in iy0..iy1 {
+            for px in ix0..ix1 {
+                let c = rrect_coverage(px as f32 + 0.5 - x, py as f32 + 0.5 - y, w, h, r);
+                if c <= 0.0 {
+                    continue;
+                }
+                let d = self.at(px, py);
+                *d = if c >= 1.0 {
+                    color
+                } else {
+                    let k = (c * 255.0) as u32;
+                    scale(*d, 255 - k).wrapping_add(scale(color, k))
+                };
+            }
+        }
     }
 
     /// Liquid Glass style panel: blurs what is already on the surface under the rounded rectangle,
