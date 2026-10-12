@@ -969,3 +969,5 @@ pub mod web_usage;
 pub mod browser_settings;
 pub mod bt_chooser;
 pub mod bt_passkey;
+pub mod input_switches;
+pub mod device_match;
