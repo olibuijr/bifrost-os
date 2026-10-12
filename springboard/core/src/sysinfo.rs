@@ -237,7 +237,7 @@ pub struct UsbDevice {
     pub product_id: u32,
     pub product: String,
     pub manufacturer: String,
-    /// Negotiated speed, Mb/s; 0 when unknown.
+    /// Negotiated speed, Mb/s (sysfs writes 1.5 for low speed, which reads as 1); 0 when unknown.
     pub speed_mbps: u32,
 }
 
@@ -254,7 +254,7 @@ pub fn read_usb(dir: &Path) -> Vec<UsbDevice> {
                 product_id: parse_hex(&read_trim(&path.join("idProduct"))).unwrap_or(0),
                 product: read_trim(&path.join("product")),
                 manufacturer: read_trim(&path.join("manufacturer")),
-                speed_mbps: read_trim(&path.join("speed")).parse().unwrap_or(0),
+                speed_mbps: read_trim(&path.join("speed")).parse::<f32>().map_or(0, |v| v as u32),
                 port,
             })
         })
