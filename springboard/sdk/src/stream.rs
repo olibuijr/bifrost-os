@@ -66,6 +66,15 @@ impl InputStream {
         self.status == StreamStatus::Open && self.pos < self.data.len()
     }
 
+    /// Adds bytes that arrived after the stream was created, such as data from a device. A stream that had reached
+    /// its end reads them on the next `read`.
+    pub fn append(&mut self, more: &[u8]) {
+        self.data.extend_from_slice(more);
+        if self.status == StreamStatus::AtEnd && self.pos < self.data.len() {
+            self.status = StreamStatus::Open;
+        }
+    }
+
     /// `read(_:maxLength:)`: copies up to `buf.len()` unread bytes into `buf` and returns how many. 0 means the end
     /// was reached. The status becomes `AtEnd` with the last byte.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, StreamError> {
@@ -145,6 +154,12 @@ impl OutputStream {
     /// `property(forKey: .dataWrittenToMemoryStreamKey)`: every byte stored so far.
     pub fn written(&self) -> &[u8] {
         &self.buf
+    }
+
+    /// Removes and returns the stored bytes, for a transport that sends them. Taking the bytes frees the capacity
+    /// they used, as a sent buffer would.
+    pub fn take_written(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.buf)
     }
 }
 
@@ -228,5 +243,18 @@ mod tests {
         assert_eq!(o.write(b"x"), Err(StreamError::Closed));
         assert!(!o.has_space_available());
         assert_eq!(o.status(), StreamStatus::Closed);
+    }
+
+    #[test]
+    fn append_after_end_reopens_reading() {
+        let mut s = InputStream::with_data(b"a".to_vec());
+        s.open();
+        let mut b = [0u8; 4];
+        assert_eq!(s.read(&mut b), Ok(1));
+        assert_eq!(s.status(), StreamStatus::AtEnd);
+        s.append(b"bc");
+        assert_eq!(s.status(), StreamStatus::Open);
+        assert_eq!(s.read(&mut b), Ok(2));
+        assert_eq!(&b[..2], b"bc");
     }
 }

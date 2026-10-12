@@ -80,6 +80,7 @@ pub mod multipart;
 pub mod social;
 pub mod url_components;
 pub mod stream;
+pub mod external_accessory;
 pub mod error;
 pub mod coding;
 pub mod restoration;
