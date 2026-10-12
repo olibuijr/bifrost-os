@@ -42,6 +42,8 @@ pub mod defaults;
 pub mod screen_saver_defaults;
 pub mod locale;
 pub mod keychain;
+pub mod entropy;
+pub mod digest;
 pub mod gss_status;
 pub mod gss_oid;
 pub mod gss_buffer;
