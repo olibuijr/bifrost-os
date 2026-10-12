@@ -12,3 +12,4 @@ pub mod hog;
 pub mod latency;
 pub mod quantum;
 pub mod aggregate;
+pub mod tap;
