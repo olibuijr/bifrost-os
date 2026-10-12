@@ -51,6 +51,21 @@ impl Text {
 pub struct Row {
     pub title: String,
     pub text: String,
+    /// the widget is set to Large in the Edit Widgets gallery: its row is taller
+    pub large: bool,
+}
+
+/// One widget in the Edit Widgets gallery: every widget an app has reloaded, placed in the column or not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Listing {
+    pub app: String,
+    pub kind: String,
+    /// the title of the entry on screen, or the kind when there is none
+    pub title: String,
+    /// the search view's description, when the app set one
+    pub description: Option<String>,
+    pub placed: bool,
+    pub large: bool,
 }
 
 /// A widget's relevance hint: how the stack ranks its entry (`relevance::rank`).
@@ -84,6 +99,10 @@ struct Widget {
     requested: bool,
     /// how the stack ranks this widget; None keeps the widget in its given place
     hint: Option<Hint>,
+    /// shown in the column (Edit Widgets adds and removes it); kept across reloads
+    placed: bool,
+    /// set to Large in the gallery; kept across reloads
+    large: bool,
 }
 
 /// An app's search view for one widget kind.
@@ -127,6 +146,21 @@ fn with<R>(f: impl FnOnce(&mut Store) -> R) -> R {
 /// activity that is still on screen.
 pub fn rows(now: i64) -> Vec<Row> {
     with(|s| s.rows(now))
+}
+
+/// The Edit Widgets gallery at `now` (unix seconds): every widget an app has reloaded.
+pub fn gallery(now: i64) -> Vec<Listing> {
+    with(|s| s.listing(now))
+}
+
+/// Adds `app`'s widget `kind` to the column, or takes it off. False when the app has not reloaded that kind.
+pub fn place(app: &str, kind: &str, placed: bool) -> bool {
+    with(|s| s.set_placed(app, kind, placed))
+}
+
+/// Sets `app`'s widget `kind` to Large (`true`) or Small in the column. False when the app has not reloaded that kind.
+pub fn resize(app: &str, kind: &str, large: bool) -> bool {
+    with(|s| s.set_large(app, kind, large))
 }
 
 fn error_text(e: Error) -> String {
@@ -173,9 +207,36 @@ impl Store {
             return Err(format!("a timeline holds at most {MAX_ENTRIES} entries"));
         }
         let n = entries.len();
+        // a reload keeps the person's choices in the gallery; a new widget starts placed, at Small
+        let (placed, large) = self.widgets.iter().find(|w| w.app == app && w.kind == kind).map_or((true, false), |w| (w.placed, w.large));
         self.widgets.retain(|w| !(w.app == app && w.kind == kind));
-        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint });
+        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint, placed, large });
         Ok(n)
+    }
+
+    /// Adds the widget to the column (`placed`) or takes it off; false when the app has not reloaded that kind.
+    pub fn set_placed(&mut self, app: &str, kind: &str, placed: bool) -> bool {
+        self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).map(|w| w.placed = placed).is_some()
+    }
+
+    /// Sets the widget's size in the column: Large is the taller row. False when the app has not reloaded that kind.
+    pub fn set_large(&mut self, app: &str, kind: &str, large: bool) -> bool {
+        self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).map(|w| w.large = large).is_some()
+    }
+
+    /// The Edit Widgets gallery at `now`: every widget, in the order the apps reloaded them.
+    pub fn listing(&self, now: i64) -> Vec<Listing> {
+        self.widgets
+            .iter()
+            .map(|w| Listing {
+                app: w.app.clone(),
+                kind: w.kind.clone(),
+                title: w.timeline.entry_at(now as f64).map(|e| e.value.title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| w.kind.clone()),
+                description: self.search_view(&w.app, &w.kind).and_then(|v| v.description()).map(str::to_string),
+                placed: w.placed,
+                large: w.large,
+            })
+            .collect()
     }
 
     /// Replaces the search view of `kind` for `app` with `results`, in their order. Blank `description` or
@@ -231,21 +292,23 @@ impl Store {
     pub fn rows(&self, now: i64) -> Vec<Row> {
         let now_f = now as f64;
         // each widget's entry on screen, paired with its rank item; widgets without a hint rank last, in their order
-        let shown: Vec<(&Entry<Text>, Option<Hint>)> = self.widgets.iter().filter_map(|w| w.timeline.entry_at(now_f).map(|e| (e, w.hint))).collect();
+        // a widget taken off in the gallery is not in the column
+        let shown: Vec<(&Entry<Text>, Option<Hint>, bool)> =
+            self.widgets.iter().filter(|w| w.placed).filter_map(|w| w.timeline.entry_at(now_f).map(|e| (e, w.hint, w.large))).collect();
         let items: Vec<Item> = shown
             .iter()
-            .map(|(e, hint)| match hint {
+            .map(|(e, hint, _)| match hint {
                 Some(h) => h.item(e.date, now_f),
                 None => Item { date: e.date, relevance: None },
             })
             .collect();
         let mut rows: Vec<Row> = relevance::rank(&items, now_f)
             .into_iter()
-            .map(|i| Row { title: shown[i].0.value.title.clone(), text: shown[i].0.value.text.clone() })
+            .map(|i| Row { title: shown[i].0.value.title.clone(), text: shown[i].0.value.text.clone(), large: shown[i].2 })
             .collect();
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
-                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone() });
+                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false });
             }
         }
         rows
@@ -469,7 +532,7 @@ mod tests {
         assert_eq!(s.current("is.a", "next", 150).map(|e| e.value.text), Some("first".into()));
         assert_eq!(s.current("is.a", "next", 250).map(|e| e.value.text), Some("second".into()));
         assert_eq!(s.current("is.b", "next", 250), None, "another app cannot read the timeline");
-        assert_eq!(s.rows(150), vec![Row { title: "Next".into(), text: "first".into() }]);
+        assert_eq!(s.rows(150), vec![Row { title: "Next".into(), text: "first".into(), large: false }]);
     }
 
     #[test]
@@ -536,7 +599,7 @@ mod tests {
         let p = obj(&[("id", Json::Num(id as f64)), ("title", Json::Str("Ride".into())), ("text", Json::Str("5 km".into()))]);
         assert!(s.call("is.b", "update_activity", &p, 110).is_err(), "another app cannot update it");
         assert_eq!(s.call("is.a", "update_activity", &p, 110), Ok(Json::Bool(true)));
-        assert_eq!(s.rows(110), vec![Row { title: "Ride".into(), text: "5 km".into() }]);
+        assert_eq!(s.rows(110), vec![Row { title: "Ride".into(), text: "5 km".into(), large: false }]);
         let listed = s.call("is.a", "activities", &Json::Null, 110).unwrap();
         assert_eq!(listed.as_array().map(|a| a.len()), Some(1));
         let end = obj(&[("id", Json::Num(id as f64)), ("dismissal", Json::Str("immediate".into()))]);
@@ -648,5 +711,53 @@ mod tests {
         assert_eq!(empty.get("rows").and_then(|j| j.as_array()).map(|a| a.len()), Some(0));
         let other = s.call("is.b", "search_rows", &obj(&[("kind", Json::Str("notes".into()))]), 0).unwrap();
         assert_eq!(other.get("placeholder"), Some(&Json::Null), "another app has no search view");
+    }
+
+    #[test]
+    fn a_widget_taken_off_in_the_gallery_leaves_the_column_and_comes_back() {
+        let mut s = Store::default();
+        ranked(&mut s, "is.a", "one", 100.0, "a", None);
+        ranked(&mut s, "is.a", "two", 100.0, "b", None);
+        assert!(s.set_placed("is.a", "one", false));
+        assert_eq!(texts(&s.rows(150)), ["b"], "the widget taken off is not drawn");
+        let g = s.listing(150);
+        assert_eq!(g.len(), 2, "the gallery still lists it, so it can be added back");
+        assert!(!g[0].placed && g[1].placed);
+        assert!(s.set_placed("is.a", "one", true));
+        assert_eq!(texts(&s.rows(150)), ["a", "b"]);
+        assert!(!s.set_placed("is.b", "one", false), "no such widget for another app");
+    }
+
+    #[test]
+    fn a_reload_keeps_the_choice_made_in_the_gallery() {
+        let mut s = Store::default();
+        ranked(&mut s, "is.a", "one", 100.0, "a", None);
+        s.set_placed("is.a", "one", false);
+        s.set_large("is.a", "one", true);
+        ranked(&mut s, "is.a", "one", 100.0, "a2", None);
+        let g = s.listing(150);
+        assert!(!g[0].placed && g[0].large, "the app's reload does not undo the person's choice");
+        assert!(s.rows(150).is_empty());
+    }
+
+    #[test]
+    fn a_large_widget_is_a_taller_row_and_the_gallery_shows_the_search_description() {
+        let mut s = Store::default();
+        ranked(&mut s, "is.a", "one", 100.0, "a", None);
+        assert!(s.set_large("is.a", "one", true));
+        assert_eq!(s.rows(150), vec![Row { title: "W".into(), text: "a".into(), large: true }]);
+        assert_eq!(s.listing(150)[0].title, "W", "the title of the entry on screen");
+        assert_eq!(s.listing(150)[0].description, None);
+        s.set_search("is.a", "one", "Notes", "", vec![]).unwrap();
+        assert_eq!(s.listing(150)[0].description.as_deref(), Some("Notes"));
+    }
+
+    #[test]
+    fn a_gallery_row_without_an_entry_on_screen_is_named_by_its_kind() {
+        let mut s = Store::default();
+        s.reload("is.a", "later", vec![], ReloadPolicy::Never).unwrap();
+        let g = s.listing(150);
+        assert_eq!(g[0].title, "later", "an empty timeline has no entry on screen");
+        assert_eq!(g[0].kind, "later");
     }
 }
