@@ -3,12 +3,17 @@
 //! copy, paste, drag and share. Each representation is a UTType id with an export function and, when the value can be
 //! read back, an import function. Declaration order is the preference order.
 //!
-//! This is the pure model and does not talk to the shell. The pasteboard ([`crate::pasteboard`]), drag and drop
+//! The conversions below are pure; [`begin_drag`] is the one call that talks to the shell. The bridges are [`pasteboard_item`]
+//! and [`from_pasteboard_item`] (named pasteboards), [`drag_item`], [`begin_drag`] and [`drop_values`] (typed drag and drop). The pasteboard ([`crate::pasteboard`]), drag and drop
 //! ([`crate::dnd`]) and the share picker ([`crate::share`]) take the bytes a representation exports and hand back the
 //! bytes they received, so a model type needs one declaration instead of hand-written conversions at every site.
 //!
 //! Remaining gaps: no sender and receiver roles for file transfers (`SentTransferredFile`), and visibility only separates
 //! the owning process from everyone else (no team level).
+
+use crate::dnd::{self, DragItem, DragPreview, Payload};
+use crate::pasteboard_types::Item as PasteItem;
+use crate::Ctx;
 
 /// `TransferRepresentationVisibility`: who may receive a representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,6 +121,69 @@ pub trait Transferable: Sized {
     fn transfer_representations() -> Representations<Self>;
 }
 
+/// The payload kinds a drag item can carry, by the UTType it is natural as.
+const TEXT_PAYLOAD: &str = "public.utf8-plain-text";
+const URL_PAYLOAD: &str = "public.url";
+
+/// The pasteboard item for `value`: one representation per type another app may see, in declaration order.
+pub fn pasteboard_item<T>(reps: &Representations<T>, value: &T) -> PasteItem {
+    let mut item = PasteItem::default();
+    for uti in reps.types_for(Viewer::Other) {
+        if let Some(bytes) = reps.export(value, uti, Viewer::Other) {
+            item = item.with(uti, &bytes);
+        }
+    }
+    item
+}
+
+/// Rebuilds a value from a pasteboard item (a paste, or a read of a named board): the first representation in the model's
+/// preference order that the item holds and the model can import.
+pub fn from_pasteboard_item<T>(reps: &Representations<T>, item: &PasteItem) -> Option<T> {
+    let offered: Vec<&str> = item.representations.iter().map(|r| r.uti.as_str()).collect();
+    let uti = reps.best_import(&offered)?;
+    reps.import(uti, item.data(uti)?)
+}
+
+/// The drag item for `value`: offered as every type another app may see, carrying its text (or, failing that, its link) as
+/// the payload. `None` when neither is visible, since a drag item carries text, a link or a file grant only.
+pub fn drag_item<T>(reps: &Representations<T>, value: &T) -> Option<DragItem> {
+    let types: Vec<String> = reps.types_for(Viewer::Other).iter().map(|t| t.to_string()).collect();
+    let mut payload = None;
+    for uti in [TEXT_PAYLOAD, URL_PAYLOAD] {
+        if let Some(bytes) = reps.export(value, uti, Viewer::Other) {
+            if let Ok(text) = String::from_utf8(bytes) {
+                payload = Some(if uti == URL_PAYLOAD { Payload::Url(text) } else { Payload::Text(text) });
+                break;
+            }
+        }
+    }
+    Some(DragItem { types, payload: payload? })
+}
+
+/// Starts a drag of `value` (`beginDraggingSession`) and returns the session id. `None` when [`drag_item`] has nothing to
+/// carry. The answer comes through the app's `App::drag` events, as for any session.
+pub fn begin_drag<T>(ctx: &Ctx, allowed: u8, value: &T, reps: &Representations<T>, preview: DragPreview) -> Option<u32> {
+    let item = drag_item(reps, value)?;
+    Some(dnd::begin(ctx, allowed, vec![item], preview))
+}
+
+/// The values a drop carries, rebuilt by the model. An item is read through the representation its payload is natural as
+/// (text or link) when the model can import it; file items and items the model cannot read are skipped.
+pub fn drop_values<T>(reps: &Representations<T>, items: &[DragItem]) -> Vec<T> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let (uti, text): (&str, &str) = match &item.payload {
+                Payload::Text(t) => (TEXT_PAYLOAD, t.as_str()),
+                Payload::Url(u) => (URL_PAYLOAD, u.as_str()),
+                Payload::File { .. } => return None,
+            };
+            let uti = reps.best_import(&[uti])?;
+            reps.import(uti, text.as_bytes())
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +274,50 @@ mod tests {
     fn transferable_model_declares_its_representations() {
         let reps = Note::transfer_representations();
         assert_eq!(reps.types_for(Viewer::Other), vec![PLAIN, HTML]);
+    }
+
+    #[test]
+    fn a_pasteboard_item_holds_every_type_another_app_may_see() {
+        let item = pasteboard_item(&note_representations(), &Note { text: "hi".into() });
+        let utis: Vec<&str> = item.representations.iter().map(|r| r.uti.as_str()).collect();
+        assert_eq!(utis, vec![PLAIN, HTML]);
+        assert_eq!(item.data(PLAIN), Some(&b"hi"[..]));
+        assert_eq!(item.data(HTML), Some(&b"<p>hi</p>"[..]));
+        assert_eq!(item.data(PRIVATE), None, "own-process types never leave the process");
+    }
+
+    #[test]
+    fn a_pasteboard_item_rebuilds_the_value_from_the_importable_type() {
+        let reps = note_representations();
+        let item = PasteItem::default().with(HTML, b"<p>hi</p>").with(PLAIN, b"hi");
+        assert_eq!(from_pasteboard_item(&reps, &item), Some(Note { text: "hi".into() }));
+        // only the proxy (HTML) is on the item: nothing can be read back
+        let proxy_only = PasteItem::default().with(HTML, b"<p>hi</p>");
+        assert_eq!(from_pasteboard_item(&reps, &proxy_only), None);
+        // bytes the importer rejects give nothing
+        let bad = PasteItem::default().with(PLAIN, &[0xff, 0xfe]);
+        assert_eq!(from_pasteboard_item(&reps, &bad), None);
+    }
+
+    #[test]
+    fn a_drag_item_is_offered_as_the_visible_types_and_carries_its_text() {
+        let item = drag_item(&note_representations(), &Note { text: "hi".into() }).unwrap();
+        assert_eq!(item.types, vec![PLAIN.to_string(), HTML.to_string()]);
+        assert_eq!(item.payload, Payload::Text("hi".into()));
+        // a value with only own-process representations has nothing to drag
+        let private = Representations::new().proxy(PRIVATE, Visibility::OwnProcess, export_private);
+        assert!(drag_item(&private, &Note { text: "x".into() }).is_none());
+    }
+
+    #[test]
+    fn a_drop_rebuilds_text_items_and_skips_the_rest() {
+        let reps = note_representations();
+        let items = vec![
+            DragItem::new(Payload::Text("hi".into())),
+            // a link: the model has no importer for public.url
+            DragItem::new(Payload::Url("https://example.org".into())),
+            DragItem::new(Payload::File { grant: [1; 16], name: "a.txt".into() }),
+        ];
+        assert_eq!(drop_values(&reps, &items), vec![Note { text: "hi".into() }]);
     }
 }

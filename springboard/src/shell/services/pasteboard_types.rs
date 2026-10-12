@@ -6,7 +6,8 @@
 //!
 //! Methods (JSON params, `board` defaults to `general`): `boards`, `unique`, `release {board}`, `write {board, items}`,
 //! `clear {board}`, `change_count {board}`, `read {board}`, `types {board}`, `string {board, uti}`, `data {board, uti}`
-//! (hex) and `can_read {board, types}`. An item is `{"reps": [{"uti", "text"}]}`; data that is not text travels as
+//! (hex), `can_read {board, types}` and `best {board, types}` (the first preferred type the board holds, exact match, as
+//! `availableType(from:)`; null when none). An item is `{"reps": [{"uti", "text"}]}`; data that is not text travels as
 //! `"hex"`. Limits: 16 items a write, 16 representations an item, 16 named boards. Binary data is hex, not base64, so
 //! the codec stays a few lines on each side. Gap: the general board's items are flat (one representation each), since
 //! the shell's clipboard state does not keep item grouping, and general writes do not yet re-broadcast to other apps'
@@ -103,6 +104,12 @@ impl Board {
     pub fn can_read(&self, ancestors: &[&str]) -> bool {
         self.items.iter().any(|item| item.reps.iter().any(|r| ancestors.iter().any(|a| uttype::conforms(&r.uti, a))))
     }
+
+    /// Type negotiation (`availableType(from:)` over the whole board): the first of `prefs`, in the order given, that some
+    /// item holds exactly.
+    pub fn best_type(&self, prefs: &[&str]) -> Option<String> {
+        prefs.iter().find(|p| self.items.iter().any(|item| item.reps.iter().any(|r| r.uti == **p))).map(|p| p.to_string())
+    }
 }
 
 /// The `pasteboard` service's state: the named boards and the last change counts announced.
@@ -190,6 +197,13 @@ impl Pasteboards {
                 let refs: Vec<&str> = types.iter().map(String::as_str).collect();
                 let b = self.view(&name);
                 Ok(Json::Bool(b.can_read(&refs)))
+            }
+            "best" => {
+                let name = board_name(params)?;
+                let types: Vec<String> = params.get("types").and_then(Json::as_array).unwrap_or(&[]).iter().filter_map(|t| t.as_str().map(str::to_string)).collect();
+                let refs: Vec<&str> = types.iter().map(String::as_str).collect();
+                let b = self.view(&name);
+                Ok(b.best_type(&refs).map_or(Json::Null, Json::Str))
             }
             _ => Err(format!("pasteboard has no method {method}")),
         }
@@ -384,6 +398,28 @@ mod tests {
         assert!(b.can_read(&["public.text"]));
         assert!(!b.can_read(&["public.url"]));
         assert!(!Board::default().can_read(&["public.data"]));
+    }
+
+    #[test]
+    fn best_type_takes_the_first_preference_the_board_holds_exactly() {
+        let mut b = Board::default();
+        b.write(vec![Item { reps: vec![rep("public.html", b"<i>x</i>"), rep("public.png", &[0])] }]);
+        assert_eq!(b.best_type(&["public.rtf", "public.png", "public.html"]).as_deref(), Some("public.png"));
+        assert_eq!(b.best_type(&["public.html", "public.png"]).as_deref(), Some("public.html"));
+        // exact match only: a parent type is not offered for a child
+        assert_eq!(b.best_type(&["public.image"]), None);
+        assert_eq!(Board::default().best_type(&["public.html"]), None);
+    }
+
+    #[test]
+    fn best_method_answers_the_negotiated_type_or_null() {
+        let mut p = Pasteboards::default();
+        let body = bifrost_core::json::parse(r#"{"board":"t-best","items":[{"reps":[{"uti":"public.html","text":"<i>x</i>"},{"uti":"public.png","hex":"89ff"}]}]}"#).unwrap();
+        p.handle("write", &body).unwrap();
+        let q = bifrost_core::json::parse(r#"{"board":"t-best","types":["public.rtf","public.png","public.html"]}"#).unwrap();
+        assert_eq!(p.handle("best", &q), Ok(Json::Str("public.png".into())));
+        let none = bifrost_core::json::parse(r#"{"board":"t-best","types":["public.rtf"]}"#).unwrap();
+        assert_eq!(p.handle("best", &none), Ok(Json::Null));
     }
 
     #[test]
