@@ -130,7 +130,7 @@ pub fn parse(line: &str) -> Result<Request, String> {
         Some("appearance") if matches!(w.get(1).copied(),Some("light"|"dark"|"auto"))&&w.len()==2=>Ok(Request::Appearance(w[1].into())),
         Some("context")=>Ok(Request::Context(num(1)?,num(2)?)),
         Some("hover")=>Ok(Request::Hover(num(1)?,num(2)?)),
-        Some("open-url")=>{let url=w.get(1).ok_or("Missing URL")?;if w.len()!=2||!(url.starts_with("http://")||url.starts_with("https://")){return Err("Expected HTTP or HTTPS URL".into());}Ok(Request::OpenUrl((*url).into()))},
+        Some("open-url")=>{let url=w.get(1).ok_or("Missing URL")?;let scheme_ok=url.split_once(':').is_some_and(|(s,r)|!r.is_empty()&&s.as_bytes().first().is_some_and(|c|c.is_ascii_alphabetic())&&s.bytes().all(|c|c.is_ascii_alphanumeric()||b"+-.".contains(&c)));if w.len()!=2||!scheme_ok{return Err("Expected a URL with a scheme, such as https: or mailto:".into());}Ok(Request::OpenUrl((*url).into()))},
         Some("tap") => Ok(Request::Tap(num(1)?, num(2)?)),
         Some("down") => Ok(Request::Touch(0, num(1)?, num(2)?)),
         Some("move") => Ok(Request::Touch(1, num(1)?, num(2)?)),

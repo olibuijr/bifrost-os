@@ -6,9 +6,9 @@ if len(sys.argv)==1:
  request=b'open-app is.olibuijr.browser.desktop\n'
 elif len(sys.argv)==3 and sys.argv[1]=='--app' and all(c.isalnum() or c in '._-' for c in sys.argv[2]):
  request=('open-app '+sys.argv[2]+'\n').encode()
-elif len(sys.argv)==2 and urlsplit(sys.argv[1]).scheme in ('http','https') and not any(c.isspace() for c in sys.argv[1]):
+elif len(sys.argv)==2 and urlsplit(sys.argv[1]).scheme and not any(c.isspace() for c in sys.argv[1]):
  request=('open-url '+sys.argv[1]+'\n').encode()
-else:sys.exit('Expected a web URL or --app ID')
+else:sys.exit('Expected a URL with a scheme or --app ID')
 if len(request)>510:sys.exit('URL is too long')
 with socket.create_connection(('127.0.0.1',7777),5) as client:
  client.settimeout(5);client.sendall(request);response=client.recv(4096).decode()
