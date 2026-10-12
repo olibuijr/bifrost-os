@@ -37,6 +37,7 @@ pub mod kit {
 pub mod widgets;
 pub mod glyphs;
 pub mod defaults;
+pub mod screen_saver_defaults;
 pub mod locale;
 pub mod keychain;
 pub mod accounts;
