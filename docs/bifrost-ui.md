@@ -1922,3 +1922,20 @@ Gaps still open: no segmentation model (the masks come from the caller), no look
 that draws the subject highlight or the Look Up button, and no text recognition. Matrix rows
 "Subject lifting and background removal" and "Visual Look Up" are `partial` at best until the model runs
 on a device with a segmenter.
+
+## AVKit: route picker button and display management (`AVRoutePickerView`, display criteria)
+
+Pure models in `springboard/ui/src/route_picker_view.rs` and `springboard/ui/src/display_manager.rs`, re-exported by the SDK
+through `bifrost_app::controls` (the SDK re-exports the whole `bifrost_ui` crate). Host unit tests only; not wired into the
+shell or the video path, and not yet run on the VM or Midget, so the matrix rows stay `partial` (never `parity`).
+
+- Route picker button: `RoutePickerView` mirrors the button's style (`System`, `Inactive`, `Active`), its highlight rule, and the
+  will-begin and did-end delegate events for the routing menu. The rows of the menu come from `route_picker.rs`, which already
+  exists; this model does not choose routes. Decided: the button is unbordered unless an app sets `bordered`.
+- Display management: `DisplayManager` takes the criteria a playing app asks for (refresh rate and dynamic range, the shape of
+  the display criteria) and picks the supported mode with the same dynamic range whose rate is closest to the content rate
+  (ties go to the higher rate, so content is not slowed down). Rates within 0.05 Hz are the same rate. A switch is pending
+  until `finish_switch`; requests that match the current mode return `Keep`.
+- Decided gaps: nothing switches the panel yet (the video path owns it); HDR is only a dynamic range flag, with no HDR metadata
+  or tone mapping; there is no user setting that turns mode switching off; route selection still lacks an AirPlay and nearby
+  receiver source on the shell side.
