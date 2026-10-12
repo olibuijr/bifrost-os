@@ -64,6 +64,7 @@ impl CompositorHandler for WmState {
             if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
                 self.settle(&window);
+                self.sync_toplevels();
             }
             self.place_pending(&root);
         }
@@ -158,7 +159,9 @@ impl SeatHandler for WmState {
 
     fn seat_state(&mut self) -> &mut SeatState<WmState> { &mut self.seat_state }
 
-    fn cursor_image(&mut self, _seat: &Seat<Self>, _image: smithay::input::pointer::CursorImageStatus) {}
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: smithay::input::pointer::CursorImageStatus) {
+        self.session.cursor = Some(image);
+    }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
         let client = focused.and_then(|s| self.dh.get_client(s.id()).ok());
@@ -278,7 +281,7 @@ impl XdgShellHandler for WmState {
 
 impl WmState {
     /// Toggles maximize through `wm` and tells the client its new size and state.
-    fn set_maximized(&mut self, window: &Window, id: crate::wm::WindowId, surface: &ToplevelSurface) {
+    pub(crate) fn set_maximized(&mut self, window: &Window, id: crate::wm::WindowId, surface: &ToplevelSurface) {
         let Some(r) = self.wm.toggle_maximize(id) else { return };
         let maximized = self.wm.is_maximized(id);
         surface.with_pending_state(|s| {
@@ -291,6 +294,7 @@ impl WmState {
         });
         surface.send_pending_configure();
         self.space.map_element(window.clone(), (r.x, r.y), true);
+        self.sync_toplevels();
     }
 }
 

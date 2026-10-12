@@ -63,12 +63,15 @@ pub struct WmState {
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
     pub seat: Seat<WmState>,
+    /// Session protocols: foreign toplevels, screencopy, output management and power, cursor shapes, activation.
+    pub session: crate::session_protocols::SessionState,
 }
 
 impl WmState {
     /// Listens on `socket` (or the next free `wayland-N`) and dispatches clients from `event_loop`.
     pub fn new(event_loop: &mut EventLoop<'static, WmState>, display: Display<WmState>, socket: Option<&str>) -> Self {
         let dh = display.handle();
+        let session = crate::session_protocols::SessionState::new(&dh);
         let mut seat_state = SeatState::new();
         let mut seat: Seat<WmState> = seat_state.new_wl_seat(&dh, "seat0");
         seat.add_keyboard(Default::default(), 300, 30).expect("keyboard");
@@ -120,6 +123,7 @@ impl WmState {
             popups: PopupManager::default(),
             seat_state,
             seat,
+            session,
             dh,
         }
     }
@@ -197,6 +201,7 @@ impl WmState {
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, surface, serial);
         }
+        self.sync_toplevels();
     }
 
     /// Frame callbacks after a composited frame: windows, layer surfaces and the lock surface draw their next frame.
