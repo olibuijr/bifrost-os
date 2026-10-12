@@ -3,7 +3,8 @@
 
   bifrost pc control|app|publish|midget|cycle|install|boot|ssh   PC workflow (docs/bifrost-pc-workflow.md)
   bifrost pc acceptance [--quick] [--midget] [--bless]                    cargo tests (incl. per-app compliance), SDK coverage, app compliance, tool tests, app smoke, bench
-  bifrost pc names | browser-smoke                                 name guard; Browser smoke on Midget via the MCP
+  bifrost pc audio-bench [host|midget|compare] [--append]        audio latency benches (docs/audio-latency.md)
+  bifrost pc names | browser-smoke                                name guard; Browser smoke on Midget via the MCP
   bifrost pc smoke|adoption|gallery                              host app previews and Golden Gate SDK adoption (docs/golden-gate-sdk-adoption.md)
   bifrost pc parity status|coverage|show|gaps|check|build|...     reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
   bifrost pc shot|tap|rtap|swipe|key|type|wait-change            computer use on the headed x86 VM
@@ -157,6 +158,9 @@ def cmd_pc(a):
         if not run:
             sys.exit("usage: bifrost pc mcp call TOOL [JSON] | bench [-n N] [--baseline] | eval [--only IDS] [--record LABEL] | push | deploy-app APP [--skip-build] [--no-open] | token")
         sys.exit(subprocess.run(run + more).returncode)
+    if op == "audio-bench":
+        # audio-bench [host|midget|compare] [--append] [--quanta 16,32] [--bench NAME]: tools/audio-bench.py, docs/audio-latency.md
+        sys.exit(subprocess.run([sys.executable, os.path.join(here, "audio-bench.py")] + (rest or ["host"])).returncode)
     if op == "log":
         # Unified Logging on Midget (docs/milestone-unified-logging.md): log show|stream|config|subsystems [ARGS]
         import shlex
