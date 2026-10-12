@@ -602,3 +602,6 @@ mod tests {
         assert_eq!(dev.start(id).err(), Some(AudioError::UnknownObject));
     }
 }
+
+/// Hog mode requests (owner: task 10).
+pub mod hog;

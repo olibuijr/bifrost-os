@@ -7,3 +7,7 @@ pub mod client;
 pub mod control;
 pub mod io;
 pub mod mixer;
+
+pub mod hog;
+pub mod latency;
+pub mod quantum;
