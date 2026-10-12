@@ -190,6 +190,11 @@ pub const STREAM_PLAYBACK: i32 = 0;
 pub const STREAM_CAPTURE: i32 = 1;
 
 pub const PCM_PVERSION: u32 = ior::<i32>(b'A', 0x00);
+/// Declares the protocol the program speaks; the kernel honours `tstamp_type` only from 2.0.12 on.
+pub const PCM_USER_PVERSION: u32 = iow::<i32>(b'A', 0x04);
+pub const PCM_TTSTAMP: u32 = iow::<i32>(b'A', 0x03);
+/// Protocol 2.0.15 (`SNDRV_PCM_VERSION`): the highest the structs here match (64-bit time, `audio_tstamp`).
+pub const PCM_USER_VERSION: i32 = (2 << 16) | 15;
 pub const PCM_HW_REFINE: u32 = iowr::<HwParams>(b'A', 0x10);
 pub const PCM_HW_PARAMS: u32 = iowr::<HwParams>(b'A', 0x11);
 pub const PCM_HW_FREE: u32 = io(b'A', 0x12);
@@ -324,6 +329,9 @@ mod tests {
     #[test]
     fn ioctl_numbers_match_the_kernel_header() {
         assert_eq!(PCM_PVERSION, 0x8004_4100);
+        assert_eq!(PCM_USER_PVERSION, 0x4004_4104);
+        assert_eq!(PCM_TTSTAMP, 0x4004_4103);
+        assert_eq!(PCM_USER_VERSION, 0x0002_000f);
         assert_eq!(PCM_HW_REFINE, 0xc260_4110);
         assert_eq!(PCM_HW_PARAMS, 0xc260_4111);
         assert_eq!(PCM_HW_FREE, 0x4112);
