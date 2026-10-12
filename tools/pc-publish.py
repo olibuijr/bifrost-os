@@ -47,6 +47,8 @@ def main():
     if not a.skip_build:
         run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--bin", "bifrost-privd", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp", "-p", "bifrostd", "-p", "bifrost-audiod", "-p", "bifrost-audio-bench", "-p", "bifrost-alsa-plugin"], cwd=os.path.join(REPO, "springboard"))
+        # the window server, its chrome clients and bifrost-log (the PKGBUILD builds the same set)
+        run(["cargo", "build", "--profile", prof, "-p", "bifrost-wm", "--bin", "bifrost-wm", "-p", "bifrost-chrome", "--bins", "-p", "bifrost-app", "--bin", "bifrost-log"], cwd=os.path.join(REPO, "springboard"))
     # the EFI loader is always built from source (even with --skip-build) and checked against its sources; run() exits on failure
     run([os.path.join(REPO, "tools/build-efi-boot.sh"), "release"])
     run([os.path.join(REPO, "tools/verify-efi-loader.sh"), os.path.join(REPO, "packaging/arch/recovery/bootweave.efi")])
@@ -61,6 +63,9 @@ def main():
     audiod = os.path.join(REPO, f"springboard/target/{prof}/bifrost-audiod")
     audio_bench = os.path.join(REPO, f"springboard/target/{prof}/bifrost-audio-bench")
     alsa_plugin = os.path.join(REPO, f"springboard/target/{prof}/libasound_module_pcm_bifrost.so")
+    tdir = os.path.join(REPO, f"springboard/target/{prof}")
+    wm_bins = {"PC_WM": "bifrost-wm", "PC_MENUBAR": "bifrost-menubar", "PC_DOCK": "bifrost-dock", "PC_PANELS": "bifrost-panels", "PC_LOG": "bifrost-log"}
+    wm_env = {k: os.path.join(tdir, v) for k, v in wm_bins.items()}
     base = re.search(r'^version\s*=\s*"([^"]+)"', open(os.path.join(REPO, "springboard/Cargo.toml")).read(), re.M).group(1)
     ver = f"{base}.{int(time.time())}"
     work = os.path.join(REPO, "out/pc-repo/build")
@@ -70,7 +75,7 @@ def main():
     src = os.path.join(REPO, "packaging/arch")
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
-    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # keep the last 3 packages
