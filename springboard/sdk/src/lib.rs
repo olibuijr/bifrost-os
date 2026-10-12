@@ -48,6 +48,7 @@ pub mod testing;
 pub mod usernotif;
 pub mod service_management;
 pub mod crash_report;
+pub mod exception_handler;
 pub mod status_item;
 pub mod share;
 pub mod print;
