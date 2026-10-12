@@ -362,6 +362,8 @@ impl ServerCore {
             .min()
             .unwrap_or(DEFAULT_QUANTUM);
         let q = want.clamp(d.desc.buffer_frames_range.0.max(MIN_QUANTUM), d.desc.buffer_frames_range.1.min(MAX_QUANTUM));
+        // never below what the sustained-xrun fallback raised the device to
+        let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire));
         d.shared.quantum.store(q, Ordering::Release);
     }
 
@@ -391,7 +393,11 @@ impl ServerCore {
         let mut runner = DeviceRunner::new(io, shared.clone(), rc);
         shared.stop.store(false, Ordering::Release);
         if self.cfg.spawn_threads {
-            let h = crate::io::spawn_io_thread(runner, format!("audio-io-{idx}")).map_err(|_| AudioError::Io)?;
+            let tuning = crate::rt::device_started();
+            let h = crate::io::spawn_io_thread_tuned(runner, format!("audio-io-{idx}"), tuning).map_err(|_| {
+                crate::rt::device_stopped();
+                AudioError::Io
+            })?;
             self.devices[idx].thread = Some(h);
         } else {
             runner.start().map_err(|_| AudioError::Io)?;
@@ -410,7 +416,9 @@ impl ServerCore {
         d.shared.stop.store(true, Ordering::Release);
         if let Some(h) = d.thread.take() {
             let _ = h.join();
+            crate::rt::device_stopped();
         }
+        d.shared.fallback_floor.store(0, Ordering::Release);
         if let Some(mut r) = d.manual.take() {
             r.stop();
         }

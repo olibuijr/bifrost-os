@@ -194,6 +194,7 @@ pub const PCM_HW_REFINE: u32 = iowr::<HwParams>(b'A', 0x10);
 pub const PCM_HW_PARAMS: u32 = iowr::<HwParams>(b'A', 0x11);
 pub const PCM_HW_FREE: u32 = io(b'A', 0x12);
 pub const PCM_SW_PARAMS: u32 = iowr::<SwParams>(b'A', 0x13);
+pub const PCM_DELAY: u32 = ior::<libc::c_long>(b'A', 0x21);
 pub const PCM_HWSYNC: u32 = io(b'A', 0x22);
 pub const PCM_SYNC_PTR: u32 = iowr::<SyncPtr>(b'A', 0x23);
 pub const PCM_PREPARE: u32 = io(b'A', 0x40);
@@ -327,6 +328,7 @@ mod tests {
         assert_eq!(PCM_HW_FREE, 0x4112);
         assert_eq!(PCM_SW_PARAMS, 0xc088_4113);
         assert_eq!(PCM_HWSYNC, 0x4122);
+        assert_eq!(PCM_DELAY, 0x8008_4121);
         assert_eq!(PCM_SYNC_PTR, 0xc088_4123);
         assert_eq!(PCM_PREPARE, 0x4140);
         assert_eq!(PCM_RESET, 0x4141);

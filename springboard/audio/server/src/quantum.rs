@@ -5,6 +5,9 @@ use std::collections::HashMap;
 
 /// The pro floor on HDA.
 pub const FLOOR_FRAMES: u32 = 64;
+/// The floor in low-latency mode (a client asked for 16 or 32 frames: 0.33 and 0.67 ms at 48 kHz). The sustained-xrun
+/// fallback (`rt::FallbackPolicy`) doubles the quantum when the machine cannot hold it.
+pub const LOW_LATENCY_FLOOR_FRAMES: u32 = 16;
 /// The default quantum when nobody asks (256 frames).
 pub const DEFAULT_FRAMES: u32 = 256;
 
@@ -19,7 +22,16 @@ pub struct Quantum {
 
 impl Quantum {
     pub fn new(range: (u32, u32)) -> Quantum {
-        let lo = range.0.max(FLOOR_FRAMES);
+        Quantum::with_floor(range, FLOOR_FRAMES)
+    }
+
+    /// A negotiator that allows 16 and 32 frames (low-latency mode).
+    pub fn new_low_latency(range: (u32, u32)) -> Quantum {
+        Quantum::with_floor(range, LOW_LATENCY_FLOOR_FRAMES)
+    }
+
+    fn with_floor(range: (u32, u32), floor: u32) -> Quantum {
+        let lo = range.0.max(floor);
         let hi = range.1.max(lo);
         Quantum { range: (lo, hi), requests: HashMap::new(), current: DEFAULT_FRAMES.clamp(lo, hi), pending: None }
     }
@@ -97,6 +109,17 @@ mod tests {
         assert_eq!(q.target(), 64);
         q.request(1, 8192);
         assert_eq!(q.target(), 512);
+    }
+
+    #[test]
+    fn low_latency_allows_16_and_32() {
+        let mut q = Quantum::new_low_latency((16, 512));
+        q.request(1, 16);
+        assert_eq!(q.target(), 16);
+        q.request(1, 32);
+        assert_eq!(q.target(), 32);
+        q.request(1, 8);
+        assert_eq!(q.target(), 16);
     }
 
     #[test]
