@@ -243,6 +243,8 @@ pub struct Settings {
     /// the Login Items page's requests waiting for approval, and the ids the user allowed there
     login_pending: Vec<(String, String)>,
     login_approve_out: Vec<String>,
+    /// the ids the user moved one place earlier in Start Order
+    login_moved: Vec<String>,
     /// Settings > Fonts, loaded when the page opens
     fonts: super::pages::FontsView,
     login_out: Vec<String>,
@@ -431,6 +433,7 @@ impl Settings {
             login_items: Vec::new(),
             login_pending: Vec::new(),
             login_approve_out: Vec::new(),
+            login_moved: Vec::new(),
             login_out: Vec::new(),
             fonts: Default::default(),
             notify_edge: None,
@@ -689,6 +692,11 @@ impl Settings {
     pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>, pending: Vec<(String, String)>) {
         self.login_items = v;
         self.login_pending = pending;
+    }
+
+    /// The Login Items ids the user moved earlier since the last call, in order.
+    pub(super) fn take_login_moved(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.login_moved)
     }
 
     pub(super) fn take_login_removed(&mut self) -> Vec<String> {
@@ -1659,6 +1667,16 @@ impl Settings {
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::LoginItemMove(id) => {
+                if let Some(i) = self.login_items.iter().position(|(a, _)| *a == id) {
+                    if i > 0 {
+                        self.login_items.swap(i - 1, i);
+                        self.login_moved.push(id);
+                    }
+                }
                 self.rebuild_visible(ui);
                 vec![]
             }

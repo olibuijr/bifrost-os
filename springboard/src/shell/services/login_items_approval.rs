@@ -31,6 +31,18 @@ pub fn status_body(status: LoginStatus) -> Json {
     Json::Obj(vec![("status".into(), Json::Str(status_name(status).into()))])
 }
 
+/// Moves `app` one place earlier in the login order, so it starts before the app above it. False when `app` is first
+/// or not in the list (nothing changes then).
+pub fn move_earlier(list: &mut [String], app: &str) -> bool {
+    match list.iter().position(|a| a == app) {
+        Some(i) if i > 0 => {
+            list.swap(i - 1, i);
+            true
+        }
+        _ => false,
+    }
+}
+
 /// What `method` does for `app` in `reg`: the status to answer with and whether a list changed.
 pub fn apply(reg: &mut Registry, app: &str, method: &str) -> Result<(LoginStatus, bool), String> {
     let op = match method {
@@ -83,6 +95,16 @@ mod tests {
         assert!(reg.approve("a"));
         assert_eq!(apply(&mut reg, "a", "status"), Ok((LoginStatus::Enabled, false)));
         assert_eq!(apply(&mut reg, "a", "unregister"), Ok((LoginStatus::NotRegistered, true)));
+    }
+
+    #[test]
+    fn move_earlier_swaps_with_the_app_above() {
+        let mut list: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        assert!(move_earlier(&mut list, "b"));
+        assert_eq!(list, ["b", "a", "c"]);
+        assert!(!move_earlier(&mut list, "b"), "the first app cannot move earlier");
+        assert!(!move_earlier(&mut list, "zz"), "an app that is not listed does not move");
+        assert_eq!(list, ["b", "a", "c"]);
     }
 
     #[test]
