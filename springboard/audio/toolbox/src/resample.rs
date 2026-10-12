@@ -232,9 +232,9 @@ mod tests {
     #[test]
     fn output_length_is_ceil_of_the_ratio() {
         let r = SincResampler::new(44100, 48000, 1, Quality::Fast).unwrap();
-        // 441 * 48000 / 44100 = 480 exactly; one more input frame needs 481
+        // 441 * 48000 / 44100 = 480 exactly; 442 * 48000 / 44100 = 481.09, which rounds up to 482
         assert_eq!(r.output_len(441), 480);
-        assert_eq!(r.output_len(442), 481);
+        assert_eq!(r.output_len(442), 482);
         let out = resample(&vec![0.0; 4410], 44100, 48000, 1, Quality::Fast).unwrap();
         assert_eq!(out.len(), 4800);
         let down = resample(&vec![0.0; 4800], 48000, 44100, 2, Quality::Fast).unwrap();

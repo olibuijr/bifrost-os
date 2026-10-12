@@ -671,7 +671,8 @@ impl Engine {
     }
 
     /// The summed (max) latency from this port along its connections: outputs follow towards the device, inputs
-    /// follow back to the sources. Depth is bounded so a feedback loop terminates.
+    /// follow back to the sources. Each step moves away from where it came from: playback walks only to connected
+    /// inputs, capture only to connected outputs. Depth is bounded so a feedback loop terminates.
     pub fn total_latency(&self, port: u32) -> u32 {
         fn walk(e: &Engine, id: u32, playback: bool, depth: u32) -> u32 {
             let Some(p) = e.port(id) else { return 0 };
@@ -679,7 +680,14 @@ impl Engine {
             if depth == 0 {
                 return own;
             }
-            own + p.conns.iter().map(|&c| walk(e, c, playback, depth - 1)).max().unwrap_or(0)
+            let want = if playback { PORT_IS_INPUT } else { PORT_IS_OUTPUT };
+            own + p
+                .conns
+                .iter()
+                .filter(|&&c| e.port(c).map_or(false, |q| q.flags & want != 0))
+                .map(|&c| walk(e, c, playback, depth - 1))
+                .max()
+                .unwrap_or(0)
         }
         let playback = self.port(port).map_or(true, |p| p.flags & PORT_IS_OUTPUT != 0);
         walk(self, port, playback, 16)

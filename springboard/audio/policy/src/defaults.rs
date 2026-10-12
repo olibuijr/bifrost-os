@@ -166,7 +166,11 @@ mod tests {
     #[test]
     fn first_able_device_is_default_and_choice_survives_absence() {
         let mut d = Defaults::new();
-        assert_eq!(d.device_added(dev("spk", false)).set, vec![(Role::Output, "spk".to_string())]);
+        // The first output is the first able device for the sound-effects role too, so it takes that default as well.
+        assert_eq!(
+            d.device_added(dev("spk", false)).set,
+            vec![(Role::Output, "spk".to_string()), (Role::SoundEffects, "spk".to_string())]
+        );
         d.device_added(dev("usb", false));
         d.choose(Role::Output, "usb");
         assert_eq!(d.effective(Role::Output), Some("usb"));
