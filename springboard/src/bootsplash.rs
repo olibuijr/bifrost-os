@@ -70,6 +70,14 @@ impl Handoff {
         self.start.is_some()
     }
 
+    /// Writes the boot frame with the bar at its hand-off fill: what the screen shows while the desktop is not ready
+    /// yet (reveal once, `bootreveal`). Does not start the hand-off.
+    pub fn hold(&self, out: &mut Vec<u32>, boot_ms: f64) {
+        out.clear();
+        out.extend_from_slice(&self.splash);
+        paint_bar(out, self.w, self.h, first_fill(boot_ms));
+    }
+
     /// Writes into `out` what to show at `now` (ms) over the screen `ui`, `boot_ms` the boot clock at the first call.
     /// Returns false once the hand-off is over: show `ui` as it is.
     pub fn compose(&mut self, ui: &[u32], out: &mut Vec<u32>, now: f64, boot_ms: f64) -> bool {

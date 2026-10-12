@@ -507,8 +507,9 @@ fn keeps_inherited(inherited: &ModeInfo, selected: &ModeInfo) -> bool {
 pub struct Display {
     #[cfg(feature = "desktop-wayland")]
     wayland: Option<super::wayland::Display>,
-    /// first boot only: the loader's frame, when the fade into the first screen started, and a blend buffer
-    boot_fade: Option<(crate::bootsplash::Handoff, Vec<u32>)>,
+    /// first boot only: the loader's frame's hand-off (when the fade into the first screen started), a blend buffer, and
+    /// the reveal gate that holds the frame until the desktop is ready (`bootreveal`)
+    boot_fade: Option<(crate::bootsplash::Handoff, Vec<u32>, crate::bootreveal::Reveal)>,
     /// no panel behind it (emulator, headless): frames are only read back through the control socket
     virt: bool,
     /// when the emulated panel last took a frame: the next present waits for the following vblank
@@ -713,7 +714,11 @@ impl Display {
         display.mode.vrefresh = backend.refresh();
         display.wayland = Some(backend);
         if std::env::var_os("BIFROST_BOOT_FADE").is_some() {
-            display.boot_fade = Some((crate::bootsplash::Handoff::new(w as usize, h as usize), vec![]));
+            display.boot_fade = Some((
+                crate::bootsplash::Handoff::new(w as usize, h as usize),
+                vec![],
+                crate::bootreveal::Reveal::new(crate::bootsplash::boottime_ms()),
+            ));
         }
         Ok(display)
     }
@@ -945,20 +950,32 @@ impl Display {
     }
 
     pub fn present(&mut self, frame: &[u32], damage: &Damage) {
-        if let Some((mut hand, mut mix)) = self.boot_fade.take() {
-            if !hand.started() {
-                crate::bootsplash::mark("desktop-first-ui");
-            }
+        if let Some((mut hand, mut mix, mut reveal)) = self.boot_fade.take() {
             let (w, h) = self.size();
             let mut all = Damage::new(w, h);
             all.all();
+            // reveal once: the boot frame stays up until the wallpaper, menu bar and Dock have presented (or the ceiling)
+            let now = crate::bootsplash::boottime_ms();
+            let was_ready = reveal.ready_at().is_some();
+            if reveal.poll(now, || std::fs::read_to_string(crate::bootsplash::MARKS).unwrap_or_default()).is_none() {
+                hand.hold(&mut mix, now);
+                self.present(&mix, &all);
+                self.boot_fade = Some((hand, mix, reveal));
+                return;
+            }
+            if !was_ready {
+                crate::bootsplash::mark("desktop-ready");
+            }
+            if !hand.started() {
+                crate::bootsplash::mark("desktop-first-ui");
+            }
             // the loader's bar fills to the end, then the boot frame fades into the first screen
-            if !hand.compose(frame, &mut mix, super::sys::now_ms(), crate::bootsplash::boottime_ms()) {
+            if !hand.compose(frame, &mut mix, super::sys::now_ms(), now) {
                 crate::bootsplash::mark("desktop-faded");
                 return self.present(frame, &all);
             }
             self.present(&mix, &all);
-            self.boot_fade = Some((hand, mix));
+            self.boot_fade = Some((hand, mix, reveal));
             return;
         }
         #[cfg(feature = "desktop-wayland")]
