@@ -3,46 +3,93 @@ use super::{View, ViewBase, ViewEvent};
 use crate::kit::ui::LABEL_2;
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
-use bifrost_ui::scroll::Scroller;
 use bifrost_ui::Rect;
 
 /// Overlay scroller knob, in points (Golden Gate overlay style: thin, inset from the right edge).
 const KNOB_W_PT: f32 = 3.0;
 const KNOB_INSET_PT: f32 = 3.0;
 const KNOB_MIN_PT: f32 = 24.0;
+/// A touch must move this far before it pans the content (points).
+const DRAG_SLOP_PT: f32 = 12.0;
 
 /// A scroll view (`NativeScrollView` + `NativeClipView`) holding one document view. Vertical only: the document is as wide as
 /// the scroll view and as tall as its `intrinsic` height (or the scroll view's, when it has none), so `Surface`'s row
-/// clip is enough. Dragging pans (with the `Scroller` fling and rubber band, driven by `View::tick`); the knob shows
-/// while the content moves. There is no wheel input yet (the proto delivers only Down, Move, Up and Cancel).
+/// clip is enough. Dragging pans the content one to one with the finger; a release runs the reference fling or spring
+/// back (`ScrollPhysics`), driven by `View::tick`; the knob shows while the content moves. There is no wheel input yet
+/// (the proto delivers only Down, Move, Up and Cancel).
 pub struct ScrollView {
     base: ViewBase,
     kids: Vec<Box<dyn View>>,
-    scroller: Scroller,
-    /// frame time of the last `tick`: `ViewEvent` carries no timestamp, so drags are timed with it
-    now: f64,
+    physics: ScrollPhysics,
+    /// the motion a release started (a fling or a spring back) and the frame time (seconds) it started at
+    motion: Option<(Motion, f64)>,
+    /// where the touch went down; `None` when no touch is down
+    down_y: Option<f32>,
+    /// the finger's last applied position (the drag anchor until the content first moves)
     last_y: f32,
+    /// the touch has passed the slop and pans the content
+    dragging: bool,
+    /// frame time of the last `tick` (seconds): `ViewEvent` carries no timestamp, so touches are timed with it
+    now: f64,
     doc_h: f32,
     knob: bool,
 }
 
 impl ScrollView {
     pub fn new(document: Box<dyn View>) -> Self {
-        ScrollView { base: ViewBase::default(), kids: vec![document], scroller: Scroller::new(), now: 0.0, last_y: 0.0, doc_h: 0.0, knob: false }
+        ScrollView {
+            base: ViewBase::default(),
+            kids: vec![document],
+            physics: ScrollPhysics::new(0.0, 0.0),
+            motion: None,
+            down_y: None,
+            last_y: 0.0,
+            dragging: false,
+            now: 0.0,
+            doc_h: 0.0,
+            knob: false,
+        }
     }
     /// `NativeClipView.bounds.origin.y`: how far the document is scrolled (may be negative or past the end mid rubber band).
     pub fn content_offset(&self) -> f32 {
-        self.scroller.offset()
+        match self.motion {
+            Some((motion, start)) => motion.at(self.now - start).0,
+            None => self.physics.offset(),
+        }
     }
     /// The largest offset: document height minus the visible height.
     pub fn max_offset(&self) -> f32 {
-        (self.doc_h - self.base.frame.h).max(0.0)
+        self.physics.max_offset()
     }
     /// `NativeClipView.scroll(to:)`: jumps to `y`, clamped to `0..=max_offset()`, and stops any fling.
     pub fn scroll_to(&mut self, y: f32) {
-        self.scroller.set_max(self.max_offset());
-        self.scroller.jump_to(y);
+        self.motion = None;
+        self.physics.set_offset(y);
         self.base.dirty = true;
+    }
+    /// The touch is at `y`: past the slop it pans the content, one to one with the finger.
+    fn finger(&mut self, y: f32) {
+        let Some(y0) = self.down_y else { return };
+        if !self.dragging {
+            if (y - y0).abs() <= DRAG_SLOP_PT {
+                return;
+            }
+            // the drag starts at the slop's edge, so the content does not jump by the slop
+            self.dragging = true;
+            self.last_y = y0 + DRAG_SLOP_PT.copysign(y - y0);
+        }
+        // a finger moving up (smaller y) scrolls towards the end
+        self.physics.drag(self.now * 1000.0, self.last_y - y);
+        self.last_y = y;
+    }
+    /// The touch lifted at `y`: a dragged touch starts its motion (a fling, or a spring back past an edge).
+    fn lift(&mut self, y: f32) {
+        self.finger(y);
+        if self.dragging {
+            self.motion = self.physics.release(self.now * 1000.0).map(|m| (m, self.now));
+        }
+        self.down_y = None;
+        self.dragging = false;
     }
     /// `documentView`, downcast.
     pub fn document_view<T: View>(&self) -> Option<&T> {
@@ -62,7 +109,7 @@ impl View for ScrollView {
         &mut self.kids
     }
     fn child_offset(&self) -> (f32, f32) {
-        (0.0, self.scroller.offset())
+        (0.0, self.content_offset())
     }
     fn clips_children(&self) -> bool {
         true
@@ -77,25 +124,31 @@ impl View for ScrollView {
         let h = if ih > 0.0 { ih } else { bounds.h };
         self.kids[0].layout(ui, Rect { x: bounds.x, y: bounds.y, w: bounds.w, h });
         self.doc_h = self.kids[0].frame().h;
-        self.scroller.set_max(self.max_offset());
+        self.physics.set_bounds(self.base.frame.h, self.doc_h);
+        if !self.dragging && self.motion.is_none() {
+            // an idle view keeps its offset inside the new range
+            let o = self.physics.offset();
+            self.physics.set_offset(o);
+        }
         self.base.dirty = true;
     }
     fn handle(&mut self, ev: &ViewEvent) -> bool {
         match ev {
             ViewEvent::Pointer(Event::Down(_, y)) => {
+                // a touch during a fling or a spring back catches the content where it is
+                if let Some((motion, start)) = self.motion.take() {
+                    let at = motion.at(self.now - start).0;
+                    self.physics.set_offset(at);
+                }
+                self.down_y = Some(*y);
                 self.last_y = *y;
-                self.scroller.set_max(self.max_offset());
-                self.scroller.down(*y, self.now * 1000.0);
+                self.dragging = false;
             }
-            ViewEvent::Pointer(Event::Move(_, y)) => {
-                self.last_y = *y;
-                self.scroller.moved(*y, self.now * 1000.0);
-            }
-            ViewEvent::Pointer(Event::Up(_, y)) => {
-                self.scroller.up(*y, self.now * 1000.0);
-            }
+            ViewEvent::Pointer(Event::Move(_, y)) => self.finger(*y),
+            ViewEvent::Pointer(Event::Up(_, y)) => self.lift(*y),
             ViewEvent::Cancel => {
-                self.scroller.up(self.last_y, self.now * 1000.0);
+                let y = self.last_y;
+                self.lift(y);
             }
             _ => return false,
         }
@@ -104,10 +157,13 @@ impl View for ScrollView {
     }
     fn tick(&mut self, t: f64) {
         self.now = t;
-        let moving = self.scroller.dragging() || self.scroller.animating();
-        if self.scroller.animating() {
-            self.scroller.tick(t * 1000.0);
+        if let Some((motion, start)) = self.motion {
+            if motion.at(t - start).1 {
+                // the content rests at the end the physics model already holds
+                self.motion = None;
+            }
         }
+        let moving = self.dragging || self.motion.is_some();
         if moving || self.knob {
             self.base.dirty = true;
         }
@@ -120,7 +176,7 @@ impl View for ScrollView {
         }
         let f = self.base.frame;
         let knob_h = (f.h * f.h / self.doc_h).max(KNOB_MIN_PT).min(f.h);
-        let t = (self.scroller.offset() / max).clamp(0.0, 1.0);
+        let t = (self.content_offset() / max).clamp(0.0, 1.0);
         let y = f.y + t * (f.h - knob_h);
         // opaque colour: overlays repaint every frame, so a translucent knob would build up
         s.fill_rrect(RectF::new(ui.pt(f.right() - KNOB_INSET_PT - KNOB_W_PT), ui.pt(y), ui.pt(KNOB_W_PT), ui.pt(knob_h)), ui.pt(KNOB_W_PT / 2.0), LABEL_2.now());
@@ -128,17 +184,10 @@ impl View for ScrollView {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Layer scrolling (wave G2 `sdk-layer-views`): the pure model behind a scroll view on the direct path.
-//
-// The content layer's bounds origin is the scroll offset. The app records the drag (`ScrollPhysics::drag`) and, on
-// release, hands the window server one animation (`motion_animation`): a keyframed deceleration after a fling, or a
-// spring back from the rubber band. The server runs it at display rate, so the app does not redraw while the content
-// moves; it redraws only when new content is exposed. On the shared-memory path the `ScrollView` above keeps driving
-// `Scroller` and redraws.
+// Scroll physics: the reference platform's model behind `ScrollView`. The finger's position and the velocity of the last
+// window come from `ScrollPhysics`; a release turns into a `Motion`, a fling that decelerates or a spring back from the
+// rubber band, which `ScrollView` evaluates on each frame.
 // ---------------------------------------------------------------------------------------------------------------------
-
-use bifrost_layers::Rect as LayerRect;
-use bifrost_layers::{Animation as LayerAnimation, AnimationId, FillMode, Keyframes, MediaTiming, Property, Spring, Value};
 
 /// The fling speed is the displacement over the last this many milliseconds.
 pub const VELOCITY_WINDOW_MS: f64 = 100.0;
@@ -148,8 +197,8 @@ pub const RUBBER_C: f32 = 0.55;
 pub const DECEL_PER_MS: f64 = 0.998;
 /// Below this speed (points per second) a release stops without a fling.
 pub const STOP_SPEED: f32 = 20.0;
-/// Sampling step of a fling's keyframes: one display frame at 60 Hz.
-pub const SAMPLE_S: f64 = 1.0 / 60.0;
+/// Spring stiffness of a bounce back to an edge, per millisecond: critically damped, about 400 ms to settle.
+pub const BOUNCE_W_PER_MS: f64 = 0.012;
 
 /// Exponential decay rate per second: speed is `v0 * e^(-rate * t)`.
 fn decay_rate() -> f64 {
@@ -174,11 +223,6 @@ pub fn displayed_offset(finger: f32, max: f32, dim: f32) -> f32 {
     } else {
         finger
     }
-}
-
-/// The content layer's bounds for a scroll offset: the origin moves, the size is the viewport's.
-pub fn content_bounds(offset: f32, width: f32, height: f32) -> LayerRect {
-    LayerRect { x: 0.0, y: offset, w: width, h: height }
 }
 
 /// Finger samples (time in ms, shown offset) within the last `VELOCITY_WINDOW_MS`.
@@ -251,6 +295,35 @@ pub enum Motion {
     Bounce { from: f32, to: f32, velocity: f32 },
 }
 
+impl Motion {
+    /// The offset `dt` seconds after the release, and whether the motion has finished by then (the content then rests
+    /// at the end the physics model already holds).
+    pub fn at(&self, dt: f64) -> (f32, bool) {
+        let dt = dt.max(0.0);
+        match *self {
+            Motion::Fling(fling) => (fling.offset_at(dt), dt >= fling.duration()),
+            Motion::Bounce { from, to, velocity } => bounce_at(from, to, velocity, dt),
+        }
+    }
+}
+
+/// A critically damped spring from `from` to `to`, starting with `velocity` (points per second), `dt` seconds on.
+/// Settled (within half a point and 0.01 points per millisecond) it returns the edge exactly.
+fn bounce_at(from: f32, to: f32, velocity: f32, dt: f64) -> (f32, bool) {
+    let w = BOUNCE_W_PER_MS;
+    let ms = dt * 1000.0;
+    let x0 = (from - to) as f64;
+    let v0 = velocity as f64 / 1000.0;
+    let e = (-w * ms).exp();
+    let x = (x0 + (v0 + w * x0) * ms) * e;
+    let v = (v0 - w * (v0 + w * x0) * ms) * e;
+    if x.abs() < 0.5 && v.abs() < 0.01 {
+        (to, true)
+    } else {
+        (to + x as f32, false)
+    }
+}
+
 /// The scroll model of one view: the finger position, the rubber band and the velocity of the last window.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollPhysics {
@@ -263,6 +336,12 @@ pub struct ScrollPhysics {
 impl ScrollPhysics {
     pub fn new(viewport_h: f32, content_h: f32) -> ScrollPhysics {
         ScrollPhysics { viewport: viewport_h, content: content_h, finger: 0.0, tracker: VelocityTracker::default() }
+    }
+
+    /// Sets the viewport and content heights after a layout. The finger keeps its place.
+    pub fn set_bounds(&mut self, viewport_h: f32, content_h: f32) {
+        self.viewport = viewport_h;
+        self.content = content_h;
     }
 
     /// The largest offset inside the range: content height minus viewport height, never negative.
@@ -307,46 +386,6 @@ impl ScrollPhysics {
         let fling = Fling { from, velocity, min: 0.0, max };
         self.finger = fling.offset_at(fling.duration());
         Some(Motion::Fling(fling))
-    }
-}
-
-/// The layer animation for a release: a keyframed deceleration sampled every display frame, or a spring to the edge.
-/// It animates the content layer's `Bounds`, so the origin is the scroll offset. The fill is `Forwards`, so the content
-/// stays where the motion ends until the window server reports the animation finished.
-pub fn motion_animation(motion: &Motion, id: AnimationId, width: f32, height: f32) -> LayerAnimation {
-    match *motion {
-        Motion::Fling(fling) => {
-            let duration = fling.duration();
-            let steps = (duration / SAMPLE_S).ceil().max(1.0) as usize;
-            let mut values = Vec::with_capacity(steps + 1);
-            let mut key_times = Vec::with_capacity(steps + 1);
-            for i in 0..=steps {
-                let t = if i == steps { duration } else { i as f64 * SAMPLE_S };
-                let key_time = if duration > 0.0 { t / duration } else { 0.0 };
-                values.push(Value::Rect(content_bounds(fling.offset_at(t), width, height)));
-                key_times.push(key_time as f32);
-            }
-            LayerAnimation::Keyframe {
-                id,
-                key: Property::Bounds,
-                keyframes: Keyframes { values, key_times, timing_functions: Vec::new() },
-                timing: MediaTiming { duration, fill_mode: FillMode::Forwards, ..MediaTiming::default() },
-            }
-        }
-        Motion::Bounce { from, to, velocity } => {
-            // Near-critically damped: a small overshoot, settled well inside half a second.
-            let span = to - from;
-            let initial_velocity = if span.abs() > 0.0 { velocity / span } else { 0.0 };
-            let spring = Spring { mass: 1.0, stiffness: 300.0, damping: 34.0, initial_velocity };
-            LayerAnimation::Spring {
-                id,
-                key: Property::Bounds,
-                from: Some(Value::Rect(content_bounds(from, width, height))),
-                to: Some(Value::Rect(content_bounds(to, width, height))),
-                spring,
-                timing: MediaTiming { fill_mode: FillMode::Forwards, ..MediaTiming::default() },
-            }
-        }
     }
 }
 
@@ -478,34 +517,12 @@ mod physics_tests {
     }
 
     #[test]
-    fn a_fling_becomes_a_keyframed_bounds_animation_ending_at_the_motion_end() {
-        let fling = Fling { from: 100.0, velocity: 1000.0, min: 0.0, max: 900.0 };
-        let anim = motion_animation(&Motion::Fling(fling), AnimationId(9), 300.0, 200.0);
-        let LayerAnimation::Keyframe { id, key, keyframes, timing } = anim else { panic!("expected keyframes") };
-        assert_eq!(id, AnimationId(9));
-        assert_eq!(key, Property::Bounds);
-        assert_eq!(timing.fill_mode, FillMode::Forwards);
-        assert!(close(timing.duration as f32, 1.95405, 1e-3));
-        assert_eq!(keyframes.values.len(), keyframes.key_times.len());
-        // One sample per display frame: ceil(1.95405 * 60) = 118 steps, so 119 samples.
-        assert_eq!(keyframes.values.len(), 119);
-        assert_eq!(keyframes.values[0], Value::Rect(LayerRect { x: 0.0, y: 100.0, w: 300.0, h: 200.0 }));
-        assert_eq!(*keyframes.key_times.last().unwrap(), 1.0);
-        let Value::Rect(last) = keyframes.values[keyframes.values.len() - 1] else { panic!("rect") };
-        assert!(close(last.y, 589.509, 0.05));
-        assert!(keyframes.key_times.windows(2).all(|w| w[0] <= w[1]));
-    }
-
-    #[test]
-    fn a_bounce_becomes_a_spring_from_the_rubber_band_to_the_edge() {
-        let motion = Motion::Bounce { from: -20.0, to: 0.0, velocity: -200.0 };
-        let anim = motion_animation(&motion, AnimationId(4), 300.0, 200.0);
-        let LayerAnimation::Spring { from, to, spring, .. } = anim else { panic!("expected a spring") };
-        assert_eq!(from, Some(Value::Rect(LayerRect { x: 0.0, y: -20.0, w: 300.0, h: 200.0 })));
-        assert_eq!(to, Some(Value::Rect(LayerRect { x: 0.0, y: 0.0, w: 300.0, h: 200.0 })));
-        // velocity / span = -200 / 20 = -10 per second in normalised progress
-        assert!(close(spring.initial_velocity, -10.0, 1e-4));
-        assert!(spring.stiffness > 0.0 && spring.mass > 0.0);
+    fn a_bounce_settles_on_its_edge() {
+        let bounce = Motion::Bounce { from: -20.0, to: 0.0, velocity: 0.0 };
+        assert_eq!(bounce.at(0.0), (-20.0, false));
+        let (mid, done) = bounce.at(0.1);
+        assert!(mid < 0.0 && mid > -20.0 && !done, "moving back: {mid}");
+        assert_eq!(bounce.at(2.0), (0.0, true));
     }
 
     #[test]
@@ -518,5 +535,107 @@ mod physics_tests {
         assert_eq!(physics.offset(), 250.0);
         physics.drag(500.0, 10.0);
         assert_eq!(physics.offset(), 260.0);
+    }
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+    use crate::kit::Font;
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(Font::parse(data).unwrap(), 1.0)
+    }
+
+    /// A document of a fixed height, standing in for a long list.
+    struct Doc {
+        base: ViewBase,
+        h: f32,
+    }
+    impl View for Doc {
+        crate::view_base!();
+        fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+            (0.0, self.h)
+        }
+    }
+
+    /// A 100 pt scroll view over a 1000 pt document: a 900 pt range.
+    fn list() -> ScrollView {
+        let mut sv = ScrollView::new(Box::new(Doc { base: ViewBase::default(), h: 1000.0 }));
+        sv.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        sv
+    }
+
+    /// Advances the frame clock to `t` seconds, then delivers a pointer event.
+    fn at(sv: &mut ScrollView, t: f64, ev: Event) {
+        sv.tick(t);
+        sv.handle(&ViewEvent::Pointer(ev));
+    }
+
+    #[test]
+    fn a_tap_moves_nothing_and_starts_no_motion() {
+        let mut sv = list();
+        at(&mut sv, 0.0, Event::Down(10.0, 50.0));
+        at(&mut sv, 0.05, Event::Up(10.0, 52.0));
+        assert_eq!(sv.content_offset(), 0.0);
+        assert!(sv.motion.is_none());
+    }
+
+    #[test]
+    fn a_fast_drag_flings_the_content_on_and_it_comes_to_rest_at_the_end() {
+        let mut sv = list();
+        at(&mut sv, 0.000, Event::Down(10.0, 90.0));
+        at(&mut sv, 0.016, Event::Move(10.0, 80.0));
+        at(&mut sv, 0.032, Event::Move(10.0, 60.0));
+        at(&mut sv, 0.048, Event::Move(10.0, 40.0));
+        at(&mut sv, 0.064, Event::Up(10.0, 40.0));
+        let released = sv.content_offset();
+        assert!(released > 0.0 && matches!(sv.motion, Some((Motion::Fling(_), _))), "a fast drag flings");
+        sv.tick(0.5);
+        assert!(sv.content_offset() > released + 100.0, "coasted on: {}", sv.content_offset());
+        sv.tick(10.0);
+        assert!(sv.motion.is_none());
+        assert!(sv.content_offset() > released && sv.content_offset() <= sv.max_offset());
+    }
+
+    #[test]
+    fn a_touch_during_a_fling_catches_the_content_where_it_is() {
+        let mut sv = list();
+        at(&mut sv, 0.000, Event::Down(10.0, 90.0));
+        at(&mut sv, 0.016, Event::Move(10.0, 60.0));
+        at(&mut sv, 0.032, Event::Move(10.0, 40.0));
+        at(&mut sv, 0.048, Event::Up(10.0, 40.0));
+        sv.tick(0.2);
+        let before = sv.content_offset();
+        assert!(sv.motion.is_some());
+        at(&mut sv, 0.2, Event::Down(10.0, 50.0));
+        assert!(sv.motion.is_none());
+        assert!((sv.content_offset() - before).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_slow_drag_stops_where_the_finger_leaves_it() {
+        let mut sv = list();
+        at(&mut sv, 0.0, Event::Down(10.0, 80.0));
+        at(&mut sv, 0.4, Event::Move(10.0, 40.0));
+        at(&mut sv, 0.8, Event::Move(10.0, 30.0));
+        at(&mut sv, 0.9, Event::Up(10.0, 30.0));
+        assert!(sv.motion.is_none(), "a slow release does not fling");
+        assert!((sv.content_offset() - 38.0).abs() < 1e-3, "stopped at {}", sv.content_offset());
+    }
+
+    #[test]
+    fn a_pull_past_the_top_rubber_bands_and_springs_back_on_release() {
+        let mut sv = list();
+        at(&mut sv, 0.0, Event::Down(10.0, 50.0));
+        at(&mut sv, 0.016, Event::Move(10.0, 150.0));
+        let pulled = sv.content_offset();
+        assert!(pulled < 0.0 && pulled > -100.0, "rubber banded: {pulled}");
+        at(&mut sv, 0.032, Event::Up(10.0, 150.0));
+        assert!(matches!(sv.motion, Some((Motion::Bounce { .. }, _))));
+        sv.tick(3.0);
+        assert!(sv.motion.is_none());
+        assert_eq!(sv.content_offset(), 0.0);
     }
 }

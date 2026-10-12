@@ -265,7 +265,7 @@ fn lin(s: &mut Solver, v: Var, value: f64, strength: Strength) {
 pub fn solve(cs: &Constraints, bounds: Rect, top_inset: f32, margin: f32, views: &[ViewInfo]) -> Solution {
     let mut s = Solver::new();
     let mut frames: BTreeMap<Item, Frame> = BTreeMap::new();
-    let mut new_frame = |s: &mut Solver, item: Item, frames: &mut BTreeMap<Item, Frame>| {
+    let new_frame = |s: &mut Solver, item: Item, frames: &mut BTreeMap<Item, Frame>| {
         let f = Frame { x: s.var(), y: s.var(), w: s.var(), h: s.var() };
         // A frame has no negative size.
         let _ = s.add(Expr::var(f.w), Rel::Ge, Strength::REQUIRED);

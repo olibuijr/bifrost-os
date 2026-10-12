@@ -85,7 +85,8 @@ pub fn new_token() -> u64 {
 pub fn complete(token: u64, result: Result<Json, RpcError>) {
     if let Ok(mut q) = COMPLETED.lock() {
         if q.len() >= MAX_COMPLETED {
-            q.remove(0); // bounded: the oldest unclaimed answer belongs to a call that already timed out
+            // bounded: the oldest unclaimed answer belongs to a call that already timed out, so its result is dropped
+            let _expired = q.remove(0);
         }
         q.push((token, result));
     }
