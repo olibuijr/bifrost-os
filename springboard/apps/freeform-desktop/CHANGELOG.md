@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- New Lasso tool: drag a loop around strokes to select them, drag inside the selection to move it, and press Delete to remove it. Delete can be undone.
+- New Rectangle and Oval tools: drag out a shape and it is drawn as a closed outline in the current colour.
+- Every stroke is now kept as a stroke, not only as pixels, so the lasso can move and delete drawn strokes. Undo restores both the picture and its strokes.
+- The toolbar shows the new tools in the same segmented group as Pen, Marker and Eraser.
+
 ## 1.2.2
 
 - The app icon is drawn from the named system colours (Light values) and the page from `WHITE`; no literal colours left in the app.

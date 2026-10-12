@@ -1,0 +1,217 @@
+//! Pure stroke helpers for Freeform: painting strokes of the drawing model (`bifrost_app::controls::drawing`) into
+//! the pixel canvas, the spacing of the discs along a stroke, and the outlines the shape tools draw. Nothing here
+//! touches the screen, so the host tests cover it.
+use bifrost_app::controls::affine::AffineTransform;
+use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke};
+use bifrost_app::controls::path::Path;
+use bifrost_app::controls::Rect;
+
+/// Marker ink covers at most this alpha (96 of 255), as the live marker does.
+pub const MARKER_ALPHA: f32 = 96.0 / 255.0;
+
+/// Linear blend of two packed pixels, byte by byte (`a` = 0..=255 of `src`).
+pub fn mix(dst: u32, src: u32, a: u32) -> u32 {
+    let mut out = 0u32;
+    for shift in [0u32, 8, 16, 24] {
+        let d = (dst >> shift) & 255;
+        let s = (src >> shift) & 255;
+        out |= ((d * (255 - a) + s * a + 127) / 255) << shift;
+    }
+    out
+}
+
+/// Paints one disc of radius `r` (canvas pixels) centred on (`x`, `y`) into `px`, a `cw` x `ch` canvas, with
+/// `color` covering at most `alpha` (0..=1) of each pixel.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_disc(px: &mut [u32], cw: usize, ch: usize, x: f32, y: f32, r: f32, color: u32, alpha: f32) {
+    let x0 = ((x - r).floor() as i32).max(0);
+    let x1 = ((x + r).ceil() as i32).min(cw as i32 - 1);
+    let y0 = ((y - r).floor() as i32).max(0);
+    let y1 = ((y + r).ceil() as i32).min(ch as i32 - 1);
+    for py in y0..=y1 {
+        for qx in x0..=x1 {
+            let d = ((qx as f32 + 0.5 - x).powi(2) + (py as f32 + 0.5 - y).powi(2)).sqrt();
+            let cover = (r + 0.5 - d).clamp(0.0, 1.0);
+            if cover <= 0.0 {
+                continue;
+            }
+            let i = py as usize * cw + qx as usize;
+            if let Some(p) = px.get_mut(i) {
+                *p = mix(*p, color, (255.0 * alpha * cover) as u32);
+            }
+        }
+    }
+}
+
+/// The disc centres that paint the segment from `a` to `b` at radius `r`, spaced like the live pen (the last one is
+/// `b`). A zero-length segment still gives one centre.
+pub fn trail(a: (f32, f32), b: (f32, f32), r: f32) -> Vec<(f32, f32)> {
+    let dist = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+    let steps = (dist / (r * 0.4).max(1.0)).ceil().max(1.0) as usize;
+    (1..=steps)
+        .map(|i| {
+            let f = i as f32 / steps as f32;
+            (a.0 + (b.0 - a.0) * f, a.1 + (b.1 - a.1) * f)
+        })
+        .collect()
+}
+
+/// Paints a whole stroke into `px`. `scale` converts the ink width (points) to canvas pixels. Marker ink is
+/// translucent; eraser strokes are paper-coloured pen strokes, so they paint like the live eraser.
+pub fn paint_stroke(px: &mut [u32], cw: usize, ch: usize, s: &Stroke, scale: f32) {
+    let r = s.ink.width / 2.0 * scale;
+    let alpha = if s.ink.kind == InkKind::Marker { MARKER_ALPHA } else { 1.0 };
+    let color = s.ink.color;
+    let Some(first) = s.points.first() else { return };
+    paint_disc(px, cw, ch, first.x, first.y, r, color, alpha);
+    for w in s.points.windows(2) {
+        for (x, y) in trail((w[0].x, w[0].y), (w[1].x, w[1].y), r) {
+            paint_disc(px, cw, ch, x, y, r, color, alpha);
+        }
+    }
+}
+
+/// The box between two drag points, whichever corners they are.
+pub fn rect_between(a: (f32, f32), b: (f32, f32)) -> Rect {
+    Rect { x: a.0.min(b.0), y: a.1.min(b.1), w: (a.0 - b.0).abs(), h: (a.1 - b.1).abs() }
+}
+
+/// The outline of a rectangle or an oval dragged from `a` to `b`, as one closed stroke per subpath of the path
+/// (the path import of the model). Ovals are cubic curves flattened within half a pixel.
+pub fn shape_drawing(a: (f32, f32), b: (f32, f32), oval: bool, ink: Ink) -> Drawing {
+    let r = rect_between(a, b);
+    let mut p = Path::new();
+    if oval {
+        p.add_ellipse_in(r);
+    } else {
+        p.add_rect(r);
+    }
+    Drawing::from_path(&p, 0.5, ink)
+}
+
+/// The canvas-space transform that moves a selection by (`dx`, `dy`).
+pub fn nudge(dx: f32, dy: f32) -> AffineTransform {
+    AffineTransform::translate(dx, dy)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::controls::drawing::StrokePoint;
+
+    const PAPER: u32 = 0xFFFF_FFFF;
+    const BLACK: u32 = 0xFF00_0000;
+
+    /// Edge pixels are antialiased, so a painted centre is judged dark, not exactly black.
+    fn dark(p: u32) -> bool {
+        p & 255 < 128
+    }
+
+    fn ink(kind: InkKind, color: u32, width: f32) -> Ink {
+        Ink { kind, color, width }
+    }
+
+    fn stroke(kind: InkKind, color: u32, width: f32, pts: &[(f32, f32)]) -> Stroke {
+        Stroke { ink: ink(kind, color, width), points: pts.iter().map(|&(x, y)| StrokePoint::at(x, y)).collect() }
+    }
+
+    #[test]
+    fn mix_returns_either_colour_at_the_ends() {
+        assert_eq!(mix(0x1122_3344, 0xAABB_CCDD, 0), 0x1122_3344);
+        assert_eq!(mix(0x1122_3344, 0xAABB_CCDD, 255), 0xAABB_CCDD);
+    }
+
+    #[test]
+    fn mix_at_half_is_the_byte_midpoint() {
+        assert_eq!(mix(0x0000_0000, 0xFFFF_FFFF, 128), 0x8080_8080);
+    }
+
+    #[test]
+    fn a_disc_paints_its_centre_and_not_far_pixels() {
+        let (cw, ch) = (10usize, 10usize);
+        let mut px = vec![PAPER; cw * ch];
+        paint_disc(&mut px, cw, ch, 5.0, 5.0, 2.0, BLACK, 1.0);
+        assert!(dark(px[5 * cw + 5]));
+        assert_eq!(px[0], PAPER);
+    }
+
+    #[test]
+    fn a_disc_off_the_canvas_paints_nothing_and_does_not_panic() {
+        let mut px = vec![PAPER; 4];
+        paint_disc(&mut px, 2, 2, -50.0, -50.0, 1.0, BLACK, 1.0);
+        assert!(px.iter().all(|&p| p == PAPER));
+        paint_disc(&mut [], 0, 0, 1.0, 1.0, 1.0, BLACK, 1.0);
+    }
+
+    #[test]
+    fn trail_spacing_ends_on_the_target_point() {
+        // radius 1 gives a step of max(0.4, 1) = 1 px, so 10 px is 10 centres.
+        let t = trail((0.0, 0.0), (10.0, 0.0), 1.0);
+        assert_eq!(t.len(), 10);
+        assert_eq!(*t.last().unwrap(), (10.0, 0.0));
+        assert_eq!(trail((3.0, 3.0), (3.0, 3.0), 1.0).len(), 1);
+    }
+
+    #[test]
+    fn a_pen_stroke_paints_along_its_points() {
+        let (cw, ch) = (20usize, 5usize);
+        let mut px = vec![PAPER; cw * ch];
+        let s = stroke(InkKind::Pen, BLACK, 2.0, &[(2.0, 2.0), (17.0, 2.0)]);
+        paint_stroke(&mut px, cw, ch, &s, 1.0);
+        assert!(dark(px[2 * cw + 2]));
+        assert!(dark(px[2 * cw + 10]), "the middle of the segment is painted");
+        assert!(dark(px[2 * cw + 17]));
+    }
+
+    #[test]
+    fn marker_ink_is_translucent_and_eraser_paper_paints_out_black() {
+        let (cw, ch) = (6usize, 6usize);
+        let mut m = vec![BLACK; cw * ch];
+        paint_stroke(&mut m, cw, ch, &stroke(InkKind::Marker, PAPER, 6.0, &[(3.0, 3.0)]), 1.0);
+        let centre = m[3 * cw + 3];
+        assert_ne!(centre, BLACK, "marker lightens");
+        assert_ne!(centre, PAPER, "marker is translucent, not opaque paper");
+
+        let mut e = vec![BLACK; cw * ch];
+        paint_stroke(&mut e, cw, ch, &stroke(InkKind::Pen, PAPER, 6.0, &[(3.0, 3.0)]), 1.0);
+        assert_eq!(e[3 * cw + 3], PAPER, "an eraser stroke paints paper");
+    }
+
+    #[test]
+    fn an_empty_stroke_paints_nothing() {
+        let mut px = vec![PAPER; 4];
+        paint_stroke(&mut px, 2, 2, &stroke(InkKind::Pen, BLACK, 2.0, &[]), 1.0);
+        assert!(px.iter().all(|&p| p == PAPER));
+    }
+
+    #[test]
+    fn rect_between_normalises_a_reversed_drag() {
+        let r = rect_between((10.0, 8.0), (2.0, 3.0));
+        assert_eq!((r.x, r.y, r.w, r.h), (2.0, 3.0, 8.0, 5.0));
+    }
+
+    #[test]
+    fn a_rectangle_is_one_closed_stroke_with_its_bounds() {
+        let d = shape_drawing((2.0, 3.0), (10.0, 8.0), false, ink(InkKind::Pen, BLACK, 2.0));
+        assert_eq!(d.strokes().len(), 1);
+        assert_eq!(d.strokes()[0].points.len(), 5, "four corners and the closing point");
+        let b = d.bounds().unwrap();
+        assert_eq!((b.x, b.y, b.w, b.h), (2.0, 3.0, 8.0, 5.0));
+    }
+
+    #[test]
+    fn an_oval_stays_inside_its_box() {
+        let d = shape_drawing((0.0, 0.0), (40.0, 20.0), true, ink(InkKind::Pen, BLACK, 2.0));
+        assert_eq!(d.strokes().len(), 1);
+        let b = d.bounds().unwrap();
+        assert!((b.x - 0.0).abs() < 0.01 && (b.y - 0.0).abs() < 0.01);
+        assert!((b.w - 40.0).abs() < 0.05 && (b.h - 20.0).abs() < 0.05, "bounds {b:?}");
+    }
+
+    #[test]
+    fn nudge_moves_points_by_the_offset() {
+        let mut s = stroke(InkKind::Pen, BLACK, 2.0, &[(1.0, 1.0)]);
+        s.transform(nudge(4.0, -1.0));
+        assert_eq!((s.points[0].x, s.points[0].y), (5.0, 0.0));
+    }
+}
