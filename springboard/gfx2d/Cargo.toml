@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-2d"
+version = "0.1.0"
+edition = "2021"
+description = "GPU executor for bifrost-render display lists (docs/graphics-architecture.md)"
+
+[dependencies]
+bifrost-gpu = { path = "../gpu" }
+bifrost-render = { path = "../render" }

@@ -2,6 +2,8 @@
 pub mod cff;
 pub mod font;
 pub mod gfx;
+pub mod canvas;
+pub mod display_list;
 pub mod gvar;
 pub mod emoji;
 pub mod symbols;

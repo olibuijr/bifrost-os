@@ -1,0 +1,12 @@
+[package]
+name = "bifrost-gpu"
+version = "0.1.0"
+edition = "2021"
+description = "Metal-shaped GPU API over Vulkan for the BifrOSt window server and SDK (docs/graphics-architecture.md)"
+
+[dependencies]
+ash = { version = "0.38", default-features = false, features = ["loaded", "std", "debug"] }
+
+[features]
+# tests that need a real Vulkan device (Titan's GPU, Midget); off in CI-style runs without one
+gpu-tests = []

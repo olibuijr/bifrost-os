@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="bifrost_layer_v1">
+  <copyright>
+    Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/graphics-architecture.md).
+  </copyright>
+
+  <interface name="bifrost_layer_manager_v1" version="1">
+    <description summary="layer trees for surfaces">
+      Lets a client describe a surface's content as a tree of layers whose animations the window server evaluates
+      at every display frame. The transaction body is the bifrost-layers codec blob.
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_context">
+      <description summary="make a layer context for a surface">
+        The context's root layer becomes the surface's content from the next commit of the context. A surface has
+        at most one context; asking again is a protocol error.
+      </description>
+      <arg name="id" type="new_id" interface="bifrost_layer_context_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+
+    <enum name="error">
+      <entry name="already_has_context" value="0"/>
+    </enum>
+  </interface>
+
+  <interface name="bifrost_layer_context_v1" version="1">
+    <description summary="a surface's layer tree">
+      Holds one bifrost-layers tree. Backing stores are bound to contents ids with bind_contents and referenced
+      from layers; commit applies one encoded transaction atomically at the next frame.
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="bind_contents">
+      <description summary="bind a backing store to a contents id">
+        Binds a dma-buf wl_buffer as the backing store for contents_id, replacing any earlier binding on the next
+        commit. The server holds the buffer until it is replaced or unbound and then sends wl_buffer.release.
+      </description>
+      <arg name="contents_id" type="uint"/>
+      <arg name="buffer" type="object" interface="wl_buffer"/>
+    </request>
+
+    <request name="unbind_contents">
+      <arg name="contents_id" type="uint"/>
+    </request>
+
+    <request name="damage_contents">
+      <description summary="mark part of a backing store as changed">
+        The rectangle, in buffer pixels, changed since the buffer was last committed; applied on the next commit.
+      </description>
+      <arg name="contents_id" type="uint"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
+
+    <request name="commit">
+      <description summary="apply a transaction">
+        Applies an encoded transaction (bifrost-layers codec) together with pending bindings and damage at the
+        next frame. A transaction that does not decode or does not apply is a protocol error.
+      </description>
+      <arg name="transaction" type="array"/>
+    </request>
+
+    <event name="presented">
+      <description summary="a transaction reached the display">
+        The transaction with this seq (and everything before it) was first shown at this time, with this refresh
+        interval. The SDK's display link uses it to pace drawing.
+      </description>
+      <arg name="seq_hi" type="uint"/>
+      <arg name="seq_lo" type="uint"/>
+      <arg name="tv_sec_hi" type="uint"/>
+      <arg name="tv_sec_lo" type="uint"/>
+      <arg name="tv_nsec" type="uint"/>
+      <arg name="refresh_ns" type="uint"/>
+    </event>
+
+    <event name="animation_finished">
+      <arg name="animation_id" type="uint"/>
+    </event>
+
+    <enum name="error">
+      <entry name="bad_transaction" value="0"/>
+      <entry name="bad_buffer" value="1"/>
+    </enum>
+  </interface>
+</protocol>
