@@ -143,6 +143,7 @@ pub mod cache {
 }
 pub mod process_info;
 pub mod process_events;
+pub mod event_client;
 pub mod file_metadata;
 pub mod file_stat;
 pub mod auth_events;
