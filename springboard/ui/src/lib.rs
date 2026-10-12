@@ -798,3 +798,6 @@ pub mod fs_maintenance;
 pub mod keychain_save;
 pub mod keychain_settings;
 pub mod certificate_trust;
+pub mod vm_state;
+pub mod vm_share;
+pub mod vm_error;
