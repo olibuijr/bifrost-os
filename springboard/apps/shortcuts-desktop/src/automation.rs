@@ -21,7 +21,7 @@ use bifrost_app::controls::onscreen_entity::{EntityRef, OnscreenContext};
 use bifrost_app::controls::scripting as sc;
 use bifrost_app::controls::value_query::{QueryError, ValueItem, ValueQueryResult};
 use bifrost_app::controls::workflow::{Step, Workflow, WorkflowController, WorkflowError};
-use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult, Param, ParamType};
+use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult, Param, ParamType, Snippet};
 use bifrost_core::json::Json;
 use std::path::Path;
 
@@ -136,7 +136,20 @@ pub fn perform(
     let steps = planner.plan(s.clone()).map_err(|why| intents::failed(format!("{} {why}", s.name)))?;
     let n = s.actions.len();
     let plural = if n == 1 { "" } else { "s" };
-    Ok(IntentResult::value(Json::Str(steps)).with_dialog(&format!("{} runs {n} step{plural}.", s.name)))
+    let dialog = format!("{} runs {n} step{plural}.", s.name);
+    // the result view: one row per step, numbered in order
+    let mut snippet = Snippet::new(&s.name);
+    for (k, line) in steps.lines().enumerate() {
+        snippet = snippet.row(&(k + 1).to_string(), line);
+    }
+    // the follow-on: "Run Shortcut" on the same shortcut, by its id (the list index), so the window's button runs it
+    let follow = Json::Obj(vec![("shortcut".into(), Json::Str(index.to_string()))]);
+    Ok(IntentResult::value(Json::Str(steps)).with_dialog(&dialog).with_snippet(snippet).opens(RUN, follow))
+}
+
+/// The title of a declared intent, or its id when the app does not declare it.
+pub fn title_of(id: &str) -> String {
+    declared().into_iter().find(|i| i.id == id).map(|i| i.title).unwrap_or_else(|| id.to_string())
 }
 
 /// Resolves the `shortcut` parameter to an index into `list`.
@@ -435,6 +448,27 @@ mod tests {
         assert_eq!(r.dialog.as_deref(), Some("Bedtime runs 3 steps."));
         let err = perform(&list, RUN, &Json::Obj(Vec::new()), front, &planner).unwrap_err();
         assert_eq!(err.message, "Bedtime cannot run on this device yet");
+    }
+
+    #[test]
+    fn plan_result_has_a_snippet_row_per_step_and_a_run_follow_on() {
+        let d = dir("snippet");
+        save(&d, &model::defaults());
+        let r = intents::run(&mut app(), None, &d, PLAN, &obj(&[("shortcut", "Bedtime")])).unwrap();
+        // Bedtime is the first default shortcut, so its id is "0"
+        let expected = Snippet::new("Bedtime")
+            .row("1", "Set Do Not Disturb: On")
+            .row("2", "Set Brightness: 10%")
+            .row("3", "Set Wi-Fi: Off");
+        assert_eq!(r.snippet, Some(expected));
+        assert_eq!(r.opens, Some((RUN.to_string(), Json::Obj(vec![("shortcut".into(), Json::Str("0".into()))]))));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_follow_on_names_a_declared_intent_title() {
+        assert_eq!(title_of(RUN), "Run Shortcut");
+        assert_eq!(title_of("missing"), "missing");
     }
 
     #[test]
