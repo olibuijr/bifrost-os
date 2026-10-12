@@ -6,7 +6,7 @@
 //! shape (rect, corner radii or capsule) for the window server. [`Material`] is the minimal enum compatible with
 //! the shared material request; `Material::level` is the blur strength the compositor maps onto its material
 //! families (ultraThin 0 .. ultraThick 4, bar is the chrome material). Everything here is pure data and unit tested.
-use crate::anim::{Animation, Curve};
+use crate::anim::Animation;
 use crate::Rect;
 use std::collections::HashMap;
 

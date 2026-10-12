@@ -154,7 +154,6 @@ impl Dispatch<BifrostMaterialSurfaceV1, Weak<WlSurface>> for WmState {
                     }
                 }));
             }
-            _ => {}
         }
         with_states(&surface, |s| {
             if let Some(m) = s.data_map.get::<Mutex<Materials>>() {

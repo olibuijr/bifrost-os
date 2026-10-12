@@ -46,7 +46,7 @@ use crate::bifrost_material::effective_regions;
 use crate::material_kind::{budgeted_blur, premultiply, MaterialSpec, Resolved};
 use crate::render_server::compose::{self, Glass as GlassMat, SceneNode};
 use crate::render_server::import::{dmabuf_to_gpu, Importer};
-use crate::render_server::material::{device_region, window_shadow, ShadowSpec, SATURATION};
+use crate::render_server::material::{device_region, window_shadow, ShadowSpec};
 use crate::render_server::server::Server;
 use crate::state::WmState;
 
