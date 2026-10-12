@@ -74,3 +74,5 @@ pub mod imgtile;
 pub mod hdr_transfer;
 pub mod hdr_metadata;
 pub mod bayer;
+pub mod reusable_layer;
+pub mod lazy_image;
