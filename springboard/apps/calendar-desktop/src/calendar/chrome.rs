@@ -7,7 +7,7 @@ use super::*;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{DETAIL_BG, LABEL, SEPARATOR_C};
+use bifrost_app::kit::ui::{CONTENT_BG, LABEL, SEPARATOR_C};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
 
@@ -320,6 +320,6 @@ impl Calendar {
     }
 
     pub(super) fn background(&self, s: &mut Surface) {
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
     }
 }

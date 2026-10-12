@@ -12,7 +12,7 @@ use super::{
 use springboard::gfx::Surface;
 use springboard::shell::clock::tz;
 use springboard::shell::ui::{Ui, Weight, WHITE};
-use bifrost_app::kit::ui::{CARD_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
 use super::chrome::cal_colour;
 
@@ -224,7 +224,7 @@ impl Calendar {
         let now_min = c.hour * 60 + c.min;
         {
             let mut g = s.rows(ui.pt(GRID0) as usize, bottom as usize);
-            g.fill_rrect(0.0, ui.pt(GRID0), w, bottom - ui.pt(GRID0), 0.0, DETAIL_BG.now());
+            g.fill_rrect(0.0, ui.pt(GRID0), w, bottom - ui.pt(GRID0), 0.0, CONTENT_BG.now());
             for h in 0..=24u32 {
                 let y = hours_top + hh * h as f32;
                 g.fill_rrect(gut, y, w - gut, ui.pt(0.5), 0.0, SEPARATOR_C.now());
@@ -281,7 +281,7 @@ impl Calendar {
                 }
             }
         }
-        s.fill_rrect(0.0, ui.pt(top_inset()), w, ui.pt(GRID0 - top_inset()), 0.0, DETAIL_BG.now());
+        s.fill_rrect(0.0, ui.pt(top_inset()), w, ui.pt(GRID0 - top_inset()), 0.0, CONTENT_BG.now());
         self.draw_header(s, ui);
         let start = self.week_start();
         for i in 0..7 {

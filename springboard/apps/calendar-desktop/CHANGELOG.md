@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0
+
+- Event notes: when the notes contain a street address (for example "Laugavegur 12"), the editor offers "Use ... as Location" under the notes. Tapping it fills the Location field. The address is found with the same detector the Notes app uses.
+- The calendar's main content area uses the window content colour (white in Light, dark grey in Dark) instead of the pure black of the detail colour, in the month, week, day and year views.
+- Still open, listed in `docs/parity/wire3-calendar.md`: Up Next does not rank by time clues (the shell timeline has no relevance field), and events have no availability (busy, free or tentative) setting.
+
 ## 1.8.4
 
 - Alerts go to the desktop's notification schedule: each alarm of an event is one request with a calendar trigger on its weekday and time. Editing an event replaces its request; deleting it removes the request. Without the schedule service (an older shell), the app posts its alerts itself, as before.

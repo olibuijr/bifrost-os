@@ -565,3 +565,17 @@ fn week_numbers_are_a_saved_setting() {
     let again = new(&ui, temp.file());
     assert!(again.week_numbers, "kept after a restart");
 }
+
+#[test]
+fn an_address_in_the_notes_is_offered_as_the_location() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Dinner")];
+    c.open(&ui, Some(1));
+    assert!(!c.rows().iter().any(|r| r.0 == Target::FillAddress), "no address in the notes yet");
+    c.fields[2].set_text(&ui, "Table for two at Laugavegur 12");
+    assert!(c.rows().iter().any(|r| r.0 == Target::FillAddress), "the offer appears under Notes");
+    c.activate(&ui, Target::FillAddress, 1.0);
+    assert_eq!(c.fields[1].text(), "Laugavegur 12");
+}
