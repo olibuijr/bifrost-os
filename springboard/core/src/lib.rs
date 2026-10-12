@@ -46,6 +46,8 @@ pub mod tunnel;
 pub mod proxy;
 pub mod rfcomm_frame;
 pub mod sdp_element;
+pub mod bt_address;
+pub mod obex_packet;
 pub mod backup_exclude;
 pub mod quarantine;
 pub mod dns_settings;
