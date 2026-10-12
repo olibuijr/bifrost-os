@@ -180,6 +180,7 @@ pub mod workspace;
 pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
+pub mod focus_filter;
 pub mod gamepad_service;
 pub mod distributed;
 pub mod observable;

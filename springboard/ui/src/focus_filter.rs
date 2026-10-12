@@ -3,8 +3,8 @@
 //! of the active Focus through `current`. An app whose context went stale calls `invalidate`, so the system asks
 //! for `current` again.
 //!
-//! This is a pure model. The shell only has Do Not Disturb (`shell::focus`), so nothing switches Focus by name yet
-//! and nothing calls this outside its tests.
+//! The shell's Focus is Do Not Disturb (`shell::focus`). The `focus_filter` shell service keeps one `FocusFilters` per
+//! app and activates Do Not Disturb as the Focus that is on; the SDK client is `bifrost_app::focus_filter`.
 
 /// The values an app stores for one Focus: key and value text, as the filter intent's parameters carry them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -28,6 +28,11 @@ impl AppContext {
     /// The value stored under `key`, if any.
     pub fn get(&self, key: &str) -> Option<&str> {
         self.pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+    }
+
+    /// Every key and its value, in the order the keys were first set.
+    pub fn pairs(&self) -> &[(String, String)] {
+        &self.pairs
     }
 
     /// The number of keys stored.
@@ -153,6 +158,8 @@ mod tests {
         assert_eq!(c.len(), 1);
         assert_eq!(c.get("a"), Some("2"));
         assert_eq!(c.get("b"), None);
+        c.set("z", "9");
+        assert_eq!(c.pairs(), &[("a".to_string(), "2".to_string()), ("z".to_string(), "9".to_string())]);
         assert!(!c.is_empty());
         assert!(AppContext::new().is_empty());
     }
