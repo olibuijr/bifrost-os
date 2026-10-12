@@ -42,6 +42,18 @@ pub enum Format {
     Raw,
 }
 
+impl Format {
+    /// Parses a format name, ignoring ASCII case. `"raw"` is the only name this model accepts. Any other name, such as a
+    /// sparse or layered format, is an `UnsupportedFormat` error that keeps the name for the caller to show.
+    pub fn parse(name: &str) -> Result<Format, ImageError> {
+        if name.eq_ignore_ascii_case("raw") {
+            Ok(Format::Raw)
+        } else {
+            Err(ImageError::UnsupportedFormat { name: name.to_string() })
+        }
+    }
+}
+
 /// Whether an open image may be written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenMode {
@@ -59,6 +71,23 @@ pub enum ImageError {
     ReadOnly,
     /// The file length is zero or is not a whole number of blocks.
     CorruptedImage { length: u64, block_size: u64 },
+    /// The format name is not one this model supports (only RAW is).
+    UnsupportedFormat { name: String },
+}
+
+impl ImageError {
+    /// Name of the official error type this value stands for, or `None` when the framework has no such type. A zero or
+    /// negative block count is `InvalidBlockCountError`, a damaged file is `CorruptedImageError`, and an unknown format is
+    /// `UnsupportedFormatError`. The size overflow and read-only errors have no official type, so they return `None`.
+    /// Stacking errors are not modelled, because layered images are not built.
+    pub fn type_name(&self) -> Option<&'static str> {
+        match self {
+            ImageError::InvalidBlockCount(_) => Some("InvalidBlockCountError"),
+            ImageError::CorruptedImage { .. } => Some("CorruptedImageError"),
+            ImageError::UnsupportedFormat { .. } => Some("UnsupportedFormatError"),
+            ImageError::SizeOverflow | ImageError::ReadOnly => None,
+        }
+    }
 }
 
 impl fmt::Display for ImageError {
@@ -70,6 +99,7 @@ impl fmt::Display for ImageError {
             ImageError::CorruptedImage { length, block_size } => {
                 write!(f, "image length {} is not a whole number of {}-byte blocks", length, block_size)
             }
+            ImageError::UnsupportedFormat { name } => write!(f, "image format {} is not supported", name),
         }
     }
 }
@@ -268,6 +298,57 @@ mod tests {
         assert_eq!(
             ImageError::CorruptedImage { length: 1000, block_size: 512 }.to_string(),
             "image length 1000 is not a whole number of 512-byte blocks"
+        );
+    }
+
+    #[test]
+    fn format_parse_accepts_raw_in_any_case_and_names_anything_else() {
+        assert_eq!(Format::parse("RAW"), Ok(Format::Raw));
+        assert_eq!(Format::parse("Raw"), Ok(Format::Raw));
+        assert_eq!(
+            Format::parse("asif"),
+            Err(ImageError::UnsupportedFormat { name: "asif".to_string() })
+        );
+        assert_eq!(
+            ImageError::UnsupportedFormat { name: "asif".to_string() }.to_string(),
+            "image format asif is not supported"
+        );
+    }
+
+    #[test]
+    fn invalid_block_count_maps_to_its_official_error_type() {
+        // Zero blocks at creation, and a negative count on truncate, are both InvalidBlockCountError.
+        let zero = RawCreation::new(0, BlockSize::B512).unwrap_err();
+        assert_eq!(zero.type_name(), Some("InvalidBlockCountError"));
+        let mut img = DiskImage::create("x.img", RawCreation::new(4, BlockSize::B512).unwrap());
+        let negative = img.truncate(-1).unwrap_err();
+        assert_eq!(negative, ImageError::InvalidBlockCount(-1));
+        assert_eq!(negative.type_name(), Some("InvalidBlockCountError"));
+    }
+
+    #[test]
+    fn corrupted_and_unsupported_values_map_to_their_error_types() {
+        // A 1000-byte file is not a whole number of 512-byte blocks: CorruptedImageError.
+        let corrupt = DiskImage::open_raw("a.iso", 1000, BlockSize::B512, OpenMode::ReadOnly).unwrap_err();
+        assert_eq!(corrupt.type_name(), Some("CorruptedImageError"));
+        let unsupported = Format::parse("qcow2").unwrap_err();
+        assert_eq!(unsupported.type_name(), Some("UnsupportedFormatError"));
+    }
+
+    #[test]
+    fn errors_without_an_official_type_return_none() {
+        // Overflow and read-only refusals are not in the framework's error list.
+        assert_eq!(RawCreation::new(i64::MAX, BlockSize::K4).unwrap_err().type_name(), None);
+        assert_eq!(ImageError::ReadOnly.type_name(), None);
+    }
+
+    #[test]
+    fn corrupted_image_size_is_the_length_is_checked_against_each_block_size() {
+        // 4096 is one whole 4 KB block. 4608 = 4096 + 512 leaves a 512-byte partial block, so it is corrupted.
+        assert!(DiskImage::open_raw("c.img", 4096, BlockSize::K4, OpenMode::ReadOnly).is_ok());
+        assert_eq!(
+            DiskImage::open_raw("c.img", 4096 + 512, BlockSize::K4, OpenMode::ReadOnly),
+            Err(ImageError::CorruptedImage { length: 4608, block_size: 4096 })
         );
     }
 }
