@@ -57,6 +57,7 @@ pub mod csv_writer;
 pub mod accounts;
 pub mod testing;
 pub mod usernotif;
+pub mod messaging;
 pub mod service_management;
 pub mod crash_report;
 pub mod exception_handler;
