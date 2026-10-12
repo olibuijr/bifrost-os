@@ -477,7 +477,8 @@ pub fn install(cfg: &Config, progress: &Shared) {
         }
         let mut args = vec!["pacstrap", "-K", "/mnt"];
         let mut kernel = kernel_for(&gpu);
-        if kernel == KERNEL_RT && r.cmd(&["pacman", "-Sp", KERNEL_RT]).is_err() {
+        // -y: the live system's own databases are not synced yet (pacstrap syncs its own), so refresh them first
+        if kernel == KERNEL_RT && r.cmd(&["pacman", "-Syp", KERNEL_RT]).is_err() {
             r.log(format!("{KERNEL_RT} is not in the package source; installing the stock {KERNEL_FALLBACK} kernel"));
             kernel = KERNEL_FALLBACK;
         } else if kernel != KERNEL_RT {
