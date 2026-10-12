@@ -37,6 +37,8 @@ pub enum ComposeError {
     BadUrl(String),
     /// The post already holds the maximum number of images (`MAX_IMAGES`) or links (`MAX_URLS`).
     Full(usize),
+    /// The sheet is on screen or has closed, so only the user can change the post now.
+    Locked,
 }
 
 impl fmt::Display for ComposeError {
@@ -45,6 +47,7 @@ impl fmt::Display for ComposeError {
             ComposeError::Empty => write!(f, "The item is empty"),
             ComposeError::BadUrl(u) => write!(f, "Not a web address: {u}"),
             ComposeError::Full(n) => write!(f, "The post already has {n} items of this kind"),
+            ComposeError::Locked => write!(f, "The post is locked: the sheet is on screen or closed"),
         }
     }
 }
@@ -145,6 +148,111 @@ impl ComposeDraft {
     }
 }
 
+/// Where a compose sheet is in its life.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SheetState {
+    /// The app is filling the draft; the sheet is not on screen yet.
+    #[default]
+    Editing,
+    /// The sheet is on screen. Only the user changes the post now.
+    Presented,
+    /// The user finished, and the result has been reported.
+    Closed,
+}
+
+/// The compose sheet: a draft the app fills, shown once with [`ComposeSheet::present`], and the result the sheet
+/// reports when the user finishes. Changes are refused once the sheet is on screen or closed, with
+/// [`ComposeError::Locked`]. Showing the sheet and posting to a network are not part of this model: the shell shows
+/// the sheet and hands the draft to the share menu.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ComposeSheet {
+    draft: ComposeDraft,
+    state: SheetState,
+    result: Option<ComposeResult>,
+}
+
+impl ComposeSheet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn state(&self) -> SheetState {
+        self.state
+    }
+
+    pub fn draft(&self) -> &ComposeDraft {
+        &self.draft
+    }
+
+    /// The result reported when the sheet closed, `None` until then.
+    pub fn result(&self) -> Option<ComposeResult> {
+        self.result
+    }
+
+    fn open(&self) -> Result<(), ComposeError> {
+        if self.state == SheetState::Editing {
+            Ok(())
+        } else {
+            Err(ComposeError::Locked)
+        }
+    }
+
+    /// `setInitialText(_:)`.
+    pub fn set_initial_text(&mut self, text: &str) -> Result<(), ComposeError> {
+        self.open()?;
+        self.draft.set_initial_text(text);
+        Ok(())
+    }
+
+    /// `add(_:)` for an image.
+    pub fn add_image(&mut self, name: &str) -> Result<(), ComposeError> {
+        self.open()?;
+        self.draft.add_image(name)
+    }
+
+    /// `add(_:)` for a URL.
+    pub fn add_url(&mut self, url: &str) -> Result<(), ComposeError> {
+        self.open()?;
+        self.draft.add_url(url)
+    }
+
+    /// `removeAllImages()`.
+    pub fn remove_all_images(&mut self) -> Result<(), ComposeError> {
+        self.open()?;
+        self.draft.remove_all_images();
+        Ok(())
+    }
+
+    /// `removeAllURLs()`.
+    pub fn remove_all_urls(&mut self) -> Result<(), ComposeError> {
+        self.open()?;
+        self.draft.remove_all_urls();
+        Ok(())
+    }
+
+    /// Shows the sheet. Returns false when it is already on screen or has closed.
+    pub fn present(&mut self) -> bool {
+        if self.state == SheetState::Editing {
+            self.state = SheetState::Presented;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// The user sends (`send`) or cancels the post. Closes the sheet and returns the result that the completion handler
+    /// receives. `None` when the sheet was not on screen.
+    pub fn finish(&mut self, send: bool) -> Option<ComposeResult> {
+        if self.state != SheetState::Presented {
+            return None;
+        }
+        let result = self.draft.dismiss(send);
+        self.state = SheetState::Closed;
+        self.result = Some(result);
+        Some(result)
+    }
+}
+
 /// `http://` or `https://` (any case) followed by a host with no spaces.
 fn is_web_url(url: &str) -> bool {
     let Some((scheme, rest)) = url.split_once("://") else { return false };
@@ -226,5 +334,60 @@ mod tests {
         assert!(d.is_empty());
         d.add_url("https://example.test").unwrap();
         assert!(!d.is_empty());
+    }
+
+    #[test]
+    fn the_sheet_locks_the_post_once_it_is_presented() {
+        let mut s = ComposeSheet::new();
+        assert_eq!(s.state(), SheetState::Editing);
+        s.set_initial_text("draft").unwrap();
+        s.add_url("https://example.test").unwrap();
+        assert!(s.present());
+        assert!(!s.present(), "a second present is refused");
+        assert_eq!(s.set_initial_text("changed"), Err(ComposeError::Locked));
+        assert_eq!(s.add_image("a.png"), Err(ComposeError::Locked));
+        assert_eq!(s.draft().text(), "draft");
+        assert_eq!(s.draft().urls().len(), 1);
+    }
+
+    #[test]
+    fn finish_reports_done_for_a_sent_post_and_closes_the_sheet() {
+        let mut s = ComposeSheet::new();
+        assert_eq!(s.finish(true), None, "the sheet must be on screen to finish");
+        s.set_initial_text("hello").unwrap();
+        s.present();
+        assert_eq!(s.finish(true), Some(ComposeResult::Done));
+        assert_eq!(s.state(), SheetState::Closed);
+        assert_eq!(s.result(), Some(ComposeResult::Done));
+        assert_eq!(s.remove_all_urls(), Err(ComposeError::Locked));
+        assert_eq!(s.finish(true), None, "a closed sheet reports nothing again");
+    }
+
+    #[test]
+    fn cancelling_or_sending_an_empty_post_reports_cancelled() {
+        let mut blank = ComposeSheet::new();
+        blank.set_initial_text("   ").unwrap();
+        blank.present();
+        assert_eq!(blank.finish(true), Some(ComposeResult::Cancelled), "blank text is not a post");
+        let mut dropped = ComposeSheet::new();
+        dropped.set_initial_text("hello").unwrap();
+        dropped.present();
+        assert_eq!(dropped.finish(false), Some(ComposeResult::Cancelled));
+    }
+
+    #[test]
+    fn the_draft_limits_apply_inside_the_sheet() {
+        let mut s = ComposeSheet::new();
+        for i in 0..MAX_IMAGES {
+            s.add_image(&format!("img{i}.png")).unwrap();
+        }
+        assert_eq!(s.add_image("extra.png"), Err(ComposeError::Full(MAX_IMAGES)));
+        s.remove_all_images().unwrap();
+        assert!(s.draft().images().is_empty());
+    }
+
+    #[test]
+    fn the_locked_error_says_why() {
+        assert_eq!(ComposeError::Locked.to_string(), "The post is locked: the sheet is on screen or closed");
     }
 }

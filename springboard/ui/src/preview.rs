@@ -171,6 +171,23 @@ impl Registry {
     }
 }
 
+/// A data-based preview provider, run in this process (the `providePreview(for:completionHandler:)` of the reference
+/// SDK). Given the name of the file, it returns the reply to draw; an error means the file cannot be previewed.
+/// Providers are not loaded from an extension bundle: the app hands them to [`Registry::preview`] itself.
+pub trait PreviewProvider {
+    fn provide(&self, file_name: &str) -> Result<Reply, ModelError>;
+}
+
+impl Registry {
+    /// Previews `file_name` with the provider the registry picks for its type. `providers` maps each provider name to
+    /// its implementation. `None` when no registration covers the file, or the chosen provider is not in `providers`.
+    pub fn preview(&self, file_name: &str, providers: &[(&str, &dyn PreviewProvider)]) -> Option<Result<Reply, ModelError>> {
+        let name = self.provider_for(file_name)?;
+        let (_, provider) = providers.iter().find(|(n, _)| *n == name)?;
+        Some(provider.provide(file_name))
+    }
+}
+
 /// What a view-based preview is asked for: `preparePreviewOfFile(at:completionHandler:)` gets a file URL, and
 /// `preparePreviewOfSearchableItem(identifier:queryString:completionHandler:)` gets the identifier of an item the app
 /// indexed for search, with the query that found it.
@@ -416,6 +433,34 @@ mod tests {
         let notes = Subject::file("/x/notes.txt").unwrap();
         assert_eq!(reg.provider_for_subject(&notes), Some("md-preview"));
         assert_eq!(reg.provider_for_subject(&Subject::file("/x/photo.png").unwrap()), None);
+    }
+
+    /// A provider that returns the same answer for any file.
+    struct Fixed(Result<Reply, ModelError>);
+
+    impl PreviewProvider for Fixed {
+        fn provide(&self, _file_name: &str) -> Result<Reply, ModelError> {
+            self.0.clone()
+        }
+    }
+
+    #[test]
+    fn a_data_preview_comes_from_the_provider_the_registry_picks() {
+        let mut reg = Registry::new();
+        reg.register("md-preview", &["public.plain-text"]).unwrap();
+        let page = Reply::new(Content::File { path: "/x/notes.txt".into() }).unwrap().with_title("Notes");
+        let ok = Fixed(Ok(page.clone()));
+        let providers: [(&str, &dyn PreviewProvider); 1] = [("md-preview", &ok)];
+        assert_eq!(reg.preview("notes.txt", &providers), Some(Ok(page)));
+        // A type no registration covers has no provider.
+        assert_eq!(reg.preview("photo.png", &providers), None);
+        // A registered provider that the app did not supply cannot run.
+        let none: [(&str, &dyn PreviewProvider); 0] = [];
+        assert_eq!(reg.preview("notes.txt", &none), None);
+        // A provider that fails reports its error.
+        let bad = Fixed(Err(ModelError::BadUrl));
+        let failing: [(&str, &dyn PreviewProvider); 1] = [("md-preview", &bad)];
+        assert_eq!(reg.preview("notes.txt", &failing), Some(Err(ModelError::BadUrl)));
     }
 
     #[test]
