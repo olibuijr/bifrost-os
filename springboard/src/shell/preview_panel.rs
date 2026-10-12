@@ -1,8 +1,10 @@
 //! Preview (`QLPreviewPanel`): the floating panel an app opens with `ToShell::Preview` (SDK `peek::PreviewPanel`) or the
 //! `quick-look` service. It is drawn on the desktop above the windows and the Dock, at the menus' layer.
 //!
-//! The panel shows one item at a time: a picture (decoded and fitted into the body), the first lines of a text file, or
-//! a line saying there is no preview. Left and Right arrows, the chevron buttons and the arrow keys step through the
+//! The panel shows one item at a time: a picture (decoded and fitted into the body), the first lines of a text file, a
+//! line naming the app that plays or reads a PDF or audio item, or a line saying there is no preview. The kind comes
+//! from the preview registry (`registry()`, by the file's type). The title is the headline and the URL sits under the
+//! body. Left and Right arrows, the chevron buttons and the arrow keys step through the
 //! items (no wrapping, as `PreviewPanel::step`). Esc, Space and the close button hide it. A click on the desktop
 //! outside the panel is left to the desktop, and the panel stays up. The shell never reads a file the app did not name:
 //! only `file://` URLs are opened, and only for a fixed size limit.
@@ -16,8 +18,26 @@ use crate::gfx::{Image, Surface};
 use crate::layout::Rect;
 use bifrost_core::json::Json;
 use bifrost_proto::peek::{PreviewItem, MAX_ITEMS};
+use bifrost_ui::preview::Registry;
 use std::io::Read;
 use std::path::Path;
+
+/// The providers the panel previews with (the shell's `QLPreviewProvider` registrations). Each covers a type subtree
+/// from the type tree in `bifrost_ui::uttype`, so every file of that kind gets the provider's preview.
+const PICTURES: &str = "desk.pictures";
+const TEXT: &str = "desk.text";
+const PDF: &str = "desk.pdf";
+const AUDIO: &str = "desk.audio";
+
+/// The registry the panel previews with: one provider per kind of item.
+pub fn registry() -> Registry {
+    let mut r = Registry::new();
+    let _ = r.register(PICTURES, &["public.image"]);
+    let _ = r.register(TEXT, &["public.text"]);
+    let _ = r.register(PDF, &["com.adobe.pdf"]);
+    let _ = r.register(AUDIO, &["public.audio"]);
+    r
+}
 
 /// Pictures larger than this are not decoded (the panel is a preview, not an editor).
 pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
@@ -26,20 +46,25 @@ pub const MAX_TEXT_BYTES: u64 = 16 * 1024;
 pub const MAX_TEXT_LINES: usize = 24;
 pub const MAX_LINE_CHARS: usize = 120;
 
-/// What kind of preview a file name gets, from its extension.
+/// What kind of preview an item gets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Image,
     Text,
+    Pdf,
+    Audio,
     Other,
 }
 
-/// The preview kind for a lower-case extension (without the dot).
-pub fn kind_for(ext: &str) -> Kind {
-    match ext {
-        "png" | "jpg" | "jpeg" | "gif" | "bmp" => Kind::Image,
-        "txt" | "md" | "markdown" | "rs" | "toml" | "json" | "log" | "csv" | "c" | "h" | "py" | "sh" | "yaml" | "yml" | "xml"
-        | "html" | "css" | "js" | "ini" | "conf" | "cfg" => Kind::Text,
+/// The preview kind of a file name: the registry picks the provider through the file's type (`uttype`), so a
+/// subtype such as Markdown or a PNG picture takes its ancestor's provider. A name with no known type is `Other`.
+pub fn kind_for(file_name: &str) -> Kind {
+    let reg = registry();
+    match reg.provider_for(file_name) {
+        Some(PICTURES) => Kind::Image,
+        Some(TEXT) => Kind::Text,
+        Some(PDF) => Kind::Pdf,
+        Some(AUDIO) => Kind::Audio,
         _ => Kind::Other,
     }
 }
@@ -74,7 +99,10 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
     let Some(path) = local_path(&item.url) else { return Body::Info("No preview for this item.".into()) };
     let p = Path::new(path);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    match kind_for(&ext) {
+    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    match kind_for(name) {
+        Kind::Pdf => Body::Info("PDF document. Open it in Books to read it.".into()),
+        Kind::Audio => Body::Info("Audio file. Open it in Music to play it.".into()),
         Kind::Image => {
             let small = std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() <= MAX_IMAGE_BYTES);
             match small.then(|| std::fs::read(p).ok()).flatten().and_then(|b| crate::imgdec::decode(&b)) {
@@ -210,6 +238,8 @@ pub struct Geometry {
     pub prev: Rect,
     pub next: Rect,
     pub body: Rect,
+    /// the strip under the body that shows the item's URL when it has a title of its own
+    pub caption: Rect,
 }
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
@@ -226,12 +256,14 @@ pub fn geometry(w: f32, h: f32, k: f32) -> Geometry {
     let (x, y) = ((w - cw) / 2.0, ((h - ch) / 2.0).max(0.0));
     let head = 36.0 * k;
     let pad = 12.0 * k;
+    let foot = 22.0 * k;
     Geometry {
         card: rect(x, y, cw, ch),
         close: rect(x + 6.0 * k, y + 6.0 * k, 28.0 * k, 28.0 * k),
         prev: rect(x + 4.0 * k, y + ch / 2.0 - 24.0 * k, 28.0 * k, 48.0 * k),
         next: rect(x + cw - 32.0 * k, y + ch / 2.0 - 24.0 * k, 28.0 * k, 48.0 * k),
-        body: rect(x + pad, y + head, cw - 2.0 * pad, (ch - head - pad).max(0.0)),
+        body: rect(x + pad, y + head, cw - 2.0 * pad, (ch - head - pad - foot).max(0.0)),
+        caption: rect(x + pad, y + ch - foot, cw - 2.0 * pad, foot),
     }
 }
 
@@ -378,6 +410,15 @@ impl Shell {
             }
         }
 
+        // the URL of an item that has a title of its own, centred under the body in secondary grey
+        if let Some(item) = p.current().filter(|i| !i.title.is_empty() && !i.url.is_empty()) {
+            let c = g.caption;
+            let url = ui.fit(&item.url, MAC_FOOTNOTE_PT, c.w as f32);
+            self.label(&url, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, |im| {
+                s.blit(im, c.x + (c.w - im.w as i32) / 2, c.y + (c.h - im.h as i32) / 2, 255, 255)
+            });
+        }
+
         // the chevrons, in LINK, dimmed at the ends
         for (r, glyph, enabled) in [(g.prev, "\u{2039}", p.index() > 0), (g.next, "\u{203A}", p.index() + 1 < p.count())] {
             let color = if enabled { LINK } else { SECONDARY };
@@ -398,10 +439,26 @@ mod tests {
 
     #[test]
     fn extensions_pick_the_preview_kind() {
-        assert_eq!(kind_for("png"), Kind::Image);
-        assert_eq!(kind_for("md"), Kind::Text);
-        assert_eq!(kind_for("pdf"), Kind::Other);
-        assert_eq!(kind_for(""), Kind::Other);
+        assert_eq!(kind_for("photo.png"), Kind::Image);
+        assert_eq!(kind_for("PHOTO.JPG"), Kind::Image, "extensions are case-insensitive");
+        assert_eq!(kind_for("notes.md"), Kind::Text, "Markdown conforms to plain text");
+        assert_eq!(kind_for("main.rs"), Kind::Text);
+        assert_eq!(kind_for("paper.pdf"), Kind::Pdf);
+        assert_eq!(kind_for("song.mp3"), Kind::Audio);
+        assert_eq!(kind_for("clip.mp4"), Kind::Other, "movies have no preview yet");
+        assert_eq!(kind_for("archive.zip"), Kind::Other);
+        assert_eq!(kind_for("README"), Kind::Other, "no extension, no type");
+    }
+
+    #[test]
+    fn pdf_and_audio_items_say_which_app_plays_them() {
+        let dir = std::env::temp_dir().join(format!("ql-kinds-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdf = dir.join("paper.pdf");
+        std::fs::write(&pdf, b"%PDF-1.4").unwrap();
+        let url = format!("file://{}", pdf.display());
+        assert!(matches!(load_body(Some(&item(&url, "paper"))), Body::Info(t) if t.starts_with("PDF document")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -499,5 +556,8 @@ mod tests {
         assert!(inside(g.card, g.next.x as f32, g.next.y as f32));
         let small = geometry(300.0, 300.0, 1.0);
         assert!(small.card.w <= 300 - 32, "a small screen shrinks the card");
+        // the caption strip sits at the bottom of the card, below the body
+        assert_eq!(g.caption.y + g.caption.h, g.card.y + g.card.h);
+        assert!(g.body.y + g.body.h <= g.caption.y);
     }
 }
