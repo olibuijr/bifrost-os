@@ -10,6 +10,10 @@ mod boot_policy;
 use alloc::string::String;
 mod uki;
 mod cmdline;
+mod crypto;
+mod handover;
+mod luks;
+mod unlock;
 use alloc::vec::Vec;
 use bootweave_frame::progress::Progress;
 use bootweave_frame::render::{bar_rect, render_bar};
@@ -379,6 +383,19 @@ fn main() -> Status {
     let verbose = keys.verbose;
     let current = cmdline(dev);
     let current = if verbose { cmdline::verbose(&current) } else { current };
+    // Unlock is login (task 10): on an encrypted root the Unlock screen takes the passphrase once. The volume key goes
+    // to the initramfs in a one-time volatile variable; the account in `bifrost.user=` is logged in by the shell. It runs
+    // before the session opens the panel (the Unlock screen opens the graphics output itself), and the loader's clock
+    // restarts after it so the time spent typing does not count as loader time in the learned boot timing.
+    let user = current
+        .split_whitespace()
+        .find_map(|t| t.strip_prefix("bifrost.user="))
+        .unwrap_or("");
+    let mut init = init;
+    if let Some(volume) = unlock::run(user) {
+        let _ = handover::publish(&volume);
+        init = tsc();
+    }
     let marker = read_text(dev, PENDING_PATH);
     let previous = read_line(dev, PREVIOUS_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
     let recovery = read_line(dev, RECOVERY_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
