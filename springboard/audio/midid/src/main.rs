@@ -11,7 +11,7 @@ mod seq;
 
 use bifrost_midi::endpoints::{Direction, ObjectId};
 use bifrost_midi::hub::Hub;
-use bifrost_midi::ump::{from_midi1, Midi1ToUmp, Ump};
+use bifrost_midi::ump::{Midi1ToUmp, Ump};
 use std::collections::BTreeMap;
 
 const LOG: &str = "is.olibuijr.audio/midi";
@@ -28,8 +28,11 @@ fn host_ns() -> u64 {
     ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
 }
 
+/// One attached rawmidi node. `conv` lives as long as the open port, so running status and an open system
+/// exclusive carry across reads.
 struct HwPort {
     port: rawmidi::RawPort,
+    device: ObjectId,
     source: ObjectId,
     conv: Midi1ToUmp,
     name: String,
@@ -53,7 +56,7 @@ fn open_hardware(hub: &mut Hub, ports: &mut BTreeMap<String, HwPort>) {
         let Some(src) = hub.registry.add_endpoint(ent, Direction::Source, &name) else { continue };
         hub.registry.add_endpoint(ent, Direction::Destination, &name);
         log(&format!("rawmidi {} ({name}) attached", dev.path));
-        ports.insert(dev.path.clone(), HwPort { port, source: src, conv: Midi1ToUmp::new(0), name });
+        ports.insert(dev.path.clone(), HwPort { port, device: d, source: src, conv: Midi1ToUmp::new(0), name });
     }
 }
 
@@ -87,26 +90,40 @@ fn run(dump_seconds: Option<u64>) {
     let start = host_ns();
     let mut last_scan = 0u64;
     let mut buf = [0u8; 4096];
+    // The sequencer buffer grows when one event's payload does not fit (see `Seq::read_events`).
+    let mut seq_buf: Vec<u8> = vec![0; 4096];
+    // System exclusive arrives from the sequencer as raw byte chunks per sender; one converter per sender keeps a
+    // message split over several events whole.
+    let mut seq_sysex: BTreeMap<(u8, u8), Midi1ToUmp> = BTreeMap::new();
+    let mut seq_error: Option<String> = None;
     loop {
         let now = host_ns();
-        if dump_seconds.is_some_and(|s| now - start > s * 1_000_000_000) {
+        if dump_seconds.is_some_and(|s| now.saturating_sub(start) > s * 1_000_000_000) {
             return;
         }
-        if now - last_scan > 2_000_000_000 || last_scan == 0 {
+        if now.saturating_sub(last_scan) > 2_000_000_000 || last_scan == 0 {
             open_hardware(&mut hub, &mut ports);
             last_scan = now;
         }
-        let mut fds: Vec<libc::pollfd> =
-            ports.values().map(|p| libc::pollfd { fd: p.port.fd(), events: libc::POLLIN, revents: 0 }).collect();
+        // Output-only ports are never read (EBADF), so they are not polled either.
+        let mut fds: Vec<libc::pollfd> = ports
+            .values()
+            .filter(|p| p.port.readable())
+            .map(|p| libc::pollfd { fd: p.port.fd(), events: libc::POLLIN, revents: 0 })
+            .collect();
         if let Some(s) = &seq {
             fds.push(libc::pollfd { fd: s.fd(), events: libc::POLLIN, revents: 0 });
         }
-        // SAFETY: `fds` is a valid array of `fds.len()` pollfd structures.
+        // SAFETY: `fds` is a valid array of `fds.len()` pollfd structures; every fd in it belongs to a port or to
+        // `seq`, which outlive this call.
         unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, 200) };
-        let stamp = host_ns();
         let mut dead = Vec::new();
-        for p in ports.values_mut() {
-            match p.port.read(&mut buf) {
+        for (path, p) in ports.iter_mut().filter(|(_, p)| p.port.readable()) {
+            let read = p.port.read(&mut buf);
+            // Stamp as close to the read as the kernel allows: right after it, per port, so the ports read before
+            // this one do not add their time to its events.
+            let stamp = host_ns();
+            match read {
                 Ok(0) => {}
                 Ok(n) => {
                     let mut pk = Vec::new();
@@ -122,27 +139,56 @@ fn run(dump_seconds: Option<u64>) {
                 }
                 Err(e) => {
                     log(&format!("{} went away: {e}", p.name));
-                    dead.push(p.name.clone());
+                    dead.push(path.clone());
                 }
             }
         }
-        ports.retain(|_, p| !dead.contains(&p.name));
+        // Keyed by node path: two devices with the same name stay apart. The registry device goes with the port
+        // (closing its fd), so a replug attaches a fresh one instead of piling up stale devices.
+        for path in dead {
+            if let Some(p) = ports.remove(&path) {
+                hub.registry.remove_external_device(p.device);
+            }
+        }
         if let (Some(s), Some(src)) = (&seq, seq_source) {
-            if let Ok(evs) = s.read_events(&mut buf) {
-                for e in evs {
-                    if let Some(m) = e.to_midi1() {
-                        let u = from_midi1(0, m);
-                        hub.send_from_source(src, stamp, u);
-                        if dump_seconds.is_some() {
-                            println!("{stamp} seq {}:{} {}", e.source().0, e.source().1, describe(&u));
+            let read = s.read_events(&mut seq_buf);
+            let stamp = host_ns();
+            match read {
+                Ok(evs) => {
+                    seq_error = None;
+                    for r in evs {
+                        let from = r.event.source();
+                        let mut pk = Vec::new();
+                        if r.event.kind() == seq::EVENT_SYSEX {
+                            let conv = seq_sysex.entry(from).or_insert_with(|| Midi1ToUmp::new(0));
+                            for &b in &r.payload {
+                                conv.push(b, &mut pk);
+                            }
+                        } else if let Some(u) = r.event.to_ump(0) {
+                            pk.push(u);
                         }
+                        for u in pk {
+                            hub.send_from_source(src, stamp, u);
+                            if dump_seconds.is_some() {
+                                println!("{stamp} seq {}:{} {}", from.0, from.1, describe(&u));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    // ENOSPC is the kernel saying the input queue overflowed and was cleared; say each new error once.
+                    let text = e.to_string();
+                    if seq_error.as_deref() != Some(text.as_str()) {
+                        log(&format!("sequencer read: {text}"));
+                        seq_error = Some(text);
                     }
                 }
             }
         }
         // Everything routed so far has been queued for its listeners; drain what no client collects.
+        let now = host_ns();
         let _ = hub.pending(_client);
-        let _ = hub.drain_inbox(_client, stamp);
+        let _ = hub.drain_inbox(_client, now);
     }
 }
 

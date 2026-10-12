@@ -1,8 +1,10 @@
 //! ALSA sequencer through the kernel uapi (`sound/asequencer.h`) on `/dev/snd/seq`. No libasound. The daemon opens a
 //! client, creates one port other clients (hardware, software synths) can subscribe to, and reads its events; each
-//! event is turned into a MIDI 1.0 event and stamped with the host clock on arrival.
+//! event is turned into a UMP packet (channel voice, system common, real-time) or, for system exclusive, its raw
+//! bytes, and stamped with the host clock right after the read.
 
 use bifrost_midi::events::MidiEvent;
+use bifrost_midi::ump::{from_midi1, system_packet, Ump};
 use std::ffi::CString;
 use std::io;
 
@@ -18,6 +20,23 @@ pub const EVENT_CONTROLLER: u8 = 10;
 pub const EVENT_PGMCHANGE: u8 = 11;
 pub const EVENT_CHANPRESS: u8 = 12;
 pub const EVENT_PITCHBEND: u8 = 13;
+pub const EVENT_SONGPOS: u8 = 20;
+pub const EVENT_SONGSEL: u8 = 21;
+pub const EVENT_QFRAME: u8 = 22;
+pub const EVENT_START: u8 = 30;
+pub const EVENT_CONTINUE: u8 = 31;
+pub const EVENT_STOP: u8 = 32;
+pub const EVENT_CLOCK: u8 = 36;
+pub const EVENT_TUNE_REQUEST: u8 = 40;
+pub const EVENT_RESET: u8 = 41;
+pub const EVENT_SENSING: u8 = 42;
+pub const EVENT_SYSEX: u8 = 130;
+
+/// `SNDRV_SEQ_EVENT_LENGTH_MASK` and `SNDRV_SEQ_EVENT_LENGTH_VARIABLE` in the event flags.
+pub const LENGTH_MASK: u8 = 0x0C;
+pub const LENGTH_VARIABLE: u8 = 0x04;
+/// The top two bits of `ext.len` are kernel flags (`SNDRV_SEQ_EXT_MASK`), not length.
+pub const EXT_LEN_MASK: u32 = 0x3FFF_FFFF;
 
 pub const PORT_CAP_READ: u32 = 0x1;
 pub const PORT_CAP_WRITE: u32 = 0x2;
@@ -115,7 +134,47 @@ impl SeqEvent {
             _ => return None,
         })
     }
+
+    /// The UMP packet this carries in `group`: channel voice as type 2, system common and real-time as type 1.
+    /// System exclusive (its bytes travel in the payload) and every other kind give `None`.
+    pub fn to_ump(&self, group: u8) -> Option<Ump> {
+        if let Some(m) = self.to_midi1() {
+            return Some(from_midi1(group, m));
+        }
+        let value = self.i32_at(24);
+        let seven = value.clamp(0, 127) as u8;
+        let sys = |st: u8, d1: u8, d2: u8| Some(system_packet(group, st, d1, d2));
+        match self.kind() {
+            EVENT_QFRAME => sys(0xF1, seven, 0),
+            EVENT_SONGPOS => {
+                // The kernel keeps the 14-bit position as msb * 128 + lsb.
+                let v = value.clamp(0, 0x3FFF) as u16;
+                sys(0xF2, (v & 0x7F) as u8, (v >> 7) as u8)
+            }
+            EVENT_SONGSEL => sys(0xF3, seven, 0),
+            EVENT_TUNE_REQUEST => sys(0xF6, 0, 0),
+            EVENT_CLOCK => sys(0xF8, 0, 0),
+            EVENT_START => sys(0xFA, 0, 0),
+            EVENT_CONTINUE => sys(0xFB, 0, 0),
+            EVENT_STOP => sys(0xFC, 0, 0),
+            EVENT_SENSING => sys(0xFE, 0, 0),
+            EVENT_RESET => sys(0xFF, 0, 0),
+            _ => None,
+        }
+    }
 }
+
+/// One event read from the sequencer with its variable-length payload (the system exclusive bytes), empty for a
+/// fixed-size event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SeqRead {
+    pub event: SeqEvent,
+    pub payload: Vec<u8>,
+}
+
+/// The largest read buffer: one event header and a payload as large as the biggest system exclusive message kept
+/// anywhere else (the kernel's event pools hold far less, so no real event is larger).
+pub const READ_MAX: usize = EVENT_SIZE + bifrost_midi::ump::SYSEX_MAX_BYTES;
 
 fn zeroed<T: Copy>() -> T {
     // SAFETY: only used for the plain-old-data uapi structs above, for which all-zero bytes are a valid value.
@@ -194,34 +253,73 @@ impl Seq {
         self.ioctl(IOCTL_SUBSCRIBE_PORT, &mut s)
     }
 
-    /// Reads the events waiting; each is fixed size. A variable-length event (system exclusive) is followed by
-    /// its payload, which is skipped here.
-    pub fn read_events(&self, buf: &mut [u8]) -> io::Result<Vec<SeqEvent>> {
-        // SAFETY: `buf` is a valid writable slice of the length passed.
-        let n = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
-        if n < 0 {
-            let e = io::Error::last_os_error();
-            return if e.kind() == io::ErrorKind::WouldBlock { Ok(Vec::new()) } else { Err(e) };
+    /// True when `poll` says an event is waiting now (zero timeout).
+    fn readable_now(&self) -> bool {
+        let mut p = libc::pollfd { fd: self.fd, events: libc::POLLIN, revents: 0 };
+        // SAFETY: `p` is one live pollfd and the count passed is 1.
+        let r = unsafe { libc::poll(&mut p, 1, 0) };
+        r > 0 && p.revents & libc::POLLIN != 0
+    }
+
+    /// Reads the events waiting, each with its payload. The kernel copies whole events only: when the first one
+    /// waiting carries a payload larger than `buf` it answers EAGAIN, exactly as for an empty queue, and keeps the
+    /// event at the head, so the port would stall with `poll` always ready. A zero-timeout poll tells the two apart
+    /// and `buf` grows (doubling, up to `READ_MAX`) until the event fits. An overflowed input queue is reported once
+    /// by the kernel as ENOSPC (the events in it are lost) and comes back as that error.
+    pub fn read_events(&self, buf: &mut Vec<u8>) -> io::Result<Vec<SeqRead>> {
+        if buf.len() < EVENT_SIZE {
+            buf.resize(EVENT_SIZE * 64, 0);
         }
-        Ok(parse_events(&buf[..n as usize]))
+        loop {
+            // SAFETY: `buf` is a valid writable buffer of the length passed.
+            let n = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+            if n >= 0 {
+                return Ok(parse_events(&buf[..n as usize]));
+            }
+            let e = io::Error::last_os_error();
+            match e.kind() {
+                io::ErrorKind::Interrupted => continue,
+                io::ErrorKind::WouldBlock => {
+                    let next = grown_len(buf.len());
+                    if next > buf.len() && self.readable_now() {
+                        buf.resize(next, 0);
+                        continue;
+                    }
+                    return Ok(Vec::new());
+                }
+                _ => return Err(e),
+            }
+        }
     }
 }
 
-/// Splits a read buffer into events, skipping the payload that follows a variable-length event.
-pub fn parse_events(buf: &[u8]) -> Vec<SeqEvent> {
+/// The next read buffer size after an event did not fit: double, capped at `READ_MAX`.
+pub fn grown_len(len: usize) -> usize {
+    len.saturating_mul(2).min(READ_MAX).max(len)
+}
+
+/// Splits a read buffer into events with their payloads. Only a variable-length event has bytes after its header
+/// (`ext.len` of them, flag bits masked off); the kernel writes whole events, so a buffer that ends inside a header
+/// or a payload is a short read: the partial event and anything after it are dropped rather than misframed.
+pub fn parse_events(buf: &[u8]) -> Vec<SeqRead> {
     let mut out = Vec::new();
     let mut at = 0;
-    while at + EVENT_SIZE <= buf.len() {
+    while buf.len() - at >= EVENT_SIZE {
         let mut raw = [0u8; EVENT_SIZE];
         raw.copy_from_slice(&buf[at..at + EVENT_SIZE]);
-        let ev = SeqEvent(raw);
         at += EVENT_SIZE;
-        if ev.flags() & 0x0C == 0x04 {
-            // Variable length: the length is the first u32 of the data union.
-            let len = u32::from_ne_bytes([raw[16], raw[17], raw[18], raw[19]]) as usize;
+        let event = SeqEvent(raw);
+        let mut payload = Vec::new();
+        if event.flags() & LENGTH_MASK == LENGTH_VARIABLE {
+            // The length is the first u32 of the data union (`struct snd_seq_ev_ext`).
+            let len = (u32::from_ne_bytes([raw[16], raw[17], raw[18], raw[19]]) & EXT_LEN_MASK) as usize;
+            if len > buf.len() - at {
+                break;
+            }
+            payload.extend_from_slice(&buf[at..at + len]);
             at += len;
         }
-        out.push(ev);
+        out.push(SeqRead { event, payload });
     }
     out
 }
@@ -301,18 +399,97 @@ mod tests {
         assert_eq!(mk(8191), Some(MidiEvent::PitchBend { channel: 0, value: 16383 }));
     }
 
+    fn sysex_header(len: u32) -> [u8; EVENT_SIZE] {
+        let mut h = ev(EVENT_SYSEX, LENGTH_VARIABLE, [0; 12]);
+        h[16..20].copy_from_slice(&len.to_ne_bytes());
+        h
+    }
+
     #[test]
-    fn variable_length_payload_is_skipped() {
+    fn variable_length_payload_is_kept() {
         let mut buf = Vec::new();
-        let mut sysex = ev(130, 0x04, [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        sysex[16..20].copy_from_slice(&5u32.to_ne_bytes());
-        buf.extend_from_slice(&sysex);
+        buf.extend_from_slice(&sysex_header(5));
         buf.extend_from_slice(&[0xF0, 1, 2, 3, 0xF7]);
         buf.extend_from_slice(&ev(EVENT_NOTEOFF, 0, [0, 61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
         let evs = parse_events(&buf);
         assert_eq!(evs.len(), 2);
-        assert_eq!(evs[0].kind(), 130);
-        assert_eq!(evs[1].to_midi1(), Some(MidiEvent::NoteOff { channel: 0, key: 61, velocity: 0 }));
+        assert_eq!(evs[0].event.kind(), EVENT_SYSEX);
+        assert_eq!(evs[0].payload, vec![0xF0, 1, 2, 3, 0xF7]);
+        assert_eq!(evs[0].event.to_ump(0), None);
+        assert!(evs[1].payload.is_empty());
+        assert_eq!(evs[1].event.to_midi1(), Some(MidiEvent::NoteOff { channel: 0, key: 61, velocity: 0 }));
+    }
+
+    #[test]
+    fn short_reads_drop_the_partial_event() {
+        let note = ev(EVENT_NOTEON, 0, [0, 60, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // A whole event and 10 bytes of the next: one event.
+        let mut buf = note.to_vec();
+        buf.extend_from_slice(&note[..10]);
+        assert_eq!(parse_events(&buf).len(), 1);
+        // Less than a header: nothing.
+        assert!(parse_events(&note[..27]).is_empty());
+        assert!(parse_events(&[]).is_empty());
+        // A payload that claims 100 bytes with 5 in the buffer: the event is dropped, not misframed.
+        let mut buf = note.to_vec();
+        buf.extend_from_slice(&sysex_header(100));
+        buf.extend_from_slice(&[0xF0, 1, 2, 3, 4]);
+        buf.extend_from_slice(&note);
+        let evs = parse_events(&buf);
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0].event.kind(), EVENT_NOTEON);
+        // A length of u32::MAX cannot overflow the cursor.
+        assert!(parse_events(&sysex_header(u32::MAX)).is_empty());
+    }
+
+    #[test]
+    fn ext_len_flag_bits_are_not_length() {
+        // 0x8000_0005: the pointer-kind flag bit plus a length of 5.
+        let mut buf = sysex_header(0x8000_0005).to_vec();
+        buf.extend_from_slice(&[0xF0, 0x7D, 1, 2, 0xF7]);
+        buf.extend_from_slice(&ev(EVENT_CLOCK, 0, [0; 12]));
+        let evs = parse_events(&buf);
+        assert_eq!(evs.len(), 2);
+        assert_eq!(evs[0].payload, vec![0xF0, 0x7D, 1, 2, 0xF7]);
+        assert_eq!(evs[1].event.to_ump(0), Some(Ump::one(0x10F8_0000)));
+    }
+
+    #[test]
+    fn system_events_become_type_1_packets() {
+        let with_value = |kind: u8, v: i32| {
+            let mut d = [0u8; 12];
+            d[8..12].copy_from_slice(&v.to_ne_bytes());
+            SeqEvent(ev(kind, 0, d)).to_ump(3)
+        };
+        // Song position 0x1234 = 36 * 128 + 52: lsb 0x34, msb 0x24.
+        assert_eq!(with_value(EVENT_SONGPOS, 0x1234), Some(Ump::one(0x13F2_3424)));
+        assert_eq!(with_value(EVENT_SONGPOS, -5), Some(Ump::one(0x13F2_0000)));
+        assert_eq!(with_value(EVENT_SONGSEL, 9), Some(Ump::one(0x13F3_0900)));
+        assert_eq!(with_value(EVENT_QFRAME, 0x7FFF), Some(Ump::one(0x13F1_7F00)));
+        for (kind, st) in [
+            (EVENT_TUNE_REQUEST, 0xF6u32),
+            (EVENT_CLOCK, 0xF8),
+            (EVENT_START, 0xFA),
+            (EVENT_CONTINUE, 0xFB),
+            (EVENT_STOP, 0xFC),
+            (EVENT_SENSING, 0xFE),
+            (EVENT_RESET, 0xFF),
+        ] {
+            assert_eq!(with_value(kind, 0), Some(Ump::one(0x1300_0000 | st << 16)), "{kind}");
+        }
+        // Channel voice goes through the MIDI 1.0 path; unknown kinds give nothing.
+        let on = SeqEvent(ev(EVENT_NOTEON, 0, [2, 60, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(on.to_ump(0), Some(Ump::one(0x2092_3C64)));
+        for kind in [0u8, 5, 14, 35, 63, 99, 255] {
+            assert_eq!(with_value(kind, 1), None, "{kind}");
+        }
+    }
+
+    #[test]
+    fn read_buffer_growth_is_capped() {
+        assert_eq!(grown_len(EVENT_SIZE * 64), EVENT_SIZE * 128);
+        assert_eq!(grown_len(READ_MAX - 1), READ_MAX);
+        assert_eq!(grown_len(READ_MAX), READ_MAX);
     }
 
     #[test]
