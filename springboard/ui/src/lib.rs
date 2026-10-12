@@ -867,6 +867,8 @@ pub mod verification_codes;
 pub mod photo_changes;
 pub mod photo_media;
 pub mod photo_request;
+pub mod photo_fetch;
+pub mod photo_access;
 pub mod fs_volume;
 pub mod fs_probe;
 pub mod fs_maintenance;
