@@ -9,6 +9,8 @@ Environment=BIFROST_MCP_PORT=7420
 Restart=always
 RestartSec=1
 Nice=-5
+# Shutdown budget (docs/boot-architecture.md, "Symmetric shutdown"): a stop that is not done in 2 s is killed.
+TimeoutStopSec=2s
 
 [Install]
 WantedBy=multi-user.target

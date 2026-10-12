@@ -57,6 +57,16 @@ struct Drm {
     /// The loader's frame while the first session of a boot fades in (`BIFROST_BOOT_FADE`).
     boot: Option<Boot>,
     glass: crate::glass::Glass,
+    /// The boot frame back over the desktop at shutdown (`SHUTDOWN_REQUEST`).
+    shutdown: Shutdown,
+}
+
+/// The loader's frame as a render buffer of the panel's size (the boot's first fade and the shutdown fade share it).
+fn boot_frame_buffer(w: i32, h: i32) -> MemoryRenderBuffer {
+    let mut px = vec![0u32; (w * h) as usize];
+    crate::boot::paint(&mut px, w as usize, h as usize);
+    let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
+    MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None)
 }
 
 struct Boot {
@@ -67,10 +77,7 @@ struct Boot {
 
 impl Boot {
     fn new(w: i32, h: i32) -> Self {
-        let mut px = vec![0u32; (w * h) as usize];
-        crate::boot::paint(&mut px, w as usize, h as usize);
-        let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
-        Boot { splash: MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None), ready_at: None }
+        Boot { splash: boot_frame_buffer(w, h), ready_at: None }
     }
 
     /// The splash opacity for this frame, None once the fade is done.
@@ -242,10 +249,45 @@ fn open_gpu(session: &mut LibSeatSession, path: &Path, state: &mut WmState, hand
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass })
+    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, shutdown: Shutdown::default() })
+}
+
+/// The shutdown fade (`crate::boot::shutdown_alpha`): once `SHUTDOWN_REQUEST` exists the boot frame comes back over the
+/// desktop and then stays until power-off. Built on the first frame of a shutdown only.
+#[derive(Default)]
+struct Shutdown {
+    splash: Option<MemoryRenderBuffer>,
+    /// When the request was first seen.
+    since: Option<std::time::Instant>,
+    /// `SHUTDOWN_FADED` is written once.
+    faded_marked: bool,
 }
 
 impl Drm {
+    /// The boot frame over the desktop for the shutdown fade, with its opacity; None before a request.
+    fn shutdown_overlay(&mut self) -> Option<(MemoryRenderBuffer, f32)> {
+        let sd = &mut self.shutdown;
+        if sd.since.is_none() {
+            if !std::path::Path::new(crate::boot::SHUTDOWN_REQUEST).exists() {
+                return None;
+            }
+            sd.since = Some(std::time::Instant::now());
+            crate::boot::mark("shutdown-start");
+        }
+        let since = sd.since.map(|t| t.elapsed().as_secs_f64() * 1000.0);
+        if sd.splash.is_none() {
+            let mode = self.output.current_mode()?;
+            sd.splash = Some(boot_frame_buffer(mode.size.w, mode.size.h));
+        }
+        if crate::boot::shutdown_faded(since) && !sd.faded_marked {
+            sd.faded_marked = true;
+            // the account's runtime directory exists for the whole session; the marker is written once
+            let _ = std::fs::write(crate::boot::SHUTDOWN_FADED, b"1\n");
+            crate::boot::mark("shutdown-faded");
+        }
+        Some((sd.splash.clone()?, crate::boot::shutdown_alpha(since)?))
+    }
+
     fn render(&mut self, state: &mut WmState) {
         let output = self.output.clone();
         let mut top: Vec<SceneElement> = Vec::new();
@@ -254,7 +296,9 @@ impl Drm {
         if splash.is_none() {
             self.boot = None;
         }
-        if let Some((buffer, alpha)) = splash {
+        // a shutdown replaces the boot's fade-in: the boot frame returns over the desktop and stays
+        let overlay = self.shutdown_overlay().or(splash);
+        if let Some((buffer, alpha)) = overlay {
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), &buffer, Some(alpha), None, None, Kind::Unspecified) {
                 top.push(SceneElement::Memory(e));
             }

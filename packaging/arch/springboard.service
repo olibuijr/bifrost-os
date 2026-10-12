@@ -18,8 +18,11 @@ Environment=RUST_BACKTRACE=1
 # Runs as root: DRM master and the evdev nodes then need no seatd/logind session or group setup.
 ExecStartPre=/usr/lib/springboard/seed-data
 ExecStart=/usr/bin/bifrost-bootweave run
-# on stop (shutdown/reboot) park the console on an empty VT so the Linux text never shows
-ExecStopPost=-/usr/bin/sh -c 'chvt 12 2>/dev/null || printf "\\033[?25l\\033[2J" >/dev/tty1'
+# Symmetric shutdown (docs/boot-architecture.md): the desktop fades back to the boot frame, which stays on screen
+# until power-off. Runs before systemd stops the session; returns at once when the window server has no fade.
+ExecStop=/usr/bin/bifrost-bootweave shutdown
+# The stop budget of the shutdown contract: the fade (about 0.5 s) and the session's stop must fit in 2 s.
+TimeoutStopSec=2s
 # Real-time limits for the shell and every app it starts (rlimits survive the bwrap uid switch):
 # the audio writer asks for SCHED_FIFO 2 (B3), and the nice fallback needs RLIMIT_NICE down to -16.
 LimitRTPRIO=10
