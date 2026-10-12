@@ -116,7 +116,7 @@ def find_local_bin():
 
 
 def run_one(argv, bench, driver, quantum, timeout=120):
-    cmd = argv + [bench, "--driver", driver, "--quantum", str(quantum)]
+    cmd = argv + [bench, "--driver", driver, "--quantum", str(quantum), "--json"]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if p.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)}: exit {p.returncode}: {p.stderr.strip()[:300]}")
