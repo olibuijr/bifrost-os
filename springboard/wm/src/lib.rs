@@ -15,6 +15,7 @@ pub mod render_server;
 pub mod nested;
 pub mod scene;
 pub mod state;
+pub mod sync;
 pub mod wm;
 
 /// Starts a client on the compositor's socket.

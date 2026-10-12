@@ -8,7 +8,7 @@ use smithay::{
     input::{Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{generic::Generic, EventLoop, Interest, LoopSignal, Mode, PostAction},
+        calloop::{generic::Generic, EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
@@ -19,6 +19,7 @@ use smithay::{
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         output::OutputManagerState,
+        presentation::PresentationState,
         selection::data_device::DataDeviceState,
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
@@ -43,6 +44,15 @@ pub struct WmState {
     pub on_vblank: Option<Box<dyn FnMut(&mut WmState)>>,
     /// Toplevels waiting for their first buffer before `wm` places them.
     pub pending: Vec<Window>,
+    /// The event loop's handle, for sources that wake the loop (acquire-point blockers in `sync`).
+    pub loop_handle: LoopHandle<'static, WmState>,
+    /// `wp_presentation` (clock: CLOCK_MONOTONIC, id 1).
+    pub presentation: PresentationState,
+    /// Presentation feedback of the frames in flight, presented at their vblank (`sync`).
+    pub frame_feedback: crate::sync::FrameFeedback,
+    /// `wp_linux_drm_syncobj_v1`, installed by the DRM backend when the kernel supports syncobj eventfds.
+    #[cfg(feature = "drm")]
+    pub drm_syncobj_state: Option<smithay::wayland::drm_syncobj::DrmSyncobjState>,
 
     /// `ext-background-effect-v1` (live glass); the renderer reads each surface's blur region.
     pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
@@ -80,6 +90,7 @@ impl WmState {
         };
         let socket_name = listening.socket_name().to_os_string();
         let handle = event_loop.handle();
+        let presentation = PresentationState::new::<WmState>(&dh, 1);
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
                 if let Err(e) = state.dh.insert_client(stream, Arc::new(ClientState::default())) {
@@ -103,6 +114,11 @@ impl WmState {
             wm: Wm::new(Rect::default()),
             next_id: 1,
             pending: Vec::new(),
+            loop_handle: handle.clone(),
+            presentation,
+            frame_feedback: Default::default(),
+            #[cfg(feature = "drm")]
+            drm_syncobj_state: None,
             on_vblank: None,
             background_effect: crate::background_effect::init(&dh),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
