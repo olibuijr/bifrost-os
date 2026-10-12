@@ -60,9 +60,9 @@ KEY = _lab_key()
 SSH = ["ssh", "-i", KEY, "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", f"root@{HOST}"]
 
 
-def run(cmd, timeout=30):
+def run(cmd, timeout=30, input=None):
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout)
+        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout, input=input)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(cmd, 124, "", "timeout")
 
@@ -315,6 +315,77 @@ def text_keys(text):
         else:
             return None
     return seq
+
+
+_RUST_CHAR = r"'(\\u\{[0-9a-fA-F]+\}|\\.|[^'\\])'"
+
+
+def _rust_char(lit):
+    if lit.startswith("\\u{"):
+        return chr(int(lit[3:-1], 16))
+    if lit.startswith("\\"):
+        return {"0": "\0", "n": "\n", "t": "\t"}.get(lit[1], lit[1])
+    return lit
+
+
+def installer_keymaps(path=None):
+    """The installer's own keyboard tables (springboard/src/installer/keymaps_data.rs): (layout ids in order,
+    per layout {code: [plain, shift, altgr, shift+altgr]}, {(mark, base): composed})."""
+    text = open(path or os.path.join(REPO, "springboard/src/installer/keymaps_data.rs"), encoding="utf-8").read()
+    lay = text[text.index("pub const LAYOUTS"):text.index("pub const KEYMAPS")]
+    ids = re.findall(r'^\s*\("([^"]+)",', lay, re.M)
+    body = text[text.index("pub const KEYMAPS"):text.index("pub const COMPOSE")]
+    maps = []
+    for block in re.split(r"^\s*// .*$", body, flags=re.M)[1:]:
+        m = {}
+        for code, chars in re.findall(r"\((\d+), \[(.*?)\]\)", block):
+            cs = [_rust_char(c) for c in re.findall(_RUST_CHAR, chars)]
+            if len(cs) == 4:
+                m[int(code)] = cs
+        maps.append(m)
+    comp = {}
+    for a, b, c in re.findall(r"\(" + _RUST_CHAR + ", " + _RUST_CHAR + ", " + _RUST_CHAR + r"\)", text[text.index("pub const COMPOSE"):]):
+        comp[(_rust_char(a), _rust_char(b))] = _rust_char(c)
+    return ids, maps[:len(ids)], comp
+
+
+def layout_keys(text, layout="us", tables=None):
+    """Text -> [(shift, code, altgr)] key presses that type it on the installer's `layout` (dead key then base letter for
+    accented ones, as a user would); None when a character has no key there."""
+    ids, maps, comp = tables or installer_keymaps()
+    if layout not in ids:
+        return None
+    km = maps[ids.index(layout)]
+    direct = {}
+    for code in sorted(km):
+        for level, c in enumerate(km[code]):
+            if c != "\0" and (c not in direct or level < direct[c][0]):
+                direct[c] = (level, code)
+    press = lambda c: (direct[c][0] & 1 == 1, direct[c][1], direct[c][0] >= 2)
+    seq = []
+    for ch in text:
+        if ch == " ":
+            seq.append((False, 57, False))
+        elif ch in direct and not "\u0300" <= ch <= "\u036f":
+            seq.append(press(ch))
+        else:
+            pair = next(((m, b) for (m, b), c in comp.items() if c == ch and m in direct and b in direct), None)
+            if pair is None:
+                return None
+            seq += [press(pair[0]), press(pair[1])]
+    return seq
+
+
+def lab_keyboard():
+    """The keyboard layout `qa-install` picks on the installer's Language screen: `keyboard=` (an installer layout id such as
+    `us` or `is`) in out/lab/account.conf, else `us`."""
+    conf = os.path.join(os.path.dirname(KEY), "account.conf")
+    if os.path.exists(conf):
+        for line in open(conf, encoding="utf-8"):
+            key, _, value = line.strip().partition("=")
+            if key == "keyboard" and re.fullmatch(r"[a-z-]+", value):
+                return value
+    return "us"
 
 
 def lab_account():
@@ -1253,11 +1324,36 @@ def qa_tap(st, centre):
     return run(SSH + ["python3 -c " + shlex.quote(uinput_pointer_script([(ax, ay)]))], 30).returncode == 0
 
 
-def qa_type(text, secret=False):
-    seq = text_keys(text)
+def fifo_key_lines(seq):
+    """[(shift, code[, altgr])] -> the installer input FIFO's `key CODE 1|0` lines (Shift = 42 and AltGr = 100 held
+    around the keys that need them)."""
+    out = []
+    for shift, code, *rest in seq:
+        mods = ([42] if shift else []) + ([100] if rest and rest[0] else [])
+        out += [f"key {m} 1" for m in mods] + [f"key {code} 1", f"key {code} 0"] + [f"key {m} 0" for m in reversed(mods)]
+    return out
+
+
+def qa_keys(lines):
+    """Send `key CODE 1|0` lines to the installer's input FIFO, one event per write, paced, so its frame loop sees each."""
+    payload = "\n".join(lines) + "\n"
+    return run(SSH + ["python3 -c " + shlex.quote(
+        "import sys,time\n"
+        "lines=sys.stdin.read().splitlines()\n"
+        "with open('/run/bifrost-input','w') as f:\n"
+        "    for l in lines:\n"
+        "        f.write(l+'\\n'); f.flush(); time.sleep(0.03)\n")], 60, input=payload)
+
+
+def qa_type(text, secret=False, layout="us"):
+    """Type into the focused installer field as key presses on `layout` through its input FIFO (/run/bifrost-input), the
+    path the installer always reads. A fresh uinput keyboard is not picked up in time (2026-10-12: every field stayed empty)."""
+    seq = layout_keys(text, layout)
     if seq is None:
         return False
-    r = run(SSH + ["python3 -c " + shlex.quote(uinput_keys_script(seq))], 30)
+    # clear what the field already holds first (the installer pre-fills the account name from the full name), the way a
+    # user would: Backspace until empty (64 is more than any field here holds)
+    r = qa_keys(["key 14 1", "key 14 0"] * 64 + fifo_key_lines(seq))
     if r.stderr:
         print(r.stderr.replace(text, "***") if secret else r.stderr, end="", file=sys.stderr)
     return r.returncode == 0
@@ -1329,10 +1425,18 @@ def cmd_qa_install(args):
         print(f"midget is {st}; qa-install starts from an installed or a live lab system")
         return 1
     password = login_password()
-    if password is None or text_keys(password) is None:
-        print("no typeable lab password: run `reinstall` once or write out/lab/<username>.password (US-layout ASCII)")
-        return 2
     user, full_name = lab_account()
+    layout = lab_keyboard()
+    tables = installer_keymaps()
+    if layout not in tables[0]:
+        print(f"keyboard={layout} in out/lab/account.conf is not an installer layout ({', '.join(tables[0])})")
+        return 2
+    if password is None or layout_keys(password, layout, tables) is None:
+        print(f"no lab password typeable on the {layout} layout: write out/lab/<username>.password")
+        return 2
+    if layout_keys(full_name, layout, tables) is None:
+        print(f"the full name has a character the {layout} layout cannot type: set keyboard= in out/lab/account.conf (is, us-intl, ...)")
+        return 2
     if st == "installed":
         ssh("rm -f /boot/EFI/BIFROST/unattended.toml; sync", 15)
         efi = ssh("efibootmgr", 10)
@@ -1363,6 +1467,12 @@ def cmd_qa_install(args):
     if en:
         qa_tap(s, en)
         s = qa_state() or s
+    # the keyboard column, the way a keyboard user picks it: Tab to the column, Up to the top, Down to the layout
+    li = tables[0].index(layout)
+    qa_keys(["key 15 1", "key 15 0"] + ["key 103 1", "key 103 0"] * len(tables[0]) + ["key 108 1", "key 108 0"] * li)
+    time.sleep(0.5)
+    s = qa_state() or s
+    step(f"keyboard layout {layout}", snap("language-keyboard"))
     if not qa_tap(s, find_button(s, "next") or (0, 0)):
         return fail("no Continue button on Language")
     s = screen("account", 60)
@@ -1374,7 +1484,7 @@ def cmd_qa_install(args):
             return fail(f"no {fid} field on Account")
         qa_tap(s, rect_centre(s["fields"][fid][0]))
         time.sleep(0.4)
-        if not qa_type(text, secret):
+        if not qa_type(text, secret, layout):
             return fail(f"could not type the {fid} field")
         s = qa_state() or s
     step("account typed (password not shown)", snap("account-filled"))
@@ -1434,9 +1544,14 @@ def cmd_qa_install(args):
         return fail(f"install did not reach Done (screen={s['screen'] if s else 'none'}, {last})")
     step("Done screen", snap("done"))
     c = find_button(s, "restart")
-    if not c or not qa_tap(s, c):
-        return fail("no Restart button on Done")
-    step("tapped Restart")
+    if c and qa_tap(s, c) and wait(lambda: not ping(), 30, 1):
+        step("tapped Restart")
+    else:
+        # Restart is the default button: Return presses it
+        qa_keys(["key 28 1", "key 28 0"])
+        if not wait(lambda: not ping(), 60, 1):
+            return fail("Restart (tap and Return) did not reboot")
+        step("pressed Return on Restart")
     rc = qa_first_boot(step)
     report("OK" if rc == 0 else "FAILED (first boot)")
     return rc

@@ -16,6 +16,18 @@ bogus line
 
 
 class QaTests(unittest.TestCase):
+    def test_icelandic_name_types_with_dead_keys(self):
+        t = m.installer_keymaps()
+        self.assertIsNone(m.layout_keys("Ó", "us", t), "U.S. has no key for an accented capital")
+        # the acute dead key (40 on Icelandic), then Shift+O
+        self.assertEqual(m.fifo_key_lines(m.layout_keys("Ó", "is", t)), ["key 40 1", "key 40 0", "key 42 1", "key 24 1", "key 24 0", "key 42 0"])
+        self.assertEqual(m.layout_keys("ab", "is", t), [(False, 30, False), (False, 48, False)])
+        self.assertIsNotNone(m.layout_keys("Ólafur Búi Ólafsson", "is", t))
+
+    def test_altgr_is_held_around_the_key(self):
+        t = m.installer_keymaps()
+        self.assertEqual(m.fifo_key_lines(m.layout_keys("@", "is", t)), ["key 100 1", "key 16 1", "key 16 0", "key 100 0"])
+
     def test_parse(self):
         s = m.parse_installer_state(SAMPLE)
         self.assertEqual(s["size"], (1280, 800))
