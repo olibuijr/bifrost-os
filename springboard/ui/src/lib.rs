@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod vm_state;
+pub mod vm_share;
+pub mod vm_error;
