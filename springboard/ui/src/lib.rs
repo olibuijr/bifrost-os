@@ -680,6 +680,7 @@ pub mod widget_ax;
 pub mod widget_action;
 pub mod media_query;
 pub mod media_search;
+pub mod media_request;
 pub mod extension;
 pub mod extensions;
 pub mod clip_buffer;
