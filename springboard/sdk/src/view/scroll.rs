@@ -155,6 +155,9 @@ impl View for ScrollView {
         self.base.dirty = true;
         true
     }
+    fn wants_tick(&self) -> bool {
+        self.dragging || self.motion.is_some() || self.knob
+    }
     fn tick(&mut self, t: f64) {
         self.now = t;
         if let Some((motion, start)) = self.motion {

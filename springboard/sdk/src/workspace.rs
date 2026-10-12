@@ -148,20 +148,27 @@ thread_local! {
 }
 
 /// The shell answered a request (the runtime calls this on the main thread).
-pub(crate) fn reply_incoming(request: u32, status: Status, items: Vec<String>) {
+/// Returns whether a request was waiting for it.
+pub(crate) fn reply_incoming(request: u32, status: Status, items: Vec<String>) -> bool {
     if let Some(done) = PENDING.with(|p| p.borrow_mut().remove(&request)) {
         done(status, items);
+        true
+    } else {
+        false
     }
 }
 
 /// The shell reported a workspace event.
-pub(crate) fn event_incoming(kind: WorkspaceEventKind, app_id: String, name: String) {
+/// Returns whether an observer is registered for the event.
+pub(crate) fn event_incoming(kind: WorkspaceEventKind, app_id: String, name: String) -> bool {
     let mut info = HashMap::new();
     if kind.is_application() {
         info.insert("id".to_string(), app_id);
         info.insert("name".to_string(), name);
     }
+    let heard = NotificationCenter.has_observer(notification_name(kind));
     NotificationCenter.post(notification_name(kind), None, info);
+    heard
 }
 
 #[cfg(test)]

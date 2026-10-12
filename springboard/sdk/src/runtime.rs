@@ -473,6 +473,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut need_frame = false;
     let mut active = true;
     let mut size = (0u32, 0u32);
+    // C1: counts the sets of buffers sent (wrapping, from 1); a `Release` for another set is stale
+    let mut generation = 0u32;
+    // the last frame repainted everything: the next one is likely to as well, so its copy-up waits for the damage
+    let mut last_all = false;
+    let mut first_turn_flag = true;
     let mut clip_seen = kit::clipboard::text();
     let mut open = true;
     let mut commands_seen = None;
@@ -493,6 +498,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     // Blocks for the first Configure; later ones arrive in the loop.
     while open {
         let t = now_ms();
+        let first_turn = std::mem::take(&mut first_turn_flag);
         let have_ctx = ctx.is_some();
         // wait: forever when idle, 0 when a frame is due, else until the app's next wake
         let free = slots.as_ref().is_some_and(|s| s.iter().any(|b| !b.held));
@@ -503,7 +509,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         } else if need_frame {
             None
         } else {
-            app.next_wake(t).map(|w| (w - t).clamp(0.0, 1000.0).ceil() as i32)
+            app.next_wake(t).map(|w| (w - t).clamp(0.0, i32::MAX as f64).ceil() as i32)
         };
         // async control calls (control::RpcError::pending) are completed and timed out from `service`: poll them
         let timeout = if control.as_ref().is_some_and(|c| c.has_pending()) { Some(timeout.map_or(50, |t| t.min(50))) } else { timeout };
@@ -520,6 +526,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let (chan_ready, ready) = chan.wait_many(&[control.as_ref().map_or(-1, |c| c.fd()), app_fd.unwrap_or(-1), crate::dispatch::main_fd()], timeout);
         let control_ready = ready[0];
         // main-queue work (`DispatchQueue::main().async_`) runs here, before anything draws
+        // whether anything happened this turn that could change what the app publishes (controls, menus, titles)
+        let mut busy = ready[1] || ready[2] || control_ready || control.as_ref().is_some_and(|c| c.has_pending());
         if ready[2] && crate::dispatch::drain_main() {
             need_frame = true;
         }
@@ -532,7 +540,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if !chan_ready && !have_ctx {
             continue;
         }
-        // drain
+        // drain; consecutive moves of one touch are held back and only the last is delivered
+        let mut held_move: Option<(u32, f32, f32, u32)> = None;
         loop {
             let (pkt, mut fds) = match chan.recv(false) {
                 Ok(Recv::Packet(p, f)) => (p, f),
@@ -544,15 +553,35 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             };
             let Ok(msg) = ToApp::decode(&pkt) else { continue };
             let now = now_ms();
+            busy = true;
+            if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms } = msg {
+                if let Some(h) = held_move.replace((id, x, y, t_ms)) {
+                    if h.0 != id {
+                        need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now);
+                    }
+                }
+                continue;
+            }
+            if let Some(h) = held_move.take() {
+                need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now);
+            }
             match msg {
                 ToApp::Configure(cfg) => {
                     springboard::shell::keyboard::set_app_inset(cfg.safe_bottom);
                     // the scheme the shell is showing (Configure::dark = dark): every Pair colour the app draws follows it
                     kit::appearance::jump_to(!cfg.dark);
-                    let mut ui = Ui::new(Font::parse(font_data).expect("SFUI.ttf"), cfg.scale);
-                    ui.text_scale = cfg.text_scale;
-                    ui.symbols = ctx.take().map(|c| c.ui.symbols).or_else(|| symbols.take()).unwrap_or_default();
-                    ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone() });
+                    // the first Configure builds the context (the font is parsed once); later ones update it in place,
+                    // so the glyph cache, Bold Text, the defaults and the queued messages all survive a resize
+                    match ctx.as_mut() {
+                        Some(c) => reconfigure(c, cfg),
+                        None => {
+                            let mut ui = Ui::new(Font::parse(font_data).expect("SFUI.ttf"), cfg.scale);
+                            ui.text_scale = cfg.text_scale;
+                            ui.bold = kit::appearance::current().bold;
+                            ui.symbols = symbols.take().unwrap_or_default();
+                            ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone() });
+                        }
+                    }
                     crate::layout::set_from(&cfg);
                     let c = ctx.as_ref().unwrap();
                     app.configure(c);
@@ -566,7 +595,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                     if size != (cfg.w, cfg.h) || slots.is_none() {
                         size = (cfg.w, cfg.h);
-                        match alloc(&chan, cfg.w, cfg.h) {
+                        generation = generation.wrapping_add(1).max(1);
+                        match alloc(&chan, cfg.w, cfg.h, generation) {
                             Some(s) => slots = Some(s),
                             None => {
                                 eprintln!("bifrost-app: cannot allocate frame buffers");
@@ -599,9 +629,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.event(c, Input::Open(url));
                     }
                 }
-                ToApp::Release { buf } => {
-                    if let Some(b) = slots.as_mut().and_then(|s| s.get_mut(buf as usize)) {
-                        b.held = false;
+                ToApp::Release { buf, generation: g } => {
+                    if g == generation {
+                        if let Some(b) = slots.as_mut().and_then(|s| s.get_mut(buf as usize)) {
+                            b.held = false;
+                        }
                     }
                 }
                 ToApp::Resume => {
@@ -704,8 +736,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::DistNotify { name, user_info } => {
-                    crate::notification::distributed_incoming(&name, user_info.into_iter().collect());
-                    need_frame = true;
+                    need_frame |= crate::notification::distributed_incoming(&name, user_info.into_iter().collect());
                 }
                 ToApp::ServiceReply { request, ok, body } => {
                     let result = crate::service::decode_reply(ok, &body);
@@ -723,12 +754,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::WorkspaceReply { request, status, items } => {
-                    crate::workspace::reply_incoming(request, status, items);
-                    need_frame = true;
+                    need_frame |= crate::workspace::reply_incoming(request, status, items);
                 }
                 ToApp::WorkspaceEvent { kind, app_id, name } => {
-                    crate::workspace::event_incoming(kind, app_id, name);
-                    need_frame = true;
+                    need_frame |= crate::workspace::event_incoming(kind, app_id, name);
                 }
                 ToApp::ShareDone { request, target } => {
                     if let Some(c) = &ctx {
@@ -763,6 +792,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 }
             }
         }
+        if let Some(h) = held_move.take() {
+            need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now_ms());
+        }
         if !open {
             break;
         }
@@ -771,8 +803,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             need_frame |= app.continue_activity(c, activity);
         }
         let t = now_ms();
-        if active {
-            need_frame |= app.tick(c, t);
+        if active && app.tick(c, t) {
+            need_frame = true;
+            busy = true;
         }
         flush_restorable(&app, c, false);
         if (active || repaint_suspended) && need_frame {
@@ -783,7 +816,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     bifrost_ui::ax::begin_frame();
                     let _ = crate::widgets::take_frame_materials();
                     let full = first_frame || app.full_redraw();
-                    let sent = draw_into(&chan, &mut app, c, slots, i, t, first_frame);
+                    let sent = draw_into(&chan, &mut app, c, slots, i, t, first_frame, &mut last_all);
                     // a partial redraw may skip the sidebar: keep the regions it declared until a frame draws some
                     // (or a full redraw draws none)
                     let drawn = crate::widgets::take_frame_materials();
@@ -791,6 +824,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         materials = drawn;
                     }
                     if sent {
+                        busy = true;
                         drawn_nodes = bifrost_ui::ax::take_frame();
                         first_frame = false;
                         repaint_suspended = false;
@@ -799,6 +833,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 }
             }
         }
+        if materials!=materials_seen {let _=chan.send(&ToShell::Materials(materials.clone()).encode(),&[]);materials_seen=materials.clone();}
+        if busy || first_turn {
         let controls=merge_controls(app.controls(c),&drawn_nodes);
         if controls!=controls_seen {let _=chan.send(&ToShell::Controls(controls.clone()).encode(),&[]);controls_seen=controls;}
         let tree=app.controls_tree(c);
@@ -807,13 +843,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
         let ax_meta=app.ax_meta(c);
         if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
-        if materials!=materials_seen {let _=chan.send(&ToShell::Materials(materials.clone()).encode(),&[]);materials_seen=materials.clone();}
         let commands=app.commands(c);
         let menus=app.main_menu(c);
         if menus!=menus_seen {let _=chan.send(&ToShell::AppMenus(menus.clone()).encode(),&[]);menus_seen=menus;}
         if commands_seen != Some(commands) {commands_seen=Some(commands);let _=chan.send(&ToShell::Commands(commands).encode(),&[]);}
         let titles=app.undo_titles(c);
         if titles!=undo_titles_seen {let _=chan.send(&ToShell::UndoTitles{undo:titles.0.clone(),redo:titles.1.clone()}.encode(),&[]);undo_titles_seen=titles;}
+        }
         // the system keyboard was asked for (or dismissed) through a `Keyboard`
         if let Some(on) = springboard::shell::keyboard::take_app_request() {
             c.wants_keyboard(on);
@@ -848,7 +884,15 @@ fn event_time(now: f64, t_ms: u32) -> f64 {
     if ago < 1000.0 { now - ago } else { now }
 }
 
-fn alloc(chan: &Channel, w: u32, h: u32) -> Option<[Slot; 2]> {
+/// Applies a new `Configure` to the live context: size, scale and Dynamic Type change; Bold Text, the glyph cache,
+/// the defaults and the messages still queued in `out` stay.
+fn reconfigure(c: &mut Ctx, cfg: Configure) {
+    c.ui.s = cfg.scale;
+    c.ui.text_scale = cfg.text_scale;
+    c.cfg = cfg;
+}
+
+fn alloc(chan: &Channel, w: u32, h: u32, generation: u32) -> Option<[Slot; 2]> {
     let bytes = (w as usize * h as usize * 4).max(4);
     let mk = |n: &str| -> Option<(Owned, Slot)> {
         let fd = shm_create(n, bytes).ok()?;
@@ -857,40 +901,50 @@ fn alloc(chan: &Channel, w: u32, h: u32) -> Option<[Slot; 2]> {
     };
     let (fa, a) = mk("bifrost-frame-0")?;
     let (fb, b) = mk("bifrost-frame-1")?;
-    chan.send(&ToShell::Buffers { w, h }.encode(), &[fa.0, fb.0]).ok()?;
+    chan.send(&ToShell::Buffers { w, h, generation }.encode(), &[fa.0, fb.0]).ok()?;
     Some([a, b])
 }
 
-/// Draws into slot `i`, brings it up to date with the other buffer first, and
-/// sends the frame. Returns whether a frame went out.
-fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 2], i: usize, t: f64, first: bool) -> bool {
+/// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
+fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, m: (u32, f32, f32, u32), now: f64) -> bool {
+    let Some(c) = ctx else { return false };
+    app.event(c, Input::Touch { kind: TouchKind::Move, id: m.0, x: m.1, y: m.2, t: event_time(now, m.3) })
+}
+
+/// Draws into slot `i`, brings it up to date with the other buffer, and sends the frame. Returns whether a frame went
+/// out. An app whose last frame repainted everything (`last_all`) is drawn first and only then is the part of the
+/// stale area its damage did not cover copied up, so a full repaint costs no copy at all.
+fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 2], i: usize, t: f64, first: bool, last_all: &mut bool) -> bool {
     let (w, h) = (ctx.cfg.w as usize, ctx.cfg.h as usize);
     let (lo, hi) = slots.split_at_mut(1);
     let (cur, other) = if i == 0 { (&mut lo[0], &mut hi[0]) } else { (&mut hi[0], &mut lo[0]) };
     let t0 = now_ms();
-    if app.full_redraw() {
+    let full = app.full_redraw();
+    let defer = !full && *last_all && !first;
+    if full {
         cur.stale.clear();
-    } else if cur.stale_all {
-        cur.map.pixels_mut().copy_from_slice(other.map.pixels());
-    } else {
-        for r in cur.stale.drain(..) {
-            copy_rect(other.map.pixels(), cur.map.pixels_mut(), w, h, r);
-        }
+    } else if !defer {
+        copy_up(cur, other, w, h, &[]);
     }
-    cur.stale.clear();
-    cur.stale_all = false;
-    let mut surface = Surface { w, h, stride: w, px: cur.map.pixels_mut(), y0: 0 };
     let t1 = now_ms();
-    let mut damage = app.draw(ctx, &mut surface, t);
-    STATS.with(|st| st.borrow_mut().frame(t1 - t0, now_ms() - t1));
+    let mut surface = Surface { w, h, stride: w, px: cur.map.pixels_mut(), y0: 0 };
+    let mut damage = if app.draws_canvas() { app.draw_canvas(ctx, &mut surface, t) } else { app.draw(ctx, &mut surface, t) };
+    let t2 = now_ms();
     if first {
         damage = Damage::new(w, h);
         damage.all();
     }
+    let rects: Vec<Rect> = damage.areas().iter().map(|a| [a.x0 as u32, a.y0 as u32, (a.x1 - a.x0) as u32, (a.y1 - a.y0) as u32]).collect();
+    if defer {
+        copy_up(cur, other, w, h, &rects);
+    }
+    cur.stale.clear();
+    cur.stale_all = false;
+    STATS.with(|st| st.borrow_mut().frame((t1 - t0) + (now_ms() - t2), t2 - t1));
     if damage.is_empty() {
         return false;
     }
-    let rects: Vec<Rect> = damage.areas().iter().map(|a| [a.x0 as u32, a.y0 as u32, (a.x1 - a.x0) as u32, (a.y1 - a.y0) as u32]).collect();
+    *last_all = damage.is_all();
     if first {
         other.stale_all = true;
     } else {
@@ -902,6 +956,57 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
     cur.held = true;
     let _ = chan.send(&ToShell::Frame { buf: i as u32, damage: rects }.encode(), &[]);
     true
+}
+
+/// Brings `cur` up to date with `other`: everything when `cur` is wholly stale, else the rectangles `other` drew since;
+/// pixels inside `except` (what the app just drew) are left alone. Returns the pixels copied.
+fn copy_up(cur: &mut Slot, other: &Slot, w: usize, h: usize, except: &[Rect]) -> usize {
+    let mut n = 0;
+    if cur.stale_all {
+        if except.is_empty() {
+            cur.map.pixels_mut().copy_from_slice(other.map.pixels());
+            n = w * h;
+        } else {
+            n = copy_rect_except(other.map.pixels(), cur.map.pixels_mut(), w, h, [0, 0, w as u32, h as u32], except);
+        }
+    } else {
+        for r in cur.stale.clone() {
+            n += copy_rect_except(other.map.pixels(), cur.map.pixels_mut(), w, h, r, except);
+        }
+    }
+    n
+}
+
+/// `copy_rect` minus the rectangles in `except`; returns the pixels copied.
+fn copy_rect_except(src: &[u32], dst: &mut [u32], w: usize, h: usize, r: Rect, except: &[Rect]) -> usize {
+    let (x0, y0) = (r[0] as usize, r[1] as usize);
+    let (x1, y1) = ((x0 + r[2] as usize).min(w), (y0 + r[3] as usize).min(h));
+    let mut n = 0;
+    for row in y0..y1 {
+        // the covered spans on this row, left to right
+        let mut cut: Vec<(usize, usize)> = except
+            .iter()
+            .filter(|e| (e[1] as usize) <= row && row < (e[1] as usize + e[3] as usize))
+            .map(|e| (e[0] as usize, e[0] as usize + e[2] as usize))
+            .collect();
+        cut.sort_unstable();
+        let mut x = x0;
+        for (a, b) in cut {
+            if a > x {
+                let end = a.min(x1);
+                if end > x {
+                    dst[row * w + x..row * w + end].copy_from_slice(&src[row * w + x..row * w + end]);
+                    n += end - x;
+                }
+            }
+            x = x.max(b);
+        }
+        if x < x1 {
+            dst[row * w + x..row * w + x1].copy_from_slice(&src[row * w + x..row * w + x1]);
+            n += x1 - x;
+        }
+    }
+    n
 }
 
 /// Frame timing, logged once a second while the app draws (`app: N fps, copy-up ..., draw ...`
@@ -927,7 +1032,9 @@ impl Stats {
         self.draw_max = self.draw_max.max(draw);
         if now - self.since >= 1000.0 {
             let n = self.n as f64;
+            if std::env::var_os("BIFROST_FRAME_STATS").is_some_and(|v| v == "1") {
             eprintln!("app frames: {:.0} fps, copy-up {:.1} ms, draw {:.1} ms avg {:.1} max", n * 1000.0 / (now - self.since), self.copy / n, self.draw / n, self.draw_max);
+            }
             *self = Stats::default();
         }
     }
@@ -935,14 +1042,6 @@ impl Stats {
 
 thread_local! {
     static STATS: std::cell::RefCell<Stats> = std::cell::RefCell::new(Stats::default());
-}
-
-fn copy_rect(src: &[u32], dst: &mut [u32], w: usize, h: usize, r: Rect) {
-    let (x, y) = (r[0] as usize, r[1] as usize);
-    let (x1, y1) = ((x + r[2] as usize).min(w), (y + r[3] as usize).min(h));
-    for row in y..y1 {
-        dst[row * w + x..row * w + x1].copy_from_slice(&src[row * w + x..row * w + x1]);
-    }
 }
 
 /// Where the app's control socket lives: `BIFROST_CONTROL`, else `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`,
@@ -1185,5 +1284,76 @@ mod direct_gate_tests {
     #[test]
     fn the_layer_context_is_not_wired_yet() {
         assert!(!LAYER_CONTEXT_WIRED);
+    }
+}
+
+#[cfg(test)]
+mod audit_fix_tests {
+    use super::*;
+    use bifrost_render::canvas::Canvas;
+
+    /// Draws everything each frame; with `canvas` its `draw` must never be called.
+    struct Fake {
+        canvas: bool,
+    }
+
+    fn all() -> Damage {
+        let mut d = Damage::new(100, 100);
+        d.all();
+        d
+    }
+
+    impl App for Fake {
+        fn id(&self) -> &str {
+            "is.test.fake"
+        }
+        fn draws_canvas(&self) -> bool {
+            self.canvas
+        }
+        fn draw(&mut self, _ctx: &Ctx, _s: &mut Surface, _t: f64) -> Damage {
+            assert!(!self.canvas, "a canvas app is drawn through draw_canvas");
+            all()
+        }
+        fn draw_canvas(&mut self, _ctx: &Ctx, _c: &mut dyn Canvas, _t: f64) -> Damage {
+            all()
+        }
+    }
+
+    #[test]
+    fn copy_rect_except_skips_the_covered_span() {
+        let src = vec![7u32; 8];
+        let mut dst = vec![0u32; 8];
+        // 4x2, everything stale, row 0 columns 1..3 covered by the new damage
+        let n = copy_rect_except(&src, &mut dst, 4, 2, [0, 0, 4, 2], &[[1, 0, 2, 1]]);
+        assert_eq!(n, 6);
+        assert_eq!(dst, [7, 0, 0, 7, 7, 7, 7, 7]);
+    }
+
+    #[test]
+    fn a_full_repaint_copies_nothing_up_and_a_canvas_app_is_drawn_through_draw_canvas() {
+        let (a, _b) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let mut slots = alloc(&a, 100, 100, 1).expect("buffers");
+        let mut app = Fake { canvas: true };
+        let mut last_all = false;
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 0, 0.0, true, &mut last_all));
+        assert!(last_all, "the first frame was whole");
+        // slot 1 is wholly stale, yet a full repaint leaves nothing to copy
+        let (lo, hi) = slots.split_at_mut(1);
+        assert_eq!(copy_up(&mut hi[0], &lo[0], 100, 100, &[[0, 0, 100, 100]]), 0);
+        assert!(draw_into(&a, &mut app, &ctx, &mut slots, 1, 1.0, false, &mut last_all));
+        assert!(!slots[1].stale_all && slots[1].stale.is_empty());
+    }
+
+    #[test]
+    fn reconfigure_keeps_bold_text_and_queued_messages() {
+        let mut ctx = test_ctx();
+        ctx.ui.bold = true;
+        ctx.open_url("https://example.com");
+        let cfg = Configure { w: 200, h: 150, scale: 2.0, text_scale: 1.5, ..ctx.cfg };
+        reconfigure(&mut ctx, cfg);
+        assert!(ctx.ui.bold, "Bold Text survives a resize");
+        assert_eq!((ctx.cfg.w, ctx.cfg.h, ctx.ui.s, ctx.ui.text_scale), (200, 150, 2.0, 1.5));
+        assert_eq!(ctx.take_sent(), [ToShell::OpenUrl { url: "https://example.com".into() }], "the queue is not dropped");
     }
 }
