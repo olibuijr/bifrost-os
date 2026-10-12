@@ -321,3 +321,5 @@ pub trait App {
     }
 }
 pub mod definitions;
+
+pub mod encryption_preference;
