@@ -2,11 +2,15 @@
 //! stream's `boundary`, the layout of interleaved and non-interleaved rings, and the plans for one write (playback)
 //! or one read (capture) including the recovery from an under- or overrun.
 
+use crate::uapi::{STATE_DISCONNECTED, STATE_RUNNING, STATE_SUSPENDED};
 use crate::convert::{pack_channel, silence_ring, unpack_channel, SampleFormat};
 use bifrost_audio_types::Buffer;
 
 /// Signed distance `a - b` of two pointers that wrap at `boundary`, in `[-boundary/2, boundary/2)`.
 pub fn ptr_diff(a: u64, b: u64, boundary: u64) -> i64 {
+    if boundary < 2 {
+        return 0;
+    }
     let bd = boundary as i128;
     let d = (a as i128 - b as i128).rem_euclid(bd);
     (if d >= bd / 2 { d - bd } else { d }) as i64
@@ -14,14 +18,55 @@ pub fn ptr_diff(a: u64, b: u64, boundary: u64) -> i64 {
 
 /// Adds `frames` to a pointer, wrapping at `boundary`.
 pub fn ptr_add(p: u64, frames: u64, boundary: u64) -> u64 {
+    if boundary == 0 {
+        return 0;
+    }
     ((p as u128 + frames as u128) % boundary as u128) as u64
 }
 
 /// Unwraps a hardware pointer reading into a running frame count: the forward distance from the last reading,
 /// added to the total.
 pub fn unwrap_ptr(last_raw: u64, total: u64, raw: u64, boundary: u64) -> u64 {
+    if boundary == 0 {
+        return total;
+    }
     let fwd = (raw as i128 - last_raw as i128).rem_euclid(boundary as i128) as u64;
-    total + fwd
+    total.wrapping_add(fwd)
+}
+
+/// What the driver does about the state the kernel reports for a started stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recovery {
+    /// Running: nothing to do.
+    None,
+    /// Stopped by an underrun or overrun (`XRUN`), or otherwise out of `RUNNING`: `prepare`, refill, `start`.
+    Restart,
+    /// `SUSPENDED` (`ESTRPIPE`): try `RESUME`.
+    Resume,
+    /// `DISCONNECTED` (`ENODEV`, the device was unplugged): nothing can be done, report it.
+    Gone,
+}
+
+/// The recovery for a PCM state (`STATE_*`).
+pub fn recovery_for(state: i32) -> Recovery {
+    match state {
+        STATE_RUNNING => Recovery::None,
+        STATE_SUSPENDED => Recovery::Resume,
+        STATE_DISCONNECTED => Recovery::Gone,
+        _ => Recovery::Restart,
+    }
+}
+
+/// The next step after a `RESUME` ioctl that failed with `errno` (`None` when it succeeded).
+pub fn after_resume(errno: Option<i32>) -> Recovery {
+    match errno {
+        None => Recovery::None,
+        // The hardware is not back yet: try again next cycle.
+        Some(libc::EAGAIN) => Recovery::Resume,
+        Some(libc::ENODEV) => Recovery::Gone,
+        // ENOSYS and anything else: the driver cannot resume, so start the stream over.
+        Some(_) => Recovery::Restart,
+    }
 }
 
 /// How the samples sit in the mmapped ring.
@@ -173,6 +218,50 @@ mod tests {
         assert_eq!(ptr_diff(10, BD - 10, BD), 20);
         assert_eq!(ptr_diff(BD - 10, 10, BD), -20);
         assert_eq!(ptr_diff(7, 7, BD), 0);
+    }
+
+    #[test]
+    fn pointers_at_the_exact_boundary() {
+        // Reading the boundary itself is the same position as 0.
+        assert_eq!(unwrap_ptr(BD - 1, 100, 0, BD), 101);
+        assert_eq!(unwrap_ptr(BD - 1, 100, BD, BD), 101, "a raw value at the boundary reduces to 0");
+        // The distance of exactly half the boundary reads as negative: the range is [-bd/2, bd/2).
+        assert_eq!(ptr_diff(BD / 2, 0, BD), -((BD / 2) as i64));
+        assert_eq!(ptr_diff(BD / 2 - 1, 0, BD), (BD / 2 - 1) as i64);
+        assert_eq!(ptr_add(BD - 1, 1, BD), 0);
+        assert_eq!(ptr_add(0, BD, BD), 0);
+        // A degenerate boundary never divides by zero.
+        assert_eq!(ptr_diff(5, 3, 0), 0);
+        assert_eq!(ptr_diff(5, 3, 1), 0);
+        assert_eq!(ptr_add(5, 3, 0), 0);
+        assert_eq!(unwrap_ptr(1, 7, 2, 0), 7);
+        // Each reading is a forward step of under half a lap: 3 laps and 10 frames in all.
+        let mut total = 0;
+        let mut last = 0;
+        for raw in [BD / 2 - 1, BD - 2, 5, BD / 2, BD - 5, 10] {
+            total = unwrap_ptr(last, total, raw, BD);
+            last = raw;
+        }
+        assert_eq!(total, (BD / 2 - 1) + (BD / 2 - 1) + 7 + (BD / 2 - 5) + (BD / 2 - 5) + 15);
+        assert_eq!(total, 2 * BD + 10);
+    }
+
+    #[test]
+    fn recovery_state_machine() {
+        use crate::uapi::*;
+        assert_eq!(recovery_for(STATE_RUNNING), Recovery::None);
+        assert_eq!(recovery_for(STATE_XRUN), Recovery::Restart);
+        assert_eq!(recovery_for(STATE_PREPARED), Recovery::Restart);
+        assert_eq!(recovery_for(STATE_SETUP), Recovery::Restart);
+        assert_eq!(recovery_for(STATE_SUSPENDED), Recovery::Resume);
+        assert_eq!(recovery_for(STATE_DISCONNECTED), Recovery::Gone);
+        assert_eq!(recovery_for(99), Recovery::Restart);
+        // Resume: success, not ready yet, unplugged while suspended, driver without resume.
+        assert_eq!(after_resume(None), Recovery::None);
+        assert_eq!(after_resume(Some(libc::EAGAIN)), Recovery::Resume);
+        assert_eq!(after_resume(Some(libc::ENODEV)), Recovery::Gone);
+        assert_eq!(after_resume(Some(libc::ENOSYS)), Recovery::Restart);
+        assert_eq!(after_resume(Some(libc::EIO)), Recovery::Restart);
     }
 
     #[test]

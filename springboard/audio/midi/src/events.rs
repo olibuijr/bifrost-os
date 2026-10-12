@@ -321,6 +321,32 @@ mod tests {
     }
 
     #[test]
+    fn hostile_bytes_never_panic_or_produce_events_from_nothing() {
+        // F7 with no F0 clears running status.
+        assert!(MidiParser::parse_all(&[0x90, 60, 100, 0xF7, 62, 90]).len() == 1);
+        // Truncated sysex followed by a channel status: the status ends the sysex.
+        let ev = MidiParser::parse_all(&[0xF0, 1, 2, 3, 0x91, 60, 100]);
+        assert_eq!(ev, vec![MidiEvent::NoteOn { channel: 1, key: 60, velocity: 100 }]);
+        // Real-time bytes inside sysex, including 0xFF, do not end it; the data after them is still skipped.
+        let ev = MidiParser::parse_all(&[0xF0, 1, 0xF8, 0xFF, 2, 0xFE, 0xF7, 0x90, 60, 100]);
+        assert_eq!(ev.len(), 1);
+        // Data bytes with no status give nothing.
+        assert!(MidiParser::parse_all(&[1, 2, 3, 4]).is_empty());
+        // A status interrupts an incomplete message: the first note-on is dropped.
+        let ev = MidiParser::parse_all(&[0x90, 60, 0x80, 61, 0]);
+        assert_eq!(ev, vec![MidiEvent::NoteOff { channel: 0, key: 61, velocity: 0 }]);
+        // Running status survives real-time bytes between messages.
+        let ev = MidiParser::parse_all(&[0x90, 60, 100, 0xF8, 61, 100]);
+        assert_eq!(ev.len(), 2);
+        // Every possible byte pair after every status is handled.
+        for status in 0x80u8..=0xFF {
+            for a in 0..=255u8 {
+                let _ = MidiParser::parse_all(&[status, a, a, a, a]);
+            }
+        }
+    }
+
+    #[test]
     fn pitch_bend_joins_its_two_seven_bit_bytes() {
         // Least significant byte 0x00, most significant 0x40: 0x40 << 7 = 8192, the centre.
         let events = MidiParser::parse_all(&[0xE1, 0x00, 0x40]);

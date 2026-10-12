@@ -186,7 +186,13 @@ pub fn sysex_to_ump(group: u8, data: &[u8]) -> Vec<Ump> {
 #[derive(Default, Debug)]
 pub struct SysexAssembler {
     buf: Vec<u8>,
+    /// True between a start packet and its end packet.
+    active: bool,
 }
+
+/// The most payload bytes one assembled message may hold. A longer message is dropped, so a peer that never
+/// sends the end packet cannot grow the buffer without bound.
+pub const SYSEX_MAX_BYTES: usize = 1 << 20;
 
 impl SysexAssembler {
     pub fn new() -> Self {
@@ -207,11 +213,25 @@ impl SysexAssembler {
             (p.words[1] >> 8) as u8,
             p.words[1] as u8,
         ];
-        if status == 0 || status == 1 {
+        match status {
+            0 | 1 => {
+                self.buf.clear();
+                self.active = status == 1;
+            }
+            // A continue or end packet with no start before it (or after an overflow) belongs to nothing.
+            2 | 3 if !self.active => return None,
+            2 | 3 => {}
+            // Status 4 to 15 are reserved.
+            _ => return None,
+        }
+        if self.buf.len() + n > SYSEX_MAX_BYTES {
             self.buf.clear();
+            self.active = false;
+            return None;
         }
         self.buf.extend_from_slice(&b[..n]);
         if status == 0 || status == 3 {
+            self.active = false;
             Some(std::mem::take(&mut self.buf))
         } else {
             None
@@ -413,6 +433,101 @@ mod tests {
         let mut a = SysexAssembler::new();
         assert_eq!(a.push(&out[4]), Some(vec![0x7D, 1, 2]));
         assert_eq!(sysex_bytes(&[0x7D, 1, 2]), vec![0xF0, 0x7D, 1, 2, 0xF7]);
+    }
+
+    #[test]
+    fn sysex_assembler_survives_hostile_packets() {
+        let pk = sysex_to_ump(0, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+        assert_eq!(pk.len(), 3);
+        let mut a = SysexAssembler::new();
+        // An end or continue packet with no start gives nothing.
+        assert_eq!(a.push(&pk[2]), None);
+        assert_eq!(a.push(&pk[1]), None);
+        // A new start restarts the message and discards the truncated one.
+        assert_eq!(a.push(&pk[0]), None);
+        assert_eq!(a.push(&pk[0]), None);
+        assert_eq!(a.push(&pk[1]), None);
+        assert_eq!(a.push(&pk[2]), Some((1..=13).collect::<Vec<u8>>()));
+        // After the end the next end is orphaned again.
+        assert_eq!(a.push(&pk[2]), None);
+        // A reserved status is ignored, and a non-sysex packet too.
+        assert_eq!(a.push(&Ump::two(0x3040_0000, 0)), None);
+        assert_eq!(a.push(&Ump::one(0x2090_3C64)), None);
+        // A length nibble above 6 is clamped to 6.
+        assert_eq!(a.push(&Ump::two(0x300F_0102, 0x0304_0506)), Some(vec![1, 2, 3, 4, 5, 6]));
+    }
+
+    #[test]
+    fn empty_sysex_round_trips() {
+        let pk = sysex_to_ump(0, &[]);
+        assert_eq!(pk.len(), 1);
+        assert_eq!(pk[0].words[0], 0x3000_0000);
+        assert_eq!(SysexAssembler::new().push(&pk[0]), Some(Vec::new()));
+        // Exactly 6 bytes is one complete packet, 12 bytes is two.
+        assert_eq!(sysex_to_ump(0, &[1; 6]).len(), 1);
+        assert_eq!(sysex_to_ump(0, &[1; 12]).len(), 2);
+    }
+
+    #[test]
+    fn byte_stream_hostile_sysex() {
+        let run = |bytes: &[u8]| {
+            let mut c = Midi1ToUmp::new(0);
+            let mut out = Vec::new();
+            for &b in bytes {
+                c.push(b, &mut out);
+            }
+            out
+        };
+        // F7 without F0 produces nothing and clears running status.
+        assert!(run(&[0xF7]).is_empty());
+        assert!(run(&[0x90, 60, 100, 0xF7, 62, 90]).len() == 1);
+        // A real-time byte inside sysex is delivered at once and the sysex continues.
+        let out = run(&[0xF0, 1, 0xF8, 2, 0xF7]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].words[0], 0x10F8_0000);
+        assert_eq!(SysexAssembler::new().push(&out[1]), Some(vec![1, 2]));
+        // A truncated sysex ended by a channel status is delivered, then the channel message parses.
+        let out = run(&[0xF0, 1, 2, 0x90, 60, 100]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(SysexAssembler::new().push(&out[0]), Some(vec![1, 2]));
+        assert_eq!(out[1].words[0], 0x2090_3C64);
+        // F0 F7 is an empty message.
+        let out = run(&[0xF0, 0xF7]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(SysexAssembler::new().push(&out[0]), Some(Vec::new()));
+        // Data bytes with no status are dropped; undefined F4 swallows its data.
+        assert!(run(&[1, 2, 3, 0xF4, 5]).is_empty());
+        // Tune request is one byte.
+        assert_eq!(run(&[0xF6]).len(), 1);
+    }
+
+    #[test]
+    fn every_channel_message_round_trips_through_both_formats() {
+        for ch in [0u8, 15] {
+            for ev in [
+                MidiEvent::NoteOff { channel: ch, key: 127, velocity: 0 },
+                MidiEvent::NoteOn { channel: ch, key: 0, velocity: 1 },
+                MidiEvent::PolyPressure { channel: ch, key: 64, pressure: 64 },
+                MidiEvent::ControlChange { channel: ch, controller: 120, value: 127 },
+                MidiEvent::ProgramChange { channel: ch, program: 127 },
+                MidiEvent::ChannelPressure { channel: ch, pressure: 0 },
+                MidiEvent::PitchBend { channel: ch, value: 0 },
+                MidiEvent::PitchBend { channel: ch, value: 16383 },
+                MidiEvent::PitchBend { channel: ch, value: 8192 },
+            ] {
+                let p1 = from_midi1(7, ev);
+                assert_eq!(to_midi1(&p1), Some(ev), "{ev:?}");
+                let bytes = ump_to_bytes(&p1).unwrap();
+                assert_eq!(crate::events::MidiParser::parse_all(&bytes), vec![ev], "{ev:?}");
+                let p2 = midi1_to_midi2(7, ev);
+                assert_eq!(midi2_to_midi1(&p2), Some(ev), "{ev:?}");
+            }
+        }
+        // Other message types give None.
+        assert_eq!(to_midi1(&Ump::one(0x1000_0000)), None);
+        assert_eq!(midi2_to_midi1(&Ump::one(0x2000_0000)), None);
+        // Reserved MIDI 2.0 opcode gives None.
+        assert_eq!(midi2_to_midi1(&Ump::two(0x40F0_0000, 0)), None);
     }
 
     #[test]
