@@ -49,6 +49,9 @@ build() {
   cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal --bin bifrost-privd ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-mcp ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-app --bin bifrost-log ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  # the new stack (docs/graphics-architecture.md): the window server and the chrome clients; shaders are compiled in
+  cargo build --release --locked -p bifrost-wm --bin bifrost-wm ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked -p bifrost-chrome --bins ${SPRINGBOARD_CARGO_FLAGS:---offline}
 }
 
 check() {
@@ -63,6 +66,10 @@ package() {
   install -Dm755 "$srcdir/target/release/bifrost-privd" "$pkgdir/usr/bin/bifrost-privd"
   install -Dm755 "$srcdir/target/release/bifrost-mcp" "$pkgdir/usr/bin/bifrost-mcp"
   install -Dm755 "$srcdir/target/release/bifrost-log" "$pkgdir/usr/bin/bifrost-log"
+  install -Dm755 "$srcdir/target/release/bifrost-wm" "$pkgdir/usr/bin/bifrost-wm"
+  for chrome in bifrost-menubar bifrost-dock bifrost-panels; do
+    install -Dm755 "$srcdir/target/release/$chrome" "$pkgdir/usr/bin/$chrome"
+  done
   install -d "$pkgdir/usr/share/springboard"
   if [ -d "$_assets" ]; then
     cp -a "$_assets" "$pkgdir/usr/share/springboard/assets"
