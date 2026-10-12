@@ -906,3 +906,7 @@ pub mod rules;
 pub mod decision;
 pub mod capture_access;
 pub mod audio_settings;
+pub mod capture_content;
+pub mod capture_filter;
+pub mod capture_config;
+pub mod capture_error;
