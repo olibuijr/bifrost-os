@@ -6,6 +6,7 @@
 //! empty space or a swipe up puts the sheet away; a long list scrolls.
 
 use super::super::control_center::Frost;
+use super::super::services::widgets_timeline::{self, Row};
 use super::super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::super::ui::{centred, Weight, WHITE};
 use super::super::{apps, AppId, Effect, Event, Screen, Shell};
@@ -417,7 +418,11 @@ impl Shell {
 // more; the card's disc clears that app, the title's clears all, a click on a
 // card opens its app, a click elsewhere closes the column. Widgets are left
 // out: the shell has no widget data source on the PC yet.
+//
+// Widget area (services/widgets_timeline.rs): under the title, one row per widget entry or live activity on screen,
+// 58 pt high, 10 apart, above the notification cards.
 
+const NC_WIDGET_PT: f32 = 58.0;
 const NC_W_PT: f32 = 342.0;
 const NC_RIGHT_PT: f32 = 18.0;
 const NC_TOP_GAP_PT: f32 = 6.0;
@@ -455,6 +460,9 @@ impl Shell {
         let c = ui.pt(NC_CLOSE_PT);
         let clear = (x + w - c, y + (ui.pt(NC_TITLE_PT) - c) / 2.0, c, c);
         y += ui.pt(NC_TITLE_PT);
+        if let Some((r, _)) = self.center_widget_rects().last() {
+            y = r.1 + r.3 + ui.pt(NC_GAP_PT);
+        }
         let mut cards = vec![];
         for (i, g) in self.notify.store().groups().iter().enumerate() {
             let h = ui.pt(NC_CARD_PT);
@@ -468,13 +476,36 @@ impl Shell {
         (title, clear, cards)
     }
 
+    /// The widget area under the title: one glass row per widget entry or live activity on screen
+    /// (`services::widgets_timeline::rows`), in the order the shell has them, as many as fit above the dock.
+    fn center_widget_rects(&self) -> Vec<(R4, Row)> {
+        let ui = &self.ui;
+        let w = ui.pt(NC_W_PT);
+        let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
+        let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
+        let mut out = vec![];
+        for row in widgets_timeline::rows(self.notify.now()) {
+            let h = ui.pt(NC_WIDGET_PT);
+            if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+                break;
+            }
+            out.push(((x, y, w, h), row));
+            y += h + ui.pt(NC_GAP_PT);
+        }
+        out
+    }
+
     /// The column's bounds in px, for the presenter's opaque regions.
     pub(crate) fn center_desk_rect(&self) -> Option<R4> {
         if self.notify.center.is_hidden() || !self.desk_active() {
             return None;
         }
         let (t, _, cards) = self.center_desk_layout();
-        let bottom = cards.last().map_or(t.1 + t.3, |c| c.1 .1 + c.1 .3 + self.ui.pt(NC_STACK_PT));
+        let bottom = cards
+            .last()
+            .map(|c| c.1 .1 + c.1 .3 + self.ui.pt(NC_STACK_PT))
+            .or_else(|| self.center_widget_rects().last().map(|(r, _)| r.1 + r.3))
+            .unwrap_or(t.1 + t.3);
         Some((t.0, t.1, t.2, bottom - t.1))
     }
 
@@ -567,6 +598,17 @@ impl Shell {
             disc(s, clear, FIELD_BG.now(), label);
         }
         let pad = ui.pt(NC_PAD_PT);
+        for ((x, y, w, h), row) in self.center_widget_rects() {
+            let x = x + slide;
+            let r = ui.pt(NC_CARD_R_PT);
+            desk_glass(s, (x, y, w, h), r, alpha);
+            let room = w - 2.0 * pad;
+            let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
+            let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
+            let ly = y + (h - (head.h + value.h) as f32) / 2.0;
+            s.blit(&head, (x + pad) as i32, ly as i32, 255, alpha);
+            s.blit(&value, (x + pad) as i32, (ly + head.h as f32) as i32, 255, alpha);
+        }
         for (i, (x, y, w, h), close) in cards {
             let g = &groups[i];
             let x = x + slide;
