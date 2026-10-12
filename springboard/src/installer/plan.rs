@@ -174,6 +174,8 @@ pub fn initramfs_hooks(encrypted: bool) -> String {
 /// threadirqs (B1) runs interrupt handlers as kernel threads, so the sound card and xHCI IRQ threads can be
 /// raised above the rest of the system (docs/audio/21-lowest-latency-path.md); the loader's fallback
 /// (`bootweave/efi/src/cmdline.rs`, `DEFAULT_CMDLINE`) and the ISO line (`tools/prepare-mkarchiso.py`) carry it too.
+/// fbcon=map:9 maps the virtual consoles to a framebuffer that does not exist, so fbcon never binds to the display:
+/// no console text, no take-over redraw (docs/boot-architecture.md, "One mode, no console"). Recovery uses ssh or serial.
 /// An empty systemd.tty.rows.console= makes PID 1 skip its ANSI size query on /dev/console. Nothing answers
 /// that query behind the boot frame, so PID 1 otherwise waits out its 333 ms reply timeout every boot.
 pub fn cmdline_txt(root_uuid: &str, kernel: &str) -> String {
@@ -193,7 +195,7 @@ pub fn kernel_for(gpu: &[&str]) -> &'static str {
 
 fn cmdline_with(root_uuid: &str, kernel: &str, audio_core: Option<&str>) -> String {
     let isolate = audio_core.map(|c| format!(" isolcpus={c} nohz_full={c} rcu_nocbs={c}")).unwrap_or_default();
-    format!("initrd=\\initramfs-{kernel}.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
+    format!("initrd=\\initramfs-{kernel}.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 fbcon=map:9 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
 }
 
 /// The mkinitcpio preset for the installed kernel package: one initramfs, no fallback image.
@@ -869,7 +871,7 @@ mod tests {
         assert_eq!(c.split_whitespace().filter(|t| *t == "threadirqs").count(), 1, "threaded IRQs for the audio IRQ thread");
         assert!(c.contains(" systemd.tty.rows.console= "));
         // Text-free baseline (docs/boot-architecture.md): every console log level and status line off.
-        for flag in ["quiet", "loglevel=3", "udev.log_level=3", "rd.udev.log_level=3", "systemd.show_status=false", "rd.systemd.show_status=false", "systemd.log_target=journal", "vt.global_cursor_default=0"] {
+        for flag in ["quiet", "loglevel=3", "udev.log_level=3", "rd.udev.log_level=3", "systemd.show_status=false", "rd.systemd.show_status=false", "systemd.log_target=journal", "vt.global_cursor_default=0", "fbcon=map:9"] {
             assert!(c.split_whitespace().any(|t| t == flag), "missing {flag}");
         }
         assert!(!c.split_whitespace().any(|t| t == "splash" || t == "plymouth"));
