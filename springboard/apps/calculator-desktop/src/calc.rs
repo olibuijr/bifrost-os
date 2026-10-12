@@ -20,6 +20,7 @@ use crate::format::{format_number, localize};
 use crate::history::{self, Entry, History, Settings};
 use crate::paste;
 use crate::sci::{Sci, SciKey};
+use crate::tape;
 use std::path::PathBuf;
 use bifrost_app::kit::ui::{SPACE_XS};
 
@@ -49,6 +50,7 @@ const ID_KEY: u32 = 100;
 const ID_DELETE: u32 = 200;
 const ID_DISPLAY: u32 = 201;
 const ID_CLEAR_HISTORY: u32 = 202;
+const ID_COPY_TAPE: u32 = 203;
 const ID_COPY: u32 = 210;
 const ID_PASTE: u32 = 211;
 const ID_CATEGORY: u32 = 300;
@@ -162,6 +164,7 @@ enum Target {
     History,
     Done,
     ClearHistory,
+    CopyTape,
     Result(usize),
     Scientific,
     Decimal,
@@ -482,7 +485,10 @@ impl Calculator {
                 nodes.push(node(ID_HISTORY + index as u32, Role::Row, entry.expression.clone(), entry.result.clone(), self.result_rect(ui, visual), true));
             }
             let (px, py, pw, ph) = self.panel(ui);
-            nodes.push(node(ID_CLEAR_HISTORY, Role::Button, "Clear History".into(), String::new(), (px, py + ph - ui.pt(64.0), pw, ui.pt(64.0)), true));
+            let row_y = py + ph - ui.pt(64.0);
+            let half = pw / 2.0;
+            nodes.push(node(ID_COPY_TAPE, Role::Button, "Copy Tape".into(), String::new(), (px, row_y, half, ui.pt(64.0)), !self.store.is_empty()));
+            nodes.push(node(ID_CLEAR_HISTORY, Role::Button, "Clear History".into(), String::new(), (px + half, row_y, pw - half, ui.pt(64.0)), true));
             return nodes;
         }
         if let Some(conv) = &self.convert {
@@ -593,7 +599,8 @@ impl Calculator {
         if self.history_open {
             let (px, py, pw, ph) = self.panel(ui);
             if Self::contains((px, py + ph - ui.pt(64.0), pw, ui.pt(64.0)), x, y) {
-                return Some(Target::ClearHistory);
+                // The left half copies the tape; the right half clears the history.
+                return Some(if x < px + pw / 2.0 { Target::CopyTape } else { Target::ClearHistory });
             }
             let visible = self.rows_visible(ui);
             for v in 0..visible {
@@ -836,6 +843,14 @@ impl Calculator {
         }
     }
 
+    /// Puts the paper tape (the whole history, oldest first) on the shared clipboard as plain text.
+    fn copy_tape(&mut self) {
+        if self.store.is_empty() {
+            return;
+        }
+        clipboard::set_text(&tape::render(self.store.entries(), self.settings.locale));
+    }
+
     fn clear_history(&mut self) {
         self.store.clear();
         self.engine.history.clear();
@@ -896,6 +911,7 @@ impl Calculator {
             }
             Target::Done => self.history_open = false,
             Target::ClearHistory => self.clear_history(),
+            Target::CopyTape => self.copy_tape(),
             Target::Result(i) => {
                 self.recall(ui, i);
                 self.history_open = false;
@@ -1169,14 +1185,11 @@ impl Calculator {
             );
             s.fill_rrect(rx, ry + rh - 1.0, rw, 1.0, 0.0, SEPARATOR_C.now());
         }
-        self.label(
-            s,
-            ui,
-            "Clear History",
-            MAC_BODY_PT,
-            DESTRUCTIVE,
-            (x, y + h - ui.pt(64.0), w, ui.pt(64.0)),
-        );
+        // Copy Tape takes the left half of the bottom row, Clear History the right half.
+        let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
+        let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LINK };
+        self.label(s, ui, "Copy Tape", MAC_BODY_PT, tape_color, (x, row_y, half, ui.pt(64.0)));
+        self.label(s, ui, "Clear History", MAC_BODY_PT, DESTRUCTIVE, (x + half, row_y, w - half, ui.pt(64.0)));
     }
 
     fn draw_menu(&mut self, s: &mut Surface, ui: &Ui) {
@@ -1467,6 +1480,21 @@ mod tests {
         let app = Calculator::new(&ui, 1200, 1920).with_storage(dir.clone());
         assert!(app.store.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_bottom_row_copies_the_tape_on_the_left_and_clears_on_the_right() {
+        let ui = crate::test_ui();
+        let mut app = Calculator::new(&ui, 1200, 1920);
+        app.store.push(Entry { expression: "2+3".into(), result: "5".into(), value: 5.0 });
+        app.history_open = true;
+        let (px, py, pw, ph) = app.panel(&ui);
+        let y = py + ph - ui.pt(32.0);
+        assert_eq!(app.hit(&ui, px + pw * 0.25, y), Some(Target::CopyTape));
+        assert_eq!(app.hit(&ui, px + pw * 0.75, y), Some(Target::ClearHistory));
+        let controls = app.controls(&ui);
+        assert!(controls.iter().any(|n| n.label == "Copy Tape" && n.enabled));
+        assert!(controls.iter().any(|n| n.label == "Clear History"));
     }
 
     #[test]

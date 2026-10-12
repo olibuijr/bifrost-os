@@ -11,6 +11,7 @@ mod history;
 mod icon;
 mod paste;
 mod sci;
+mod tape;
 
 use bifrost_app::kit::{clipboard, Damage, Event, Surface};
 use bifrost_app::{App, Command, Commands, Ctx, Input, TouchKind, KeyInput};
