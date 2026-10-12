@@ -748,6 +748,87 @@ impl DispatchWorkItem {
     }
 }
 
+/// `concurrentPerform(iterations:execute:)`: calls `body(i)` once for each `i` in `0..iterations`, spread over up to
+/// `available_parallelism` threads, and returns when every call has finished. The calls run on scoped threads, so
+/// `body` may borrow from the caller. A panic in `body` propagates to the caller. Unlike the queues above, this does
+/// not use the shared pool: it is meant for a short parallel loop that the caller waits for.
+pub fn concurrent_perform<F: Fn(usize) + Sync>(iterations: usize, body: F) {
+    if iterations == 0 {
+        return;
+    }
+    let width = thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(iterations);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    thread::scope(|s| {
+        for _ in 0..width {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                if i >= iterations {
+                    break;
+                }
+                body(i);
+            });
+        }
+    });
+}
+
+#[cfg(test)]
+mod perform_tests {
+    use super::concurrent_perform;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn every_index_runs_exactly_once() {
+        let hits: Vec<AtomicUsize> = (0..50).map(|_| AtomicUsize::new(0)).collect();
+        concurrent_perform(50, |i| {
+            hits[i].fetch_add(1, Ordering::SeqCst);
+        });
+        assert!(hits.iter().all(|h| h.load(Ordering::SeqCst) == 1));
+    }
+
+    #[test]
+    fn sum_of_indices_matches_the_closed_form() {
+        // 0 + 1 + ... + 99 = 99 * 100 / 2 = 4950.
+        let sum = AtomicUsize::new(0);
+        concurrent_perform(100, |i| {
+            sum.fetch_add(i, Ordering::SeqCst);
+        });
+        assert_eq!(sum.load(Ordering::SeqCst), 4950);
+    }
+
+    #[test]
+    fn zero_iterations_never_call_the_body() {
+        let calls = AtomicUsize::new(0);
+        concurrent_perform(0, |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn one_iteration_calls_index_zero_once() {
+        let count = AtomicUsize::new(0);
+        let sum = AtomicUsize::new(0);
+        concurrent_perform(1, |i| {
+            count.fetch_add(1, Ordering::SeqCst);
+            sum.fetch_add(i + 10, Ordering::SeqCst);
+        });
+        // One call with i = 0 adds 0 + 10 = 10.
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        assert_eq!(sum.load(Ordering::SeqCst), 10);
+    }
+
+    #[test]
+    fn body_may_borrow_from_the_caller() {
+        let base = vec![3usize, 5, 7];
+        let total = AtomicUsize::new(0);
+        concurrent_perform(base.len(), |i| {
+            total.fetch_add(base[i], Ordering::SeqCst);
+        });
+        // 3 + 5 + 7 = 15.
+        assert_eq!(total.load(Ordering::SeqCst), 15);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
