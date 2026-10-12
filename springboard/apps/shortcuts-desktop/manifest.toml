@@ -7,7 +7,7 @@ min_shell = "0.4.84"
 summary = "Manage shortcut tiles; action execution is not yet supported on PC."
 category = "Productivity"
 architecture = "x86_64-linux"
-permissions = ["storage"]
+permissions = ["storage", "notifications"]
 window = "full-size"
 
 [[intent]]

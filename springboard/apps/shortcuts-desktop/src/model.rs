@@ -121,12 +121,52 @@ impl Action {
     }
 }
 
+/// A daily time of day (local, 24-hour clock) at which a shortcut's reminder fires.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Daily {
+    pub hour: u8,
+    pub minute: u8,
+}
+
+/// The times the editor's "Daily Reminder" row offers, in order. Off comes before the first and after the last.
+pub const TIMES: [Daily; 6] = [
+    Daily { hour: 7, minute: 0 },
+    Daily { hour: 9, minute: 0 },
+    Daily { hour: 12, minute: 0 },
+    Daily { hour: 18, minute: 0 },
+    Daily { hour: 21, minute: 0 },
+    Daily { hour: 22, minute: 30 },
+];
+
+impl Daily {
+    /// `HH:MM`, as the row and the list file show it.
+    pub fn label(self) -> String {
+        format!("{:02}:{:02}", self.hour, self.minute)
+    }
+
+    /// The next setting after `cur` in the row's order: Off (`None`), each time in `TIMES`, then Off again.
+    pub fn after(cur: Option<Daily>) -> Option<Daily> {
+        match cur {
+            None => Some(TIMES[0]),
+            Some(t) => TIMES.iter().position(|x| *x == t).and_then(|i| TIMES.get(i + 1)).copied(),
+        }
+    }
+
+    fn parse(text: &str) -> Option<Daily> {
+        let (h, m) = text.split_once(':')?;
+        let (hour, minute) = (h.parse::<u8>().ok()?, m.parse::<u8>().ok()?);
+        (hour < 24 && minute < 60).then_some(Daily { hour, minute })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shortcut {
     pub name: String,
     /// index into the app's tile palette
     pub color: usize,
     pub actions: Vec<Action>,
+    /// a daily reminder time; `None` for no reminder
+    pub schedule: Option<Daily>,
 }
 
 pub fn serialize(list: &[Shortcut]) -> String {
@@ -134,7 +174,11 @@ pub fn serialize(list: &[Shortcut]) -> String {
     for s in list {
         let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
         let acts: Vec<String> = s.actions.iter().map(Action::encode).collect();
-        out += &format!("{name}\t{}\t{}\n", s.color, acts.join(";"));
+        out += &format!("{name}\t{}\t{}", s.color, acts.join(";"));
+        if let Some(at) = s.schedule {
+            out += &format!("\t{}", at.label());
+        }
+        out.push('\n');
     }
     out
 }
@@ -146,7 +190,8 @@ pub fn parse(text: &str) -> Vec<Shortcut> {
             let name: String = f.next()?.chars().take(MAX_NAME).collect();
             let color = f.next()?.parse().ok()?;
             let actions = f.next().unwrap_or("").split(';').filter_map(Action::decode).take(MAX_ACTIONS).collect();
-            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions })
+            let schedule = f.next().and_then(Daily::parse);
+            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule })
         })
         .take(MAX_SHORTCUTS)
         .collect()
@@ -166,7 +211,7 @@ pub fn save(path: &Path, list: &[Shortcut]) -> std::io::Result<()> {
 
 /// The shortcuts a first launch starts with.
 pub fn defaults() -> Vec<Shortcut> {
-    let mk = |name: &str, color, actions| Shortcut { name: name.into(), color, actions };
+    let mk = |name: &str, color, actions| Shortcut { name: name.into(), color, actions, schedule: None };
     vec![
         mk("Bedtime", 6, vec![Action::Dnd(true), Action::Brightness(10), Action::Wifi(false)]),
         mk("Save Battery", 3, vec![Action::LowPower(true), Action::Brightness(30)]),
@@ -183,6 +228,31 @@ mod tests {
     fn round_trips() {
         let l = defaults();
         assert_eq!(parse(&serialize(&l)), l);
+    }
+
+    #[test]
+    fn a_reminder_time_round_trips_and_old_lines_have_none() {
+        let mut l = defaults();
+        l[1].schedule = Some(Daily { hour: 7, minute: 5 });
+        let text = serialize(&l);
+        assert!(text.lines().nth(1).unwrap().ends_with("\t07:05"));
+        assert_eq!(parse(&text), l);
+        assert_eq!(parse("A\t2\twifi:1\n")[0].schedule, None);
+    }
+
+    #[test]
+    fn a_bad_reminder_time_is_dropped_not_the_shortcut() {
+        let l = parse("A\t2\t\t25:00\n");
+        assert_eq!(l.len(), 1);
+        assert_eq!(l[0].schedule, None);
+    }
+
+    #[test]
+    fn the_reminder_row_steps_through_its_times_then_off() {
+        assert_eq!(Daily::after(None), Some(TIMES[0]));
+        assert_eq!(Daily::after(Some(TIMES[0])), Some(TIMES[1]));
+        assert_eq!(Daily::after(Some(TIMES[TIMES.len() - 1])), None);
+        assert_eq!(TIMES[5].label(), "22:30");
     }
 
     #[test]

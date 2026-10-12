@@ -5,17 +5,23 @@
 mod automation;
 mod icon;
 mod model;
+mod services;
 mod widget;
 
 use bifrost_app::control::RpcError;
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::login_items_approval as login;
 use bifrost_app::{App, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::path::Path;
 
 struct ShortcutsApp {
     w: Option<widget::Shortcuts>,
+    /// the reminders the shell was last sent; `None` until the first sync, when the app clears any left over
+    reminders: Option<Vec<services::Reminder>>,
+    /// whether the Login Items status has been asked for
+    asked_login: bool,
 }
 
 impl ShortcutsApp {
@@ -25,6 +31,13 @@ impl ShortcutsApp {
             Some(c) => c.list().to_vec(),
             None => automation::stored(data_dir),
         }
+    }
+
+    /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
+    /// input or script change.
+    fn sync(&mut self, ctx: &Ctx) {
+        let list = self.shortcuts(&ctx.data_dir);
+        self.reminders = Some(services::sync_reminders(ctx, self.reminders.as_deref(), &list));
     }
 }
 
@@ -39,6 +52,11 @@ impl App for ShortcutsApp {
             Some(c) => c.set_size(w, h),
             None => self.w = Some(widget::Shortcuts::new(&ctx.ui, w, h, ctx.data_dir.join("shortcuts.tsv"))),
         }
+        if !self.asked_login {
+            self.asked_login = true;
+            services::ask_login(ctx);
+        }
+        self.sync(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -52,7 +70,32 @@ impl App for ShortcutsApp {
         if !c.take_runs().is_empty() {
             c.show_run_unavailable(t);
         }
+        let login_request = c.take_login_request();
+        if let Some(on) = login_request {
+            services::set_login(ctx, on);
+        }
+        self.sync(ctx);
         true
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+        if let Err(msg) = result {
+            eprintln!("shortcuts: shell service: {msg}");
+        }
+        if let (Some(status), Some(c)) = (login::status_from_reply(result), self.w.as_mut()) {
+            c.set_login(Some(status));
+        }
+        true
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        match (login::status_from_event(service, event, body), self.w.as_mut()) {
+            (Some(status), Some(c)) => {
+                c.set_login(Some(status));
+                true
+            }
+            _ => false,
+        }
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
@@ -83,21 +126,29 @@ impl App for ShortcutsApp {
         vec!["script.dictionary", "script.get", "script.set"]
     }
 
-    fn rpc(&mut self, _ctx: Option<&Ctx>, data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
         match method {
             "script.dictionary" => Ok(automation::dictionary_json()),
             "script.get" => automation::script_get(&self.shortcuts(data_dir), params),
-            "script.set" => match self.w.as_mut() {
-                Some(c) => c.edit_list(|l| automation::script_set(l, params)),
-                None => {
-                    // no window yet: change the saved file, so the next launch shows the change
-                    let mut list = automation::stored(data_dir);
-                    let out = automation::script_set(&mut list, params)?;
-                    model::save(&data_dir.join(automation::FILE), &list)
-                        .map_err(|e| intents::failed(format!("could not save the list: {e}")))?;
-                    Ok(out)
+            "script.set" => {
+                let out = match self.w.as_mut() {
+                    Some(c) => c.edit_list(|l| automation::script_set(l, params)),
+                    None => {
+                        // no window yet: change the saved file, so the next launch shows the change
+                        let mut list = automation::stored(data_dir);
+                        automation::script_set(&mut list, params).and_then(|out| {
+                            model::save(&data_dir.join(automation::FILE), &list)
+                                .map(|_| out)
+                                .map_err(|e| intents::failed(format!("could not save the list: {e}")))
+                        })
+                    }
+                };
+                // a changed reminder time reaches the shell now; without a context it waits for the next input
+                if let (Some(ctx), Ok(_)) = (ctx, &out) {
+                    self.sync(ctx);
                 }
-            },
+                out
+            }
             _ => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no method {method}"))),
         }
     }
@@ -113,5 +164,5 @@ impl App for ShortcutsApp {
 }
 
 fn main() {
-    bifrost_app::run(ShortcutsApp { w: None });
+    bifrost_app::run(ShortcutsApp { w: None, reminders: None, asked_login: false });
 }
