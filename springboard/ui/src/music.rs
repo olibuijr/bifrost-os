@@ -1,8 +1,9 @@
 //! Music understanding: a session runs analyses over a mono audio buffer and returns time-stamped results
 //! (`MusicUnderstandingSession`, `SessionResult`, `RhythmResult`). Implemented: rhythm (beats, bars, BPM) from an
-//! onset-energy envelope. Key, loudness, pace, structure and instrument activity are not implemented yet; a
-//! `SessionResult` never carries them, and asking for them fails with `Unsupported`. Times are seconds from the
-//! start of the buffer. Pure Rust, no decoding: the caller hands over samples.
+//! onset-energy envelope. Pace is available from a beat grid through `analyze_pace`; it is not part of `analyze`
+//! yet. Key, loudness, structure and instrument activity are not implemented; a `SessionResult` never carries them,
+//! and asking for them fails with `Unsupported`. Times are seconds from the start of the buffer. Pure Rust, no
+//! decoding: the caller hands over samples.
 
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -73,6 +74,34 @@ pub struct RhythmResult {
     pub bars: Vec<f64>,
     /// Tempo; 0 when the input has no rhythmic onsets (silence).
     pub beats_per_minute: f64,
+}
+
+/// `PaceResult`: energy and momentum over time, as events per minute for each range of the song. A higher value means a
+/// busier or more energetic stretch, independent of the tempo.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PaceResult {
+    pub ranges: Vec<RangedValue<f64>>,
+}
+
+/// Pace from a beat grid (as `RhythmResult` gives). The beats are cut into non-overlapping windows of
+/// `beats_per_window` beat intervals; each window's value is `beats_per_window * 60 / span`, the events per minute over
+/// the seconds it covers. A trailing part shorter than a window is dropped, and so is a window that spans no time.
+/// This counts beats, not the reference framework's perceptual energy measure. A window of zero beats gives no ranges.
+pub fn analyze_pace(beats: &[f64], beats_per_window: usize) -> PaceResult {
+    let mut ranges = Vec::new();
+    if beats_per_window == 0 {
+        return PaceResult::default();
+    }
+    let mut i = 0;
+    while i + beats_per_window < beats.len() {
+        let (start, end) = (beats[i], beats[i + beats_per_window]);
+        let span = end - start;
+        if span > 0.0 {
+            ranges.push(RangedValue { range: start..end, value: beats_per_window as f64 * 60.0 / span });
+        }
+        i += beats_per_window;
+    }
+    PaceResult { ranges }
 }
 
 /// `MusicUnderstandingSession.SessionResult`. Only the fields for implemented analyses exist.
@@ -326,5 +355,51 @@ mod tests {
         assert_eq!(s.samples, vec![0.5, 0.0]);
         assert_eq!(MusicUnderstandingSession::new(Vec::new(), 44100).err(), Some(MusicUnderstandingError::InvalidAsset));
         assert_eq!(MusicUnderstandingSession::from_interleaved(&[0.0], 0, 44100).err(), Some(MusicUnderstandingError::InvalidAsset));
+    }
+}
+
+#[cfg(test)]
+mod pace_tests {
+    use super::*;
+
+    #[test]
+    fn steady_beats_give_the_same_rate_in_every_window() {
+        // Beats every 0.5 s (120 beats a minute). Windows of 4 intervals span 2 s: 4 * 60 / 2 = 120.
+        let beats: Vec<f64> = (0..9).map(|i| i as f64 * 0.5).collect();
+        let pace = analyze_pace(&beats, 4);
+        assert_eq!(pace.ranges.len(), 2);
+        assert_eq!(pace.ranges[0].range, 0.0..2.0);
+        assert_eq!(pace.ranges[1].range, 2.0..4.0);
+        assert!(pace.ranges.iter().all(|r| (r.value - 120.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_slower_stretch_has_a_lower_rate() {
+        // 0.5 s intervals up to 2.0 s, then 1.0 s intervals. The second window spans 2.0..6.0 s: 4 * 60 / 4 = 60.
+        let beats = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let pace = analyze_pace(&beats, 4);
+        assert_eq!(pace.ranges.len(), 2);
+        assert!((pace.ranges[0].value - 120.0).abs() < 1e-9);
+        assert!((pace.ranges[1].value - 60.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_trailing_part_shorter_than_a_window_is_dropped() {
+        // Five beats with windows of 4 intervals: the window needs beat 4 to exist, which it does; a second window would
+        // need beat 8 and is dropped.
+        let beats = [0.0, 1.0, 2.0, 3.0, 4.0];
+        let pace = analyze_pace(&beats, 4);
+        assert_eq!(pace.ranges.len(), 1);
+        assert_eq!(pace.ranges[0].range, 0.0..4.0);
+        assert!((pace.ranges[0].value - 60.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn too_few_beats_zero_windows_and_zero_spans_give_nothing() {
+        assert!(analyze_pace(&[0.0, 1.0], 4).ranges.is_empty());
+        assert!(analyze_pace(&[0.0, 1.0, 2.0, 3.0, 4.0], 0).ranges.is_empty());
+        // Repeated timestamps span no time, so no rate can be given.
+        assert!(analyze_pace(&[1.0, 1.0, 1.0, 1.0, 1.0], 4).ranges.is_empty());
+        assert_eq!(analyze_pace(&[], 4), PaceResult::default());
     }
 }
