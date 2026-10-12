@@ -7,8 +7,11 @@
 //! `NotSupported`. A rating request must be finite and lie between the minimum and the maximum, inclusive; otherwise
 //! it is refused with `OutOfRange`. A feedback request sets the on or off state directly.
 //!
-//! Gaps: no handler registration or event dispatch (apps call `request` from their own handlers), no language option
-//! commands, no skip interval or position commands, and no shared command centre: each command is its own value.
+//! The shared command centre (`CommandCenter`) keeps the transport actions the system can send to the app, the handlers
+//! registered for each action and which actions are switched off. It holds no closures: `add_handler` returns a token
+//! and the app keeps its own handler under that token. `dispatch` picks the token to run for an incoming action.
+//! Handler status values and the rate, rating and feedback commands are not routed through the centre yet: each
+//! command above is still its own value. Language option, skip interval and position commands are not modelled.
 
 /// Two playback rates closer than this are the same rate.
 pub const RATE_EPS: f32 = 1e-4;
@@ -22,6 +25,86 @@ pub enum CommandError {
     NotSupported,
     /// The rating is not finite or lies outside the command's range.
     OutOfRange,
+    /// The centre has no handler registered for the action.
+    NoHandler,
+}
+
+/// A transport action the system can send to the app that is playing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RemoteAction {
+    Play,
+    Pause,
+    TogglePlayPause,
+    Stop,
+    NextTrack,
+    PreviousTrack,
+    ChangePlaybackPosition,
+}
+
+/// Names one handler registered on a `CommandCenter`. Tokens count up from 1 and a centre never reuses one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct HandlerToken(u64);
+
+/// The app's table of remote commands: the handlers registered per action and the actions switched off.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CommandCenter {
+    last_token: u64,
+    handlers: Vec<(HandlerToken, RemoteAction)>,
+    disabled: Vec<RemoteAction>,
+}
+
+impl CommandCenter {
+    /// An empty centre: no handlers, every action enabled.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a handler for `action` and returns its token.
+    pub fn add_handler(&mut self, action: RemoteAction) -> HandlerToken {
+        self.last_token += 1;
+        let token = HandlerToken(self.last_token);
+        self.handlers.push((token, action));
+        token
+    }
+
+    /// Removes the handler with `token`. Returns false when no handler has that token.
+    pub fn remove_handler(&mut self, token: HandlerToken) -> bool {
+        let before = self.handlers.len();
+        self.handlers.retain(|(t, _)| *t != token);
+        self.handlers.len() != before
+    }
+
+    /// The number of handlers registered for `action`.
+    pub fn handler_count(&self, action: RemoteAction) -> usize {
+        self.handlers.iter().filter(|(_, a)| *a == action).count()
+    }
+
+    /// Whether `action` is switched on. Every action starts on.
+    pub fn is_enabled(&self, action: RemoteAction) -> bool {
+        !self.disabled.contains(&action)
+    }
+
+    /// Switches `action` on or off. Switching off keeps its handlers.
+    pub fn set_enabled(&mut self, action: RemoteAction, enabled: bool) {
+        self.disabled.retain(|a| *a != action);
+        if !enabled {
+            self.disabled.push(action);
+        }
+    }
+
+    /// Picks the handler for an incoming `action`: the newest handler registered for it. A switched-off action is
+    /// refused with `Disabled`, and an action with no handler with `NoHandler`.
+    pub fn dispatch(&self, action: RemoteAction) -> Result<HandlerToken, CommandError> {
+        if !self.is_enabled(action) {
+            return Err(CommandError::Disabled);
+        }
+        self.handlers
+            .iter()
+            .rev()
+            .find(|(_, a)| *a == action)
+            .map(|(t, _)| *t)
+            .ok_or(CommandError::NoHandler)
+    }
 }
 
 /// Changes the playback rate of the playing item to one of its supported rates.
@@ -266,6 +349,59 @@ mod tests {
         assert_eq!(like.toggle(), Ok(false));
         assert_eq!(like.request(true), Ok(true));
         assert!(like.is_active());
+    }
+
+    #[test]
+    fn dispatch_picks_the_newest_handler_for_the_action() {
+        let mut center = CommandCenter::new();
+        let first = center.add_handler(RemoteAction::Play);
+        let second = center.add_handler(RemoteAction::Play);
+        assert_eq!(center.handler_count(RemoteAction::Play), 2);
+        assert_eq!(center.dispatch(RemoteAction::Play), Ok(second));
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn dispatch_without_a_handler_is_refused() {
+        let center = CommandCenter::new();
+        assert_eq!(center.dispatch(RemoteAction::Pause), Err(CommandError::NoHandler));
+        assert!(center.is_enabled(RemoteAction::Pause));
+    }
+
+    #[test]
+    fn switched_off_action_is_refused_until_it_is_switched_back_on() {
+        let mut center = CommandCenter::new();
+        let token = center.add_handler(RemoteAction::Pause);
+        center.set_enabled(RemoteAction::Pause, false);
+        assert_eq!(center.dispatch(RemoteAction::Pause), Err(CommandError::Disabled));
+        // Switching off keeps the handler, so switching back on routes to it again.
+        assert_eq!(center.handler_count(RemoteAction::Pause), 1);
+        center.set_enabled(RemoteAction::Pause, true);
+        assert_eq!(center.dispatch(RemoteAction::Pause), Ok(token));
+    }
+
+    #[test]
+    fn removing_the_newest_handler_falls_back_to_the_older_one() {
+        let mut center = CommandCenter::new();
+        let older = center.add_handler(RemoteAction::NextTrack);
+        let newest = center.add_handler(RemoteAction::NextTrack);
+        assert!(center.remove_handler(newest));
+        assert_eq!(center.dispatch(RemoteAction::NextTrack), Ok(older));
+        // A token that is already gone removes nothing.
+        assert!(!center.remove_handler(newest));
+        assert!(center.remove_handler(older));
+        assert_eq!(center.dispatch(RemoteAction::NextTrack), Err(CommandError::NoHandler));
+    }
+
+    #[test]
+    fn handlers_are_routed_per_action_and_tokens_are_not_reused() {
+        let mut center = CommandCenter::new();
+        let play = center.add_handler(RemoteAction::Play);
+        assert_eq!(center.dispatch(RemoteAction::Pause), Err(CommandError::NoHandler));
+        assert!(center.remove_handler(play));
+        let again = center.add_handler(RemoteAction::Play);
+        assert_eq!(play, HandlerToken(1));
+        assert_eq!(again, HandlerToken(2));
     }
 
     #[test]

@@ -12,6 +12,8 @@
 
 pub use bifrost_ui as controls;
 pub use bifrost_ui::{Command, Commands};
+/// The shared remote command centre (`CommandCenter`): app-side handlers for the transport actions the system sends.
+pub use bifrost_ui::remote_command;
 pub use bifrost_proto as proto;
 pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, TouchKind};
 

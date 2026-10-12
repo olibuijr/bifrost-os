@@ -783,6 +783,8 @@ pub mod audio_session;
 pub mod playback_arbiter;
 pub mod remote_command;
 pub mod media_content;
+pub mod media_playlist;
+pub mod media_changes;
 pub mod audio_hardware;
 pub mod process_tap;
 pub mod scan;
