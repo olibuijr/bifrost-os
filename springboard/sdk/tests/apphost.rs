@@ -63,11 +63,15 @@ fn frames_touches_damage_and_exit() {
     let (px, w, hh) = h.frame().unwrap();
     assert_eq!((w, hh, px[10 * 64 + 50]), (64, 48, WHITE));
 
-    // suspend then kill: the app saved its state on Quit
+    // suspend, wait for the app to save its state (the write is asynchronous; kill gives the app ~20 ms before SIGKILL),
+    // then kill. The file is removed first so an earlier run's copy cannot satisfy the wait.
+    let saved_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("apps-sdk-test-a/suspended");
+    let _ = std::fs::remove_file(&saved_path);
     h.suspend();
+    pump_until(&mut h, |_, _| std::fs::read_to_string(&saved_path).is_ok_and(|s| s == "3"));
     h.kill();
     assert!(matches!(h.status(), Status::Exited(_)));
-    let saved = std::fs::read_to_string(Path::new(env!("CARGO_TARGET_TMPDIR")).join("apps-sdk-test-a/suspended")).unwrap();
+    let saved = std::fs::read_to_string(&saved_path).unwrap();
     assert_eq!(saved, "3");
 }
 

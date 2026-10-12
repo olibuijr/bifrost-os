@@ -237,7 +237,8 @@ mod tests {
         assert_eq!(r.output_len(442), 482);
         let out = resample(&vec![0.0; 4410], 44100, 48000, 1, Quality::Fast).unwrap();
         assert_eq!(out.len(), 4800);
-        let down = resample(&vec![0.0; 4800], 48000, 44100, 2, Quality::Fast).unwrap();
+        // 4800 stereo frames is 9600 interleaved samples; 4800 * 44100 / 48000 = 4410 frames = 8820 samples
+        let down = resample(&vec![0.0; 9600], 48000, 44100, 2, Quality::Fast).unwrap();
         assert_eq!(down.len(), 4410 * 2);
     }
 
