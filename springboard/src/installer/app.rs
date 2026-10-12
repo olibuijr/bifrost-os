@@ -284,6 +284,7 @@ impl App {
             Page::Look => self.go(Page::Disk),
             Page::Disk if self.disk.is_some() => self.act(Act::Install),
             Page::Confirm => self.start(),
+            Page::Done => self.act(Act::Restart),
             _ => {}
         }
     }
@@ -1304,6 +1305,18 @@ mod tests {
         b.progress.lock().unwrap().done = true;
         render(&mut b);
         assert_eq!(b.page, Page::Done);
+    }
+
+    #[test]
+    fn return_presses_restart_on_done() {
+        let mut a = app();
+        a.page = Page::Progress;
+        a.progress.lock().unwrap().done = true;
+        render(&mut a);
+        assert_eq!(a.page, Page::Done);
+        a.event(Event::Key { code: 28, down: true });
+        a.event(Event::Key { code: 28, down: false });
+        assert!(a.want_restart);
     }
 
     #[test]
