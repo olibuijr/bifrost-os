@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- Up Next can be cleared. A "Clear Up Next" line sits at the end of the queue when songs are waiting. It takes every
+  waiting song out and keeps the song that is playing, where it is. A shuffled queue keeps its played order for when
+  shuffle is turned off.
+
 ## 1.4.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.

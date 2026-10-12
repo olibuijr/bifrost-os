@@ -139,6 +139,8 @@ pub enum Target {
     /// move the i-th queue row up one place, or take it out
     QUp(usize),
     QDel(usize),
+    /// the Clear Up Next row at the end of the queue: takes every upcoming song out
+    QClear,
     /// the playlist page's nav bar: rename, delete
     Rename,
     DeletePlaylist,
@@ -796,7 +798,12 @@ impl Music {
             (Page::Root, Tab::Songs) => n(self.view.len()) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Playlists) => n(self.playlists.lists().len() + 1) * ui.pt(ARTIST_ROW_PT) + ui.pt(SPACE_L),
             (Page::Playlist(p), _) => ui.pt(PLAYLIST_HEADER_PT) + n(self.playlist_entries(p).len()) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L),
-            (Page::Queue, _) => n(self.queue.items().len().saturating_sub(self.queue.current())) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L),
+            (Page::Queue, _) => {
+                // the rows, then the Clear Up Next row when something is upcoming
+                let rows = n(self.queue.items().len().saturating_sub(self.queue.current()));
+                let clear = if self.queue.upcoming().is_empty() { 0.0 } else { 1.0 };
+                (rows + clear) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L)
+            }
             (Page::Root, Tab::Artists) => n(self.library.artists.len()) * ui.pt(ARTIST_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Radio) => n(self.radio.stations().len()) * ui.pt(STATION_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Albums) => self.grid_cells(ui, self.library.albums.len()).last().map_or(0.0, |c| c.1 + c.3 + ui.pt(SPACE_L)),
@@ -833,7 +840,11 @@ impl Music {
             }
             (Page::Queue, _) => {
                 let i = (y / ui.pt(SONG_ROW_PT)) as usize;
-                if i >= self.queue.items().len().saturating_sub(self.queue.current()) {
+                let rows = self.queue.items().len().saturating_sub(self.queue.current());
+                if i == rows && !self.queue.upcoming().is_empty() {
+                    return Some(Target::QClear);
+                }
+                if i >= rows {
                     return None;
                 }
                 let zone = ui.pt(FAV_ZONE_PT);
@@ -1215,6 +1226,13 @@ impl Music {
         }
     }
 
+    /// Clear Up Next: every upcoming song leaves the queue; the current song keeps playing where it was.
+    fn queue_clear(&mut self) {
+        if self.queue.clear_upcoming() > 0 {
+            self.push_queue(self.snap.position_ms, self.snap.playing);
+        }
+    }
+
     fn queue_move_up(&mut self, upcoming: usize) {
         if upcoming > 0 && self.queue.move_upcoming(upcoming, upcoming - 1) {
             self.push_queue(self.snap.position_ms, self.snap.playing);
@@ -1420,6 +1438,7 @@ impl Music {
             }
             Target::QUp(i) => self.queue_move_up(i.saturating_sub(1)),
             Target::QDel(i) => self.queue_remove(i.saturating_sub(1)),
+            Target::QClear => self.queue_clear(),
             Target::Rename => {
                 if let Page::Playlist(p) = self.page() {
                     self.renaming = self.playlists.lists().get(p).map(|l| l.name.clone());
@@ -1751,6 +1770,7 @@ impl Music {
         let (m, thumb, zone) = (ui.pt(MARGIN_PT), ui.pt(THUMB_PT), ui.pt(FAV_ZONE_PT));
         let text_x = m + thumb + ui.pt(SPACE_M);
         let current = self.queue.current();
+        let rows = self.queue.items().len().saturating_sub(current);
         let items: Vec<PathBuf> = self.queue.items().iter().skip(current).cloned().collect();
         for (i, path) in items.into_iter().enumerate() {
             let y = y0 + i as f32 * row;
@@ -1787,6 +1807,17 @@ impl Music {
                 springboard::shell::glyphs::paint(s, (c.0 - r - t, c.1 - r - t, 2.0 * r + 2.0 * t, 2.0 * r + 2.0 * t), color, either(seg((c.0 - r, c.1 + r * 0.4), (c.0, c.1 - r * 0.6), t), seg((c.0, c.1 - r * 0.6), (c.0 + r, c.1 + r * 0.4), t)));
             }
             s.fill_rrect(text_x, y + row - 1.0, self.w as f32 - text_x, 1.0, 0.0, SEPARATOR_C.now());
+        }
+        // Clear Up Next: one text row after the last song, shown only when something is upcoming
+        if !self.queue.upcoming().is_empty() {
+            let y = y0 + rows as f32 * row;
+            if y + row >= s.y0 as f32 && y <= bottom {
+                if pressed == Some(Target::QClear) {
+                    s.fill_rect(0, y.max(0.0) as usize, self.w as usize, row as usize, ROW_PRESSED.now());
+                }
+                let mid = y + row / 2.0;
+                self.label(s, ui, "Clear Up Next", MAC_BODY_PT, Weight::Regular, PINK, self.w as f32 / 2.0, mid, 0.5);
+            }
         }
     }
 
@@ -2051,7 +2082,7 @@ pub fn tint_of(img: &Image) -> u32 {
 
 /// Targets that live inside the scrolling area.
 fn scrolls(t: Target) -> bool {
-    matches!(t, Target::Row(_) | Target::Fav(_) | Target::More(_) | Target::QUp(_) | Target::QDel(_) | Target::Content | Target::Play | Target::Shuffle)
+    matches!(t, Target::Row(_) | Target::Fav(_) | Target::More(_) | Target::QUp(_) | Target::QDel(_) | Target::QClear | Target::Content | Target::Play | Target::Shuffle)
 }
 
 /// The artwork cache key of a station's logo.
