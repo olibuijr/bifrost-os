@@ -139,6 +139,7 @@ pub mod peer_mesh;
 pub mod peer_identity;
 pub mod nearby_service;
 pub mod restoration;
+pub mod image_source;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
