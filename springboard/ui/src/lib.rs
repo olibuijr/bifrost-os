@@ -616,6 +616,7 @@ pub mod textlist;
 pub mod metaquery;
 pub mod column_summary;
 pub mod searchquery;
+pub mod searchindex;
 pub mod pathbar;
 pub mod peripheral;
 pub mod constraint;
