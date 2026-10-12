@@ -60,6 +60,51 @@ impl std::fmt::Display for Error {
     }
 }
 
+/// The category an app switches on. The names match the platform's peer error codes (`invalidParameter`, `notConnected`
+/// and so on), which [`Code::name`] returns. The model returns only `InvalidParameter`, `Unavailable` and `NotConnected`;
+/// the other variants exist so that an app's handling matches the platform's list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Code {
+    Cancelled,
+    InvalidParameter,
+    NotConnected,
+    TimedOut,
+    Unavailable,
+    Unknown,
+    Unsupported,
+}
+
+impl Code {
+    /// The platform's spelling of this code.
+    pub fn name(self) -> &'static str {
+        match self {
+            Code::Cancelled => "cancelled",
+            Code::InvalidParameter => "invalidParameter",
+            Code::NotConnected => "notConnected",
+            Code::TimedOut => "timedOut",
+            Code::Unavailable => "unavailable",
+            Code::Unknown => "unknown",
+            Code::Unsupported => "unsupported",
+        }
+    }
+}
+
+impl Error {
+    /// The category of this error. Bad names, limits, invitation ids and payload sizes are `InvalidParameter`. A full
+    /// session is `Unavailable` (it may have room later), and a reliable send to a missing peer is `NotConnected`.
+    pub fn code(&self) -> Code {
+        match self {
+            Error::InvalidName
+            | Error::BadLimit
+            | Error::AlreadyConnected
+            | Error::UnknownInvitation
+            | Error::TooLarge => Code::InvalidParameter,
+            Error::Full => Code::Unavailable,
+            Error::NotConnected => Code::NotConnected,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Invitation {
     from: String,
@@ -306,6 +351,21 @@ mod tests {
         let over = vec![7u8; MAX_PAYLOAD_BYTES + 1];
         assert!(m.send(&["a"], &exact, Mode::Reliable).is_ok());
         assert_eq!(m.send(&["a"], &over, Mode::Reliable), Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn errors_map_to_the_platform_codes_by_cause() {
+        let mut m = mesh(2);
+        let a = m.receive_invitation("a").unwrap();
+        m.respond(a, true).unwrap();
+        // The session of limit 2 is full once "a" is in, so a second acceptance has no room.
+        let b = m.receive_invitation("b").unwrap();
+        assert_eq!(m.respond(b, true).unwrap_err().code(), Code::Unavailable);
+        assert_eq!(m.send(&["ghost"], b"x", Mode::Reliable).unwrap_err().code(), Code::NotConnected);
+        assert_eq!(m.send(&["a"], &vec![0u8; MAX_PAYLOAD_BYTES + 1], Mode::Reliable).unwrap_err().code(), Code::InvalidParameter);
+        assert_eq!(Error::AlreadyConnected.code(), Code::InvalidParameter);
+        assert_eq!(Code::TimedOut.name(), "timedOut");
+        assert_eq!(Code::InvalidParameter.name(), "invalidParameter");
     }
 
     #[test]
