@@ -184,3 +184,11 @@ Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
   3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region costs about 2.5 M texels at 5 or 6 passes, so the budget only bites on larger outputs or radii.
 - Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client and applies the saturation.
 - Appearance comes from `WmState::material_dark` (`BIFROST_WM_APPEARANCE=light` for Light); no appearance protocol yet.
+
+## Accessibility display options (for the window server)
+
+The shell writes `/run/bifrost/user/accessibility` (atomic rename) whenever Settings > Accessibility > Display changes
+Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines for `reduce_transparency`,
+`increase_contrast`, `differentiate_without_color`. Increase Contrast implies Reduce Transparency (the reader applies it).
+A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
+it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.

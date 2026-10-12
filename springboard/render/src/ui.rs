@@ -105,6 +105,17 @@ pub const MATERIAL_SELECTION_INACTIVE: Pair = Pair::new(pack(70, 70, 74, 200), p
 pub const MATERIAL_SIDEBAR_SOLID: Pair = Pair::new(pack(20, 20, 22, 255), pack(235, 235, 235, 255));
 pub const MATERIAL_TITLEBAR_SOLID: Pair = Pair::new(pack(28, 28, 30, 255), pack(246, 246, 246, 255));
 pub const MATERIAL_HUD_SOLID: Pair = Pair::new(pack(12, 12, 14, 255), pack(12, 12, 14, 255));
+/// Increase Contrast: the outline a material (sidebar, title bar, popover, HUD) gets, and the stronger separator.
+pub const MATERIAL_BORDER_CONTRAST: Pair = Pair::new(pack(150, 150, 156, 255), pack(110, 110, 116, 255));
+pub const SEPARATOR_CONTRAST: Pair = Pair::new(pack(110, 110, 114, 255), pack(140, 140, 146, 255));
+/// The material outline colour now: `Some` only while Increase Contrast is on.
+pub fn material_border() -> Option<u32> {
+    crate::appearance::increase_contrast().then(|| MATERIAL_BORDER_CONTRAST.now())
+}
+/// Separator colour that follows Increase Contrast.
+pub fn separator_now() -> u32 {
+    if crate::appearance::increase_contrast() { SEPARATOR_CONTRAST.now() } else { SEPARATOR_C.now() }
+}
 /// Window frame: focused and background title areas.
 pub const WINDOW_FRAME_FOCUSED: Pair = Pair::new(pack(52, 52, 55, 255), pack(236, 236, 236, 255));
 pub const WINDOW_FRAME_BLURRED: Pair = Pair::new(pack(40, 40, 43, 255), pack(246, 246, 246, 255));
