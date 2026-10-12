@@ -32,3 +32,6 @@ pub mod codereq;
 pub mod biometry;
 pub mod tunnel;
 pub mod proxy;
+pub mod dns_settings;
+pub mod content_filter;
+pub mod relay;
