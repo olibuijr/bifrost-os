@@ -96,6 +96,7 @@ pub mod attributed;
 pub mod spellcheck;
 pub mod translation;
 pub mod notification;
+pub mod system_sound;
 pub mod workspace;
 pub mod distributed;
 pub mod observable;
