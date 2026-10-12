@@ -291,6 +291,10 @@ pub struct Settings {
     stale_depth: usize,
     /// the keypad over Settings while a passcode is set, changed or turned off
     passcode: Option<Overlay>,
+    /// the login whose password waits for the passcode before it is shown
+    pw_pending: Option<(String, String)>,
+    /// the login whose password the Passwords page shows: site, account, password
+    pw_revealed: Option<(String, String, String)>,
     /// Screen Time: weekly chart shown, the Downtime row the time picker edits (true = From), and the passcode prompt guarding an edit
     st_weekly: bool,
     st_edge: Option<bool>,
@@ -437,6 +441,8 @@ impl Settings {
             night: NightShift::load(prefs),
             night_edge: None,
             alert: None,
+            pw_pending: None,
+            pw_revealed: None,
             pressed: None,
             pressed_thumb: None,
             pressed_sheet: None,
@@ -544,6 +550,12 @@ impl Settings {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
             }
+            PageId::Passwords => {
+                let logins = super::services::keychain_groups::logins(&super::apphost::root());
+                let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
+                let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
+                super::passwords_page::spec(&super::passwords_page::PageState { logins: &logins, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
+            }
             PageId::Diagnostics => {
                 let crashes = diag::load(&self.data_dir);
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
@@ -569,6 +581,43 @@ impl Settings {
         // a page opened with no back target is a first-level page: it gets the header card
         let pane = Pane { header: back.is_none(), ..self.pane() };
         Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(pane.status_pt == 0.0 && !pane.sidebar), title, view: View::List(ListPage::in_pane(ui, spec, self.w, self.h, back, pane)) }
+    }
+
+    /// Settings > Passwords: a tap on a login asks for the passcode when one is set, then shows the password; Copy,
+    /// Hide and Delete act on the revealed login.
+    fn passwords_act(&mut self, ui: &Ui, act: super::passwords_page::Act) -> Vec<Effect> {
+        use super::passwords_page::Act;
+        match act {
+            Act::Reveal { site, account } => {
+                if passcode::Store::load(self.data_dir.join("passcode.ini")).enabled() {
+                    self.pw_pending = Some((site, account));
+                    self.passcode = Some(Overlay::new(&self.data_dir.join("passcode.ini"), passcode::Purpose::Reveal, false, self.w, self.h));
+                } else {
+                    self.reveal_password(ui, site, account);
+                }
+            }
+            Act::Copy => {
+                if let Some((_, _, password)) = &self.pw_revealed {
+                    super::clipboard::set_text(password);
+                }
+            }
+            Act::Hide => self.pw_revealed = None,
+            Act::Delete { site, account } => {
+                let _ = super::services::keychain_groups::remove(&super::apphost::root(), &site, &account);
+                if self.pw_revealed.as_ref().is_some_and(|(s, a, _)| *s == site && *a == account) {
+                    self.pw_revealed = None;
+                }
+            }
+        }
+        self.rebuild(ui);
+        vec![]
+    }
+
+    fn reveal_password(&mut self, ui: &Ui, site: String, account: String) {
+        if let Some(password) = super::services::keychain_groups::secret(&super::apphost::root(), &site, &account) {
+            self.pw_revealed = Some((site, account, password));
+        }
+        self.rebuild(ui);
     }
 
     /// Re-renders every page on the stack (new info, text size), keeping
@@ -941,7 +990,7 @@ impl Settings {
         self.stack.truncate(usize::from(self.side_w == 0));
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
-                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
+                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
                 BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
@@ -1186,10 +1235,16 @@ impl Settings {
         if let Some(o) = &mut self.passcode {
             match o.touch(ui, ev, t) {
                 OverlayOut::Open => {}
-                OverlayOut::Cancelled => self.passcode = None,
+                OverlayOut::Cancelled => {
+                    self.passcode = None;
+                    self.pw_pending = None;
+                }
                 OverlayOut::Done => {
                     self.passcode = None;
-                    self.rebuild(ui);
+                    match self.pw_pending.take() {
+                        Some((site, account)) => self.reveal_password(ui, site, account),
+                        None => self.rebuild(ui),
+                    }
                 }
             }
             return vec![];
@@ -1692,6 +1747,7 @@ impl Settings {
                 self.passcode = Some(Overlay::new(&self.data_dir.join("passcode.ini"), purpose, custom, self.w, self.h));
                 vec![]
             }
+            Action::Passwords(act) => self.passwords_act(ui, act),
             Action::Pick(pick) => {
                 self.list_mut().expect("list").set_check(g, i);
                 match pick {
@@ -2580,6 +2636,7 @@ mod tests {
             (vec!["General", "bifrost Storage"], PageId::Storage),
             (vec!["General", "Backup"], PageId::Backup),
             (vec!["Passcode"], PageId::Passcode),
+            (vec!["Passwords"], PageId::Passwords),
             (vec!["Developer"], PageId::Developer),
             (vec!["Wi-Fi", "Home"], PageId::WifiDetail),
         ];

@@ -431,6 +431,8 @@ pub enum Purpose {
     TurnOn,
     Change,
     TurnOff,
+    /// only confirms the current code; the store is not changed (Settings > Passwords reveal)
+    Reveal,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -505,6 +507,7 @@ impl Flow {
                         FlowOut::Failed
                     }
                 }
+                Verdict::Ok if self.purpose == Purpose::Reveal => FlowOut::Done,
                 Verdict::Ok => {
                     self.step = Step::New;
                     FlowOut::Next
