@@ -53,6 +53,10 @@ pub struct Options {
     pub icon_size: usize,
     /// Settings › Menu Bar: which menu extras show, a `MenuExtra` bit set (all on by default)
     pub menu_extras: u8,
+    /// Settings > Screen Saver: index into `screensaver::SAVERS`
+    pub screensaver_module: usize,
+    /// Settings > Screen Saver > Start After: idle minutes before the saver starts, 0 = never
+    pub screensaver_minutes: u32,
     pub auto_join: bool,
     /// ringer and alerts 0..=1
     pub volume: f32,
@@ -80,11 +84,11 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0 }
     }
 }
 
-const KEYS: [&str; 29] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras"];
+const KEYS: [&str; 31] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -106,6 +110,8 @@ impl Options {
             dnd: flag("dnd", d.dnd),
             assistive_touch: flag("assistive_touch", d.assistive_touch),
             menu_extras: p.get_parsed("menu_extras").unwrap_or(d.menu_extras),
+            screensaver_module: p.get_parsed("screensaver_module").filter(|&i: &usize| i < super::screensaver::SAVERS.len()).unwrap_or(d.screensaver_module),
+            screensaver_minutes: p.get_parsed("screensaver_minutes").unwrap_or(d.screensaver_minutes),
             icon_size: p.get_parsed("icon_size").filter(|&i| i < ICON_SIZES.len()).unwrap_or(d.icon_size),
             auto_join: flag("auto_join", d.auto_join),
             volume: p.get_parsed::<f32>("volume").map_or(d.volume, |v| v.clamp(0.0, 1.0)),
@@ -157,6 +163,8 @@ impl Options {
             flag(self.corner_swipe).into(),
             flag(self.backup_before_update).into(),
             self.menu_extras.to_string(),
+            self.screensaver_module.to_string(),
+            self.screensaver_minutes.to_string(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -190,7 +198,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101 };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5 };
         o.save(&mut p);
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
         assert_eq!(p.get("system_sleep_minutes"), Some("15"));
