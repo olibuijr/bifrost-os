@@ -8,11 +8,20 @@
 //! Nothing touches /dev/video* until the app is opened (`start`) and the
 //! stream is released as soon as the app is left (`stop`). When no node
 //! works the screen says "Camera not available" with a Try Again button.
+//!
+//! Cameras are listed by the device browser (`bifrost_ui::device_browser`): the
+//! switch button picks among the attached ones and remembers the choice, and a
+//! plug or unplug is noticed within about a second (the /dev nodes are re-read).
+//! Import from Camera (the button at the top) lists the pictures on a camera or
+//! SD card with a DCIM folder and copies the picked ones into the Photos folder.
 
+pub mod devices;
+pub mod import;
 pub mod jpeg;
 pub mod logic;
 pub mod qr;
 
+use self::import::{ImportAction, ImportView};
 use self::logic::{Aspect, SelfTimer, ShutterAction};
 use super::cache::TextCache;
 use super::clock::Wall;
@@ -24,6 +33,7 @@ use super::Event;
 use crate::gfx::{pack, rgba, Image, Surface};
 use crate::layout::Rect;
 use crate::media::v4l2::{self, CameraInfo, Frame};
+use bifrost_ui::device_browser::{DeviceBrowser, DeviceMask};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -39,6 +49,8 @@ pub(crate) const POLL_MS: f64 = 33.0;
 const JPEG_QUALITY: u8 = 92;
 /// Minimum time between QR scans of the viewfinder (ms).
 const QR_SCAN_MS: f64 = 450.0;
+/// How often the /dev nodes and the mounted cards are checked while the app is open (ms).
+const HOTPLUG_MS: f64 = 1000.0;
 /// Corner radius in px for every control (rule: at most 6).
 const RADIUS: f32 = 6.0;
 const PLATE: u32 = pack(44, 44, 46, 255);
@@ -56,6 +68,8 @@ enum Target {
     Zoom(usize),
     Qr,
     QrBanner,
+    /// opens Import from Camera
+    Import,
     /// a tap on the picture itself: tap-to-focus
     View,
 }
@@ -187,6 +201,18 @@ pub struct Camera {
     state: State,
     cameras: Vec<CameraInfo>,
     current: usize,
+    /// the attached cameras, by stable id; keeps the chosen camera across unplug and replug
+    cams: DeviceBrowser,
+    /// the /dev video nodes seen by the last scan
+    nodes: Vec<String>,
+    /// when the devices were last checked (app clock, ms)
+    scan_at: f64,
+    /// the cards and camera storage that hold a DCIM folder, by id
+    volumes: DeviceBrowser,
+    /// Import from Camera, while it is open
+    import: Option<ImportView>,
+    copied_tx: Sender<usize>,
+    copied_rx: Receiver<usize>,
     worker: Option<Worker>,
     preview: Option<Image>,
     last_raw: Option<Frame>,
@@ -280,6 +306,7 @@ impl Camera {
     pub fn new(ui: &Ui, w: i32, h: i32, dir: PathBuf, wall: Wall) -> Self {
         let (saved_tx, saved_rx) = channel();
         let (qr_tx, qr_rx) = channel();
+        let (copied_tx, copied_rx) = channel();
         Self {
             w,
             h,
@@ -287,6 +314,13 @@ impl Camera {
             state: State::Idle,
             cameras: Vec::new(),
             current: 0,
+            cams: DeviceBrowser::new(),
+            nodes: Vec::new(),
+            scan_at: f64::MIN,
+            volumes: DeviceBrowser::new(),
+            import: None,
+            copied_tx,
+            copied_rx,
             worker: None,
             preview: None,
             last_raw: None,
@@ -324,9 +358,12 @@ impl Camera {
 
     /// The app was opened by the user: probe the nodes, open the first and load the last-photo thumbnail.
     pub fn start(&mut self, ui: &Ui) {
+        self.nodes = devices::node_listing();
         self.cameras = v4l2::probe();
-        self.current = 0;
-        self.open_current();
+        // the browser keeps its preferred camera from an earlier visit
+        self.cams.start(DeviceMask::CAMERA);
+        let _ = self.cams.update(devices::camera_devices(&self.cameras));
+        self.choose_preferred();
         if self.thumb.is_none() && !self.thumb_loading {
             self.thumb_loading = true;
             let (dir, n, tx) = (self.dir.clone(), self.thumb_size(ui), self.saved_tx.clone());
@@ -345,6 +382,8 @@ impl Camera {
     /// The app was left: release the camera so nothing keeps streaming in the background.
     pub fn stop(&mut self) {
         self.timer.cancel();
+        self.cams.stop();
+        self.close_import();
         if self.state != State::Idle {
             self.worker = None;
             self.state = State::Idle;
@@ -360,6 +399,76 @@ impl Camera {
         if self.state == State::Idle {
             self.start(ui);
         }
+    }
+
+    /// The id of the camera that is streaming now, when one is.
+    fn live_camera_id(&self) -> Option<String> {
+        if self.state != State::Live {
+            return None;
+        }
+        devices::camera_ids(&self.cameras).get(self.current).cloned()
+    }
+
+    /// Opens the preferred camera (the one picked last time), or the first attached one. With no camera
+    /// attached the screen says so.
+    fn choose_preferred(&mut self) {
+        let wanted = self.cams.preferred_device().map(|d| d.id.clone());
+        let at = wanted.and_then(|id| devices::camera_ids(&self.cameras).iter().position(|c| *c == id)).unwrap_or(0);
+        self.current = at;
+        self.open_current();
+    }
+
+    /// /dev changed: probes the cameras again and applies the plug and unplug events. The camera that is
+    /// streaming keeps streaming when it is still attached. When it is gone, or nothing is streaming, the
+    /// preferred camera is opened.
+    fn refresh_cameras(&mut self, nodes: Vec<String>) {
+        self.nodes = nodes;
+        let streaming = self.live_camera_id();
+        self.cameras = v4l2::probe();
+        let _ = self.cams.update(devices::camera_devices(&self.cameras));
+        let still = streaming.and_then(|id| devices::camera_ids(&self.cameras).iter().position(|c| *c == id));
+        match still {
+            Some(at) => self.current = at,
+            None => self.choose_preferred(),
+        }
+        self.dirty = true;
+    }
+
+    /// Checks for plugged and unplugged cameras and cards. Runs about once a second while the app is open.
+    fn check_devices(&mut self, t: f64) {
+        self.scan_at = t;
+        let nodes = devices::node_listing();
+        if nodes != self.nodes {
+            self.refresh_cameras(nodes);
+        }
+        if self.import.is_some() {
+            let events = self.volumes.update(devices::volume_devices());
+            if let Some(view) = &mut self.import {
+                for e in &events {
+                    view.on_event(e);
+                }
+            }
+            if !events.is_empty() {
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Opens Import from Camera with the cards and camera storage attached now.
+    fn open_import(&mut self) {
+        self.volumes = DeviceBrowser::new();
+        self.volumes.start(DeviceMask::CAMERA);
+        let mut view = ImportView::new(self.w, self.h);
+        for e in self.volumes.update(devices::volume_devices()) {
+            view.on_event(&e);
+        }
+        self.import = Some(view);
+        self.dirty = true;
+    }
+
+    fn close_import(&mut self) {
+        self.volumes.stop();
+        self.import = None;
     }
 
     pub fn streaming(&self) -> bool {
@@ -491,6 +600,9 @@ impl Camera {
         if matches!(self.state, State::Unavailable(_)) && Self::inside(self.retry_rect(ui), x, y) {
             return Some(Target::Retry);
         }
+        if self.state != State::Idle && Self::inside(self.tool_rect(ui, 3), x, y) {
+            return Some(Target::Import);
+        }
         if self.state == State::Live && Self::inside(self.shutter_rect(ui), x, y) && self.last_raw.is_some() && matches!(self.mode, PHOTO_MODE | SQUARE_MODE) {
             return Some(Target::Shutter);
         }
@@ -532,6 +644,13 @@ impl Camera {
     }
 
     pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
+        if let Some(view) = &mut self.import {
+            if view.touch(ui, event) == ImportAction::Close {
+                self.close_import();
+            }
+            self.dirty = true;
+            return;
+        }
         match event {
             Event::Down(x, y) => {
                 self.pressed = self.hit(ui, x, y);
@@ -575,8 +694,13 @@ impl Camera {
                         Target::Switch => {
                             self.timer.cancel();
                             self.current = (self.current + 1) % self.cameras.len().max(1);
+                            // the picked camera is the one opened next time too
+                            if let Some(id) = devices::camera_ids(&self.cameras).get(self.current) {
+                                self.cams.set_preferred(id);
+                            }
                             self.open_current();
                         }
+                        Target::Import => self.open_import(),
                         Target::Retry => self.start(ui),
                         Target::Thumb => self.open_photo = self.thumb.as_ref().map(|(p, _)| p.clone()),
                     }
@@ -589,6 +713,25 @@ impl Camera {
 
     /// Pulls the newest frame; true when the picture changed.
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
+        if t - self.scan_at >= HOTPLUG_MS {
+            self.check_devices(t);
+        }
+        // a finished copy from Import from Camera, and a new copy request from the view
+        while let Ok(copied) = self.copied_rx.try_recv() {
+            if let Some(view) = &mut self.import {
+                view.on_copied(copied);
+            }
+            self.dirty = true;
+        }
+        if let Some(view) = &mut self.import {
+            if let Some(paths) = view.take_request() {
+                let (dir, tx) = (self.dir.clone(), self.copied_tx.clone());
+                std::thread::spawn(move || {
+                    let _ = tx.send(devices::import_files(&paths, &dir));
+                });
+                self.dirty = true;
+            }
+        }
         let (_, _, vw, vh) = self.view_rect(ui);
         let mut failed = None;
         if let Some(w) = &self.worker {
@@ -665,7 +808,15 @@ impl Camera {
     }
 
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        (self.worker.is_some() || self.flash_at.is_some() || self.timer.running() || self.focus.is_some() || !self.reserved.is_empty()).then_some(t + POLL_MS)
+        let busy = self.worker.is_some() || self.flash_at.is_some() || self.timer.running() || self.focus.is_some() || !self.reserved.is_empty() || self.import.as_ref().is_some_and(|v| v.busy());
+        if busy {
+            Some(t + POLL_MS)
+        } else if self.state != State::Idle {
+            // nothing to draw, but the devices are checked about once a second
+            Some(t + HOTPLUG_MS)
+        } else {
+            None
+        }
     }
 
     pub fn describe(&self) -> String {
@@ -674,7 +825,7 @@ impl Camera {
             State::Live => "live".to_string(),
             State::Unavailable(m) => format!("unavailable:{m}"),
         };
-        format!("camera_state={state} camera_nodes={} camera_current={} camera_has_frame={} camera_thumb={} camera_aspect={} camera_timer={} camera_grid={} camera_qr={} camera_mode={} camera_flash={} camera_zoom={}", self.cameras.len(), self.current, self.last_raw.is_some(), self.thumb.is_some(), self.aspect.label(), self.timer.mode.seconds(), self.grid, self.qr_on, MODES[self.mode], self.flash.label(), ZOOMS[self.zoom].0)
+        format!("camera_state={state} camera_nodes={} camera_current={} camera_import={} camera_has_frame={} camera_thumb={} camera_aspect={} camera_timer={} camera_grid={} camera_qr={} camera_mode={} camera_flash={} camera_zoom={}", self.cameras.len(), self.current, self.import.is_some(), self.last_raw.is_some(), self.thumb.is_some(), self.aspect.label(), self.timer.mode.seconds(), self.grid, self.qr_on, MODES[self.mode], self.flash.label(), ZOOMS[self.zoom].0)
     }
 
     fn label(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, color: u32, (x, y, w, h): (f32, f32, f32, f32)) {
@@ -688,6 +839,10 @@ impl Camera {
         if style != self.cache_style {
             self.cache.clear();
             self.cache_style = style;
+        }
+        if let Some(view) = &mut self.import {
+            view.draw(s, ui);
+            return;
         }
         s.fill_rect(0, 0, self.w as usize, self.h as usize, BLACK);
         let (vx, vy, vw, vh) = self.view_rect(ui);
@@ -792,6 +947,12 @@ impl Camera {
                 s.fill_rrect(zr.0, zr.1, zr.2, zr.3, zr.2 / 2.0, fill);
                 self.label(s, ui, text, 15.0, if on { BLACK } else { WHITE }, zr);
             }
+        }
+        if self.state != State::Idle {
+            let r = self.tool_rect(ui, 3);
+            let fill = if self.pressed == Some(Target::Import) { pack(72, 72, 74, 255) } else { pack(44, 44, 46, 220) };
+            s.fill_rrect(r.0, r.1, r.2, r.3, RADIUS, fill);
+            self.label(s, ui, "Import", 14.0, WHITE, r);
         }
         if self.cameras.len() > 1 {
             let r = self.switch_rect(ui);
@@ -929,6 +1090,29 @@ mod tests {
         assert!(!cam.streaming());
         assert!(cam.describe().contains("camera_state=idle"));
         assert!(cam.next_wake(0.0).is_none(), "nothing polls before the app is opened");
+    }
+
+    #[test]
+    fn import_opens_and_closes_without_touching_a_device() {
+        let ui = crate::shell::tests::ui();
+        let mut cam = Camera::new(&ui, 1200, 1920, PathBuf::from("/nonexistent"), Wall::default());
+        cam.open_import();
+        assert!(cam.describe().contains("camera_import=true"));
+        cam.close_import();
+        assert!(cam.describe().contains("camera_import=false"));
+        assert!(!cam.streaming());
+    }
+
+    #[test]
+    fn with_no_camera_attached_the_screen_says_so() {
+        let ui = crate::shell::tests::ui();
+        let mut cam = Camera::new(&ui, 1200, 1920, PathBuf::from("/nonexistent"), Wall::default());
+        // no camera is attached on the test host, so the preferred choice falls back to the first and fails
+        cam.choose_preferred();
+        let d = cam.describe();
+        assert!(d.contains("camera_state=unavailable:No camera found"), "{d}");
+        assert!(d.contains("camera_nodes=0"), "{d}");
+        assert_eq!(cam.next_wake(5.0), Some(5.0 + HOTPLUG_MS), "an unavailable camera rechecks the devices every second");
     }
 
     #[test]
