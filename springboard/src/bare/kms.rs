@@ -1165,10 +1165,10 @@ mod tests {
         assert_eq!((pref.hdisplay, pref.vrefresh), (1920, 60), "no request: the preferred mode, so the firmware's mode is kept");
         let best = select_mode(&hz, None, true).unwrap();
         assert_eq!((best.hdisplay, best.vrefresh), (1920, 144), "refresh=max: max refresh at the native size, never a lower resolution");
-        let fixed = select_mode(&modes, Some("1200x1920@60")).unwrap();
+        let fixed = select_mode(&modes, Some("1200x1920@60"), false).unwrap();
         assert_eq!((fixed.hdisplay, fixed.vdisplay, fixed.vrefresh), (1200, 1920, 60));
-        assert!(select_mode(&modes, Some("1200x1920@75")).is_err());
-        assert!(select_mode(&modes, Some("bad")).is_err());
+        assert!(select_mode(&modes, Some("1200x1920@75"), false).is_err());
+        assert!(select_mode(&modes, Some("bad"), false).is_err());
         assert!(select_mode(&[], None, false).is_err());
     }
 
