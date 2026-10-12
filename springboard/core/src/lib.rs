@@ -35,6 +35,7 @@ pub mod pedometer;
 pub mod permission_request;
 pub mod motion_activity;
 pub mod rumble;
+pub mod force_effect;
 pub mod migrate;
 pub mod occlusion;
 pub mod progress;
