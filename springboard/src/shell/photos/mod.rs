@@ -36,6 +36,7 @@ use crate::imgdec;
 use crate::layout::Rect;
 use crate::scene::STATUS_PT;
 use albums::Selection;
+use bifrost_ui::photo_caching::{Key as PreKey, Manager as PreheatCache};
 use bifrost_ui::photo_smart_albums::SmartAlbum;
 use edit::{Aspect, Edit, Filter};
 use grid::Grid;
@@ -137,6 +138,8 @@ pub enum Target {
     SelShare,
     SelDelete,
     Info,
+    /// the Info sheet's Revert to Original row
+    InfoRevert,
     Edit,
     EditCancel,
     EditSave,
@@ -285,7 +288,8 @@ enum Done {
     ThumbSkipped { key: String },
     Full { key: String, image: Option<Image> },
     Wallpaper { id: String, ok: bool },
-    Edited { ok: bool },
+    /// an edit saved as a copy; `copy` is None when the copy could not be written
+    Edited { original: PathBuf, copy: Option<PathBuf> },
 }
 
 pub struct Photos {
@@ -332,6 +336,11 @@ pub struct Photos {
     thumb_wanted: Arc<Mutex<HashSet<String>>>,
     /// scroll offset at the last thumbnail request, to tell which way it moves
     thumb_scroll: f32,
+    /// the thumbnail preparations started for the grid's window (bifrost_ui photo_caching)
+    preheat: PreheatCache,
+    preheat_keys: Vec<PreKey>,
+    /// the original of the edited copy shown in the Info sheet, when the sheet offers Revert to Original
+    info_revert: Option<PathBuf>,
     /// thumbnails resampled to the grid's cell size, so drawing is a plain copy
     cells: MemCache,
     cell_px: usize,
@@ -415,6 +424,9 @@ impl Photos {
             thumb_failed: HashSet::new(),
             thumb_wanted: Arc::new(Mutex::new(HashSet::new())),
             thumb_scroll: 0.0,
+            preheat: PreheatCache::new(),
+            preheat_keys: Vec::new(),
+            info_revert: None,
             cells: MemCache::new(thumbs::MEM_BUDGET),
             cell_px: 0,
             fav_paths: HashSet::new(),
@@ -811,6 +823,12 @@ impl Photos {
         let keys: Vec<String> = wanted.iter().map(Photo::key).collect();
         // jobs still queued for cells that scrolled away give way
         *self.thumb_wanted.lock().unwrap() = keys.iter().cloned().collect();
+        // the caching manager keeps the same window as its preparations; the ones that scrolled away stop
+        let window: Vec<PreKey> = keys.iter().map(|k| PreKey::new(k, thumbs::SIZE as u32, thumbs::SIZE as u32)).collect();
+        let stale: Vec<PreKey> = self.preheat_keys.iter().filter(|k| !window.contains(*k)).cloned().collect();
+        self.preheat.stop(&stale);
+        self.preheat.start(&window);
+        self.preheat_keys = window;
         for (photo, key) in wanted.into_iter().zip(keys) {
             if self.thumbs.contains(&key) || self.thumb_pending.contains(&key) || self.thumb_failed.contains(&key) {
                 continue;
@@ -942,13 +960,14 @@ impl Photos {
                         self.full.insert(&key, img);
                     }
                 }
-                Done::Edited { ok } => {
-                    if ok {
+                Done::Edited { original, copy } => match copy {
+                    Some(copy) => {
+                        // the link lets the copy's Info sheet offer Revert to Original
+                        self.pref_set(&format!("edited:{}", copy.display()), &original.display().to_string());
                         self.rescan();
-                    } else {
-                        eprintln!("photos: edited copy not written");
                     }
-                }
+                    None => eprintln!("photos: edited copy not written"),
+                },
                 Done::Wallpaper { id, ok } => {
                     if ok {
                         self.effects.push(Effect::Wallpaper(id));
@@ -1118,6 +1137,13 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
+                if self.info_revert.is_some() {
+                    let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
+                    let row = ui.pt(INFO_ROW_PT);
+                    if within(x, y, (sx, sy + row * (self.info.len() + 1) as f32, sw, row)) {
+                        return Some(Target::InfoRevert);
+                    }
+                }
                 return Some(Target::SheetCancel);
             }
             let (sx, sy, sw, sh) = self.sheet_rect(ui, sheet);
@@ -1253,7 +1279,15 @@ impl Photos {
                 if let Some(p) = self.viewing().cloned() {
                     let head = read_head(&p.path);
                     self.info = exif::describe(&p.name(), p.size, p.mtime, self.offset, &head);
+                    self.info_revert = self.edited_original(&p);
                     self.sheet = Some(Sheet::Info);
+                }
+            }
+            Target::InfoRevert => {
+                let original = self.info_revert.take();
+                self.sheet = None;
+                if let (Some(original), Some(edited)) = (original, self.viewing().cloned()) {
+                    self.revert_to_original(ui, &edited, &original);
                 }
             }
             Target::Edit => {
@@ -1298,13 +1332,13 @@ impl Photos {
                 if let Some(ed) = self.editor.take() {
                     if !ed.edit.is_identity() {
                         let (path, e) = (ed.photo.path.clone(), ed.edit);
+                        let original = path.clone();
                         self.pool.spawn(move || {
-                            let ok = (|| {
+                            let copy = (|| {
                                 let img = decode_upright(&std::fs::read(&path).ok()?)?;
                                 edit::save_copy(&path, &e.apply(&img)).ok()
-                            })()
-                            .is_some();
-                            Done::Edited { ok }
+                            })();
+                            Done::Edited { original, copy }
                         });
                     }
                 }
@@ -1612,7 +1646,30 @@ impl Photos {
     // --- info sheet ---
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1) as f32)
+        let revert = usize::from(self.info_revert.is_some());
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + revert) as f32)
+    }
+
+    /// The original of `p` when `p` is an edited copy whose original is still in the library folder.
+    /// Recently Deleted copies have no revert: their edit is already gone with them.
+    fn edited_original(&self, p: &Photo) -> Option<PathBuf> {
+        if self.album == Album::Trash {
+            return None;
+        }
+        let original = PathBuf::from(self.prefs.get(&format!("edited:{}", p.path.display()))?);
+        original.exists().then_some(original)
+    }
+
+    /// Revert to Original: the edited copy goes to Recently Deleted (where it can still be recovered) and the
+    /// original opens. The original file is never changed.
+    fn revert_to_original(&mut self, ui: &Ui, edited: &Photo, original: &Path) {
+        if !self.remove_one(edited) {
+            eprintln!("photos: could not revert {}", edited.path.display());
+            return;
+        }
+        self.after_removal(ui);
+        self.rescan();
+        let _ = self.show(ui, original);
     }
 
     /// "12 days left" for a photo in Recently Deleted.
@@ -1970,6 +2027,12 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
+        if self.info_revert.is_some() {
+            let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
+        }
     }
 
     /// The edit screen: the live preview and the tool panel.
@@ -2321,6 +2384,34 @@ mod tests {
         let visible: HashSet<String> = p.grid.visible(0.0, p.content_bottom(&ui) - content_top(&ui)).into_iter().map(|i| p.photos()[i].key()).collect();
         assert_eq!(*p.thumb_wanted.lock().unwrap(), visible);
         assert_eq!(visible.len(), 12);
+        // the caching manager holds one preparation per visible thumbnail, at the grid's thumbnail size
+        assert_eq!(p.preheat.len(), 12);
+        assert!(p.preheat.is_started(&PreKey::new(&p.photos()[0].key(), thumbs::SIZE as u32, thumbs::SIZE as u32)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn revert_to_original_moves_the_edit_to_recently_deleted_and_opens_the_original() {
+        let (mut p, dir, ui) = photos("revert", 2);
+        let pics = dir.join("Pictures");
+        let (original, edited) = (pics.join("IMG_0000.png"), pics.join("IMG_0001.png"));
+        // IMG_0001 is the edited copy of IMG_0000 (the editor records this link when it saves a copy)
+        p.pref_set(&format!("edited:{}", edited.display()), &original.display().to_string());
+        p.open_viewer(1);
+        frame(&mut p, &ui);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        assert_eq!(p.sheet, Some(Sheet::Info));
+        assert_eq!(p.info_revert.as_deref(), Some(original.as_path()));
+        // the Revert row sits under the detail rows
+        let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
+        let row = ui.pt(INFO_ROW_PT);
+        let y = sy + row * (p.info.len() + 1) as f32 + row / 2.0;
+        tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
+        assert!(!edited.exists(), "the edited copy leaves the library");
+        assert!(original.exists(), "the original is never changed");
+        assert_eq!(p.trash.len(), 1, "the copy stays recoverable in Recently Deleted");
+        assert_eq!(p.viewing().map(|v| v.path.clone()), Some(original.clone()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
