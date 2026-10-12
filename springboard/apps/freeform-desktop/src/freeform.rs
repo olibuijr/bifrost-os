@@ -7,6 +7,8 @@
 //! stays the picture that is drawn and saved.
 
 use crate::ink;
+use bifrost_app::controls::affine::AffineTransform;
+use bifrost_app::controls::cursor::Kind;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
 use bifrost_app::controls::lasso::{Lasso, Selection};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -38,6 +40,7 @@ const BAR_LASSO: u32 = 8;
 const BAR_RECT: u32 = 9;
 const BAR_OVAL: u32 = 10;
 const BAR_DELETE: u32 = 11;
+const BAR_COPY: u32 = 12;
 const UNDO_DEPTH: usize = 12;
 
 const COLORS: [u32; 7] = [
@@ -67,6 +70,7 @@ enum Target {
     Undo,
     Clear,
     Delete,
+    Copy,
     Save,
 }
 
@@ -107,6 +111,10 @@ pub struct Freeform {
     moving: Option<(f32, f32)>,
     /// A rectangle or oval is being dragged from this point (canvas pixels).
     shape: Option<(f32, f32)>,
+    /// Pixels per canvas pixel of the export (1 unless the display is denser than the canvas).
+    export_scale: u32,
+    /// The strokes Copy took, waiting for the app to put them on the pasteboard (`take_copy`).
+    copied: Option<Drawing>,
 }
 
 /// Width of the ink a tool draws, in points.
@@ -130,6 +138,7 @@ fn id_target(id: u32) -> Option<Target> {
         BAR_UNDO => Target::Undo,
         BAR_CLEAR => Target::Clear,
         BAR_DELETE => Target::Delete,
+        BAR_COPY => Target::Copy,
         BAR_SAVE => Target::Save,
         _ => return None,
     })
@@ -147,6 +156,7 @@ fn target_id(t: Target) -> Option<u32> {
         Target::Undo => BAR_UNDO,
         Target::Clear => BAR_CLEAR,
         Target::Delete => BAR_DELETE,
+        Target::Copy => BAR_COPY,
         Target::Save => BAR_SAVE,
         Target::Color(_) => return None,
     })
@@ -179,6 +189,40 @@ impl Freeform {
             lassoing: false,
             moving: None,
             shape: None,
+            export_scale: 1,
+            copied: None,
+        }
+    }
+
+    /// The export factor from the display's backing scale (`services` learns it from the screens service).
+    pub fn set_export_scale(&mut self, factor: u32) {
+        self.export_scale = factor.max(1);
+    }
+
+    /// The strokes the last Copy took, once: the app puts them on the pasteboard.
+    pub fn take_copy(&mut self) -> Option<Drawing> {
+        self.copied.take()
+    }
+
+    /// The pointer shape over window point (x, y): the arrow over the toolbar; over the board, the tool's drawing
+    /// cursor (crosshair for the pen, marker and shapes, the poof for the eraser), and the hands over a lasso selection.
+    pub fn pointer_for(&self, ui: &Ui, x: f32, y: f32) -> Kind {
+        if y < self.canvas_top(ui) as f32 {
+            return Kind::Arrow;
+        }
+        match self.tool {
+            Tool::Pen | Tool::Marker | Tool::Rectangle | Tool::Oval => Kind::Crosshair,
+            Tool::Eraser => Kind::DisappearingItem,
+            Tool::Lasso => {
+                let (cx, cy) = self.canvas_point(ui, x, y);
+                if self.moving.is_some() {
+                    Kind::ClosedHand
+                } else if self.selection_contains(cx, cy) {
+                    Kind::OpenHand
+                } else {
+                    Kind::Arrow
+                }
+            }
         }
     }
 
@@ -219,6 +263,7 @@ impl Freeform {
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_UNDO, "Undo").in_group(2).enabled(!self.undo.is_empty()),
             ToolbarItem::button(BAR_CLEAR, "Clear").in_group(2),
+            ToolbarItem::button(BAR_COPY, "Copy").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::button(BAR_DELETE, "Delete").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::icon(BAR_SAVE, "Save to Photos", "square.and.arrow.up"),
         ])
@@ -529,8 +574,9 @@ impl Freeform {
                 self.selection = None;
             }
             Target::Delete => self.delete_selection(ui),
+            Target::Copy => self.copy_selection(),
             Target::Save => {
-                let msg = match self.save() {
+                let msg = match self.save(ui) {
                     Ok(name) => format!("Saved {name} to Photos"),
                     Err(e) => format!("Could not save: {e}"),
                 };
@@ -540,7 +586,7 @@ impl Freeform {
         self.dirty = true;
     }
 
-    fn save(&self) -> Result<String, String> {
+    fn save(&self, ui: &Ui) -> Result<String, String> {
         let dir = self.save_dir.as_ref().ok_or("no Photos folder")?;
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         let millis = std::time::SystemTime::now()
@@ -548,9 +594,44 @@ impl Freeform {
             .map(|d| d.as_millis())
             .unwrap_or(0);
         let name = free_name(dir, millis);
-        let png = springboard::pngenc::encode_rgb(self.cw, self.ch, &self.canvas);
+        let png = self.export_png(ui);
         springboard::shell::fsutil::write_atomic(&dir.join(&name), png).map_err(|e| e.to_string())?;
         Ok(name)
+    }
+
+    /// The picture as a PNG. On a display denser than the canvas the strokes are painted again at the export factor,
+    /// so the file is sharp; otherwise the canvas itself is written.
+    fn export_png(&self, ui: &Ui) -> Vec<u8> {
+        let k = self.export_scale.max(1) as usize;
+        if k == 1 {
+            return springboard::pngenc::encode_rgb(self.cw, self.ch, &self.canvas);
+        }
+        let mut big = self.model.clone();
+        big.transform(AffineTransform::scale(k as f32, k as f32));
+        let (w, h) = (self.cw * k, self.ch * k);
+        let mut px = vec![PAPER; w * h];
+        for s in big.strokes() {
+            ink::paint_stroke(&mut px, w, h, s, ui.s * k as f32);
+        }
+        springboard::pngenc::encode_rgb(w, h, &px)
+    }
+
+    /// Copy: the selected strokes go to `copied` for the app to put on the pasteboard.
+    fn copy_selection(&mut self) {
+        let Some(sel) = &self.selection else { return };
+        let strokes: Vec<Stroke> = self
+            .model
+            .strokes()
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| sel.contains_stroke(*i))
+            .map(|(_, s)| s.clone())
+            .collect();
+        if strokes.is_empty() {
+            return;
+        }
+        self.copied = Some(Drawing::from_strokes(strokes));
+        self.toast = Some(("Copied the selection".to_string(), self.now + 2500.0));
     }
 
     pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
@@ -843,5 +924,78 @@ mod model_tests {
         app.canvas_up(&ui, 40.0, top + 20.0);
         assert_eq!(app.model.strokes().len(), 1);
         assert!(app.model.strokes()[0].points.len() > 8, "an oval is flattened to many points");
+    }
+
+    fn two_lines() -> Drawing {
+        let line = |x: f32| Stroke { ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 }, points: vec![StrokePoint::at(x, 5.0)] };
+        Drawing::from_strokes(vec![line(5.0), line(120.0)])
+    }
+
+    /// Selects the strokes a lasso drawn 10 points around (x, y) reaches, as a drag on the board would.
+    fn select_at(app: &mut Freeform, x: f32, y: f32) {
+        let mut lasso = Lasso::new();
+        for (px, py) in [(x - 10.0, y - 10.0), (x + 10.0, y - 10.0), (x + 10.0, y + 10.0), (x - 10.0, y + 10.0)] {
+            lasso.add(px, py);
+        }
+        app.selection = Some(lasso.select(&app.model)).filter(|s| !s.is_empty());
+    }
+
+    #[test]
+    fn copy_takes_only_the_selected_strokes_once() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        assert!(app.take_copy().is_none());
+        select_at(&mut app, 120.0, 5.0);
+        app.activate(&ui, Target::Copy);
+        let copied = app.take_copy().expect("the selected stroke is copied");
+        assert_eq!(copied.strokes().len(), 1);
+        assert_eq!(copied.strokes()[0].points[0].x, 120.0);
+        assert!(app.take_copy().is_none(), "a copy is taken once");
+        assert_eq!(app.model.strokes().len(), 2, "copy leaves the board alone");
+    }
+
+    #[test]
+    fn copy_needs_a_selection_and_the_button_follows_it() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        app.activate(&ui, Target::Copy);
+        assert!(app.take_copy().is_none());
+        assert!(app.bar().items.iter().any(|i| i.id == BAR_COPY && !i.enabled));
+        select_at(&mut app, 5.0, 5.0);
+        assert!(app.bar().items.iter().any(|i| i.id == BAR_COPY && i.enabled));
+    }
+
+    #[test]
+    fn the_export_is_scaled_by_the_display_factor() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        let (w, h) = (app.cw, app.ch);
+        let dims = |png: &[u8]| (u32::from_be_bytes([png[16], png[17], png[18], png[19]]) as usize, u32::from_be_bytes([png[20], png[21], png[22], png[23]]) as usize);
+        assert_eq!(dims(&app.export_png(&ui)), (w, h));
+        app.set_export_scale(2);
+        assert_eq!(dims(&app.export_png(&ui)), (w * 2, h * 2));
+        app.set_export_scale(0);
+        assert_eq!(dims(&app.export_png(&ui)), (w, h), "a zero factor is treated as 1");
+    }
+
+    #[test]
+    fn the_pointer_is_an_arrow_on_the_toolbar_and_the_tool_cursor_on_the_board() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        let top = app.canvas_top(&ui) as f32;
+        assert_eq!(app.pointer_for(&ui, 10.0, 0.0), Kind::Arrow);
+        assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::Crosshair);
+        app.tool = Tool::Eraser;
+        assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::DisappearingItem);
+        app.tool = Tool::Lasso;
+        assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::Arrow);
+        app.model = two_lines();
+        select_at(&mut app, 5.0, 5.0);
+        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::OpenHand, "over the selected stroke");
+        app.moving = Some((0.0, 0.0));
+        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::ClosedHand, "while it is dragged");
     }
 }
