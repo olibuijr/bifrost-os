@@ -10,9 +10,9 @@
     {
       "feature": "Wi-Fi configuration (persistent networks, join)",
       "apple": "NEHotspotConfiguration, NEHotspotConfigurationManager (Wi-Fi configuration collection group)",
-      "bifrost": "springboard/src/net/wifi_config.rs, springboard/src/net/wifi.rs",
-      "status": "os",
-      "note": "Saved networks are written as wpa_supplicant blocks with priority ordering (move_network, upsert). Only the shell can use them; no SDK API exposes a join or add-configuration call to apps."
+      "bifrost": "springboard/sdk/src/hotspot_configuration.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Saved networks are written as wpa_supplicant blocks with priority ordering (move_network, upsert). Only the shell can use them; no SDK API exposes a join or add-configuration call to apps."
     },
     {
       "feature": "Hotspot helper",
@@ -24,9 +24,9 @@
     {
       "feature": "Configuring a Wi-Fi accessory to join a network",
       "apple": "Wi-Fi configuration sample code (accessory setup)",
-      "bifrost": "springboard/src/net/wifi_config.rs",
-      "status": "gap",
-      "note": "Accessory onboarding flow is not built. The network-config primitives exist only inside the shell."
+      "bifrost": "springboard/sdk/src/accessory_hotspot.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Accessory onboarding flow is not built. The network-config primitives exist only inside the shell."
     },
     {
       "feature": "VPN configuration (personal VPN, IKEv2/IPsec)",

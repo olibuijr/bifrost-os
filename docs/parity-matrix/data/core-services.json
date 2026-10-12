@@ -45,9 +45,9 @@
     {
       "feature": "Shared file lists (recent items, favourites)",
       "apple": "LSSharedFileList, LSSharedFileListItem",
-      "bifrost": "none found in springboard/sdk/src or springboard/src/shell",
-      "status": "gap",
-      "note": "Deprecated by Apple in favour of other APIs; no counterpart."
+      "bifrost": "springboard/ui/src/shared_list.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart."
     },
     {
       "feature": "Quarantine properties",
@@ -87,9 +87,9 @@
     {
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
       "apple": "MDQuery, MDItem, MDLabel, kMDItem* constants, importer plug-ins",
-      "bifrost": "none found in springboard/sdk/src (no metadata query API); Search panel is springboard/src/shell/quicksearch.rs",
-      "status": "gap",
-      "note": "No attribute store that apps can query, and no importer plug-ins."
+      "bifrost": "springboard/ui/src/metaquery.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribute store that apps can query, and no importer plug-ins."
     },
     {
       "feature": "Dictionary lookup",

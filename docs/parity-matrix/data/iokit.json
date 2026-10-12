@@ -7,22 +7,118 @@
   "summary": "IOKit's device-access layer exists on BifrOSt only in the Linux system layer (sysfs, /dev nodes, DRM, evdev, v4l2, ALSA control, Bluetooth), used by the shell and daemons. Apps get no device-registry, matching, notification or driver-call API, so the framework is not offered to SDK apps; the serial-port modem sample has no counterpart.",
   "rea_evidence": "ev_3eeb0b1b38dd6644082af26946ee505e9c85f8208ce87b029dbec5cfd26293fa",
   "features": [
-    {"feature": "Device matching and service discovery", "apple": "IOServiceGetMatchingServices, IOServiceMatching, IOBSDNameMatching, IOIteratorNext (IOKitLib.h)", "bifrost": "springboard/src/bare/kms.rs (open_first_available, drm_drivers); springboard/src/bare/input.rs:497 (every input device found by capability)", "status": "os", "note": "Enumeration happens inside the shell and daemons with sysfs and /dev scans; no SDK call returns a list of devices by class."},
-    {"feature": "Device registry tree and properties", "apple": "IORegistryEntryGetProperty, IORegistryEntryCopyPath, IORegistryEntryCopyFromPath (IOKit Functions)", "bifrost": "springboard/src/shell/gpu_page.rs:76 (read_from: vendor, device, driver from /sys/class/drm); springboard/src/shell/battery.rs:254 (health, sysfs power_supply)", "status": "os", "note": "Properties come from sysfs text files. No general registry walk and no typed property API for apps."},
-    {"feature": "Device add and remove notifications", "apple": "IONotificationPortCreate, IOServiceAddMatchingNotification, IONotificationPortSetDispatchQueue", "bifrost": "springboard/src/bare/input.rs:587 (rescans /dev/input when due); springboard/src/bare/sleep.rs:115 (mains plug changes by polling)", "status": "os", "note": "Changes are found by polling. The shell reacts; no app receives a device-arrival event."},
-    {"feature": "User-client method calls to drivers", "apple": "IOServiceOpen, IOConnectCallMethod, IOConnectCallScalarMethod, IOConnectCallStructMethod, IOConnectMapMemory", "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open, ioctl-based capture); springboard/src/bare/kms.rs (DRM ioctls)", "status": "os", "note": "The Linux kernel ABI is used directly by the shell. No general driver-call API is offered to apps."},
-    {"feature": "Shared-memory data queues from drivers", "apple": "IODataQueueAllocateNotificationPort, IODataQueueDequeue, IODataQueuePeek (IODataQueueClient.h)", "bifrost": "springboard/src/media/v4l2.rs (mmap'd capture buffers); springboard/src/bare/scanout.rs (buffer allocation for display)", "status": "os", "note": "Equivalent buffer-sharing paths exist for video and display. No generic data-queue type exists in the SDK."},
-    {"feature": "Power sources and battery state", "apple": "IOPowerSources (power source APIs built on IOKit)", "bifrost": "springboard/src/bare/power.rs:113 (percent and charging from sysfs); springboard/src/shell/battery.rs:252 (health rows)", "status": "os", "note": "Battery state reaches the shell and the menu bar. No SDK API returns it to apps."},
-    {"feature": "Thermal state", "apple": "IOKit thermal notifications, surfaced through ProcessInfo.thermalState", "bifrost": "springboard/sdk/src/process_info.rs:84 (worst state over /sys/class/thermal)", "status": "partial", "note": "Reads the thermal zones once per call and reports a state. No change notification and no per-zone detail."},
-    {"feature": "Graphics accelerators and displays", "apple": "IOAccelerator and IOGraphics services, reached through IOKit", "bifrost": "springboard/src/bare/kms.rs (Display, open_first_available); springboard/src/bare/scanout.rs:236 (probe_drm); springboard/src/shell/gpu_page.rs (Graphics page)", "status": "os", "note": "The shell presents through DRM/KMS. Apps draw through the SDK renderer, not a driver connection."},
-    {"feature": "Input devices (HID)", "apple": "IOHIDManager and HID element APIs (IOKit HID classes)", "bifrost": "springboard/src/bare/input.rs:498 (evdev devices by capability, hot-rescanned)", "status": "os", "note": "Keyboard, mouse and touch reach the shell. No HID device API for apps; this is part of the system layer."},
-    {"feature": "Audio devices", "apple": "IOAudio and audio device services used by Core Audio", "bifrost": "springboard/src/media/volume.rs:23 (CONTROL_DEVICE /dev/snd/controlC0); springboard/src/media/capture.rs:68 (capture_candidates); springboard/src/media/audioplayer.rs:155 (open_device)", "status": "os", "note": "Playback and capture go through the audiod daemon. Apps reach audio through the audio service, not device access."},
-    {"feature": "Video capture devices", "apple": "IOKit camera and video device services (used by AVFoundation)", "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open); springboard/src/shell/camera/ (camera page)", "status": "os", "note": "Only the shell opens the camera through V4L2. No app-facing capture device list."},
-    {"feature": "Bluetooth devices", "apple": "IOBluetooth-related services reached through IOKit", "bifrost": "springboard/src/bare/bluetooth.rs:193 (Device), :222 (State), :231 (Status)", "status": "os", "note": "A Bluetooth stack reached from the shell. No SDK API for pairing or discovery."},
-    {"feature": "Network interfaces", "apple": "IOKit network interface services (IONetworkInterface)", "bifrost": "springboard/src/net/wifi.rs:630 (adapter link and address from sysfs)", "status": "os", "note": "Network state is read by the netd daemon and the shell."},
-    {"feature": "Serial ports and modem", "apple": "IOSerialPort sample, Communicating with a Modem on a Serial Port", "bifrost": "none found in springboard/ or the SDK", "status": "gap", "note": "No serial-port enumeration or modem open path exists for apps. The sample has no counterpart."},
-    {"feature": "Driver development (DriverKit, kernel extensions)", "apple": "IOKit driver model; DriverKit is required for devices on macOS 11 and later (per the IOKit landing page)", "bifrost": "Linux kernel drivers are used as-is (sysfs names such as i915 and amdgpu in springboard/src/bare/kms.rs:463)", "status": "n/a", "note": "Apple's driver model does not apply to BifrOSt; drivers run in the Linux kernel."},
-    {"feature": "IOKit data types, constants and enumerations", "apple": "IOReturn, IOOptionBits, IOMessage, IOByteCount and related C typedefs", "bifrost": "none", "status": "n/a", "note": "C-level type definitions for the Mach-IOKit ABI. They have no Rust-side counterpart and no app-level meaning on BifrOSt."}
+    {
+      "feature": "Device matching and service discovery",
+      "apple": "IOServiceGetMatchingServices, IOServiceMatching, IOBSDNameMatching, IOIteratorNext (IOKitLib.h)",
+      "bifrost": "springboard/src/bare/kms.rs (open_first_available, drm_drivers); springboard/src/bare/input.rs:497 (every input device found by capability)",
+      "status": "os",
+      "note": "Enumeration happens inside the shell and daemons with sysfs and /dev scans; no SDK call returns a list of devices by class."
+    },
+    {
+      "feature": "Device registry tree and properties",
+      "apple": "IORegistryEntryGetProperty, IORegistryEntryCopyPath, IORegistryEntryCopyFromPath (IOKit Functions)",
+      "bifrost": "springboard/src/shell/gpu_page.rs:76 (read_from: vendor, device, driver from /sys/class/drm); springboard/src/shell/battery.rs:254 (health, sysfs power_supply)",
+      "status": "os",
+      "note": "Properties come from sysfs text files. No general registry walk and no typed property API for apps."
+    },
+    {
+      "feature": "Device add and remove notifications",
+      "apple": "IONotificationPortCreate, IOServiceAddMatchingNotification, IONotificationPortSetDispatchQueue",
+      "bifrost": "springboard/src/bare/input.rs:587 (rescans /dev/input when due); springboard/src/bare/sleep.rs:115 (mains plug changes by polling)",
+      "status": "os",
+      "note": "Changes are found by polling. The shell reacts; no app receives a device-arrival event."
+    },
+    {
+      "feature": "User-client method calls to drivers",
+      "apple": "IOServiceOpen, IOConnectCallMethod, IOConnectCallScalarMethod, IOConnectCallStructMethod, IOConnectMapMemory",
+      "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open, ioctl-based capture); springboard/src/bare/kms.rs (DRM ioctls)",
+      "status": "os",
+      "note": "The Linux kernel ABI is used directly by the shell. No general driver-call API is offered to apps."
+    },
+    {
+      "feature": "Shared-memory data queues from drivers",
+      "apple": "IODataQueueAllocateNotificationPort, IODataQueueDequeue, IODataQueuePeek (IODataQueueClient.h)",
+      "bifrost": "springboard/src/media/v4l2.rs (mmap'd capture buffers); springboard/src/bare/scanout.rs (buffer allocation for display)",
+      "status": "os",
+      "note": "Equivalent buffer-sharing paths exist for video and display. No generic data-queue type exists in the SDK."
+    },
+    {
+      "feature": "Power sources and battery state",
+      "apple": "IOPowerSources (power source APIs built on IOKit)",
+      "bifrost": "springboard/sdk/src/power_sources.rs (over springboard/core/src/power_supply.rs)",
+      "status": "partial",
+      "note": "Wave 4 (w4-iokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Battery state reaches the shell and the menu bar. No SDK API returns it to apps."
+    },
+    {
+      "feature": "Thermal state",
+      "apple": "IOKit thermal notifications, surfaced through ProcessInfo.thermalState",
+      "bifrost": "springboard/sdk/src/process_info.rs:84 (worst state over /sys/class/thermal)",
+      "status": "partial",
+      "note": "Reads the thermal zones once per call and reports a state. No change notification and no per-zone detail."
+    },
+    {
+      "feature": "Graphics accelerators and displays",
+      "apple": "IOAccelerator and IOGraphics services, reached through IOKit",
+      "bifrost": "springboard/src/bare/kms.rs (Display, open_first_available); springboard/src/bare/scanout.rs:236 (probe_drm); springboard/src/shell/gpu_page.rs (Graphics page)",
+      "status": "os",
+      "note": "The shell presents through DRM/KMS. Apps draw through the SDK renderer, not a driver connection."
+    },
+    {
+      "feature": "Input devices (HID)",
+      "apple": "IOHIDManager and HID element APIs (IOKit HID classes)",
+      "bifrost": "springboard/src/bare/input.rs:498 (evdev devices by capability, hot-rescanned)",
+      "status": "os",
+      "note": "Keyboard, mouse and touch reach the shell. No HID device API for apps; this is part of the system layer."
+    },
+    {
+      "feature": "Audio devices",
+      "apple": "IOAudio and audio device services used by Core Audio",
+      "bifrost": "springboard/src/media/volume.rs:23 (CONTROL_DEVICE /dev/snd/controlC0); springboard/src/media/capture.rs:68 (capture_candidates); springboard/src/media/audioplayer.rs:155 (open_device)",
+      "status": "os",
+      "note": "Playback and capture go through the audiod daemon. Apps reach audio through the audio service, not device access."
+    },
+    {
+      "feature": "Video capture devices",
+      "apple": "IOKit camera and video device services (used by AVFoundation)",
+      "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open); springboard/src/shell/camera/ (camera page)",
+      "status": "os",
+      "note": "Only the shell opens the camera through V4L2. No app-facing capture device list."
+    },
+    {
+      "feature": "Bluetooth devices",
+      "apple": "IOBluetooth-related services reached through IOKit",
+      "bifrost": "springboard/src/bare/bluetooth.rs:193 (Device), :222 (State), :231 (Status)",
+      "status": "os",
+      "note": "A Bluetooth stack reached from the shell. No SDK API for pairing or discovery."
+    },
+    {
+      "feature": "Network interfaces",
+      "apple": "IOKit network interface services (IONetworkInterface)",
+      "bifrost": "springboard/src/net/wifi.rs:630 (adapter link and address from sysfs)",
+      "status": "os",
+      "note": "Network state is read by the netd daemon and the shell."
+    },
+    {
+      "feature": "Serial ports and modem",
+      "apple": "IOSerialPort sample, Communicating with a Modem on a Serial Port",
+      "bifrost": "springboard/core/src/serial_line.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No serial-port enumeration or modem open path exists for apps. The sample has no counterpart."
+    },
+    {
+      "feature": "Driver development (DriverKit, kernel extensions)",
+      "apple": "IOKit driver model; DriverKit is required for devices on macOS 11 and later (per the IOKit landing page)",
+      "bifrost": "Linux kernel drivers are used as-is (sysfs names such as i915 and amdgpu in springboard/src/bare/kms.rs:463)",
+      "status": "n/a",
+      "note": "Apple's driver model does not apply to BifrOSt; drivers run in the Linux kernel."
+    },
+    {
+      "feature": "IOKit data types, constants and enumerations",
+      "apple": "IOReturn, IOOptionBits, IOMessage, IOByteCount and related C typedefs",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "C-level type definitions for the Mach-IOKit ABI. They have no Rust-side counterpart and no app-level meaning on BifrOSt."
+    }
   ],
   "gaps": [
     "No SDK API for enumerating devices by class or matching criteria (IOServiceGetMatchingServices equivalent).",

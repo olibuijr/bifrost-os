@@ -101,9 +101,9 @@
     {
       "feature": "Printing: print panel, page layout, accessory views",
       "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
-      "bifrost": "docs/bifrost-ui.md (section Printing)",
-      "status": "gap",
-      "note": "print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel"
+      "bifrost": "springboard/sdk/src/print_panel.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel"
     },
     {
       "feature": "Printing: printer discovery",

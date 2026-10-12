@@ -38,9 +38,9 @@
     {
       "feature": "Credential management (gss_acquire_cred, gss_inquire_cred, kGSSIC* keys)",
       "apple": "gss_acquire_cred, gss_acquire_cred_with_password, gss_add_cred, gss_iter_creds (Credential Management)",
-      "bifrost": "springboard/sdk/src/keychain.rs (add/get/update/delete per app)",
-      "status": "gap",
-      "note": "the keychain stores app secrets as (service, account) items; it does not acquire, inquire or refresh Kerberos or GSS credentials"
+      "bifrost": "springboard/sdk/src/gss_credential.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-gss, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the keychain stores app secrets as (service, account) items; it does not acquire, inquire or refresh Kerberos or GSS credentials"
     },
     {
       "feature": "Security mechanisms (gss_indicate_mechs, mechanism attributes)",
@@ -52,9 +52,9 @@
     {
       "feature": "Name handling (gss_import_name, gss_display_name, gss_compare_name)",
       "apple": "GSSCreateName, gss_import_name, gss_display_name, gss_compare_name, gss_canonicalize_name (Name Handling)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "keychain items are keyed by plain (service, account) strings, not GSS name objects"
+      "bifrost": "springboard/sdk/src/gss_name.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-gss, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. keychain items are keyed by plain (service, account) strings, not GSS name objects"
     },
     {
       "feature": "Object identifiers (gss_OID, gss_OID_set)",
@@ -66,9 +66,9 @@
     {
       "feature": "Token management (gss_encapsulate_token, gss_decapsulate_token)",
       "apple": "gss_encapsulate_token, gss_decapsulate_token (Token Management)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no GSS token framing"
+      "bifrost": "springboard/sdk/src/gss_token.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-gss, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GSS token framing"
     },
     {
       "feature": "Message protection (gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic)",

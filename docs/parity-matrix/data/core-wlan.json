@@ -7,19 +7,97 @@
   "summary": "The Wi-Fi system layer covers most of what CoreWLAN reads and changes (interface discovery, scan, join, saved profiles, RSSI, security types) and netd publishes it as Status events. No app-facing SDK API exists: springboard/sdk/src/ has no network module, so apps cannot query interfaces, networks or events the way CWWiFiClient allows. Interface configuration for access-point and IBSS modes, channel and PHY detail, and Wi-Fi keychain functions are not covered.",
   "rea_evidence": "ev_e4c4cf24a0143cf25b9a47a6304490eb070f6f73d7ce1519a699dec2eab519d4",
   "features": [
-    {"feature": "Client and shared instance (CWWiFiClient)", "apple": "CWWiFiClient, CWWiFiClient.shared()", "bifrost": "springboard/src/net/wifi.rs:106 (Wifi::start, snapshot, sender); netd owns the supplicant (springboard/docs/services.md:49)", "status": "os", "note": "one owner process (netd) runs the supplicant; no SDK client object for apps"},
-    {"feature": "Interfaces (CWInterface)", "apple": "CWInterface, interfaceNames, powerOn, interfaceMode", "bifrost": "springboard/src/net/wifi.rs:690 (wireless_iface, sysfs /sys/class/net/*/wireless); springboard/src/shell/desktop_network.rs:9 (Interface)", "status": "os", "note": "only the first wireless interface is used; power is Cmd::Enable(bool); no per-interface API for apps"},
-    {"feature": "Scan and network list (CWNetwork)", "apple": "CWNetwork: ssid, bssid, rssi, channel, security, ibss, countryCode; scanForNetworks", "bifrost": "springboard/src/net/wpa.rs:8 (ScanResult: ssid, bssid, freq, signal, secure, enterprise); Cmd::Scan in springboard/src/net/wifi.rs:83", "status": "os", "note": "frequency is in place of a CWChannel; no ibss or country code; scan list is in Status.scan"},
-    {"feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)", "apple": "CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode", "bifrost": "springboard/src/net/wpa.rs:8 (freq only)", "status": "gap", "note": "no channel number, band, width or PHY mode is decoded or exposed"},
-    {"feature": "Saved network profiles (CWNetworkProfile, CWMutableNetworkProfile)", "apple": "CWNetworkProfile, CWMutableNetworkProfile: ssid, security, priority, password reference", "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network)", "status": "partial", "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API"},
-    {"feature": "Security types (CWSecurity)", "apple": "CWSecurity: none, WEP, WPA personal and enterprise, WPA2 personal and enterprise, WPA3 personal and transition, and others", "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap))", "status": "partial", "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method"},
-    {"feature": "Configuration (CWConfiguration, CWMutableConfiguration)", "apple": "CWConfiguration, CWMutableConfiguration: interface mode, channel, network profiles, access-point and IBSS settings", "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move)", "status": "partial", "note": "client mode only; no access-point or IBSS configuration and no channel setting"},
-    {"feature": "Join, select and forget", "apple": "CWInterface.associate(to:password:), associateToEnterpriseNetwork, commitConfiguration", "bifrost": "Cmd::Join, Cmd::Select, Cmd::JoinOther, Cmd::Forget in springboard/src/net/wifi.rs:83; WifiAction in springboard/src/shell/mod.rs:302", "status": "os", "note": "join and forget run in netd; the Settings page and the shell issue them; apps have no call path"},
-    {"feature": "Wi-Fi events (CWEventDelegate, CWEventType)", "apple": "CWEventDelegate: ssidDidChange, bssidDidChange, linkDidChange, powerDidChange, scanCacheUpdated, modeDidChange, countryCodeDidChange, linkQualityDidChange", "bifrost": "Evt::Status in springboard/proto/src/svc.rs:530 (sent on subscribe and on each change, polled every 250 ms); springboard/src/net/wifi_event.rs (join failures only)", "status": "os", "note": "one status snapshot instead of typed per-event callbacks; no delegate interface for apps"},
-    {"feature": "Link quality and RSSI", "apple": "CWInterface.rssiValue, noiseMeasurement, transmitRate, linkQuality (CWEventType link quality)", "bifrost": "Status.rssi in springboard/src/net/wifi.rs:45-64 (dBm, current network only)", "status": "partial", "note": "no noise, transmit rate or link quality; RSSI is available to the shell only"},
-    {"feature": "Keychain helpers for Wi-Fi passwords and EAP identities", "apple": "CWKeychainSetWiFiPassword, CWKeychainFindWiFiPassword, CWKeychainSetWiFiEAPUsernameAndPassword, CWKeychainCopyEAPIdentityList and related functions", "bifrost": "springboard/sdk/src/keychain.rs (generic keychain, not Wi-Fi specific); passwords sit in springboard.conf via wifi_config.rs", "status": "gap", "note": "no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"},
-    {"feature": "Network merge and identity utilities (CWMergeNetworks, CWKeychainCopyEAPIdentityList)", "apple": "CWMergeNetworks, CWKeychainCopyEAPIdentityList", "bifrost": "none found", "status": "gap", "note": "scan results are not merged by SSID across BSSIDs in an app-facing API"},
-    {"feature": "Sandbox access through interface objects", "apple": "CoreWLAN used from an App Sandbox app via vended interface objects", "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox for apps); no Wi-Fi capability is granted to apps", "status": "n/a", "note": "Apple sandbox rule is not applicable; apps have no Wi-Fi access at all"}
+    {
+      "feature": "Client and shared instance (CWWiFiClient)",
+      "apple": "CWWiFiClient, CWWiFiClient.shared()",
+      "bifrost": "springboard/src/net/wifi.rs:106 (Wifi::start, snapshot, sender); netd owns the supplicant (springboard/docs/services.md:49)",
+      "status": "os",
+      "note": "one owner process (netd) runs the supplicant; no SDK client object for apps"
+    },
+    {
+      "feature": "Interfaces (CWInterface)",
+      "apple": "CWInterface, interfaceNames, powerOn, interfaceMode",
+      "bifrost": "springboard/src/net/wifi.rs:690 (wireless_iface, sysfs /sys/class/net/*/wireless); springboard/src/shell/desktop_network.rs:9 (Interface)",
+      "status": "os",
+      "note": "only the first wireless interface is used; power is Cmd::Enable(bool); no per-interface API for apps"
+    },
+    {
+      "feature": "Scan and network list (CWNetwork)",
+      "apple": "CWNetwork: ssid, bssid, rssi, channel, security, ibss, countryCode; scanForNetworks",
+      "bifrost": "springboard/src/net/wpa.rs:8 (ScanResult: ssid, bssid, freq, signal, secure, enterprise); Cmd::Scan in springboard/src/net/wifi.rs:83",
+      "status": "os",
+      "note": "frequency is in place of a CWChannel; no ibss or country code; scan list is in Status.scan"
+    },
+    {
+      "feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)",
+      "apple": "CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode",
+      "bifrost": "springboard/sdk/src/wlan.rs (Band",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no channel number, band, width or PHY mode is decoded or exposed"
+    },
+    {
+      "feature": "Saved network profiles (CWNetworkProfile, CWMutableNetworkProfile)",
+      "apple": "CWNetworkProfile, CWMutableNetworkProfile: ssid, security, priority, password reference",
+      "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network)",
+      "status": "partial",
+      "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API"
+    },
+    {
+      "feature": "Security types (CWSecurity)",
+      "apple": "CWSecurity: none, WEP, WPA personal and enterprise, WPA2 personal and enterprise, WPA3 personal and transition, and others",
+      "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap))",
+      "status": "partial",
+      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method"
+    },
+    {
+      "feature": "Configuration (CWConfiguration, CWMutableConfiguration)",
+      "apple": "CWConfiguration, CWMutableConfiguration: interface mode, channel, network profiles, access-point and IBSS settings",
+      "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move)",
+      "status": "partial",
+      "note": "client mode only; no access-point or IBSS configuration and no channel setting"
+    },
+    {
+      "feature": "Join, select and forget",
+      "apple": "CWInterface.associate(to:password:), associateToEnterpriseNetwork, commitConfiguration",
+      "bifrost": "Cmd::Join, Cmd::Select, Cmd::JoinOther, Cmd::Forget in springboard/src/net/wifi.rs:83; WifiAction in springboard/src/shell/mod.rs:302",
+      "status": "os",
+      "note": "join and forget run in netd; the Settings page and the shell issue them; apps have no call path"
+    },
+    {
+      "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",
+      "apple": "CWEventDelegate: ssidDidChange, bssidDidChange, linkDidChange, powerDidChange, scanCacheUpdated, modeDidChange, countryCodeDidChange, linkQualityDidChange",
+      "bifrost": "Evt::Status in springboard/proto/src/svc.rs:530 (sent on subscribe and on each change, polled every 250 ms); springboard/src/net/wifi_event.rs (join failures only)",
+      "status": "os",
+      "note": "one status snapshot instead of typed per-event callbacks; no delegate interface for apps"
+    },
+    {
+      "feature": "Link quality and RSSI",
+      "apple": "CWInterface.rssiValue, noiseMeasurement, transmitRate, linkQuality (CWEventType link quality)",
+      "bifrost": "Status.rssi in springboard/src/net/wifi.rs:45-64 (dBm, current network only)",
+      "status": "partial",
+      "note": "no noise, transmit rate or link quality; RSSI is available to the shell only"
+    },
+    {
+      "feature": "Keychain helpers for Wi-Fi passwords and EAP identities",
+      "apple": "CWKeychainSetWiFiPassword, CWKeychainFindWiFiPassword, CWKeychainSetWiFiEAPUsernameAndPassword, CWKeychainCopyEAPIdentityList and related functions",
+      "bifrost": "springboard/sdk/src/keychain.rs (generic keychain, not Wi-Fi specific); passwords sit in springboard.conf via wifi_config.rs",
+      "status": "gap",
+      "note": "no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"
+    },
+    {
+      "feature": "Network merge and identity utilities (CWMergeNetworks, CWKeychainCopyEAPIdentityList)",
+      "apple": "CWMergeNetworks, CWKeychainCopyEAPIdentityList",
+      "bifrost": "springboard/sdk/src/wlan.rs (merge",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. scan results are not merged by SSID across BSSIDs in an app-facing API"
+    },
+    {
+      "feature": "Sandbox access through interface objects",
+      "apple": "CoreWLAN used from an App Sandbox app via vended interface objects",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox for apps); no Wi-Fi capability is granted to apps",
+      "status": "n/a",
+      "note": "Apple sandbox rule is not applicable; apps have no Wi-Fi access at all"
+    }
   ],
   "gaps": [
     "No app-facing SDK API: springboard/sdk/src/ has no network module, so apps cannot list interfaces, scan, join or read status.",

@@ -87,9 +87,9 @@
     {
       "feature": "Euclidean distance transform, guided filter, keypoints",
       "apple": "MPSImageEuclideanDistanceTransform, MPSImageGuidedFilter, MPSImageFindKeypoints",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No vision primitives in the repo."
+      "bifrost": "springboard/render/src/distance.rs (euclidean_distance), springboard/render/src/guided.rs (guided_filter)",
+      "status": "partial",
+      "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vision primitives in the repo."
     },
     {
       "feature": "Neural network graphs and CNN layers",
@@ -108,9 +108,9 @@
     {
       "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",
       "apple": "MPSMatrix, MPSMatrixMultiplication, MPSMatrixDecompositionCholesky, MPSMatrixDecompositionLU, MPSMatrixSoftMax",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No GPU linear algebra in springboard."
+      "bifrost": "springboard/ui/src/linalg.rs (cholesky",
+      "status": "partial",
+      "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPU linear algebra in springboard."
     },
     {
       "feature": "Ray tracing and acceleration structures",

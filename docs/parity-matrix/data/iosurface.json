@@ -7,20 +7,104 @@
   "summary": "The system layer shares buffers across processes with memfd and fd passing, and imports GPU dma-bufs with format and modifier metadata. Apps get no IOSurface-like SDK type: they receive shared memory only as internal pixel copies, with no lookup by ID, attributes, purgeability or colour space.",
   "rea_evidence": "ev_42009e926440152a976795c45dfa85700886eb1922c23e8ee5c3daa24fd77a86",
   "features": [
-    {"feature": "Cross-process shared framebuffers", "apple": "IOSurface, IOSurfaceRef, IOSurfaceCreate", "bifrost": "springboard/proto/src/sys.rs (shm_create, memfd with ashmem fallback)", "status": "os", "note": "memfd shared memory exists in the proto layer; no app-facing SDK type wraps it"},
-    {"feature": "Passing a buffer to another process", "apple": "IOSurfaceCreateMachPort, IOSurfaceLookupFromMachPort, IOSurfaceCreateXPCObject", "bifrost": "springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)", "status": "os", "note": "Linux fd passing over SOCK_SEQPACKET replaces Mach ports; used by the shell, not exposed to apps"},
-    {"feature": "Global buffer lookup by ID", "apple": "IOSurfaceGetID, IOSurfaceLookup, kIOSurfaceIsGlobal", "bifrost": "none found", "status": "gap", "note": "searched for dma-buf and shared buffer lookup; no ID registry was found"},
-    {"feature": "GPU-backed buffers imported into the compositor", "apple": "IOSurface as a texture or framebuffer for Metal and Core Animation", "bifrost": "springboard/src/bare/wayland.rs (DmaBuf wl_buffer, dmabuf_formats); springboard/src/gpu/desktop.rs:74 (GBM buffer exported as dma-buf)", "status": "os", "note": "compositor-side only; the triage note that zero-copy from a GPU context is a follow-up is confirmed at docs/bifrost-ui.md:767"},
-    {"feature": "Pixel format, stride and plane layout", "apple": "kIOSurfacePixelFormat, kIOSurfaceBytesPerRow, kIOSurfacePlaneInfo, IOSurfaceGetBytesPerRow", "bifrost": "springboard/src/gpu/wl.rs:38 (BufferInfo: fd, stride, offset, modifier, fourcc); springboard/src/gpu/target.rs:18 (image_attribs_fourcc)", "status": "os", "note": "fourcc and modifier are carried for EGL import; no app-visible description"},
-    {"feature": "Multi-plane video buffers", "apple": "IOSurfaceGetPlaneCount, IOSurfaceGetWidthOfPlane, kIOSurfacePlaneBase", "bifrost": "springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop); springboard/src/media/v4l2.rs:170 (FOURCC list)", "status": "os", "note": "hardware decode path only; apps do not receive planes"},
-    {"feature": "CPU lock and unlock of buffer memory", "apple": "IOSurfaceLock, IOSurfaceUnlock, IOSurfaceGetBaseAddress", "bifrost": "springboard/src/media/mod.rs:117 (DmaBuf: ptr, len, sync_cpu_read)", "status": "os", "note": "cache sync is bracketed for reads only; no write lock API"},
-    {"feature": "CPU cache mode", "apple": "kIOSurfaceCacheMode, kIOSurfaceDefaultCache, kIOSurfaceWriteCombineCache, IOSurfaceSetPurgeable", "bifrost": "springboard/src/media/mod.rs:117 (sync_cpu_read on cached mappings)", "status": "partial", "note": "cached mappings are handled internally; no cache mode is selectable"},
-    {"feature": "Use counts and in-use state", "apple": "IOSurfaceIncrementUseCount, IOSurfaceGetUseCount, IOSurfaceIsInUse", "bifrost": "none found", "status": "gap", "note": "no per-buffer use tracking found"},
-    {"feature": "Purgeable buffer memory", "apple": "IOSurfaceSetPurgeable, IOSurfacePurgeabilityState", "bifrost": "springboard/render/src/purgeable.rs (cache with memory-pressure eviction, docs/bifrost-ui.md NSCache section)", "status": "partial", "note": "purgeability exists for caches, not for surface buffers"},
-    {"feature": "Surface attribute dictionary", "apple": "IOSurfaceSetValue, IOSurfaceCopyValue, IOSurfacePropertyKey", "bifrost": "none found", "status": "gap", "note": "no per-buffer key-value store"},
-    {"feature": "Colour space and ICC profile on buffers", "apple": "kIOSurfaceColorSpace, kIOSurfaceICCProfile", "bifrost": "none found", "status": "gap", "note": "no buffer-level colour tagging found in searched code"},
-    {"feature": "Ownership and memory ledger", "apple": "IOSurfaceSetOwnershipIdentity, IOSurfaceMemoryLedgerFlags", "bifrost": "none", "status": "n/a", "note": "Apple task ledger accounting; Linux uses cgroups (springboard/src/bare/app_manager.rs)"},
-    {"feature": "App-facing shared pixel surfaces", "apple": "IOSurface as a view backing store (Core Animation)", "bifrost": "springboard/sdk/src/webview.rs:237 (shm_create); springboard/sdk/src/runtime.rs:805 (shm_create); docs/bifrost-ui.md:766 (frame copied into shared memory)", "status": "partial", "note": "frames are copied into shared memory and blitted; zero-copy is the stated follow-up at docs/bifrost-ui.md:767"}
+    {
+      "feature": "Cross-process shared framebuffers",
+      "apple": "IOSurface, IOSurfaceRef, IOSurfaceCreate",
+      "bifrost": "springboard/proto/src/sys.rs (shm_create, memfd with ashmem fallback)",
+      "status": "os",
+      "note": "memfd shared memory exists in the proto layer; no app-facing SDK type wraps it"
+    },
+    {
+      "feature": "Passing a buffer to another process",
+      "apple": "IOSurfaceCreateMachPort, IOSurfaceLookupFromMachPort, IOSurfaceCreateXPCObject",
+      "bifrost": "springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)",
+      "status": "os",
+      "note": "Linux fd passing over SOCK_SEQPACKET replaces Mach ports; used by the shell, not exposed to apps"
+    },
+    {
+      "feature": "Global buffer lookup by ID",
+      "apple": "IOSurfaceGetID, IOSurfaceLookup, kIOSurfaceIsGlobal",
+      "bifrost": "springboard/core/src/surface_registry.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iosurface, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. searched for dma-buf and shared buffer lookup; no ID registry was found"
+    },
+    {
+      "feature": "GPU-backed buffers imported into the compositor",
+      "apple": "IOSurface as a texture or framebuffer for Metal and Core Animation",
+      "bifrost": "springboard/src/bare/wayland.rs (DmaBuf wl_buffer, dmabuf_formats); springboard/src/gpu/desktop.rs:74 (GBM buffer exported as dma-buf)",
+      "status": "os",
+      "note": "compositor-side only; the triage note that zero-copy from a GPU context is a follow-up is confirmed at docs/bifrost-ui.md:767"
+    },
+    {
+      "feature": "Pixel format, stride and plane layout",
+      "apple": "kIOSurfacePixelFormat, kIOSurfaceBytesPerRow, kIOSurfacePlaneInfo, IOSurfaceGetBytesPerRow",
+      "bifrost": "springboard/src/gpu/wl.rs:38 (BufferInfo: fd, stride, offset, modifier, fourcc); springboard/src/gpu/target.rs:18 (image_attribs_fourcc)",
+      "status": "os",
+      "note": "fourcc and modifier are carried for EGL import; no app-visible description"
+    },
+    {
+      "feature": "Multi-plane video buffers",
+      "apple": "IOSurfaceGetPlaneCount, IOSurfaceGetWidthOfPlane, kIOSurfacePlaneBase",
+      "bifrost": "springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop); springboard/src/media/v4l2.rs:170 (FOURCC list)",
+      "status": "os",
+      "note": "hardware decode path only; apps do not receive planes"
+    },
+    {
+      "feature": "CPU lock and unlock of buffer memory",
+      "apple": "IOSurfaceLock, IOSurfaceUnlock, IOSurfaceGetBaseAddress",
+      "bifrost": "springboard/src/media/mod.rs:117 (DmaBuf: ptr, len, sync_cpu_read)",
+      "status": "os",
+      "note": "cache sync is bracketed for reads only; no write lock API"
+    },
+    {
+      "feature": "CPU cache mode",
+      "apple": "kIOSurfaceCacheMode, kIOSurfaceDefaultCache, kIOSurfaceWriteCombineCache, IOSurfaceSetPurgeable",
+      "bifrost": "springboard/src/media/mod.rs:117 (sync_cpu_read on cached mappings)",
+      "status": "partial",
+      "note": "cached mappings are handled internally; no cache mode is selectable"
+    },
+    {
+      "feature": "Use counts and in-use state",
+      "apple": "IOSurfaceIncrementUseCount, IOSurfaceGetUseCount, IOSurfaceIsInUse",
+      "bifrost": "springboard/ui/src/surface_use.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iosurface, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-buffer use tracking found"
+    },
+    {
+      "feature": "Purgeable buffer memory",
+      "apple": "IOSurfaceSetPurgeable, IOSurfacePurgeabilityState",
+      "bifrost": "springboard/render/src/purgeable.rs (cache with memory-pressure eviction, docs/bifrost-ui.md NSCache section)",
+      "status": "partial",
+      "note": "purgeability exists for caches, not for surface buffers"
+    },
+    {
+      "feature": "Surface attribute dictionary",
+      "apple": "IOSurfaceSetValue, IOSurfaceCopyValue, IOSurfacePropertyKey",
+      "bifrost": "springboard/ui/src/surface_attach.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iosurface, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-buffer key-value store"
+    },
+    {
+      "feature": "Colour space and ICC profile on buffers",
+      "apple": "kIOSurfaceColorSpace, kIOSurfaceICCProfile",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "no buffer-level colour tagging found in searched code"
+    },
+    {
+      "feature": "Ownership and memory ledger",
+      "apple": "IOSurfaceSetOwnershipIdentity, IOSurfaceMemoryLedgerFlags",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple task ledger accounting; Linux uses cgroups (springboard/src/bare/app_manager.rs)"
+    },
+    {
+      "feature": "App-facing shared pixel surfaces",
+      "apple": "IOSurface as a view backing store (Core Animation)",
+      "bifrost": "springboard/sdk/src/webview.rs:237 (shm_create); springboard/sdk/src/runtime.rs:805 (shm_create); docs/bifrost-ui.md:766 (frame copied into shared memory)",
+      "status": "partial",
+      "note": "frames are copied into shared memory and blitted; zero-copy is the stated follow-up at docs/bifrost-ui.md:767"
+    }
   ],
   "gaps": [
     "No app-facing SDK type for a shared buffer: apps cannot create, lock, or share an IOSurface-like object.",

@@ -59,9 +59,9 @@
     {
       "feature": "Accessible appearance",
       "apple": "accessibilityReduceMotion, Increase contrast, differentiateWithoutColor",
-      "bifrost": "springboard/render/src/appearance.rs",
-      "status": "gap",
-      "note": "light/dark exist; no reduce-motion or contrast environment flags found"
+      "bifrost": "springboard/ui/src/accessible_look.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. light/dark exist; no reduce-motion or contrast environment flags found"
     },
     {
       "feature": "Accessible controls",

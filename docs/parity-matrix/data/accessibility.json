@@ -94,9 +94,9 @@
     {
       "feature": "Voice Control",
       "apple": "Voice Control (AccessibilityTechnology.voiceControl)",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No voice command code found in springboard/."
+      "bifrost": "springboard/ui/src/voice_commands.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No voice command code found in springboard/."
     },
     {
       "feature": "Accessibility Inspector",
@@ -108,9 +108,9 @@
     {
       "feature": "Braille displays and Braille translation",
       "apple": "Braille displays, AXBrailleTranslator",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No Braille source code found; the only hits are generated build output under springboard/target."
+      "bifrost": "springboard/ui/src/braille.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Braille source code found; the only hits are generated build output under springboard/target."
     },
     {
       "feature": "Audio graphs and hearing device support",

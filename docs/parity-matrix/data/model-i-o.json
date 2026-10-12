@@ -38,9 +38,9 @@
     {
       "feature": "Materials and shading models",
       "apple": "MDLMaterial, MDLMaterialProperty, MDLScatteringFunction, MDLPhysicallyPlausibleScatteringFunction",
-      "bifrost": "none; springboard/render/src/ui.rs holds 2D colours and type only",
-      "status": "gap",
-      "note": "window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"
+      "bifrost": "springboard/ui/src/scene_material.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"
     },
     {
       "feature": "Textures as 3D material inputs",
@@ -52,9 +52,9 @@
     {
       "feature": "Lights",
       "apple": "MDLLight, MDLAreaLight, MDLPhotometricLight, MDLPhysicallyPlausibleLight, MDLLightProbe",
-      "bifrost": "none; springboard/src/shell/desk.rs draw_light is the window traffic-light button",
-      "status": "gap",
-      "note": "name match only"
+      "bifrost": "springboard/ui/src/scene_light.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. name match only"
     },
     {
       "feature": "Cameras",
@@ -87,9 +87,9 @@
     {
       "feature": "Volumetric representation",
       "apple": "MDLVoxelArray, MDLVoxelIndex, MDLVoxelIndexExtent",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no voxel type anywhere in the repo"
+      "bifrost": "springboard/ui/src/voxel_array.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no voxel type anywhere in the repo"
     },
     {
       "feature": "Sharing buffers with the GPU framework",

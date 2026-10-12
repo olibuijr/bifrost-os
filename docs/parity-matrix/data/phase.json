@@ -31,23 +31,23 @@
     {
       "feature": "Spatial sources and listener",
       "apple": "PHASESource, PHASEListener, PHASEObject",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no 3D position or orientation for sound; route.rs only switches outputs"
+      "bifrost": "springboard/ui/src/sound_space.rs (Listener",
+      "status": "partial",
+      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D position or orientation for sound; route.rs only switches outputs"
     },
     {
       "feature": "Occluders, shapes and materials",
       "apple": "PHASEOccluder, PHASEShape, PHASEShape.Element, PHASEMaterial, PHASEMaterialPreset",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no geometry-based acoustics"
+      "bifrost": "springboard/ui/src/sound_space.rs (Occluder",
+      "status": "partial",
+      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no geometry-based acoustics"
     },
     {
       "feature": "Spatial mixing and reverb",
       "apple": "PHASESpatialMixerDefinition, PHASESpatialPipeline, PHASEReverbPreset, PHASEMedium",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no environmental effects API"
+      "bifrost": "springboard/ui/src/sound_room.rs (Medium",
+      "status": "partial",
+      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no environmental effects API"
     },
     {
       "feature": "Distance models and directivity",
@@ -80,9 +80,9 @@
     {
       "feature": "Groups and ducking",
       "apple": "PHASEGroup, PHASEGroupPreset, PHASEDucker",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "the sound server mixes streams; apps cannot share parameters or duck competing sounds"
+      "bifrost": "springboard/ui/src/sound_group.rs (Group",
+      "status": "partial",
+      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the sound server mixes streams; apps cannot share parameters or duck competing sounds"
     },
     {
       "feature": "Loudness normalization and calibration",

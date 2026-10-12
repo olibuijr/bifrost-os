@@ -52,9 +52,9 @@
     {
       "feature": "Network services, sets and locations",
       "apple": "SCNetworkServiceCreate, SCNetworkSetCreate, SCNetworkSetSetCurrent, SCNetworkSetSetServiceOrder, SCNetworkServiceCopyAll",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."
+      "bifrost": "springboard/core/src/network_sets.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."
     },
     {
       "feature": "Preferences session for system configuration",
@@ -66,9 +66,9 @@
     {
       "feature": "Computer name and local host name",
       "apple": "SCPreferencesSetComputerName, SCPreferencesSetLocalHostName, SCDynamicStoreCopyComputerName, SCDynamicStoreCopyLocalHostName",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Not searched beyond the index. No accessor for the host name was found."
+      "bifrost": "springboard/core/src/host_name.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Not searched beyond the index. No accessor for the host name was found."
     },
     {
       "feature": "Network connections (start, stop, status) for VPN and PPP",

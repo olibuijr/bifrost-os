@@ -108,9 +108,9 @@
     {
       "feature": "DispatchData",
       "apple": "DispatchData, DispatchDataIterator, dispatch_data_t",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"
+      "bifrost": "springboard/sdk/src/dispatch_data.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"
     },
     {
       "feature": "Semaphores",

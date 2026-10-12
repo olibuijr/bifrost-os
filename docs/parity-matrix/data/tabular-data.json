@@ -2,23 +2,95 @@
   "framework": "Tabular Data",
   "doc": "https://developer.apple.com/documentation/tabulardata",
   "macos_since": "12.0",
-  "status": "n/a",
+  "status": "partial",
   "bifrost": "springboard/ui/src/table.rs (SortDescriptor), springboard/ui/src/format.rs, springboard/sdk/src/coding.rs, springboard/src/shell/weather/data.rs (parse_quotes)",
   "summary": "Apple's TabularData is a typed data-frame library for preparing machine-learning training tables (DataFrame, typed columns, statistical summaries, CSV/JSON import and export). BifrOSt has no data-frame or typed-column type and no statistics layer; the only table-like pieces are the UI table's sort model, a JSON Codable layer and an ad hoc CSV parser inside the weather widget. Overall status n/a because the framework serves ML training pipelines that the desktop does not provide and no app needs.",
   "rea_evidence": "ev_3c68f7d8153be73ef92d775dc6c70ea577516a12c3e6c2981ef996dee8654504",
   "features": [
-    {"feature": "Data frames (DataFrame, DataFrameProtocol)", "apple": "DataFrame, DataFrameProtocol", "bifrost": "none", "status": "n/a", "note": "no row-and-column container type in the SDK or ui crates; ML training tables are not a desktop feature"},
-    {"feature": "Typed columns and slices", "apple": "Column, ColumnSlice, FilledColumn, DiscontiguousColumnSlice, ColumnProtocol, OptionalColumnProtocol", "bifrost": "springboard/ui/src/table.rs (Column)", "status": "n/a", "note": "table.rs Column is a UI view column (id, title, width), not a typed data column; no element typing or missing-value handling"},
-    {"feature": "Type-erased columns", "apple": "AnyColumn, AnyColumnSlice, AnyColumnProtocol, AnyColumnPrototype", "bifrost": "none", "status": "n/a", "note": "depends on typed columns, which BifrOSt does not have"},
-    {"feature": "Statistical summaries", "apple": "NumericSummary, CategoricalSummary, AnyCategoricalSummary", "bifrost": "none", "status": "gap", "note": "no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer"},
-    {"feature": "Sorting order", "apple": "Order", "bifrost": "springboard/ui/src/table.rs (SortDescriptor, sort by descriptors)", "status": "partial", "note": "stable multi-key sort exists for table views; no general ordering type outside the table view"},
-    {"feature": "Column identifier", "apple": "ColumnID", "bifrost": "springboard/ui/src/table.rs (Column id, sort_key)", "status": "partial", "note": "a string key with no element type attached"},
-    {"feature": "Formatting options", "apple": "FormattingOptions", "bifrost": "springboard/ui/src/format.rs (byte_count, duration, relative, grouped)", "status": "partial", "note": "fixed formatters for bytes, durations, relative dates and grouped integers; no option set"},
-    {"feature": "CSV reading", "apple": "CSVReadingError, DataFrame init from CSV", "bifrost": "springboard/src/shell/weather/data.rs (parse_quotes)", "status": "partial", "note": "ad hoc parser for one weather CSV feed, skips header; no general CSV reader, writer or error type"},
-    {"feature": "CSV writing", "apple": "CSVWritingError", "bifrost": "none", "status": "gap", "note": "no CSV writer in the SDK or apps"},
-    {"feature": "JSON reading and writing", "apple": "JSONReadingError, JSONWritingOptions", "bifrost": "springboard/sdk/src/coding.rs (Codable JSON, reuses bifrost_core::json)", "status": "partial", "note": "Codable-style encode and decode exists; no tabular or column-wise JSON mapping"},
-    {"feature": "Column encode and decode errors", "apple": "ColumnDecodingError, ColumnEncodingError", "bifrost": "springboard/sdk/src/coding.rs", "status": "partial", "note": "Codable errors exist but are not tied to columns"},
-    {"feature": "Turi Create SFrame reading", "apple": "SFrameReadingError", "bifrost": "none", "status": "n/a", "note": "third-party Turi Create format, no desktop use"}
+    {
+      "feature": "Data frames (DataFrame, DataFrameProtocol)",
+      "apple": "DataFrame, DataFrameProtocol",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "no row-and-column container type in the SDK or ui crates; ML training tables are not a desktop feature"
+    },
+    {
+      "feature": "Typed columns and slices",
+      "apple": "Column, ColumnSlice, FilledColumn, DiscontiguousColumnSlice, ColumnProtocol, OptionalColumnProtocol",
+      "bifrost": "springboard/ui/src/table.rs (Column)",
+      "status": "n/a",
+      "note": "table.rs Column is a UI view column (id, title, width), not a typed data column; no element typing or missing-value handling"
+    },
+    {
+      "feature": "Type-erased columns",
+      "apple": "AnyColumn, AnyColumnSlice, AnyColumnProtocol, AnyColumnPrototype",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "depends on typed columns, which BifrOSt does not have"
+    },
+    {
+      "feature": "Statistical summaries",
+      "apple": "NumericSummary, CategoricalSummary, AnyCategoricalSummary",
+      "bifrost": "springboard/ui/src/column_summary.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer"
+    },
+    {
+      "feature": "Sorting order",
+      "apple": "Order",
+      "bifrost": "springboard/ui/src/table.rs (SortDescriptor, sort by descriptors)",
+      "status": "partial",
+      "note": "stable multi-key sort exists for table views; no general ordering type outside the table view"
+    },
+    {
+      "feature": "Column identifier",
+      "apple": "ColumnID",
+      "bifrost": "springboard/ui/src/table.rs (Column id, sort_key)",
+      "status": "partial",
+      "note": "a string key with no element type attached"
+    },
+    {
+      "feature": "Formatting options",
+      "apple": "FormattingOptions",
+      "bifrost": "springboard/ui/src/format.rs (byte_count, duration, relative, grouped)",
+      "status": "partial",
+      "note": "fixed formatters for bytes, durations, relative dates and grouped integers; no option set"
+    },
+    {
+      "feature": "CSV reading",
+      "apple": "CSVReadingError, DataFrame init from CSV",
+      "bifrost": "springboard/src/shell/weather/data.rs (parse_quotes)",
+      "status": "partial",
+      "note": "ad hoc parser for one weather CSV feed, skips header; no general CSV reader, writer or error type"
+    },
+    {
+      "feature": "CSV writing",
+      "apple": "CSVWritingError",
+      "bifrost": "springboard/sdk/src/csv_writer.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no CSV writer in the SDK or apps"
+    },
+    {
+      "feature": "JSON reading and writing",
+      "apple": "JSONReadingError, JSONWritingOptions",
+      "bifrost": "springboard/sdk/src/coding.rs (Codable JSON, reuses bifrost_core::json)",
+      "status": "partial",
+      "note": "Codable-style encode and decode exists; no tabular or column-wise JSON mapping"
+    },
+    {
+      "feature": "Column encode and decode errors",
+      "apple": "ColumnDecodingError, ColumnEncodingError",
+      "bifrost": "springboard/sdk/src/coding.rs",
+      "status": "partial",
+      "note": "Codable errors exist but are not tied to columns"
+    },
+    {
+      "feature": "Turi Create SFrame reading",
+      "apple": "SFrameReadingError",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "third-party Turi Create format, no desktop use"
+    }
   ],
   "gaps": [
     "No DataFrame or typed column container in the SDK or ui crates",

@@ -45,9 +45,9 @@
     {
       "feature": "Device and display profiles",
       "apple": "ColorSyncRegisterDevice, ColorSyncIterateDeviceProfiles, ColorSyncDeviceSetCustomProfiles, ColorSyncProfileCreateWithDisplayID",
-      "bifrost": "springboard/src/bare/kms.rs",
-      "status": "gap",
-      "note": "kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile. No device registry or custom-profile setting exists in the shell."
+      "bifrost": "springboard/render/src/icc.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile. No device registry or custom-profile setting exists in the shell."
     },
     {
       "feature": "Rendering intents and black point compensation",

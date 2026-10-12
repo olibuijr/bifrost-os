@@ -10,16 +10,16 @@
     {
       "feature": "3D vectors and points",
       "apple": "Vector3D, Vector3DFloat, Point3D, Point3DFloat, Size3D, Rect3D, Axis3D",
-      "bifrost": "none found; grep for Vector3, Point3D, Vec3 and Mat4 in springboard/ returns no SDK or ui types (only shader vec3 literals in springboard/src/gpu/wl.rs and springboard/wm/src/glass.rs)",
-      "status": "gap",
-      "note": "no 3D value types exposed to apps"
+      "bifrost": "springboard/ui/src/spatial.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D value types exposed to apps"
     },
     {
       "feature": "Rotations and poses",
       "apple": "Rotation3D, Rotation3DFloat, RotationAxis3D, Pose3D, ScaledPose3D, EulerAnglesFloat",
-      "bifrost": "springboard/render/src/gfx/rotate.rs (quarter-turn image rotation only)",
-      "status": "gap",
-      "note": "no quaternion, Euler or 3D pose type"
+      "bifrost": "springboard/ui/src/pose.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no quaternion, Euler or 3D pose type"
     },
     {
       "feature": "Affine and projective transforms",
@@ -31,9 +31,9 @@
     {
       "feature": "Rays and spherical coordinates",
       "apple": "Ray3D, Ray3DFloat, SphericalCoordinates3D",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no ray casting or picking math in the SDK or UI kit"
+      "bifrost": "springboard/ui/src/spatial.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no ray casting or picking math in the SDK or UI kit"
     },
     {
       "feature": "Coordinate spaces",

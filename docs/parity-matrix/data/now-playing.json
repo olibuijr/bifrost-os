@@ -10,9 +10,9 @@
     {
       "feature": "Local sessions: MediaSession and MediaSessionRepresentable",
       "apple": "MediaSession, MediaSessionRepresentable, MediaSessionError",
-      "bifrost": "springboard/src/shell/audiosvc.rs (shell as audio service client); no app-facing publish API in springboard/sdk/src/",
-      "status": "gap",
-      "note": "Only the shell reads playback; an app cannot register its own session. The audio client (springboard/sdk/src/lib.rs:87) drives playback but does not publish metadata to the system."
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the shell reads playback; an app cannot register its own session. The audio client (springboard/sdk/src/lib.rs:87) drives playback but does not publish metadata to the system."
     },
     {
       "feature": "Publishing media sessions to Lock Screen and Control Center",
@@ -38,23 +38,23 @@
     {
       "feature": "Artwork (Artwork, ArtworkRepresentation, AnimatedArtwork)",
       "apple": "Artwork, ArtworkRepresentation, AnimatedArtwork",
-      "bifrost": "springboard/src/shell/music/nowplaying.rs:218 (LockCard, LOCK_ART_PT geometry); springboard/apps/music-desktop/src/music.rs (art drawn by the Music app)",
-      "status": "gap",
-      "note": "The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
+      "bifrost": "springboard/ui/src/media_artwork.rs, springboard/sdk/src/now_playing.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
     },
     {
       "feature": "Play, pause, stop and toggle commands",
       "apple": "play(_:), pause(_:), stop(_:), togglePlayPause(_:)",
-      "bifrost": "springboard/proto/src/svc.rs (Cmd::Play, Pause, Toggle, Stop); springboard/src/shell/audiosvc.rs:152 (svc_transport); springboard/src/shell/control_center.rs (transport buttons)",
-      "status": "os",
-      "note": "Transport works from the lock card and Control Center. Apps have no command registration, so a remote command from the system cannot be routed to an app's own player."
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Transport works from the lock card and Control Center. Apps have no command registration, so a remote command from the system cannot be routed to an app's own player."
     },
     {
       "feature": "Next and previous track commands",
       "apple": "next(_:), previous(_:)",
-      "bifrost": "springboard/src/shell/audiosvc.rs:155-156 (Prev, Next); springboard/proto/src/svc.rs (Cmd::Next, Cmd::Prev, JumpTo)",
-      "status": "os",
-      "note": "Works for the service queue. Enablement per command is not published, so the card cannot grey out an unavailable direction."
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Works for the service queue. Enablement per command is not published, so the card cannot grey out an unavailable direction."
     },
     {
       "feature": "Skip forward and backward by interval",

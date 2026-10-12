@@ -87,16 +87,16 @@
     {
       "feature": "Randomization services",
       "apple": "SecRandomCopyBytes",
-      "bifrost": "springboard/src/keychain.rs, springboard/src/shell/passcode.rs and springboard/src/privd/auth.rs use the OS random source internally",
-      "status": "gap",
-      "note": "No SDK call returns random bytes to apps. Internal use only."
+      "bifrost": "springboard/sdk/src/entropy.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns random bytes to apps. Internal use only."
     },
     {
       "feature": "Security transforms (encryption, signing, verification)",
       "apple": "SecTransform, SecKeyCreateEncryptedData, SecKeyCreateSignature",
-      "bifrost": "springboard/src/shell/sha256.rs (SHA-256, internal); HMAC-SHA256 in springboard/src/keychain.rs",
-      "status": "gap",
-      "note": "No SDK API for encryption, signing or key objects. Hashing and MAC are internal to the shell."
+      "bifrost": "springboard/sdk/src/digest.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API for encryption, signing or key objects. Hashing and MAC are internal to the shell."
     },
     {
       "feature": "Password AutoFill and Shared Web Credentials",

@@ -31,9 +31,9 @@
     {
       "feature": "Geometry and built-in shapes",
       "apple": "SCNGeometry, SCNGeometrySource, SCNGeometryElement, SCNBox, SCNSphere, SCNText, SCNShape",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no mesh type; springboard/src/shell/browser/style/values.rs has 2D TransformFn only"
+      "bifrost": "springboard/ui/src/primitives3d.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh type; springboard/src/shell/browser/style/values.rs has 2D TransformFn only"
     },
     {
       "feature": "Animation and actions",
@@ -52,9 +52,9 @@
     {
       "feature": "Skinning and morphing",
       "apple": "SCNSkinner, SCNMorpher",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no skeletal or blend-shape animation"
+      "bifrost": "springboard/ui/src/morph_skin.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-scenekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no skeletal or blend-shape animation"
     },
     {
       "feature": "Physics simulation",
@@ -94,9 +94,9 @@
     {
       "feature": "3D data types",
       "apple": "SCNVector3, SCNVector4, SCNMatrix4, SCNQuaternion",
-      "bifrost": "springboard/render/src/gfx/affinity.rs (2D affine only)",
-      "status": "gap",
-      "note": "no 3D vector, matrix or quaternion types; 2D affine transforms only"
+      "bifrost": "springboard/ui/src/linalg.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-scenekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D vector, matrix or quaternion types; 2D affine transforms only"
     },
     {
       "feature": "JavaScript export",

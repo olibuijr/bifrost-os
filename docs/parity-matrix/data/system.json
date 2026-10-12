@@ -31,16 +31,16 @@
     {
       "feature": "File permissions and modes",
       "apple": "FilePermissions, FileMode, FileType (https://developer.apple.com/documentation/system/filepermissions)",
-      "bifrost": "springboard/sdk/src/control.rs:124 (sets 0600 on the control socket); springboard/src/shell/terminal/:285 (sets 0700 on the config directory)",
-      "status": "os",
-      "note": "Modes are set with std::os::unix::fs::PermissionsExt. There is no typed mode, type or permission set in the SDK."
+      "bifrost": "springboard/core/src/file_mode.rs (FilePermissions, springboard/sdk/src/file_stat.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Modes are set with std::os::unix::fs::PermissionsExt. There is no typed mode, type or permission set in the SDK."
     },
     {
       "feature": "File status (stat, file size, link count, owner, inode, timestamps)",
       "apple": "Stat, Stat.Flags, Inode, DeviceID, UserID, GroupID (https://developer.apple.com/documentation/system/stat; macOS 27.0 for Stat)",
-      "bifrost": "Rust std::fs::metadata and std::os::unix::fs::MetadataExt (used in springboard/src/bare/power.rs:155 for mode checks); springboard/src/bare/docbroker.rs (device and inode check on reopen)",
-      "status": "os",
-      "note": "The Linux metadata calls exist in the system layer. No SDK wrapper exposes Stat or the ID types."
+      "bifrost": "springboard/sdk/src/file_stat.rs (FileStat",
+      "status": "partial",
+      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Linux metadata calls exist in the system layer. No SDK wrapper exposes Stat or the ID types."
     },
     {
       "feature": "Filesystem capacity (statvfs)",
@@ -52,9 +52,9 @@
     {
       "feature": "Error numbers (Errno)",
       "apple": "Errno (https://developer.apple.com/documentation/system/errno)",
-      "bifrost": "Rust std::io::Error with raw OS errors (springboard/src/bare/sys.rs:97-98 uses io::Error::last_os_error)",
-      "status": "os",
-      "note": "Errors come through io::Error. No typed Errno enum in the SDK, so apps match on raw codes or ErrorKind."
+      "bifrost": "springboard/core/src/errno.rs (Errno)",
+      "status": "partial",
+      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Errors come through io::Error. No typed Errno enum in the SDK, so apps match on raw codes or ErrorKind."
     },
     {
       "feature": "Advisory directory locks for coordinated reads and writes",
@@ -73,9 +73,9 @@
     {
       "feature": "Typed system-call results and option sets (FileFlags, FileMode bits, open options)",
       "apple": "FileFlags, Stat.Flags, FileDescriptor.OpenOptions, FileDescriptor.AccessMode (OptionSet types)",
-      "bifrost": "No SDK option sets; flags are passed as raw integers (for example the std OpenOptions builder in springboard/src/shell/terminal/:285)",
-      "status": "gap",
-      "note": "No typed option sets exist for file flags or open options in the SDK."
+      "bifrost": "springboard/core/src/file_mode.rs (FilePermissions option set",
+      "status": "partial",
+      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed option sets exist for file flags or open options in the SDK."
     },
     {
       "feature": "File ownership by user and group identity",

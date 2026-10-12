@@ -87,16 +87,16 @@
     {
       "feature": "Hardware clocks and sample-accurate sync",
       "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The output path has no clock objects or reference-device selection. Sync is handled by the sound server."
+      "bifrost": "springboard/ui/src/hardware_clock.rs (HardwareClock",
+      "status": "partial",
+      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The output path has no clock objects or reference-device selection. Sync is handled by the sound server."
     },
     {
       "feature": "Channel layouts and data types",
       "apple": "ManagedAudioChannelLayout, AudioHardwareError",
-      "bifrost": "springboard/src/media/aac.rs (48 kHz output path), springboard/src/media/alsa.rs (S16 capture)",
-      "status": "gap",
-      "note": "No layout type or typed HAL error is exposed. Format handling is per decoder and PCM, with no general channel layout API."
+      "bifrost": "springboard/ui/src/channel_layout.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout type or typed HAL error is exposed. Format handling is per decoder and PCM, with no general channel layout API."
     },
     {
       "feature": "Boxes and device containers",

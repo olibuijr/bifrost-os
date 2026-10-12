@@ -17,9 +17,9 @@
     {
       "feature": "Preview and configuration sheet",
       "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page)"
+      "bifrost": "springboard/ui/src/screensaver.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page)"
     },
     {
       "feature": "Preference storage for a screen saver module",
@@ -31,9 +31,9 @@
     {
       "feature": "Window backing store and gamma fade for the saver window",
       "apple": "ScreenSaverView.backingStoreType(), performGammaFade()",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"
+      "bifrost": "springboard/render/src/gamma_fade.rs, springboard/ui/src/screensaver.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"
     },
     {
       "feature": "Random value and rectangle helpers",

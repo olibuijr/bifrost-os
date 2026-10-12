@@ -38,9 +38,9 @@
     {
       "feature": "Tool calling (Tool)",
       "apple": "Tool protocol, tool calling in sessions",
-      "bifrost": "springboard/sdk/src/intents.rs (App Intents), springboard/mcp/src/tools.rs (agent tools)",
-      "status": "gap",
-      "note": "App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps"
+      "bifrost": "springboard/ui/src/tool_calls.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps"
     },
     {
       "feature": "Intent-style actions for system use",
@@ -66,9 +66,9 @@
     {
       "feature": "Multimodal prompt attachments",
       "apple": "Attachment, ImageAttachmentContent, ImageReference",
-      "bifrost": "springboard/render/src/imgdec.rs (PNG/JPEG decoding)",
-      "status": "gap",
-      "note": "images can be decoded, but the Assistant has no image input path to a model"
+      "bifrost": "springboard/ui/src/model_attachment.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-foundation-models, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images can be decoded, but the Assistant has no image input path to a model"
     },
     {
       "feature": "Dynamic instructions and profiles",
@@ -80,9 +80,9 @@
     {
       "feature": "Custom language model provider",
       "apple": "LanguageModel, LanguageModelExecutor, LanguageModelCapabilities",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "the Assistant is hard-wired to the Anthropic Messages API"
+      "bifrost": "springboard/ui/src/model_provider.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-foundation-models, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant is hard-wired to the Anthropic Messages API"
     },
     {
       "feature": "Session properties",

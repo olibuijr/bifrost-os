@@ -24,9 +24,9 @@
     {
       "feature": "Media library synchronization",
       "apple": "MPMediaLibrary",
-      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (scan_all, scan_file)",
-      "status": "gap",
-      "note": "library scan lives in the Music app; no SDK API reports library state or change events"
+      "bifrost": "springboard/ui/src/media_changes.rs (MediaLibrary)",
+      "status": "partial",
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. library scan lives in the Music app; no SDK API reports library state or change events"
     },
     {
       "feature": "Media item queries and filters",
@@ -38,9 +38,9 @@
     {
       "feature": "Media items, collections and playlists",
       "apple": "MPMediaItem, MPMediaItemCollection, MPMediaPlaylist, MPMediaPlaylistCreationMetadata, MPMediaEntity",
-      "bifrost": "springboard/apps/music-desktop/src/music.rs (Page::Playlist, playlists)",
-      "status": "gap",
-      "note": "playlists exist only inside the Music app; no SDK item model"
+      "bifrost": "springboard/ui/src/media_playlist.rs (Playlist)",
+      "status": "partial",
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playlists exist only inside the Music app; no SDK item model"
     },
     {
       "feature": "Item artwork and animated artwork",
@@ -73,9 +73,9 @@
     {
       "feature": "Remote command center for apps",
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
-      "bifrost": "springboard/src/shell/music/system.rs (transport buttons), springboard/src/bare/input.rs:826 (media-key remote noted, not mapped)",
-      "status": "os",
-      "note": "the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped"
+      "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command)",
+      "status": "partial",
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped"
     },
     {
       "feature": "Track navigation and seeking",

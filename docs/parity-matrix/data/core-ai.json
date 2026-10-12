@@ -10,9 +10,9 @@
     {
       "feature": "Integrating on-device models",
       "apple": "AIModel, AIModelAsset (Core AI landing page, Essentials)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
+      "bifrost": "springboard/ui/src/model_assets.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
     },
     {
       "feature": "Inference functions and values",
@@ -59,9 +59,9 @@
     {
       "feature": "Model cache and specialization",
       "apple": "AIModelCache, managing model specialization and caching",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
+      "bifrost": "springboard/ui/src/model_specialization.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
     },
     {
       "feature": "Ahead-of-time model compilation",

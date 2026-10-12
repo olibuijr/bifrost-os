@@ -52,9 +52,9 @@
     {
       "feature": "Node constraints",
       "apple": "SKConstraint, SKReachConstraints",
-      "bifrost": "springboard/ui/src/constraint.rs (Cassowary solver for layout)",
-      "status": "gap",
-      "note": "the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
+      "bifrost": "springboard/ui/src/node_constraint.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
     },
     {
       "feature": "Physics simulation",
@@ -66,9 +66,9 @@
     {
       "feature": "Physics joints",
       "apple": "SKPhysicsJoint, SKPhysicsJointPin, SKPhysicsJointSpring, SKPhysicsJointSliding, SKPhysicsJointLimit, SKPhysicsJointFixed",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no joint solver"
+      "bifrost": "springboard/ui/src/physics.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no joint solver"
     },
     {
       "feature": "Particle emitters",
@@ -101,9 +101,9 @@
     {
       "feature": "Warp geometry",
       "apple": "SKWarpGeometry, SKWarpGeometryGrid, SKWarpable",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no mesh deformation API"
+      "bifrost": "springboard/ui/src/warp.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh deformation API"
     },
     {
       "feature": "Environmental nodes (audio, light)",

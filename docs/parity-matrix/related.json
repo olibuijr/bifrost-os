@@ -4,23 +4,23 @@
   "accessibility": [
    {
     "slug": "application-services",
-    "score": 0.956
+    "score": 0.958
    },
    {
     "slug": "media-accessibility",
-    "score": 0.938
-   },
-   {
-    "slug": "appkit-user-interface",
-    "score": 0.923
+    "score": 0.94
    },
    {
     "slug": "swiftui-events-a11y-integration",
-    "score": 0.923
+    "score": 0.925
+   },
+   {
+    "slug": "appkit-user-interface",
+    "score": 0.922
    },
    {
     "slug": "core-services",
-    "score": 0.919
+    "score": 0.921
    }
   ],
   "appkit-app-structure": [
@@ -42,13 +42,13 @@
    },
    {
     "slug": "application-services",
-    "score": 0.936
+    "score": 0.937
    }
   ],
   "appkit-graphics-printing": [
    {
     "slug": "core-graphics",
-    "score": 0.94
+    "score": 0.941
    },
    {
     "slug": "appkit-user-interface",
@@ -56,11 +56,11 @@
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.935
+    "score": 0.936
    },
    {
     "slug": "application-services",
-    "score": 0.924
+    "score": 0.923
    },
    {
     "slug": "appkit-text",
@@ -78,15 +78,15 @@
    },
    {
     "slug": "core-text",
-    "score": 0.937
+    "score": 0.938
    },
    {
     "slug": "appkit-user-interactions",
     "score": 0.929
    },
    {
-    "slug": "application-services",
-    "score": 0.92
+    "slug": "appkit-graphics-printing",
+    "score": 0.919
    }
   ],
   "appkit-user-interactions": [
@@ -108,7 +108,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.921
+    "score": 0.92
    }
   ],
   "appkit-user-interface": [
@@ -130,7 +130,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.936
+    "score": 0.935
    }
   ],
   "bundle-resources": [
@@ -187,11 +187,11 @@
     "score": 0.856
    },
    {
-    "slug": "permissionkit",
-    "score": 0.854
+    "slug": "classkit",
+    "score": 0.849
    },
    {
-    "slug": "classkit",
+    "slug": "security",
     "score": 0.849
    },
    {
@@ -213,30 +213,30 @@
     "score": 0.918
    },
    {
-    "slug": "foundation-networking-lowlevel",
-    "score": 0.914
+    "slug": "core-services",
+    "score": 0.915
    },
    {
-    "slug": "core-services",
+    "slug": "foundation-networking-lowlevel",
     "score": 0.914
    }
   ],
   "evaluations": [
    {
     "slug": "core-ml",
-    "score": 0.921
+    "score": 0.926
    },
    {
     "slug": "foundation-models",
-    "score": 0.912
+    "score": 0.919
    },
    {
     "slug": "core-ai",
-    "score": 0.908
+    "score": 0.915
    },
    {
     "slug": "application-services",
-    "score": 0.902
+    "score": 0.906
    },
    {
     "slug": "app-intents-testing",
@@ -254,7 +254,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.939
+    "score": 0.938
    },
    {
     "slug": "core-foundation",
@@ -280,7 +280,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.941
+    "score": 0.942
    },
    {
     "slug": "file-provider",
@@ -302,7 +302,7 @@
    },
    {
     "slug": "foundation-models",
-    "score": 0.939
+    "score": 0.938
    },
    {
     "slug": "foundation-networking-lowlevel",
@@ -316,7 +316,7 @@
    },
    {
     "slug": "network",
-    "score": 0.94
+    "score": 0.943
    },
    {
     "slug": "core-foundation",
@@ -334,23 +334,23 @@
   "foundation-models": [
    {
     "slug": "core-ai",
-    "score": 0.939
+    "score": 0.941
    },
    {
     "slug": "foundation-fundamentals",
-    "score": 0.939
+    "score": 0.938
    },
    {
     "slug": "application-services",
-    "score": 0.933
-   },
-   {
-    "slug": "foundation-app-support",
-    "score": 0.931
+    "score": 0.937
    },
    {
     "slug": "core-ml",
-    "score": 0.931
+    "score": 0.935
+   },
+   {
+    "slug": "foundation-networking-lowlevel",
+    "score": 0.932
    }
   ],
   "geotoolbox": [
@@ -360,7 +360,7 @@
    },
    {
     "slug": "mapkit",
-    "score": 0.866
+    "score": 0.86
    },
    {
     "slug": "developer-tools-support",
@@ -371,22 +371,22 @@
     "score": 0.845
    },
    {
-    "slug": "iosurface",
-    "score": 0.838
+    "slug": "matter-support",
+    "score": 0.836
    }
   ],
   "hvf": [
    {
     "slug": "core-text",
-    "score": 0.872
-   },
-   {
-    "slug": "model-i-o",
-    "score": 0.865
+    "score": 0.87
    },
    {
     "slug": "video-toolbox",
-    "score": 0.857
+    "score": 0.855
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.854
    },
    {
     "slug": "core-graphics",
@@ -394,7 +394,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.848
+    "score": 0.847
    }
   ],
   "music-understanding": [
@@ -407,16 +407,16 @@
     "score": 0.934
    },
    {
+    "slug": "phase",
+    "score": 0.928
+   },
+   {
     "slug": "audio-unit",
     "score": 0.925
    },
    {
-    "slug": "phase",
-    "score": 0.917
-   },
-   {
-    "slug": "avfaudio",
-    "score": 0.909
+    "slug": "speech",
+    "score": 0.91
    }
   ],
   "objective-c-runtime": [
@@ -448,7 +448,7 @@
    },
    {
     "slug": "darwin-notify",
-    "score": 0.889
+    "score": 0.888
    },
    {
     "slug": "dispatch",
@@ -466,45 +466,45 @@
   "paperkit": [
    {
     "slug": "pencilkit",
-    "score": 0.937
+    "score": 0.933
    },
    {
     "slug": "application-services",
-    "score": 0.915
+    "score": 0.912
    },
    {
-    "slug": "pdfkit",
-    "score": 0.905
-   },
-   {
-    "slug": "tipkit",
-    "score": 0.902
+    "slug": "inputmethodkit",
+    "score": 0.903
    },
    {
     "slug": "widgetkit",
-    "score": 0.901
+    "score": 0.902
+   },
+   {
+    "slug": "pdfkit",
+    "score": 0.902
    }
   ],
   "permissionkit": [
    {
     "slug": "security",
-    "score": 0.912
-   },
-   {
-    "slug": "screen-time",
-    "score": 0.908
-   },
-   {
-    "slug": "core-services",
-    "score": 0.906
+    "score": 0.913
    },
    {
     "slug": "application-services",
-    "score": 0.904
+    "score": 0.911
    },
    {
-    "slug": "storekit",
-    "score": 0.904
+    "slug": "app-intents",
+    "score": 0.909
+   },
+   {
+    "slug": "core-services",
+    "score": 0.909
+   },
+   {
+    "slug": "widgetkit",
+    "score": 0.907
    }
   ],
   "regexbuilder": [
@@ -553,10 +553,6 @@
   ],
   "spatial-preview": [
    {
-    "slug": "spatial",
-    "score": 0.891
-   },
-   {
     "slug": "visionkit",
     "score": 0.886
    },
@@ -565,11 +561,15 @@
     "score": 0.886
    },
    {
-    "slug": "application-services",
-    "score": 0.882
+    "slug": "spatial",
+    "score": 0.886
    },
    {
     "slug": "quick-look",
+    "score": 0.881
+   },
+   {
+    "slug": "application-services",
     "score": 0.881
    }
   ],
@@ -592,7 +592,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.902
+    "score": 0.903
    }
   ],
   "swift": [
@@ -614,7 +614,7 @@
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.926
+    "score": 0.927
    }
   ],
   "swiftdata": [
@@ -636,7 +636,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.924
+    "score": 0.926
    }
   ],
   "swiftui-app-data": [
@@ -668,18 +668,18 @@
    },
    {
     "slug": "swiftui-views-layout",
-    "score": 0.944
+    "score": 0.943
    },
    {
     "slug": "swift",
     "score": 0.936
    },
    {
-    "slug": "appkit-user-interface",
-    "score": 0.923
+    "slug": "accessibility",
+    "score": 0.925
    },
    {
-    "slug": "accessibility",
+    "slug": "appkit-user-interface",
     "score": 0.923
    }
   ],
@@ -690,7 +690,7 @@
    },
    {
     "slug": "swiftui-events-a11y-integration",
-    "score": 0.944
+    "score": 0.943
    },
    {
     "slug": "swift",
@@ -701,8 +701,8 @@
     "score": 0.919
    },
    {
-    "slug": "swift-charts",
-    "score": 0.913
+    "slug": "swiftdata",
+    "score": 0.91
    }
   ],
   "symbols": [
@@ -723,14 +723,14 @@
     "score": 0.904
    },
    {
-    "slug": "model-i-o",
-    "score": 0.899
+    "slug": "core-text",
+    "score": 0.903
    }
   ],
   "usdkit": [
    {
     "slug": "appkit-app-structure",
-    "score": 0.908
+    "score": 0.907
    },
    {
     "slug": "developer-tools-support",
@@ -764,7 +764,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.924
+    "score": 0.925
    },
    {
     "slug": "core-services",
@@ -796,23 +796,23 @@
   "address-book": [
    {
     "slug": "contacts",
-    "score": 0.955
+    "score": 0.957
    },
    {
     "slug": "contacts-ui",
-    "score": 0.933
+    "score": 0.935
    },
    {
     "slug": "core-services",
-    "score": 0.902
+    "score": 0.906
    },
    {
     "slug": "application-services",
-    "score": 0.899
+    "score": 0.902
    },
    {
     "slug": "cloudkit",
-    "score": 0.895
+    "score": 0.898
    }
   ],
   "adservices": [
@@ -852,7 +852,7 @@
    },
    {
     "slug": "core-bluetooth",
-    "score": 0.873
+    "score": 0.872
    },
    {
     "slug": "authentication-services",
@@ -878,29 +878,29 @@
    },
    {
     "slug": "core-services",
-    "score": 0.93
+    "score": 0.931
    }
   ],
   "application-services": [
    {
     "slug": "core-services",
-    "score": 0.961
+    "score": 0.962
    },
    {
     "slug": "accessibility",
-    "score": 0.956
+    "score": 0.958
    },
    {
     "slug": "core-graphics",
-    "score": 0.939
-   },
-   {
-    "slug": "appkit-user-interface",
-    "score": 0.936
+    "score": 0.938
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.936
+    "score": 0.937
+   },
+   {
+    "slug": "foundation-models",
+    "score": 0.937
    }
   ],
   "automaticassessmentconfiguration": [
@@ -909,26 +909,26 @@
     "score": 0.875
    },
    {
-    "slug": "system-configuration",
+    "slug": "authentication-services",
     "score": 0.874
    },
    {
-    "slug": "authentication-services",
-    "score": 0.874
+    "slug": "system-configuration",
+    "score": 0.872
    },
    {
     "slug": "device-management",
     "score": 0.872
    },
    {
-    "slug": "core-services",
+    "slug": "security",
     "score": 0.87
    }
   ],
   "background-assets": [
    {
     "slug": "core-services",
-    "score": 0.91
+    "score": 0.913
    },
    {
     "slug": "bundle-resources",
@@ -936,21 +936,21 @@
    },
    {
     "slug": "foundation-files-persistence",
+    "score": 0.906
+   },
+   {
+    "slug": "application-services",
     "score": 0.905
    },
    {
     "slug": "foundation-networking-lowlevel",
-    "score": 0.902
-   },
-   {
-    "slug": "application-services",
-    "score": 0.901
+    "score": 0.903
    }
   ],
   "callkit": [
    {
     "slug": "extensionkit",
-    "score": 0.9
+    "score": 0.899
    },
    {
     "slug": "application-services",
@@ -961,12 +961,12 @@
     "score": 0.897
    },
    {
-    "slug": "coreaudiokit",
-    "score": 0.893
+    "slug": "core-services",
+    "score": 0.894
    },
    {
-    "slug": "core-services",
-    "score": 0.892
+    "slug": "coreaudiokit",
+    "score": 0.893
    }
   ],
   "classkit": [
@@ -980,24 +980,28 @@
    },
    {
     "slug": "core-services",
-    "score": 0.889
+    "score": 0.887
    },
    {
     "slug": "device-management",
     "score": 0.883
    },
    {
-    "slug": "eventkit",
+    "slug": "relevancekit",
     "score": 0.883
    }
   ],
   "cloudkit": [
    {
-    "slug": "accounts",
-    "score": 0.92
+    "slug": "core-services",
+    "score": 0.922
    },
    {
-    "slug": "core-services",
+    "slug": "security",
+    "score": 0.921
+   },
+   {
+    "slug": "accounts",
     "score": 0.92
    },
    {
@@ -1005,12 +1009,8 @@
     "score": 0.92
    },
    {
-    "slug": "storekit",
+    "slug": "eventkit",
     "score": 0.92
-   },
-   {
-    "slug": "security",
-    "score": 0.919
    }
   ],
   "combine": [
@@ -1028,7 +1028,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.884
+    "score": 0.886
    },
    {
     "slug": "foundation-networking-lowlevel",
@@ -1037,16 +1037,16 @@
   ],
   "contacts": [
    {
+    "slug": "address-book",
+    "score": 0.957
+   },
+   {
     "slug": "contacts-ui",
     "score": 0.956
    },
    {
-    "slug": "address-book",
-    "score": 0.955
-   },
-   {
     "slug": "core-services",
-    "score": 0.908
+    "score": 0.909
    },
    {
     "slug": "cloudkit",
@@ -1064,7 +1064,7 @@
    },
    {
     "slug": "address-book",
-    "score": 0.933
+    "score": 0.935
    },
    {
     "slug": "appkit-user-interface",
@@ -1072,7 +1072,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.892
+    "score": 0.891
    },
    {
     "slug": "swiftui-app-data",
@@ -1082,23 +1082,23 @@
   "core-ai": [
    {
     "slug": "core-ml",
-    "score": 0.964
+    "score": 0.966
    },
    {
     "slug": "foundation-models",
-    "score": 0.939
+    "score": 0.941
    },
    {
-    "slug": "core-image",
-    "score": 0.922
-   },
-   {
-    "slug": "model-i-o",
-    "score": 0.921
+    "slug": "application-services",
+    "score": 0.925
    },
    {
     "slug": "core-services",
-    "score": 0.921
+    "score": 0.924
+   },
+   {
+    "slug": "core-image",
+    "score": 0.924
    }
   ],
   "core-data": [
@@ -1112,11 +1112,11 @@
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.935
+    "score": 0.936
    },
    {
     "slug": "core-services",
-    "score": 0.934
+    "score": 0.935
    },
    {
     "slug": "swift",
@@ -1126,11 +1126,11 @@
   "core-location": [
    {
     "slug": "mapkit",
-    "score": 0.93
+    "score": 0.928
    },
    {
     "slug": "core-services",
-    "score": 0.923
+    "score": 0.924
    },
    {
     "slug": "core-motion",
@@ -1148,22 +1148,22 @@
   "core-ml": [
    {
     "slug": "core-ai",
-    "score": 0.964
-   },
-   {
-    "slug": "create-ml",
-    "score": 0.932
+    "score": 0.966
    },
    {
     "slug": "foundation-models",
-    "score": 0.931
+    "score": 0.935
    },
    {
-    "slug": "ml-compute",
-    "score": 0.922
+    "slug": "create-ml",
+    "score": 0.927
    },
    {
     "slug": "evaluations",
+    "score": 0.926
+   },
+   {
+    "slug": "core-services",
     "score": 0.921
    }
   ],
@@ -1174,25 +1174,25 @@
    },
    {
     "slug": "core-animation",
-    "score": 0.909
+    "score": 0.91
    },
    {
     "slug": "core-services",
+    "score": 0.906
+   },
+   {
+    "slug": "core-media",
     "score": 0.904
    },
    {
     "slug": "imagecapturecore",
     "score": 0.903
-   },
-   {
-    "slug": "application-services",
-    "score": 0.898
    }
   ],
   "core-spotlight": [
    {
     "slug": "core-services",
-    "score": 0.935
+    "score": 0.934
    },
    {
     "slug": "visual-intelligence",
@@ -1214,29 +1214,29 @@
   "core-text": [
    {
     "slug": "appkit-text",
-    "score": 0.937
+    "score": 0.938
    },
    {
     "slug": "core-graphics",
-    "score": 0.927
+    "score": 0.93
    },
    {
     "slug": "application-services",
-    "score": 0.925
+    "score": 0.928
    },
    {
     "slug": "core-foundation",
-    "score": 0.916
+    "score": 0.918
    },
    {
     "slug": "core-services",
-    "score": 0.91
+    "score": 0.914
    }
   ],
   "core-transferable": [
    {
     "slug": "core-services",
-    "score": 0.928
+    "score": 0.929
    },
    {
     "slug": "application-services",
@@ -1258,7 +1258,11 @@
   "crashreportextension": [
    {
     "slug": "metrickit",
-    "score": 0.921
+    "score": 0.919
+   },
+   {
+    "slug": "exception-handling",
+    "score": 0.917
    },
    {
     "slug": "statereporting",
@@ -1267,10 +1271,6 @@
    {
     "slug": "core-services",
     "score": 0.912
-   },
-   {
-    "slug": "exception-handling",
-    "score": 0.908
    },
    {
     "slug": "endpoint-security",
@@ -1284,7 +1284,7 @@
    },
    {
     "slug": "core-ml",
-    "score": 0.932
+    "score": 0.927
    },
    {
     "slug": "ml-compute",
@@ -1292,11 +1292,11 @@
    },
    {
     "slug": "core-ai",
-    "score": 0.894
+    "score": 0.891
    },
    {
     "slug": "foundation-models",
-    "score": 0.871
+    "score": 0.866
    }
   ],
   "create-ml-components": [
@@ -1306,19 +1306,19 @@
    },
    {
     "slug": "core-ml",
-    "score": 0.898
+    "score": 0.895
    },
    {
     "slug": "core-ai",
-    "score": 0.883
+    "score": 0.881
    },
    {
     "slug": "ml-compute",
     "score": 0.87
    },
    {
-    "slug": "foundation-models",
-    "score": 0.861
+    "slug": "media-intelligence",
+    "score": 0.857
    }
   ],
   "datadetection": [
@@ -1332,15 +1332,15 @@
    },
    {
     "slug": "application-services",
-    "score": 0.898
+    "score": 0.899
    },
    {
     "slug": "natural-language",
     "score": 0.898
    },
    {
-    "slug": "swift",
-    "score": 0.895
+    "slug": "core-services",
+    "score": 0.897
    }
   ],
   "devicecheck": [
@@ -1358,17 +1358,17 @@
    },
    {
     "slug": "apple-cryptokit",
-    "score": 0.883
+    "score": 0.88
    },
    {
-    "slug": "service-management",
-    "score": 0.878
+    "slug": "identitydocumentservices",
+    "score": 0.877
    }
   ],
   "eventkit": [
    {
     "slug": "cloudkit",
-    "score": 0.916
+    "score": 0.92
    },
    {
     "slug": "storekit",
@@ -1376,59 +1376,59 @@
    },
    {
     "slug": "core-services",
-    "score": 0.903
-   },
-   {
-    "slug": "appkit-app-structure",
-    "score": 0.9
+    "score": 0.906
    },
    {
     "slug": "endpoint-security",
-    "score": 0.898
+    "score": 0.904
+   },
+   {
+    "slug": "appkit-app-structure",
+    "score": 0.901
    }
   ],
   "extensionfoundation": [
    {
     "slug": "extensionkit",
-    "score": 0.954
+    "score": 0.956
    },
    {
     "slug": "network-extension",
-    "score": 0.924
+    "score": 0.925
    },
    {
     "slug": "foundation-app-support",
     "score": 0.92
    },
    {
-    "slug": "core-services",
-    "score": 0.908
+    "slug": "foundation-models",
+    "score": 0.912
    },
    {
-    "slug": "foundation-models",
-    "score": 0.907
+    "slug": "core-services",
+    "score": 0.911
    }
   ],
   "extensionkit": [
    {
     "slug": "extensionfoundation",
-    "score": 0.954
+    "score": 0.956
    },
    {
     "slug": "widgetkit",
-    "score": 0.934
+    "score": 0.937
    },
    {
     "slug": "application-services",
-    "score": 0.927
+    "score": 0.931
    },
    {
     "slug": "core-services",
-    "score": 0.925
+    "score": 0.929
    },
    {
     "slug": "network-extension",
-    "score": 0.922
+    "score": 0.925
    }
   ],
   "file-provider": [
@@ -1460,7 +1460,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.916
+    "score": 0.917
    },
    {
     "slug": "extensionkit",
@@ -1482,7 +1482,7 @@
    },
    {
     "slug": "metrickit",
-    "score": 0.897
+    "score": 0.895
    },
    {
     "slug": "cloudkit",
@@ -1494,7 +1494,7 @@
    },
    {
     "slug": "iokit",
-    "score": 0.891
+    "score": 0.89
    }
   ],
   "identitydocumentservices": [
@@ -1512,11 +1512,11 @@
    },
    {
     "slug": "core-services",
-    "score": 0.877
+    "score": 0.876
    },
    {
     "slug": "application-services",
-    "score": 0.873
+    "score": 0.872
    }
   ],
   "identitydocumentservicesui": [
@@ -1533,12 +1533,12 @@
     "score": 0.87
    },
    {
-    "slug": "application-services",
-    "score": 0.87
+    "slug": "service-management",
+    "score": 0.869
    },
    {
-    "slug": "core-services",
-    "score": 0.87
+    "slug": "application-services",
+    "score": 0.869
    }
   ],
   "javascriptcore": [
@@ -1556,7 +1556,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.902
+    "score": 0.901
    },
    {
     "slug": "foundation-app-support",
@@ -1566,7 +1566,7 @@
   "mailkit": [
    {
     "slug": "application-services",
-    "score": 0.899
+    "score": 0.898
    },
    {
     "slug": "extensionkit",
@@ -1574,11 +1574,11 @@
    },
    {
     "slug": "core-services",
-    "score": 0.896
+    "score": 0.895
    },
    {
     "slug": "security",
-    "score": 0.894
+    "score": 0.895
    },
    {
     "slug": "user-notifications",
@@ -1591,42 +1591,42 @@
     "score": 0.911
    },
    {
-    "slug": "core-services",
-    "score": 0.903
-   },
-   {
     "slug": "bundle-resources",
     "score": 0.902
    },
    {
-    "slug": "background-assets",
-    "score": 0.896
+    "slug": "core-services",
+    "score": 0.902
    },
    {
-    "slug": "application-services",
-    "score": 0.893
+    "slug": "background-assets",
+    "score": 0.892
+   },
+   {
+    "slug": "security",
+    "score": 0.892
    }
   ],
   "mapkit": [
    {
     "slug": "core-location",
-    "score": 0.93
+    "score": 0.928
    },
    {
     "slug": "weatherkit",
-    "score": 0.908
+    "score": 0.906
+   },
+   {
+    "slug": "spritekit",
+    "score": 0.906
+   },
+   {
+    "slug": "application-services",
+    "score": 0.906
    },
    {
     "slug": "visionkit",
     "score": 0.905
-   },
-   {
-    "slug": "application-services",
-    "score": 0.904
-   },
-   {
-    "slug": "spritekit",
-    "score": 0.902
    }
   ],
   "matter": [
@@ -1639,16 +1639,16 @@
     "score": 0.909
    },
    {
-    "slug": "core-services",
-    "score": 0.904
-   },
-   {
     "slug": "external-accessory",
     "score": 0.904
    },
    {
+    "slug": "core-services",
+    "score": 0.904
+   },
+   {
     "slug": "core-bluetooth",
-    "score": 0.901
+    "score": 0.9
    }
   ],
   "matter-support": [
@@ -1679,16 +1679,16 @@
     "score": 0.938
    },
    {
+    "slug": "media-player",
+    "score": 0.932
+   },
+   {
     "slug": "siri-kit",
     "score": 0.932
    },
    {
-    "slug": "media-player",
-    "score": 0.931
-   },
-   {
     "slug": "now-playing",
-    "score": 0.93
+    "score": 0.929
    },
    {
     "slug": "audio-toolbox",
@@ -1698,22 +1698,22 @@
   "multipeer-connectivity": [
    {
     "slug": "network",
-    "score": 0.931
-   },
-   {
-    "slug": "network-extension",
-    "score": 0.914
+    "score": 0.933
    },
    {
     "slug": "distributed",
     "score": 0.912
    },
    {
-    "slug": "application-services",
-    "score": 0.91
+    "slug": "network-extension",
+    "score": 0.911
    },
    {
     "slug": "core-services",
+    "score": 0.91
+   },
+   {
+    "slug": "application-services",
     "score": 0.91
    }
   ],
@@ -1724,29 +1724,29 @@
    },
    {
     "slug": "application-services",
-    "score": 0.914
+    "score": 0.915
    },
    {
     "slug": "translation",
-    "score": 0.911
+    "score": 0.912
+   },
+   {
+    "slug": "core-ai",
+    "score": 0.91
    },
    {
     "slug": "foundation-fundamentals",
     "score": 0.909
-   },
-   {
-    "slug": "core-ai",
-    "score": 0.907
    }
   ],
   "notification-center": [
    {
     "slug": "widgetkit",
-    "score": 0.938
+    "score": 0.939
    },
    {
     "slug": "user-notifications",
-    "score": 0.92
+    "score": 0.921
    },
    {
     "slug": "user-notifications-ui",
@@ -1768,7 +1768,7 @@
    },
    {
     "slug": "apple-cryptokit",
-    "score": 0.87
+    "score": 0.872
    },
    {
     "slug": "musickit",
@@ -1779,36 +1779,36 @@
     "score": 0.868
    },
    {
-    "slug": "usdkit",
-    "score": 0.864
+    "slug": "appkit-app-structure",
+    "score": 0.865
    }
   ],
   "preference-panes": [
    {
     "slug": "application-services",
-    "score": 0.913
+    "score": 0.914
    },
    {
     "slug": "core-services",
-    "score": 0.904
+    "score": 0.905
    },
    {
     "slug": "system-configuration",
-    "score": 0.898
+    "score": 0.903
+   },
+   {
+    "slug": "accessibility",
+    "score": 0.897
    },
    {
     "slug": "appkit-user-interface",
     "score": 0.896
-   },
-   {
-    "slug": "accessibility",
-    "score": 0.894
    }
   ],
   "pushkit": [
    {
     "slug": "user-notifications",
-    "score": 0.895
+    "score": 0.896
    },
    {
     "slug": "storekit",
@@ -1819,12 +1819,12 @@
     "score": 0.886
    },
    {
-    "slug": "permissionkit",
-    "score": 0.884
-   },
-   {
     "slug": "healthkit",
     "score": 0.883
+   },
+   {
+    "slug": "permissionkit",
+    "score": 0.878
    }
   ],
   "quick-look": [
@@ -1834,7 +1834,7 @@
    },
    {
     "slug": "quartz",
-    "score": 0.943
+    "score": 0.944
    },
    {
     "slug": "quick-look-thumbnailing",
@@ -1842,7 +1842,7 @@
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.915
+    "score": 0.916
    },
    {
     "slug": "appkit-user-interface",
@@ -1860,7 +1860,7 @@
    },
    {
     "slug": "quartz",
-    "score": 0.926
+    "score": 0.928
    },
    {
     "slug": "developer-tools-support",
@@ -1868,25 +1868,25 @@
    },
    {
     "slug": "core-services",
-    "score": 0.898
+    "score": 0.897
    }
   ],
   "safari-services": [
    {
     "slug": "webkit",
-    "score": 0.921
+    "score": 0.923
    },
    {
     "slug": "core-services",
-    "score": 0.918
+    "score": 0.92
    },
    {
     "slug": "application-services",
-    "score": 0.914
+    "score": 0.917
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.909
+    "score": 0.91
    },
    {
     "slug": "authentication-services",
@@ -1896,7 +1896,7 @@
   "safetykit": [
    {
     "slug": "exception-handling",
-    "score": 0.899
+    "score": 0.893
    },
    {
     "slug": "crashreportextension",
@@ -1922,19 +1922,19 @@
    },
    {
     "slug": "security",
-    "score": 0.892
+    "score": 0.893
    },
    {
     "slug": "application-services",
-    "score": 0.881
+    "score": 0.88
    },
    {
     "slug": "visionkit",
     "score": 0.88
    },
    {
-    "slug": "screencapturekit",
-    "score": 0.879
+    "slug": "datadetection",
+    "score": 0.877
    }
   ],
   "shared-with-you": [
@@ -1978,7 +1978,7 @@
    },
    {
     "slug": "application-services",
-    "score": 0.917
+    "score": 0.918
    }
   ],
   "sms-and-call-reporting": [
@@ -1999,8 +1999,8 @@
     "score": 0.852
    },
    {
-    "slug": "address-book",
-    "score": 0.852
+    "slug": "group-activities",
+    "score": 0.851
    }
   ],
   "social": [
@@ -2010,7 +2010,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.912
+    "score": 0.911
    },
    {
     "slug": "foundation-app-support",
@@ -2018,33 +2018,33 @@
    },
    {
     "slug": "application-services",
-    "score": 0.902
+    "score": 0.901
    },
    {
     "slug": "security",
-    "score": 0.897
+    "score": 0.896
    }
   ],
   "speech": [
    {
-    "slug": "audio-toolbox",
-    "score": 0.931
-   },
-   {
     "slug": "sound-analysis",
-    "score": 0.929
+    "score": 0.933
    },
    {
-    "slug": "avfaudio",
-    "score": 0.925
-   },
-   {
-    "slug": "core-audio",
-    "score": 0.922
+    "slug": "audio-toolbox",
+    "score": 0.932
    },
    {
     "slug": "avfoundation-capture-audio",
-    "score": 0.922
+    "score": 0.927
+   },
+   {
+    "slug": "avfaudio",
+    "score": 0.924
+   },
+   {
+    "slug": "core-audio",
+    "score": 0.923
    }
   ],
   "storekit": [
@@ -2057,16 +2057,16 @@
     "score": 0.92
    },
    {
-    "slug": "core-services",
-    "score": 0.917
+    "slug": "appkit-app-structure",
+    "score": 0.918
    },
    {
-    "slug": "appkit-app-structure",
+    "slug": "core-services",
     "score": 0.916
    },
    {
-    "slug": "managed-app-distribution",
-    "score": 0.911
+    "slug": "security",
+    "score": 0.912
    }
   ],
   "suggested-actions": [
@@ -2079,66 +2079,66 @@
     "score": 0.856
    },
    {
-    "slug": "permissionkit",
-    "score": 0.854
-   },
-   {
     "slug": "relevancekit",
     "score": 0.854
    },
    {
     "slug": "shared-with-you",
     "score": 0.852
+   },
+   {
+    "slug": "user-notifications",
+    "score": 0.852
    }
   ],
   "swift-charts": [
    {
     "slug": "swiftui-views-layout",
-    "score": 0.913
-   },
-   {
-    "slug": "swiftui-events-a11y-integration",
-    "score": 0.909
-   },
-   {
-    "slug": "swiftui-app-data",
     "score": 0.907
    },
    {
+    "slug": "swiftui-events-a11y-integration",
+    "score": 0.906
+   },
+   {
+    "slug": "swiftui-app-data",
+    "score": 0.903
+   },
+   {
     "slug": "swift",
-    "score": 0.9
+    "score": 0.897
    },
    {
     "slug": "swiftdata",
-    "score": 0.893
+    "score": 0.891
    }
   ],
   "tabular-data": [
    {
     "slug": "foundation-fundamentals",
-    "score": 0.895
+    "score": 0.902
    },
    {
     "slug": "core-foundation",
-    "score": 0.886
+    "score": 0.892
    },
    {
     "slug": "swiftdata",
-    "score": 0.884
+    "score": 0.892
    },
    {
     "slug": "application-services",
-    "score": 0.881
+    "score": 0.888
    },
    {
     "slug": "foundation-files-persistence",
-    "score": 0.88
+    "score": 0.887
    }
   ],
   "tipkit": [
    {
     "slug": "widgetkit",
-    "score": 0.919
+    "score": 0.92
    },
    {
     "slug": "application-services",
@@ -2146,33 +2146,33 @@
    },
    {
     "slug": "extensionkit",
-    "score": 0.907
-   },
-   {
-    "slug": "paperkit",
-    "score": 0.902
+    "score": 0.908
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.901
+    "score": 0.902
+   },
+   {
+    "slug": "inputmethodkit",
+    "score": 0.902
    }
   ],
   "translation": [
    {
     "slug": "application-services",
-    "score": 0.917
+    "score": 0.916
    },
    {
     "slug": "natural-language",
-    "score": 0.911
+    "score": 0.912
    },
    {
     "slug": "foundation-fundamentals",
-    "score": 0.908
+    "score": 0.907
    },
    {
     "slug": "accessibility",
-    "score": 0.904
+    "score": 0.903
    },
    {
     "slug": "foundation-app-support",
@@ -2182,15 +2182,15 @@
   "user-notifications": [
    {
     "slug": "user-notifications-ui",
-    "score": 0.969
+    "score": 0.968
    },
    {
     "slug": "darwin-notify",
-    "score": 0.921
+    "score": 0.922
    },
    {
     "slug": "notification-center",
-    "score": 0.92
+    "score": 0.921
    },
    {
     "slug": "foundation-app-support",
@@ -2198,13 +2198,13 @@
    },
    {
     "slug": "application-services",
-    "score": 0.914
+    "score": 0.913
    }
   ],
   "user-notifications-ui": [
    {
     "slug": "user-notifications",
-    "score": 0.969
+    "score": 0.968
    },
    {
     "slug": "notification-center",
@@ -2215,11 +2215,11 @@
     "score": 0.9
    },
    {
-    "slug": "widgetkit",
-    "score": 0.895
+    "slug": "foundation-app-support",
+    "score": 0.893
    },
    {
-    "slug": "foundation-app-support",
+    "slug": "widgetkit",
     "score": 0.893
    }
   ],
@@ -2230,7 +2230,7 @@
    },
    {
     "slug": "quartz",
-    "score": 0.918
+    "score": 0.92
    },
    {
     "slug": "imagecapturecore",
@@ -2242,7 +2242,7 @@
    },
    {
     "slug": "photokit",
-    "score": 0.911
+    "score": 0.913
    }
   ],
   "wallet-orders": [
@@ -2270,11 +2270,11 @@
   "weatherkit": [
    {
     "slug": "mapkit",
-    "score": 0.908
+    "score": 0.906
    },
    {
     "slug": "widgetkit",
-    "score": 0.9
+    "score": 0.902
    },
    {
     "slug": "core-location",
@@ -2286,7 +2286,7 @@
    },
    {
     "slug": "metrickit",
-    "score": 0.891
+    "score": 0.893
    }
   ],
   "webkit": [
@@ -2296,11 +2296,11 @@
    },
    {
     "slug": "safari-services",
-    "score": 0.921
+    "score": 0.923
    },
    {
     "slug": "application-services",
-    "score": 0.919
+    "score": 0.918
    },
    {
     "slug": "core-services",
@@ -2308,25 +2308,25 @@
    },
    {
     "slug": "widgetkit",
-    "score": 0.911
+    "score": 0.912
    }
   ],
   "widgetkit": [
    {
     "slug": "notification-center",
-    "score": 0.938
+    "score": 0.939
    },
    {
     "slug": "extensionkit",
-    "score": 0.934
+    "score": 0.937
    },
    {
     "slug": "application-services",
-    "score": 0.928
+    "score": 0.929
    },
    {
     "slug": "core-services",
-    "score": 0.92
+    "score": 0.921
    },
    {
     "slug": "app-intents",
@@ -2352,7 +2352,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.906
+    "score": 0.908
    }
   ],
   "automator": [
@@ -2391,11 +2391,11 @@
     "score": 0.904
    },
    {
-    "slug": "appkit-app-structure",
-    "score": 0.903
+    "slug": "usdkit",
+    "score": 0.902
    },
    {
-    "slug": "usdkit",
+    "slug": "xcodekit",
     "score": 0.902
    }
   ],
@@ -2410,7 +2410,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.894
+    "score": 0.893
    },
    {
     "slug": "swiftui-app-data",
@@ -2424,7 +2424,7 @@
   "scripting-bridge": [
    {
     "slug": "core-services",
-    "score": 0.93
+    "score": 0.929
    },
    {
     "slug": "application-services",
@@ -2450,10 +2450,6 @@
    },
    {
     "slug": "model-i-o",
-    "score": 0.888
-   },
-   {
-    "slug": "scenekit",
     "score": 0.88
    },
    {
@@ -2461,8 +2457,12 @@
     "score": 0.877
    },
    {
-    "slug": "metal",
+    "slug": "scenekit",
     "score": 0.873
+   },
+   {
+    "slug": "metal",
+    "score": 0.872
    }
   ],
   "storekit-test": [
@@ -2475,11 +2475,11 @@
     "score": 0.879
    },
    {
-    "slug": "eventkit",
-    "score": 0.877
+    "slug": "cloudkit",
+    "score": 0.876
    },
    {
-    "slug": "cloudkit",
+    "slug": "eventkit",
     "score": 0.876
    },
    {
@@ -2512,7 +2512,7 @@
   "xcodekit": [
    {
     "slug": "appkit-app-structure",
-    "score": 0.908
+    "score": 0.907
    },
    {
     "slug": "appkit-text",
@@ -2528,7 +2528,7 @@
    },
    {
     "slug": "extensionkit",
-    "score": 0.89
+    "score": 0.889
    }
   ],
   "xcselect": [
@@ -2541,34 +2541,34 @@
     "score": 0.857
    },
    {
-    "slug": "core-services",
+    "slug": "os",
     "score": 0.849
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.849
+    "score": 0.848
    },
    {
     "slug": "iokit",
-    "score": 0.849
+    "score": 0.847
    }
   ],
   "colorsync": [
    {
     "slug": "core-image",
-    "score": 0.915
-   },
-   {
-    "slug": "core-graphics",
-    "score": 0.904
+    "score": 0.918
    },
    {
     "slug": "core-video",
-    "score": 0.903
+    "score": 0.908
+   },
+   {
+    "slug": "core-graphics",
+    "score": 0.906
    },
    {
     "slug": "image-i-o",
-    "score": 0.901
+    "score": 0.903
    },
    {
     "slug": "application-services",
@@ -2582,15 +2582,15 @@
    },
    {
     "slug": "metal",
-    "score": 0.902
-   },
-   {
-    "slug": "model-i-o",
-    "score": 0.899
+    "score": 0.901
    },
    {
     "slug": "metal-performance-shaders-graph",
     "score": 0.893
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.891
    },
    {
     "slug": "metalkit",
@@ -2600,33 +2600,33 @@
   "core-animation": [
    {
     "slug": "core-graphics",
-    "score": 0.935
+    "score": 0.934
+   },
+   {
+    "slug": "core-video",
+    "score": 0.921
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.917
    },
    {
     "slug": "symbols",
     "score": 0.917
    },
    {
-    "slug": "glkit",
+    "slug": "spritekit",
     "score": 0.917
-   },
-   {
-    "slug": "screen-saver",
-    "score": 0.916
-   },
-   {
-    "slug": "core-video",
-    "score": 0.916
    }
   ],
   "core-graphics": [
    {
     "slug": "appkit-graphics-printing",
-    "score": 0.94
+    "score": 0.941
    },
    {
     "slug": "application-services",
-    "score": 0.939
+    "score": 0.938
    },
    {
     "slug": "glkit",
@@ -2637,62 +2637,58 @@
     "score": 0.937
    },
    {
-    "slug": "core-animation",
+    "slug": "core-video",
     "score": 0.935
    }
   ],
   "core-image": [
    {
+    "slug": "image-i-o",
+    "score": 0.939
+   },
+   {
     "slug": "core-graphics",
     "score": 0.937
    },
    {
-    "slug": "image-i-o",
-    "score": 0.935
-   },
-   {
     "slug": "core-video",
-    "score": 0.925
+    "score": 0.93
    },
    {
     "slug": "accelerate",
-    "score": 0.923
+    "score": 0.924
    },
    {
-    "slug": "model-i-o",
-    "score": 0.922
+    "slug": "core-ai",
+    "score": 0.924
    }
   ],
   "game-controller": [
    {
-    "slug": "core-hid",
-    "score": 0.908
-   },
-   {
-    "slug": "hiddriverkit",
-    "score": 0.907
-   },
-   {
     "slug": "gameplaykit",
-    "score": 0.905
+    "score": 0.912
    },
    {
     "slug": "application-services",
-    "score": 0.902
+    "score": 0.906
    },
    {
-    "slug": "force-feedback",
-    "score": 0.901
+    "slug": "core-hid",
+    "score": 0.905
+   },
+   {
+    "slug": "inputmethodkit",
+    "score": 0.904
+   },
+   {
+    "slug": "hiddriverkit",
+    "score": 0.902
    }
   ],
   "gamekit": [
    {
     "slug": "gameplaykit",
-    "score": 0.916
-   },
-   {
-    "slug": "game-controller",
-    "score": 0.878
+    "score": 0.911
    },
    {
     "slug": "classkit",
@@ -2705,28 +2701,32 @@
    {
     "slug": "storekit",
     "score": 0.869
+   },
+   {
+    "slug": "healthkit",
+    "score": 0.868
    }
   ],
   "gameplaykit": [
    {
     "slug": "spritekit",
-    "score": 0.926
-   },
-   {
-    "slug": "gamekit",
-    "score": 0.916
+    "score": 0.932
    },
    {
     "slug": "scenekit",
-    "score": 0.907
+    "score": 0.914
    },
    {
-    "slug": "glkit",
-    "score": 0.907
+    "slug": "game-controller",
+    "score": 0.912
    },
    {
-    "slug": "realitykit",
-    "score": 0.905
+    "slug": "gamekit",
+    "score": 0.911
+   },
+   {
+    "slug": "extensionkit",
+    "score": 0.908
    }
   ],
   "gamesave": [
@@ -2744,7 +2744,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.901
+    "score": 0.903
    },
    {
     "slug": "file-provider",
@@ -2753,12 +2753,12 @@
   ],
   "glkit": [
    {
-    "slug": "core-graphics",
-    "score": 0.937
+    "slug": "spritekit",
+    "score": 0.938
    },
    {
-    "slug": "spritekit",
-    "score": 0.934
+    "slug": "core-graphics",
+    "score": 0.937
    },
    {
     "slug": "metalkit",
@@ -2770,29 +2770,29 @@
    },
    {
     "slug": "scenekit",
-    "score": 0.927
+    "score": 0.928
    }
   ],
   "image-i-o": [
    {
     "slug": "core-image",
-    "score": 0.935
-   },
-   {
-    "slug": "quartz",
-    "score": 0.916
-   },
-   {
-    "slug": "model-i-o",
-    "score": 0.916
+    "score": 0.939
    },
    {
     "slug": "imagecapturecore",
-    "score": 0.912
+    "score": 0.921
+   },
+   {
+    "slug": "quartz",
+    "score": 0.92
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.918
    },
    {
     "slug": "diskimagekit",
-    "score": 0.911
+    "score": 0.915
    }
   ],
   "image-playground": [
@@ -2806,69 +2806,69 @@
    },
    {
     "slug": "image-i-o",
-    "score": 0.896
+    "score": 0.897
    },
    {
     "slug": "photokit",
-    "score": 0.895
+    "score": 0.894
    },
    {
-    "slug": "core-image",
-    "score": 0.888
+    "slug": "quartz",
+    "score": 0.886
    }
   ],
   "metal": [
    {
     "slug": "metalkit",
-    "score": 0.956
+    "score": 0.958
    },
    {
     "slug": "metal-performance-shaders",
-    "score": 0.946
+    "score": 0.951
    },
    {
     "slug": "metalfx",
-    "score": 0.938
-   },
-   {
-    "slug": "core-video",
-    "score": 0.935
+    "score": 0.942
    },
    {
     "slug": "model-i-o",
-    "score": 0.932
+    "score": 0.934
+   },
+   {
+    "slug": "core-video",
+    "score": 0.933
    }
   ],
   "metal-performance-shaders": [
    {
     "slug": "metal-performance-shaders-graph",
-    "score": 0.964
+    "score": 0.965
    },
    {
     "slug": "metal",
-    "score": 0.946
-   },
-   {
-    "slug": "metalkit",
-    "score": 0.918
+    "score": 0.951
    },
    {
     "slug": "metalfx",
-    "score": 0.918
+    "score": 0.927
+   },
+   {
+    "slug": "metalkit",
+    "score": 0.921
    },
    {
     "slug": "model-i-o",
-    "score": 0.909
+    "score": 0.914
    }
   ],
   "metal-performance-shaders-graph": [
    {
     "slug": "metal-performance-shaders",
-    "score": 0.964
+    "score": 0.965
    },
    {
     "slug": "metal",
-    "score": 0.923
+    "score": 0.928
    },
    {
     "slug": "metalkit",
@@ -2876,7 +2876,7 @@
    },
    {
     "slug": "model-i-o",
-    "score": 0.896
+    "score": 0.897
    },
    {
     "slug": "compute-graph",
@@ -2886,33 +2886,33 @@
   "metalfx": [
    {
     "slug": "metal",
-    "score": 0.938
+    "score": 0.942
    },
    {
     "slug": "metal-performance-shaders",
-    "score": 0.918
+    "score": 0.927
    },
    {
     "slug": "metalkit",
-    "score": 0.914
+    "score": 0.921
    },
    {
     "slug": "model-i-o",
-    "score": 0.902
+    "score": 0.913
    },
    {
     "slug": "core-video",
-    "score": 0.897
+    "score": 0.906
    }
   ],
   "metalkit": [
    {
     "slug": "metal",
-    "score": 0.956
+    "score": 0.958
    },
    {
     "slug": "model-i-o",
-    "score": 0.942
+    "score": 0.938
    },
    {
     "slug": "glkit",
@@ -2920,47 +2920,47 @@
    },
    {
     "slug": "metal-performance-shaders",
-    "score": 0.918
+    "score": 0.921
    },
    {
-    "slug": "spritekit",
-    "score": 0.914
+    "slug": "metalfx",
+    "score": 0.921
    }
   ],
   "model-i-o": [
    {
     "slug": "metalkit",
-    "score": 0.942
+    "score": 0.938
+   },
+   {
+    "slug": "metal",
+    "score": 0.934
+   },
+   {
+    "slug": "spatial",
+    "score": 0.933
    },
    {
     "slug": "glkit",
     "score": 0.933
    },
    {
-    "slug": "metal",
-    "score": 0.932
-   },
-   {
-    "slug": "spatial",
-    "score": 0.928
-   },
-   {
-    "slug": "core-graphics",
-    "score": 0.926
+    "slug": "scenekit",
+    "score": 0.931
    }
   ],
   "pdfkit": [
    {
     "slug": "quartz",
-    "score": 0.916
+    "score": 0.917
    },
    {
     "slug": "application-services",
-    "score": 0.91
+    "score": 0.909
    },
    {
     "slug": "paperkit",
-    "score": 0.905
+    "score": 0.902
    },
    {
     "slug": "appkit-graphics-printing",
@@ -2974,45 +2974,45 @@
   "pencilkit": [
    {
     "slug": "paperkit",
-    "score": 0.937
+    "score": 0.933
    },
    {
     "slug": "core-graphics",
-    "score": 0.913
+    "score": 0.916
    },
    {
     "slug": "application-services",
-    "score": 0.911
+    "score": 0.913
    },
    {
     "slug": "inputmethodkit",
-    "score": 0.898
+    "score": 0.905
    },
    {
     "slug": "core-text",
-    "score": 0.897
+    "score": 0.9
    }
   ],
   "quartz": [
    {
     "slug": "quick-look",
-    "score": 0.943
+    "score": 0.944
    },
    {
     "slug": "quicklook-ui",
-    "score": 0.926
+    "score": 0.928
    },
    {
     "slug": "application-services",
-    "score": 0.924
+    "score": 0.925
    },
    {
     "slug": "quick-look-thumbnailing",
-    "score": 0.923
+    "score": 0.925
    },
    {
     "slug": "core-graphics",
-    "score": 0.92
+    "score": 0.922
    }
   ],
   "realitykit": [
@@ -3022,37 +3022,37 @@
    },
    {
     "slug": "spritekit",
-    "score": 0.918
+    "score": 0.919
    },
    {
     "slug": "gameplaykit",
-    "score": 0.905
-   },
-   {
-    "slug": "spatial",
-    "score": 0.903
+    "score": 0.904
    },
    {
     "slug": "glkit",
     "score": 0.902
+   },
+   {
+    "slug": "spatial",
+    "score": 0.901
    }
   ],
   "replaykit": [
+   {
+    "slug": "screencapturekit",
+    "score": 0.936
+   },
    {
     "slug": "avkit",
     "score": 0.932
    },
    {
-    "slug": "screencapturekit",
-    "score": 0.932
+    "slug": "avfoundation-capture-audio",
+    "score": 0.917
    },
    {
     "slug": "coreaudiokit",
     "score": 0.915
-   },
-   {
-    "slug": "avfoundation-capture-audio",
-    "score": 0.914
    },
    {
     "slug": "avfaudio",
@@ -3062,67 +3062,67 @@
   "scenekit": [
    {
     "slug": "spritekit",
-    "score": 0.951
+    "score": 0.953
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.931
    },
    {
     "slug": "glkit",
-    "score": 0.927
+    "score": 0.928
    },
    {
     "slug": "realitykit",
     "score": 0.925
    },
    {
-    "slug": "model-i-o",
-    "score": 0.923
-   },
-   {
     "slug": "spatial",
-    "score": 0.916
+    "score": 0.92
    }
   ],
   "spatial": [
    {
     "slug": "model-i-o",
-    "score": 0.928
-   },
-   {
-    "slug": "core-graphics",
-    "score": 0.917
+    "score": 0.933
    },
    {
     "slug": "scenekit",
+    "score": 0.92
+   },
+   {
+    "slug": "core-graphics",
     "score": 0.916
    },
    {
     "slug": "spritekit",
-    "score": 0.909
+    "score": 0.911
    },
    {
-    "slug": "glkit",
-    "score": 0.908
+    "slug": "application-services",
+    "score": 0.907
    }
   ],
   "spritekit": [
    {
     "slug": "scenekit",
-    "score": 0.951
+    "score": 0.953
    },
    {
     "slug": "glkit",
-    "score": 0.934
+    "score": 0.938
    },
    {
     "slug": "gameplaykit",
-    "score": 0.926
+    "score": 0.932
    },
    {
     "slug": "realitykit",
-    "score": 0.918
+    "score": 0.919
    },
    {
-    "slug": "metalkit",
-    "score": 0.914
+    "slug": "model-i-o",
+    "score": 0.917
    }
   ],
   "audio-toolbox": [
@@ -3132,19 +3132,19 @@
    },
    {
     "slug": "core-audio",
-    "score": 0.954
+    "score": 0.957
    },
    {
     "slug": "avfaudio",
-    "score": 0.95
+    "score": 0.951
    },
    {
     "slug": "coreaudiokit",
     "score": 0.948
    },
    {
-    "slug": "core-audio-types",
-    "score": 0.942
+    "slug": "phase",
+    "score": 0.941
    }
   ],
   "audio-unit": [
@@ -3158,15 +3158,15 @@
    },
    {
     "slug": "core-audio",
-    "score": 0.936
+    "score": 0.937
    },
    {
     "slug": "avfaudio",
-    "score": 0.934
+    "score": 0.933
    },
    {
-    "slug": "music-understanding",
-    "score": 0.925
+    "slug": "phase",
+    "score": 0.928
    }
   ],
   "avfaudio": [
@@ -3176,18 +3176,18 @@
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.95
+    "score": 0.951
    },
    {
     "slug": "avkit",
-    "score": 0.949
+    "score": 0.947
    },
    {
     "slug": "core-audio",
-    "score": 0.946
+    "score": 0.947
    },
    {
-    "slug": "coreaudiokit",
+    "slug": "avfoundation-playback-editing",
     "score": 0.943
    }
   ],
@@ -3198,51 +3198,51 @@
    },
    {
     "slug": "avfoundation-playback-editing",
-    "score": 0.946
+    "score": 0.945
    },
    {
     "slug": "avkit",
-    "score": 0.944
+    "score": 0.939
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.933
+    "score": 0.937
    },
    {
     "slug": "core-audio",
-    "score": 0.93
+    "score": 0.932
    }
   ],
   "avfoundation-playback-editing": [
    {
     "slug": "avkit",
-    "score": 0.946
+    "score": 0.947
    },
    {
     "slug": "avfoundation-capture-audio",
-    "score": 0.946
-   },
-   {
-    "slug": "media-toolbox",
-    "score": 0.942
+    "score": 0.945
    },
    {
     "slug": "avfaudio",
-    "score": 0.942
+    "score": 0.943
+   },
+   {
+    "slug": "media-toolbox",
+    "score": 0.941
    },
    {
     "slug": "media-player",
-    "score": 0.929
+    "score": 0.931
    }
   ],
   "avkit": [
    {
     "slug": "avfaudio",
-    "score": 0.949
+    "score": 0.947
    },
    {
     "slug": "avfoundation-playback-editing",
-    "score": 0.946
+    "score": 0.947
    },
    {
     "slug": "coreaudiokit",
@@ -3250,7 +3250,7 @@
    },
    {
     "slug": "avfoundation-capture-audio",
-    "score": 0.944
+    "score": 0.939
    },
    {
     "slug": "replaykit",
@@ -3260,7 +3260,7 @@
   "avrouting": [
    {
     "slug": "avfaudio",
-    "score": 0.924
+    "score": 0.925
    },
    {
     "slug": "coreaudiokit",
@@ -3271,66 +3271,66 @@
     "score": 0.918
    },
    {
-    "slug": "network-extension",
-    "score": 0.91
+    "slug": "audio-toolbox",
+    "score": 0.911
    },
    {
-    "slug": "audio-toolbox",
+    "slug": "network-extension",
     "score": 0.909
    }
   ],
   "cinematic": [
    {
     "slug": "core-image",
-    "score": 0.899
-   },
-   {
-    "slug": "video-toolbox",
-    "score": 0.896
+    "score": 0.897
    },
    {
     "slug": "immersive-media-support",
     "score": 0.895
    },
    {
-    "slug": "scenekit",
-    "score": 0.888
+    "slug": "video-toolbox",
+    "score": 0.894
+   },
+   {
+    "slug": "media-intelligence",
+    "score": 0.887
    },
    {
     "slug": "metal",
-    "score": 0.888
+    "score": 0.886
    }
   ],
   "core-audio": [
+   {
+    "slug": "audio-toolbox",
+    "score": 0.957
+   },
    {
     "slug": "coreaudiokit",
     "score": 0.956
    },
    {
-    "slug": "audio-toolbox",
-    "score": 0.954
-   },
-   {
     "slug": "core-audio-types",
-    "score": 0.951
+    "score": 0.947
    },
    {
     "slug": "avfaudio",
-    "score": 0.946
+    "score": 0.947
    },
    {
     "slug": "audio-unit",
-    "score": 0.936
+    "score": 0.937
    }
   ],
   "core-audio-types": [
    {
     "slug": "core-audio",
-    "score": 0.951
+    "score": 0.947
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.942
+    "score": 0.941
    },
    {
     "slug": "media-toolbox",
@@ -3338,7 +3338,7 @@
    },
    {
     "slug": "core-media",
-    "score": 0.934
+    "score": 0.935
    },
    {
     "slug": "coreaudiokit",
@@ -3348,36 +3348,36 @@
   "core-media": [
    {
     "slug": "core-media-i-o",
-    "score": 0.938
+    "score": 0.939
    },
    {
     "slug": "core-audio-types",
-    "score": 0.934
+    "score": 0.935
    },
    {
     "slug": "avfoundation-playback-editing",
-    "score": 0.925
-   },
-   {
-    "slug": "media-toolbox",
-    "score": 0.925
+    "score": 0.928
    },
    {
     "slug": "core-video",
-    "score": 0.924
+    "score": 0.927
+   },
+   {
+    "slug": "media-toolbox",
+    "score": 0.926
    }
   ],
   "core-media-i-o": [
    {
     "slug": "core-media",
-    "score": 0.938
-   },
-   {
-    "slug": "imagecapturecore",
-    "score": 0.93
+    "score": 0.939
    },
    {
     "slug": "iokit",
+    "score": 0.93
+   },
+   {
+    "slug": "imagecapturecore",
     "score": 0.93
    },
    {
@@ -3391,6 +3391,10 @@
   ],
   "core-midi": [
    {
+    "slug": "core-media",
+    "score": 0.909
+   },
+   {
     "slug": "coreaudiokit",
     "score": 0.906
    },
@@ -3403,34 +3407,30 @@
     "score": 0.905
    },
    {
-    "slug": "core-media",
-    "score": 0.904
-   },
-   {
     "slug": "avfaudio",
-    "score": 0.898
+    "score": 0.897
    }
   ],
   "core-video": [
    {
     "slug": "video-toolbox",
-    "score": 0.936
-   },
-   {
-    "slug": "metal",
-    "score": 0.935
+    "score": 0.94
    },
    {
     "slug": "core-graphics",
-    "score": 0.93
+    "score": 0.935
+   },
+   {
+    "slug": "metal",
+    "score": 0.933
    },
    {
     "slug": "core-image",
-    "score": 0.925
+    "score": 0.93
    },
    {
     "slug": "core-media",
-    "score": 0.924
+    "score": 0.927
    }
   ],
   "coreaudiokit": [
@@ -3473,7 +3473,7 @@
     "score": 0.894
    },
    {
-    "slug": "core-services",
+    "slug": "accessory-access",
     "score": 0.889
    }
   ],
@@ -3488,7 +3488,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.889
+    "score": 0.888
    },
    {
     "slug": "collaboration",
@@ -3506,19 +3506,19 @@
    },
    {
     "slug": "core-services",
+    "score": 0.927
+   },
+   {
+    "slug": "screencapturekit",
     "score": 0.924
    },
    {
     "slug": "application-services",
+    "score": 0.922
+   },
+   {
+    "slug": "image-i-o",
     "score": 0.921
-   },
-   {
-    "slug": "visionkit",
-    "score": 0.917
-   },
-   {
-    "slug": "avfoundation-capture-audio",
-    "score": 0.913
    }
   ],
   "immersive-media-support": [
@@ -3532,11 +3532,11 @@
    },
    {
     "slug": "video-toolbox",
-    "score": 0.901
+    "score": 0.898
    },
    {
     "slug": "core-media",
-    "score": 0.898
+    "score": 0.896
    },
    {
     "slug": "mediaextension",
@@ -3554,21 +3554,21 @@
    },
    {
     "slug": "media-player",
-    "score": 0.902
+    "score": 0.897
    },
    {
     "slug": "media-intents",
     "score": 0.894
    },
    {
-    "slug": "appkit-app-structure",
-    "score": 0.89
+    "slug": "core-media",
+    "score": 0.891
    }
   ],
   "media-accessibility": [
    {
     "slug": "accessibility",
-    "score": 0.938
+    "score": 0.94
    },
    {
     "slug": "application-services",
@@ -3576,21 +3576,25 @@
    },
    {
     "slug": "media-player",
-    "score": 0.916
+    "score": 0.919
    },
    {
     "slug": "avkit",
     "score": 0.914
    },
    {
-    "slug": "coreaudiokit",
-    "score": 0.906
+    "slug": "avfoundation-playback-editing",
+    "score": 0.908
    }
   ],
   "media-intelligence": [
    {
     "slug": "core-ai",
-    "score": 0.92
+    "score": 0.923
+   },
+   {
+    "slug": "core-ml",
+    "score": 0.907
    },
    {
     "slug": "sensitive-content-analysis",
@@ -3599,10 +3603,6 @@
    {
     "slug": "visual-intelligence",
     "score": 0.907
-   },
-   {
-    "slug": "core-ml",
-    "score": 0.906
    },
    {
     "slug": "mediaextension",
@@ -3616,7 +3616,7 @@
    },
    {
     "slug": "media-player",
-    "score": 0.927
+    "score": 0.925
    },
    {
     "slug": "media-intents",
@@ -3624,7 +3624,7 @@
    },
    {
     "slug": "core-media",
-    "score": 0.91
+    "score": 0.913
    },
    {
     "slug": "media-toolbox",
@@ -3634,10 +3634,14 @@
   "media-player": [
    {
     "slug": "now-playing",
-    "score": 0.954
+    "score": 0.957
    },
    {
     "slug": "media-intents",
+    "score": 0.932
+   },
+   {
+    "slug": "avfoundation-playback-editing",
     "score": 0.931
    },
    {
@@ -3646,11 +3650,7 @@
    },
    {
     "slug": "media-toolbox",
-    "score": 0.929
-   },
-   {
-    "slug": "avfoundation-playback-editing",
-    "score": 0.929
+    "score": 0.928
    }
   ],
   "media-toolbox": [
@@ -3660,15 +3660,15 @@
    },
    {
     "slug": "video-toolbox",
-    "score": 0.942
+    "score": 0.947
    },
    {
     "slug": "avfoundation-playback-editing",
-    "score": 0.942
+    "score": 0.941
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.938
+    "score": 0.937
    },
    {
     "slug": "core-audio-types",
@@ -3689,12 +3689,12 @@
     "score": 0.922
    },
    {
-    "slug": "avfoundation-playback-editing",
-    "score": 0.916
+    "slug": "core-media",
+    "score": 0.919
    },
    {
-    "slug": "core-media",
-    "score": 0.915
+    "slug": "video-toolbox",
+    "score": 0.918
    }
   ],
   "musickit": [
@@ -3707,82 +3707,82 @@
     "score": 0.903
    },
    {
-    "slug": "media-player",
-    "score": 0.903
-   },
-   {
     "slug": "storekit",
     "score": 0.902
    },
    {
     "slug": "media-library",
     "score": 0.9
+   },
+   {
+    "slug": "shazamkit",
+    "score": 0.899
    }
   ],
   "now-playing": [
    {
     "slug": "media-player",
-    "score": 0.954
+    "score": 0.957
    },
    {
     "slug": "media-intents",
-    "score": 0.93
+    "score": 0.929
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.922
+    "score": 0.92
    },
    {
-    "slug": "coreaudiokit",
+    "slug": "phase",
     "score": 0.916
    },
    {
-    "slug": "avfaudio",
-    "score": 0.916
+    "slug": "core-audio",
+    "score": 0.914
    }
   ],
   "phase": [
    {
     "slug": "audio-toolbox",
-    "score": 0.931
-   },
-   {
-    "slug": "audio-unit",
-    "score": 0.921
+    "score": 0.941
    },
    {
     "slug": "core-audio",
-    "score": 0.92
+    "score": 0.932
+   },
+   {
+    "slug": "audio-unit",
+    "score": 0.928
    },
    {
     "slug": "music-understanding",
-    "score": 0.917
+    "score": 0.928
    },
    {
     "slug": "avfaudio",
-    "score": 0.916
+    "score": 0.922
    }
   ],
   "photokit": [
    {
     "slug": "quartz",
+    "score": 0.915
+   },
+   {
+    "slug": "visionkit",
     "score": 0.913
    },
    {
     "slug": "avkit",
-    "score": 0.912
-   },
-   {
-    "slug": "visionkit",
     "score": 0.911
    },
    {
-    "slug": "media-library",
-    "score": 0.907
+    "slug": "image-i-o",
+    "score": 0.908
    },
    {
-    "slug": "storekit",
-    "score": 0.904
+    "slug": "extensionkit",
+    "score": 0.907
    }
   ],
   "quick-look-thumbnailing": [
@@ -3796,21 +3796,21 @@
    },
    {
     "slug": "quartz",
-    "score": 0.923
+    "score": 0.925
    },
    {
     "slug": "image-i-o",
-    "score": 0.893
+    "score": 0.898
    },
    {
-    "slug": "application-services",
-    "score": 0.883
+    "slug": "photokit",
+    "score": 0.884
    }
   ],
   "screen-saver": [
    {
     "slug": "screen-time",
-    "score": 0.919
+    "score": 0.923
    },
    {
     "slug": "core-animation",
@@ -3818,37 +3818,37 @@
    },
    {
     "slug": "application-services",
-    "score": 0.908
+    "score": 0.907
+   },
+   {
+    "slug": "screencapturekit",
+    "score": 0.906
    },
    {
     "slug": "core-services",
-    "score": 0.902
-   },
-   {
-    "slug": "core-graphics",
     "score": 0.902
    }
   ],
   "screencapturekit": [
    {
     "slug": "replaykit",
-    "score": 0.932
-   },
-   {
-    "slug": "avkit",
-    "score": 0.92
+    "score": 0.936
    },
    {
     "slug": "imagecapturecore",
-    "score": 0.913
+    "score": 0.924
+   },
+   {
+    "slug": "avkit",
+    "score": 0.918
    },
    {
     "slug": "application-services",
-    "score": 0.91
+    "score": 0.916
    },
    {
-    "slug": "scenekit",
-    "score": 0.907
+    "slug": "avfoundation-capture-audio",
+    "score": 0.913
    }
   ],
   "shazamkit": [
@@ -3865,12 +3865,12 @@
     "score": 0.875
    },
    {
-    "slug": "audio-toolbox",
-    "score": 0.871
-   },
-   {
     "slug": "avkit",
     "score": 0.87
+   },
+   {
+    "slug": "audio-toolbox",
+    "score": 0.867
    }
   ],
   "sound-analysis": [
@@ -3880,19 +3880,19 @@
    },
    {
     "slug": "speech",
-    "score": 0.929
+    "score": 0.933
    },
    {
     "slug": "audio-toolbox",
-    "score": 0.927
+    "score": 0.93
+   },
+   {
+    "slug": "phase",
+    "score": 0.916
    },
    {
     "slug": "core-audio",
-    "score": 0.91
-   },
-   {
-    "slug": "avfaudio",
-    "score": 0.906
+    "score": 0.915
    }
   ],
   "video-subscriber-account": [
@@ -3909,56 +3909,56 @@
     "score": 0.872
    },
    {
-    "slug": "video-toolbox",
-    "score": 0.865
+    "slug": "accounts",
+    "score": 0.864
    },
    {
-    "slug": "accounts",
+    "slug": "avkit",
     "score": 0.864
    }
   ],
   "video-toolbox": [
    {
     "slug": "media-toolbox",
-    "score": 0.942
+    "score": 0.947
    },
    {
     "slug": "core-video",
-    "score": 0.936
+    "score": 0.94
    },
    {
     "slug": "avfoundation-playback-editing",
-    "score": 0.914
+    "score": 0.92
    },
    {
     "slug": "mediaextension",
-    "score": 0.909
+    "score": 0.918
    },
    {
-    "slug": "image-i-o",
-    "score": 0.906
+    "slug": "accelerate",
+    "score": 0.916
    }
   ],
   "accelerate": [
    {
     "slug": "core-image",
-    "score": 0.923
-   },
-   {
-    "slug": "application-services",
-    "score": 0.912
-   },
-   {
-    "slug": "core-ai",
-    "score": 0.912
-   },
-   {
-    "slug": "model-i-o",
-    "score": 0.911
+    "score": 0.924
    },
    {
     "slug": "video-toolbox",
-    "score": 0.906
+    "score": 0.916
+   },
+   {
+    "slug": "core-ai",
+    "score": 0.913
+   },
+   {
+    "slug": "application-services",
+    "score": 0.913
+   },
+   {
+    "slug": "model-i-o",
+    "score": 0.909
    }
   ],
   "accessory-access": [
@@ -3968,19 +3968,19 @@
    },
    {
     "slug": "iousbhost",
-    "score": 0.921
+    "score": 0.923
    },
    {
     "slug": "iokit",
-    "score": 0.901
+    "score": 0.903
    },
    {
     "slug": "core-hid",
     "score": 0.9
    },
    {
-    "slug": "hiddriverkit",
-    "score": 0.894
+    "slug": "system",
+    "score": 0.895
    }
   ],
   "app-tracking-transparency": [
@@ -3993,60 +3993,60 @@
     "score": 0.886
    },
    {
-    "slug": "permissionkit",
-    "score": 0.88
-   },
-   {
     "slug": "managed-app-distribution",
     "score": 0.879
    },
    {
     "slug": "security-foundation",
     "score": 0.877
+   },
+   {
+    "slug": "storekit",
+    "score": 0.875
    }
   ],
   "apple-archive": [
    {
     "slug": "compression",
-    "score": 0.905
+    "score": 0.909
    },
    {
     "slug": "appkit-app-structure",
-    "score": 0.891
+    "score": 0.895
    },
    {
     "slug": "foundation-files-persistence",
-    "score": 0.889
+    "score": 0.892
    },
    {
     "slug": "apple-cryptokit",
-    "score": 0.884
+    "score": 0.888
    },
    {
     "slug": "bundle-resources",
-    "score": 0.883
+    "score": 0.886
    }
   ],
   "apple-cryptokit": [
    {
     "slug": "security",
-    "score": 0.931
+    "score": 0.934
    },
    {
     "slug": "cryptotokenkit",
-    "score": 0.919
+    "score": 0.922
    },
    {
     "slug": "authentication-services",
     "score": 0.906
    },
    {
-    "slug": "gss",
-    "score": 0.895
+    "slug": "appkit-app-structure",
+    "score": 0.898
    },
    {
-    "slug": "appkit-app-structure",
-    "score": 0.894
+    "slug": "security-interface",
+    "score": 0.898
    }
   ],
   "authentication-services": [
@@ -4064,7 +4064,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.926
+    "score": 0.925
    },
    {
     "slug": "service-management",
@@ -4074,14 +4074,14 @@
   "cfnetwork": [
    {
     "slug": "network",
-    "score": 0.929
-   },
-   {
-    "slug": "core-foundation",
-    "score": 0.914
+    "score": 0.93
    },
    {
     "slug": "system-configuration",
+    "score": 0.914
+   },
+   {
+    "slug": "core-foundation",
     "score": 0.914
    },
    {
@@ -4090,7 +4090,7 @@
    },
    {
     "slug": "network-extension",
-    "score": 0.912
+    "score": 0.909
    }
   ],
   "collaboration": [
@@ -4104,7 +4104,7 @@
    },
    {
     "slug": "security",
-    "score": 0.898
+    "score": 0.897
    },
    {
     "slug": "core-services",
@@ -4118,23 +4118,23 @@
   "compression": [
    {
     "slug": "apple-archive",
-    "score": 0.905
-   },
-   {
-    "slug": "accelerate",
-    "score": 0.882
-   },
-   {
-    "slug": "image-i-o",
-    "score": 0.881
+    "score": 0.909
    },
    {
     "slug": "video-toolbox",
-    "score": 0.879
+    "score": 0.891
+   },
+   {
+    "slug": "accelerate",
+    "score": 0.89
+   },
+   {
+    "slug": "image-i-o",
+    "score": 0.888
    },
    {
     "slug": "core-foundation",
-    "score": 0.871
+    "score": 0.88
    }
   ],
   "core-bluetooth": [
@@ -4152,7 +4152,7 @@
    },
    {
     "slug": "coreaudiokit",
-    "score": 0.914
+    "score": 0.916
    },
    {
     "slug": "iokit",
@@ -4162,7 +4162,7 @@
   "core-hid": [
    {
     "slug": "hiddriverkit",
-    "score": 0.96
+    "score": 0.961
    },
    {
     "slug": "iokit",
@@ -4170,50 +4170,46 @@
    },
    {
     "slug": "iousbhost",
-    "score": 0.919
+    "score": 0.921
    },
    {
     "slug": "iobluetooth",
-    "score": 0.912
+    "score": 0.911
    },
    {
-    "slug": "game-controller",
-    "score": 0.908
+    "slug": "external-accessory",
+    "score": 0.905
    }
   ],
   "core-services": [
    {
     "slug": "application-services",
-    "score": 0.961
+    "score": 0.962
    },
    {
     "slug": "security",
-    "score": 0.943
+    "score": 0.944
    },
    {
     "slug": "foundation-files-persistence",
-    "score": 0.941
+    "score": 0.942
    },
    {
     "slug": "foundation-app-support",
-    "score": 0.939
+    "score": 0.938
    },
    {
-    "slug": "bundle-resources",
+    "slug": "core-foundation",
     "score": 0.937
    }
   ],
   "core-telephony": [
    {
     "slug": "system-configuration",
-    "score": 0.897
+    "score": 0.895
    },
    {
     "slug": "core-services",
-    "score": 0.886
-   },
-   {
-    "slug": "core-wlan",
     "score": 0.885
    },
    {
@@ -4221,40 +4217,44 @@
     "score": 0.884
    },
    {
-    "slug": "network-extension",
+    "slug": "core-wlan",
+    "score": 0.882
+   },
+   {
+    "slug": "core-bluetooth",
     "score": 0.881
    }
   ],
   "core-wlan": [
    {
     "slug": "system-configuration",
-    "score": 0.923
+    "score": 0.925
    },
    {
     "slug": "network",
-    "score": 0.915
+    "score": 0.917
    },
    {
     "slug": "network-extension",
-    "score": 0.914
+    "score": 0.913
    },
    {
     "slug": "core-services",
-    "score": 0.897
+    "score": 0.899
    },
    {
     "slug": "core-bluetooth",
-    "score": 0.896
+    "score": 0.897
    }
   ],
   "cryptotokenkit": [
    {
-    "slug": "security",
-    "score": 0.921
+    "slug": "apple-cryptokit",
+    "score": 0.922
    },
    {
-    "slug": "apple-cryptokit",
-    "score": 0.919
+    "slug": "security",
+    "score": 0.922
    },
    {
     "slug": "security-interface",
@@ -4272,7 +4272,7 @@
   "darwin-notify": [
    {
     "slug": "user-notifications",
-    "score": 0.921
+    "score": 0.922
    },
    {
     "slug": "dispatch",
@@ -4288,7 +4288,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.895
+    "score": 0.897
    }
   ],
   "device-management": [
@@ -4302,15 +4302,15 @@
    },
    {
     "slug": "service-management",
-    "score": 0.898
+    "score": 0.897
    },
    {
     "slug": "devicediscoveryextension",
     "score": 0.895
    },
    {
-    "slug": "system-configuration",
-    "score": 0.893
+    "slug": "external-accessory",
+    "score": 0.89
    }
   ],
   "disk-arbitration": [
@@ -4320,25 +4320,25 @@
    },
    {
     "slug": "core-services",
-    "score": 0.909
+    "score": 0.915
    },
    {
-    "slug": "diskimagekit",
+    "slug": "endpoint-security",
+    "score": 0.91
+   },
+   {
+    "slug": "virtualization",
     "score": 0.906
    },
    {
     "slug": "system",
-    "score": 0.903
-   },
-   {
-    "slug": "endpoint-security",
-    "score": 0.902
+    "score": 0.906
    }
   ],
   "diskimagekit": [
    {
     "slug": "image-i-o",
-    "score": 0.911
+    "score": 0.915
    },
    {
     "slug": "disk-arbitration",
@@ -4349,8 +4349,8 @@
     "score": 0.901
    },
    {
-    "slug": "virtualization",
-    "score": 0.892
+    "slug": "photokit",
+    "score": 0.894
    },
    {
     "slug": "imagecapturecore",
@@ -4360,7 +4360,7 @@
   "dispatch": [
    {
     "slug": "swift",
-    "score": 0.91
+    "score": 0.912
    },
    {
     "slug": "darwin-notify",
@@ -4382,18 +4382,18 @@
   "dnssd": [
    {
     "slug": "network",
-    "score": 0.916
+    "score": 0.919
    },
    {
     "slug": "system-configuration",
-    "score": 0.909
-   },
-   {
-    "slug": "network-extension",
-    "score": 0.907
+    "score": 0.913
    },
    {
     "slug": "core-services",
+    "score": 0.907
+   },
+   {
+    "slug": "network-extension",
     "score": 0.906
    },
    {
@@ -4416,7 +4416,7 @@
    },
    {
     "slug": "hiddriverkit",
-    "score": 0.917
+    "score": 0.915
    },
    {
     "slug": "fskit",
@@ -4426,51 +4426,55 @@
   "endpoint-security": [
    {
     "slug": "core-services",
-    "score": 0.932
+    "score": 0.934
    },
    {
     "slug": "security",
-    "score": 0.924
+    "score": 0.928
    },
    {
     "slug": "xpc",
     "score": 0.918
    },
    {
-    "slug": "fskit",
-    "score": 0.913
+    "slug": "application-services",
+    "score": 0.914
    },
    {
-    "slug": "application-services",
+    "slug": "fskit",
     "score": 0.913
    }
   ],
   "exception-handling": [
    {
     "slug": "crashreportextension",
-    "score": 0.908
+    "score": 0.917
    },
    {
     "slug": "os",
-    "score": 0.902
-   },
-   {
-    "slug": "safetykit",
-    "score": 0.899
-   },
-   {
-    "slug": "dispatch",
-    "score": 0.892
+    "score": 0.903
    },
    {
     "slug": "endpoint-security",
-    "score": 0.89
+    "score": 0.9
+   },
+   {
+    "slug": "metrickit",
+    "score": 0.896
+   },
+   {
+    "slug": "core-services",
+    "score": 0.894
    }
   ],
   "execution-policy": [
    {
+    "slug": "exception-handling",
+    "score": 0.889
+   },
+   {
     "slug": "security",
-    "score": 0.886
+    "score": 0.888
    },
    {
     "slug": "endpoint-security",
@@ -4478,11 +4482,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.88
-   },
-   {
-    "slug": "exception-handling",
-    "score": 0.875
+    "score": 0.879
    },
    {
     "slug": "application-services",
@@ -4496,15 +4496,15 @@
    },
    {
     "slug": "iobluetooth",
-    "score": 0.922
+    "score": 0.923
+   },
+   {
+    "slug": "iokit",
+    "score": 0.92
    },
    {
     "slug": "core-bluetooth",
     "score": 0.92
-   },
-   {
-    "slug": "iokit",
-    "score": 0.919
    },
    {
     "slug": "application-services",
@@ -4522,7 +4522,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.912
+    "score": 0.914
    },
    {
     "slug": "file-provider-ui",
@@ -4539,10 +4539,6 @@
     "score": 0.902
    },
    {
-    "slug": "game-controller",
-    "score": 0.901
-   },
-   {
     "slug": "accessibility",
     "score": 0.9
    },
@@ -4551,21 +4547,25 @@
     "score": 0.896
    },
    {
-    "slug": "application-services",
+    "slug": "game-controller",
     "score": 0.894
+   },
+   {
+    "slug": "application-services",
+    "score": 0.893
    }
   ],
   "fskit": [
    {
     "slug": "system",
-    "score": 0.931
-   },
-   {
-    "slug": "file-provider",
-    "score": 0.922
+    "score": 0.935
    },
    {
     "slug": "core-services",
+    "score": 0.922
+   },
+   {
+    "slug": "file-provider",
     "score": 0.922
    },
    {
@@ -4580,41 +4580,41 @@
   "gss": [
    {
     "slug": "security",
-    "score": 0.922
+    "score": 0.926
    },
    {
     "slug": "core-services",
-    "score": 0.912
+    "score": 0.917
    },
    {
     "slug": "authentication-services",
-    "score": 0.91
+    "score": 0.909
    },
    {
     "slug": "application-services",
-    "score": 0.897
+    "score": 0.902
    },
    {
-    "slug": "apple-cryptokit",
-    "score": 0.895
+    "slug": "endpoint-security",
+    "score": 0.9
    }
   ],
   "hiddriverkit": [
    {
     "slug": "core-hid",
-    "score": 0.96
+    "score": 0.961
    },
    {
     "slug": "iokit",
-    "score": 0.943
+    "score": 0.944
    },
    {
     "slug": "iousbhost",
-    "score": 0.917
+    "score": 0.919
    },
    {
     "slug": "driverkit",
-    "score": 0.917
+    "score": 0.915
    },
    {
     "slug": "iobluetooth",
@@ -4624,7 +4624,7 @@
   "hypervisor": [
    {
     "slug": "virtualization",
-    "score": 0.952
+    "score": 0.943
    },
    {
     "slug": "vmnet",
@@ -4646,23 +4646,23 @@
   "inputmethodkit": [
    {
     "slug": "application-services",
-    "score": 0.912
-   },
-   {
-    "slug": "appkit-user-interactions",
-    "score": 0.91
-   },
-   {
-    "slug": "hiddriverkit",
-    "score": 0.908
+    "score": 0.923
    },
    {
     "slug": "accessibility",
-    "score": 0.907
+    "score": 0.915
+   },
+   {
+    "slug": "hiddriverkit",
+    "score": 0.912
    },
    {
     "slug": "iokit",
-    "score": 0.903
+    "score": 0.908
+   },
+   {
+    "slug": "appkit-user-interactions",
+    "score": 0.908
    }
   ],
   "iobluetooth": [
@@ -4672,7 +4672,7 @@
    },
    {
     "slug": "iobluetooth-ui",
-    "score": 0.956
+    "score": 0.954
    },
    {
     "slug": "iokit",
@@ -4680,17 +4680,17 @@
    },
    {
     "slug": "external-accessory",
-    "score": 0.922
+    "score": 0.923
    },
    {
     "slug": "iousbhost",
-    "score": 0.917
+    "score": 0.92
    }
   ],
   "iobluetooth-ui": [
    {
     "slug": "iobluetooth",
-    "score": 0.956
+    "score": 0.954
    },
    {
     "slug": "core-bluetooth",
@@ -4701,11 +4701,11 @@
     "score": 0.91
    },
    {
-    "slug": "application-services",
-    "score": 0.907
+    "slug": "coreaudiokit",
+    "score": 0.906
    },
    {
-    "slug": "coreaudiokit",
+    "slug": "external-accessory",
     "score": 0.906
    }
   ],
@@ -4716,7 +4716,7 @@
    },
    {
     "slug": "hiddriverkit",
-    "score": 0.943
+    "score": 0.944
    },
    {
     "slug": "iobluetooth",
@@ -4724,61 +4724,61 @@
    },
    {
     "slug": "iousbhost",
-    "score": 0.933
+    "score": 0.935
    },
    {
     "slug": "kernel",
-    "score": 0.933
+    "score": 0.932
    }
   ],
   "iosurface": [
    {
     "slug": "core-video",
-    "score": 0.923
+    "score": 0.924
    },
    {
     "slug": "model-i-o",
     "score": 0.917
    },
    {
-    "slug": "iokit",
-    "score": 0.909
-   },
-   {
     "slug": "metal",
-    "score": 0.907
+    "score": 0.912
    },
    {
     "slug": "core-graphics",
-    "score": 0.904
+    "score": 0.912
+   },
+   {
+    "slug": "iokit",
+    "score": 0.911
    }
   ],
   "iousbhost": [
    {
     "slug": "iokit",
-    "score": 0.933
+    "score": 0.935
    },
    {
     "slug": "accessory-access",
-    "score": 0.921
+    "score": 0.923
    },
    {
     "slug": "core-hid",
-    "score": 0.919
+    "score": 0.921
    },
    {
-    "slug": "core-media-i-o",
-    "score": 0.918
+    "slug": "iobluetooth",
+    "score": 0.92
    },
    {
     "slug": "hiddriverkit",
-    "score": 0.917
+    "score": 0.919
    }
   ],
   "kernel": [
    {
     "slug": "iokit",
-    "score": 0.933
+    "score": 0.932
    },
    {
     "slug": "driverkit",
@@ -4786,14 +4786,14 @@
    },
    {
     "slug": "core-services",
-    "score": 0.909
+    "score": 0.908
    },
    {
     "slug": "core-media-i-o",
     "score": 0.904
    },
    {
-    "slug": "iobluetooth",
+    "slug": "system",
     "score": 0.901
    }
   ],
@@ -4812,21 +4812,21 @@
    },
    {
     "slug": "core-ai",
-    "score": 0.853
+    "score": 0.851
    },
    {
-    "slug": "foundation-models",
-    "score": 0.848
+    "slug": "core-services",
+    "score": 0.844
    }
   ],
   "lightweightcoderequirements": [
    {
     "slug": "security",
-    "score": 0.924
+    "score": 0.928
    },
    {
     "slug": "core-services",
-    "score": 0.911
+    "score": 0.913
    },
    {
     "slug": "local-authentication",
@@ -4837,8 +4837,8 @@
     "score": 0.905
    },
    {
-    "slug": "bundle-resources",
-    "score": 0.896
+    "slug": "application-services",
+    "score": 0.898
    }
   ],
   "local-authentication": [
@@ -4848,7 +4848,7 @@
    },
    {
     "slug": "security",
-    "score": 0.94
+    "score": 0.941
    },
    {
     "slug": "authentication-services",
@@ -4878,11 +4878,11 @@
    },
    {
     "slug": "security",
-    "score": 0.897
+    "score": 0.901
    },
    {
-    "slug": "accounts",
-    "score": 0.885
+    "slug": "extensionkit",
+    "score": 0.888
    }
   ],
   "metrickit": [
@@ -4892,15 +4892,15 @@
    },
    {
     "slug": "crashreportextension",
-    "score": 0.921
-   },
-   {
-    "slug": "os",
-    "score": 0.913
+    "score": 0.919
    },
    {
     "slug": "iokit",
-    "score": 0.913
+    "score": 0.912
+   },
+   {
+    "slug": "widgetkit",
+    "score": 0.912
    },
    {
     "slug": "core-services",
@@ -4910,11 +4910,11 @@
   "ml-compute": [
    {
     "slug": "core-ml",
-    "score": 0.922
+    "score": 0.915
    },
    {
     "slug": "core-ai",
-    "score": 0.903
+    "score": 0.901
    },
    {
     "slug": "create-ml",
@@ -4936,7 +4936,7 @@
    },
    {
     "slug": "network",
-    "score": 0.895
+    "score": 0.894
    },
    {
     "slug": "multipeer-connectivity",
@@ -4947,52 +4947,52 @@
     "score": 0.881
    },
    {
-    "slug": "network-extension",
+    "slug": "spatial-preview",
     "score": 0.879
    }
   ],
   "network": [
    {
     "slug": "network-extension",
-    "score": 0.947
+    "score": 0.948
    },
    {
     "slug": "foundation-networking-lowlevel",
-    "score": 0.94
+    "score": 0.943
+   },
+   {
+    "slug": "system-configuration",
+    "score": 0.939
+   },
+   {
+    "slug": "multipeer-connectivity",
+    "score": 0.933
+   },
+   {
+    "slug": "cfnetwork",
+    "score": 0.93
+   }
+  ],
+  "network-extension": [
+   {
+    "slug": "network",
+    "score": 0.948
    },
    {
     "slug": "system-configuration",
     "score": 0.935
    },
    {
-    "slug": "multipeer-connectivity",
-    "score": 0.931
-   },
-   {
-    "slug": "cfnetwork",
-    "score": 0.929
-   }
-  ],
-  "network-extension": [
-   {
-    "slug": "network",
-    "score": 0.947
-   },
-   {
-    "slug": "system-configuration",
-    "score": 0.933
+    "slug": "extensionkit",
+    "score": 0.925
    },
    {
     "slug": "extensionfoundation",
-    "score": 0.924
-   },
-   {
-    "slug": "extensionkit",
-    "score": 0.922
+    "score": 0.925
    },
    {
     "slug": "core-wlan",
-    "score": 0.914
+    "score": 0.913
    }
   ],
   "open-directory": [
@@ -5002,7 +5002,7 @@
    },
    {
     "slug": "security",
-    "score": 0.906
+    "score": 0.907
    },
    {
     "slug": "accounts",
@@ -5050,7 +5050,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.912
+    "score": 0.913
    },
    {
     "slug": "endpoint-security",
@@ -5058,29 +5058,29 @@
    },
    {
     "slug": "metrickit",
-    "score": 0.906
+    "score": 0.902
    }
   ],
   "paravirtualized-graphics": [
    {
-    "slug": "virtualization",
-    "score": 0.899
-   },
-   {
     "slug": "hypervisor",
     "score": 0.894
+   },
+   {
+    "slug": "virtualization",
+    "score": 0.888
    },
    {
     "slug": "pcidriverkit",
     "score": 0.886
    },
    {
-    "slug": "iosurface",
-    "score": 0.869
+    "slug": "core-graphics",
+    "score": 0.866
    },
    {
-    "slug": "core-video",
-    "score": 0.868
+    "slug": "image-i-o",
+    "score": 0.864
    }
   ],
   "pcidriverkit": [
@@ -5090,25 +5090,25 @@
    },
    {
     "slug": "iokit",
-    "score": 0.91
+    "score": 0.909
    },
    {
     "slug": "kernel",
     "score": 0.894
    },
    {
-    "slug": "hiddriverkit",
-    "score": 0.887
-   },
-   {
     "slug": "paravirtualized-graphics",
     "score": 0.886
+   },
+   {
+    "slug": "hiddriverkit",
+    "score": 0.884
    }
   ],
   "security": [
    {
     "slug": "security-interface",
-    "score": 0.953
+    "score": 0.954
    },
    {
     "slug": "authentication-services",
@@ -5116,21 +5116,21 @@
    },
    {
     "slug": "core-services",
-    "score": 0.943
+    "score": 0.944
+   },
+   {
+    "slug": "local-authentication",
+    "score": 0.941
    },
    {
     "slug": "accounts",
     "score": 0.941
-   },
-   {
-    "slug": "local-authentication",
-    "score": 0.94
    }
   ],
   "security-foundation": [
    {
     "slug": "security",
-    "score": 0.926
+    "score": 0.925
    },
    {
     "slug": "security-interface",
@@ -5145,14 +5145,14 @@
     "score": 0.897
    },
    {
-    "slug": "permissionkit",
-    "score": 0.895
+    "slug": "accounts",
+    "score": 0.893
    }
   ],
   "security-interface": [
    {
     "slug": "security",
-    "score": 0.953
+    "score": 0.954
    },
    {
     "slug": "local-authentication",
@@ -5168,7 +5168,7 @@
    },
    {
     "slug": "core-services",
-    "score": 0.913
+    "score": 0.912
    }
   ],
   "service-management": [
@@ -5182,21 +5182,21 @@
    },
    {
     "slug": "security",
-    "score": 0.92
+    "score": 0.922
    },
    {
     "slug": "application-services",
-    "score": 0.912
+    "score": 0.913
    },
    {
     "slug": "scripting-bridge",
-    "score": 0.909
+    "score": 0.91
    }
   ],
   "system": [
    {
     "slug": "fskit",
-    "score": 0.931
+    "score": 0.935
    },
    {
     "slug": "os",
@@ -5204,37 +5204,37 @@
    },
    {
     "slug": "core-services",
-    "score": 0.917
-   },
-   {
-    "slug": "appkit-app-structure",
-    "score": 0.916
+    "score": 0.921
    },
    {
     "slug": "file-provider",
-    "score": 0.916
+    "score": 0.92
+   },
+   {
+    "slug": "appkit-app-structure",
+    "score": 0.919
    }
   ],
   "system-configuration": [
    {
     "slug": "network",
-    "score": 0.935
+    "score": 0.939
    },
    {
     "slug": "network-extension",
-    "score": 0.933
-   },
-   {
-    "slug": "core-wlan",
-    "score": 0.923
+    "score": 0.935
    },
    {
     "slug": "security",
-    "score": 0.922
+    "score": 0.926
+   },
+   {
+    "slug": "core-wlan",
+    "score": 0.925
    },
    {
     "slug": "core-services",
-    "score": 0.92
+    "score": 0.925
    }
   ],
   "system-extensions": [
@@ -5252,20 +5252,90 @@
    },
    {
     "slug": "system-configuration",
-    "score": 0.893
+    "score": 0.891
    },
    {
     "slug": "core-services",
-    "score": 0.889
+    "score": 0.888
    }
   ],
   "thread-network": [
    {
     "slug": "network",
-    "score": 0.901
+    "score": 0.9
+   },
+   {
+    "slug": "system-configuration",
+    "score": 0.888
+   },
+   {
+    "slug": "matter",
+    "score": 0.886
    },
    {
     "slug": "network-extension",
+    "score": 0.885
+   },
+   {
+    "slug": "core-wlan",
+    "score": 0.884
+   }
+  ],
+  "uniform-type-identifiers": [
+   {
+    "slug": "core-transferable",
+    "score": 0.899
+   },
+   {
+    "slug": "core-services",
+    "score": 0.896
+   },
+   {
+    "slug": "application-services",
+    "score": 0.894
+   },
+   {
+    "slug": "foundation-fundamentals",
+    "score": 0.892
+   },
+   {
+    "slug": "image-i-o",
+    "score": 0.892
+   }
+  ],
+  "virtualization": [
+   {
+    "slug": "hypervisor",
+    "score": 0.943
+   },
+   {
+    "slug": "iousbhost",
+    "score": 0.914
+   },
+   {
+    "slug": "application-services",
+    "score": 0.909
+   },
+   {
+    "slug": "system-configuration",
+    "score": 0.907
+   },
+   {
+    "slug": "disk-arbitration",
+    "score": 0.906
+   }
+  ],
+  "vmnet": [
+   {
+    "slug": "hypervisor",
+    "score": 0.911
+   },
+   {
+    "slug": "virtualization",
+    "score": 0.901
+   },
+   {
+    "slug": "network",
     "score": 0.89
    },
    {
@@ -5273,84 +5343,14 @@
     "score": 0.888
    },
    {
-    "slug": "core-wlan",
-    "score": 0.887
-   },
-   {
-    "slug": "matter",
-    "score": 0.886
-   }
-  ],
-  "uniform-type-identifiers": [
-   {
-    "slug": "core-transferable",
-    "score": 0.898
-   },
-   {
-    "slug": "core-services",
-    "score": 0.895
-   },
-   {
-    "slug": "application-services",
-    "score": 0.893
-   },
-   {
-    "slug": "core-foundation",
-    "score": 0.892
-   },
-   {
-    "slug": "system",
-    "score": 0.891
-   }
-  ],
-  "virtualization": [
-   {
-    "slug": "hypervisor",
-    "score": 0.952
-   },
-   {
-    "slug": "vmnet",
-    "score": 0.913
-   },
-   {
-    "slug": "iousbhost",
-    "score": 0.907
-   },
-   {
-    "slug": "system-configuration",
-    "score": 0.902
-   },
-   {
-    "slug": "kernel",
-    "score": 0.9
-   }
-  ],
-  "vmnet": [
-   {
-    "slug": "virtualization",
-    "score": 0.913
-   },
-   {
-    "slug": "hypervisor",
-    "score": 0.911
-   },
-   {
-    "slug": "network",
-    "score": 0.891
-   },
-   {
-    "slug": "system-configuration",
-    "score": 0.889
-   },
-   {
     "slug": "network-extension",
-    "score": 0.876
+    "score": 0.873
    }
   ],
   "xpc": [
    {
     "slug": "core-services",
-    "score": 0.929
+    "score": 0.93
    },
    {
     "slug": "distributed",
@@ -5365,18 +5365,18 @@
     "score": 0.918
    },
    {
-    "slug": "scripting-bridge",
-    "score": 0.916
+    "slug": "security",
+    "score": 0.917
    }
   ],
   "link-presentation": [
    {
     "slug": "core-services",
-    "score": 0.888
+    "score": 0.889
    },
    {
     "slug": "application-services",
-    "score": 0.885
+    "score": 0.886
    },
    {
     "slug": "core-transferable",
@@ -5394,23 +5394,23 @@
   "screen-time": [
    {
     "slug": "screen-saver",
-    "score": 0.919
+    "score": 0.923
    },
    {
     "slug": "permissionkit",
-    "score": 0.908
+    "score": 0.907
    },
    {
     "slug": "application-services",
-    "score": 0.895
+    "score": 0.9
+   },
+   {
+    "slug": "screencapturekit",
+    "score": 0.899
    },
    {
     "slug": "core-services",
-    "score": 0.894
-   },
-   {
-    "slug": "security",
-    "score": 0.893
+    "score": 0.897
    }
   ]
  }

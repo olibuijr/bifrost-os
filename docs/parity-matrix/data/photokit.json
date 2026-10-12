@@ -10,16 +10,16 @@
     {
       "feature": "Shared photo library access (PHPhotoLibrary)",
       "apple": "PHPhotoLibrary, PHPhotosError, PHPhotosErrorDomain",
-      "bifrost": "springboard/src/shell/photos/library.rs (dirs() returns ~/Pictures)",
-      "status": "gap",
-      "note": "No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps."
+      "bifrost": "springboard/ui/src/photo_access.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps."
     },
     {
       "feature": "Asset retrieval and fetch options",
       "apple": "PHAsset, PHAssetCollection, PHCollectionList, PHFetchResult, PHFetchOptions, PHObject",
-      "bifrost": "springboard/src/shell/photos/mod.rs (Photos struct, all/favorites/trash lists); springboard/src/shell/photos/albums.rs (is_screenshot, recents, in_range, date queries)",
-      "status": "os",
-      "note": "Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs."
+      "bifrost": "springboard/ui/src/photo_fetch.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs."
     },
     {
       "feature": "Smart albums (screenshots, recents, recently deleted)",
@@ -129,9 +129,9 @@
     {
       "feature": "Enhanced privacy and limited library access",
       "apple": "Delivering an Enhanced Privacy Experience in Your Photos App; PHPickerFilter scope",
-      "bifrost": "springboard/sdk/src/ (no photo permission type found)",
-      "status": "gap",
-      "note": "Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued."
+      "bifrost": "springboard/ui/src/photo_access.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued."
     }
   ],
   "gaps": [

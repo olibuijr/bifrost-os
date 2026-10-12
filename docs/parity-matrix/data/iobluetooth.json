@@ -73,9 +73,9 @@
     {
       "feature": "OBEX sessions and file transfer",
       "apple": "OBEXSession, OBEXFileTransferServices, OBEX.h functions",
-      "bifrost": "none found in springboard/",
-      "status": "gap",
-      "note": "No OBEX code. Object exchange over Bluetooth is absent."
+      "bifrost": "springboard/core/src/obex_packet.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No OBEX code. Object exchange over Bluetooth is absent."
     },
     {
       "feature": "Hands-free profile (audio gateway and device)",
@@ -94,16 +94,16 @@
     {
       "feature": "User notifications on device events",
       "apple": "IOBluetoothUserNotification, IOBluetoothUserNotificationCallback",
-      "bifrost": "springboard/src/bare/bluetooth.rs (EV_DEVICE_CONNECTED :53, EV_DEVICE_DISCONNECTED :54 are handled inside the shell)",
-      "status": "gap",
-      "note": "Connect and disconnect events go to the shell's own state. No app subscription API."
+      "bifrost": "springboard/sdk/src/bluetooth_events.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect and disconnect events go to the shell's own state. No app subscription API."
     },
     {
       "feature": "Address and utility helpers",
       "apple": "IOBluetoothNSStringFromDeviceAddress, IOBluetoothNSStringToDeviceAddress, IOBluetoothGetUniqueFileNameAndPath",
-      "bifrost": "springboard/src/bare/bluetooth.rs:108 (parse_addr), :122 (fmt_addr)",
-      "status": "os",
-      "note": "Conversion helpers exist inside the shell crate. Not an SDK API."
+      "bifrost": "springboard/core/src/bt_address.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Conversion helpers exist inside the shell crate. Not an SDK API."
     },
     {
       "feature": "Low-level HCI structures and commands",

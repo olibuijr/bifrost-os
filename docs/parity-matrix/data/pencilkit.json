@@ -66,16 +66,16 @@
     {
       "feature": "Bezier path import (PKStroke from paths)",
       "apple": "PKStroke init from path data, Bezier import article",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Strokes are polylines only. Curve data cannot be imported."
+      "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)",
+      "status": "partial",
+      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are polylines only. Curve data cannot be imported."
     },
     {
       "feature": "Stroke slicing, animation and blending",
       "apple": "Controlling stroke rendering for animation and editing",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
+      "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice",
+      "status": "partial",
+      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
     },
     {
       "feature": "Handwriting recognition (PKStrokeRecognizer)",

@@ -7,20 +7,104 @@
   "summary": "Apps get HTTP(S) requests through URLSession-style APIs, which cover the common case. Raw connections, listeners, service browsing, multicast groups, QUIC, WebSocket, framers and path monitoring exist only inside the shell and system services, with no SDK API for apps.",
   "rea_evidence": "ev_730899d40633f249bdc7b7fca55aec2c5ae4238a676d771877c6cd49a10b7415",
   "features": [
-    {"feature": "HTTP and URL-based loading", "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)", "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)", "status": "partial", "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2"},
-    {"feature": "Connections (NWConnection) to a remote endpoint", "apple": "NWConnection, NWEndpoint, NWParameters", "bifrost": "springboard/src/deildu/http.rs (Tls::connect, TcpStream); springboard/src/net/share.rs (TCP transfer)", "status": "os", "note": "Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"},
-    {"feature": "Listeners for incoming connections", "apple": "NWListener", "bifrost": "springboard/src/net/share.rs (nearby share TCP listener); springboard/src/bare/control.rs (TcpListener)", "status": "os", "note": "Used by the shell for nearby share and control. Apps cannot listen on a port"},
-    {"feature": "Service discovery on the local network", "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)", "bifrost": "springboard/src/net/share.rs (UDP multicast beacon 224.0.0.251:5354)", "status": "gap", "note": "The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps"},
-    {"feature": "Multicast groups", "apple": "NWConnectionGroup", "bifrost": "springboard/src/net/share.rs (join_multicast_v4)", "status": "os", "note": "Multicast is used inside the shell only. No app API"},
-    {"feature": "Custom Ethernet frames", "apple": "NWEthernetChannel", "bifrost": "none", "status": "n/a", "note": "Niche raw-frame access. No app need in the desktop, and no SDK plan"},
-    {"feature": "TCP, UDP and IP protocol options", "apple": "NWProtocolTCP, NWProtocolUDP, NWProtocolIP", "bifrost": "springboard/src/deildu/http.rs (set_nodelay, read and write timeouts)", "status": "os", "note": "Socket options are set in the shell. Apps have no protocol stack configuration"},
-    {"feature": "TLS and security options", "apple": "NWProtocolTLS, sec_protocol_options_t, sec_protocol_metadata_t, sec_identity_t", "bifrost": "springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots); springboard/sdk/src/keychain.rs (keychain items)", "status": "os", "note": "TLS is fixed in the shell (rustls). No handshake options, verify blocks, client identities, or TLS metadata for apps"},
-    {"feature": "QUIC, WebSocket and custom framers", "apple": "NWProtocolQUIC, NWProtocolWebSocket, NWProtocolFramer, NWMessage and NWFramer", "bifrost": "none", "status": "gap", "note": "No QUIC or WebSocket code in the repo. No protocol framer API"},
-    {"feature": "Network path monitoring", "apple": "NWPathMonitor, NWPath, NWInterface", "bifrost": "springboard/netd/src/main.rs (status events to subscribers); springboard/src/net/wifi.rs", "status": "os", "note": "netd publishes Wi-Fi status to the shell over BIFROST_SERVICE_SOCK. Apps get no reachability or interface callback. bifrost_app::workspace and bifrost_app::process_info have no network state"},
-    {"feature": "Network errors", "apple": "NWError", "bifrost": "springboard/sdk/src/url.rs (URLError)", "status": "partial", "note": "URLError covers a few codes (CannotConnect and others). No NWError POSIX or DNS error domains"},
-    {"feature": "Network debugging and diagnostics", "apple": "CFNetwork diagnostic logging, packet trace, Debugging HTTP Server-Side Errors", "bifrost": "springboard/core/src/log.rs (Logger, bifrost-log); springboard/sdk/src/log.rs", "status": "partial", "note": "Apps can log through os.Logger. No packet traces, no CFNetwork-style HTTP logging, and no network inspector"},
-    {"feature": "Privacy attribution and local network identity", "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS", "bifrost": "springboard/src/bare/app_policy.rs (native-app sandbox)", "status": "gap", "note": "The sandbox limits app access, but there is no per-connection attribution and no local-network permission prompt"},
-    {"feature": "Web content loading in a view", "apple": "WKWebView (related, outside Network)", "bifrost": "springboard/sdk/src/webview.rs (pool.create, pool.load)", "status": "partial", "note": "Listed as related context only. Not part of the Network framework, so it does not count toward the rows above"}
+    {
+      "feature": "HTTP and URL-based loading",
+      "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
+      "status": "partial",
+      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2"
+    },
+    {
+      "feature": "Connections (NWConnection) to a remote endpoint",
+      "apple": "NWConnection, NWEndpoint, NWParameters",
+      "bifrost": "springboard/src/deildu/http.rs (Tls::connect, TcpStream); springboard/src/net/share.rs (TCP transfer)",
+      "status": "os",
+      "note": "Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"
+    },
+    {
+      "feature": "Listeners for incoming connections",
+      "apple": "NWListener",
+      "bifrost": "springboard/src/net/share.rs (nearby share TCP listener); springboard/src/bare/control.rs (TcpListener)",
+      "status": "os",
+      "note": "Used by the shell for nearby share and control. Apps cannot listen on a port"
+    },
+    {
+      "feature": "Service discovery on the local network",
+      "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
+      "bifrost": "springboard/src/net/share.rs (UDP multicast beacon 224.0.0.251:5354)",
+      "status": "gap",
+      "note": "The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps"
+    },
+    {
+      "feature": "Multicast groups",
+      "apple": "NWConnectionGroup",
+      "bifrost": "springboard/src/net/share.rs (join_multicast_v4)",
+      "status": "os",
+      "note": "Multicast is used inside the shell only. No app API"
+    },
+    {
+      "feature": "Custom Ethernet frames",
+      "apple": "NWEthernetChannel",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Niche raw-frame access. No app need in the desktop, and no SDK plan"
+    },
+    {
+      "feature": "TCP, UDP and IP protocol options",
+      "apple": "NWProtocolTCP, NWProtocolUDP, NWProtocolIP",
+      "bifrost": "springboard/src/deildu/http.rs (set_nodelay, read and write timeouts)",
+      "status": "os",
+      "note": "Socket options are set in the shell. Apps have no protocol stack configuration"
+    },
+    {
+      "feature": "TLS and security options",
+      "apple": "NWProtocolTLS, sec_protocol_options_t, sec_protocol_metadata_t, sec_identity_t",
+      "bifrost": "springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots); springboard/sdk/src/keychain.rs (keychain items)",
+      "status": "os",
+      "note": "TLS is fixed in the shell (rustls). No handshake options, verify blocks, client identities, or TLS metadata for apps"
+    },
+    {
+      "feature": "QUIC, WebSocket and custom framers",
+      "apple": "NWProtocolQUIC, NWProtocolWebSocket, NWProtocolFramer, NWMessage and NWFramer",
+      "bifrost": "springboard/core/src/websocket.rs, springboard/sdk/src/websocket.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No QUIC or WebSocket code in the repo. No protocol framer API"
+    },
+    {
+      "feature": "Network path monitoring",
+      "apple": "NWPathMonitor, NWPath, NWInterface",
+      "bifrost": "springboard/core/src/net_path.rs, springboard/sdk/src/network_path.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd publishes Wi-Fi status to the shell over BIFROST_SERVICE_SOCK. Apps get no reachability or interface callback. bifrost_app::workspace and bifrost_app::process_info have no network state"
+    },
+    {
+      "feature": "Network errors",
+      "apple": "NWError",
+      "bifrost": "springboard/sdk/src/url.rs (URLError)",
+      "status": "partial",
+      "note": "URLError covers a few codes (CannotConnect and others). No NWError POSIX or DNS error domains"
+    },
+    {
+      "feature": "Network debugging and diagnostics",
+      "apple": "CFNetwork diagnostic logging, packet trace, Debugging HTTP Server-Side Errors",
+      "bifrost": "springboard/core/src/log.rs (Logger, bifrost-log); springboard/sdk/src/log.rs",
+      "status": "partial",
+      "note": "Apps can log through os.Logger. No packet traces, no CFNetwork-style HTTP logging, and no network inspector"
+    },
+    {
+      "feature": "Privacy attribution and local network identity",
+      "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS",
+      "bifrost": "springboard/src/bare/app_policy.rs (native-app sandbox)",
+      "status": "gap",
+      "note": "The sandbox limits app access, but there is no per-connection attribution and no local-network permission prompt"
+    },
+    {
+      "feature": "Web content loading in a view",
+      "apple": "WKWebView (related, outside Network)",
+      "bifrost": "springboard/sdk/src/webview.rs (pool.create, pool.load)",
+      "status": "partial",
+      "note": "Listed as related context only. Not part of the Network framework, so it does not count toward the rows above"
+    }
   ],
   "gaps": [
     "No app-facing raw TCP or UDP connection API (NWConnection, NWParameters, NWEndpoint)",

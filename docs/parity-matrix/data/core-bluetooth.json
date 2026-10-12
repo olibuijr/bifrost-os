@@ -24,9 +24,9 @@
     {
       "feature": "Discovered peripheral and advertisement data",
       "apple": "CBPeripheral, CBPeer, didDiscover peripheral advertisementData RSSI",
-      "bifrost": "springboard/src/bare/bluetooth.rs:197 (Device.kind mgmt address type), springboard/src/bare/bluetooth.rs:207 (Device::new with addr, name, rssi), springboard/src/bare/bluetooth.rs:171-176 (EIR parsing for names and audio UUIDs)",
-      "status": "os",
-      "note": "Name, RSSI and audio-service flag are parsed in the shell. Manufacturer data and service UUIDs from advertisements are not exposed."
+      "bifrost": "springboard/ui/src/advertising.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-bluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Name, RSSI and audio-service flag are parsed in the shell. Manufacturer data and service UUIDs from advertisements are not exposed."
     },
     {
       "feature": "Connecting and disconnecting peripherals",
@@ -59,9 +59,9 @@
     {
       "feature": "Peripheral role: advertising and local GATT server",
       "apple": "CBPeripheralManager, CBPeripheralManagerDelegate, CBMutableService, CBMutableCharacteristic, CBMutableDescriptor, CBATTRequest",
-      "bifrost": "none found in springboard/sdk/src, springboard/ui/src or springboard/src",
-      "status": "gap",
-      "note": "No code advertises services or answers ATT requests."
+      "bifrost": "springboard/ui/src/peripheral.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-05, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code advertises services or answers ATT requests."
     },
     {
       "feature": "Central role: GATT client (services, characteristics, descriptors)",

@@ -52,9 +52,9 @@
     {
       "feature": "Contact photos",
       "apple": "ABPersonSetImageData, ABPersonCopyImageData, ABImageClient, ABBeginLoadingImageDataForClient",
-      "bifrost": "none found in springboard/src/shell/contactstore.rs",
-      "status": "gap",
-      "note": "Contact struct has no image field"
+      "bifrost": "springboard/ui/src/contact_photo.rs (Photos::set",
+      "status": "partial",
+      "note": "Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Contact struct has no image field"
     },
     {
       "feature": "Formatted postal addresses",
@@ -80,9 +80,9 @@
     {
       "feature": "Change notifications",
       "apple": "ABAddressBookRegisterExternalChangeCallback, ABAddressBookUnregisterExternalChangeCallback",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No callback when the contact store changes outside the app"
+      "bifrost": "springboard/ui/src/contact_changes.rs (Observers::register",
+      "status": "partial",
+      "note": "Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback when the contact store changes outside the app"
     },
     {
       "feature": "Access authorization",

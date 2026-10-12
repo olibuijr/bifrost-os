@@ -10,9 +10,9 @@
     {
       "feature": "Extension-based UI in a host app (remote views)",
       "apple": "ExtensionKit: Including extension-based UI in your interface (article)",
-      "bifrost": "none; springboard/sdk/src/view/app.rs is in-process (ControllerHost)",
-      "status": "gap",
-      "note": "No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."
+      "bifrost": "springboard/ui/src/remote_view.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-01, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."
     },
     {
       "feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)",

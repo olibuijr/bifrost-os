@@ -52,9 +52,9 @@
     {
       "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",
       "apple": "PDEPlugIn, PDEPanel, PDEPlugInCallbackProtocol",
-      "bifrost": "springboard/sdk/src/print.rs",
-      "status": "gap",
-      "note": "No print panel plug-in mechanism; the print sheet is not shell-drawn yet."
+      "bifrost": "springboard/sdk/src/print_panel.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No print panel plug-in mechanism; the print sheet is not shell-drawn yet."
     },
     {
       "feature": "ColorSync Manager (profiles, transforms, CMM)",

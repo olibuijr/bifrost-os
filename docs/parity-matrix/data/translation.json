@@ -38,9 +38,9 @@
     {
       "feature": "Formatted-text translation",
       "apple": "TranslationSession.translate(_:) overload that preserves formatting (AttributedString input)",
-      "bifrost": "springboard/sdk/src/attributed.rs (attributed text type, if present) ",
-      "status": "gap",
-      "note": "not checked in code; the attributed text type would be the input, but no translate step exists"
+      "bifrost": "springboard/ui/src/translation.rs (translate_runs), springboard/sdk/src/translation.rs (TranslationSession::translate_attributed)",
+      "status": "partial",
+      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not checked in code; the attributed text type would be the input, but no translate step exists"
     },
     {
       "feature": "Localized UI strings and number and date formats (related, not translation)",

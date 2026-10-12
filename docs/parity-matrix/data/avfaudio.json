@@ -66,9 +66,9 @@
     {
       "feature": "Audio engine graph (AVAudioEngine)",
       "apple": "AVAudioEngine: attach nodes, connect, mixer, input and output nodes, real-time render",
-      "bifrost": "springboard/apps/daw/src/render.rs (offline song render, app-private); springboard/src/media/alsa.rs; springboard/src/media/speaker.rs",
-      "status": "gap",
-      "note": "the DAW renders offline inside the app and no node graph API is exposed; speaker.rs writes through libasound's default PCM"
+      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine)",
+      "status": "partial",
+      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the DAW renders offline inside the app and no node graph API is exposed; speaker.rs writes through libasound's default PCM"
     },
     {
       "feature": "Speech synthesis (AVSpeechSynthesizer)",

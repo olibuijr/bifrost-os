@@ -73,9 +73,9 @@
     {
       "feature": "Scheduled file regions and slices (ScheduledAudioFileRegion)",
       "apple": "ScheduledAudioFileRegion, ScheduledAudioSlice",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No scheduled playback of file regions. The service plays whole tracks."
+      "bifrost": "springboard/ui/src/scheduled_region.rs (FileRegion",
+      "status": "partial",
+      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scheduled playback of file regions. The service plays whole tracks."
     },
     {
       "feature": "Voice I/O (Audio Unit Voice I/O, echo cancellation)",

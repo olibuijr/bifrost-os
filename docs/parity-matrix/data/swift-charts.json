@@ -10,16 +10,16 @@
     {
       "feature": "Chart view and content builder",
       "apple": "Chart, ChartContent, ChartContentBuilder, Plot (https://developer.apple.com/documentation/charts)",
-      "bifrost": "none. The sdk View trait (springboard/sdk/src/view/mod.rs:169) lets an app draw into a Surface by hand",
-      "status": "gap",
-      "note": "no declarative chart container; apps would hand-draw every bar and label"
+      "bifrost": "springboard/ui/src/chart_content.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative chart container; apps would hand-draw every bar and label"
     },
     {
       "feature": "Bar marks",
       "apple": "BarMark, BarPlot",
-      "bifrost": "springboard/src/shell/screentime/chart.rs (Chart::draw, hourly and daily bars)",
-      "status": "os",
-      "note": "bars are drawn only inside the Screen Time page; no app API"
+      "bifrost": "springboard/ui/src/chart_content.rs (Mark::Bar), springboard/ui/src/chart_vector.rs (bar_plot)",
+      "status": "partial",
+      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. bars are drawn only inside the Screen Time page; no app API"
     },
     {
       "feature": "Line and area marks",
@@ -45,9 +45,9 @@
     {
       "feature": "Vectorized plots for large data",
       "apple": "VectorizedChartContent, AreaPlot, LinePlot, PointPlot, RectanglePlot, RulePlot, BarPlot, SectorPlot",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no batched plot path; both shell charts take small fixed arrays"
+      "bifrost": "springboard/ui/src/chart_vector.rs (decimate",
+      "status": "partial",
+      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no batched plot path; both shell charts take small fixed arrays"
     },
     {
       "feature": "Scales, domains and ranges",
@@ -87,9 +87,9 @@
     {
       "feature": "Scrolling charts",
       "apple": "ChartScrollTargetBehavior, ChartScrollTargetBehaviorContext",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "the scroll view (springboard/sdk/src/view/scroll.rs) has no chart snap behaviour"
+      "bifrost": "springboard/ui/src/chart_scroll.rs (ValueAligned)",
+      "status": "partial",
+      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the scroll view (springboard/sdk/src/view/scroll.rs) has no chart snap behaviour"
     },
     {
       "feature": "3D charts and surface plots",

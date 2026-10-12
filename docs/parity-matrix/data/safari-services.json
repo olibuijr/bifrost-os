@@ -17,9 +17,9 @@
     {
       "feature": "Standard in-app Safari browser sheet",
       "apple": "SFSafariViewController, SFSafariSettings",
-      "bifrost": "none; springboard/apps/browser/src/main.rs has its own Settings sheet, not an SDK component",
-      "status": "gap",
-      "note": "An SDK app has to build its own web view and chrome. No system-provided browser sheet with Safari's controls."
+      "bifrost": "springboard/ui/src/browser_sheet.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An SDK app has to build its own web view and chrome. No system-provided browser sheet with Safari's controls."
     },
     {
       "feature": "Safari web extensions and Safari app extensions",
@@ -59,9 +59,9 @@
     {
       "feature": "Safari settings access",
       "apple": "SFSafariSettings, SFSafariSettingsError",
-      "bifrost": "springboard/apps/browser/src/prefs.rs (browser.homepage, browser.searchEngine, browser.restoreSession in the app's own UserDefaults)",
-      "status": "gap",
-      "note": "Preferences are private to the Browser app. Other apps cannot read them and there is no system-wide Safari settings object."
+      "bifrost": "springboard/ui/src/browser_settings.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-23, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Preferences are private to the Browser app. Other apps cannot read them and there is no system-wide Safari settings object."
     },
     {
       "feature": "Browser app features (history, bookmarks, tabs, private windows)",
@@ -80,9 +80,9 @@
     {
       "feature": "Importing data exported from Safari",
       "apple": "Importing data exported from Safari (bookmarks, saved passwords)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No import path for Safari bookmarks or passwords. Browser bookmarks are stored as TSV under ~/.local/share/bifrost-browser/."
+      "bifrost": "springboard/ui/src/bookmark_import.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No import path for Safari bookmarks or passwords. Browser bookmarks are stored as TSV under ~/.local/share/bifrost-browser/."
     },
     {
       "feature": "Home Screen bookmarks and availability checks",

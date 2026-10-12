@@ -17,9 +17,9 @@
     {
       "feature": "Command queue and work submission",
       "apple": "MTLCommandQueue, MTLCommandBuffer",
-      "bifrost": "springboard/src/gpu/wl.rs (Presenter::open, one render pass per present)",
-      "status": "os",
-      "note": "submission is internal to the compositor; no app command buffers"
+      "bifrost": "springboard/ui/src/command_buffer.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. submission is internal to the compositor; no app command buffers"
     },
     {
       "feature": "Drawables and onscreen presentation",
@@ -45,9 +45,9 @@
     {
       "feature": "Buffers and textures",
       "apple": "MTLBuffer, MTLTexture, MTLTextureDescriptor",
-      "bifrost": "springboard/src/gpu/texture.rs (GL texture entries), springboard/src/gpu/desktop.rs (GBM buffers as dma-buf)",
-      "status": "os",
-      "note": "textures are compositor-internal; no app resource creation or upload API"
+      "bifrost": "springboard/ui/src/texture_descriptor.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. textures are compositor-internal; no app resource creation or upload API"
     },
     {
       "feature": "Resource synchronization and buffer reuse",
@@ -59,9 +59,9 @@
     {
       "feature": "Compute passes",
       "apple": "MTLComputeCommandEncoder, compute pipelines",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no compute path; BifrOSt raster renderer is CPU (docs/wayland-desktop.md)"
+      "bifrost": "springboard/ui/src/compute_dispatch.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no compute path; BifrOSt raster renderer is CPU (docs/wayland-desktop.md)"
     },
     {
       "feature": "Blit passes and copies",

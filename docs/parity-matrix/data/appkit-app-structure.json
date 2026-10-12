@@ -94,9 +94,9 @@
     {
       "feature": "Resource management (nib, storyboard, bundle)",
       "apple": "NSNib, NSStoryboard, NSBundle resource loading",
-      "bifrost": "",
-      "status": "gap",
-      "note": "Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"
+      "bifrost": "springboard/sdk/src/bundle_resources.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"
     },
     {
       "feature": "App extensions",

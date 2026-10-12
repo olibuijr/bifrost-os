@@ -38,9 +38,9 @@
     {
       "feature": "Testing packs against a local mock server",
       "apple": "Testing asset packs locally",
-      "bifrost": "none",
-      "status": "gap",
-      "note": ""
+      "bifrost": "springboard/ui/src/assetmock.rs (MockPackSource)",
+      "status": "partial",
+      "note": "Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Unmanaged download manager and URL downloads (BADownloadManager, BAURLDownload, BADownload)",
@@ -52,9 +52,9 @@
     {
       "feature": "Downloader extension and manifest (BADownloaderExtension, BAManifestURL)",
       "apple": "BADownloaderExtension, BADownloaderExtensionConfiguration, BAManifestURL",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no extension that runs while the app is closed or before first launch"
+      "bifrost": "springboard/ui/src/assetpack.rs (AssetPackManifest::to_lines",
+      "status": "partial",
+      "note": "Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension that runs while the app is closed or before first launch"
     },
     {
       "feature": "Install-size limits for initial downloads",

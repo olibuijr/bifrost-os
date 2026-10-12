@@ -17,16 +17,16 @@
     {
       "feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)",
       "apple": "IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream, IOUSBHostIOSource",
-      "bifrost": "none in springboard/sdk/src",
-      "status": "gap",
-      "note": "No pipe or stream abstraction exposed to apps."
+      "bifrost": "springboard/core/src/usb_pipe.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pipe or stream abstraction exposed to apps."
     },
     {
       "feature": "Isochronous transfer options",
       "apple": "IOUSBHostIsochronousTransfer*, IOUSBHostIsochronousTransaction",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Needed for audio and video class devices if apps are to drive them directly."
+      "bifrost": "springboard/core/src/usb_pipe.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-14, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needed for audio and video class devices if apps are to drive them directly."
     },
     {
       "feature": "Matching and IOServicePlane device and interface properties",

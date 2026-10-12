@@ -10,23 +10,23 @@
     {
       "feature": "Stream screen content to an app (SCStream, SCStreamConfiguration, SCStreamOutput)",
       "apple": "SCStream, SCStreamConfiguration, SCStreamOutput, SCStreamOutputType, SCStreamFrameInfo, SCFrameStatus",
-      "bifrost": "none in springboard/sdk/src/ (no capture module); compositor capture lives in springboard/mcp/src/wl.rs",
-      "status": "gap",
-      "note": "The compositor exposes wlr-screencopy and ext-image-copy-capture, but only the agent MCP server uses them. No app receives a frame stream."
+      "bifrost": "springboard/ui/src/capture_config.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor exposes wlr-screencopy and ext-image-copy-capture, but only the agent MCP server uses them. No app receives a frame stream."
     },
     {
       "feature": "Discover displays, apps and windows to capture (SCShareableContent, SCDisplay, SCRunningApplication, SCWindow)",
       "apple": "SCShareableContent, SCShareableContentInfo, SCShareableContentStyle, SCDisplay, SCRunningApplication, SCWindow",
-      "bifrost": "springboard/mcp/src/wl.rs (toplevel list via wlr-foreign-toplevel)",
-      "status": "os",
-      "note": "The window list is available to the agent tooling only. Apps get no enumeration API."
+      "bifrost": "springboard/ui/src/capture_content.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The window list is available to the agent tooling only. Apps get no enumeration API."
     },
     {
       "feature": "Filter what a stream captures (SCContentFilter)",
       "apple": "SCContentFilter",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No per-window or per-app filter exists for app-facing capture."
+      "bifrost": "springboard/ui/src/capture_filter.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-window or per-app filter exists for app-facing capture."
     },
     {
       "feature": "Single-frame screenshots (SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput)",
@@ -66,9 +66,9 @@
     {
       "feature": "Stream errors and lifecycle (SCStreamDelegate, SCStreamError)",
       "apple": "SCStreamDelegate, SCStreamError, SCStreamErrorDomain",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "There is no stream to report errors for."
+      "bifrost": "springboard/ui/src/capture_error.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. There is no stream to report errors for."
     }
   ],
   "gaps": [

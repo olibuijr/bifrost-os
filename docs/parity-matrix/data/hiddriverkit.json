@@ -45,9 +45,9 @@
     {
       "feature": "Stylus and pen input",
       "apple": "IOHIDDigitizerStylusData, Handling Stylus Input from a Human Interface Device",
-      "bifrost": "none found in springboard/src/bare/input.rs",
-      "status": "gap",
-      "note": "Pen tilt, pressure and eraser are not decoded"
+      "bifrost": "springboard/ui/src/stylus.rs (StylusReport::to_point",
+      "status": "partial",
+      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pen tilt, pressure and eraser are not decoded"
     },
     {
       "feature": "Pointer and scrolling devices",

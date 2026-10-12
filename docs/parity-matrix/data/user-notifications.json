@@ -73,9 +73,9 @@
     {
       "feature": "Per-app notification settings and Focus",
       "apple": "UNNotificationSettings, Focus status (INFocusStatusCenter)",
-      "bifrost": "springboard/src/shell/notify_page.rs (per-app switches), springboard/src/shell/focus.rs (Do Not Disturb), springboard/src/shell/notify/store.rs (is_muted)",
-      "status": "os",
-      "note": "The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. Apps get no API to read their authorization settings or the Focus status (UNNotificationSettings is not exposed in the SDK)."
+      "bifrost": "springboard/sdk/src/usernotif.rs (settings), springboard/src/shell/usernotif.rs (settings_for), springboard/proto/src/rich.rs (NotifSettings)",
+      "status": "partial",
+      "note": "Wave 4 (w4-user-notifications, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. Apps get no API to read their authorization settings or the Focus status (UNNotificationSettings is not exposed in the SDK)."
     },
     {
       "feature": "Dock badge from a notification",

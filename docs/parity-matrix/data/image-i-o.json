@@ -24,9 +24,9 @@
     {
       "feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)",
       "apple": "Image I/O supported type list (Image Properties, format-specific property keys)",
-      "bifrost": "springboard/src/shell/browser/images.rs:12-14 (GIF, WebP and SVG sniffed, not decoded)",
-      "status": "gap",
-      "note": "Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."
+      "bifrost": "springboard/core/src/imgprobe.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."
     },
     {
       "feature": "Downsampled and thumbnail decode",
@@ -80,16 +80,16 @@
     {
       "feature": "Animated GIF and APNG frames",
       "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
-      "bifrost": "springboard/src/shell/browser/images.rs:14 (animated GIFs skipped, no frames kept)",
-      "status": "gap",
-      "note": "No frame iteration or delay API."
+      "bifrost": "springboard/core/src/gifframes.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame iteration or delay API."
     },
     {
       "feature": "Colour profiles and HDR gain maps",
       "apple": "Color management (kCGImageDestinationEncode* gain map and base colour space keys)",
-      "bifrost": "none for images (springboard/src/pngenc.rs writes no colour chunk)",
-      "status": "gap",
-      "note": "Images are treated as sRGB. No ICC, gain map or HDR support."
+      "bifrost": "springboard/render/src/icc.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Images are treated as sRGB. No ICC, gain map or HDR support."
     },
     {
       "feature": "Spatial photos and stereo HEIC",

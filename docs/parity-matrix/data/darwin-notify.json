@@ -66,9 +66,9 @@
     {
       "feature": "Posting to a non-running app (suspensionBehavior)",
       "apple": "notify_post delivery when target not running",
-      "bifrost": "springboard/sdk/src/notification.rs (documented gap)",
-      "status": "gap",
-      "note": "An app that is not running misses the post, equal to Apple's drop behaviour, with no option to hold it."
+      "bifrost": "springboard/sdk/src/post_delivery.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-09, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app that is not running misses the post, equal to Apple's drop behaviour, with no option to hold it."
     },
     {
       "feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)",

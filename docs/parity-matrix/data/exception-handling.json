@@ -7,15 +7,69 @@
   "summary": "Apple's framework is one Objective-C class, NSExceptionHandler, that installs an uncaught-exception handler and lets a delegate decide per exception whether to handle and log it. BifrOSt has no app-facing exception handler API; it captures Rust panics in the system layer (panic hook writes crash.log, unclean exits are noted at the next start) and isolates panics per job in the SDK dispatch and shell job pools.",
   "rea_evidence": "ev_96f61e3a54d0509b32d7c0c45f1e80685e3801fe576b4d682ae6b97ba19abfae",
   "features": [
-    {"feature": "Uncaught exception capture and logging", "apple": "NSExceptionHandler (default(), setExceptionHandlingMask(_:))", "bifrost": "springboard/src/bare/crashlog.rs (install, format_panic)", "status": "os", "note": "Panic hook appends a one-line record to DIR/crash.log before the release abort; no SDK call exposes it to apps"},
-    {"feature": "Exception handling mask (which exceptions are monitored)", "apple": "exceptionHandlingMask, setExceptionHandlingMask(_:), logging and handling constants", "bifrost": "none", "status": "gap", "note": "Rust has no exception types; the closest knob would be a panic policy (abort or unwind), not provided"},
-    {"feature": "Halt-for-debugger mask (system hang constants)", "apple": "exceptionHangingMask, setExceptionHangingMask(_:)", "bifrost": "none", "status": "gap", "note": "No debugger-halt hook on panic; coredumps are captured by systemd-coredump instead"},
-    {"feature": "Delegate approval per exception", "apple": "NSExceptionHandlerDelegate: exceptionHandler(_:shouldHandle:mask:), exceptionHandler(_:shouldLogException:mask:)", "bifrost": "none", "status": "gap", "note": "The panic hook chains to the previous hook with no per-panic delegate decision"},
-    {"feature": "Default handler singleton and delegate accessors", "apple": "NSExceptionHandler.default(), delegate(), setDelegate(_:)", "bifrost": "none", "status": "gap", "note": "No app-facing singleton; apps cannot install a panic hook through the SDK"},
-    {"feature": "Panic isolation for background work", "apple": "No direct equivalent in the framework; Objective-C exceptions unwind through the caller", "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain)", "status": "partial", "note": "catch_unwind per job keeps a panicking closure from killing the worker; sync re-raises the panic on the caller"},
-    {"feature": "Crash record surfaced to the user and developer", "apple": "Crash reports from the system (outside this framework)", "bifrost": "springboard/src/shell/diag.rs (CrashEntry), springboard/mcp/src/dev.rs (crash, panic_log)", "status": "os", "note": "Diagnostics list crash.log entries and coredumpctl output; there is no in-app crash reporter API"},
-    {"feature": "Unclean-exit detection at next start", "apple": "Not part of this framework", "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note)", "status": "os", "note": "A start with a last_start marker and no last_exit reports the previous run as unclean"},
-    {"feature": "Objective-C exception global string constants and error names", "apple": "NSExceptionHandler global string constants for Objective-C runtime and system exceptions", "bifrost": "none", "status": "n/a", "note": "Tied to the Objective-C runtime; Rust panics carry a payload string and location, not named exception classes"}
+    {
+      "feature": "Uncaught exception capture and logging",
+      "apple": "NSExceptionHandler (default(), setExceptionHandlingMask(_:))",
+      "bifrost": "springboard/src/bare/crashlog.rs (install, format_panic)",
+      "status": "os",
+      "note": "Panic hook appends a one-line record to DIR/crash.log before the release abort; no SDK call exposes it to apps"
+    },
+    {
+      "feature": "Exception handling mask (which exceptions are monitored)",
+      "apple": "exceptionHandlingMask, setExceptionHandlingMask(_:), logging and handling constants",
+      "bifrost": "springboard/core/src/exception_policy.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rust has no exception types; the closest knob would be a panic policy (abort or unwind), not provided"
+    },
+    {
+      "feature": "Halt-for-debugger mask (system hang constants)",
+      "apple": "exceptionHangingMask, setExceptionHangingMask(_:)",
+      "bifrost": "springboard/core/src/exception_policy.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No debugger-halt hook on panic; coredumps are captured by systemd-coredump instead"
+    },
+    {
+      "feature": "Delegate approval per exception",
+      "apple": "NSExceptionHandlerDelegate: exceptionHandler(_:shouldHandle:mask:), exceptionHandler(_:shouldLogException:mask:)",
+      "bifrost": "springboard/core/src/exception_policy.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The panic hook chains to the previous hook with no per-panic delegate decision"
+    },
+    {
+      "feature": "Default handler singleton and delegate accessors",
+      "apple": "NSExceptionHandler.default(), delegate(), setDelegate(_:)",
+      "bifrost": "springboard/core/src/exception_policy.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing singleton; apps cannot install a panic hook through the SDK"
+    },
+    {
+      "feature": "Panic isolation for background work",
+      "apple": "No direct equivalent in the framework; Objective-C exceptions unwind through the caller",
+      "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain)",
+      "status": "partial",
+      "note": "catch_unwind per job keeps a panicking closure from killing the worker; sync re-raises the panic on the caller"
+    },
+    {
+      "feature": "Crash record surfaced to the user and developer",
+      "apple": "Crash reports from the system (outside this framework)",
+      "bifrost": "springboard/sdk/src/exception_handler.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-exception-handling, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Diagnostics list crash.log entries and coredumpctl output; there is no in-app crash reporter API"
+    },
+    {
+      "feature": "Unclean-exit detection at next start",
+      "apple": "Not part of this framework",
+      "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note)",
+      "status": "os",
+      "note": "A start with a last_start marker and no last_exit reports the previous run as unclean"
+    },
+    {
+      "feature": "Objective-C exception global string constants and error names",
+      "apple": "NSExceptionHandler global string constants for Objective-C runtime and system exceptions",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Tied to the Objective-C runtime; Rust panics carry a payload string and location, not named exception classes"
+    }
   ],
   "gaps": [
     "No app-facing SDK API to install a panic or uncaught-failure handler, or to read crash.log entries from an app",

@@ -1,23 +1,117 @@
 {
-"framework":"EventKit","doc":"https://developer.apple.com/documentation/eventkit","macos_since":"10.8","status":"os",
-"bifrost":"springboard/src/shell/calendar/store.rs, springboard/apps/calendar-desktop/src/calendar/, springboard/apps/reminders-desktop/src/",
-"summary":"Events, recurrence, alarms, ICS import/export and reminders exist inside the shell and the Calendar and Reminders apps. No app-facing SDK API (no calendar module in springboard/sdk/src), so third-party apps cannot read or write calendar data.",
-"rea_evidence":"ev_4bf4ac268a018a5e377584d729b63b1d10e6682cc1f1ee35fc153d3727099360",
-"features":[
-{"feature":"Event store and access","apple":"EKEventStore, access requests","bifrost":"springboard/src/shell/calendar/store.rs","status":"os","note":"shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"},
-{"feature":"Events","apple":"EKEvent","bifrost":"springboard/src/shell/calendar/store.rs (CalendarEvent)","status":"os","note":"title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees"},
-{"feature":"Reminders","apple":"EKReminder","bifrost":"springboard/apps/reminders-desktop/src/model.rs","status":"os","note":"app-internal file store (store.rs); no SDK access"},
-{"feature":"Calendars and sources","apple":"EKCalendar, EKSource","bifrost":"springboard/apps/calendar-desktop/src/calendar/exchange.rs","status":"partial","note":"ICS import/export and colour plates; no account sources (CalDAV, Exchange) in the store model"},
-{"feature":"Participants","apple":"EKParticipant","bifrost":"springboard/apps/calendar-desktop/src/calendar/ics.rs","status":"gap","note":"no attendee or invitation model found"},
-{"feature":"Recurrence rules","apple":"EKRecurrenceRule, EKRecurrenceEnd, EKRecurrenceDayOfWeek","bifrost":"springboard/apps/calendar-desktop/src/calendar/recur.rs","status":"partial","note":"RRULE subset FREQ, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH, EXDATE; app-internal, not SDK; reminders have own repeat.rs"},
-{"feature":"Alarms","apple":"EKAlarm","bifrost":"springboard/apps/calendar-desktop/src/calendar/alerts.rs","status":"partial","note":"relative-offset alerts posted as notifications; no absolute or proximity alarms"},
-{"feature":"Alarm scheduling service","apple":"alarm delivery","bifrost":"docs/alarm-service-design.md","status":"os","note":"design for a scheduler service used by Reminders and Calendar"},
-{"feature":"Location-based reminders","apple":"EKStructuredLocation, geofence alarms","bifrost":"springboard/apps/reminders-desktop/src/model.rs","status":"gap","note":"no geofence or structured location found"},
-{"feature":"Change notifications","apple":"EKEventStoreChanged","bifrost":"springboard/apps/reminders-desktop/src/alerts.rs","status":"gap","note":"shell polls store generation; no app-facing change notification"},
-{"feature":"Fetch by predicate","apple":"events(matching:), reminders(matching:)","bifrost":"springboard/apps/calendar-desktop/src/calendar/search.rs","status":"os","note":"in-app search only"},
-{"feature":"Calendar UI components","apple":"EventKitUI","bifrost":"springboard/ui/src/calendar.rs","status":"partial","note":"MiniMonth and Gregorian grids only; no event edit or chooser view controllers"},
-{"feature":"Virtual conferences","apple":"EKVirtualConferenceProvider","bifrost":"springboard/apps/calendar-desktop/src/calendar/ics.rs","status":"gap","note":"no extension point"},
-{"feature":"Errors","apple":"EKError","bifrost":"springboard/src/shell/calendar/store.rs","status":"gap","note":"no error domain; store validates via CalendarEvent::valid"}
-],
-"gaps":["No SDK calendar/reminder API for apps","No permission model for calendar access","No attendees, invitations or account sources","No location-based alarms","No app-facing change notification","No virtual conference extensions"]
+  "framework": "EventKit",
+  "doc": "https://developer.apple.com/documentation/eventkit",
+  "macos_since": "10.8",
+  "status": "os",
+  "bifrost": "springboard/src/shell/calendar/store.rs, springboard/apps/calendar-desktop/src/calendar/, springboard/apps/reminders-desktop/src/",
+  "summary": "Events, recurrence, alarms, ICS import/export and reminders exist inside the shell and the Calendar and Reminders apps. No app-facing SDK API (no calendar module in springboard/sdk/src), so third-party apps cannot read or write calendar data.",
+  "rea_evidence": "ev_4bf4ac268a018a5e377584d729b63b1d10e6682cc1f1ee35fc153d3727099360",
+  "features": [
+    {
+      "feature": "Event store and access",
+      "apple": "EKEventStore, access requests",
+      "bifrost": "springboard/src/shell/calendar/store.rs",
+      "status": "os",
+      "note": "shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"
+    },
+    {
+      "feature": "Events",
+      "apple": "EKEvent",
+      "bifrost": "springboard/src/shell/calendar/store.rs (CalendarEvent)",
+      "status": "os",
+      "note": "title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees"
+    },
+    {
+      "feature": "Reminders",
+      "apple": "EKReminder",
+      "bifrost": "springboard/apps/reminders-desktop/src/model.rs",
+      "status": "os",
+      "note": "app-internal file store (store.rs); no SDK access"
+    },
+    {
+      "feature": "Calendars and sources",
+      "apple": "EKCalendar, EKSource",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs",
+      "status": "partial",
+      "note": "ICS import/export and colour plates; no account sources (CalDAV, Exchange) in the store model"
+    },
+    {
+      "feature": "Participants",
+      "apple": "EKParticipant",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
+      "status": "gap",
+      "note": "no attendee or invitation model found"
+    },
+    {
+      "feature": "Recurrence rules",
+      "apple": "EKRecurrenceRule, EKRecurrenceEnd, EKRecurrenceDayOfWeek",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/recur.rs",
+      "status": "partial",
+      "note": "RRULE subset FREQ, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH, EXDATE; app-internal, not SDK; reminders have own repeat.rs"
+    },
+    {
+      "feature": "Alarms",
+      "apple": "EKAlarm",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs",
+      "status": "partial",
+      "note": "relative-offset alerts posted as notifications; no absolute or proximity alarms"
+    },
+    {
+      "feature": "Alarm scheduling service",
+      "apple": "alarm delivery",
+      "bifrost": "docs/alarm-service-design.md",
+      "status": "os",
+      "note": "design for a scheduler service used by Reminders and Calendar"
+    },
+    {
+      "feature": "Location-based reminders",
+      "apple": "EKStructuredLocation, geofence alarms",
+      "bifrost": "springboard/ui/src/location_reminder.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-19, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no geofence or structured location found"
+    },
+    {
+      "feature": "Change notifications",
+      "apple": "EKEventStoreChanged",
+      "bifrost": "springboard/ui/src/calendar_store_changes.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-eventkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shell polls store generation; no app-facing change notification"
+    },
+    {
+      "feature": "Fetch by predicate",
+      "apple": "events(matching:), reminders(matching:)",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs",
+      "status": "os",
+      "note": "in-app search only"
+    },
+    {
+      "feature": "Calendar UI components",
+      "apple": "EventKitUI",
+      "bifrost": "springboard/ui/src/calendar.rs",
+      "status": "partial",
+      "note": "MiniMonth and Gregorian grids only; no event edit or chooser view controllers"
+    },
+    {
+      "feature": "Virtual conferences",
+      "apple": "EKVirtualConferenceProvider",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
+      "status": "gap",
+      "note": "no extension point"
+    },
+    {
+      "feature": "Errors",
+      "apple": "EKError",
+      "bifrost": "springboard/ui/src/calendar_error.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-eventkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no error domain; store validates via CalendarEvent::valid"
+    }
+  ],
+  "gaps": [
+    "No SDK calendar/reminder API for apps",
+    "No permission model for calendar access",
+    "No attendees, invitations or account sources",
+    "No location-based alarms",
+    "No app-facing change notification",
+    "No virtual conference extensions"
+  ]
 }

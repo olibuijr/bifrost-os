@@ -38,9 +38,9 @@
     {
       "feature": "Displaying a guest in a window",
       "apple": "VZVirtualMachineView",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "tools/arch-vm-iso.sh opens QEMU in a Hyprland window; the desktop has no embeddable guest view"
+      "bifrost": "springboard/core/src/guest_display.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm-iso.sh opens QEMU in a Hyprland window; the desktop has no embeddable guest view"
     },
     {
       "feature": "Graphics device for guests",
@@ -73,9 +73,9 @@
     {
       "feature": "Clipboard sharing",
       "apple": "Clipboard sharing (SPICE agent)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The pasteboard SDK does not bridge to a guest"
+      "bifrost": "springboard/core/src/guest_clipboard.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The pasteboard SDK does not bridge to a guest"
     },
     {
       "feature": "Keyboard and pointing devices",
@@ -87,9 +87,9 @@
     {
       "feature": "Audio devices",
       "apple": "Audio (virtio sound, host audio)",
-      "bifrost": "tools/arch-vm.sh passes -audio none",
-      "status": "gap",
-      "note": "No guest audio; springboard/audiod has no VM route"
+      "bifrost": "springboard/core/src/guest_audio.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No guest audio; springboard/audiod has no VM route"
     },
     {
       "feature": "Memory balloon",
@@ -122,9 +122,9 @@
     {
       "feature": "USB devices",
       "apple": "USB Devices (VZXHCIController)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "usbhost access is not exposed to VMs"
+      "bifrost": "springboard/core/src/guest_usb.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. usbhost access is not exposed to VMs"
     },
     {
       "feature": "Rosetta for Linux",
@@ -136,9 +136,9 @@
     {
       "feature": "Custom Virtio drivers",
       "apple": "Custom Virtio drivers",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No BifrOSt guest driver code exists"
+      "bifrost": "springboard/core/src/virtio.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No BifrOSt guest driver code exists"
     },
     {
       "feature": "Errors and enumerations",

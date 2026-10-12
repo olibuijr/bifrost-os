@@ -38,9 +38,9 @@
     {
       "feature": "Video settings",
       "apple": "AVVideoSettings keys and constants",
-      "bifrost": "springboard/src/media/hwdec/mod.rs",
-      "status": "gap",
-      "note": "Decode only, no encoder settings"
+      "bifrost": "springboard/ui/src/video_settings.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decode only, no encoder settings"
     },
     {
       "feature": "Audio settings",
@@ -115,9 +115,9 @@
     {
       "feature": "Video effects and compositing",
       "apple": "AVVideoComposition, AVVideoCompositing, AVVideoCompositionCoreAnimationTool",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No transitions, custom compositor or layer-animation tool"
+      "bifrost": "springboard/ui/src/video_transition.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transitions, custom compositor or layer-animation tool"
     },
     {
       "feature": "Audio mixing",

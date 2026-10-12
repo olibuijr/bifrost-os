@@ -10,9 +10,9 @@
     {
       "feature": "Daily metric reports to the app (MXMetricManager, MetricReport)",
       "apple": "MXMetricManager, MetricReport (async sequences, once per day, previous 24 h)",
-      "bifrost": "springboard/core/src/host.rs (host counters), springboard/src/shell/desktop_metrics.rs (shell menu extras only)",
-      "status": "gap",
-      "note": "No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
+      "bifrost": "springboard/sdk/src/daily_metric_report.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
     },
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
@@ -24,9 +24,9 @@
     {
       "feature": "Crash diagnostics (CrashDiagnostic, call stacks)",
       "apple": "CrashDiagnostic, CallStackTree, CallStackThread, CallStackFrame",
-      "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs (CrashEntry)",
-      "status": "os",
-      "note": "Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app."
+      "bifrost": "springboard/sdk/src/call_stack_tree.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app."
     },
     {
       "feature": "Hang diagnostics and UI stall detection (HangDiagnostic, HangTimeMetric)",
@@ -38,9 +38,9 @@
     {
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",
       "apple": "HitchTimeMetric, HitchTimeRatio",
-      "bifrost": "springboard/src/bare/jank.rs (slow and very slow frame classes, perf.log)",
-      "status": "os",
-      "note": "Frame budget is classified at 16.7 ms and 33 ms and written to perf.log, rate-limited to 20 lines per second. The data stays in the shell; there is no per-app hitch metric."
+      "bifrost": "springboard/sdk/src/hitch_ratio.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Frame budget is classified at 16.7 ms and 33 ms and written to perf.log, rate-limited to 20 lines per second. The data stays in the shell; there is no per-app hitch metric."
     },
     {
       "feature": "CPU and memory metrics (CPUTimeMetric, PeakMemoryMetric, SuspendedMemoryMetric)",
@@ -52,9 +52,9 @@
     {
       "feature": "Memory and CPU exception diagnostics (MemoryExceptionDiagnostic, CPUExceptionDiagnostic)",
       "apple": "MemoryExceptionDiagnostic, CPUExceptionDiagnostic",
-      "bifrost": "springboard/src/bare/crashlog.rs",
-      "status": "gap",
-      "note": "An app killed for memory or CPU limits is not recorded as a diagnostic event; only panics and watchdog exits are."
+      "bifrost": "springboard/core/src/resource_exception.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app killed for memory or CPU limits is not recorded as a diagnostic event; only panics and watchdog exits are."
     },
     {
       "feature": "Time-in-use metrics (foreground, background, audio, location time)",

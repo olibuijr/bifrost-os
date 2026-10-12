@@ -80,9 +80,9 @@
     {
       "feature": "Shape layer (CAShapeLayer, Bezier paths)",
       "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
-      "bifrost": "springboard/src/shell/control_center.rs:925 (fill_poly, ad hoc), springboard/src/shell/music/icons.rs:14 (fill_poly, ad hoc)",
-      "status": "gap",
-      "note": "no app-facing path or stroke API; polygon fill is private to shell modules"
+      "bifrost": "springboard/ui/src/stroke_style.rs, springboard/ui/src/shape.rs (Path::dashed)",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
     },
     {
       "feature": "Gradient layer (CAGradientLayer)",
@@ -94,9 +94,9 @@
     {
       "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
       "apple": "CALayer cornerRadius, cornerCurve, shadowOpacity, mask, CALayerCornerCurve",
-      "bifrost": "springboard/src/gpu/batch.rs:151 (push_shadow, compositor), springboard/src/shell/desk.rs:1508 (copy_rect_rounded), springboard/src/shell/browser/tiles.rs:152 (shadow, CSS box-shadow)",
-      "status": "gap",
-      "note": "rounded rects and shadows are drawn by shell code; no per-view corner radius, shadow or mask property in the SDK"
+      "bifrost": "springboard/ui/src/layer_style.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. rounded rects and shadows are drawn by shell code; no per-view corner radius, shadow or mask property in the SDK"
     },
     {
       "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",

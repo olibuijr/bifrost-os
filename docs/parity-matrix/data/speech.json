@@ -31,9 +31,9 @@
     {
       "feature": "Microphone consent and ownership",
       "apple": "Microphone access for speech input (permission prompt)",
-      "bifrost": "springboard/proto/src/svc.rs (RecordStart, RecordStop, RecordDone); springboard/docs/services.md:38",
-      "status": "os",
-      "note": "The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps."
+      "bifrost": "springboard/ui/src/mic_consent.rs (SDK: springboard/sdk/src/lib.rs microphone)",
+      "status": "partial",
+      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps."
     },
     {
       "feature": "Recognition results (alternatives, confidence, time ranges)",
@@ -52,9 +52,9 @@
     {
       "feature": "Asset and model installation",
       "apple": "AssetInventory, AssetInstallationRequest, SpeechModels",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No on-device model download or install path for speech. springboard/updated handles system updates only."
+      "bifrost": "springboard/ui/src/speech_assets.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device model download or install path for speech. springboard/updated handles system updates only."
     },
     {
       "feature": "System dictation entry point",

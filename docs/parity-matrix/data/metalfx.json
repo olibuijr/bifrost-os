@@ -10,16 +10,16 @@
     {
       "feature": "Temporal upscaling (MTLFXTemporalScaler)",
       "apple": "MTLFXTemporalScaler, MTLFXTemporalScalerDescriptor, encode(commandBuffer:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Needs per-frame colour, depth and motion vectors. The presenter (springboard/src/gpu/wl.rs:147) receives CPU rasters uploaded on damage (docs/gpu-first.md, layer model) and no motion or depth buffers."
+      "bifrost": "springboard/render/src/temporal_upscale.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needs per-frame colour, depth and motion vectors. The presenter (springboard/src/gpu/wl.rs:147) receives CPU rasters uploaded on damage (docs/gpu-first.md, layer model) and no motion or depth buffers."
     },
     {
       "feature": "Temporal denoised upscaling (MTLFXTemporalDenoisedScaler)",
       "apple": "MTLFXTemporalDenoisedScaler, MTLFXTemporalDenoisedScalerDescriptor (macOS 26)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No denoiser and no temporal history buffer in the GPU path."
+      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised)",
+      "status": "partial",
+      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No denoiser and no temporal history buffer in the GPU path."
     },
     {
       "feature": "Spatial upscaling (MTLFXSpatialScaler)",
@@ -38,9 +38,9 @@
     {
       "feature": "Frame interpolation (MTLFXFrameInterpolator)",
       "apple": "MTLFXFrameInterpolator, MTLFXFrameInterpolatorDescriptor, MTL4FXFrameInterpolator (macOS 26)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No frame generation anywhere in the shell or the GPU presenter."
+      "bifrost": "springboard/render/src/frame_interp.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame generation anywhere in the shell or the GPU presenter."
     },
     {
       "feature": "Metal command-buffer encoding of scaler passes",

@@ -45,16 +45,16 @@
     {
       "feature": "On-device model updates",
       "apple": "MLUpdateTask, MLTask, personalization sample",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no training or fine-tuning path in the SDK"
+      "bifrost": "springboard/ui/src/ml_update.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-ml, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no training or fine-tuning path in the SDK"
     },
     {
       "feature": "Downloading and compiling a model at runtime",
       "apple": "Downloading and Compiling a Model on the User's Device, MLModelCollection",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "model deployment is an Apple service; BifrOSt would need its own model distribution"
+      "bifrost": "springboard/ui/src/model_assets.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. model deployment is an Apple service; BifrOSt would need its own model distribution"
     },
     {
       "feature": "Model encryption",

@@ -73,9 +73,9 @@
     {
       "feature": "QLPreviewView (embedded preview)",
       "apple": "QLPreviewView, QLPreviewViewStyle",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No embeddable preview view; the peek.rs gap list says the same."
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewView",
+      "status": "partial",
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No embeddable preview view; the peek.rs gap list says the same."
     },
     {
       "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",

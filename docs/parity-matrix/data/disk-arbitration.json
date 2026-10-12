@@ -10,9 +10,9 @@
     {
       "feature": "Disk description and lookup (DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskGetBSDName, DADiskCopyDescription)",
       "apple": "DADisk.h: DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskCopyDescription, DADiskGetBSDName",
-      "bifrost": "springboard/src/installer/disks.rs (lsblk PATH,TYPE,RM,RO; SIZE; MODEL)",
-      "status": "gap",
-      "note": "Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."
+      "bifrost": "springboard/core/src/disk_events.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-disk-arbitration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."
     },
     {
       "feature": "Session and run loop or dispatch queue scheduling (DASession)",
@@ -24,9 +24,9 @@
     {
       "feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)",
       "apple": "DADiskMount, DADiskMountWithArguments, DADiskUnmount, DADiskEject, DADiskRename",
-      "bifrost": "springboard/src/installer/plan.rs:395 (umount in installer teardown only)",
-      "status": "gap",
-      "note": "Installer unmounts its own target; no app or shell API to mount, eject or rename a volume."
+      "bifrost": "springboard/core/src/disk_commands.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer unmounts its own target; no app or shell API to mount, eject or rename a volume."
     },
     {
       "feature": "Disk appeared, disappeared and description-changed callbacks (DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback)",
@@ -45,9 +45,9 @@
     {
       "feature": "Disk claims (DADiskClaim, DADiskUnclaim, DADiskIsClaimed)",
       "apple": "DADiskClaim, DADiskUnclaim, DADiskIsClaimed, DADiskSetOptions, DADiskGetOptions",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No exclusive-use claim on a disk. The installer uses shell commands, not a claim."
+      "bifrost": "springboard/core/src/disk_claims.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No exclusive-use claim on a disk. The installer uses shell commands, not a claim."
     },
     {
       "feature": "Volumes in the Files sidebar",

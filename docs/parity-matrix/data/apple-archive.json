@@ -7,14 +7,62 @@
   "summary": "BifrOSt has zip create and extract in the Files app and its system file layer, tar reading and extraction for app package install, and DEFLATE decoding for the Books engine. None of this is exposed through an SDK API, and the Apple Archive stream, string, metadata-preserving and encrypted formats are not present.",
   "rea_evidence": "ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d",
   "features": [
-    {"feature": "Compressing and extracting file system directories", "apple": "Compressing file system directories; Decompressing and extracting an archived directory", "bifrost": "springboard/src/files/zip.rs:569 (create), springboard/src/files/zip.rs:222 (extract)", "status": "os", "note": "Zip folder trees via the Files app; no SDK API; Apple's Apple Archive format is not used"},
-    {"feature": "Compressing and decompressing single files", "apple": "Compressing single files; Decompressing single files", "bifrost": "springboard/apps/files/src/main.rs (compress_now, extract_now)", "status": "os", "note": "Files app writes name.zip for one file; covered by a round-trip test; no SDK call"},
-    {"feature": "Compressing and parsing strings", "apple": "Compressing and saving a string to the file system; Decompressing and parsing an archived string", "bifrost": "none found", "status": "gap", "note": "No string-level archive API in the SDK or the system layer"},
-    {"feature": "Archive headers and file attributes", "apple": "ArchiveHeader; file ownership, permissions, flags, times, extended attributes", "bifrost": "springboard/src/shell/store/install.rs:250 (TarEntry: path, mode, is_dir, offset, size)", "status": "partial", "note": "Tar entries keep mode only; the zip path was not checked for ownership, times or xattr preservation"},
-    {"feature": "Archive streams (data blobs and byte buffers)", "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol", "bifrost": "none found", "status": "gap", "note": "Streaming is internal to read_tar and index_tar; no public stream type for apps"},
-    {"feature": "Reading and indexing tar packages for install", "apple": "No direct equivalent; closest is the archive read path", "bifrost": "springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)", "status": "os", "note": "Used by the App Store installer; headers are indexed without loading file data; not an app-facing API"},
-    {"feature": "DEFLATE decoding", "apple": "Multithreaded lossless compression (decoding side)", "bifrost": "springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/books/engine/zip.rs", "status": "os", "note": "Decoder lives in the Books engine; not verified which book formats use it; no compression side"},
-    {"feature": "Encrypted archives", "apple": "Apple Encrypted Archive; ArchiveEncryptionContext", "bifrost": "none found", "status": "gap", "note": "No encrypted archive format found in the code searched"}
+    {
+      "feature": "Compressing and extracting file system directories",
+      "apple": "Compressing file system directories; Decompressing and extracting an archived directory",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_directory",
+      "status": "partial",
+      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Zip folder trees via the Files app; no SDK API; Apple's Apple Archive format is not used"
+    },
+    {
+      "feature": "Compressing and decompressing single files",
+      "apple": "Compressing single files; Decompressing single files",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_file",
+      "status": "partial",
+      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files app writes name.zip for one file; covered by a round-trip test; no SDK call"
+    },
+    {
+      "feature": "Compressing and parsing strings",
+      "apple": "Compressing and saving a string to the file system; Decompressing and parsing an archived string",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_text",
+      "status": "partial",
+      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No string-level archive API in the SDK or the system layer"
+    },
+    {
+      "feature": "Archive headers and file attributes",
+      "apple": "ArchiveHeader; file ownership, permissions, flags, times, extended attributes",
+      "bifrost": "springboard/src/shell/store/install.rs:250 (TarEntry: path, mode, is_dir, offset, size)",
+      "status": "partial",
+      "note": "Tar entries keep mode only; the zip path was not checked for ownership, times or xattr preservation"
+    },
+    {
+      "feature": "Archive streams (data blobs and byte buffers)",
+      "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "Streaming is internal to read_tar and index_tar; no public stream type for apps"
+    },
+    {
+      "feature": "Reading and indexing tar packages for install",
+      "apple": "No direct equivalent; closest is the archive read path",
+      "bifrost": "springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)",
+      "status": "os",
+      "note": "Used by the App Store installer; headers are indexed without loading file data; not an app-facing API"
+    },
+    {
+      "feature": "DEFLATE decoding",
+      "apple": "Multithreaded lossless compression (decoding side)",
+      "bifrost": "springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/books/engine/zip.rs",
+      "status": "os",
+      "note": "Decoder lives in the Books engine; not verified which book formats use it; no compression side"
+    },
+    {
+      "feature": "Encrypted archives",
+      "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
+      "bifrost": "none found",
+      "status": "gap",
+      "note": "No encrypted archive format found in the code searched"
+    }
   ],
   "gaps": [
     "No SDK API for creating or extracting archives; apps cannot use the Files app zip code",

@@ -38,9 +38,9 @@
     {
       "feature": "Camera/microphone permission",
       "apple": "AVCaptureDevice.authorizationStatus, requestAccess",
-      "bifrost": "docs/app-isolation.md",
-      "status": "gap",
-      "note": "Sandbox doc lists a portal for devices as future work; no per-app camera or microphone prompt"
+      "bifrost": "springboard/ui/src/capture_access.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-avfoundation-capture-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Sandbox doc lists a portal for devices as future work; no per-app camera or microphone prompt"
     },
     {
       "feature": "Audio playback",
@@ -59,9 +59,9 @@
     {
       "feature": "Audio engine and processing graph",
       "apple": "AVAudioEngine, AVAudioNode, AVAudioUnit effects, AVAudioFile, AVAudioPCMBuffer",
-      "bifrost": "springboard/src/media/audiofile.rs, springboard/src/media/convert.rs",
-      "status": "gap",
-      "note": "File decode and conversion helpers exist; no node graph, effects, mixer nodes or buffer API for apps"
+      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine)",
+      "status": "partial",
+      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. File decode and conversion helpers exist; no node graph, effects, mixer nodes or buffer API for apps"
     },
     {
       "feature": "Audio session and routing",
@@ -80,9 +80,9 @@
     {
       "feature": "Audio settings keys",
       "apple": "AVAudioSettings constants (format, sample rate, channels)",
-      "bifrost": "springboard/src/media/capture.rs",
-      "status": "gap",
-      "note": "Recorder picks the first working PCM/format; no settings dictionary"
+      "bifrost": "springboard/ui/src/audio_settings.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-avfoundation-capture-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Recorder picks the first working PCM/format; no settings dictionary"
     }
   ],
   "gaps": [

@@ -17,9 +17,9 @@
     {
       "feature": "Filter objects and chaining (CIFilter)",
       "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
-      "bifrost": "none in the SDK; springboard/src/shell/photos/edit.rs (Edit pipeline, fixed order)",
-      "status": "gap",
-      "note": "Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name"
+      "bifrost": "springboard/render/src/effect_chain.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-core-image, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name"
     },
     {
       "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
@@ -73,9 +73,9 @@
     {
       "feature": "Custom kernels (CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel)",
       "apple": "CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel, CISampler, Core Image Kernel Language and Metal kernels",
-      "bifrost": "springboard/src/gpu/shaders.rs (presenter shaders, internal to the shell)",
-      "status": "gap",
-      "note": "The GPU shaders serve the compositor only. Apps cannot supply a kernel or a custom filter"
+      "bifrost": "springboard/render/src/kernel.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-04, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU shaders serve the compositor only. Apps cannot supply a kernel or a custom filter"
     },
     {
       "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",

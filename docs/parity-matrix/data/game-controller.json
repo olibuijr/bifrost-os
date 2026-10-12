@@ -17,9 +17,9 @@
     {
       "feature": "Input events (polling and callbacks)",
       "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput",
-      "bifrost": "springboard/src/bare/input.rs (ABS_X/ABS_Y, BTN_TOUCH, BTN_LEFT, key codes); springboard/sdk/src/control.rs (app control socket, not input)",
-      "status": "gap",
-      "note": "Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state."
+      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput)",
+      "status": "partial",
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state."
     },
     {
       "feature": "Button, axis, switch and direction-pad elements",
@@ -52,23 +52,23 @@
     {
       "feature": "Motion sensing (gyro and accelerometer)",
       "apple": "GCMotion",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No motion or orientation input is read from controllers or from the device."
+      "bifrost": "springboard/ui/src/controller_motion.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No motion or orientation input is read from controllers or from the device."
     },
     {
       "feature": "Virtual on-screen controller",
       "apple": "GCVirtualController",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The touch layer could feed a virtual pad, but no SDK virtual controller exists."
+      "bifrost": "springboard/ui/src/virtual_controller.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The touch layer could feed a virtual pad, but no SDK virtual controller exists."
     },
     {
       "feature": "Racing wheels, paddles and gear shifters",
       "apple": "GCRacingWheel, GCRacingWheelInput, GCGearShifterElement, GCSteeringWheelElement",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No force-feedback or wheel input model exists."
+      "bifrost": "springboard/ui/src/racing_wheel.rs",
+      "status": "partial",
+      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No force-feedback or wheel input model exists."
     },
     {
       "feature": "Gamepad input in web content",

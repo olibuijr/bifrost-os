@@ -94,9 +94,9 @@
     {
       "feature": "Vertical text and horizontal-in-vertical",
       "apple": "kCTVerticalFormsAttributeName, kCTHorizontalInVerticalFormsAttributeName",
-      "bifrost": "none found in the text modules",
-      "status": "gap",
-      "note": "No vertical layout."
+      "bifrost": "springboard/ui/src/vertical_text.rs (layout_column",
+      "status": "partial",
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vertical layout."
     },
     {
       "feature": "Ruby annotations",
@@ -108,9 +108,9 @@
     {
       "feature": "Run delegates and embedded attachments",
       "apple": "CTRunDelegate, CTAdaptiveImageProviding",
-      "bifrost": "none in the SDK text model (springboard/sdk/src/attributed.rs has no attachment attribute)",
-      "status": "gap",
-      "note": "No way to place an image or view inside styled text."
+      "bifrost": "springboard/ui/src/run_delegate.rs",
+      "status": "partial",
+      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to place an image or view inside styled text."
     }
   ],
   "gaps": [
