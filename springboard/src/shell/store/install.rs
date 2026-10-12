@@ -40,6 +40,8 @@ pub struct InstalledApp {
     pub provides: Vec<String>,
     /// the kept previous version that `rollback` can restore, if any
     pub previous: Option<String>,
+    /// the day the customer first installed the app (days since 1970-01-01); 0 when the registry does not say
+    pub purchased: i64,
 }
 
 impl InstalledApp {
@@ -76,6 +78,11 @@ pub fn installed_apps() -> Vec<InstalledApp> {
 
 pub fn installed_in(root: &Path) -> Vec<InstalledApp> {
     read_registry(root).into_iter().map(|e| e.app(root)).collect()
+}
+
+/// Today as days since 1970-01-01: the day a first install is recorded on.
+pub fn install_day() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64 / 86_400).unwrap_or(0)
 }
 
 // ---- semver ----
@@ -376,6 +383,8 @@ struct Entry {
     name: String,
     version: String,
     previous: Option<String>,
+    /// the first install day, kept across updates (`InstalledApp::purchased`)
+    purchased: i64,
     exec: String,
     icon: String,
     kind: String,
@@ -386,7 +395,7 @@ impl Entry {
     fn app(&self, root: &Path) -> InstalledApp {
         let cur = apps_dir(root).join(&self.id).join("current");
         let exec_path = if self.exec.is_empty() { PathBuf::new() } else { cur.join(&self.exec) };
-        InstalledApp { id: self.id.clone(), name: self.name.clone(), version: self.version.clone(), exec_path, icon_path: cur.join(&self.icon), dir: cur, kind: self.kind.clone(), provides: self.provides.clone(), previous: self.previous.clone() }
+        InstalledApp { id: self.id.clone(), name: self.name.clone(), version: self.version.clone(), exec_path, icon_path: cur.join(&self.icon), dir: cur, kind: self.kind.clone(), provides: self.provides.clone(), previous: self.previous.clone(), purchased: self.purchased }
     }
 }
 
@@ -401,7 +410,7 @@ fn read_registry(root: &Path) -> Vec<Entry> {
         .and_then(Json::as_array)
         .unwrap_or_default()
         .iter()
-        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version")?, previous: a.str_field("previous"), exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
+        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version")?, previous: a.str_field("previous"), purchased: a.get("purchased").and_then(Json::as_u64).unwrap_or(0) as i64, exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
         .filter(|e| !e.exec.is_empty() || e.kind == KIND_SYSTEM || e.kind == KIND_SERVICE)
         .collect()
 }
@@ -411,8 +420,9 @@ fn write_registry(root: &Path, entries: &[Entry]) -> Result<(), String> {
         .iter()
         .map(|e| {
             let prev = e.previous.as_deref().map(|p| format!(",\"previous\":{}", json::quote(p))).unwrap_or_default();
+            let bought = if e.purchased > 0 { format!(",\"purchased\":{}", e.purchased) } else { String::new() };
             let provides: Vec<String> = e.provides.iter().map(|p| json::quote(p)).collect();
-            format!("{{\"id\":{},\"name\":{},\"version\":{}{prev},\"exec\":{},\"icon\":{},\"kind\":{},\"provides\":[{}]}}", json::quote(&e.id), json::quote(&e.name), json::quote(&e.version), json::quote(&e.exec), json::quote(&e.icon), json::quote(&e.kind), provides.join(","))
+            format!("{{\"id\":{},\"name\":{},\"version\":{}{prev}{bought},\"exec\":{},\"icon\":{},\"kind\":{},\"provides\":[{}]}}", json::quote(&e.id), json::quote(&e.name), json::quote(&e.version), json::quote(&e.exec), json::quote(&e.icon), json::quote(&e.kind), provides.join(","))
         })
         .collect();
     let path = registry_path(root);
@@ -493,8 +503,10 @@ fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Resul
         }
     }
     let mut reg = read_registry(root);
+    // the first install day stays the purchase day across updates
+    let purchased = reg.iter().find(|e| e.id == m.id).map(|e| e.purchased).filter(|&d| d > 0).unwrap_or_else(install_day);
     reg.retain(|e| e.id != m.id);
-    let entry = Entry { id: m.id.clone(), name: m.name, version: m.version, previous, exec: m.exec, icon: m.icon, kind: m.kind, provides: m.provides };
+    let entry = Entry { id: m.id.clone(), name: m.name, version: m.version, previous, purchased, exec: m.exec, icon: m.icon, kind: m.kind, provides: m.provides };
     let app = entry.app(root);
     reg.push(entry);
     write_registry(root, &reg)?;

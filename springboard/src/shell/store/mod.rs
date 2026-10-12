@@ -20,6 +20,7 @@ use crate::deildu::scroll::Scroller;
 use crate::gfx::{pack, squircle_mask, Image, Surface};
 use crate::scene::STATUS_PT;
 use api::StoreApp;
+use bifrost_ui::entitlement::Ledger;
 use install::InstalledApp;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -349,6 +350,25 @@ impl AppStore {
         (0..self.catalog.len()).filter(|&i| !self.catalog[i].is_service() && matches!(self.installed_version(&self.catalog[i].id), Some(v) if api::update_available(v, &self.catalog[i].version))).collect()
     }
 
+    /// The installed apps the customer has purchased on `day`, newest purchase first (ties by name). Every installed app
+    /// (not a background service) is a free purchase recorded on its first install day, held in the entitlement ledger.
+    fn purchased(&self, day: i64) -> Vec<usize> {
+        let mut ledger = Ledger::new();
+        for i in self.installed.iter().filter(|i| !i.is_service()) {
+            ledger.record(&i.id, i.purchased, None);
+        }
+        let mut out: Vec<(i64, String, usize)> = ledger
+            .current_entitlements(day)
+            .into_iter()
+            .filter_map(|t| {
+                let idx = self.installed.iter().position(|i| i.id == t.product)?;
+                Some((t.purchased, self.installed[idx].name.to_lowercase(), idx))
+            })
+            .collect();
+        out.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        out.into_iter().map(|(_, _, i)| i).collect()
+    }
+
     /// Story and list cards for Today from the catalogue, newest release first.
     fn today_cards(&self, mut apps: Vec<usize>) -> Vec<Card> {
         let date = |i: usize| self.catalog[i].changelog.first().map(|r| r.date.clone()).unwrap_or_default();
@@ -409,9 +429,9 @@ impl AppStore {
                     let open = self.expanded.contains(&self.catalog[i].id);
                     Row::Update(i, if open { n } else { n.min(2) }, !open && n > 2)
                 }));
-                let rest: Vec<usize> = (0..self.installed.len()).filter(|&i| !ups.iter().any(|&u| self.catalog[u].id == self.installed[i].id) && !self.installed[i].is_service() && !self.catalog.iter().any(|a| a.id == self.installed[i].id && a.is_service())).collect();
+                let rest: Vec<usize> = self.purchased(today_days()).into_iter().filter(|&i| !ups.iter().any(|&u| self.catalog[u].id == self.installed[i].id)).collect();
                 if !rest.is_empty() {
-                    r.push(Row::Header("Installed".into(), false));
+                    r.push(Row::Header("Purchased".into(), false));
                     for i in rest {
                         match self.catalog.iter().position(|a| a.id == self.installed[i].id) {
                             Some(c) => r.push(Row::App(c)),
@@ -606,6 +626,10 @@ impl AppStore {
     fn press_button(&mut self, id: &str) {
         match self.find(id).map(|a| self.button(a)) {
             Some(Btn::None) => {}
+            // a paid app needs a purchase, and the shell has no purchase sheet yet: it is never installed here
+            Some(Btn::Get) if self.find(id).is_some_and(|a| a.is_paid()) => {
+                self.failed.insert(id.to_string(), "Purchase is not available yet".into());
+            }
             Some(Btn::Get | Btn::Update) => self.start(id),
             Some(Btn::Progress(_)) => self.cancel(id),
             Some(Btn::Open) => self.launch = self.installed.iter().find(|i| i.id == id).cloned(),
@@ -1225,7 +1249,7 @@ impl AppStore {
         let mut y = y0 + ui.pt(150.0);
         let w = self.card_w(&*ui);
         c.fill_rect(x as usize, y as usize, w as usize, 1, sep());
-        let cells = [("VERSION", a.version.clone()), ("SIZE", size_text(a.size)), ("CATEGORY", category_label(&a).to_string())];
+        let cells = [("VERSION", a.version.clone()), ("SIZE", size_text(a.size)), ("PRICE", a.price_text()), ("AGE", a.age_text()), ("CATEGORY", category_label(&a).to_string())];
         let cw = w / cells.len() as f32;
         for (i, (k, v)) in cells.iter().enumerate() {
             let cx = x + cw * i as f32 + cw / 2.0;
@@ -1630,5 +1654,32 @@ mod tests {
         assert_eq!(s.update_count(), 2, "apps and system components both count");
         assert_eq!(category_label(&kb), "System Component");
         assert_eq!(category_label(&s.catalog[0]), "Utilities");
+    }
+
+    #[test]
+    fn purchased_lists_installed_apps_by_purchase_day_and_hides_services() {
+        let mut s = store();
+        s.installed = vec![
+            InstalledApp { purchased: 120, ..local("is.o.chess", "1.0.0") },
+            InstalledApp { purchased: 100, ..local("is.o.calc", "1.1.0") },
+            InstalledApp { kind: "service".into(), purchased: 90, ..local("is.o.update", "1.0.0") },
+            InstalledApp { purchased: 300, ..local("is.o.later", "1.0.0") },
+        ];
+        assert_eq!(s.purchased(200), vec![0, 1], "the service and the purchase after today are left out");
+        s.tab = Tab::Updates;
+        let rows = s.rows();
+        let at = rows.iter().position(|r| *r == Row::Header("Purchased".into(), false)).expect("Purchased header");
+        assert_eq!(rows[at + 1..], [Row::App(1), Row::App(0)], "chess (bought first) then calc, both in the catalogue");
+    }
+
+    #[test]
+    fn a_paid_app_is_not_installed_without_a_purchase() {
+        let mut s = store();
+        s.catalog[1].price = Some(bifrost_ui::purchase::Price::new(990, 0, "ISK"));
+        let chess = s.catalog[1].clone();
+        s.press_button(&chess.id);
+        assert!(s.jobs.is_empty());
+        assert_eq!(s.failed.get(&chess.id).map(String::as_str), Some("Purchase is not available yet"));
+        assert_eq!(s.button(&chess), Btn::Get);
     }
 }
