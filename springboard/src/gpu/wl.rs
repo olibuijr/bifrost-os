@@ -1202,3 +1202,35 @@ fn link(gl: &Gles) -> io::Result<Program> {
     gl!(gl, uniform1i(tex, 0));
     Ok(Program { id, view: loc("u_view"), mode: loc("u_mode"), half: loc("u_half"), alpha: loc("u_alpha"), rrect: loc("u_rrect"), radius: loc("u_radius"), glass: loc("u_glass"), hole: loc("u_hole"), hole_r: loc("u_hole_r"), sat: loc("u_sat"), rim: loc("u_rim"), color: loc("u_color") })
 }
+
+#[cfg(test)]
+mod stack_tests {
+    use super::*;
+
+    fn under_entry() -> Under {
+        Under { live: None, dirty: false, built: None, wait: false }
+    }
+
+    /// A foreign toplevel is never in the stack and a stale key must not matter: marking dirty touches only
+    /// windows at or above `from` that have a backdrop, and never panics.
+    #[test]
+    fn dirty_from_marks_only_windows_above() {
+        let k = |n: u32| WINDOW_KEY_BASE + n;
+        let stack = vec![(k(1), 0, 0), (k(2), 10, 10), (k(3), 20, 20)];
+        let mut under: HashMap<u32, Under> = HashMap::new();
+        under.insert(k(2), under_entry());
+        under.insert(k(3), under_entry());
+        under.insert(k(9), under_entry());
+        let mut changed = Vec::new();
+        under_dirty_from(&stack, &mut under, &mut changed, 2);
+        assert_eq!(changed, vec![k(3)]);
+        assert!(under[&k(3)].dirty && !under[&k(2)].dirty && !under[&k(9)].dirty);
+        under_dirty_from(&stack, &mut under, &mut changed, 0);
+        assert_eq!(changed, vec![k(3), k(2)]);
+    }
+
+    #[test]
+    fn window_keys_are_windows() {
+        assert!(is_window(WINDOW_KEY_BASE) && !is_window(5) && !is_window(u32::MAX));
+    }
+}
