@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.0 — 2026-10-12
+
+- Tags: a word written as `#tag` in a reminder's title or notes is a tag, such as `#home` or `#Work`. Tags match without case, so `#Home` and `#home` are one tag.
+- The sidebar has a Tags section under My Lists, listing each tag with the number of open reminders that carry it. Choose a tag to see those reminders, with the same show and hide rules for completed ones as a list.
+- The Tags section appears only when a reminder has a tag, so the sidebar is unchanged until you use one.
+
 ## 1.12.0 — 2026-10-12
 
 - Edit > Undo and Edit > Redo (Cmd+Z and Cmd+Shift+Z) now work on every change to your reminders: completing or reopening one, saving a new or changed reminder, duplicating, moving by drag, and creating or renaming a list. Undo and Redo show the change's name in the Edit menu, such as "Undo Mark as Completed".

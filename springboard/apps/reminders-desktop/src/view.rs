@@ -211,6 +211,7 @@ impl Reminders {
         let wpx = self.w as f32;
         let (title, color) = match self.view {
             View::Smart(sm) => (sm.label().to_string(), BLUE),
+            View::Tag(key) => (crate::model::tag_name(&self.data.items, key).map_or(String::new(), |n| format!("#{n}")), BLUE),
             View::List(id) => (
                 self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
                 list_color(&self.data, id),

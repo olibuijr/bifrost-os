@@ -24,6 +24,8 @@ const SIDE_INSET: f32 = 10.0;
 const ADD_LIST_H: f32 = 36.0;
 /// Source-list row ids of My Lists: `LIST_ROW + index`.
 const LIST_ROW: u32 = 1000;
+/// Source-list row ids of the Tags section: `TAG_ROW + index` in the sorted tag list (`model::tag_counts`).
+const TAG_ROW: u32 = 2000;
 /// Accessibility ids of the sidebar's smart tiles and Add List (the toolbar uses 1 to 9).
 const SIDEBAR_TILE: u64 = 100;
 const SIDEBAR_ADD: u64 = 200;
@@ -175,7 +177,7 @@ impl Reminders {
             B_OPTIONS => Target::Options,
             B_INFO => match self.view {
                 View::List(l) => Target::ListInfo(l),
-                View::Smart(_) => return None,
+                View::Smart(_) | View::Tag(_) => return None,
             },
             B_ADD => Target::New,
             B_SEARCH if self.search_open() => Target::Field(Field::Title),
@@ -209,6 +211,12 @@ impl Reminders {
                 let value = model::list_count(&self.data.items, list.id).to_string();
                 nodes.push(Node { id: LIST_ROW as u64 + i as u64, role: Role::Row, label: list.name.clone(), value, bounds, enabled: true });
             }
+            // the Tags section follows My Lists: its header is item `lists + 1`, then one row per tag
+            let tags = model::tag_counts(&self.data.items);
+            for (i, (name, open)) in tags.iter().enumerate() {
+                let bounds = lists.item_rect(self.data.lists.len() + 2 + i, area, 0.0);
+                nodes.push(Node { id: TAG_ROW as u64 + i as u64, role: Role::Row, label: format!("#{name}"), value: open.to_string(), bounds, enabled: true });
+            }
             nodes.push(Node { id: SIDEBAR_ADD, role: Role::Button, label: "Add List".into(), value: String::new(), bounds: self.add_list_rect(ui), enabled: true });
         }
         nodes
@@ -240,9 +248,18 @@ impl Reminders {
             let colour = view::COLORS[l.color as usize % view::COLORS.len()];
             items.push(SidebarItem::row(LIST_ROW + i as u32, &l.name).with_dot(colour).with_count(model::list_count(&self.data.items, l.id) as u32));
         }
+        // Tags: a section only when some reminder carries a #tag, so the default sidebar is unchanged
+        let tags = model::tag_counts(&self.data.items);
+        if !tags.is_empty() {
+            items.push(SidebarItem::header("Tags"));
+            for (i, (name, open)) in tags.iter().enumerate() {
+                items.push(SidebarItem::row(TAG_ROW + i as u32, &format!("#{name}")).with_count(*open as u32));
+            }
+        }
         let mut list = SourceList::new(items, 32.0, 30.0);
         let open = match self.view {
             View::List(id) if !self.searching => self.data.lists.iter().position(|l| l.id == id).map(|i| LIST_ROW + i as u32),
+            View::Tag(key) if !self.searching => tags.iter().position(|(name, _)| model::tag_key(name) == key).map(|i| TAG_ROW + i as u32),
             _ => None,
         };
         list.set_selected(open);
@@ -265,6 +282,10 @@ impl Reminders {
             return Some(Target::NewList);
         }
         let id = self.lists_source().hit(self.lists_bounds(ui), 0.0, px, py)?;
+        if id >= TAG_ROW {
+            let tags = model::tag_counts(&self.data.items);
+            return tags.get((id - TAG_ROW) as usize).map(|(name, _)| Target::Tag(model::tag_key(name)));
+        }
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }
 

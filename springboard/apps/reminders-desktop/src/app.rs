@@ -75,6 +75,8 @@ enum Target {
     Smart(Smart),
     List(u64),
     ListInfo(u64),
+    /// A tag in the sidebar's Tags section, by its `model::tag_key`.
+    Tag(u64),
     Row(usize),
     Circle(usize),
     Collapse(usize),
@@ -508,6 +510,7 @@ impl Reminders {
         let label = match self.view {
             View::Smart(s) => s.label().to_string(),
             View::List(id) => self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
+            View::Tag(key) => model::tag_name(&self.data.items, key).map_or(String::new(), |n| format!("#{n}")),
         };
         let screen = match self.screen {
             Screen::Items => "list",
@@ -944,7 +947,7 @@ impl Reminders {
             let mut r = Reminder::new(0, "");
             r.list = match self.view {
                 View::List(l) => l,
-                View::Smart(_) => self
+                View::Smart(_) | View::Tag(_) => self
                     .opts
                     .default_list
                     .filter(|id| self.data.lists.iter().any(|l| l.id == *id))
@@ -1302,6 +1305,7 @@ impl Reminders {
             Target::OptDefaultList(id) => self.opts.default_list = id,
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
             Target::List(id) => self.open_view(ui, View::List(id)),
+            Target::Tag(key) => self.open_view(ui, View::Tag(key)),
             Target::ListInfo(id) => self.open_list_editor(ui, Some(id), t),
             Target::NewList => self.open_list_editor(ui, None, t),
             Target::Search => self.begin_search(ui, t),
@@ -1543,6 +1547,7 @@ impl Reminders {
             Target::Sidebar
                 | Target::Smart(_)
                 | Target::List(_)
+                | Target::Tag(_)
                 | Target::ListInfo(_)
                 | Target::New
                 | Target::NewList
