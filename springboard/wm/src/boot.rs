@@ -24,6 +24,27 @@ pub fn read_marks_file() -> String {
     std::fs::read_to_string(bootsplash::MARKS).unwrap_or_default()
 }
 
+/// The supervisor's progress record (contract C3): a `bootweave_frame::timing::Handoff` encoding, written atomically
+/// whenever its bar moves.
+pub const PROGRESS_FILE: &str = "/run/bifrost/bootweave/progress";
+
+/// The bar position (0..=1) and appearance the supervisor last showed, from the progress record's bytes.
+pub fn decode_progress(bytes: &[u8]) -> Option<(f32, bootweave_frame::Appearance)> {
+    let h = bootweave_frame::timing::Handoff::decode(bytes)?;
+    Some(((h.shown_permille as f32 / 1000.0).clamp(0.0, 1.0), h.timing.appearance))
+}
+
+/// The held boot frame: continues from the supervisor's bar and appearance when it published them, else the loader's
+/// frame at 0 in Dark. `last` is the position already shown; the bar never moves back from it.
+pub fn held_frame(w: u32, h: u32, record: Option<&[u8]>, last: f32) -> bootweave_frame::Frame {
+    let mut f = bootweave_frame::Frame::boot(w, h);
+    if let Some((p, a)) = record.and_then(decode_progress) {
+        f.progress = Some(p.max(last));
+        f.appearance = a;
+    }
+    f
+}
+
 /// Opacity of the loader's frame over the desktop. `since_ready` is the time since the desktop became ready
 /// (None until then: the frame stays fully opaque). None once the fade is over.
 pub fn splash_alpha(since_ready: Option<f64>) -> Option<f32> {
@@ -42,7 +63,7 @@ pub const SHUTDOWN_REQUEST: &str = "/run/bifrost/bootweave/shutdown";
 /// runtime directory: the window server runs as that account, while `/run/bifrost/bootweave` belongs to root.
 pub const SHUTDOWN_FADED: &str = "/run/bifrost/user/shutdown-faded";
 /// How long the desktop takes to fade back to the boot frame at shutdown (the boot's own fade length).
-pub const SHUTDOWN_FADE_MS: f64 = 450.0;
+pub const SHUTDOWN_FADE_MS: f64 = FADE_MS;
 
 /// Opacity of the boot frame over the desktop during a shutdown. `since_request` is the time since the request was
 /// first seen (None when there is no request). It eases from 0 to 1 over `SHUTDOWN_FADE_MS` and then holds at 1, so
@@ -60,6 +81,21 @@ pub fn shutdown_faded(since_request: Option<f64>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_held_frame_continues_from_the_supervisors_bar() {
+        use bootweave_frame::{timing::{BootTiming, Handoff}, Appearance};
+        let timing = BootTiming { loader_ms: 100, kernel_ms: 200, userspace_ms: 300, samples: 1, appearance: Appearance::Light };
+        let rec = Handoff { timing, loader_ms: 10, shown_permille: 420 }.encode();
+        let f = super::held_frame(64, 32, Some(&rec), 0.0);
+        assert_eq!(f.progress, Some(0.42));
+        assert_eq!(f.appearance, Appearance::Light);
+        // never back from what was shown
+        assert_eq!(super::held_frame(64, 32, Some(&rec), 0.9).progress, Some(0.9));
+        // no record: the loader's frame
+        assert_eq!(super::held_frame(64, 32, None, 0.0).progress, Some(0.0));
+        assert_eq!(super::held_frame(64, 32, Some(&[1, 2]), 0.0).appearance, Appearance::Dark);
+    }
+
     use super::*;
 
     #[test]

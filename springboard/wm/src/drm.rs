@@ -61,13 +61,21 @@ struct Drm {
     vulkan: Option<crate::drm_vulkan::Vulkan>,
     /// The boot frame back over the desktop at shutdown (`SHUTDOWN_REQUEST`).
     shutdown: Shutdown,
+    /// The session is switched away (VT switch): nothing is composed or flipped until it comes back (WM-16).
+    paused: bool,
 }
 
 /// The loader's frame as a render buffer of the panel's size (the boot's first fade and the shutdown fade share it).
+/// The bar continues from the supervisor's published position and appearance (`boot::held_frame`, BOOT-4).
 fn boot_frame_buffer(w: i32, h: i32) -> MemoryRenderBuffer {
+    let record = std::fs::read(crate::boot::PROGRESS_FILE).ok();
+    let frame = crate::boot::held_frame(w as u32, h as u32, record.as_deref(), 0.0);
     let mut px = vec![0u32; (w * h) as usize];
-    bootweave_frame::render(&bootweave_frame::Frame::boot(w as u32, h as u32), &mut px, w as usize, bootweave_frame::PixelOrder::Bgrx);
-    let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
+    bootweave_frame::render(&frame, &mut px, w as usize, bootweave_frame::PixelOrder::Bgrx);
+    let mut bytes = Vec::with_capacity(px.len() * 4);
+    for p in &px {
+        bytes.extend_from_slice(&p.to_le_bytes());
+    }
     MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None)
 }
 
@@ -140,14 +148,19 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
 
     // VT switches pause and resume the GPU and input
     let b = backend.clone();
-    event_loop.handle().insert_source(notifier, move |event, _, _state| match event {
-        SessionEvent::PauseSession => libinput.suspend(),
+    event_loop.handle().insert_source(notifier, move |event, _, state| match event {
+        SessionEvent::PauseSession => {
+            libinput.suspend();
+            b.borrow_mut().paused = true;
+        }
         SessionEvent::ActivateSession => {
             if let Err(e) = libinput.resume() {
                 eprintln!("bifrost-wm: libinput resume: {e:?}");
             }
             let mut d = b.borrow_mut();
+            d.paused = false;
             d.pending = false;
+            state.dirty = true;
             let _ = d.compositor.reset_state();
             if let Some(v) = d.vulkan.as_mut() {
                 v.reset();
@@ -155,13 +168,11 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         }
     })?;
 
-    // first frame, then one per vblank; a quiet desktop is re-checked at the refresh rate
+    // first frame, then a frame only when something changed (`WmState::dirty`) or the boot/shutdown fade runs; the timer
+    // is the retry for a dirty flag set while a flip was pending, and costs one flag check per tick on a quiet desktop
     let b = backend.clone();
     event_loop.handle().insert_source(Timer::immediate(), move |_, _, state| {
-        let mut d = b.borrow_mut();
-        if !d.pending {
-            d.render(state);
-        }
+        b.borrow_mut().tick(state);
         TimeoutAction::ToDuration(Duration::from_millis(16))
     })?;
     // clients' dmabufs (the shell's GPU presenter) are imported by this renderer
@@ -187,7 +198,7 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             eprintln!("bifrost-wm: frame submitted: {e}");
         }
         d.pending = false;
-        d.render(state);
+        d.tick(state);
     }));
 
     let name = state.socket_name.to_string_lossy().into_owned();
@@ -286,7 +297,7 @@ fn open_gpu(
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default() })
+    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default(), paused: false })
 }
 
 /// The shutdown fade (`crate::boot::shutdown_alpha`): once `SHUTDOWN_REQUEST` exists the boot frame comes back over the
@@ -298,19 +309,16 @@ struct Shutdown {
     since: Option<std::time::Instant>,
     /// `SHUTDOWN_FADED` is written once.
     faded_marked: bool,
+    /// When the request file was last looked for.
+    checked: Option<std::time::Instant>,
 }
 
 impl Drm {
     /// The boot frame over the desktop for the shutdown fade, with its opacity; None before a request.
     fn shutdown_overlay(&mut self) -> Option<(MemoryRenderBuffer, f32)> {
+        self.poll_shutdown();
         let sd = &mut self.shutdown;
-        if sd.since.is_none() {
-            if !std::path::Path::new(crate::boot::SHUTDOWN_REQUEST).exists() {
-                return None;
-            }
-            sd.since = Some(std::time::Instant::now());
-            crate::boot::mark("shutdown-start");
-        }
+        sd.since?;
         let since = sd.since.map(|t| t.elapsed().as_secs_f64() * 1000.0);
         if sd.splash.is_none() {
             let mode = self.output.current_mode()?;
@@ -325,10 +333,41 @@ impl Drm {
         Some((sd.splash.clone()?, crate::boot::shutdown_alpha(since)?))
     }
 
+    /// Looks for the shutdown request at most every 250 ms (it was a `stat` per frame).
+    fn poll_shutdown(&mut self) {
+        let sd = &mut self.shutdown;
+        if sd.since.is_some() || sd.checked.is_some_and(|t| t.elapsed() < Duration::from_millis(250)) {
+            return;
+        }
+        sd.checked = Some(std::time::Instant::now());
+        if std::path::Path::new(crate::boot::SHUTDOWN_REQUEST).exists() {
+            sd.since = Some(std::time::Instant::now());
+            crate::boot::mark("shutdown-start");
+        }
+    }
+
+    /// Composes when the scene changed or a fade runs, and not while a flip is pending or the session is away.
+    fn tick(&mut self, state: &mut WmState) {
+        if !should_render(self.paused, self.pending) {
+            return;
+        }
+        self.poll_shutdown();
+        let fading = self.boot.is_some() || (self.shutdown.since.is_some() && !self.shutdown.faded_marked);
+        if !state.dirty && !fading {
+            return;
+        }
+        state.dirty = false;
+        let gone = std::mem::take(&mut state.destroyed_buffers);
+        if let Some(v) = self.vulkan.as_mut() {
+            v.forget_buffers(&gone);
+        }
+        self.render(state);
+    }
+
     fn render(&mut self, state: &mut WmState) {
         let output = self.output.clone();
         if let Some(v) = self.vulkan.as_mut() {
-            match v.frame(self.compositor.surface()) {
+            match v.frame(self.compositor.surface(), state, &output) {
                 Ok(queued) => self.pending = queued,
                 Err(e) => {
                     eprintln!("bifrost-wm: vulkan frame: {e}");
@@ -371,6 +410,9 @@ impl Drm {
         state.send_frames(&output);
     }
 }
+
+/// Whether a frame may be composed now: not while the session is switched away and not with a flip in flight.
+pub(crate) fn should_render(paused: bool, pending: bool) -> bool { !paused && !pending }
 
 /// The boot's one modeset stays: the mode the CRTC already shows (the loader's, or the learned `video=` mode) is
 /// kept. Without one, the native size at its fastest refresh. `BIFROST_WM_MODE=WxH@R` overrides both.
@@ -448,6 +490,13 @@ mod tests {
     use super::*;
 
     fn m(w: u16, h: u16, hz: u32, preferred: bool) -> ModeSummary { ModeSummary { w, h, hz, preferred } }
+
+    #[test]
+    fn no_frame_while_paused_or_pending() {
+        assert!(should_render(false, false));
+        assert!(!should_render(true, false));
+        assert!(!should_render(false, true));
+    }
 
     #[test]
     fn the_active_mode_is_kept_so_the_boot_has_one_modeset() {

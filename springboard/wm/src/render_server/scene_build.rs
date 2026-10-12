@@ -169,7 +169,7 @@ pub fn layer_nodes(pl: &PresentedLayer, bound: &dyn Fn(ContentsId) -> Option<u64
 }
 
 /// Stable key of a `wl_buffer` for the importer's cache: one key per buffer object.
-fn buffer_key(buffer: &WlBuffer) -> u64 {
+pub(crate) fn buffer_key(buffer: &WlBuffer) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     buffer.id().hash(&mut h);
@@ -261,10 +261,14 @@ pub fn build(state: &WmState, output: &Output, t: f64, server: &mut Server) -> V
 
     for w in state.space.elements() {
         let Some(loc) = state.space.element_location(w) else { continue };
-        let Some(toplevel) = w.toplevel() else { continue };
+        // Wayland toplevels and X11 windows alike (WM-3)
+        let Some(wl) = w.wl_surface().map(|s| s.into_owned()) else { continue };
         let geo = w.geometry();
         let origin = loc - geo.loc;
-        let active = toplevel.current_state().states.contains(xdg_toplevel::State::Activated);
+        let active = match w.toplevel() {
+            Some(t) => t.current_state().states.contains(xdg_toplevel::State::Activated),
+            None => crate::state::WmState::known_id(w).is_some() && crate::state::WmState::known_id(w) == state.wm.focused(),
+        };
 
         // the shadow of the window frame, behind everything of it
         let frame = [loc.x as f32, loc.y as f32, geo.size.w as f32, geo.size.h as f32];
@@ -276,7 +280,7 @@ pub fn build(state: &WmState, output: &Output, t: f64, server: &mut Server) -> V
         out.push(shadow);
 
         // glass behind the regions the window asks to blur
-        for r in blur_region(toplevel.wl_surface()) {
+        for r in blur_region(&wl) {
             let mut g = SceneNode::solid(
                 [(origin.x + r.loc.x) as f32, (origin.y + r.loc.y) as f32, r.size.w as f32, r.size.h as f32],
                 [0.0; 4],
@@ -286,7 +290,7 @@ pub fn build(state: &WmState, output: &Output, t: f64, server: &mut Server) -> V
             out.push(g);
         }
 
-        surface_nodes(importer, toplevel.wl_surface(), origin, scale, WINDOW_RADIUS, &mut out);
+        surface_nodes(importer, &wl, origin, scale, WINDOW_RADIUS, &mut out);
     }
 
     // layer trees: each context's presented layers, in context id order

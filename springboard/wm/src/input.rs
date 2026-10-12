@@ -249,7 +249,15 @@ pub fn configure_device(device: &mut smithay::reexports::input::Device, prefs: &
 /// Creates the seat's keyboard with the layout and repeat rate from the preferences. The keyboard sends the repeat
 /// rate to clients as `wl_keyboard.repeat_info`.
 pub fn add_keyboard(seat: &mut Seat<WmState>, prefs: &InputPrefs) -> Result<KeyboardHandle<WmState>, KeyboardError> {
-    seat.add_keyboard(XkbConfig { layout: &prefs.layout, ..Default::default() }, prefs.repeat_delay_ms, prefs.repeat_rate)
+    match seat.add_keyboard(XkbConfig { layout: &prefs.layout, ..Default::default() }, prefs.repeat_delay_ms, prefs.repeat_rate) {
+        Ok(k) => Ok(k),
+        Err(e) => {
+            // a layout the xkb data does not have (`valid_layout` only checks the shape) must not abort the session (WM-9)
+            let fallback = InputPrefs::default().layout;
+            eprintln!("bifrost-wm: keyboard layout {:?} rejected ({e:?}), using {fallback:?}", prefs.layout);
+            seat.add_keyboard(XkbConfig { layout: &fallback, ..Default::default() }, prefs.repeat_delay_ms, prefs.repeat_rate)
+        }
+    }
 }
 
 /// The xcursor search directories for a theme: `~/.icons`, then `icons/` under each XDG data directory.
@@ -331,6 +339,7 @@ impl WmState {
     /// Keyboard, pointer and gesture events from a backend. Pointer motion also goes out as relative motion.
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         // any input is activity for ext-idle-notify (the shell dims and locks on idle)
+        self.dirty = true;
         let seat = self.seat.clone();
         self.idle_notifier_state.notify_activity(&seat);
         match event {
