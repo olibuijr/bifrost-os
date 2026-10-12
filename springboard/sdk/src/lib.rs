@@ -146,6 +146,8 @@ pub mod translation;
 pub mod wlan;
 pub mod wlan_events;
 pub mod wlan_keychain;
+pub mod wifi_status;
+pub mod system_prefs;
 pub mod notification;
 pub mod post_delivery;
 pub mod system_sound;
