@@ -965,3 +965,5 @@ pub mod remote_view;
 pub mod x25519;
 pub mod web_usage;
 pub mod browser_settings;
+pub mod bt_chooser;
+pub mod bt_passkey;
