@@ -52,6 +52,7 @@ pub mod effects;
 pub mod blur_kernels;
 pub mod blur_filters;
 pub mod effect_chain;
+pub mod composite_filters;
 pub mod gamma_fade;
 pub mod video_transfer;
 pub mod block_motion;
