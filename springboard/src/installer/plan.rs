@@ -25,7 +25,7 @@ fn lab_link() -> Option<(String, String)> {
 
 /// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1).
 fn lab_nmconnection(mac: &str, cidr: &str) -> String {
-    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
+    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=magic\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
 }
 
 /// Everything the user chose.
@@ -159,6 +159,16 @@ pub const AUDIO_CORE: Option<&str> = None;
 
 pub const INITRAMFS_HOOKS: &str = "HOOKS=(base udev autodetect microcode modconf kms keyboard block filesystems bifrost-mounts)";
 
+/// The initramfs hooks line; an encrypted root opens in `bifrost-unlock`, which must run before `filesystems`
+/// (`packaging/arch/initcpio/hooks/bifrost-unlock`). The installer cannot create LUKS yet, so installs use `false`.
+pub fn initramfs_hooks(encrypted: bool) -> String {
+    if encrypted {
+        INITRAMFS_HOOKS.replace(" filesystems", " bifrost-unlock filesystems")
+    } else {
+        INITRAMFS_HOOKS.to_string()
+    }
+}
+
 /// Installed kernel command line (boot.cfg). i915 framebuffer compression and PSR are off: on Skylake (HD 530) they
 /// produced sheared, repeated stripes across the top of the EFI frame and the first frames after the handoff.
 /// threadirqs (B1) runs interrupt handlers as kernel threads, so the sound card and xHCI IRQ threads can be
@@ -172,7 +182,13 @@ pub fn cmdline_txt(root_uuid: &str) -> String {
 
 fn cmdline_with(root_uuid: &str, audio_core: Option<&str>) -> String {
     let isolate = audio_core.map(|c| format!(" isolcpus={c} nohz_full={c} rcu_nocbs={c}")).unwrap_or_default();
-    format!("initrd=\\initramfs-linux.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs{isolate}\n")
+    format!("initrd=\\initramfs-linux.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
+}
+
+/// Lab autonomy: a panic, an oops or a lockup reboots the machine after 10 s instead of hanging it, so an unattended
+/// lab machine comes back by itself (`panic=10` on the command line covers a panic before sysctl has run).
+pub fn autonomy_sysctl() -> &'static str {
+    "kernel.panic = 10\nkernel.panic_on_oops = 1\nkernel.softlockup_panic = 1\nkernel.hardlockup_panic = 1\n"
 }
 
 /// HDA codec power saving off (B2): the kernel's default suspends the codec after 10 s idle, and the wake-up
@@ -481,6 +497,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         r.write(&sys("/etc/bifrost/keyboard.env"), &wayland_keyboard_conf(&cfg.layout))?;
         r.write(&sys("/usr/lib/os-release"), os_release())?;
         r.write(&sys("/etc/ssh/sshd_config.d/10-bifrost.conf"), sshd_dropin())?;
+        r.write(&sys("/etc/sysctl.d/90-bifrost-autonomy.conf"), autonomy_sysctl())?;
         // a lab ISO (it carries /etc/bifrost/lab.token) leaves the lab's root key on the installed system, so the next test
         // iteration can reach it; a release ISO has no token and installs nothing of the sort
         if std::path::Path::new("/etc/bifrost/lab.token").exists() {
@@ -576,7 +593,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         let mc = mc.lines().map(|l| {
             // busybox init mounts the root at once; the systemd initrd held sysroot.mount ~0.9 s behind its
             // mount-event rate limit (boot-bench). btrfs needs no fsck and the console is never shown.
-            if l.starts_with("HOOKS=") { INITRAMFS_HOOKS.to_string() } else if l.starts_with("MODULES=(") { let mut line=l.to_string(); for module in ["virtio_gpu", "btrfs"] { if !line.contains(module) { line=line.replacen("MODULES=(", &format!("MODULES=({module} "), 1); } } line } else { l.to_string() }
+            if l.starts_with("HOOKS=") { initramfs_hooks(false) } else if l.starts_with("MODULES=(") { let mut line=l.to_string(); for module in ["virtio_gpu", "btrfs"] { if !line.contains(module) { line=line.replacen("MODULES=(", &format!("MODULES=({module} "), 1); } } line } else { l.to_string() }
         }).collect::<Vec<_>>().join("\n");
         r.write(&sys("/etc/mkinitcpio.conf"), &(mc + "\n"))?;
         // the package ships the hook; an older package from the update repo may not, so keep a local copy then
@@ -754,6 +771,18 @@ mod tests {
         assert!(k.contains("mac-address=00:23:24:dc:c8:40\n"));
         assert!(k.contains("method=manual\naddress1=10.99.0.200/24,10.99.0.1\n"));
         assert!(k.contains("[ipv6]\nmethod=ignore"));
+        assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=magic\n"), "the lab NIC wakes on a magic packet");
+    }
+
+    #[test]
+    fn autonomy_reboots_on_panic_oops_and_lockups() {
+        let s = autonomy_sysctl();
+        for line in ["kernel.panic = 10", "kernel.panic_on_oops = 1", "kernel.softlockup_panic = 1", "kernel.hardlockup_panic = 1"] {
+            assert!(s.lines().any(|l| l == line), "missing {line}");
+        }
+        assert!(s.ends_with('\n'));
+        assert!(cmdline_txt("abcd").split_whitespace().any(|t| t == "panic=10"), "a panic before sysctl runs also reboots");
+        assert_eq!(cmdline_txt("abcd").split_whitespace().filter(|t| t.starts_with("panic=")).count(), 1);
     }
 
     fn layout(id: &str) -> Layout {
@@ -804,6 +833,10 @@ mod tests {
         let c = cmdline_txt("abcd");
         assert!(c.starts_with("initrd=\\initramfs-linux.img root=UUID=abcd rootflags=subvol=@system rw quiet") && c.ends_with('\n'));
         assert!(!c.contains("plymouth") && !c.contains(" splash"));
+        let enc = initramfs_hooks(true);
+        assert_eq!(initramfs_hooks(false), INITRAMFS_HOOKS);
+        assert!(enc.find("bifrost-unlock").unwrap() < enc.find("filesystems").unwrap(), "unlock before the root mounts: {enc}");
+        assert!(enc.ends_with("bifrost-mounts)") && enc.matches("bifrost-unlock").count() == 1);
         assert!(!INITRAMFS_HOOKS.contains("systemd") && !INITRAMFS_HOOKS.contains("fsck") && INITRAMFS_HOOKS.contains(" kms "));
         assert!(c.contains(" threadirqs") && !c.contains("isolcpus"));
         assert_eq!(c.split_whitespace().filter(|t| *t == "threadirqs").count(), 1, "threaded IRQs for the audio IRQ thread");

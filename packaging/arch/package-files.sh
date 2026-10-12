@@ -67,6 +67,9 @@ package_bifrost_files() {
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"
   install -Dm644 "$here/initcpio/hooks/bifrost-mounts" "$pkgdir/usr/lib/initcpio/hooks/bifrost-mounts"
+  # "unlock is login": opens an encrypted root from the loader's one-time key (HOOKS order: before filesystems)
+  install -Dm644 "$here/initcpio/install/bifrost-unlock" "$pkgdir/usr/lib/initcpio/install/bifrost-unlock"
+  install -Dm644 "$here/initcpio/hooks/bifrost-unlock" "$pkgdir/usr/lib/initcpio/hooks/bifrost-unlock"
   install -Dm644 "$here/seatd-early.conf" "$pkgdir/usr/lib/systemd/system/seatd.service.d/bifrost-early.conf"
   for file in session session-env session-policy; do
     install -Dm755 "$here/wayland/$file" "$pkgdir/usr/lib/bifrost/$file"

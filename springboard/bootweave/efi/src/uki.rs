@@ -18,9 +18,40 @@ pub fn options(line: &str) -> alloc::string::String {
         .join(" ")
 }
 
+/// The file the loader starts for `line`: the `uki=` image, else `vmlinuz-linux` next to the `initrd=` file (the
+/// older install layout). `None` when the path cannot be a firmware path (a NUL, or a character outside UCS-2), so
+/// the caller takes the rollback path instead of panicking in the firmware.
+pub fn kernel_file(line: &str) -> Option<alloc::string::String> {
+    let file = match target(line) {
+        Some(file) => alloc::string::String::from(file),
+        None => {
+            let dir = line
+                .split_whitespace()
+                .find_map(|t| t.strip_prefix("initrd="))
+                .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
+                .unwrap_or("\\arch\\boot\\x86_64");
+            alloc::format!("{dir}\\vmlinuz-linux")
+        }
+    };
+    file.chars().all(|c| c != '\0' && (c as u32) <= 0xFFFF).then_some(file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kernel_file_names_the_image_or_the_kernel_next_to_the_initrd() {
+        assert_eq!(kernel_file("uki=\\EFI\\BIFROST\\bifrost.efi quiet").as_deref(), Some("\\EFI\\BIFROST\\bifrost.efi"));
+        assert_eq!(kernel_file("initrd=\\boot\\initramfs.img quiet").as_deref(), Some("\\boot\\vmlinuz-linux"));
+        assert_eq!(kernel_file("quiet").as_deref(), Some("\\arch\\boot\\x86_64\\vmlinuz-linux"));
+    }
+
+    #[test]
+    fn kernel_file_rejects_paths_the_firmware_cannot_hold() {
+        assert_eq!(kernel_file("uki=\\EFI\\\u{1F600}.efi quiet"), None, "outside UCS-2");
+        assert_eq!(kernel_file("initrd=\\a\0b\\initramfs.img"), None, "embedded NUL");
+    }
 
     #[test]
     fn finds_the_image_path_wherever_the_token_sits() {

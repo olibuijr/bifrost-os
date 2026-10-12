@@ -311,29 +311,17 @@ impl Session {
         let mut buf = Vec::new();
         let mut b = DevicePathBuilder::with_vec(&mut buf);
         for n in dp.node_iter() {
-            b = b.push(&n).unwrap();
+            let Ok(next) = b.push(&n) else { return Status::INVALID_PARAMETER };
+            b = next;
         }
         // A unified image (`uki=`) starts directly with the options after it; otherwise the kernel next to the
         // initramfs named by `initrd=` (the older install layout) starts with the whole line.
-        let (file, options) = match uki::target(line) {
-            Some(file) => (String::from(file), uki::options(line)),
-            None => {
-                let dir = line
-                    .split_whitespace()
-                    .find_map(|t| t.strip_prefix("initrd="))
-                    .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
-                    .unwrap_or("\\arch\\boot\\x86_64");
-                (alloc::format!("{dir}\\vmlinuz-linux"), String::from(line))
-            }
-        };
-        let kernel_path = uefi::CString16::try_from(file.as_str()).unwrap();
-        let full = b
-            .push(&FilePath {
-                path_name: &kernel_path,
-            })
-            .unwrap()
-            .finalize()
-            .unwrap();
+        let options = if uki::target(line).is_some() { uki::options(line) } else { String::from(line) };
+        // a path the firmware cannot hold is an error status (main then takes the rollback path), never a panic
+        let Some(file) = uki::kernel_file(line) else { return Status::INVALID_PARAMETER };
+        let Ok(kernel_path) = uefi::CString16::try_from(file.as_str()) else { return Status::INVALID_PARAMETER };
+        let Ok(b) = b.push(&FilePath { path_name: &kernel_path }) else { return Status::INVALID_PARAMETER };
+        let Ok(full) = b.finalize() else { return Status::INVALID_PARAMETER };
         let Ok(k) = boot::load_image(
             self.image,
             LoadImageSource::FromDevicePath {
@@ -373,7 +361,10 @@ impl Session {
             VariableAttributes::BOOTSERVICE_ACCESS | VariableAttributes::RUNTIME_ACCESS,
             &handoff.encode(),
         );
-        loader_var(cstr16!("LoaderTimeExecUSec"), &alloc::format!("{}", tsc().wrapping_sub(self.init) / self.per_us));
+        // Boot Loader Interface: both values are absolute TSC microseconds (systemd needs init < exec); the loader's
+        // own duration is exec - init, which tools/boot-bench.py computes.
+        loader_var(cstr16!("LoaderTimeInitUSec"), &alloc::format!("{}", self.init / self.per_us));
+        loader_var(cstr16!("LoaderTimeExecUSec"), &alloc::format!("{}", tsc() / self.per_us));
         match boot::start_image(k) {
             Ok(()) => Status::SUCCESS,
             Err(e) => e.status(),
@@ -410,7 +401,9 @@ fn main() -> Status {
         .find_map(|t| t.strip_prefix("bifrost.user="))
         .unwrap_or("");
     let mut init = init;
-    if let Some(volume) = unlock::run(user) {
+    // Only a line that names an encrypted root asks for it (BOOT-5/6: the installer cannot create LUKS yet, and the
+    // scan of every block device must not cost an unencrypted boot).
+    if let Some(volume) = cmdline::wants_unlock(&current).then(|| unlock::run(user)).flatten() {
         let _ = handover::publish(&volume);
         init = tsc();
     }
@@ -450,7 +443,8 @@ fn main() -> Status {
         boot_policy::Choice::Previous => true,
     };
     if fallback {
-        return session.rollback(previous.as_deref()).unwrap_or(Status::LOAD_ERROR);
+        // no previous generation to fall back to: try the current line rather than show the firmware's error
+        return session.rollback(previous.as_deref()).unwrap_or_else(|| session.boot_line(&current));
     }
     let status = session.boot_line(&current);
     // A unified image that will not start falls back to the previous generation even without a pending update.
