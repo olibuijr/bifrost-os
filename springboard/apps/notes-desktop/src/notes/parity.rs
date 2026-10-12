@@ -71,8 +71,8 @@ fn checker(words: &str, lang: &str) -> SpellChecker {
     SpellChecker::new(Box::new(WordList::new(lang, list)))
 }
 
-/// The ranges Check Spelling and Links flags, in order: the misspelled words of the note, plus its links, dates and
-/// phone numbers. A misspelling inside a detected item (the "www" of a link) is dropped, so each piece of text is
+/// The ranges Check Spelling and Links flags, in order: the misspelled words of the note, plus its links, dates,
+/// street addresses, flight numbers and phone numbers. A misspelling inside a detected item (the "www" of a link) is dropped, so each piece of text is
 /// flagged once. Spelling uses the word list of the note's language: English and Icelandic have one; a note in any
 /// other language gets only the detectors. A note with no letters is checked as English.
 pub fn check_ranges(text: &str) -> Vec<Range<usize>> {
@@ -81,7 +81,7 @@ pub fn check_ranges(text: &str) -> Vec<Range<usize>> {
         Some(Language::English) | None => Some(checker(EN_WORDS, "en")),
         Some(_) => None,
     };
-    let kinds = [detect::Kind::Link, detect::Kind::Date, detect::Kind::Phone];
+    let kinds = [detect::Kind::Link, detect::Kind::Date, detect::Kind::Address, detect::Kind::Flight, detect::Kind::Phone];
     let detected: Vec<Range<usize>> = detect::find(text, &kinds).into_iter().map(|m| to_chars(text, m.range)).collect();
     let mut out: Vec<Range<usize>> = match spelling {
         Some(sc) => sc
@@ -130,6 +130,16 @@ mod tests {
         assert!(found.iter().any(|s| s == "2026-10-09"), "date flagged: {found:?}");
         // "example" and "com" sit inside the link and must not be flagged on their own.
         assert!(!found.iter().any(|s| s == "example" || s == "com"), "{found:?}");
+    }
+
+    #[test]
+    fn check_flags_flight_numbers_as_one_item() {
+        // "FI 552" is one flight item (airline code, space, number), and "Flight" is not flagged as a flight
+        let text = "Flight FI 552 lands at BA117 today";
+        let found: Vec<String> = check_ranges(text).iter().map(|r| slice(text, r)).collect();
+        assert!(found.iter().any(|s| s == "FI 552"), "{found:?}");
+        assert!(found.iter().any(|s| s == "BA117"), "{found:?}");
+        assert!(!found.iter().any(|s| s == "Flight"), "{found:?}");
     }
 
     #[test]

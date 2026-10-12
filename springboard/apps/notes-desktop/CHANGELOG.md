@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.0 — 2026-10-12
+
+- Check Spelling and Links (the More menu in the editor) now also flags street addresses and flight numbers, such as "FI 552" or "BA117", as one item each, next to the links, dates and phone numbers. Use the find arrows to step through them.
+- Not in this version: flight numbers and addresses are not yet underlined in the note body (links, dates and phone numbers are), and tapping them does nothing. The checklist boxes keep their current drawing; symbol rendering modes are not applied to them yet.
+
 ## 1.10.0 — 2026-10-12
 
 - Find: Match Whole Word in Find (the More menu in the editor) makes a search skip matches inside a longer word, so "rust" does not count "rusty". The matches come from the shared find model (`bifrost_app::controls::textfind`).
