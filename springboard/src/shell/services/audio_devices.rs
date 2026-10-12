@@ -296,11 +296,12 @@ fn opt_str(s: Option<&str>) -> Json {
 mod tests {
     #[test]
     fn probing_for_a_microphone_does_not_reconnect_every_tick() {
+        // a service tick every 200 ms (the shell clock is in milliseconds) for 60 s, with no audio server: the backoff
+        // (1 s doubling to 30 s) allows attempts at 0, 1, 3, 7, 15 and 31 s, not one per tick (0.6.2 made 5 a second)
         let mut d = AudioDevices::new();
-        for k in 0..30 {
-            d.probe_microphone(k as f64 * PROBE_EVERY_S);
+        for k in 0..300 {
+            d.probe_microphone(k as f64 * 200.0);
         }
-        // 60 s of probes: at most one attempt per RECONNECT_EVERY_S while there is no input
         assert!(d.attempts <= 6, "{}", d.attempts);
     }
 
