@@ -28,6 +28,8 @@ struct NewsApp {
     news: Option<news::News>,
     /// the network-path request sent at start; its reply sets the offline state
     path_request: Option<u32>,
+    /// whether the keyboard is asked for (the search field has focus)
+    kb: bool,
 }
 
 impl App for NewsApp {
@@ -80,19 +82,9 @@ impl App for NewsApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        let Some(n) = &mut self.news else { return false };
-        let (kind, x, y, t) = match ev {
-            Input::Touch { kind, x, y, t, .. } => (kind, x, y, t),
-            Input::Activate(id) => return n.activate_control(&ctx.ui, id),
-            _ => return false,
-        };
-        let e = match kind {
-            TouchKind::Down => Event::Down(x, y),
-            TouchKind::Move => Event::Move(x, y),
-            TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
-        };
-        n.touch(&ctx.ui, e, t);
-        true
+        let handled = self.input(ctx, ev);
+        self.sync_keyboard(ctx);
+        handled
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
@@ -105,6 +97,33 @@ impl App for NewsApp {
             }
             ticked | pumped
         })
+    }
+
+    /// (the body of `event`, before the keyboard is synced)
+    fn input(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let Some(n) = &mut self.news else { return false };
+        let (kind, x, y, t) = match ev {
+            Input::Touch { kind, x, y, t, .. } => (kind, x, y, t),
+            Input::Activate(id) => return n.activate_control(&ctx.ui, id),
+            Input::Key(k) => return n.key(k),
+            _ => return false,
+        };
+        let e = match kind {
+            TouchKind::Down => Event::Down(x, y),
+            TouchKind::Move => Event::Move(x, y),
+            TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
+        };
+        n.touch(&ctx.ui, e, t);
+        true
+    }
+
+    /// Asks for the on-screen keyboard only while the toolbar search field has focus.
+    fn sync_keyboard(&mut self, ctx: &Ctx) {
+        let on = self.news.as_ref().is_some_and(|n| n.search_focused());
+        if on != self.kb {
+            self.kb = on;
+            ctx.wants_keyboard(on);
+        }
     }
 
     /// Edit (translate and share) and View (text size), enabled while an article is open.
@@ -185,5 +204,5 @@ impl App for NewsApp {
 }
 
 fn main() {
-    bifrost_app::run(NewsApp { news: None, path_request: None });
+    bifrost_app::run(NewsApp { news: None, path_request: None, kb: false });
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- Search: a search field sits at the trailing end of the toolbar. Typing filters the list to the headlines that contain the text (ignoring case), in Today, the Reading List and each feed. Escape or the clear button empties it, and "No matching articles" shows when nothing matches. The on-screen keyboard is asked for only while the field has focus.
+
 ## 1.5.0 — 2026-10-12
 
 - Faster feed refreshes: News keeps the feeds and pictures it has loaded and asks the server only whether they changed (with the ETag and Last-Modified values it was sent). A copy that the server says is still fresh is used without a request, and an unchanged feed answers "not modified" with no new download. Nothing is kept for responses the server marks as not to be stored.

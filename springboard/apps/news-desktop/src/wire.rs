@@ -6,6 +6,7 @@ use crate::feed::Item;
 use bifrost_app::controls::language::{dominant_language, Language};
 use bifrost_app::controls::linkmeta::{validate_url, Card, LinkMetadata, LinkView};
 use bifrost_app::controls::reading_list::ReadingList;
+use bifrost_app::controls::textfind;
 use bifrost_app::controls::translation::LanguageAvailability;
 use bifrost_app::spellcheck::words;
 use bifrost_app::translation::{TranslationError, TranslationMemory, TranslationSession};
@@ -149,6 +150,16 @@ pub fn toggle(list: &mut ReadingList, item: &Item) -> bool {
     list.add(&item.link, &item.title, &item.body, now_secs()).is_ok()
 }
 
+/// Keeps the headlines that contain `query`, ignoring case as the find bar does. A blank query keeps every row, and
+/// the order is unchanged.
+pub fn search_rows(list: &mut Vec<Item>, query: &str) {
+    let query = query.trim();
+    if query.is_empty() {
+        return;
+    }
+    list.retain(|item| !textfind::find_all(&item.title, query, textfind::Options::default()).is_empty());
+}
+
 /// The saved pages as feed rows (newest first), so the list draws them like headlines.
 pub fn rows(list: &ReadingList) -> Vec<Item> {
     list.items()
@@ -170,6 +181,30 @@ mod tests {
 
     fn article(title: &str, link: &str, body: &str) -> Item {
         Item { title: title.into(), link: link.into(), date: String::new(), body: body.into(), source: "RÚV".into(), image: String::new() }
+    }
+
+    #[test]
+    fn search_keeps_headlines_that_contain_the_query_in_order() {
+        let mut list = vec![
+            article("Council votes on bridge", "https://www.ruv.is/a", ""),
+            article("Snow in the north", "https://www.ruv.is/b", ""),
+            article("Bridge repairs begin", "https://www.ruv.is/c", ""),
+        ];
+        search_rows(&mut list, "BRIDGE");
+        let titles: Vec<&str> = list.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["Council votes on bridge", "Bridge repairs begin"]);
+    }
+
+    #[test]
+    fn a_blank_query_keeps_every_row_and_a_missing_word_keeps_none() {
+        let mut list = vec![article("Snow", "https://www.ruv.is/b", ""), article("Rain", "https://www.ruv.is/c", "")];
+        search_rows(&mut list, "   ");
+        assert_eq!(list.len(), 2);
+        search_rows(&mut list, " snow ");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].title, "Snow");
+        search_rows(&mut list, "volcano");
+        assert!(list.is_empty());
     }
 
     #[test]
