@@ -253,6 +253,288 @@ fn base64(data: &[u8]) -> String {
     out
 }
 
+/// Builds the client's opening handshake (RFC 6455 section 4.1): an HTTP/1.1 GET with the upgrade headers.
+/// `key` is the base64 of 16 bytes the caller chose at random; `protocols` may be empty.
+pub fn handshake_request(host: &str, path: &str, key: &str, protocols: &[&str]) -> Vec<u8> {
+    let path = if path.is_empty() { "/" } else { path };
+    let mut req = format!(
+        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
+    );
+    if !protocols.is_empty() {
+        req.push_str("Sec-WebSocket-Protocol: ");
+        req.push_str(&protocols.join(", "));
+        req.push_str("\r\n");
+    }
+    req.push_str("\r\n");
+    req.into_bytes()
+}
+
+/// Why the server's answer to the opening handshake was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandshakeError {
+    /// The answer is not an HTTP status line and header block ending in a blank line.
+    Malformed,
+    /// The status code is not 101 Switching Protocols.
+    Rejected(u16),
+    /// The answer has no `Sec-WebSocket-Accept` header.
+    MissingAccept,
+    /// The accept value is not the one computed from the client's key.
+    WrongAccept,
+}
+
+impl fmt::Display for HandshakeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HandshakeError::Malformed => write!(f, "malformed handshake response"),
+            HandshakeError::Rejected(code) => write!(f, "server answered {code}, not 101"),
+            HandshakeError::MissingAccept => write!(f, "no Sec-WebSocket-Accept header"),
+            HandshakeError::WrongAccept => write!(f, "Sec-WebSocket-Accept does not match the key"),
+        }
+    }
+}
+
+/// Checks the server's answer to the opening handshake. `response` holds the bytes up to and including the blank
+/// line that ends the headers; `client_key` is the key the client sent.
+pub fn check_handshake_response(response: &[u8], client_key: &str) -> Result<(), HandshakeError> {
+    let text = std::str::from_utf8(response).map_err(|_| HandshakeError::Malformed)?;
+    let end = text.find("\r\n\r\n").ok_or(HandshakeError::Malformed)?;
+    let mut lines = text[..end].split("\r\n");
+    let status = lines.next().ok_or(HandshakeError::Malformed)?;
+    let mut parts = status.splitn(3, ' ');
+    if !parts.next().unwrap_or("").starts_with("HTTP/") {
+        return Err(HandshakeError::Malformed);
+    }
+    let code: u16 = parts.next().and_then(|c| c.parse().ok()).ok_or(HandshakeError::Malformed)?;
+    if code != 101 {
+        return Err(HandshakeError::Rejected(code));
+    }
+    let accept = lines
+        .find_map(|line| {
+            let (k, v) = line.split_once(':')?;
+            if k.trim().eq_ignore_ascii_case("sec-websocket-accept") {
+                Some(v.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .ok_or(HandshakeError::MissingAccept)?;
+    if accept == accept_key(client_key) {
+        Ok(())
+    } else {
+        Err(HandshakeError::WrongAccept)
+    }
+}
+
+/// A whole message, after its fragments are joined.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Message {
+    Text(String),
+    Binary(Vec<u8>),
+    Ping(Vec<u8>),
+    Pong(Vec<u8>),
+    /// A close frame. The code and reason are absent when the peer sent an empty payload.
+    Close { code: Option<u16>, reason: String },
+}
+
+/// Why a frame sequence could not be joined into messages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AssemblyError {
+    /// A continuation frame arrived with no fragmented message open.
+    UnexpectedContinuation,
+    /// A new data message started while a fragmented one was still open.
+    UnexpectedData,
+    /// A text message is not valid UTF-8.
+    InvalidUtf8,
+    /// A close payload is one byte long. It must be empty or hold a two-byte code.
+    BadClosePayload,
+    /// The message is longer than the limit the assembler was given.
+    TooLarge,
+}
+
+impl fmt::Display for AssemblyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssemblyError::UnexpectedContinuation => write!(f, "continuation frame without a message"),
+            AssemblyError::UnexpectedData => write!(f, "data frame inside a fragmented message"),
+            AssemblyError::InvalidUtf8 => write!(f, "text message is not UTF-8"),
+            AssemblyError::BadClosePayload => write!(f, "close payload is one byte"),
+            AssemblyError::TooLarge => write!(f, "message is over the size limit"),
+        }
+    }
+}
+
+/// Joins the frames of fragmented messages (RFC 6455 section 5.4). Control frames are returned at once, even in
+/// the middle of a fragmented message, as the RFC requires.
+pub struct Assembler {
+    limit: usize,
+    kind: Option<Opcode>,
+    buf: Vec<u8>,
+}
+
+impl Assembler {
+    /// An assembler that refuses messages longer than `limit` bytes.
+    pub fn new(limit: usize) -> Self {
+        Assembler { limit, kind: None, buf: Vec::new() }
+    }
+
+    /// Feeds one decoded frame. Returns the message the frame completes, if any.
+    pub fn push(&mut self, frame: Frame) -> Result<Option<Message>, AssemblyError> {
+        match frame.opcode {
+            Opcode::Ping => return Ok(Some(Message::Ping(frame.payload))),
+            Opcode::Pong => return Ok(Some(Message::Pong(frame.payload))),
+            Opcode::Close => return close_message(&frame.payload).map(Some),
+            Opcode::Continuation => {
+                if self.kind.is_none() {
+                    return Err(AssemblyError::UnexpectedContinuation);
+                }
+            }
+            Opcode::Text | Opcode::Binary => {
+                if self.kind.is_some() {
+                    return Err(AssemblyError::UnexpectedData);
+                }
+                self.kind = Some(frame.opcode);
+            }
+        }
+        if self.buf.len() + frame.payload.len() > self.limit {
+            self.kind = None;
+            self.buf.clear();
+            return Err(AssemblyError::TooLarge);
+        }
+        self.buf.extend_from_slice(&frame.payload);
+        if !frame.fin {
+            return Ok(None);
+        }
+        let kind = self.kind.take().unwrap_or(Opcode::Binary);
+        let data = std::mem::take(&mut self.buf);
+        match kind {
+            Opcode::Text => String::from_utf8(data).map(|s| Some(Message::Text(s))).map_err(|_| AssemblyError::InvalidUtf8),
+            _ => Ok(Some(Message::Binary(data))),
+        }
+    }
+}
+
+/// Reads a close payload: a two-byte code, then a UTF-8 reason. An empty payload has neither.
+fn close_message(payload: &[u8]) -> Result<Message, AssemblyError> {
+    match payload.len() {
+        0 => Ok(Message::Close { code: None, reason: String::new() }),
+        1 => Err(AssemblyError::BadClosePayload),
+        _ => {
+            let code = u16::from_be_bytes([payload[0], payload[1]]);
+            let reason = String::from_utf8(payload[2..].to_vec()).map_err(|_| AssemblyError::InvalidUtf8)?;
+            Ok(Message::Close { code: Some(code), reason })
+        }
+    }
+}
+
+/// The single frame that carries a whole message (FIN set). Close without a code sends an empty payload.
+pub fn frame_for(msg: &Message) -> Frame {
+    let (opcode, payload) = match msg {
+        Message::Text(s) => (Opcode::Text, s.as_bytes().to_vec()),
+        Message::Binary(b) => (Opcode::Binary, b.clone()),
+        Message::Ping(p) => (Opcode::Ping, p.clone()),
+        Message::Pong(p) => (Opcode::Pong, p.clone()),
+        Message::Close { code, reason } => {
+            let mut p = Vec::new();
+            if let Some(c) = code {
+                p.extend_from_slice(&c.to_be_bytes());
+                p.extend_from_slice(reason.as_bytes());
+            }
+            (Opcode::Close, p)
+        }
+    };
+    Frame { fin: true, opcode, payload }
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+
+    const RFC_KEY: &str = "dGhlIHNhbXBsZSBub25jZQ==";
+
+    #[test]
+    fn handshake_request_lists_the_upgrade_headers() {
+        let req = handshake_request("example.test", "/chat", RFC_KEY, &["chat", "superchat"]);
+        let text = String::from_utf8(req).unwrap();
+        assert_eq!(
+            text,
+            "GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+             Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Protocol: chat, superchat\r\n\r\n"
+        );
+        // An empty path becomes "/" and no protocol header is sent without protocols.
+        let bare = String::from_utf8(handshake_request("h", "", RFC_KEY, &[])).unwrap();
+        assert!(bare.starts_with("GET / HTTP/1.1\r\n"));
+        assert!(!bare.contains("Sec-WebSocket-Protocol"));
+    }
+
+    #[test]
+    fn handshake_response_is_checked_against_the_key() {
+        let ok = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                   Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n";
+        assert_eq!(check_handshake_response(ok, RFC_KEY), Ok(()));
+        let wrong = b"HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: AAAAAAAAAAAAAAAAAAAAAAAAAAA=\r\n\r\n";
+        assert_eq!(check_handshake_response(wrong, RFC_KEY), Err(HandshakeError::WrongAccept));
+        let refused = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+        assert_eq!(check_handshake_response(refused, RFC_KEY), Err(HandshakeError::Rejected(200)));
+        let no_accept = b"HTTP/1.1 101 Switching Protocols\r\n\r\n";
+        assert_eq!(check_handshake_response(no_accept, RFC_KEY), Err(HandshakeError::MissingAccept));
+        assert_eq!(check_handshake_response(b"HTTP/1.1 101", RFC_KEY), Err(HandshakeError::Malformed));
+    }
+
+    fn frame(fin: bool, opcode: Opcode, payload: &[u8]) -> Frame {
+        Frame { fin, opcode, payload: payload.to_vec() }
+    }
+
+    #[test]
+    fn fragments_join_into_one_text_message() {
+        let mut a = Assembler::new(1024);
+        assert_eq!(a.push(frame(false, Opcode::Text, b"Hel")), Ok(None));
+        assert_eq!(a.push(frame(true, Opcode::Continuation, b"lo")), Ok(Some(Message::Text("Hello".into()))));
+        // The assembler is idle again and takes a new message.
+        assert_eq!(a.push(frame(true, Opcode::Binary, &[1, 2])), Ok(Some(Message::Binary(vec![1, 2]))));
+    }
+
+    #[test]
+    fn ping_inside_a_fragmented_message_is_returned_at_once() {
+        let mut a = Assembler::new(1024);
+        assert_eq!(a.push(frame(false, Opcode::Binary, &[9])), Ok(None));
+        assert_eq!(a.push(frame(true, Opcode::Ping, b"p")), Ok(Some(Message::Ping(b"p".to_vec()))));
+        assert_eq!(a.push(frame(true, Opcode::Continuation, &[8])), Ok(Some(Message::Binary(vec![9, 8]))));
+    }
+
+    #[test]
+    fn out_of_order_frames_are_errors() {
+        let mut a = Assembler::new(1024);
+        assert_eq!(a.push(frame(true, Opcode::Continuation, b"x")), Err(AssemblyError::UnexpectedContinuation));
+        assert_eq!(a.push(frame(false, Opcode::Text, b"a")), Ok(None));
+        assert_eq!(a.push(frame(true, Opcode::Text, b"b")), Err(AssemblyError::UnexpectedData));
+    }
+
+    #[test]
+    fn invalid_utf8_and_size_limit_are_refused() {
+        let mut a = Assembler::new(1024);
+        // 0xC3 starts a two-byte sequence that is never finished.
+        assert_eq!(a.push(frame(true, Opcode::Text, &[0xC3])), Err(AssemblyError::InvalidUtf8));
+        let mut small = Assembler::new(4);
+        assert_eq!(small.push(frame(false, Opcode::Binary, b"abc")), Ok(None));
+        assert_eq!(small.push(frame(true, Opcode::Continuation, b"de")), Err(AssemblyError::TooLarge));
+        // The refused message is dropped, so the next one starts clean.
+        assert_eq!(small.push(frame(true, Opcode::Binary, b"ok")), Ok(Some(Message::Binary(b"ok".to_vec()))));
+    }
+
+    #[test]
+    fn close_payload_carries_code_and_reason() {
+        let mut a = Assembler::new(1024);
+        let close = frame(true, Opcode::Close, &[0x03, 0xE8, b'b', b'y', b'e']);
+        assert_eq!(a.push(close), Ok(Some(Message::Close { code: Some(1000), reason: "bye".into() })));
+        assert_eq!(a.push(frame(true, Opcode::Close, &[])), Ok(Some(Message::Close { code: None, reason: String::new() })));
+        assert_eq!(a.push(frame(true, Opcode::Close, &[0x03])), Err(AssemblyError::BadClosePayload));
+        let out = frame_for(&Message::Close { code: Some(1000), reason: "bye".into() });
+        assert_eq!(out.payload, vec![0x03, 0xE8, b'b', b'y', b'e']);
+        assert!(out.fin);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

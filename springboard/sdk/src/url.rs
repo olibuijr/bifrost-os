@@ -481,3 +481,94 @@ fn resolve(base: &str, loc: &str) -> Result<String, URLError> {
     let dir = &dir[..dir.rfind('/').map_or(0, |i| i + 1)];
     Ok(format!("{origin}{dir}{loc}"))
 }
+
+/// Cookie hand-off for `URLSession` (`HTTPCookieStorage` parity): sets the `Cookie` header of `request` to the cookies
+/// `storage` holds for its URL at `now` (Unix seconds). A request with no matching cookie is left unchanged.
+/// The session does not call this itself yet: an app that keeps a jar applies it before `data_task`.
+pub fn attach_cookies(request: &mut URLRequest, storage: &crate::http_cookies::HTTPCookieStorage, now: u64) {
+    if let Some(header) = storage.cookie_header(&request.url, now) {
+        request.set_header("Cookie", &header);
+    }
+}
+
+/// Stores the `Set-Cookie` headers of `response`, received at `now`, in `storage`. Returns how many were accepted.
+/// Pairs with `attach_cookies`: an app runs it on each reply it gets back.
+pub fn store_cookies(response: &HTTPURLResponse, storage: &mut crate::http_cookies::HTTPCookieStorage, now: u64) -> usize {
+    storage.set_cookies_from_headers(&response.url, &response.headers, now)
+}
+
+#[cfg(test)]
+mod cookie_tests {
+    use super::*;
+    use crate::http_cookies::HTTPCookieStorage;
+
+    fn reply(url: &str, set_cookies: &[&str]) -> HTTPURLResponse {
+        HTTPURLResponse {
+            url: url.to_string(),
+            status_code: 200,
+            headers: set_cookies.iter().map(|v| ("Set-Cookie".to_string(), v.to_string())).collect(),
+        }
+    }
+
+    #[test]
+    fn a_stored_cookie_is_attached_to_a_matching_request_only() {
+        let mut jar = HTTPCookieStorage::new();
+        assert_eq!(store_cookies(&reply("https://shop.example/", &["sid=abc; Path=/"]), &mut jar, 100), 1);
+        let mut same_site = URLRequest::new("https://shop.example/cart");
+        attach_cookies(&mut same_site, &jar, 100);
+        assert_eq!(same_site.headers, vec![("Cookie".to_string(), "sid=abc".to_string())]);
+        let mut other = URLRequest::new("https://other.example/");
+        attach_cookies(&mut other, &jar, 100);
+        assert!(other.headers.is_empty());
+    }
+
+    #[test]
+    fn secure_cookies_need_https() {
+        let mut jar = HTTPCookieStorage::new();
+        assert_eq!(store_cookies(&reply("https://shop.example/", &["token=t; Secure; Path=/"]), &mut jar, 100), 1);
+        assert_eq!(jar.cookie_header("http://shop.example/", 100), None);
+        assert_eq!(jar.cookie_header("https://shop.example/", 100), Some("token=t".to_string()));
+    }
+
+    #[test]
+    fn max_age_expires_the_cookie_at_its_deadline() {
+        let mut jar = HTTPCookieStorage::new();
+        store_cookies(&reply("https://shop.example/", &["tmp=1; Max-Age=60; Path=/"]), &mut jar, 100);
+        assert_eq!(jar.cookie_header("https://shop.example/", 159), Some("tmp=1".to_string()));
+        assert_eq!(jar.cookie_header("https://shop.example/", 160), None);
+    }
+
+    #[test]
+    fn only_set_cookie_headers_are_stored_and_longer_paths_go_first() {
+        let mut jar = HTTPCookieStorage::new();
+        let resp = HTTPURLResponse {
+            url: "https://shop.example/".to_string(),
+            status_code: 200,
+            headers: vec![
+                ("Set-Cookie".to_string(), "a=1; Path=/".to_string()),
+                ("Content-Type".to_string(), "text/html".to_string()),
+                ("set-cookie".to_string(), "b=2; Path=/cart".to_string()),
+            ],
+        };
+        assert_eq!(store_cookies(&resp, &mut jar, 100), 2);
+        assert_eq!(jar.cookies().len(), 2);
+        assert_eq!(jar.cookie_header("https://shop.example/", 100), Some("a=1".to_string()));
+        assert_eq!(jar.cookie_header("https://shop.example/cart", 100), Some("b=2; a=1".to_string()));
+    }
+
+    #[test]
+    fn a_cookie_with_the_same_name_and_path_replaces_the_old_one() {
+        let mut jar = HTTPCookieStorage::new();
+        store_cookies(&reply("https://shop.example/", &["a=1; Path=/"]), &mut jar, 100);
+        assert_eq!(store_cookies(&reply("https://shop.example/", &["a=2; Path=/"]), &mut jar, 101), 1);
+        assert_eq!(jar.cookies().len(), 1);
+        assert_eq!(jar.cookie_header("https://shop.example/", 101), Some("a=2".to_string()));
+    }
+
+    #[test]
+    fn a_domain_attribute_for_another_host_is_refused() {
+        let mut jar = HTTPCookieStorage::new();
+        assert_eq!(store_cookies(&reply("https://shop.example/", &["x=1; Domain=other.example"]), &mut jar, 100), 0);
+        assert!(jar.cookies().is_empty());
+    }
+}
