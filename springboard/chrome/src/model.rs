@@ -52,7 +52,7 @@ pub struct DockItem {
     pub badge: String,
     /// Launch or download progress 0..1, negative for none.
     pub progress: f32,
-    /// Kept in the Dock (the context menu offers Remove from Dock). Added after v1: the codec carries it at the end.
+    /// Kept in the Dock (the context menu offers Remove from Dock). Encoded after `progress`.
     pub pinned: bool,
 }
 
@@ -352,6 +352,7 @@ pub fn encode_to_chrome(m: &ToChrome) -> Vec<u8> {
                 w.bool(it.active);
                 w.str(&it.badge);
                 w.f32(it.progress);
+                w.bool(it.pinned);
             }
             w.f32(d.size);
             w.f32(d.magnified);
@@ -421,6 +422,7 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
                     active: r.bool()?,
                     badge: r.str()?,
                     progress: r.f32()?,
+                    pinned: r.bool()?,
                 });
             }
             let size = r.f32()?;
@@ -566,6 +568,7 @@ mod tests {
                     active: false,
                     badge: "3".into(),
                     progress: 0.5,
+                    pinned: true,
                 }],
                 size: 48.0,
                 magnified: 72.0,
