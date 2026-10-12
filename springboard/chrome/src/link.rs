@@ -283,7 +283,8 @@ mod tests {
     fn client_path_keeps_one_safe_component() {
         let dir = Path::new("/run/user/1000");
         assert_eq!(client_path(dir, "chrome-dock", 42), PathBuf::from("/run/user/1000/bifrost-chrome-chrome-dock-42.sock"));
-        assert_eq!(client_path(dir, "../evil name", 1), PathBuf::from("/run/user/1000/bifrost-chrome-----evil-name-1.sock"));
+        // "../evil name": '.', '.' and '/' each become '-' (three), then "evil", the space as '-', "name"
+        assert_eq!(client_path(dir, "../evil name", 1), PathBuf::from("/run/user/1000/bifrost-chrome----evil-name-1.sock"));
     }
 
     #[test]

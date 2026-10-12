@@ -44,6 +44,8 @@ pub const N_KIND_MULTI: u64 = 202;
 pub const N_SAVE: u64 = 203;
 pub const N_CANCEL: u64 = 204;
 pub const MEMBER_BASE: u64 = 300;
+/// Member ids run `MEMBER_BASE..MEMBER_BASE + MEMBER_SPAN`; anything above is not a published node.
+pub const MEMBER_SPAN: u64 = 100;
 
 /// What a point or an accessibility id stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -418,7 +420,7 @@ impl AudioSetup {
             N_SAVE => Target::Save,
             N_CANCEL => Target::Cancel,
             x if (ROW_BASE..MEMBER_BASE).contains(&x) => Target::Row((x - ROW_BASE) as usize),
-            x if x >= MEMBER_BASE => Target::Member((x - MEMBER_BASE) as usize),
+            x if (MEMBER_BASE..MEMBER_BASE + MEMBER_SPAN).contains(&x) => Target::Member((x - MEMBER_BASE) as usize),
             _ => Target::Nothing,
         }
     }
