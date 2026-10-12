@@ -17,6 +17,7 @@ pub mod audio_devices;
 pub mod quick_look;
 pub mod gamepad_service;
 pub mod bluetooth_service;
+pub mod login_items_approval;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -54,6 +55,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(quick_look::PreviewService),
         Box::new(gamepad_service::GamepadService::default()),
         Box::new(bluetooth_service::BluetoothService::default()),
+        Box::new(login_items_approval::LoginItemsApproval),
     ]
 }
 

@@ -262,6 +262,8 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// Login Items: allow this pending app (id) to open at login
+    LoginItemApprove(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -300,6 +302,8 @@ pub struct Model<'a> {
     pub defaults: &'a [super::defaultapps::CategoryView],
     /// the Login Items page: (app id, name) of each login item
     pub login_items: &'a [(String, String)],
+    /// the Login Items page: (app id, name) of each registration waiting for approval
+    pub login_pending: &'a [(String, String)],
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
 }
@@ -626,15 +630,27 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::LoginItems => page(
             "Login Items",
             false,
-            vec![
-                Group::new(if m.login_items.is_empty() {
-                    vec![Item::new("No login items")]
-                } else {
-                    m.login_items.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemRemove(id.clone()))).collect()
-                })
-                .header("OPEN AT LOGIN")
-                .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
-            ],
+            {
+                // an app that asked to open at login waits here until the user allows it (SMAppService: requiresApproval)
+                let mut groups = Vec::new();
+                if !m.login_pending.is_empty() {
+                    groups.push(
+                        Group::new(m.login_pending.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemApprove(id.clone()))).collect())
+                            .header("REQUIRES APPROVAL")
+                            .footer("These apps asked to open when you log in. Choose one to allow it."),
+                    );
+                }
+                groups.push(
+                    Group::new(if m.login_items.is_empty() {
+                        vec![Item::new("No login items")]
+                    } else {
+                        m.login_items.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemRemove(id.clone()))).collect()
+                    })
+                    .header("OPEN AT LOGIN")
+                    .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
+                );
+                groups
+            },
         ),
         PageId::Pip => page(
             "Picture in Picture",
@@ -1205,7 +1221,7 @@ mod tests {
     }
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], fonts: &NO_FONTS }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS }
     }
 
     #[test]
