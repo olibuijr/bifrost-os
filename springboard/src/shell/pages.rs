@@ -125,6 +125,8 @@ pub enum Toggle {
     ButtonShapes,
     /// Accessibility > Dim Flashing Lights (`a11y_dim_flashing_lights`)
     DimFlashingLights,
+    /// Accessibility > Screen Reader (`a11y_screen_reader`)
+    ScreenReader,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -894,8 +896,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         reduce_transparency_item(a.reduce_transparency, a.increase_contrast),
                         Item::new("Show Borders").switch(a.button_shapes, Action::Toggle(Toggle::ButtonShapes)),
                         Item::new("Dim Flashing Lights").switch(a.dim_flashing_lights, Action::Toggle(Toggle::DimFlashingLights)),
+                        Item::new("Screen Reader").switch(a.screen_reader, Action::Toggle(Toggle::ScreenReader)),
                     ])
-                    .header("VISION"),
+                    .header("VISION")
+                    .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),

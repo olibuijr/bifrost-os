@@ -582,6 +582,8 @@ pub struct Shell {
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
+    /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
+    reader: accessibility::reader::Reader,
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
@@ -809,6 +811,7 @@ impl Shell {
             permission_sheet: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
+            reader: Default::default(),
             battery_checked: f64::NEG_INFINITY,
             dirty: true,
             perf_only: false,
@@ -2783,7 +2786,7 @@ impl Shell {
         if self.notify_damage_all() {
             damage.all();
         }
-        if self.announce_damage() {
+        if self.announce_damage() || self.reader_damage() {
             damage.all();
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
@@ -2998,6 +3001,7 @@ impl Shell {
             self.draw_banner(s, t);
         }
         self.draw_announce(s);
+        self.draw_reader(s);
         if self.dnd.session.is_some() {
             damage.all();
             self.dnd_draw(s);
@@ -3061,7 +3065,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3082,7 +3086,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }

@@ -112,6 +112,8 @@ pub enum Shortcut {
     CycleWindow,
     /// Ctrl+Space: the next enabled input source (`kb_layouts::cycle`); the binary moves the hardware layout with it
     InputSource,
+    /// Ctrl+Alt+Right (true) and Ctrl+Alt+Left (false): the screen reader's cursor moves to the next or previous element
+    ReaderStep(bool),
 }
 
 impl Shortcut {
@@ -124,7 +126,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) => return None,
         }))
     }
 }
@@ -228,6 +230,7 @@ impl HwKeys {
                 _ => Tile::Center,
             })),
             KEY_GRAVE if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::CycleWindow),
+            KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -543,6 +546,7 @@ impl Shell {
                 self.cmdtab_release(t);
                 vec![]
             }
+            Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
                 if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
                     self.desk_zoom_window(i);
@@ -670,6 +674,10 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_X), Some(Shortcut::Cut));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_A), Some(Shortcut::SelectAll));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_Z), Some(Shortcut::Undo));
+        // the screen reader's cursor: Ctrl+Alt+Right forward, Ctrl+Alt+Left back
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::ReaderStep(true)));
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_LEFT), Some(Shortcut::ReaderStep(false)));
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_RIGHT), None, "Alt alone is not the cursor");
     }
 
     #[test]

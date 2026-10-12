@@ -1,6 +1,6 @@
 //! The OS half of the element map (`bifrost_ui::ax`): producers that walk what the shell already knows and name it.
 //! Settings is generated from its page specs, so a new row or page is addressable the moment it exists.
-use super::list::{Accessory, Spec};
+use super::list::{Accessory, Item, Spec};
 use super::{AppId, Effect, Shell};
 use super::pages::{Action, PageId};
 use super::accessibility::actions::{window_index, WINDOW_ACTIONS};
@@ -32,15 +32,7 @@ fn walk(map: &mut Map, spec: &dyn Fn(PageId) -> Spec, page: PageId, parent: &str
     let s = spec(page);
     for group in &s.groups {
         for item in &group.items {
-            let (role, value) = match (&item.action, &item.accessory) {
-                (Action::Push(_), _) => ("page", item.value.clone()),
-                (Action::Toggle(_), Accessory::Switch(on)) | (_, Accessory::Switch(on)) => ("toggle", if *on { "on" } else { "off" }.to_string()),
-                (Action::Slider(_), _) => ("slider", item.value.clone()),
-                (Action::Pick(_), Accessory::Check(on)) => ("choice", if *on { "selected" } else { "" }.to_string()),
-                (Action::Pick(_), _) => ("choice", item.value.clone()),
-                (Action::None, _) => ("text", item.value.clone()),
-                _ => ("row", item.value.clone()),
-            };
+            let (role, value) = item_role(item);
             let mut path = trail.to_vec();
             path.push(item.label.clone());
             let address = map.add(parent, role, &item.label, &value, item.tappable() || role == "text", None, &path.join(">"));
@@ -51,6 +43,19 @@ fn walk(map: &mut Map, spec: &dyn Fn(PageId) -> Spec, page: PageId, parent: &str
                 }
             }
         }
+    }
+}
+
+/// The role and value a Settings row shows to assistive tech. Shared with the screen reader's cursor (`accessibility::reader`).
+pub(super) fn item_role(item: &Item) -> (&'static str, String) {
+    match (&item.action, &item.accessory) {
+        (Action::Push(_), _) => ("page", item.value.clone()),
+        (Action::Toggle(_), Accessory::Switch(on)) | (_, Accessory::Switch(on)) => ("toggle", if *on { "on" } else { "off" }.to_string()),
+        (Action::Slider(_), _) => ("slider", item.value.clone()),
+        (Action::Pick(_), Accessory::Check(on)) => ("choice", if *on { "selected" } else { "" }.to_string()),
+        (Action::Pick(_), _) => ("choice", item.value.clone()),
+        (Action::None, _) => ("text", item.value.clone()),
+        _ => ("row", item.value.clone()),
     }
 }
 
