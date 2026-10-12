@@ -9,6 +9,7 @@ use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
 use crate::shell::switcher::draw_scaled;
 use bifrost_ui::media_session::PlaybackState;
+use bifrost_ui::symbol_effect::{Effect as SymbolFx, Options as SymbolOptions, SymbolEffect};
 use super::AppId;
 use super::ui::{Ui, Weight, SECONDARY, WHITE};
 use super::{Effect, Event, Info, Screen, Shell, WifiAction};
@@ -336,15 +337,36 @@ pub struct ControlCenter {
     expanded: Option<Expanded>,
     /// a finger resting on an expandable tile: (tile, down time, x, y)
     press: Option<(Tile, f64, f32, f32)>,
+    /// the toggle whose glyph bounces after it changed, with the bounce effect (seconds on the shell clock)
+    bounce: Option<(Tile, SymbolEffect)>,
 }
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None }
+        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None }
     }
 }
 
 impl ControlCenter {
+    /// The toggles whose glyph bounces once when they change (a Bounce symbol effect, as on the toggles of a PC panel).
+    const BOUNCE_TILES: [Tile; 6] = [Tile::Airplane, Tile::Wifi, Tile::Bluetooth, Tile::RotationLock, Tile::Focus, Tile::Silent];
+
+    /// Starts the bounce of toggle `tile` at `t` ms. Nothing starts under Reduce Motion or for a tile that is not a toggle.
+    pub fn start_toggle_bounce(&mut self, tile: Tile, t: f64) {
+        if !Self::BOUNCE_TILES.contains(&tile) || bifrost_render::appearance::reduce_motion() {
+            return;
+        }
+        self.bounce = Some((tile, SymbolEffect::new(SymbolFx::Bounce, SymbolOptions::default(), t / 1000.0)));
+    }
+
+    /// The glyph scale of `tile` at `t` ms: 1 unless its bounce is playing.
+    pub fn glyph_scale(&self, tile: Tile, t: f64) -> f32 {
+        match self.bounce {
+            Some((k, effect)) if k == tile => effect.pose(t / 1000.0).scale,
+            _ => 1.0,
+        }
+    }
+
     pub fn is_hidden(&self) -> bool {
         matches!(self.state, State::Hidden)
     }
@@ -354,7 +376,7 @@ impl ControlCenter {
     }
 
     pub fn animating(&self) -> bool {
-        matches!(self.state, State::Settling { .. })
+        matches!(self.state, State::Settling { .. }) || self.bounce.is_some()
     }
 
     /// 0 hidden .. 1 shown, past the ends under the rubber band.
@@ -565,6 +587,7 @@ impl Shell {
     }
 
     fn activate_tile(&mut self, tile: Tile, t: f64) -> Vec<Effect> {
+        self.cc.start_toggle_bounce(tile, t);
         match tile {
             Tile::RotationLock => self.toggle_rotation_lock(t),
             Tile::Airplane => {
@@ -672,6 +695,9 @@ impl Shell {
 
     /// Finishes a settle animation, and expands a module the finger has rested on.
     pub(super) fn cc_tick(&mut self, t: f64) -> Vec<Effect> {
+        if self.cc.bounce.is_some_and(|(_, effect)| effect.is_done(t / 1000.0)) {
+            self.cc.bounce = None;
+        }
         if let (State::Shown, Some((tile, _, _, _))) = (self.cc.state, self.cc.press) {
             if self.cc.next_wake().is_some_and(|w| t >= w) {
                 self.cc.press = None;
@@ -1154,6 +1180,23 @@ mod tests {
     }
 
     #[test]
+    fn a_toggle_bounces_its_glyph_once_and_only_toggles_bounce() {
+        let mut cc = ControlCenter::default();
+        cc.start_toggle_bounce(Tile::Wifi, 1000.0);
+        // a 0.6 s bounce peaks halfway: 1 + 0.15 * sin(pi / 2) = 1.15
+        assert!((cc.glyph_scale(Tile::Wifi, 1300.0) - 1.15).abs() < 1e-4);
+        assert_eq!(cc.glyph_scale(Tile::Bluetooth, 1300.0), 1.0, "only the toggle that changed bounces");
+        assert!(cc.animating(), "frames keep coming while the bounce plays");
+        // at 0 s into the bounce sin(0) = 0, so the glyph is at rest
+        assert!((cc.glyph_scale(Tile::Wifi, 1000.0) - 1.0).abs() < 1e-6);
+        // Brightness is a slider, not a toggle: it starts nothing and keeps the Wi-Fi bounce
+        cc.start_toggle_bounce(Tile::Brightness, 2000.0);
+        assert!(matches!(cc.bounce, Some((Tile::Wifi, _))));
+        // after 0.7 s the bounce is done, so the glyph rests and the tick drops it
+        assert!((cc.glyph_scale(Tile::Wifi, 1700.0) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
     fn cluster_sits_at_the_top_right_like_the_bifrost() {
         let sh = shell();
         let (x, y, w, _) = cluster(&sh.ui, sh.w);
@@ -1624,16 +1667,19 @@ impl Shell {
                 {
                     self.activate_tile(tile, t)
                 }
-                Some(Touch::Tile(tile)) if at(x, y).map(|a| a.0) == Some(tile) => match tile {
-                    Tile::Wifi => {
-                        let on = !self.desk_wifi().is_some_and(|w| w.0);
-                        if let Some(n) = self.info.desktop_network.as_mut() {
-                            n.wifi_on = on;
+                Some(Touch::Tile(tile)) if at(x, y).map(|a| a.0) == Some(tile) => {
+                    self.cc.start_toggle_bounce(tile, t);
+                    match tile {
+                        Tile::Wifi => {
+                            let on = !self.desk_wifi().is_some_and(|w| w.0);
+                            if let Some(n) = self.info.desktop_network.as_mut() {
+                                n.wifi_on = on;
+                            }
+                            vec![Effect::Wifi(WifiAction::Enable(on))]
                         }
-                        vec![Effect::Wifi(WifiAction::Enable(on))]
+                        other => self.activate_tile(other, t),
                     }
-                    other => self.activate_tile(other, t),
-                },
+                }
                 _ => vec![],
             },
             _ => vec![],
@@ -1705,11 +1751,12 @@ impl Shell {
                     s.fill_rrect(dx, dy, d, d, d / 2.0, a(disc));
                     let ink = a(if on { WHITE } else { label });
                     let (cx, cy) = (dx + d / 2.0, dy + d / 2.0);
+                    let k = self.cc.glyph_scale(tile, t);
                     match tile {
-                        Tile::Wifi => status::draw_wifi(s, cx - ui.pt(9.0), cy - ui.pt(5.0), ui.pt(9.0), ink),
-                        Tile::Bluetooth => draw_bluetooth(s, cx, cy, ui.s * 0.8, ink),
+                        Tile::Wifi => status::draw_wifi(s, cx - ui.pt(9.0) * k, cy - ui.pt(5.0) * k, ui.pt(9.0) * k, ink),
+                        Tile::Bluetooth => draw_bluetooth(s, cx, cy, ui.s * 0.8 * k, ink),
                         _ => {
-                            let radius = d * 0.3;
+                            let radius = d * 0.3 * k;
                             let moon = super::glyphs::disc((cx, cy), radius);
                             let cut = super::glyphs::disc((cx + radius * 0.55, cy - radius * 0.4), radius * 0.85);
                             super::glyphs::paint(s, (cx - radius, cy - radius, 2.0 * radius, 2.0 * radius), ink, |x, y| moon(x, y).max(-cut(x, y)));

@@ -192,6 +192,9 @@ pub struct Desk {
     pub(super) fx: super::window_fx::FxTracker,
     #[cfg(feature = "desktop-wayland")]
     frames: Vec<crate::bare::wayland::WindowFrame>,
+    /// last frames of windows that are closing: (depth in `frames`, frame), drawn until the close effect ends
+    #[cfg(feature = "desktop-wayland")]
+    ghosts: Vec<(usize, crate::bare::wayland::WindowFrame)>,
     /// an open or focus asked for the front window to be raised over native clients
     pub(super) raise_front: bool,
     #[cfg(feature = "desktop-wayland")]
@@ -599,7 +602,7 @@ pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep
 
 /// Which window effect `Shell::desk_fx_start` begins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum FxCall { Open, Minimize, Restore, Zoom }
+pub(super) enum FxCall { Open, Minimize, Restore, Zoom, Close }
 
 /// The id the frames and the presenter use for the window of `app` (its index in `apps()` plus one).
 fn win_id(app: AppId) -> Option<u32> {
@@ -883,13 +886,30 @@ impl Shell {
             FxCall::Minimize => window_fx::Effect::Minimize { to_dx: dx, to_dy: dy },
             FxCall::Restore => window_fx::Effect::Restore { from_dx: dx, from_dy: dy },
             FxCall::Zoom => window_fx::Effect::Zoom,
+            FxCall::Close => window_fx::Effect::Close,
         };
         let behavior = match app {
             AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(Default::default, |a| a.manifest.animation_behavior()),
             _ => window_fx::AnimationBehavior::Default,
         };
         let reduce = bifrost_render::appearance::reduce_motion();
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_mut() { d.ghosts.retain(|g| g.1.id != id); }
         if self.desk.as_mut().unwrap().fx.begin(id, effect, behavior, reduce, t / 1000.0) { self.dirty = true; }
+    }
+
+    /// Keeps the last drawn frame of a window that is closing, at its depth, so the close effect can draw it after
+    /// the window has left the window list. Only when the close effect actually started.
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_keep_ghost(&mut self, app: AppId) {
+        let Some(id) = win_id(app) else { return };
+        let Some(d) = self.desk.as_mut() else { return };
+        if !d.fx.get(id).is_some_and(|f| f.effect == window_fx::Effect::Close) { return; }
+        let Some(z) = d.frames.iter().position(|f| f.id == id) else { return };
+        let mut frame = d.frames[z].clone();
+        frame.damage.all();
+        frame.fx = bifrost_render::glass::Fx::IDENTITY;
+        d.ghosts.push((z, frame));
     }
 
     /// Per tick: drops finished effects (one last frame is drawn) and keeps frames coming while any runs.
@@ -1000,6 +1020,8 @@ impl Shell {
     /// Opens `app` in a window (or raises it) and makes it the focused app.
     pub(super) fn desk_open(&mut self, app: AppId, t: f64) {
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
+        // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
+        if let Some(k)=apps().iter().position(|a|a.id==app){self.dock_start_bounce(k,t);}
         #[cfg(feature = "desktop-wayland")]
         if app == AppId::Browser {
             if let Some(slot)=apphost::slot_of("is.olibuijr.browser.desktop") {self.desk_native_open(AppId::External(slot as u8));return;}
@@ -1114,6 +1136,11 @@ impl Shell {
     }
 
     pub(super) fn desk_close_app(&mut self, app: AppId) {
+        // the close effect starts while the window is still listed; its last frame is kept for the effect
+        let t = self.last_input;
+        self.desk_fx_start(app, FxCall::Close, t);
+        #[cfg(feature = "desktop-wayland")]
+        self.desk_keep_ghost(app);
         if let Some(d) = &mut self.desk {
             if let Some(i) = d.index_of(app) {
                 d.close(i);
@@ -1512,6 +1539,15 @@ impl Shell {
                 continue;
             }
             self.draw_window(s, w, Some(i) == front, &m, t);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_mut() {
+            let fx = &d.fx;
+            d.ghosts.retain(|g| fx.keeps_visible(g.1.id, now_s));
+            for (z, frame) in d.ghosts.iter() {
+                let at = (*z).min(d.frames.len());
+                d.frames.insert(at, frame.clone());
+            }
         }
         #[cfg(feature = "desktop-wayland")]
         {
