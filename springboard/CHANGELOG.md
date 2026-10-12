@@ -1,5 +1,19 @@
 # BifrOSt changelog
 
+## 0.6.1 — 2026-10-12
+
+The real-time kernel by default, a loader built from source, and installs driven like a user.
+
+- Kernel: new installs get linux-rt (PREEMPT_RT). Machines with an NVIDIA GPU, or a package source without linux-rt,
+  get the stock kernel, and the installer logs why. The loader and the update guard follow whichever kernel is
+  installed, so existing installs keep booting.
+- Boot: every release builds the EFI loader from source (a stale prebuilt loader could not start the unified kernel
+  image), and the live installer opens its display before it scans for disks.
+- Installer: Return presses Restart on the Done screen, like the default button on every other screen.
+- Lab: `midget.py qa-install` drives the installer's real screens. It picks the keyboard layout on the Language
+  screen, types through the installer's own keymaps (dead keys and AltGr, so Ó and ú type), clears the
+  pre-filled account name first, and detects the restart by the kernel's boot id.
+
 ## 0.6.0 — 2026-10-12
 
 New graphics, audio and boot stacks, a full code audit and lab autonomy.
