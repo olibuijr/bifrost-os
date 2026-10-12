@@ -1,5 +1,15 @@
 # BifrOSt changelog
 
+## 0.6.4 — 2026-10-12
+
+The audio server stops its devices when asked.
+
+- Audio server: every wait of a device's IO thread is bounded and checks the stop request, a cycle target far in the
+  future is resynced, and a device that does not stop in time has its stream aborted instead of being left running.
+  A device thread is never detached: the server refuses to reopen the device until the old thread has ended. Before,
+  a stuck stop left the sound card held by the server and every later open failed with "Busy".
+- Boot: the module recorder rebuilds a stale initramfs drop-in after an update even when the module list is the same.
+
 ## 0.6.3 — 2026-10-12
 
 One display mode from power-on to the desktop, and a desktop that cannot freeze on the audio server.
