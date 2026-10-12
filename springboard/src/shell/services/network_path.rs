@@ -10,19 +10,99 @@
 use super::{Event, SystemService};
 use crate::shell::desktop_network::{Interface as NetInterface, Snapshot};
 use crate::shell::Shell;
+use bifrost_core::dns_browse::{Browser, Change, ServiceType};
+use bifrost_core::dnssd_ref::{Kind, Ref, Registry};
 use bifrost_core::json::Json;
 use bifrost_core::net_path::{IfaceKind, Interface, Path, PathMonitor, Status};
 
 /// The event a change of path is pushed as.
 pub const PATH_EVENT: &str = "pathUpdate";
 
+/// Where a browse's replies come from. No DNS-SD daemon is wired yet, so a browse never receives an instance.
+pub const BROWSE_SOURCE: &str = "none";
+
+/// Most DNS-SD browses an app may hold open at once.
+const MAX_BROWSES: usize = 16;
+
+/// One open browse: its operation reference and the instances it tracks.
+struct Browse {
+    reference: Ref<Change>,
+    browser: Browser,
+}
+
 pub struct NetworkPath {
     monitor: PathMonitor,
+    refs: Registry,
+    browses: Vec<Browse>,
 }
 
 impl NetworkPath {
     pub fn new() -> Self {
-        NetworkPath { monitor: PathMonitor::new() }
+        NetworkPath { monitor: PathMonitor::new(), refs: Registry::new(), browses: Vec::new() }
+    }
+
+    /// Opens a browse for a service type such as `_http._tcp` in the `local.` domain. Returns its reference number.
+    fn browse_open(&mut self, params: &Json) -> Result<Json, String> {
+        if self.browses.len() >= MAX_BROWSES {
+            return Err(format!("at most {MAX_BROWSES} browses can be open"));
+        }
+        let text = params.as_str().ok_or("expected a service type such as _http._tcp")?;
+        let kind = ServiceType::parse(text).map_err(|e| format!("bad service type {text}: {e}"))?;
+        let reference: Ref<Change> = self.refs.open(Kind::Browse);
+        let number = reference.number().unwrap_or(0);
+        let browser = Browser::new(kind, "");
+        let name = browser.kind().dns_name(browser.domain());
+        let domain = browser.domain().to_string();
+        self.browses.push(Browse { reference, browser });
+        Ok(Json::Obj(vec![
+            ("ref".into(), Json::Num(f64::from(number))),
+            ("name".into(), Json::Str(name)),
+            ("domain".into(), Json::Str(domain)),
+            ("source".into(), Json::Str(BROWSE_SOURCE.into())),
+        ]))
+    }
+
+    /// The index of the open browse a reference number names. Closed or unknown numbers are errors.
+    fn position(&self, params: &Json) -> Result<usize, String> {
+        let Json::Num(n) = params else {
+            return Err("expected a browse reference number".into());
+        };
+        if n.fract() != 0.0 || *n < 1.0 {
+            return Err(format!("bad browse reference {n}"));
+        }
+        let number = *n as u32;
+        self.browses.iter().position(|b| b.reference.number() == Some(number)).ok_or_else(|| format!("no open browse {number}"))
+    }
+
+    /// The instances an open browse tracks, by name. Empty until a daemon reply is pushed.
+    fn browse_instances(&mut self, params: &Json) -> Result<Json, String> {
+        let i = self.position(params)?;
+        let b = &self.browses[i];
+        let names: Vec<Json> = b.browser.instances().iter().map(|inst| Json::Str(inst.name.clone())).collect();
+        Ok(Json::Obj(vec![
+            ("ref".into(), Json::Num(f64::from(b.reference.number().unwrap_or(0)))),
+            ("source".into(), Json::Str(BROWSE_SOURCE.into())),
+            ("instances".into(), Json::Arr(names)),
+        ]))
+    }
+
+    /// Takes the next queued change of an open browse, or `null` when none is waiting.
+    fn browse_next(&mut self, params: &Json) -> Result<Json, String> {
+        let i = self.position(params)?;
+        let next = self.browses[i].reference.process_result().map_err(|e| e.to_string())?;
+        Ok(match next {
+            Some(Change::Added(name)) => Json::Obj(vec![("added".into(), Json::Str(name))]),
+            Some(Change::Removed(name)) => Json::Obj(vec![("removed".into(), Json::Str(name))]),
+            None => Json::Null,
+        })
+    }
+
+    /// Closes an open browse: its reference is deallocated and its number retired. Returns the replies dropped.
+    fn browse_close(&mut self, params: &Json) -> Result<Json, String> {
+        let i = self.position(params)?;
+        let mut browse = self.browses.remove(i);
+        let dropped = browse.reference.deallocate();
+        Ok(Json::Obj(vec![("dropped".into(), Json::Num(dropped as f64))]))
     }
 }
 
@@ -37,9 +117,13 @@ impl SystemService for NetworkPath {
         "network"
     }
 
-    fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, _params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         match method {
             "path" => Ok(path_to_json(&live_path(shell.info.desktop_network.as_ref()))),
+            "dnssdBrowse" => self.browse_open(params),
+            "dnssdInstances" => self.browse_instances(params),
+            "dnssdNext" => self.browse_next(params),
+            "dnssdClose" => self.browse_close(params),
             _ => Err(format!("network has no method {method}")),
         }
     }
@@ -212,5 +296,35 @@ mod tests {
         assert!(path_from_json(&bad_status).is_err());
         let no_flag = bifrost_core::json::parse(r#"{"status":"satisfied","interfaces":[],"expensive":false,"ipv4":true}"#).unwrap();
         assert!(path_from_json(&no_flag).is_err());
+    }
+
+    #[test]
+    fn a_dns_sd_browse_opens_numbers_from_one_and_closes_once() {
+        let mut n = NetworkPath::new();
+        let open = n.browse_open(&Json::Str("_http._tcp".into())).unwrap();
+        assert_eq!(open.get("ref"), Some(&Json::Num(1.0)));
+        assert_eq!(open.get("name").and_then(Json::as_str), Some("_http._tcp.local."));
+        assert_eq!(open.get("source").and_then(Json::as_str), Some("none"));
+        let one = Json::Num(1.0);
+        let listed = n.browse_instances(&one).unwrap();
+        assert_eq!(listed.get("instances").and_then(Json::as_array).map(|a| a.len()), Some(0));
+        assert_eq!(n.browse_next(&one), Ok(Json::Null));
+        let closed = n.browse_close(&one).unwrap();
+        assert_eq!(closed.get("dropped"), Some(&Json::Num(0.0)));
+        assert!(n.browse_close(&one).is_err(), "a closed reference is gone");
+        assert!(n.browse_next(&one).is_err());
+        let second = n.browse_open(&Json::Str("_ipp._tcp".into())).unwrap();
+        assert_eq!(second.get("ref"), Some(&Json::Num(2.0)), "numbers are never reused");
+    }
+
+    #[test]
+    fn a_dns_sd_browse_refuses_bad_types_and_references() {
+        let mut n = NetworkPath::new();
+        assert!(n.browse_open(&Json::Str("http".into())).is_err());
+        assert!(n.browse_open(&Json::Num(3.0)).is_err());
+        assert!(n.browse_instances(&Json::Num(0.0)).is_err());
+        assert!(n.browse_instances(&Json::Num(1.5)).is_err());
+        assert!(n.browse_instances(&Json::Str("1".into())).is_err());
+        assert!(n.browse_instances(&Json::Num(7.0)).is_err());
     }
 }

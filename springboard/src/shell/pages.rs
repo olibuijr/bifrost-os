@@ -538,6 +538,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![link]),
                     Group::new(vec![Item::new("Forget This Device").tint(Tint::Blue).action(Action::Run(Command::ForgetBluetooth(d.addr.clone())))]),
                     rows(vec![("Address", d.addr.clone()), ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string())]),
+                    // The service browser model: no service records are read yet, so the list is empty and says so.
+                    Group::new(vec![Item::new("Services").value("None listed")]).header("SERVICES").footer(super::services::bluetooth_service::SERVICE_NOTE),
                 ],
             )
         }
@@ -1439,7 +1441,11 @@ mod tests {
         assert_eq!(s.groups[1].items[0].action, Action::Run(Command::ForgetBluetooth("A".into())));
         info.bt.devices[0].connected = true;
         let m = Model { detail: "Buds", ..model(&info, &opts) };
-        assert_eq!(spec(PageId::BluetoothDetail, &m).groups[0].items[0].action, Action::Bluetooth(Cmd::Disconnect("A".into())));
+        let detail = spec(PageId::BluetoothDetail, &m);
+        assert_eq!(detail.groups[0].items[0].action, Action::Bluetooth(Cmd::Disconnect("A".into())));
+        let services = &detail.groups[3];
+        assert_eq!((services.items[0].label.as_str(), services.items[0].value.as_str()), ("Services", "None listed"));
+        assert_eq!(services.header.as_deref(), Some("SERVICES"));
     }
 
     #[test]
