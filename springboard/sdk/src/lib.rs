@@ -165,6 +165,7 @@ pub mod post_delivery;
 pub mod system_sound;
 pub mod workspace;
 pub mod service;
+pub mod search_ranking;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;

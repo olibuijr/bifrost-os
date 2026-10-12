@@ -10,6 +10,7 @@ use bifrost_core::json::Json;
 
 pub mod pasteboard_types;
 pub mod keychain_groups;
+pub mod search_ranking;
 pub mod system;
 
 /// A named service in the shell.
@@ -38,6 +39,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(system::System),
         Box::new(pasteboard_types::Pasteboards::default()),
         Box::new(keychain_groups::KeychainGroups::default()),
+        Box::new(search_ranking::SearchRanking::default()),
     ]
 }
 
