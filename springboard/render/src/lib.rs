@@ -15,6 +15,8 @@ pub mod glass;
 pub mod motion;
 pub mod assets;
 pub mod fontprefs;
+pub mod fontregistry;
+pub mod kern;
 pub mod filter;
 pub mod mesh;
 pub mod texture;
