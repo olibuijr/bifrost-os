@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 use crate::display_file;
 use crate::dupes;
 use crate::exchange;
+use crate::extras::{self, Extra, Extras, ValueKind};
 use crate::group_file;
 use crate::history::History;
 use crate::names;
@@ -72,6 +73,8 @@ const LIST_DUPLICATES: u32 = 103;
 const LIST_GROUP: u32 = 1000;
 const GROUPS_FILE: &str = "groups.txt";
 const DISPLAY_FILE: &str = "display.txt";
+/// Extra phone numbers, emails and addresses, beside the contacts file (see `extras.rs`).
+const VALUES_FILE: &str = "values.txt";
 
 /// What the list shows. Every filter but `All` narrows the list to a set of contact identifiers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -182,11 +185,12 @@ enum Target {
 /// The sort choices the Settings row cycles through, in order.
 const SORT_CHOICES: [SortOrder; 4] = [SortOrder::UserDefault, SortOrder::FamilyName, SortOrder::GivenName, SortOrder::None];
 
-/// The card model's entry for a contact: its phone, email and address with the labels the contact picked.
-fn card_entry(c: &Contact) -> Entry {
+/// The card model's entry for a contact: its phone, email and address with the labels the contact picked, then its
+/// extra values with their labels.
+fn card_entry(c: &Contact, extra: &[Extra]) -> Entry {
     let values = [&c.phone, &c.email, &c.address];
     let keys = [contact_card::Key::Phone, contact_card::Key::Email, contact_card::Key::Address];
-    let fields = keys
+    let mut fields: Vec<Field> = keys
         .into_iter()
         .enumerate()
         .map(|(k, key)| {
@@ -195,22 +199,39 @@ fn card_entry(c: &Contact) -> Entry {
             Field { key, label: label.to_string(), value: values[k].clone() }
         })
         .collect();
+    fields.extend(extra.iter().map(|e| Field { key: card_key(e.kind), label: e.label.clone(), value: e.value.clone() }));
     Entry { id: c.id, name: c.name.clone(), fields }
 }
 
-/// The value rows a contact's card shows, in card order. The model leaves out empty values.
-fn card_rows(c: &Contact) -> Vec<contact_card::Row> {
-    Card::new(Kind::Existing).rows(&card_entry(c))
+fn card_key(kind: ValueKind) -> contact_card::Key {
+    match kind {
+        ValueKind::Phone => contact_card::Key::Phone,
+        ValueKind::Email => contact_card::Key::Email,
+        ValueKind::Address => contact_card::Key::Address,
+    }
 }
 
-/// The index of a card value in `Contact` order (phone 0, email 1, address 2). Other keys have no slot.
-fn value_slot(key: contact_card::Key) -> Option<usize> {
+/// The value rows a contact's card shows, in card order: the store's values, then the extra ones. The model leaves
+/// out empty values. A row's index is the number a card layout uses to copy it.
+fn card_rows(c: &Contact, extra: &[Extra]) -> Vec<contact_card::Row> {
+    Card::new(Kind::Existing).rows(&card_entry(c, extra))
+}
+
+/// The word an accessibility control names a card value with.
+fn value_word(key: contact_card::Key) -> &'static str {
     match key {
-        contact_card::Key::Phone => Some(0),
-        contact_card::Key::Email => Some(1),
-        contact_card::Key::Address => Some(2),
-        _ => None,
+        contact_card::Key::Phone => "phone",
+        contact_card::Key::Email => "email",
+        contact_card::Key::Address => "address",
+        _ => "value",
     }
+}
+
+/// The contacts the list shows for a search: those whose store fields match, and those with an extra value that
+/// matches, in the order of `contacts`. A blank query shows every contact.
+fn list_hits(contacts: &[Contact], extras: &Extras, query: &str) -> Vec<usize> {
+    let by_field: BTreeSet<usize> = store::search(contacts, query).into_iter().collect();
+    (0..contacts.len()).filter(|&i| by_field.contains(&i) || extras.matches(contacts[i].id, query)).collect()
 }
 
 fn sort_label(order: SortOrder) -> &'static str {
@@ -315,11 +336,14 @@ pub struct Contacts {
     pressed: Option<Target>,
     scroll_list: Option<bool>,
     share_req: Option<springboard::shell::share::Item>,
-    /// The contact a Copy Contact press asked to put on the pasteboard; `main.rs` takes it with `take_copy`.
-    copy_out: Option<Contact>,
+    /// The contact, with its extra values, that a Copy Contact press asked to put on the pasteboard; `main.rs` takes it
+    /// with `take_copy`.
+    copy_out: Option<(Contact, Vec<Extra>)>,
     confirm_delete: bool,
     /// A failed load must not turn into an overwrite of unknown data.
     load_failed: bool,
+    /// The extra phone numbers, emails and addresses of each contact (`values.txt`).
+    extras: Extras,
     error: Option<String>,
     toast_until: Option<f64>,
     labels: TextCache,
@@ -346,7 +370,15 @@ impl Contacts {
             Ok(contacts) => (contacts, None),
             Err(e) => (vec![], Some(format!("Unable to load contacts: {e}"))),
         };
-        let load_failed = error.is_some();
+        let (mut extras, values_error) = match extras::load_checked(&path.with_file_name(VALUES_FILE)) {
+            Ok(values) => (values, None),
+            Err(e) => (Extras::default(), Some(format!("Unable to load contact values: {e}"))),
+        };
+        let load_failed = error.is_some() || values_error.is_some();
+        let error = error.or(values_error);
+        // Values of contacts that are no longer in the store are dropped on load.
+        let live: BTreeSet<u64> = contacts.iter().map(|c| c.id).collect();
+        extras.retain(|id| live.contains(&id));
         let (groups, group_ids, groups_error) = match group_file::load(&path.with_file_name(GROUPS_FILE)) {
             Ok((groups, ids)) => (groups, ids, None),
             Err(e) => (Groups::new(), Vec::new(), Some(format!("Unable to load groups: {e}"))),
@@ -389,6 +421,7 @@ impl Contacts {
             copy_out: None,
             confirm_delete: false,
             load_failed,
+            extras,
             error: error.or(groups_error),
             toast_until: None,
             labels: TextCache::default(),
@@ -462,7 +495,7 @@ impl Contacts {
     }
 
     /// The contact the user asked to copy to the pasteboard, if any (taken once).
-    pub fn take_copy(&mut self) -> Option<Contact> {
+    pub fn take_copy(&mut self) -> Option<(Contact, Vec<Extra>)> {
         self.copy_out.take()
     }
 
@@ -613,11 +646,9 @@ impl Contacts {
         y += MAC_TITLE1_PT + SPACE_S + SPACE_XL;
         let mut values = vec![];
         if let Some(c) = self.selected() {
-            for row in card_rows(c) {
-                if let Some(k) = value_slot(row.key) {
-                    values.push((k, rect(x, y, cw, VALUE_ROW)));
-                    y += VALUE_ROW + m::CARD_GAP;
-                }
+            for k in 0..card_rows(c, self.extras.get(c.id)).len() {
+                values.push((k, rect(x, y, cw, VALUE_ROW)));
+                y += VALUE_ROW + m::CARD_GAP;
             }
         }
         let nh = (self.notes.height() / ui.pt(1.0)).max(3.0 * MAC_BODY_PT) + SPACE_XL + SPACE_L;
@@ -703,6 +734,10 @@ impl Contacts {
     // ---- model ----
 
     /// The folder beside the contacts file that holds `name` (Import or Export).
+    fn values_path(&self) -> PathBuf {
+        self.path.with_file_name(VALUES_FILE)
+    }
+
     fn folder(&self, name: &str) -> PathBuf {
         self.path.parent().unwrap_or(Path::new("")).join(name)
     }
@@ -730,7 +765,7 @@ impl Contacts {
         let mut top = 0.0;
         let mut previous = None;
         let shown = self.filter_ids();
-        for i in store::search(&self.contacts, &self.query) {
+        for i in list_hits(&self.contacts, &self.extras, &self.query) {
             if shown.as_ref().is_some_and(|ids| !ids.contains(&self.contacts[i].id)) {
                 continue;
             }
@@ -882,6 +917,11 @@ impl Contacts {
                 self.error = None;
                 if self.groups.forget_contact(id) > 0 {
                     self.save_groups();
+                }
+                if self.extras.remove(id) {
+                    if let Err(e) = extras::save(&self.values_path(), &self.extras) {
+                        self.error = Some(format!("Unable to save contact values: {e}"));
+                    }
                 }
                 self.close_detail(ui);
                 self.rebuild(ui);
@@ -1154,6 +1194,7 @@ impl Contacts {
             return;
         }
         let mut updated = self.contacts.clone();
+        let mut updated_extras = self.extras.clone();
         let (mut added, mut skipped, mut invalid, mut extra, mut unreadable) = (0usize, 0usize, 0usize, 0usize, 0usize);
         for file in files {
             let read = std::fs::read(&file)
@@ -1165,7 +1206,7 @@ impl Contacts {
             };
             invalid += read.invalid;
             extra += read.extra_values;
-            for contact in read.contacts {
+            for (contact, values) in read.contacts.into_iter().zip(read.values) {
                 if dupes::has_duplicate(&updated, &contact) {
                     skipped += 1;
                     continue;
@@ -1175,6 +1216,9 @@ impl Contacts {
                     break;
                 };
                 updated.push(Contact { id, ..contact });
+                for value in values {
+                    updated_extras.add(id, value);
+                }
                 added += 1;
             }
         }
@@ -1186,7 +1230,7 @@ impl Contacts {
             parts.push(format!("{invalid} cards could not be kept"));
         }
         if extra > 0 {
-            parts.push(format!("{extra} extra phone numbers or emails were not kept"));
+            parts.push(format!("{extra} extra phone numbers or emails were not kept (a contact keeps {} extra values)", extras::MAX_EXTRAS));
         }
         if unreadable > 0 {
             parts.push(format!("{unreadable} files could not be read"));
@@ -1202,6 +1246,10 @@ impl Contacts {
                 let before = std::mem::replace(&mut self.contacts, updated);
                 self.record(&before);
                 self.error = None;
+                self.extras = updated_extras;
+                if let Err(e) = extras::save(&self.values_path(), &self.extras) {
+                    self.error = Some(format!("Unable to save contact values: {e}"));
+                }
                 self.status = Some(summary);
                 self.rebuild(ui);
             }
@@ -1219,7 +1267,7 @@ impl Contacts {
             exchange::Version::V4 => ("contacts-4.0.vcf", "4.0"),
         };
         let folder = self.folder("Export");
-        let text = exchange::export(&self.contacts, version);
+        let text = exchange::export(&self.contacts, &self.extras, version);
         match std::fs::create_dir_all(&folder).and_then(|()| std::fs::write(folder.join(file), text)) {
             Ok(()) => {
                 self.error = None;
@@ -1439,9 +1487,9 @@ impl Contacts {
             }
             Target::Copy(k) => {
                 if let Some(c) = self.selected() {
-                    let value = [&c.phone, &c.email, &c.address][k];
+                    let value = card_rows(c, self.extras.get(c.id)).get(k).map(|row| row.value.clone()).unwrap_or_default();
                     if !value.is_empty() {
-                        clipboard::set_text(value);
+                        clipboard::set_text(&value);
                         self.toast_until = Some(t + 2000.0);
                     }
                 }
@@ -1451,7 +1499,13 @@ impl Contacts {
                     self.share_req = Some(springboard::shell::share::Item::from_contact(c));
                 }
             }
-            Target::CopyContact => self.copy_out = self.selected().cloned(),
+            Target::CopyContact => {
+                let copy = self.selected().cloned().map(|c| {
+                    let extra = self.extras.get(c.id).to_vec();
+                    (c, extra)
+                });
+                self.copy_out = copy;
+            }
             Target::Favorite => self.toggle_favorite(ui),
             Target::Delete => {
                 self.confirm_delete = true;
@@ -1638,8 +1692,9 @@ impl Contacts {
             Screen::Detail(_) => {
                 let l = self.card_layout(ui);
                 let Some(contact) = self.selected() else { return nodes };
+                let rows = card_rows(contact, self.extras.get(contact.id));
                 for &(k, r) in &l.values {
-                    let kind = ["phone", "email", "address"][k];
+                    let kind = rows.get(k).map_or("value", |row| value_word(row.key));
                     nodes.push(button(NODE_COPY + k as u64, &format!("Copy {kind}"), r));
                 }
                 let fav = if contact.favorite { "Remove from Favorites" } else { "Add to Favorites" };
@@ -1878,7 +1933,7 @@ impl Contacts {
             self.centre_text(s, ui, &company, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, name_mid + MAC_TITLE1_PT);
         }
         // the value rows come from the card model, in the same order as the layout's rects
-        for (row, &(_, r)) in card_rows(&contact).iter().zip(&l.values) {
+        for (row, &(_, r)) in card_rows(&contact, self.extras.get(contact.id)).iter().zip(&l.values) {
             Self::fill(s, ui, r, m::CARD_RADIUS, CARD_BG.now());
             self.text(s, ui, &row.label, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), r.x + SPACE_L, r.y + r.h * 0.3);
             let value = ui.fit(&row.value, MAC_BODY_PT, ui.pt(r.w - 2.0 * SPACE_L));
@@ -2032,11 +2087,11 @@ mod tests {
         let mut app = Contacts::new(&ui, 1200, 780, path);
         app.open_detail(&ui, 1);
         assert!(app.activate_control(&ui, NODE_COPY_CONTACT));
-        assert_eq!(app.take_copy().map(|c| c.id), Some(1));
+        assert_eq!(app.take_copy().map(|(c, _)| c.id), Some(1));
         assert!(app.take_copy().is_none(), "taken once");
         app.open_detail(&ui, 2);
         app.activate(&ui, Target::CopyContact, 0.0, 0.0, 0.0);
-        assert_eq!(app.take_copy().map(|c| c.name), Some("Bo Berg".to_string()));
+        assert_eq!(app.take_copy().map(|(c, _)| c.name), Some("Bo Berg".to_string()));
     }
 
     #[test]
@@ -2141,7 +2196,7 @@ mod tests {
         ann.phone = "555 0100".into();
         ann.labels = [2, 1, 0];
         ann.address = "Hverfisgata 1".into();
-        let rows: Vec<(String, String)> = card_rows(&ann).into_iter().map(|r| (r.label, r.value)).collect();
+        let rows: Vec<(String, String)> = card_rows(&ann, &[]).into_iter().map(|r| (r.label, r.value)).collect();
         assert_eq!(
             rows,
             vec![("work".to_string(), "555 0100".to_string()), ("home".to_string(), "Hverfisgata 1".to_string())],
@@ -2152,7 +2207,58 @@ mod tests {
         let mut app = Contacts::new(&ui, 1200, 780, path.clone());
         app.open_detail(&ui, 1);
         let slots: Vec<usize> = app.card_layout(&ui).values.iter().map(|v| v.0).collect();
-        assert_eq!(slots, vec![0, 2], "phone and address rows, so copy and layout use the same slots");
+        assert_eq!(slots, vec![0, 1], "one row for the phone and one for the address, so copy and layout use the same row numbers");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn extra_values_follow_the_store_values_on_the_card_and_copy_by_row() {
+        let mut ann = contact(1, "Anna As");
+        ann.phone = "555 0100".into();
+        ann.labels = [2, 1, 0];
+        let extra = [
+            Extra { kind: ValueKind::Phone, label: "home".into(), value: "555 0199".into() },
+            Extra { kind: ValueKind::Email, label: "work".into(), value: "anna@work.is".into() },
+        ];
+        let rows: Vec<(String, String)> = card_rows(&ann, &extra).into_iter().map(|r| (r.label, r.value)).collect();
+        assert_eq!(
+            rows,
+            vec![
+                ("work".to_string(), "555 0100".to_string()),
+                ("home".to_string(), "555 0199".to_string()),
+                ("work".to_string(), "anna@work.is".to_string()),
+            ],
+            "store phone, extra phone, then extra email: the card groups by kind"
+        );
+        assert_eq!(value_word(card_rows(&ann, &extra)[2].key), "email");
+    }
+
+    #[test]
+    fn a_search_matches_extra_values_as_well_as_store_fields() {
+        let contacts = vec![contact(1, "Anna As"), contact(2, "Bo Berg")];
+        let mut extras = Extras::default();
+        assert!(extras.add(2, Extra { kind: ValueKind::Email, label: "work".into(), value: "bo@berg.is".into() }));
+        assert_eq!(list_hits(&contacts, &extras, "BO@BERG"), vec![1], "only Bo has that extra email");
+        assert_eq!(list_hits(&contacts, &extras, "anna"), vec![0], "the store's name still matches");
+        assert_eq!(list_hits(&contacts, &extras, "zzz"), Vec::<usize>::new());
+        assert_eq!(list_hits(&contacts, &extras, ""), vec![0, 1], "a blank search shows everyone");
+    }
+
+    #[test]
+    fn deleting_a_contact_drops_its_extra_values_from_the_file() {
+        let path = file_with("extras-delete", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.extras.add(1, Extra { kind: ValueKind::Phone, label: "home".into(), value: "555 0199".into() }));
+        assert!(app.extras.add(2, Extra { kind: ValueKind::Phone, label: "home".into(), value: "555 0299".into() }));
+        extras::save(&path.with_file_name(VALUES_FILE), &app.extras).unwrap();
+        app.open_detail(&ui, 1);
+        app.remove_selected(&ui);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        assert!(app.extras.get(1).is_empty());
+        let left = extras::load_checked(&path.with_file_name(VALUES_FILE)).unwrap();
+        assert_eq!(left.get(2).len(), 1, "Bo keeps his value");
+        assert!(left.get(1).is_empty());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
