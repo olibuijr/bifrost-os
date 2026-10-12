@@ -1,6 +1,6 @@
 id = "is.olibuijr.remote.desktop"
 name = "Remote"
-version = "0.1.9"
+version = "0.2.0"
 exec = "bifrost-remote"
 icon = "icon.png"
 window = "full-size"
