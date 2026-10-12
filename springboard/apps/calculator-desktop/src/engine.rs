@@ -290,12 +290,6 @@ impl Engine {
         }
     }
 
-    pub fn recall(&mut self, index: usize) {
-        if let Some(value) = self.history.get(index).map(|c| c.value) {
-            self.recall_value(value);
-        }
-    }
-
     /// Starts afresh from `value` (a recalled history result).
     pub fn recall_value(&mut self, value: f64) {
         self.reset();
@@ -496,11 +490,10 @@ mod tests {
         let mut e = Engine::default();
         enter(&mut e, "1+1==========");
         assert_eq!(e.history.len(), MAX_HISTORY);
-        e.recall(2);
+        let value = e.history[2].value;
+        e.recall_value(value);
         assert_eq!(e.display(), "9");
         enter(&mut e, "*2=");
-        assert_eq!(e.display(), "18");
-        e.recall(999);
         assert_eq!(e.display(), "18");
     }
 }

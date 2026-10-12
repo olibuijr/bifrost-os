@@ -12,7 +12,7 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::{clipboard, Event, Surface, TextCache};
+use bifrost_app::kit::{clipboard, Event, TextCache};
 use crate::chrome;
 use crate::convert::{Category, Converter};
 use crate::copy_service::CopyRequest;
@@ -131,7 +131,7 @@ const SCI_KEYS: [SciDef; SCI_COLS * SCI_ROWS] = [
     one("mc", SciKey::MemClear),
     one("m+", SciKey::MemAdd),
     one("m-", SciKey::MemSub),
-    one("mr", SciKey::MemRecall),
+    two("mr", SciKey::MemRecall, "ans", SciKey::Answer),
     special("2nd", Act::Second),
     one("x²", SciKey::Postfix("^2")),
     one("x³", SciKey::Postfix("^3")),
@@ -367,6 +367,7 @@ impl Calculator {
     }
 
     /// The centre of a visible basic key, also useful to host previews.
+    #[cfg(test)]
     pub fn key_centre(&self, ui: &Ui, key: Key) -> Option<(f32, f32)> {
         let i = KEYS.iter().position(|&k| k == key)?;
         let (x, y, w, h) = self.key_rect(ui, i);
@@ -374,6 +375,7 @@ impl Calculator {
     }
 
     /// The centre of a visible scientific key (by its un-2nd action).
+    #[cfg(test)]
     pub fn sci_key_centre(&self, ui: &Ui, key: SciKey) -> Option<(f32, f32)> {
         if !self.sci_active(ui) {
             return None;
@@ -414,19 +416,23 @@ impl Calculator {
     }
 
     /// Toolbar item `id` in pixels, or an empty rectangle when it overflowed.
+    #[cfg(test)]
     fn bar_rect(&self, ui: &Ui, id: u32) -> (f32, f32, f32, f32) {
         self.bar_layout(ui).rect_of(id).map_or((0.0, 0.0, 0.0, 0.0), |r| (ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)))
     }
 
+    #[cfg(test)]
     fn history_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.bar_rect(ui, BAR_HISTORY)
     }
 
     /// The Scientific segment (Basic when the scientific keypad shows, so a tap toggles it).
+    #[cfg(test)]
     fn scientific_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.bar_rect(ui, if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC })
     }
 
+    #[cfg(test)]
     fn decimal_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.bar_rect(ui, BAR_DECIMAL)
     }
@@ -999,6 +1005,8 @@ impl Calculator {
         self.hold.map(|t0| t0 + HOLD_MS)
     }
 
+    /// The state a test reads back, in the same words as the app's `describe` line.
+    #[cfg(test)]
     pub fn describe(&self) -> String {
         format!(
             "calculator_display={:?} calculator_history={} calculator_history_open={} calculator_scientific={} calculator_locale={} calculator_convert={:?}",
@@ -1268,6 +1276,7 @@ mod tests {
     use super::*;
     use crate::format;
     use crate::icon::icon;
+    use bifrost_app::kit::Surface;
 
     fn tap(app: &mut Calculator, ui: &Ui, x: f32, y: f32) {
         app.touch(ui, Event::Down(x, y), 0.0);
