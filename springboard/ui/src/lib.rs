@@ -920,6 +920,8 @@ pub mod vm_share;
 pub mod vm_error;
 pub mod smartcard_slot;
 pub mod token_watch;
+pub mod token_objects;
+pub mod token_registry;
 pub mod screensaver;
 pub mod disk_image;
 
