@@ -1,7 +1,8 @@
 //! `NativeScrollView`: one document view inside a clipping frame, panned by dragging, with a thin overlay scroller.
 use super::{View, ViewBase, ViewEvent};
 use crate::kit::ui::LABEL_2;
-use crate::kit::{Event, Surface, Ui};
+use crate::kit::{Event, Ui};
+use bifrost_render::canvas::{Canvas, RectF};
 use bifrost_ui::scroll::Scroller;
 use bifrost_ui::Rect;
 
@@ -112,7 +113,7 @@ impl View for ScrollView {
         }
         self.knob = moving;
     }
-    fn draw_overlay(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_overlay(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let max = self.max_offset();
         if !self.knob || max <= 0.0 {
             return;
@@ -122,7 +123,7 @@ impl View for ScrollView {
         let t = (self.scroller.offset() / max).clamp(0.0, 1.0);
         let y = f.y + t * (f.h - knob_h);
         // opaque colour: overlays repaint every frame, so a translucent knob would build up
-        s.fill_rrect(ui.pt(f.right() - KNOB_INSET_PT - KNOB_W_PT), ui.pt(y), ui.pt(KNOB_W_PT), ui.pt(knob_h), ui.pt(KNOB_W_PT / 2.0), LABEL_2.now());
+        s.fill_rrect(RectF::new(ui.pt(f.right() - KNOB_INSET_PT - KNOB_W_PT), ui.pt(y), ui.pt(KNOB_W_PT), ui.pt(knob_h)), ui.pt(KNOB_W_PT / 2.0), LABEL_2.now());
     }
 }
 

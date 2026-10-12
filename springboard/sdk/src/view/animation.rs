@@ -448,7 +448,7 @@ impl<S: Responder> Window<S> {
             an.complete(g);
         }
         if moved {
-            self.full = true; // vacated areas need a repaint: Surface has no clip, so the whole window is redrawn
+            self.full = true; // vacated areas need a repaint: the window is redrawn in full
         }
     }
 
@@ -457,39 +457,11 @@ impl<S: Responder> Window<S> {
     }
 }
 
-/// The pixels under a view, saved so that the view can be drawn normally and then faded back into them.
-pub(super) struct Backdrop {
-    x: usize,
-    y: usize,
-    w: usize,
-    rows: Vec<Vec<u32>>,
-}
-
-impl Backdrop {
-    /// Saves the pixels of `(x, y, w, h)` (clipped to the surface).
-    pub(super) fn save(s: &Surface, x: usize, y: usize, w: usize, h: usize) -> Backdrop {
-        let (x1, y1) = ((x + w).min(s.w), (y + h).min(s.h));
-        let x = x.min(x1);
-        let y = y.max(s.y0);
-        let rows = (y..y1.max(y)).map(|r| s.px[(r - s.y0) * s.stride + x..(r - s.y0) * s.stride + x1].to_vec()).collect();
-        Backdrop { x, y, w: x1 - x, rows }
-    }
-    /// Replaces the saved area with `alpha` (0..=255) of what was drawn there and the rest of the saved pixels.
-    /// Cost: one copy and one blend of the view's frame per faded view; no full-size layer is allocated.
-    pub(super) fn blend(&self, s: &mut Surface, alpha: u32) {
-        use crate::kit::gfx::scale;
-        for (i, saved) in self.rows.iter().enumerate() {
-            let base = (self.y + i - s.y0) * s.stride + self.x;
-            for (d, &b) in s.px[base..base + self.w].iter_mut().zip(saved) {
-                *d = scale(b, 255 - alpha).wrapping_add(scale(*d, alpha));
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_render::canvas::RectF;
+    use crate::kit::Surface;
 
     fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect { x, y, w, h }
@@ -691,11 +663,15 @@ mod tests {
 
     #[test]
     fn faded_view_blends_over_its_backdrop() {
+        // group opacity: a white square at 50% over black is mid grey, the rest of the surface is untouched
         let mut px = vec![0xff00_0000u32; 16];
         let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
-        let b = Backdrop::save(&s, 0, 0, 2, 2);
-        s.fill_rect(0, 0, 2, 2, 0xffff_ffff);
-        b.blend(&mut s, 128);
+        {
+            let c: &mut dyn Canvas = &mut s;
+            c.push_opacity(0.5);
+            c.fill_rect(RectF::new(0.0, 0.0, 2.0, 2.0), 0xffff_ffff);
+            c.pop_opacity();
+        }
         let p = px[0];
         assert!((p & 0xff).abs_diff(0x80) <= 1 && p >> 24 == 0xff);
         assert_eq!(px[3], 0xff00_0000);
