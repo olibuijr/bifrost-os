@@ -9,6 +9,9 @@ The audio server stops its devices when asked.
   A device thread is never detached: the server refuses to reopen the device until the old thread has ended. Before,
   a stuck stop left the sound card held by the server and every later open failed with "Busy".
 - Boot: the module recorder rebuilds a stale initramfs drop-in after an update even when the module list is the same.
+- Boot: the boot image carries microcode for this CPU only (it was in twice, for every CPU) and only the GPU firmware
+  the driver asked for, compressed harder; the menu bar and Dock draw as soon as the compositor configures them, so the
+  desktop no longer waits up to 4 s for its first full frame.
 
 ## 0.6.3 — 2026-10-12
 
