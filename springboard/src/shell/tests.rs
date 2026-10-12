@@ -1592,6 +1592,25 @@
         assert!(sh.ax_map(2.0).get("os/apps/settings").is_some_and(|e| e.value == "open"));
     }
 
+    // an open window is an element whose title-bar actions are listed and run through `ax action`
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn an_open_window_lists_and_runs_its_title_bar_actions() {
+        let mut sh = desktop_shell();
+        sh.ax_press("os/apps/settings", 1.0).expect("opens");
+        let map = sh.ax_map(2.0);
+        assert!(map.get("os/windows/settings").is_some_and(|e| e.role == "window" && e.handle == "win:0"), "{}", map.listing("os/windows"));
+        assert_eq!(map.custom_actions("os/windows/settings").collect::<Vec<_>>(), ["Zoom", "Minimize", "Close"]);
+        assert!(sh.ax_press("os/windows/settings", 3.0).unwrap_err().contains("is a window"));
+        assert!(sh.ax_action("os/windows/settings", "Fly", 4.0).unwrap_err().contains("has no action"));
+        let (address, _) = sh.ax_action("os/windows/settings", "Minimize", 5.0).expect("minimizes");
+        assert_eq!(address, "os/windows/settings");
+        assert!(sh.desk.as_ref().unwrap().wins.iter().any(|w| w.app == super::AppId::Settings && w.minimized));
+        let listing = sh.ax_listing("os/windows", 6.0);
+        assert!(listing.starts_with("os/windows/settings\twindow\tSettings\tminimized\tenabled\t\t\t\n"), "{listing}");
+        assert_eq!(sh.ax_actions("os/windows/settings", 7.0).unwrap(), "Zoom\nMinimize\nClose\n");
+    }
+
     #[test]
     fn an_alert_is_answered_through_the_map_and_blocks_other_presses() {
         let mut sh = desktop_shell();

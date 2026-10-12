@@ -57,6 +57,10 @@ pub enum Request {
     AxList(String),
     /// `ax press <address or name>`
     AxPress(String),
+    /// `ax actions <address or name>`: the custom action names of one element
+    AxActions(String),
+    /// `ax action <address or name> :: <action name>`: runs one custom action
+    AxAction(String, String),
     Version,
     Ready,
     Perf,
@@ -146,7 +150,12 @@ pub fn parse(line: &str) -> Result<Request, String> {
         Some("ax") => match (w.get(1).copied(), line.trim().splitn(3, ' ').nth(2)) {
             (Some("list") | None, rest) => Ok(Request::AxList(rest.unwrap_or("").trim().into())),
             (Some("press"), Some(q)) if !q.trim().is_empty() => Ok(Request::AxPress(q.trim().into())),
-            _ => Err("usage: ax list [prefix] | ax press <address or name>".into()),
+            (Some("actions"), Some(q)) if !q.trim().is_empty() => Ok(Request::AxActions(q.trim().into())),
+            (Some("action"), Some(q)) => match q.split_once("::") {
+                Some((el, name)) if !el.trim().is_empty() && !name.trim().is_empty() => Ok(Request::AxAction(el.trim().into(), name.trim().into())),
+                _ => Err("usage: ax action <address or name> :: <action name>".into()),
+            },
+            _ => Err("usage: ax list [prefix] | ax press <address or name> | ax actions <element> | ax action <element> :: <name>".into()),
         },
         Some("state") => Ok(Request::State),
         Some("version") => Ok(Request::Version),
@@ -252,6 +261,10 @@ mod tests {
         assert_eq!(parse("ax list os/settings"), Ok(Request::AxList("os/settings".into())));
         assert_eq!(parse("ax press General > Software Update"), Ok(Request::AxPress("General > Software Update".into())));
         assert!(parse("ax press").is_err());
+        assert_eq!(parse("ax actions os/windows/settings"), Ok(Request::AxActions("os/windows/settings".into())));
+        assert_eq!(parse("ax action Settings :: Zoom"), Ok(Request::AxAction("Settings".into(), "Zoom".into())));
+        assert!(parse("ax action Settings").is_err(), "the action name is required");
+        assert!(parse("ax action :: Zoom").is_err(), "the element is required");
         assert!(parse("ready now").is_ok());
         assert_eq!(parse("lock"), Ok(Request::Lock));
         assert!(parse("lock now").is_err());

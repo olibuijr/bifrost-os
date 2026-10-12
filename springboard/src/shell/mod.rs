@@ -575,6 +575,8 @@ pub struct Shell {
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
     low_monitor: low_battery::Monitor,
+    /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
+    announce: accessibility::banner::Banner,
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
@@ -800,6 +802,7 @@ impl Shell {
             low_alert: None,
             permission_sheet: None,
             low_monitor: low_battery::Monitor::default(),
+            announce: Default::default(),
             battery_checked: f64::NEG_INFINITY,
             dirty: true,
             perf_only: false,
@@ -2663,6 +2666,7 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        self.announce_tick(t);
         self.permission_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -2764,6 +2768,9 @@ impl Shell {
             return &self.damage;
         }
         if self.notify_damage_all() {
+            damage.all();
+        }
+        if self.announce_damage() {
             damage.all();
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
@@ -2977,6 +2984,7 @@ impl Shell {
         if self.clock.alert().is_none() {
             self.draw_banner(s, t);
         }
+        self.draw_announce(s);
         if self.dnd.session.is_some() {
             damage.all();
             self.dnd_draw(s);
@@ -3037,7 +3045,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
         if !quiet {
             return None;
         }
@@ -3058,7 +3066,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
         if !quiet {
             return None;
         }

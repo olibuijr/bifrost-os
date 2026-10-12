@@ -11,6 +11,10 @@
 
 use super::prefs::Prefs;
 
+pub mod actions;
+pub mod banner;
+pub mod tree;
+
 /// Display Zoom: geometry factor for "Standard" and "Larger".
 pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];
 /// Touch Accommodations: how long a press must last to count as a hold (ms).
