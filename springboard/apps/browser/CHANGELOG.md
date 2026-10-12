@@ -1,3 +1,11 @@
+## 0.10.0 — 2026-10-12
+
+- Import Bookmarks: Settings (Cmd+,) has an "Import Bookmarks..." row. It reads the newest bookmark export in Downloads (a `bookmark*.html` file in the Netscape Bookmarks form that browsers and Safari write) and adds the links you do not have yet. Bookmarks you already have keep their names. The import reports how many it added. Folder names are not kept, only the links and their titles.
+- Scripts can import too: `browser.bookmarks` takes `op=import` and `path`, and reports `imported`.
+- Clear history from a time: `browser.history` takes `clear_since` (seconds since the epoch) and removes the entries last visited at or after that time, reporting `cleared`. The Settings sheet still clears all history.
+- Under the hood: page-source fetches, site icons, download probes and the download progress redraw run on the shared dispatch queues instead of raw threads and channels. Nothing changes on screen.
+- Style: the page dimming behind sheets, the switch knob and the element-inspector overlay now come from named colour tokens; the overlay uses the app tint. Corner radii and spacing use the shared layout and spacing tokens.
+
 ## 0.9.0 — 2026-10-11
 
 - Settings: the sheet shrinks to fit short windows and scrolls by dragging inside it (content is clipped to the card); the label column and width follow the window.

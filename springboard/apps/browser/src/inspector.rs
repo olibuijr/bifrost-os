@@ -9,9 +9,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Rect, TextField};
 use bifrost_app::kit::ui::system::SYSTEM_ORANGE;
-use bifrost_app::kit::ui::{Weight, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, SEGMENT_ON, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, SEGMENT_ON, SEPARATOR_C, SPACE_XS, TINT};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
 use bifrost_app::webview::{WebProcessPool, WebViewEvent, WebViewId};
@@ -22,6 +23,9 @@ use bifrost_core::json::{self, Json};
 use crate::control::{self, Cell, Panel, Rec, Row};
 use crate::pagetools::{self, Cap, NodeInfo};
 use crate::{devtools, elements, network};
+
+/// Segmented tabs and chips: the small-control radius (the prefs tile token).
+const SEG_RADIUS_PT: f32 = m::ICON_RADIUS;
 
 /// Entries kept per tab; the oldest are dropped first.
 pub const MAX_ENTRIES: usize = 5000;
@@ -1253,7 +1257,7 @@ impl Inspector {
             let c = Self::tab_rect(p, i);
             let on = *panel == self.panel;
             if on {
-                s.fill_rrect(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h), ui.pt(5.0), SEGMENT_ON.now());
+                s.fill_rrect(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h), ui.pt(SEG_RADIUS_PT), SEGMENT_ON.now());
             }
             let name = match panel {
                 Panel::Console => "Console",
@@ -1270,7 +1274,7 @@ impl Inspector {
                 let c = Self::chip(p, i);
                 let on = i == current;
                 if on {
-                    s.fill_rrect(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h), ui.pt(5.0), SEGMENT_ON.now());
+                    s.fill_rrect(ui.pt(c.x), ui.pt(c.y), ui.pt(c.w), ui.pt(c.h), ui.pt(SEG_RADIUS_PT), SEGMENT_ON.now());
                 }
                 text(s, name, c.x + 8.0, c.y + c.h / 2.0, c.w - 12.0, if on { Weight::Semibold } else { Weight::Regular }, if on { LABEL.now() } else { LABEL_2.now() });
             }
@@ -1321,7 +1325,7 @@ fn draw_cells(s: &mut Surface, ui: &Ui, row: &Row, list: Rect, cy: f32, top: f32
             for d in 0..depth {
                 s.fill_rect(px(list.x + 10.0 + d as f32 * elements::INDENT_PT + 5.0), px(top), 1, px(ROW_PT), SEPARATOR_C.now());
             }
-            let sz = (ui.pt(4.0) as i32).max(2);
+            let sz = (ui.pt(SPACE_XS) as i32).max(2);
             let (x0, y0) = (px(list.x + c.x + 2.0) as i32, px(cy) as i32);
             match rest {
                 // closed: points right

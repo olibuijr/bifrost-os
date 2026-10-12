@@ -250,10 +250,12 @@ pub enum Req {
     Inspect { id: Option<u32>, x: f32, y: f32, timeout_ms: u64 },
     /// List downloads; `cancel` stops one by id, `clear` drops finished entries from the list.
     Downloads { cancel: Option<u32>, clear: bool },
-    /// Bookmarks: `op` is list (default), add (url defaults to the current page), remove or rename.
-    Bookmarks { op: String, url: Option<String>, title: Option<String>, query: Option<String>, limit: usize },
-    /// History, newest first; `remove` deletes one URL, `clear` deletes everything.
-    History { query: Option<String>, limit: usize, remove: Option<String>, clear: bool },
+    /// Bookmarks: `op` is list (default), add (url defaults to the current page), remove, rename or import (`path` is a
+    /// bookmark export in HTML form).
+    Bookmarks { op: String, url: Option<String>, title: Option<String>, query: Option<String>, limit: usize, path: Option<String> },
+    /// History, newest first; `remove` deletes one URL, `clear` deletes everything, `clear_since` (epoch seconds)
+    /// deletes the entries last visited at or after that time.
+    History { query: Option<String>, limit: usize, remove: Option<String>, clear: bool, clear_since: Option<u64> },
     Favicon { id: Option<u32> },
 }
 
@@ -510,23 +512,27 @@ pub fn parse(method: &str, p: &Json) -> Result<Req, RpcError> {
         "browser.downloads" => Req::Downloads { cancel: opt_uint(p, "cancel", u32::MAX as u64)?.map(|v| v as u32), clear: opt_bool(p, "clear")?.unwrap_or(false) },
         "browser.bookmarks" => {
             let op = opt_str(p, "op")?.unwrap_or_else(|| "list".into());
-            if !matches!(op.as_str(), "list" | "add" | "remove" | "rename") {
-                return Err(invalid("op must be list, add, remove or rename"));
+            if !matches!(op.as_str(), "list" | "add" | "remove" | "rename" | "import") {
+                return Err(invalid("op must be list, add, remove, rename or import"));
             }
-            let (url, title) = (opt_str(p, "url")?, opt_str(p, "title")?);
+            let (url, title, path) = (opt_str(p, "url")?, opt_str(p, "title")?, opt_str(p, "path")?);
+            if op == "import" && path.is_none() {
+                return Err(invalid("path is required for import"));
+            }
             if matches!(op.as_str(), "remove" | "rename") && url.is_none() {
                 return Err(invalid("url is required for remove and rename"));
             }
             if op == "rename" && title.is_none() {
                 return Err(invalid("title is required for rename"));
             }
-            Req::Bookmarks { op, url, title, query: opt_str(p, "query")?, limit: opt_uint(p, "limit", 5000)?.unwrap_or(200) as usize }
+            Req::Bookmarks { op, url, title, query: opt_str(p, "query")?, limit: opt_uint(p, "limit", 5000)?.unwrap_or(200) as usize, path }
         }
         "browser.history" => Req::History {
             query: opt_str(p, "query")?,
             limit: opt_uint(p, "limit", 5000)?.unwrap_or(100) as usize,
             remove: opt_str(p, "remove")?,
             clear: opt_bool(p, "clear")?.unwrap_or(false),
+            clear_since: opt_uint(p, "clear_since", i64::MAX as u64)?,
         },
         "browser.favicon" => Req::Favicon { id: tab_id(p)? },
         _ => return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),

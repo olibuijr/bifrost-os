@@ -13,7 +13,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
+
+use bifrost_app::dispatch::DispatchQueue;
+
+use crate::inbox::{self, Slot};
 
 /// Prefix of the eval that reads `document.cookie`; the inspector must not list its answer.
 pub const COOKIE_PREFIX: &str = "bifrost-ck:";
@@ -120,7 +124,7 @@ pub struct Downloads {
     pub open: bool,
     next: u32,
     last: HashMap<WebViewId, String>,
-    probes: Vec<(WebViewId, Receiver<Probe>)>,
+    probes: Vec<(WebViewId, Slot<Probe>)>,
     cookies: HashMap<WebViewId, String>,
     pub ua: String,
     ctx: HashMap<String, Ctx>,
@@ -260,8 +264,18 @@ fn probe(url: &str, cx: &Ctx) -> Probe {
     Probe { url: url.to_string(), download: Some(name), total }
 }
 
-fn wake() {
-    bifrost_app::dispatch::DispatchQueue::main().async_(|| {});
+/// Redraws while a download runs: one wake every half second on the main queue, until nothing is active (or after an
+/// hour). A download that starts as this stops finds the flag still set, so it restarts the chain.
+fn progress_tick(n: u32) {
+    if n >= 7200 || ACTIVE.load(Ordering::SeqCst) == 0 {
+        WAKER.store(false, Ordering::SeqCst);
+        if ACTIVE.load(Ordering::SeqCst) > 0 && !WAKER.swap(true, Ordering::SeqCst) {
+            progress_tick(0);
+        }
+        return;
+    }
+    inbox::wake();
+    DispatchQueue::main().async_after(Duration::from_millis(500), move || progress_tick(n + 1));
 }
 
 fn size_text(n: u64) -> String {
@@ -317,12 +331,8 @@ impl Downloads {
         let cookie = if same_site(&base, &referer) { self.cookies.get(&view).cloned().unwrap_or_default() } else { String::new() };
         let cx = Ctx { cookie, referer, ua: self.ua.clone() };
         self.ctx.insert(base.clone(), cx.clone());
-        let (tx, rx) = channel();
-        std::thread::spawn(move || {
-            let _ = tx.send(probe(&base, &cx));
-            wake();
-        });
-        self.probes.push((view, rx));
+        let slot = inbox::spawn(move || probe(&base, &cx));
+        self.probes.push((view, slot));
     }
 
     /// The answer to `COOKIE_JS` for `view`; true when it was one (the caller then hides it from the console).
@@ -362,20 +372,7 @@ impl Downloads {
         // wake the idle loop while a download runs so progress redraws; one thread, gone when none is active
         self.sync_active();
         if !WAKER.swap(true, Ordering::SeqCst) {
-            std::thread::spawn(|| {
-                for _ in 0..7200 {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    if ACTIVE.load(Ordering::SeqCst) == 0 {
-                        break;
-                    }
-                    wake();
-                }
-                WAKER.store(false, Ordering::SeqCst);
-                // a download that started while this thread was leaving finds WAKER still set: hand over
-                if ACTIVE.load(Ordering::SeqCst) > 0 {
-                    wake();
-                }
-            });
+            progress_tick(0);
         }
         true
     }
@@ -385,13 +382,12 @@ impl Downloads {
         let mut changed = false;
         let mut stop = Vec::new();
         let mut ready = Vec::new();
-        self.probes.retain(|(v, rx)| match rx.try_recv() {
-            Ok(p) => {
+        self.probes.retain(|(v, slot)| match inbox::take(slot) {
+            Some(p) => {
                 ready.push((*v, p));
                 false
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => true,
-            Err(_) => false,
+            None => true,
         });
         for (v, p) in ready {
             if let Some(name) = p.download {

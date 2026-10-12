@@ -4,9 +4,11 @@
 use std::collections::VecDeque;
 
 use bifrost_app::controls::menu::{Menu, MenuItem};
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Rect, TextField};
 use bifrost_app::kit::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, TINT, WHITE};
-use bifrost_app::kit::{rgba, Surface, Ui};
+use bifrost_app::kit::{Surface, Ui};
+use crate::tokens;
 use bifrost_app::webview::{DialogKind, MenuKind, WebProcessPool, WebViewEvent, WebViewId};
 use bifrost_app::widgets::{self, MENU_PAD_PT, MENU_ROW_PT, MENU_SEPARATOR_PT};
 use bifrost_app::KeyInput;
@@ -305,8 +307,8 @@ impl PageUi {
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: u32, h: u32) {
         if let (Some(d), Some((card, field, cancel, ok, lines))) = (self.dialogs.front(), self.layout(ui, w, h)) {
-            s.fill_rect(0, 0, s.w, s.h, rgba(0, 0, 0, 110));
-            s.fill_rrect(ui.pt(card.x), ui.pt(card.y), ui.pt(card.w), ui.pt(card.h), ui.pt(14.0), CARD_BG.now());
+            s.fill_rect(0, 0, s.w, s.h, tokens::scrim(110));
+            s.fill_rrect(ui.pt(card.x), ui.pt(card.y), ui.pt(card.w), ui.pt(card.h), ui.pt(m::CARD_RADIUS), CARD_BG.now());
             let (lx, mut ty) = (ui.pt(card.x + PAD) as i32, ui.pt(card.y + PAD));
             let title = if d.host.is_empty() { "This page says".to_string() } else { format!("\u{201c}{}\u{201d} says", d.host) };
             let t = ui.text(&ui.fit(&title, MAC_BODY_PT, ui.pt(SHEET_W - 2.0 * PAD)), MAC_BODY_PT, Weight::Semibold, LABEL.now());

@@ -20,7 +20,7 @@ use std::{fs, io};
 
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_XXS, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, TINT};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -82,6 +82,8 @@ mod library;
 mod crashbanner;
 mod reader;
 mod favicon;
+mod inbox;
+mod tokens;
 mod session;
 
 const KEY_F: u32 = 33;
@@ -139,7 +141,7 @@ struct Browser {
     /// Script dialogs, context menu and <select> popups.
     pageui: pageui::PageUi,
     /// View Source fetches running off the UI thread: (page URL, result).
-    sources: Vec<(String, std::sync::mpsc::Receiver<String>)>,
+    sources: Vec<(String, inbox::Slot<String>)>,
     prefs: prefs::Prefs,
     sheet: prefs::Sheet,
     /// Private window (`--private`): no history, no session, a throwaway profile deleted on exit.
@@ -424,7 +426,7 @@ impl Browser {
                 // its own control socket: binding the default path would take over the main window's
                 .env("BIFROST_CONTROL", home().join(format!(".cache/bifrost-browser/private-{}-{}.sock", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis()))))
                 .spawn() {
-                std::thread::spawn(move || {
+                bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
                     let _ = child.wait();
                 });
             }
@@ -454,6 +456,18 @@ impl Browser {
         self.start();
     }
 
+    /// Settings > Import Bookmarks: the newest bookmark export in ~/Downloads is added (links already bookmarked stay).
+    fn import_bookmarks(&mut self) {
+        let msg = match library::newest_export(&home().join("Downloads")) {
+            None => "No bookmark export found in Downloads.".to_string(),
+            Some(path) => match fs::read_to_string(&path) {
+                Ok(html) => format!("Imported {} bookmarks.", library::import_html(&mut self.store, &html, store::now())),
+                Err(_) => "The bookmark export could not be read.".to_string(),
+            },
+        };
+        self.sheet.set_status(&msg);
+    }
+
     /// Applies what the Settings sheet reported.
     fn sheet_action(&mut self, ctx: &Ctx, a: prefs::Action) {
         match a {
@@ -463,6 +477,7 @@ impl Browser {
                 self.store.clear_history();
                 self.sheet.set_status("History cleared.");
             }
+            prefs::Action::ImportBookmarks => self.import_bookmarks(),
             prefs::Action::ClearData => {
                 self.clear_website_data();
                 self.sheet.set_status("Website data cleared.");
@@ -610,14 +625,10 @@ impl Browser {
                 let url = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone()).unwrap_or_default();
                 if url.starts_with("http") {
                     // curl runs on a thread; tick() opens the source tab when it finishes.
-                    let (tx, rx) = std::sync::mpsc::channel();
+                    // the result lands in the slot and wakes the idle loop; tick() collects it
                     let u = url.clone();
-                    std::thread::spawn(move || {
-                        let _ = tx.send(devmenu::fetch_source(&u));
-                        // wake the idle loop so tick() collects the result; no redraw polling meanwhile
-                        bifrost_app::dispatch::DispatchQueue::main().async_(|| {});
-                    });
-                    self.sources.push((url, rx));
+                    let slot = inbox::spawn(move || devmenu::fetch_source(&u));
+                    self.sources.push((url, slot));
                 }
             }
             (KEY_R, true, true) => {
@@ -892,13 +903,12 @@ impl App for Browser {
         }
         self.save_session(t);
         let mut ready = Vec::new();
-        self.sources.retain(|(url, rx)| match rx.try_recv() {
-            Ok(src) => {
+        self.sources.retain(|(url, slot)| match inbox::take(slot) {
+            Some(src) => {
                 ready.push(devmenu::source_document(url, &src));
                 false
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => true,
-            Err(_) => false,
+            None => true,
         });
         let opened = !ready.is_empty();
         for doc in ready {
@@ -1400,7 +1410,7 @@ impl App for Browser {
         if let Some(st) = self.view().and_then(|v| self.pool.as_ref()?.state(v)) {
             if devmenu::not_secure(&st.url) {
                 let img = ui.text("Not Secure", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
-                s.blit(&img, w as i32 - img.w as i32 - ui.pt(8.0) as i32, ui.pt(UNIFIED_BAR_PT + 2.0) as i32, 255, 255);
+                s.blit(&img, w as i32 - img.w as i32 - ui.pt(SPACE_S) as i32, ui.pt(UNIFIED_BAR_PT + 2.0) as i32, 255, 255);
             }
         }
         if let Some(msg) = &self.error {
@@ -1412,7 +1422,7 @@ impl App for Browser {
         widgets::toolbar_band(s, ui, Rect { x: 0.0, y: 0.0, w: wpt, h: UNIFIED_BAR_PT });
         if self.private {
             // a private window has a visibly dark toolbar (Browser)
-            s.fill_rrect(0.0, 0.0, s.w as f32, ui.pt(UNIFIED_BAR_PT), 0.0, bifrost_app::kit::rgba(0, 0, 0, 140));
+            s.fill_rrect(0.0, 0.0, s.w as f32, ui.pt(UNIFIED_BAR_PT), 0.0, tokens::scrim(140));
         }
         let pressed = match self.press {
             Some((Press::Bar(id), _, _)) => Some(id),
