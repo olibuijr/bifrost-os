@@ -7,7 +7,10 @@ use bifrost_app::controls::{Command, Rect, TextField};
 use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, TINT, WHITE};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::controls::bookmark_import;
 use bifrost_app::{glyphs, widgets, Ctx, KeyInput};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use crate::store::{Entry, Store};
 
@@ -24,6 +27,8 @@ const MENU_ROW_PT: f32 = 24.0;
 const MENU_MAX_ROWS: usize = 14;
 
 const PANEL_W_PT: f32 = 520.0;
+/// Longest host shown at the trailing edge of a row (points).
+const HOST_MAX_PT: f32 = 150.0;
 const PANEL_MAX_H_PT: f32 = 480.0;
 const PAD_PT: f32 = 14.0;
 const ROW_PT: f32 = 26.0;
@@ -112,6 +117,26 @@ pub fn day_label(last: u64, now: u64) -> String {
 pub fn host(url: &str) -> &str {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     rest.split(['/', '?', '#']).next().unwrap_or(rest)
+}
+
+/// Adds the links of a bookmark export (the HTML form browsers write) to the store. Returns how many were added.
+pub fn import_html(store: &mut Store, html: &str, at: u64) -> usize {
+    let links: Vec<(String, String)> = bookmark_import::bookmarks(&bookmark_import::parse(html)).into_iter().map(|b| (b.url, b.title)).collect();
+    store.import_bookmarks(&links, at)
+}
+
+/// The newest `*.html` file in `dir` whose name contains "bookmark" (what a browser saves its bookmark export as).
+pub fn newest_export(dir: &Path) -> Option<PathBuf> {
+    fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| is_export_name(p))
+        .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
+}
+
+fn is_export_name(p: &Path) -> bool {
+    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+    name.contains("bookmark") && (name.ends_with(".html") || name.ends_with(".htm"))
 }
 
 fn label(e: &Entry) -> String {
@@ -309,7 +334,7 @@ impl Library {
             }
             return Act::Pass;
         }
-        let cap = (Self::geo(hpt, 1000.0).list.h / ROW_PT) as usize;
+        let cap = (Self::geo(hpt, PANEL_W_PT).list.h / ROW_PT) as usize;
         match k {
             KeyInput::Text(s) => {
                 self.query.push_str(s);
@@ -593,11 +618,11 @@ impl Library {
                     }
                     let (c1, c2) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
                     let sub = host(url);
-                    let sub_px = ui.measure(sub, MAC_FOOTNOTE_PT, Weight::Regular).min(ui.pt(150.0));
+                    let sub_px = ui.measure(sub, MAC_FOOTNOTE_PT, Weight::Regular).min(ui.pt(HOST_MAX_PT));
                     let room = ui.pt(g.list.w - 2.0 * PAD_PT - 16.0) - sub_px;
                     let t = ui.fit(title, MAC_SUBHEAD_PT, room.max(0.0));
                     Self::txt(s, ui, &t, MAC_SUBHEAD_PT, Weight::Regular, c1, g.list.x + PAD_PT + 4.0, cy);
-                    let st = ui.fit(sub, MAC_FOOTNOTE_PT, ui.pt(150.0));
+                    let st = ui.fit(sub, MAC_FOOTNOTE_PT, ui.pt(HOST_MAX_PT));
                     let img = ui.text(&st, MAC_FOOTNOTE_PT, Weight::Regular, c2);
                     s.blit(&img, ui.pt(g.list.x + g.list.w - PAD_PT - 4.0) as i32 - img.w as i32, ui.pt(cy) as i32 - img.h as i32 / 2, 255, 255);
                 }
@@ -680,5 +705,27 @@ mod tests {
         assert_eq!(st.bookmarks.len(), 1);
         assert_eq!(st.bookmarks[0].url, "https://b.test/");
         assert_eq!(lib.key(&KeyInput::Code(13), &mut st, 10, 600.0), Act::Open("https://b.test/".into()));
+    }
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    #[test]
+    fn export_names_are_bookmark_html_files() {
+        assert!(is_export_name(Path::new("/d/Bookmarks.html")));
+        assert!(is_export_name(Path::new("/d/firefox-bookmarks-2026.htm")));
+        assert!(!is_export_name(Path::new("/d/notes.html")));
+        assert!(!is_export_name(Path::new("/d/bookmarks.zip")));
+    }
+
+    #[test]
+    fn import_html_adds_the_export_links() {
+        let html = "<DL><p><DT><H3>Work</H3><DL><p><DT><A HREF=\"https://a.test/\">A</A></DL></DL>";
+        let mut store = Store::in_memory();
+        assert_eq!(import_html(&mut store, html, 9), 1);
+        assert_eq!(store.bookmark("https://a.test/").map(|b| b.title.clone()), Some("A".to_string()));
+        assert_eq!(import_html(&mut store, html, 10), 0, "a second import adds nothing");
     }
 }

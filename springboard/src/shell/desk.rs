@@ -1456,6 +1456,7 @@ impl Shell {
         self.draw_desk_dock(s, &m, t);
         #[cfg(feature="desktop-wayland")]
         self.draw_desktop_popup(s);
+        self.draw_quick_look(s);
         self.draw_cmdtab(s);
         // Developer > Performance HUD: the desktop branch never reached `draw_assistive`, so it never showed
         self.draw_perf(s);
@@ -1652,6 +1653,7 @@ impl Shell {
                     });
                 }
             }
+            self.dock_tile_progress(s, i, r, t);
         }
         // the hover label fades in and out (Reduce Motion: it just appears)
         let (label_slot, label_alpha) = self.dock_label_state(t);

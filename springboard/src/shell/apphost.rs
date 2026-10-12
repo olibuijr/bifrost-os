@@ -26,6 +26,9 @@ pub struct Manifest {
     pub summary: String,
     pub category: String,
     pub permissions: Vec<String>,
+    /// `keychain_groups = ["is.example.group"]`: keychain access groups the app shares items through (the
+    /// `keychain-groups` service). Honoured only with the `keychain` permission; see `services::keychain_groups`.
+    pub keychain_groups: Vec<String>,
     /// `entitlements = ["log-store"]`: privileged capabilities, honoured only for the kinds that may hold them
     /// (`log-store`: `system-app`; see `app_policy::Policy::with_entitlements`).
     pub entitlements: Vec<String>,
@@ -117,6 +120,7 @@ impl Manifest {
                 "summary" => m.summary = unquote(v),
                 "category" => m.category = unquote(v),
                 "permissions" => m.permissions = strs(),
+                "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
                 "provides" => m.provides = strs(),
                 "handles" => m.handles = strs(),
@@ -326,6 +330,8 @@ pub struct AppHost {
     quit_at: Option<f64>,
     /// The dock badge the app set (`ToShell::SetBadge`), already cleaned by `clean_badge`.
     pub badge: String,
+    /// Progress and attention bounce the app set on its Dock tile (the `dock` service).
+    pub tile: super::desktop_dock::TileState,
     /// `ToShell::DocumentState`: the document's title, unsaved-changes flag and file name (cleaned by `clean_badge`-style trimming).
     pub doc_title: String,
     pub doc_edited: bool,
@@ -408,6 +414,7 @@ impl AppHost {
             announcements: Vec::new(),
             last_notification: None,
             badge: String::new(),
+            tile: Default::default(),
             sudden: false,
             activity: 0,
             quit_at: None,
@@ -819,6 +826,16 @@ impl Shell {
                     super::spotindex::apply(&a.manifest.id, m);
                 }
             }
+            ToShell::Preview { items, index } => {
+                let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
+                self.quick_look_show(&app_id, items, index as usize);
+            }
+            ToShell::PreviewClose => {
+                let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
+                if self.quick_look_owner() == Some(app_id.as_str()) {
+                    self.quick_look_hide();
+                }
+            }
             ToShell::ServiceCall { request, service, method, body } => {
                 let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
                 let (ok, body) = match self.service_call(&app_id, &service, &method, &body, t) {
@@ -1186,6 +1203,7 @@ impl Shell {
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::Preview { .. } | ToShell::PreviewClose) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]

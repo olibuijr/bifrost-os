@@ -4,7 +4,9 @@
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, MAC_TITLE3_PT};
+use crate::phase::{Flow, Phase};
 use crate::solitaire;
+use bifrost_core::random::{RandomSource, Xorshift64};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -52,13 +54,6 @@ enum Game {
     Solitaire,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Phase {
-    Playing,
-    Won,
-    Lost,
-}
-
 #[derive(Clone, Copy, Default)]
 struct Cell {
     mine: bool,
@@ -72,17 +67,17 @@ pub struct Games {
     h: i32,
     game: Game,
     prefs: Prefs,
-    rng: u64,
+    rng: Xorshift64,
     // 2048
     grid: [[u32; N]; N],
     score: u32,
     best_2048: u32,
-    p2048: Phase,
+    p2048: Flow,
     // minesweeper
     cells: Vec<Cell>,
     placed: bool,
     flag_mode: bool,
-    pm: Phase,
+    pm: Flow,
     started: Option<f64>,
     elapsed: u32,
     best_mines: u32,
@@ -109,15 +104,15 @@ impl Games {
             h,
             game: Game::G2048,
             prefs: Prefs::memory(),
-            rng: seed,
+            rng: Xorshift64::new(seed),
             grid: [[0; N]; N],
             score: 0,
             best_2048: 0,
-            p2048: Phase::Playing,
+            p2048: Flow::new(),
             cells: vec![Cell::default(); MW * MH],
             placed: false,
             flag_mode: false,
-            pm: Phase::Playing,
+            pm: Flow::new(),
             started: None,
             elapsed: 0,
             best_mines: 0,
@@ -147,12 +142,7 @@ impl Games {
     }
 
     fn rand(&mut self) -> u32 {
-        let mut x = self.rng;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.rng = x;
-        (x >> 32) as u32
+        (self.rng.next_u64() >> 32) as u32
     }
 
     // ---- 2048 ----
@@ -160,7 +150,7 @@ impl Games {
     fn new_2048(&mut self) {
         self.grid = [[0; N]; N];
         self.score = 0;
-        self.p2048 = Phase::Playing;
+        self.p2048.go(Phase::Playing);
         self.spawn();
         self.spawn();
     }
@@ -195,7 +185,7 @@ impl Games {
 
     /// dir: 0 left, 1 right, 2 up, 3 down.
     fn shift(&mut self, dir: u8) {
-        if self.p2048 == Phase::Lost {
+        if self.p2048.phase() == Phase::Lost {
             return;
         }
         let mut moved = false;
@@ -232,11 +222,11 @@ impl Games {
             self.best_2048 = self.score;
             let _ = self.prefs.set("best_2048", &self.best_2048.to_string());
         }
-        if self.p2048 == Phase::Playing && self.grid.iter().flatten().any(|&v| v >= 2048) {
-            self.p2048 = Phase::Won;
+        if self.p2048.phase() == Phase::Playing && self.grid.iter().flatten().any(|&v| v >= 2048) {
+            self.p2048.go(Phase::Won);
         }
         if !self.can_move() {
-            self.p2048 = Phase::Lost;
+            self.p2048.go(Phase::Lost);
         }
     }
 
@@ -257,7 +247,7 @@ impl Games {
     fn new_mines(&mut self) {
         self.cells = vec![Cell::default(); MW * MH];
         self.placed = false;
-        self.pm = Phase::Playing;
+        self.pm.go(Phase::Playing);
         self.started = None;
         self.elapsed = 0;
     }
@@ -295,7 +285,7 @@ impl Games {
     }
 
     fn dig(&mut self, i: usize, t: f64) {
-        if self.pm != Phase::Playing || self.cells[i].flag || self.cells[i].open {
+        if self.pm.phase() != Phase::Playing || self.cells[i].flag || self.cells[i].open {
             return;
         }
         if !self.placed {
@@ -304,7 +294,7 @@ impl Games {
         }
         if self.cells[i].mine {
             self.cells[i].open = true;
-            self.pm = Phase::Lost;
+            self.pm.go(Phase::Lost);
             for c in self.cells.iter_mut().filter(|c| c.mine) {
                 c.open = true;
             }
@@ -321,7 +311,7 @@ impl Games {
             }
         }
         if self.cells.iter().all(|c| c.mine || c.open) {
-            self.pm = Phase::Won;
+            self.pm.go(Phase::Won);
             if let Some(t0) = self.started {
                 self.elapsed = ((t - t0) / 1000.0) as u32;
             }
@@ -501,7 +491,7 @@ impl Games {
                 } else if let Some(i) = self.mine_at(ui, x, y) {
                     if (x - d0).abs().max((y - d1).abs()) <= ui.pt(SPACE_XL) {
                         if self.flag_mode {
-                            if !self.cells[i].open && self.pm == Phase::Playing {
+                            if !self.cells[i].open && self.pm.phase() == Phase::Playing {
                                 self.cells[i].flag = !self.cells[i].flag;
                             }
                         } else {
@@ -517,7 +507,7 @@ impl Games {
     }
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
-        if let (Some(t0), Game::Mines, Phase::Playing) = (self.started, self.game, self.pm) {
+        if let (Some(t0), Game::Mines, Phase::Playing) = (self.started, self.game, self.pm.phase()) {
             let e = ((t - t0) / 1000.0) as u32;
             if e != self.elapsed {
                 self.elapsed = e;
@@ -529,13 +519,13 @@ impl Games {
 
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
         let t0 = self.started?;
-        (self.game == Game::Mines && self.pm == Phase::Playing).then(|| t0 + (self.elapsed as f64 + 1.0) * 1000.0)
+        (self.game == Game::Mines && self.pm.phase() == Phase::Playing).then(|| t0 + (self.elapsed as f64 + 1.0) * 1000.0)
     }
 
     pub fn describe(&self) -> String {
         format!(
             "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\n{}",
-            self.game, self.score, self.best_2048, self.pm, self.best_mines, self.sol.describe()
+            self.game, self.score, self.best_2048, self.pm.phase(), self.best_mines, self.sol.describe()
         )
     }
 
@@ -590,7 +580,7 @@ impl Games {
         };
         let r = (cx, cy + ui.pt(STATUS_TOP_PT), cw, ui.pt(ROW_PT));
         self.text_c(s, ui, &status, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), r);
-        let msg = match (self.game, self.p2048, self.pm) {
+        let msg = match (self.game, self.p2048.phase(), self.pm.phase()) {
             (Game::G2048, Phase::Won, _) => "You made 2048!",
             (Game::G2048, Phase::Lost, _) => "No moves left",
             (Game::Mines, _, Phase::Won) => "Cleared!",
@@ -744,8 +734,35 @@ mod tests {
             g.cells[i].flag = false;
         }
         g.dig(target, 42_000.0);
-        assert_eq!(g.pm, Phase::Won);
+        assert_eq!(g.pm.phase(), Phase::Won);
         assert_eq!(g.best_mines, 42);
+    }
+
+    #[test]
+    fn the_games_rng_is_the_same_xorshift_sequence_as_before() {
+        // The app's words came from an inline xorshift64 before the core random source; the sequence must not change,
+        // or the blessed snapshots and the seeded deals would move.
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        let mut x: u64 = 0x2545_F491_4F6C_DD1D;
+        g.rng = Xorshift64::new(x);
+        for _ in 0..16 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            assert_eq!(g.rand(), (x >> 32) as u32);
+        }
+    }
+
+    #[test]
+    fn a_lost_board_does_not_move_until_restarted() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.p2048.go(Phase::Lost);
+        g.shift(0);
+        assert_eq!(g.p2048.phase(), Phase::Lost);
+        assert!(g.p2048.go(Phase::Playing));
+        assert_eq!(g.p2048.phase(), Phase::Playing);
     }
 }
 

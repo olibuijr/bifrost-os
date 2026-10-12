@@ -2,6 +2,7 @@
 //! in-shell Games hosted through the SDK, in a Golden Gate full-size window (source list and unified toolbar).
 
 mod games;
+mod phase;
 mod solitaire;
 
 use bifrost_app::kit::{Damage, Event, Surface};

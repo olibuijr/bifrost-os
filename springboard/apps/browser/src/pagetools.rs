@@ -75,13 +75,16 @@ pub fn same_text(engine: &str, page: &str) -> bool {
 /// JSON string `{tag,id,class,x,y,w,h,attrs}` (x, y in document CSS px), `{error}` when the node is gone, or `null`
 /// when removing. The overlay is a fixed, pointer-transparent `div` that follows scroll and resize.
 pub fn js_highlight(path: &str) -> String {
+    // the overlay uses the app tint (a named token), written as CSS
+    let edge = crate::tokens::css_rgb(bifrost_app::kit::ui::TINT);
+    let fill = crate::tokens::css_rgba(bifrost_app::kit::ui::TINT, 0.2);
     format!(
         "(function(p){{var h=document.getElementById('{OVERLAY_ID}');if(h)h.remove();\
          if(window.__bhl){{window.removeEventListener('scroll',window.__bhl,true);window.removeEventListener('resize',window.__bhl);window.__bhl=null}}\
          if(!p)return 'null';var e=document.documentElement,a=String(p).split('.').slice(1);\
          for(var i=0;i<a.length&&e;i++)e=e.children[+a[i]];if(!e)return JSON.stringify({{error:'the node is gone'}});\
          var d=document.createElement('div');d.id='{OVERLAY_ID}';\
-         d.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;box-sizing:border-box;margin:0;padding:0;border:2px solid rgb(0,122,255);background:rgba(0,122,255,0.2)';\
+         d.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;box-sizing:border-box;margin:0;padding:0;border:2px solid {edge};background:{fill}';\
          function pos(){{var r=e.getBoundingClientRect();d.style.left=r.left+'px';d.style.top=r.top+'px';d.style.width=r.width+'px';d.style.height=r.height+'px'}}\
          pos();(document.body||document.documentElement).appendChild(d);window.__bhl=pos;\
          window.addEventListener('scroll',pos,true);window.addEventListener('resize',pos);\

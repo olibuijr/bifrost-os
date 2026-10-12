@@ -1,7 +1,9 @@
 //! The Console window's state and behaviour: the views, the streaming, the search and the table selection, and the
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
+use crate::cursor;
 use crate::model::{Buffer, Levels, LogEntry, Query, MAX_ENTRIES};
+use crate::signposts;
 use crate::source::{Coredumps, Follow, Journal, LogFile, Sink, Source};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -12,6 +14,7 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::dispatch::DispatchQueue;
 use bifrost_app::{KeyInput, TouchKind};
+use bifrost_core::log_cursor::Position;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -41,6 +44,7 @@ const PENDING_MAX: usize = 20_000;
 // Sidebar row ids: This Mac, Crash Reports, then log file `i` as `FILE_ROW + i`.
 const ROW_LIVE: u32 = 1;
 const ROW_CRASH: u32 = 2;
+const ROW_SIGNPOST: u32 = 3;
 const FILE_ROW: u32 = 100;
 
 // Toolbar item ids (also the published control ids).
@@ -55,6 +59,7 @@ pub const B_SEARCH: u32 = 5;
 pub enum View {
     Live,
     Crashes,
+    Signposts,
     File(usize),
 }
 
@@ -111,6 +116,12 @@ pub struct Console {
     pub selected: Option<u64>,
     /// The selected entry's extra detail text (`coredumpctl info` for a crash), with the sequence it belongs to.
     pub detail: Option<(u64, String)>,
+    /// The selected entry's position in the log's sequence, as text (`Position::encode`).
+    pub position: Option<String>,
+    /// Walk mode: only the messages after this position are shown (set by the Log menu from the selection).
+    pub after: Option<Position>,
+    /// The Signposts view's footer: the totals of the intervals it shows.
+    pub signpost_line: String,
     pub scroll: Scroller,
     /// Keep the newest row in view as messages arrive (set when a live view opens, cleared by the user's touch).
     pub stick: bool,
@@ -139,6 +150,9 @@ impl Console {
             pending: Arc::new(Mutex::new(Vec::new())),
             selected: None,
             detail: None,
+            position: None,
+            after: None,
+            signpost_line: String::new(),
             scroll: Scroller::new(),
             stick: false,
             status: String::new(),
@@ -163,6 +177,7 @@ impl Console {
         self.source = match view {
             View::Live => Box::new(Journal),
             View::Crashes => Box::new(Coredumps),
+            View::Signposts => Box::new(Journal),
             View::File(i) => Box::new(LogFile { path: self.files.get(i).cloned().unwrap_or_default() }),
         };
         self.view = view;
@@ -170,9 +185,12 @@ impl Console {
         self.visible.clear();
         self.selected = None;
         self.detail = None;
+        self.position = None;
+        self.after = None;
         self.status.clear();
         self.scroll.jump_top();
-        match self.source.load(LOAD) {
+        let (loaded, _timing) = signposts::timed(|| self.source.load(LOAD));
+        match loaded {
             Ok(entries) => {
                 for e in entries {
                     self.buffer.push(e);
@@ -246,7 +264,11 @@ impl Console {
             }
         }
         if changed {
-            self.trim_visible();
+            if self.after.is_some() {
+                self.rebuild();
+            } else {
+                self.trim_visible();
+            }
         }
         if self.follow.as_ref().is_some_and(|f| f.finished()) {
             self.follow = None;
@@ -272,8 +294,20 @@ impl Console {
     pub fn rebuild(&mut self) {
         let levels = self.levels;
         let query = &self.query;
-        let visible: Vec<u64> = self.buffer.iter().filter(|(_, e)| levels.shows(e.level) && query.matches(e)).map(|(s, _)| s).collect();
+        let signposts_only = self.view == View::Signposts;
+        let mut visible: Vec<u64> = self.buffer.iter().filter(|(_, e)| levels.shows(e.level) && query.matches(e) && (!signposts_only || signposts::parse(&e.message).is_some())).map(|(s, _)| s).collect();
+        if let Some(from) = self.after {
+            let newer = cursor::after(&self.positions(), from);
+            visible.retain(|s| newer.contains(s));
+        }
         self.visible = visible;
+        self.signpost_line = if signposts_only { signposts::summary_line(&signposts::summarize(self.visible.iter().filter_map(|s| self.buffer.get(*s)))) } else { String::new() };
+    }
+
+    /// Every buffered message with its position in the log's sequence (`cursor::positions`).
+    fn positions(&self) -> Vec<(Position, u64)> {
+        let all: Vec<(u64, &LogEntry)> = self.buffer.iter().collect();
+        cursor::positions(&all)
     }
 
     pub fn clear(&mut self) {
@@ -281,6 +315,8 @@ impl Console {
         self.visible.clear();
         self.selected = None;
         self.detail = None;
+        self.position = None;
+        self.after = None;
         if let Ok(mut p) = self.pending.lock() {
             p.clear();
         }
@@ -292,6 +328,7 @@ impl Console {
         let mut items = vec![SidebarItem::header("Live"), SidebarItem::row(ROW_LIVE, "This Mac").with_symbol("desktopcomputer")];
         items.push(SidebarItem::header("Reports"));
         items.push(SidebarItem::row(ROW_CRASH, "Crash Reports").with_symbol("xmark.circle.fill"));
+        items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
         items.push(SidebarItem::header("Log Files"));
         for (i, f) in self.files.iter().enumerate() {
             let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -301,6 +338,7 @@ impl Console {
         list.set_selected(Some(match self.view {
             View::Live => ROW_LIVE,
             View::Crashes => ROW_CRASH,
+            View::Signposts => ROW_SIGNPOST,
             View::File(i) => FILE_ROW + i as u32,
         }));
         list
@@ -318,6 +356,7 @@ impl Console {
         let view = match id {
             ROW_LIVE => View::Live,
             ROW_CRASH => View::Crashes,
+            ROW_SIGNPOST => View::Signposts,
             id if id >= FILE_ROW && ((id - FILE_ROW) as usize) < self.files.len() => View::File((id - FILE_ROW) as usize),
             _ => return,
         };
@@ -418,6 +457,7 @@ impl Console {
     fn select(&mut self, seq: u64) {
         self.selected = Some(seq);
         self.detail = None;
+        self.position = cursor::position_of(&self.positions(), seq).map(|p| p.encode());
         if let Some(e) = self.buffer.get(seq).cloned() {
             if let Some(text) = self.source.detail(&e) {
                 self.detail = Some((seq, text));
@@ -585,9 +625,33 @@ impl Console {
             MENU_DEBUG => self.activate(B_DEBUG),
             MENU_CLEAR => self.clear(),
             MENU_FIND => self.focus_search(),
+            MENU_AFTER => self.toggle_after(),
+            MENU_SUBSYSTEM => self.show_subsystem(),
             _ => return false,
         }
         true
+    }
+
+    /// Log menu: walk mode. Shows the messages after the selected one, or back to every message.
+    pub fn toggle_after(&mut self) {
+        if self.after.take().is_none() {
+            self.after = self.selected.and_then(|seq| cursor::position_of(&self.positions(), seq));
+        }
+        self.rebuild();
+    }
+
+    /// Log menu: narrows the search to the selected message's subsystem, as a `subsystem:` token appended to any search.
+    pub fn show_subsystem(&mut self) {
+        let Some(subsystem) = self.selected_entry().map(|e| e.subsystem.clone()) else { return };
+        if subsystem.is_empty() {
+            return;
+        }
+        let token = if subsystem.contains(char::is_whitespace) { format!("subsystem:\"{subsystem}\"") } else { format!("subsystem:{subsystem}") };
+        if !self.search.is_empty() {
+            self.search.push_str(" ");
+        }
+        self.search.push_str(&token);
+        self.search_changed();
     }
 
     /// The footer's count and streaming state.
@@ -599,7 +663,9 @@ impl Console {
             (s, t) if s == t => format!("{} messages", group(t)),
             (s, t) => format!("{} of {} messages", group(s), group(t)),
         };
-        if !self.is_live() {
+        if self.view == View::Signposts {
+            if self.signpost_line.is_empty() { count } else { format!("{count} · {}", self.signpost_line) }
+        } else if !self.is_live() {
             count
         } else if self.streaming {
             format!("{count} · Streaming")
@@ -612,6 +678,7 @@ impl Console {
         match self.view {
             View::Live => "No Messages",
             View::Crashes => "No Crash Reports",
+            View::Signposts => "No Signposts",
             View::File(_) => "No Log Entries",
         }
     }
@@ -683,6 +750,8 @@ pub const MENU_INFO: u32 = 2;
 pub const MENU_DEBUG: u32 = 3;
 pub const MENU_CLEAR: u32 = 4;
 pub const MENU_FIND: u32 = 5;
+pub const MENU_AFTER: u32 = 6;
+pub const MENU_SUBSYSTEM: u32 = 7;
 
 #[cfg(test)]
 mod tests {

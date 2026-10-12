@@ -1,6 +1,7 @@
 //! The Voice Memos folder: WAV files named after their title.
 
-use springboard::media::capture::wav_duration_ms;
+use bifrost_app::controls::recording::Trim;
+use springboard::media::capture::{wav_bytes, wav_duration_ms};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,19 @@ pub struct Memo {
     pub duration_ms: u64,
     /// modification time, Unix seconds
     pub mtime: i64,
+    /// sample rate in Hz and channel count from the WAV header (0 when the header is not 16-bit PCM)
+    pub rate: u32,
+    pub channels: u16,
+}
+
+/// Sample rate and channel count of a 16-bit PCM WAV header; `None` for any other layout.
+fn pcm16_format(head: &[u8]) -> Option<(u32, u16)> {
+    let h = head.get(..44)?;
+    let tag = u16::from_le_bytes([h[20], h[21]]);
+    let channels = u16::from_le_bytes([h[22], h[23]]);
+    let rate = u32::from_le_bytes([h[24], h[25], h[26], h[27]]);
+    let bits = u16::from_le_bytes([h[34], h[35]]);
+    (tag == 1 && bits == 16 && channels > 0 && rate > 0).then_some((rate, channels))
 }
 
 fn read_memo(path: PathBuf) -> Option<Memo> {
@@ -22,7 +36,8 @@ fn read_memo(path: PathBuf) -> Option<Memo> {
     let duration_ms = wav_duration_ms(&head, md.len())?;
     let mtime = md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
     let title = path.file_stem()?.to_string_lossy().into_owned();
-    Some(Memo { path, title, duration_ms, mtime })
+    let (rate, channels) = pcm16_format(&head).unwrap_or((0, 0));
+    Some(Memo { path, title, duration_ms, mtime, rate, channels })
 }
 
 /// The memos in `dir`, newest first (hidden files and non-WAVs skipped).
@@ -91,6 +106,44 @@ pub fn clock(ms: u64) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// Recording metadata for the detail subtitle: `8 kHz mono`, `44.1 kHz stereo`, `48 kHz 6 channels`.
+/// Empty when the format is unknown (rate or channels 0).
+pub fn format_title(rate: u32, channels: u16) -> String {
+    if rate == 0 || channels == 0 {
+        return String::new();
+    }
+    let khz = if rate % 1000 == 0 { format!("{} kHz", rate / 1000) } else { format!("{:.1} kHz", rate as f64 / 1000.0) };
+    let layout = match channels {
+        1 => "mono".to_string(),
+        2 => "stereo".to_string(),
+        n => format!("{n} channels"),
+    };
+    format!("{khz} {layout}")
+}
+
+/// The kept part of a 16-bit PCM WAV as a new WAV (`trim` in seconds). `None` when the file is not 16-bit PCM.
+pub fn trimmed_wav(path: &Path, trim: Trim) -> Option<Vec<u8>> {
+    let bytes = std::fs::read(path).ok()?;
+    let (rate, channels) = pcm16_format(&bytes)?;
+    let frame = channels as usize * 2;
+    let data = bytes.get(44..)?;
+    let frames = data.len() / frame;
+    let first = ((trim.start() * rate as f64).round() as usize).min(frames);
+    let last = ((trim.end() * rate as f64).round() as usize).min(frames);
+    let samples: Vec<i16> = data[first * frame..last * frame].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+    Some(wav_bytes(rate, channels as u32, &samples))
+}
+
+/// Writes the trimmed part of `memo` as a new memo named `<title> trimmed` (numbered when taken).
+/// The original recording is kept as it was.
+pub fn save_trim(memo: &Memo, trim: Trim) -> std::io::Result<PathBuf> {
+    let wav = trimmed_wav(&memo.path, trim).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "not a 16-bit WAV"))?;
+    let dir = memo.path.parent().unwrap_or(Path::new("."));
+    let path = free_path(dir, &format!("{} trimmed", memo.title), None);
+    springboard::shell::fsutil::write_atomic(&path, &wav)?;
+    Ok(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +192,36 @@ mod tests {
     fn clock_formats_minutes_and_seconds() {
         assert_eq!(clock(0), "0:00");
         assert_eq!(clock(65_400), "1:05");
+    }
+
+    #[test]
+    fn metadata_line_names_rate_and_channels() {
+        assert_eq!(format_title(8000, 1), "8 kHz mono");
+        assert_eq!(format_title(44100, 2), "44.1 kHz stereo");
+        assert_eq!(format_title(48000, 6), "48 kHz 6 channels");
+        assert_eq!(format_title(0, 1), "", "unknown format is left out");
+    }
+
+    #[test]
+    fn trimmed_copy_keeps_the_kept_samples_and_the_original() {
+        let dir = temp("trim");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        let src = save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let memo = scan(&dir).remove(0);
+        assert_eq!((memo.rate, memo.channels), (8000, 1));
+
+        let trim = Trim::new(0.25, 0.5, 1.0).unwrap();
+        let out = trimmed_wav(&memo.path, trim).unwrap();
+        assert_eq!(wav_duration_ms(&out[..44], out.len() as u64), Some(250));
+        assert_eq!(i16::from_le_bytes([out[44], out[45]]), 2000, "starts at the start handle");
+
+        let copy = save_trim(&memo, trim).unwrap();
+        assert_eq!(copy.file_name().unwrap(), "Voice Memo 20261004-120000 trimmed.wav");
+        assert!(src.exists() && copy.exists(), "the original stays");
+        let list = scan(&dir);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].duration_ms, 250, "the trimmed copy is newest");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

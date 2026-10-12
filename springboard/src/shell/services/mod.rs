@@ -8,7 +8,24 @@
 use super::Shell;
 use bifrost_core::json::Json;
 
+pub mod pasteboard_types;
+pub mod keychain_groups;
+pub mod search_ranking;
+pub mod privacy_permissions;
+pub mod power_service;
+pub mod audio_devices;
+pub mod quick_look;
+pub mod gamepad_service;
+pub mod bluetooth_service;
+pub mod login_items_approval;
+pub mod network_path;
+pub mod dock_tile;
+pub mod now_playing;
+pub mod notification_schedule;
+pub mod screens;
+pub mod cursor_service;
 pub mod system;
+pub mod widgets_timeline;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -33,7 +50,24 @@ pub struct Event {
 /// Every service, in registration order. One line per service.
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
+        Box::new(dock_tile::DockService),
         Box::new(system::System),
+        Box::new(pasteboard_types::Pasteboards::default()),
+        Box::new(keychain_groups::KeychainGroups::default()),
+        Box::new(search_ranking::SearchRanking::default()),
+        Box::new(privacy_permissions::PrivacyPermissions),
+        Box::new(widgets_timeline::WidgetsTimeline),
+        Box::new(power_service::PowerService::default()),
+        Box::new(audio_devices::AudioDevices::new()),
+        Box::new(quick_look::PreviewService),
+        Box::new(gamepad_service::GamepadService::default()),
+        Box::new(bluetooth_service::BluetoothService::default()),
+        Box::new(login_items_approval::LoginItemsApproval),
+        Box::new(network_path::NetworkPath::new()),
+        Box::new(now_playing::NowPlaying),
+        Box::new(notification_schedule::NotificationSchedule::default()),
+        Box::new(screens::Displays::default()),
+        Box::new(cursor_service::CursorService),
     ]
 }
 

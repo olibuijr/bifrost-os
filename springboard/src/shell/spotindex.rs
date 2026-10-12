@@ -3,14 +3,25 @@
 //! (atomically replaced, only when it changed), and the Search panel searches it ("Documents" section). Opening a
 //! result starts the app and sends `ToApp::ContinueActivity` (see `Shell::quicksearch_act`).
 //!
+//! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
+//! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). A title match outranks a keyword
+//! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
+//! above one in another language; then shorter matches; then the newest item.
+//! Expiry: an item can carry a Unix time after which it is dropped (`CSSearchableItem.expirationDate`), set through the
+//! `search-index` service (`services/search_ranking.rs`).
+//!
 //! Bounds: `MAX_PER_APP` items per app (the oldest are dropped first), at most `MAX_APPS` apps, and every field is
 //! already cut by the wire codec, so one app cannot grow the index without limit.
 
+use super::fuzzy::Matcher;
 use bifrost_core::json::{self, Json};
 use bifrost_proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DELETE_IDS};
+use bifrost_ui::language::{dominant_language, Language};
+use bifrost_ui::lexical_tags;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MAX_PER_APP: usize = 1000;
 pub const MAX_APPS: usize = 64;
@@ -22,12 +33,38 @@ struct Entry {
     title_folded: String,
     keywords_folded: String,
     desc_folded: String,
+    /// the dominant language of the item's text, when one is recognisable
+    lang: Option<Language>,
+    /// Unix seconds after which the item is dropped; `None` keeps it until the app deletes it
+    expires_at: Option<u64>,
 }
 
 impl Entry {
     fn new(item: SearchableItem) -> Entry {
-        Entry { title_folded: super::fuzzy::fold(&item.title), keywords_folded: super::fuzzy::fold(&item.keywords.join(" ")), desc_folded: super::fuzzy::fold(&item.description), item }
+        let text = format!("{} {} {}", item.title, item.keywords.join(" "), item.description);
+        Entry {
+            title_folded: super::fuzzy::fold(&item.title),
+            keywords_folded: super::fuzzy::fold(&item.keywords.join(" ")),
+            desc_folded: super::fuzzy::fold(&item.description),
+            lang: dominant_language(&text),
+            expires_at: None,
+            item,
+        }
     }
+}
+
+/// The rank of an item for a query: the weakest field among its words, the kinds of its matches, whether it is in
+/// another language than the query, and the length of its matches. `None` when some word matches nothing.
+fn score(words: &[Matcher], e: &Entry, query_lang: Option<Language>) -> Option<(u8, u8, bool, usize)> {
+    let (mut field, mut kind, mut len) = (0u8, 0u8, 0usize);
+    for w in words {
+        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| w.rank_folded(text).map(|r| (f, r))).min()?;
+        field = field.max(f);
+        kind += r.kind as u8;
+        len += r.len;
+    }
+    let other_language = matches!((query_lang, e.lang), (Some(q), Some(l)) if q != l);
+    Some((field, kind, other_language, len))
 }
 
 /// A search result.
@@ -91,25 +128,64 @@ impl Index {
         self.apps.values().map(Vec::len).sum()
     }
 
-    /// The best `limit` items for `query`: a title match outranks a keyword match, which outranks a description match;
-    /// ties go to the newest item.
+    /// The best `limit` items for `query` (every word of it must match): see the module notes on ranking.
     pub fn search(&self, query: &str, limit: usize) -> Vec<Found> {
-        let q = query.trim();
-        if q.is_empty() {
+        self.rank_hits(None, query, limit)
+    }
+
+    /// Like `search`, over the items of `app_id` only.
+    pub fn search_app(&self, app_id: &str, query: &str, limit: usize) -> Vec<Found> {
+        self.rank_hits(Some(app_id), query, limit)
+    }
+
+    fn rank_hits(&self, only: Option<&str>, query: &str, limit: usize) -> Vec<Found> {
+        let words: Vec<Matcher> = lexical_tags::words(query).into_iter().map(|(w, _)| Matcher::new(w)).collect();
+        if words.is_empty() {
             return vec![];
         }
-        let m = super::fuzzy::Matcher::new(q);
+        let query_lang = dominant_language(query);
         let mut hits = vec![];
         for (app, list) in &self.apps {
+            if only.map_or(false, |a| a != app.as_str()) {
+                continue;
+            }
             for (age, e) in list.iter().enumerate().rev() {
-                let best = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(field, text)| m.rank_folded(text).map(|r| (field, r))).min();
-                if let Some((field, rank)) = best {
-                    hits.push(((field, rank, std::cmp::Reverse(age)), Found { app_id: app.clone(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone() }));
+                if let Some(key) = score(&words, e, query_lang) {
+                    hits.push(((key, std::cmp::Reverse(age)), Found { app_id: app.clone(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone() }));
                 }
             }
         }
         hits.sort_by(|a, b| a.0.cmp(&b.0));
         hits.into_iter().take(limit).map(|(_, f)| f).collect()
+    }
+
+    /// Sets (or with `None` clears) the expiry of one item. False when the app has no item with that identifier.
+    pub fn set_expiry(&mut self, app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
+        let Some(e) = self.apps.get_mut(app_id).and_then(|l| l.iter_mut().find(|e| e.item.unique_id == unique_id)) else {
+            return false;
+        };
+        e.expires_at = at;
+        self.mark(app_id);
+        true
+    }
+
+    /// Drops the items whose expiry is at or before `now` (Unix seconds). Returns how many went.
+    pub fn prune(&mut self, now: u64) -> usize {
+        let mut gone = 0;
+        let mut changed = vec![];
+        for (app, list) in self.apps.iter_mut() {
+            let before = list.len();
+            list.retain(|e| e.expires_at.map_or(true, |t| t > now));
+            if list.len() != before {
+                gone += before - list.len();
+                changed.push(app.clone());
+            }
+        }
+        self.apps.retain(|_, l| !l.is_empty());
+        for app in changed {
+            self.mark(&app);
+        }
+        gone
     }
 
     fn to_json(list: &[Entry]) -> String {
@@ -119,7 +195,8 @@ impl Index {
             .map(|e| {
                 let i = &e.item;
                 let kw: Vec<String> = i.keywords.iter().map(|k| q(k)).collect();
-                format!("{{\"id\":{},\"domain\":{},\"title\":{},\"desc\":{},\"keywords\":[{}],\"thumb\":{},\"url\":{}}}", q(&i.unique_id), q(&i.domain), q(&i.title), q(&i.description), kw.join(","), q(&i.thumbnail), q(&i.content_url))
+                let expires = e.expires_at.map(|t| format!(",\"expires\":{t}")).unwrap_or_default();
+                format!("{{\"id\":{},\"domain\":{},\"title\":{},\"desc\":{},\"keywords\":[{}],\"thumb\":{},\"url\":{}{}}}", q(&i.unique_id), q(&i.domain), q(&i.title), q(&i.description), kw.join(","), q(&i.thumbnail), q(&i.content_url), expires)
             })
             .collect();
         format!("[{}]\n", items.join(",\n"))
@@ -132,7 +209,7 @@ impl Index {
             .filter_map(|o| {
                 let unique_id = o.str_field("id").filter(|s| !s.is_empty())?;
                 let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.string().map(str::to_string)).collect()).unwrap_or_default();
-                Some(Entry::new(SearchableItem {
+                let mut e = Entry::new(SearchableItem {
                     unique_id,
                     domain: o.str_field("domain").unwrap_or_default(),
                     title: o.str_field("title").unwrap_or_default(),
@@ -140,7 +217,9 @@ impl Index {
                     keywords,
                     thumbnail: o.str_field("thumb").unwrap_or_default(),
                     content_url: o.str_field("url").unwrap_or_default(),
-                }))
+                });
+                e.expires_at = o.get("expires").and_then(Json::as_u64);
+                Some(e)
             })
             .take(MAX_PER_APP)
             .collect()
@@ -217,10 +296,36 @@ pub fn apply(app_id: &str, msg: bifrost_proto::ToShell) {
     });
 }
 
-/// Items matching `query`, at most `limit`, of apps that are still installed.
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// Drops the items whose expiry has passed; returns how many went.
+pub fn expire_due() -> usize {
+    let now = now_secs();
+    with(|ix| ix.prune(now))
+}
+
+/// Sets (or clears, with `None`) the expiry of an item of `app_id`; false when there is no such item.
+pub fn set_expiry(app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
+    with(|ix| ix.set_expiry(app_id, unique_id, at))
+}
+
+/// Items of `app_id` matching `query`, at most `limit`. Expired items are not returned.
+pub fn search_app(app_id: &str, query: &str, limit: usize) -> Vec<Found> {
+    let now = now_secs();
+    with(|ix| {
+        ix.prune(now);
+        ix.search_app(app_id, query, limit)
+    })
+}
+
+/// Items matching `query`, at most `limit`, of apps that are still installed. Expired items are not returned.
 pub fn search(query: &str, limit: usize) -> Vec<Found> {
     let installed = super::apphost::installed();
+    let now = now_secs();
     with(|ix| {
+        ix.prune(now);
         ix.search(query, limit + 16)
             .into_iter()
             .filter(|f| installed.iter().any(|a| a.manifest.id == f.app_id))
@@ -281,6 +386,57 @@ mod tests {
             ix.index(&format!("app{n}"), vec![it("1", "", "t", "", &[])]);
         }
         assert!(ix.apps.len() <= MAX_APPS);
+    }
+
+    #[test]
+    fn every_word_must_match_in_any_order() {
+        let mut ix = Index::default();
+        ix.index("a", vec![it("1", "", "Trip to Reykjavík", "", &[]), it("2", "", "Trip home", "Reykjavík hotel", &[]), it("3", "", "Trip home", "", &[])]);
+        let ids = |q: &str| -> Vec<String> { ix.search(q, 10).into_iter().map(|f| f.unique_id).collect() };
+        assert_eq!(ids("reykjavik trip"), ["1", "2"], "the title match ranks first");
+        assert_eq!(ids("trip reyk"), ["1", "2"]);
+        assert!(ids("trip paris").is_empty());
+        assert!(ids("  ").is_empty());
+    }
+
+    #[test]
+    fn the_query_language_breaks_ties() {
+        let e = Entry::new(it("1", "", "Halló", "", &[]));
+        let e = Entry { lang: Some(Language::Icelandic), ..e };
+        let words = vec![Matcher::new("hallo")];
+        let same = score(&words, &e, Some(Language::Icelandic)).unwrap();
+        let other = score(&words, &e, Some(Language::English)).unwrap();
+        assert!(!same.2 && other.2);
+        assert!(same < other, "an item in the query's language sorts first");
+        assert!(score(&words, &e, None).is_some_and(|s| !s.2), "no query language means no penalty");
+    }
+
+    #[test]
+    fn expired_items_are_dropped_and_the_expiry_is_kept() {
+        let mut ix = Index::default();
+        ix.index("a", vec![it("1", "", "Ticket", "", &[]), it("2", "", "Ticket two", "", &[])]);
+        assert!(ix.set_expiry("a", "1", Some(100)));
+        assert!(!ix.set_expiry("a", "nope", Some(100)));
+        assert!(!ix.set_expiry("zz", "1", None));
+        assert_eq!(ix.prune(99), 0);
+        assert_eq!(ix.prune(100), 1);
+        let left: Vec<String> = ix.search("ticket", 10).into_iter().map(|f| f.unique_id).collect();
+        assert_eq!(left, ["2"]);
+        assert!(ix.set_expiry("a", "2", Some(500)));
+        let back = Index::from_json(&Index::to_json(&ix.apps["a"]));
+        assert_eq!(back[0].expires_at, Some(500));
+        assert_eq!(ix.prune(500), 1);
+        assert_eq!(ix.len(), 0);
+    }
+
+    #[test]
+    fn search_app_sees_only_its_own_items() {
+        let mut ix = Index::default();
+        ix.index("a", vec![it("1", "", "Mail draft", "", &[])]);
+        ix.index("b", vec![it("1", "", "Mail note", "", &[])]);
+        assert_eq!(ix.search_app("a", "mail", 10).len(), 1);
+        assert_eq!(ix.search_app("a", "mail", 10)[0].app_id, "a");
+        assert_eq!(ix.search("mail", 10).len(), 2);
     }
 
     #[test]

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0 — 2026-10-12
+
+- Find: Match Whole Word in Find (the More menu in the editor) makes a search skip matches inside a longer word, so "rust" does not count "rusty". The matches come from the shared find model (`bifrost_app::controls::textfind`).
+- Check Spelling and Links (the More menu in the editor) flags the misspelled words of the note, merged with its links, dates and phone numbers. Use the find arrows to step through them. Spelling uses the English or Icelandic word list, chosen from the note's language; other languages get only the links, dates and phone numbers.
+- The date line under the title shows the note's language, detected from its text (for example "Icelandic").
+- Replace and the list styles beyond bullets and numbers are not in this version yet.
+
 ## 1.9.0 — 2026-10-11
 
 - Resume: the open note and the folder view (All, a folder, Recently Deleted) come back after a restart, a reboot or an update (system 0.5.33 state restoration).

@@ -217,6 +217,8 @@ impl Books {
     fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32) {
         let m = self.metrics(ui);
         let marked = self.reader.as_ref().is_some_and(|_r| !self.page_marks(page_no).is_empty());
+        // the saved highlights of this book, drawn under the text like the find match
+        let spans: Vec<super::store::Span> = self.reader.as_ref().and_then(|r| self.store.entry(&r.path)).map_or_else(Vec::new, |e| e.highlights.clone());
         let Some(r) = self.reader.as_mut() else { return };
         let (left, top) = (ui.pt(PAGE_MARGIN_PT) + dx, ui.pt(page_top_pt()));
         let body_pt = Self::pt_of(ui, m.body);
@@ -247,6 +249,17 @@ impl Books {
                                 let x1 = x0 + ui.measure(&word, pt, weight);
                                 s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(SYSTEM_YELLOW, 110));
                             }
+                        }
+                    }
+                    for sp in spans.iter().filter(|sp| sp.block == line.block) {
+                        let text = r.book.blocks.get(sp.block).and_then(|b| b.text()).unwrap_or("");
+                        let (a, b) = layout::line_cols(text, line.offset, &line.text, sp.offset, sp.offset + sp.len);
+                        if a < b {
+                            let prefix: String = line.text.chars().take(a).collect();
+                            let word: String = line.text.chars().skip(a).take(b - a).collect();
+                            let x0 = left + ui.measure(&prefix, pt, weight);
+                            let x1 = x0 + ui.measure(&word, pt, weight);
+                            s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(SYSTEM_YELLOW, 110));
                         }
                     }
                     let img = self.labels.get(ui, &line.text, pt, weight, pal.fg);

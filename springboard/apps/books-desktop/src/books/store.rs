@@ -64,11 +64,22 @@ pub struct Pos {
     pub offset: usize,
 }
 
+/// A run of text the reader marked: `len` chars from `offset` inside `block`. Like `Pos`, it does not depend on the
+/// font size, so a highlight survives re-pagination.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Span {
+    pub block: usize,
+    pub offset: usize,
+    pub len: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub path: PathBuf,
     pub pos: Pos,
     pub bookmarks: Vec<Pos>,
+    /// highlighted text, sorted by place
+    pub highlights: Vec<Span>,
     /// order of last opening (higher = more recent); 0 = never opened
     pub opened: u64,
     /// how far through the book, in thousandths
@@ -100,13 +111,22 @@ impl Store {
                 ["B", path, block, offset, opened, marks, ..] => {
                     let opened = opened.parse().unwrap_or(0);
                     s.clock = s.clock.max(opened);
-                    s.entries.push(Entry {
-                        path: PathBuf::from(path),
-                        pos: Pos { block: block.parse().unwrap_or(0), offset: offset.parse().unwrap_or(0) },
-                        bookmarks: marks.split(',').filter_map(parse_pos).collect(),
-                        opened,
-                        progress: f.get(6).and_then(|p| p.parse::<u16>().ok()).unwrap_or(0).min(1000),
-                    });
+                    // a highlight line may come before its book line
+                    let e = s.entry_mut(Path::new(path));
+                    e.pos = Pos { block: block.parse().unwrap_or(0), offset: offset.parse().unwrap_or(0) };
+                    e.bookmarks = marks.split(',').filter_map(parse_pos).collect();
+                    e.opened = opened;
+                    e.progress = f.get(6).and_then(|p| p.parse::<u16>().ok()).unwrap_or(0).min(1000);
+                }
+                ["H", path, block, offset, len] => {
+                    let span = Span { block: block.parse().unwrap_or(0), offset: offset.parse().unwrap_or(0), len: len.parse().unwrap_or(0) };
+                    if span.len > 0 {
+                        let e = s.entry_mut(Path::new(path));
+                        if !e.highlights.contains(&span) {
+                            e.highlights.push(span);
+                            e.highlights.sort();
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -119,6 +139,9 @@ impl Store {
         for e in &self.entries {
             let marks: Vec<String> = e.bookmarks.iter().map(|p| format!("{}.{}", p.block, p.offset)).collect();
             out.push_str(&format!("B\t{}\t{}\t{}\t{}\t{}\t{}\n", clean(&e.path), e.pos.block, e.pos.offset, e.opened, marks.join(","), e.progress));
+            for h in &e.highlights {
+                out.push_str(&format!("H\t{}\t{}\t{}\t{}\n", clean(&e.path), h.block, h.offset, h.len));
+            }
         }
         if let Some(dir) = self.file.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -138,7 +161,7 @@ impl Store {
         if let Some(i) = self.entries.iter().position(|e| e.path == path) {
             return &mut self.entries[i];
         }
-        self.entries.push(Entry { path: path.to_path_buf(), pos: Pos::default(), bookmarks: vec![], opened: 0, progress: 0 });
+        self.entries.push(Entry { path: path.to_path_buf(), pos: Pos::default(), bookmarks: vec![], highlights: vec![], opened: 0, progress: 0 });
         self.entries.last_mut().expect("just pushed")
     }
 
@@ -164,6 +187,22 @@ impl Store {
         } else {
             e.bookmarks.push(pos);
             e.bookmarks.sort_by_key(|p| (p.block, p.offset));
+            true
+        }
+    }
+
+    /// Adds or removes a highlight; true when it now exists. An empty span is ignored (false).
+    pub fn toggle_highlight(&mut self, path: &Path, span: Span) -> bool {
+        if span.len == 0 {
+            return false;
+        }
+        let e = self.entry_mut(path);
+        if let Some(i) = e.highlights.iter().position(|&h| h == span) {
+            e.highlights.remove(i);
+            false
+        } else {
+            e.highlights.push(span);
+            e.highlights.sort();
             true
         }
     }

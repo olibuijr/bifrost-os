@@ -227,8 +227,9 @@ impl Browser {
                 }
                 Ok(control::obj(o))
             }
-            Req::Bookmarks { op, url, title, query, limit } => {
+            Req::Bookmarks { op, url, title, query, limit, path } => {
                 let now = crate::store::now();
+                let mut imported = None;
                 let cur = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|s| (s.url.clone(), s.title.clone()));
                 let done = match op.as_str() {
                     "add" => {
@@ -241,24 +242,37 @@ impl Browser {
                     }
                     "remove" => Some(self.store.remove_bookmark(&url.unwrap_or_default())),
                     "rename" => Some(self.store.rename_bookmark(&url.unwrap_or_default(), &title.unwrap_or_default())),
+                    "import" => {
+                        let file = path.unwrap_or_default();
+                        let html = std::fs::read_to_string(&file).map_err(|e| control::invalid(format!("cannot read {file}: {e}")))?;
+                        imported = Some(crate::library::import_html(&mut self.store, &html, now));
+                        Some(true)
+                    }
                     _ => None,
                 };
                 let mut o = vec![("bookmarks", entries_json(&self.store.bookmarks, query.as_deref(), limit))];
                 if let Some(d) = done {
                     o.push(("ok", Json::Bool(d)));
                 }
+                if let Some(n) = imported {
+                    o.push(("imported", Json::Num(n as f64)));
+                }
                 Ok(control::obj(o))
             }
-            Req::History { query, limit, remove, clear } => {
+            Req::History { query, limit, remove, clear, clear_since } => {
                 let removed = remove.map(|u| self.store.remove_history(&u));
                 if clear {
                     self.store.clear_history();
                 }
+                let cleared = clear_since.map(|since| self.store.clear_history_during(since, u64::MAX));
                 let mut sorted = self.store.history.clone();
                 sorted.sort_by(|a, b| b.last.cmp(&a.last));
                 let mut o = vec![("history", entries_json(&sorted, query.as_deref(), limit))];
                 if let Some(r) = removed {
                     o.push(("removed", Json::Bool(r)));
+                }
+                if let Some(n) = cleared {
+                    o.push(("cleared", Json::Num(n as f64)));
                 }
                 Ok(control::obj(o))
             }

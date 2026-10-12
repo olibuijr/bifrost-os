@@ -3,6 +3,7 @@
 
 mod freeform;
 mod icon;
+mod ink;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind};
@@ -29,7 +30,7 @@ impl App for FreeformApp {
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         if let (Some(c), Input::Activate(id)) = (&mut self.app, &ev) {
-            return c.activate_id(*id);
+            return c.activate_id(&ctx.ui, *id);
         }
         let (Some(c), Input::Touch { kind, x, y, t, .. }) = (&mut self.app, ev) else { return false };
         let e = match kind {

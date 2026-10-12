@@ -105,6 +105,7 @@ pub mod desktop_network;
 mod desktop_bar;
 #[cfg(feature = "desktop-wayland")]
 pub mod docpanel;
+pub mod preview_panel;
 mod desktop_metrics;
 mod desktop_dock;
 pub mod defaultapps;
@@ -595,6 +596,8 @@ pub struct Shell {
     /// the document broker: `None` until first asked for, then `Some(None)` when there is no installed account
     #[cfg(feature = "desktop-wayland")]
     doc_broker:Option<Option<docpanel::Broker>>,
+    /// the floating preview panel (`preview_panel`), shown by an app's `ToShell::Preview` or the `quick-look` service
+    quick_look:preview_panel::Panel,
     desktop_metrics: desktop_metrics::Snapshot,
     desktop_metrics_at:f64,
     metrics_sampler: desktop_metrics::Sampler,
@@ -794,6 +797,7 @@ impl Shell {
             doc_panel:None,
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
+            quick_look:Default::default(),
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:Default::default(),desk_regions:None,desk_clear:None,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
@@ -2327,8 +2331,9 @@ impl Shell {
             _ if app == AppId::Settings => {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
+                let pending = self.login_pending_views();
                 let Some(st) = &mut self.settings else { return vec![] };
-                st.set_login_items(logins);
+                st.set_login_items(logins, pending);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
                     st.set_dock(dock);
                 }
@@ -2343,6 +2348,7 @@ impl Shell {
                 let dock_changes = st.take_dock_changes();
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
+                let login_approved = st.take_login_approved();
                 for change in changes {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
@@ -2360,6 +2366,7 @@ impl Shell {
                 }
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
+                self.login_items_approve(login_approved);
                 if self.desk.is_some() {
                     for change in dock_changes {
                         let _ = self.dock_change(change, t);
@@ -2596,6 +2603,8 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        // app requests for the Bluetooth radio (services/bluetooth_service.rs)
+        effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
         self.perf_only = perf_changed && !self.dirty;
         self.dirty |= perf_changed;
         effects
@@ -2617,7 +2626,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.assistive_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.assistive_visible() && !self.quick_look.is_visible()
             && self.drawn != Drawn::Nothing && self.retain_wayland_windows() {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
@@ -2687,6 +2696,10 @@ impl Shell {
             return &self.damage;
         }
         if self.notify_damage_all() {
+            damage.all();
+        }
+        // the preview panel is drawn over the whole desktop: a change repaints the frame
+        if self.quick_look.take_dirty() {
             damage.all();
         }
         let ease = gestures::ease_out_quartic(self.progress(t));

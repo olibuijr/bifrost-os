@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.10.0 — 2026-10-12
+
+- Due-date alerts are now scheduled with the system. Each upcoming alert (and each early alert) is handed to the shell as a notification with a time trigger, so it shows on time even when Reminders is closed, and it is replaced or removed when the reminder changes. The app keeps up to 32 alerts pending and re-plans when the list changes, when the time zone changes, and at least once an hour.
+- Repeating reminders schedule their next alert as soon as they are completed, through the same path.
+
 ## 1.9.4 — 2026-10-11
 
 - Undo records every delete, clear and flag change on the shared `UndoManager` (`bifrost_app::controls::undo`), named after the change. The Undo bar still offers the latest one for its usual time; its behaviour is unchanged.

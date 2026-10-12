@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6 — 2026-10-12
+
+- MIDI input: a recorder turns note-on and note-off messages (raw MIDI bytes or events) into song notes at their song position, with running status and the sustain pedal holding notes until it is released.
+- MIDI output: a clip's notes can be scheduled as note-on and note-off bytes in song order, with note-offs first when a key repeats.
+- MIDI clock: a song position in sixteenth steps converts to MIDI clock pulses (24 per quarter note), with start, continue and stop bytes.
+- Device parameters: each instrument and effect exposes its parameters as a parameter tree with names, units and clamped values, and the engine reads those values back.
+- Presets: a device's current values can be saved as a named preset, applied again, and kept as JSON.
+
 ## 0.2.5 — 2026-10-11
 
 - Full-size window: the header controls (Back, Play, Arrange, Rack, Auto, Stop, New Song) start right of the traffic lights and are published as accessible buttons.

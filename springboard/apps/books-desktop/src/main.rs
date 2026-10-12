@@ -9,6 +9,10 @@ use springboard::shell::keyboard::Out;
 use std::path::{Path, PathBuf};
 
 const MENU_PRINT: u32 = 1;
+const MENU_FIND_NEXT: u32 = 2;
+const MENU_FIND_PREVIOUS: u32 = 3;
+const MENU_HIGHLIGHT: u32 = 4;
+const MENU_WHOLE_WORDS: u32 = 5;
 
 struct BooksApp {
     books: Option<books::Books>,
@@ -34,13 +38,45 @@ impl App for BooksApp {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let open = self.books.as_ref().is_some_and(|b| b.reading().is_some());
-        vec![AppMenu {
-            title: "File".into(),
-            items: vec![AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open && bifrost_app::print::available())],
-        }]
+        let hits = self.books.as_ref().is_some_and(|b| b.has_hits());
+        let highlight = self.books.as_ref().and_then(|b| b.match_span());
+        let whole = self.books.as_ref().is_some_and(|b| b.whole_words());
+        vec![
+            AppMenu {
+                title: "File".into(),
+                items: vec![AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open && bifrost_app::print::available())],
+            },
+            AppMenu {
+                title: "Find".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(hits),
+                    AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(hits),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_HIGHLIGHT, "Highlight Match").key("cmd+shift+y").enabled(highlight.is_some()).checked(highlight.is_some_and(|(_, saved)| saved)),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_WHOLE_WORDS, "Match Whole Words").enabled(open).checked(whole),
+                ],
+            },
+        ]
     }
 
     fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS) {
+            let Some(books) = &mut self.books else { return false };
+            let t = bifrost_app::proto::sys::now_ms();
+            match id {
+                MENU_FIND_NEXT => books.find_step(1, t),
+                MENU_FIND_PREVIOUS => books.find_step(-1, t),
+                MENU_HIGHLIGHT => {
+                    books.toggle_match_highlight();
+                }
+                _ => {
+                    let on = !books.whole_words();
+                    books.set_whole_words(on);
+                }
+            }
+            return true;
+        }
         if id != MENU_PRINT {
             return false;
         }

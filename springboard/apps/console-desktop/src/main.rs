@@ -3,14 +3,18 @@
 //! are `model.rs`.
 
 mod console;
+mod cursor;
 mod draw;
 mod model;
+mod signposts;
 mod source;
+#[cfg(test)]
+mod wire_tests;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
-use console::{Console, View, MENU_CLEAR, MENU_DEBUG, MENU_FIND, MENU_INFO, MENU_STREAM};
+use console::{Console, View, MENU_AFTER, MENU_CLEAR, MENU_DEBUG, MENU_FIND, MENU_INFO, MENU_STREAM, MENU_SUBSYSTEM};
 
 struct ConsoleApp {
     console: Option<Console>,
@@ -79,6 +83,10 @@ impl App for ConsoleApp {
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_FIND, "Find Message").key("cmd+f"),
                 AppMenuItem::new(MENU_CLEAR, "Clear Display").key("cmd+k"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_AFTER, if c.after.is_some() { "Show All Messages" } else { "Show Messages After Selected" })
+                    .enabled(c.after.is_some() || c.selected.is_some()),
+                AppMenuItem::new(MENU_SUBSYSTEM, "Show Only This Subsystem").enabled(c.selected_entry().is_some_and(|e| !e.subsystem.is_empty())),
             ],
         }]
     }

@@ -213,9 +213,10 @@ impl App for RemindersApp {
             ctx.set_badge(&model::badge_label(due));
         }
         let path = ctx.data_dir.join("reminders.tsv");
-        let fired = alerts::step(&mut self.alerts, self.wall.now(t), a.generation(), || store::load(&path).items, &|t| springboard::bare::timezone::offset_at(t).unwrap_or(self.wall.offset));
-        for (_, title, body, _) in fired {
-            ctx.notify(&title, &body);
+        // Alerts are shell triggers: only the plan changes are sent (see alerts.rs).
+        let change = alerts::step(&mut self.alerts, self.wall.now(t), a.generation(), || store::load(&path).items, &|t| springboard::bare::timezone::offset_at(t).unwrap_or(self.wall.offset));
+        if let Some(change) = change {
+            alerts::apply(ctx, &change);
         }
         self.sync_keyboard(ctx);
         redraw

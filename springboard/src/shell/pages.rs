@@ -12,6 +12,8 @@ use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
 use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
+use bifrost_ui::capture_access::Media;
+use super::services::privacy_permissions::{self, Row};
 use crate::bare::bluetooth::{Cmd, State as BtState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -68,6 +70,8 @@ pub enum PageId {
     Privacy,
     /// Privacy › Analytics & Diagnostics
     Diagnostics,
+    /// Privacy › App Permissions: which installed apps may use the camera, microphone or screen
+    PrivacyPermissions,
     Storage,
     /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
     Graphics,
@@ -141,6 +145,8 @@ pub enum Toggle {
     BgRefresh,
     FourFinger,
     CornerSwipe,
+    /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
+    Permission(Media, usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,6 +262,8 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// Login Items: allow this pending app (id) to open at login
+    LoginItemApprove(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -294,6 +302,8 @@ pub struct Model<'a> {
     pub defaults: &'a [super::defaultapps::CategoryView],
     /// the Login Items page: (app id, name) of each login item
     pub login_items: &'a [(String, String)],
+    /// the Login Items page: (app id, name) of each registration waiting for approval
+    pub login_pending: &'a [(String, String)],
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
 }
@@ -620,15 +630,27 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::LoginItems => page(
             "Login Items",
             false,
-            vec![
-                Group::new(if m.login_items.is_empty() {
-                    vec![Item::new("No login items")]
-                } else {
-                    m.login_items.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemRemove(id.clone()))).collect()
-                })
-                .header("OPEN AT LOGIN")
-                .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
-            ],
+            {
+                // an app that asked to open at login waits here until the user allows it (SMAppService: requiresApproval)
+                let mut groups = Vec::new();
+                if !m.login_pending.is_empty() {
+                    groups.push(
+                        Group::new(m.login_pending.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemApprove(id.clone()))).collect())
+                            .header("REQUIRES APPROVAL")
+                            .footer("These apps asked to open when you log in. Choose one to allow it."),
+                    );
+                }
+                groups.push(
+                    Group::new(if m.login_items.is_empty() {
+                        vec![Item::new("No login items")]
+                    } else {
+                        m.login_items.iter().map(|(id, name)| Item::new(name.as_str()).tint(Tint::Blue).action(Action::LoginItemRemove(id.clone()))).collect()
+                    })
+                    .header("OPEN AT LOGIN")
+                    .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
+                );
+                groups
+            },
         ),
         PageId::Pip => page(
             "Picture in Picture",
@@ -843,10 +865,39 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
-        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
+        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
         // built by `diagnostics_page::spec`, which knows the crash logs
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
+        // built by `permissions_page`, which reads the installed apps and their answers
+        PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
     }
+}
+
+/// Privacy › App Permissions: one group per media type (camera, microphone, screen recording), each listing the
+/// installed apps with a switch. A switch is on only when the person authorized that app for that media type; apps
+/// that have not asked yet show off. `rows` come from `services::privacy_permissions::rows()`, in the order of the
+/// installed apps, so a switch's index is the app's index.
+pub fn permissions_page(rows: &[Row]) -> Spec {
+    let groups = privacy_permissions::MEDIA
+        .iter()
+        .map(|media| {
+            let (header, footer) = match media {
+                Media::Video => ("CAMERA", "Apps that may use the camera. A switch is on only when you allow it."),
+                Media::Audio => ("MICROPHONE", "Apps that may record from the microphone. A switch is on only when you allow it."),
+                Media::Screen => ("SCREEN RECORDING", "Apps that may record the screen or capture other windows."),
+            };
+            let items: Vec<Item> = if rows.is_empty() {
+                vec![Item::new("No apps installed")]
+            } else {
+                rows.iter()
+                    .enumerate()
+                    .map(|(i, r)| Item::new(r.name.as_str()).switch(r.access.can_capture(*media), Action::Toggle(Toggle::Permission(*media, i))))
+                    .collect()
+            };
+            Group::new(items).header(header).footer(footer)
+        })
+        .collect();
+    Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
 /// The switches under Sounds: Keyboard Haptics only exists with a vibrator.
@@ -1170,7 +1221,24 @@ mod tests {
     }
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], fonts: &NO_FONTS }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS }
+    }
+
+    #[test]
+    fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
+        use bifrost_ui::capture_access::CaptureAccess;
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default() }];
+        let s = permissions_page(&rows);
+        assert_eq!(s.groups.len(), 3, "camera, microphone, screen recording");
+        assert_eq!(s.groups[0].header.as_deref(), Some("CAMERA"));
+        let row = &s.groups[0].items[0];
+        assert_eq!(row.label, "Alpha");
+        assert_eq!(row.accessory, Accessory::Switch(false), "an app that has not asked is off");
+        assert_eq!(row.action, Action::Toggle(Toggle::Permission(Media::Video, 0)));
+        assert_eq!(s.groups[2].items[0].action, Action::Toggle(Toggle::Permission(Media::Screen, 0)));
+        let empty = permissions_page(&[]);
+        assert_eq!(empty.groups[1].items[0].label, "No apps installed");
+        assert_eq!(empty.groups[1].items[0].action, Action::None);
     }
 
     #[test]

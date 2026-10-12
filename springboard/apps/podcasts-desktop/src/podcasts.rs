@@ -7,6 +7,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
+use crate::transport;
 use bifrost_app::audio::{self, Track};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -47,9 +48,6 @@ const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
 /// An episode arrives in ranges of this size, straight into its `.part` file.
 const CHUNK: u64 = 2 << 20;
-const SKIP_MS: f64 = 30_000.0;
-const BACK_MS: f64 = 15_000.0;
-const SPEEDS: [f32; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 /// sleep timer choices in minutes; 0 is off
 const SLEEPS: [u32; 5] = [0, 5, 15, 30, 60];
 const SAVE_EVERY_MS: f64 = 5_000.0;
@@ -138,8 +136,8 @@ pub struct Podcasts {
     paused: bool,
     sheet: bool,
     scrubbing: Option<f64>,
-    /// index into SPEEDS (kept per session; applied where the engine supports a rate)
-    speed: usize,
+    /// the playback rate the speed control shows, one of `transport::RATES` (kept per session; the engine plays at 1x)
+    rate: f64,
     sleep: usize,
     sleep_at: Option<f64>,
     resume: Vec<(String, u64)>,
@@ -185,7 +183,7 @@ impl Podcasts {
             paused: false,
             sheet: false,
             scrubbing: None,
-            speed: 2,
+            rate: 1.0,
             sleep: 0,
             sleep_at: None,
             resume,
@@ -429,8 +427,10 @@ impl Podcasts {
         }
     }
 
-    fn skip(&mut self, delta: f64) {
-        self.seek_to(self.position_ms + delta);
+    /// Moves back or forward by `interval_s` seconds, clamped by the transport model (`transport::skip_target_ms`).
+    fn skip(&mut self, backward: bool, interval_s: f64) {
+        let to = transport::skip_target_ms(backward, interval_s, self.position_ms, self.duration_ms);
+        self.seek_to(to);
     }
 
     // geometry ----------------------------------------------------------
@@ -750,7 +750,7 @@ impl Podcasts {
                 }
             },
             Target::Stop => self.stop_playback(),
-            Target::SkipBack => self.skip(-if self.sheet { BACK_MS } else { SKIP_MS }),
+            Target::SkipBack => self.skip(true, if self.sheet { transport::SHEET_BACK_S } else { transport::PLAYER_SKIP_S }),
             Target::Sheet => self.sheet = true,
             Target::CloseSheet => self.sheet = false,
             Target::Scrub => {}
@@ -760,12 +760,12 @@ impl Podcasts {
                     self.paused = !self.paused;
                 }
             }
-            Target::Speed => self.speed = (self.speed + 1) % SPEEDS.len(),
+            Target::Speed => self.rate = transport::next_rate(self.rate),
             Target::Sleep => {
                 self.sleep = (self.sleep + 1) % SLEEPS.len();
                 self.sleep_at = (SLEEPS[self.sleep] > 0).then(|| t + SLEEPS[self.sleep] as f64 * 60_000.0);
             }
-            Target::SkipFwd => self.skip(SKIP_MS),
+            Target::SkipFwd => self.skip(false, transport::PLAYER_SKIP_S),
             Target::List => {}
         }
         self.dirty = true;
@@ -785,6 +785,14 @@ impl Podcasts {
                 self.finish_add();
             } else if let Some(f) = &mut self.field {
                 f.edit(ui, &out, t);
+            }
+        } else {
+            // transport keys, the in-app stand-in for the system's remote commands: space plays or pauses, arrows skip
+            match &out {
+                Out::Text(s) if s == " " => self.activate(ui, Target::PlayPause, t),
+                Out::Named("Left") => self.skip(true, transport::PLAYER_SKIP_S),
+                Out::Named("Right") => self.skip(false, transport::PLAYER_SKIP_S),
+                _ => {}
             }
         }
         self.dirty = true;
@@ -968,8 +976,7 @@ impl Podcasts {
         self.button(s, ui, Target::SkipBack, "Back 15", LINK, self.sheet_button(ui, 0));
         self.button(s, ui, Target::PlayPause, if self.paused { "Play" } else { "Pause" }, LINK, self.sheet_button(ui, 1));
         self.button(s, ui, Target::SkipFwd, "Fwd 30", LINK, self.sheet_button(ui, 2));
-        let sp = SPEEDS[self.speed];
-        self.button(s, ui, Target::Speed, &format!("Speed {sp}x"), LINK, self.sheet_button(ui, 3));
+        self.button(s, ui, Target::Speed, &transport::speed_label(self.rate), LINK, self.sheet_button(ui, 3));
         let label = self.sleep_label(t);
         self.button(s, ui, Target::Sleep, &label, LINK, self.sheet_button(ui, 4));
     }

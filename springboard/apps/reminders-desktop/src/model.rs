@@ -514,39 +514,6 @@ pub fn due_unix(r: &Reminder, offset_at: OffsetAt) -> Option<i64> {
     Some(springboard::shell::clock::alarm::local_to_unix(day, min * 60, offset_at))
 }
 
-/// (id, fire time, early?) alerts that fall in (from, to].
-pub fn due_alerts(items: &[Reminder], from: i64, to: i64, offset_at: OffsetAt) -> Vec<(u64, i64, bool)> {
-    let mut out = vec![];
-    for r in items.iter().filter(|r| !r.completed) {
-        let Some(due) = due_unix(r, offset_at) else { continue };
-        if due > from && due <= to {
-            out.push((r.id, due, false));
-        }
-        if let Some(early) = r.early {
-            let at = due - early as i64 * 60;
-            if at > from && at <= to {
-                out.push((r.id, at, true));
-            }
-        }
-    }
-    out
-}
-
-/// The first alert strictly after `after` (unix seconds).
-pub fn next_alert(items: &[Reminder], after: i64, offset_at: OffsetAt) -> Option<i64> {
-    let mut best: Option<i64> = None;
-    for r in items.iter().filter(|r| !r.completed) {
-        let Some(due) = due_unix(r, offset_at) else { continue };
-        let early = r.early.map(|e| due - e as i64 * 60);
-        for at in [Some(due), early].into_iter().flatten() {
-            if at > after && best.map_or(true, |b| at < b) {
-                best = Some(at);
-            }
-        }
-    }
-    best
-}
-
 /// "9:05 AM" for minute 545.
 pub fn clock_label(min: u16) -> String {
     let (h, m) = (min / 60 % 24, min % 60);
@@ -795,26 +762,6 @@ mod tests {
         assert!(!d.delete_list(1), "the last list stays");
     }
     #[test]
-    fn alerts_fire_in_window_with_early_and_default_time() {
-        let mut a = r(1, "a");
-        a.due = Some(TODAY);
-        a.time = Some(600);
-        a.early = Some(30);
-        let mut b = r(2, "b");
-        b.due = Some(TODAY);
-        let mut c = r(3, "c");
-        c.due = Some(TODAY);
-        c.time = Some(600);
-        c.completed = true;
-        let items = [a, b, c];
-        let base = TODAY * 86_400 - 3600; // offset +1h
-        let at = |m: i64| base + m * 60;
-        let fired = due_alerts(&items, at(0), at(24 * 60), &|_| 3600);
-        assert_eq!(fired, vec![(1, at(600), false), (1, at(570), true), (2, at(540), false)]);
-        assert!(due_alerts(&items, at(600), at(600), &|_| 3600).is_empty());
-        assert_eq!(due_alerts(&items, at(569), at(570), &|_| 3600), vec![(1, at(570), true)]);
-    }
-    #[test]
     fn early_presets_cycle() {
         let mut e = None;
         let mut seen = vec![];
@@ -855,11 +802,6 @@ mod tests {
         a.due = Some(TODAY);
         a.time = Some(600);
         a.early = Some(30);
-        let items = [a.clone()];
-        let base = TODAY * 86_400;
-        assert_eq!(next_alert(&items, base, &|_| 0), Some(base + 570 * 60));
-        assert_eq!(next_alert(&items, base + 570 * 60, &|_| 0), Some(base + 600 * 60));
-        assert_eq!(next_alert(&items, base + 600 * 60, &|_| 0), None);
         assert_eq!(clock_label(545), "9:05 AM");
         assert_eq!(clock_label(0), "12:00 AM");
         assert_eq!(clock_label(13 * 60), "1:00 PM");

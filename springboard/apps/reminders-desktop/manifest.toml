@@ -1,6 +1,6 @@
 id = "is.olibuijr.reminders.desktop"
 name = "Reminders"
-version = "1.9.4"
+version = "1.10.0"
 exec = "bifrost-reminders"
 icon = "icon.png"
 min_shell = "0.5.7"

@@ -239,6 +239,9 @@ pub struct Settings {
     defaults_out: Vec<(usize, String)>,
     /// the Login Items page's rows as the shell holds them, and the ids removed there
     login_items: Vec<(String, String)>,
+    /// the Login Items page's requests waiting for approval, and the ids the user allowed there
+    login_pending: Vec<(String, String)>,
+    login_approve_out: Vec<String>,
     /// Settings > Fonts, loaded when the page opens
     fonts: super::pages::FontsView,
     login_out: Vec<String>,
@@ -423,6 +426,8 @@ impl Settings {
             defaults: Vec::new(),
             defaults_out: Vec::new(),
             login_items: Vec::new(),
+            login_pending: Vec::new(),
+            login_approve_out: Vec::new(),
             login_out: Vec::new(),
             fonts: Default::default(),
             notify_edge: None,
@@ -499,7 +504,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, fonts: &self.fonts }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, fonts: &self.fonts }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -540,6 +545,7 @@ impl Settings {
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
             }
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
+            PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: backup::latest(&self.data_dir).map(|(_, t)| t) }),
             _ => spec(id, &self.model()),
         }
@@ -671,12 +677,18 @@ impl Settings {
         self.defaults = v;
     }
 
-    pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>) {
+    pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>, pending: Vec<(String, String)>) {
         self.login_items = v;
+        self.login_pending = pending;
     }
 
     pub(super) fn take_login_removed(&mut self) -> Vec<String> {
         std::mem::take(&mut self.login_out)
+    }
+
+    /// The Login Items requests the user allowed since the last call.
+    pub(super) fn take_login_approved(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.login_approve_out)
     }
 
     pub(super) fn take_defaults_changes(&mut self) -> Vec<(usize, String)> {
@@ -1640,6 +1652,15 @@ impl Settings {
                 self.rebuild_visible(ui);
                 vec![]
             }
+            Action::LoginItemApprove(id) => {
+                if let Some(i) = self.login_pending.iter().position(|(a, _)| *a == id) {
+                    let (a, name) = self.login_pending.remove(i);
+                    self.login_items.push((a, name));
+                    self.login_approve_out.push(id);
+                }
+                self.rebuild_visible(ui);
+                vec![]
+            }
             Action::Font(role, path) => {
                 if let Err(e) = prefs.set(role.pref(), path.as_deref().unwrap_or("")) {
                     eprintln!("springboard: settings.ini: {e}");
@@ -1933,6 +1954,16 @@ impl Settings {
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),
             Toggle::CornerSwipe => flip(&mut self.opts.corner_swipe),
+            Toggle::Permission(media, index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    let id = app.manifest.id.clone();
+                    let allowed = !super::services::privacy_permissions::access(&id).can_capture(media);
+                    // a restricted app refuses the change; the switch then shows the answer that stands
+                    let _ = super::services::privacy_permissions::set_by_user(&id, media, allowed);
+                    super::services::privacy_permissions::access(&id).can_capture(media)
+                }
+                None => false,
+            },
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),
             Toggle::DockRecents => flip(&mut self.opts.dock_recents),
             Toggle::DockAutohide => {
@@ -2503,6 +2534,7 @@ mod tests {
             (vec!["Wallpaper"], PageId::Wallpaper),
             (vec!["Battery"], PageId::Battery),
             (vec!["Privacy"], PageId::Privacy),
+            (vec!["Privacy", "App Permissions"], PageId::PrivacyPermissions),
             (vec!["Privacy", "Analytics & Diagnostics"], PageId::Diagnostics),
             (vec!["General", "bifrost Storage"], PageId::Storage),
             (vec!["General", "Backup"], PageId::Backup),

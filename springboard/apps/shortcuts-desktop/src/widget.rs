@@ -132,6 +132,24 @@ impl Shortcuts {
         }
     }
 
+    /// The list as the window holds it now. Intents and scripts read it, so they never see a stale copy.
+    pub fn list(&self) -> &[Shortcut] {
+        &self.list
+    }
+
+    /// Runs `f` on a copy of the list and keeps the copy, and saves it, only when `f` changed it. Intents and
+    /// scripts change the list through here, so the window and the saved file stay the same.
+    pub fn edit_list<T>(&mut self, f: impl FnOnce(&mut Vec<Shortcut>) -> T) -> T {
+        let mut next = self.list.clone();
+        let out = f(&mut next);
+        if next != self.list {
+            self.list = next;
+            self.dirty = true;
+            self.save();
+        }
+        out
+    }
+
     pub fn set_size(&mut self, w: i32, h: i32) {
         self.w = w;
         self.h = h;

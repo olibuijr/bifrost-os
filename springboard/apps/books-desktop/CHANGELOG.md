@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- Find menu: Find Next (⌘G) and Find Previous (⇧⌘G) step through the matches of the book's search in order and wrap at
+  the ends. Match Whole Words limits the search to whole words, so "cat" skips "concatenate". The choice lasts for the
+  session.
+- Highlight Match (⇧⌘Y) marks the text the last find went to. Highlights stay on the page at any font size and across
+  restarts, and choosing it again removes the highlight.
+- Highlights are saved with the book's reading position in the Books state file, one line per highlight.
+
 ## 1.2.5
 
 - File › Print… (⌘P) prints the open PDF book through `bifrost_app::print` (CUPS `lp`); the item merges into the shell's File menu.
