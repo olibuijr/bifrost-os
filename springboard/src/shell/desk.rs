@@ -77,6 +77,18 @@ pub fn tile_rect(a: Rect, tile: Tile) -> Rect {
     }
 }
 
+/// Split view: two windows share the work area side by side with a `divider` px gap between them. `lead_permille`
+/// (0..=1000) is the leading window's share of the usable width; each side keeps at least `min_w` px, so the ratio
+/// gives way on a narrow area. The rectangles always cover the area minus the divider.
+#[cfg_attr(not(test), allow(dead_code))] // wired by the split view entry (next round)
+pub fn split_view_rects(a: Rect, lead_permille: i32, divider: i32, min_w: i32) -> (Rect, Rect) {
+    let usable = (a.w - divider).max(0);
+    let lo = min_w.max(0).min(usable / 2);
+    let lead = (usable * lead_permille.clamp(0, 1000) / 1000).clamp(lo, usable - lo);
+    let trail = usable - lead;
+    (Rect { x: a.x, y: a.y, w: lead, h: a.h }, Rect { x: a.x + lead + divider, y: a.y, w: trail, h: a.h })
+}
+
 /// The tile a pointer at (`px`,`py`) snaps to while dragging a title bar: left or right edge = half,
 /// top edge = fill, corners = quarters. The band is `band` px wide (derive it from `ui.pt`).
 pub fn snap_zone(a: Rect, px: i32, py: i32, band: i32) -> Option<Tile> {
@@ -2152,6 +2164,27 @@ mod tests {
         d.tile(&m, 0, Tile::Left);
         d.return_to_previous(0);
         assert_eq!(d.wins[0].r, before);
+    }
+
+    #[test]
+    fn split_view_shares_the_width_around_the_divider_and_keeps_both_sides_usable() {
+        let a = Rect { x: 0, y: 30, w: 1001, h: 601 };
+        let (l, r) = split_view_rects(a, 500, 8, 320);
+        assert_eq!(l.w + 8 + r.w, a.w, "the two sides and the divider cover the area");
+        assert_eq!((l.w, r.w), (496, 497), "an even split takes the usable width in halves");
+        assert_eq!((l.x, r.x), (0, 504), "the trailing side starts after the divider");
+        assert!(l.y == 30 && r.y == 30 && l.h == 601 && r.h == 601);
+        // the ratio is clamped so neither side drops below the minimum width
+        let (l, r) = split_view_rects(a, 50, 8, 320);
+        assert_eq!((l.w, r.w), (320, 1001 - 8 - 320));
+        let (l, r) = split_view_rects(a, 1000, 8, 320);
+        assert_eq!((l.w, r.w), (1001 - 8 - 320, 320));
+        // a narrow area splits in halves instead of honouring the minimum
+        let (l, r) = split_view_rects(Rect { x: 0, y: 0, w: 300, h: 200 }, 900, 8, 320);
+        assert_eq!((l.w, r.w), (146, 146));
+        // degenerate width never goes negative
+        let (l, r) = split_view_rects(Rect { x: 0, y: 0, w: 4, h: 10 }, 500, 8, 320);
+        assert!(l.w >= 0 && r.w >= 0);
     }
 
     #[test]
