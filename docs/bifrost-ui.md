@@ -1310,6 +1310,11 @@ Under the pin, Games deals from `PINNED_SEED`, Console shows a fixed three-row j
 `now_ms()` (animation time) is not pinned. The four apps' goldens were regenerated once with `BIFROST_BLESS=1` in 0.5.10, and their
 `KNOWN_GAPS` lists are empty again.
 
+The pin lives in `bifrost_core::pin` (the SDK re-exports it), so the shell crate honours it too: `clock::Wall::sample`
+returns the pinned instant in UTC under the pin, which keeps Calendar's month and today marker fixed (it followed the real
+date before and broke its snapshot at midnight). Files reads its first folder at once under the pin, so a busy machine
+never snapshots "Loading…".
+
 ### NSPasteboard rich types (Apple parity)
 
 `bifrost_app::pasteboard::NSPasteboard::general()` mirrors `NSPasteboard.general`: `clear_contents(ctx) -> change_count`,

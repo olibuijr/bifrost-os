@@ -44,7 +44,11 @@ pub struct Wall {
 
 impl Wall {
     /// The system clock and local zone read now, anchored at monotonic `at`.
+    /// Under the test pin (`BIFROST_TEST_PIN=1`) it is the pinned instant in UTC, so snapshots do not follow the date.
     pub fn sample(at: f64) -> Self {
+        if bifrost_core::pin::pinned() {
+            return Self { unix: bifrost_core::pin::PINNED_UNIX_SECS, offset: 0, at };
+        }
         let (unix, offset) = crate::bare::sys::wall_time();
         Self { unix, offset, at }
     }

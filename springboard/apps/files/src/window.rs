@@ -40,7 +40,7 @@ impl Files {
         let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || path == self.bin();
         let (sort, bin) = (self.sort, self.bin());
         let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
-        DispatchQueue::global(Qos::Utility).async_(move || {
+        let work = move || {
             let result = if let Some(list) = tagged {
                 Ok(list)
             } else if path == Path::new(fs::RECENTS) {
@@ -63,7 +63,13 @@ impl Files {
                 })
                 .collect();
             let _ = tx.send(Listing { path, result, ancestors });
-        });
+        };
+        // Under the test pin the listing is read at once, so a snapshot never catches "Loading…" on a busy machine.
+        if bifrost_app::testing::pinned() {
+            work();
+        } else {
+            DispatchQueue::global(Qos::Utility).async_(work);
+        }
     }
     pub(crate) fn in_bin(&self) -> bool {
         self.path == self.bin()
