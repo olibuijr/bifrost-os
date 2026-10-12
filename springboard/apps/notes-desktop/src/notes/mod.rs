@@ -15,6 +15,7 @@ pub mod folders;
 mod chrome;
 pub mod icon;
 pub mod rpc;
+pub mod sketch;
 
 mod parity;
 mod picker;
@@ -47,7 +48,7 @@ use springboard::shell::keyboard::{self, Keyboard, Out};
 use springboard::shell::textarea::TextArea;
 use springboard::shell::textfield::TextField;
 use springboard::shell::ui::{centred, home_zone, Ui, Weight, WHITE};
-use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEPARATOR_C};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEPARATOR_C};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::kit::Event;
 use springboard::deildu::scroll::Scroller;
@@ -66,6 +67,9 @@ use bifrost_app::kit::ui::{SPACE_XS};
 /// Picker sheet header height and thumbnail decode size (pt).
 const PICK_HEAD_PT: f32 = 52.0;
 const PICK_THUMB_PT: f32 = 200.0;
+/// Sketch pad header height and the width of its Cancel, Undo and Done zones (pt).
+const SKETCH_HEAD_PT: f32 = 52.0;
+const SKETCH_ZONE_PT: f32 = 90.0;
 
 /// The Notes tint (systemYellow in dark mode).
 pub const YELLOW: u32 = springboard::shell::ui::SYSTEM_YELLOW;
@@ -152,6 +156,7 @@ enum Act {
     Recover,
     EraseNote,
     AttachPhoto,
+    InsertSketch,
     ChoosePhoto,
     /// pin or unpin the open note
     TogglePin,
@@ -272,6 +277,8 @@ pub struct Notes {
     menu: Option<Menu>,
     /// the Photos picker sheet
     picker: Option<picker::Picker>,
+    /// the sketch pad over the open note (Insert Sketch)
+    sketch: Option<sketch::Pad>,
     pick_drag: Option<f32>,
     pick_moved: bool,
     naming: Option<Naming>,
@@ -373,6 +380,7 @@ impl Notes {
             prefs,
             menu: None,
             picker: None,
+            sketch: None,
             pick_drag: None,
             pick_moved: false,
             naming: None,
@@ -1428,6 +1436,7 @@ impl Notes {
             ("Move Checked to Bottom".to_string(), Act::SortCheckedNow, false),
             ("Photo from Library".to_string(), Act::ChoosePhoto, false),
             ("Attach Latest Photo".to_string(), Act::AttachPhoto, false),
+            ("Insert Sketch".to_string(), Act::InsertSketch, false),
             ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
             ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
         ];
@@ -1593,6 +1602,7 @@ impl Notes {
                 }
             }
             Act::AttachPhoto => self.attach_latest_photo(ui, t),
+            Act::InsertSketch => self.open_sketch(),
             Act::TogglePin => self.activate(ui, Target::EditorPin, 0.0, 0.0, t),
             Act::ToggleWholeWord => {
                 self.whole_word = !self.whole_word;
@@ -1653,14 +1663,104 @@ impl Notes {
         let Screen::Editor(i) = self.screen else { return Err(std::io::Error::other("No open note")) };
         let id = self.notes[i].id.clone();
         let name = attach::import(&self.note_dir(&id), &id, bytes)?;
+        self.insert_image(ui, &name, t);
+        Ok(())
+    }
+
+    /// Inserts the image paragraph for file `name` at the caret (the note is then saved as changed).
+    fn insert_image(&mut self, ui: &Ui, name: &str, t: f64) {
         let para = self.editor.paragraph_of(self.editor.caret());
         let at_start = self.editor.caret() == para.start;
-        let line = format!("{}{}\n", if at_start { "" } else { "\n" }, md::image_line(&name));
+        let line = format!("{}{}\n", if at_start { "" } else { "\n" }, md::image_line(name));
         let caret = self.editor.caret();
         self.editor.replace_range(ui, caret..caret, &line, t, false);
         self.load_images(ui);
         self.changed(ui, t);
-        Ok(())
+    }
+
+    /// Insert Sketch (editor menu): opens an empty sketch pad over the window.
+    fn open_sketch(&mut self) {
+        if matches!(self.screen, Screen::Editor(_)) {
+            self.sketch = Some(sketch::Pad::new());
+        }
+    }
+
+    /// Done on the sketch pad: saves the drawing beside the note and inserts its picture at the caret. An empty pad
+    /// just closes.
+    fn finish_sketch(&mut self, ui: &Ui, t: f64) {
+        let Some(pad) = self.sketch.take() else { return };
+        let drawing = pad.into_drawing();
+        if drawing.is_empty() {
+            return;
+        }
+        let Screen::Editor(i) = self.screen else { return };
+        let id = self.notes[i].id.clone();
+        match sketch::save(&self.note_dir(&id), &id, &drawing) {
+            Ok(name) => self.insert_image(ui, &name, t),
+            Err(error) => self.notice = Some(format!("Unable to save sketch: {error}")),
+        }
+    }
+
+    /// Touches on the sketch pad. Below the header a stroke follows the finger. In the header, Cancel closes the pad
+    /// (left zone), Undo removes the newest stroke (middle zone) and Done saves it (right zone).
+    fn sketch_touch(&mut self, ui: &Ui, ev: Event, t: f64) {
+        let (head, zone, width, w) = (ui.pt(SKETCH_HEAD_PT), ui.pt(SKETCH_ZONE_PT), ui.pt(sketch::LINE_PT), self.w as f32);
+        let Some(pad) = self.sketch.as_mut() else { return };
+        let x = match ev {
+            Event::Down(x, y) => {
+                if y >= head {
+                    pad.begin(x, y, width);
+                }
+                return;
+            }
+            Event::Move(x, y) => {
+                pad.extend(x, y);
+                return;
+            }
+            Event::Up(x, y) => {
+                if pad.is_drawing() {
+                    pad.end();
+                    return;
+                }
+                if y >= head {
+                    return;
+                }
+                x
+            }
+            _ => return,
+        };
+        if x < zone {
+            self.sketch = None;
+        } else if x >= w - zone {
+            self.finish_sketch(ui, t);
+        } else if x >= w - 2.0 * zone {
+            if let Some(pad) = self.sketch.as_mut() {
+                pad.undo();
+            }
+        }
+    }
+
+    /// The sketch pad: the whole window in the content colour, a rule under the header, the strokes and the header
+    /// controls (Cancel, Sketch, Undo, Done).
+    fn draw_sketch(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some(pad) = &self.sketch else { return };
+        let (head, zone) = (ui.pt(SKETCH_HEAD_PT), ui.pt(SKETCH_ZONE_PT));
+        let w = self.w as f32;
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
+        s.fill_rect(0, head as usize, self.w as usize, 1, SEPARATOR_C.now());
+        for stroke in pad.all() {
+            for (cx, cy, r, color) in sketch::stroke_dabs(stroke, &|x: f32, y: f32| (x, y), 1.0) {
+                s.fill_rect((cx - r).max(0) as usize, (cy - r).max(0) as usize, (2 * r + 1) as usize, (2 * r + 1) as usize, color);
+            }
+        }
+        let title = self.labels.get(ui, "Sketch", MAC_BODY_PT, Weight::Semibold, LABEL.now());
+        centred(s, title, self.w / 2, (head / 2.0 - title.h as f32 / 2.0) as i32);
+        let cancel = self.labels.get(ui, "Cancel", MAC_BODY_PT, Weight::Regular, LINK);
+        centred(s, cancel, (zone / 2.0) as i32, (head / 2.0) as i32);
+        let undo = self.labels.get(ui, "Undo", MAC_BODY_PT, Weight::Regular, LINK);
+        centred(s, undo, (w - 1.5 * zone) as i32, (head / 2.0) as i32);
+        let done = self.labels.get(ui, "Done", MAC_BODY_PT, Weight::Semibold, LINK);
+        centred(s, done, (w - zone / 2.0) as i32, (head / 2.0) as i32);
     }
 
     /// Sheet rect: the bottom 62% of the screen.
@@ -1752,6 +1852,13 @@ impl Notes {
     /// Typed input for the search field or the editor.
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.dirty = true;
+        if self.sketch.is_some() {
+            // the sketch pad takes no typing; Hide closes it
+            if matches!(out, Out::Hide) {
+                self.sketch = None;
+            }
+            return;
+        }
         // the search field and the folder-name prompt take the keys over the note beside them
         let list_keys = self.screen == Screen::List || self.search.focused || self.naming.is_some();
         match list_keys {
@@ -1956,6 +2063,10 @@ impl Notes {
         self.sync_width(ui);
         let kb_top = self.kb_top(ui);
         let in_list = !matches!(self.screen, Screen::Editor(_)) || x < self.ed_px(ui).0;
+        if self.sketch.is_some() {
+            self.sketch_touch(ui, ev, t);
+            return;
+        }
         if self.picker.is_some() {
             self.picker_touch(ui, ev, t);
             return;
@@ -2178,7 +2289,7 @@ impl Notes {
                 let label = self.labels.get(ui, if pinned[i] { "Unpin" } else { "Pin" }, MAC_BODY_PT, Weight::Regular, WHITE);
                 let lx = (rx + dx / 2.0 - label.w as f32 / 2.0).max(rx + ui.pt(SPACE_S));
                 content.blit(label, lx as i32, (ry + rh / 2.0 - label.h as f32 / 2.0) as i32, 255, 255);
-                content.fill_rrect(rx + dx, ry, rw - dx, rh, 0.0, DETAIL_BG.now());
+                content.fill_rrect(rx + dx, ry, rw - dx, rh, 0.0, CONTENT_BG.now());
             }
             if dx < 0.0 {
                 content.fill_rrect(rx, ry, rw, rh, ui.pt(m::SELECTION_RADIUS), DESTRUCTIVE);
@@ -2186,7 +2297,7 @@ impl Notes {
                 let bx = rx + rw + dx;
                 let lx = (bx + (-dx).min(ui.pt(DELETE_PT)) / 2.0 - label.w as f32 / 2.0).max(bx + ui.pt(SPACE_S));
                 content.blit(label, lx as i32, (ry + rh / 2.0 - label.h as f32 / 2.0) as i32, 255, 255);
-                content.fill_rrect(rx, ry, rw + dx, rh, 0.0, DETAIL_BG.now());
+                content.fill_rrect(rx, ry, rw + dx, rh, 0.0, CONTENT_BG.now());
             }
             // the open note: the accent plate with white text (Golden Gate Notes); the arrow-key row: a grey plate
             if is_open && dx == 0.0 {
@@ -2342,6 +2453,7 @@ impl Notes {
         self.draw_naming(s, ui);
         self.draw_menu(s, ui);
         self.draw_picker(s, ui);
+        self.draw_sketch(s, ui);
         let (ex, ew) = self.ed_px(ui);
         if let Some(error) = self.pin_error.as_ref().or(self.notice.as_ref()) {
             let text = ui.fit(error, MAC_FOOTNOTE_PT, ew - ui.pt(SPACE_HUGE));
@@ -3402,6 +3514,42 @@ mod tests {
         assert!(dir.join("Pics").join(format!("{id}.md")).exists());
         assert!(dir.join("Pics").join(format!("{id}-1.png")).exists() && dir.join("Pics").join(format!("{id}-2.png")).exists());
         assert!(!dir.join(format!("{id}-1.png")).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn insert_sketch_saves_a_picture_and_its_drawing_beside_the_note() {
+        let ui = ui();
+        let dir = scratch("sketch");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Plan");
+        let id = n.editing().unwrap().id.clone();
+        let (w, head) = (n.w as f32, ui.pt(SKETCH_HEAD_PT));
+        // Cancel (left zone of the header) closes the pad and saves nothing
+        n.run(&ui, Act::InsertSketch, 1900.0);
+        assert!(n.sketch.is_some(), "the pad opens over an open note");
+        n.touch(&ui, Event::Down(5.0, 10.0), 1910.0);
+        n.touch(&ui, Event::Up(5.0, 10.0), 1920.0);
+        assert!(n.sketch.is_none());
+        assert_eq!(n.editing().unwrap().text, "Plan");
+        // a stroke, then Done (right zone of the header) saves it and inserts its picture at the caret
+        n.run(&ui, Act::InsertSketch, 2000.0);
+        n.touch(&ui, Event::Down(100.0, head + 40.0), 2100.0);
+        n.touch(&ui, Event::Move(160.0, head + 60.0), 2110.0);
+        n.touch(&ui, Event::Up(160.0, head + 60.0), 2120.0);
+        draw(&mut n, &ui, 2150.0);
+        n.touch(&ui, Event::Down(w - 5.0, 10.0), 2200.0);
+        n.touch(&ui, Event::Up(w - 5.0, 10.0), 2210.0);
+        assert!(n.sketch.is_none());
+        settle_images(&mut n, &ui);
+        assert_eq!(n.editing().unwrap().text, format!("Plan\n![image]({id}-1.png)\n"));
+        assert!(dir.join(format!("{id}-1.png")).exists() && dir.join(format!("{id}-1.sketch")).exists());
+        // an empty pad closes without inserting anything
+        n.run(&ui, Act::InsertSketch, 2300.0);
+        n.touch(&ui, Event::Down(w - 5.0, 10.0), 2310.0);
+        n.touch(&ui, Event::Up(w - 5.0, 10.0), 2320.0);
+        assert!(n.sketch.is_none());
+        assert_eq!(n.editing().unwrap().text, format!("Plan\n![image]({id}-1.png)\n"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

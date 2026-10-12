@@ -66,7 +66,8 @@ pub fn rename(dir: &Path, old: &str, new: &str) -> io::Result<String> {
     Ok(new)
 }
 
-/// Attachment files of note `id` in `dir`: `<id>-<digits>.<png|jpg|jpeg>`.
+/// Attachment files of note `id` in `dir`: `<id>-<digits>.<png|jpg|jpeg|sketch>` (a sketch's `.sketch` file is the
+/// drawing behind its picture, and moves, copies and erases with it).
 pub fn attachments(dir: &Path, id: &str) -> Vec<String> {
     let prefix = format!("{id}-");
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
@@ -74,17 +75,23 @@ pub fn attachments(dir: &Path, id: &str) -> Vec<String> {
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
         .filter(|n| {
-            n.strip_prefix(&prefix).and_then(|rest| rest.split_once('.')).is_some_and(|(num, ext)| !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str()))
+            n.strip_prefix(&prefix).and_then(|rest| rest.split_once('.')).is_some_and(|(num, ext)| !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) && ["png", "jpg", "jpeg", "sketch"].contains(&ext.to_ascii_lowercase().as_str()))
         })
         .collect();
     names.sort();
     names
 }
 
-/// The next free attachment name for `id` with extension `ext`.
+/// The next free attachment name for `id` with extension `ext`: one past the highest number in use, so a picture and
+/// its sketch file share a number and no gap is reused.
 pub fn next_attachment(dir: &Path, id: &str, ext: &str) -> String {
-    let used = attachments(dir, id).len();
-    (used + 1..).map(|n| format!("{id}-{n}.{ext}")).find(|n| !dir.join(n).exists()).unwrap()
+    let prefix = format!("{id}-");
+    let top = attachments(dir, id)
+        .iter()
+        .filter_map(|n| n.strip_prefix(&prefix)?.split_once('.')?.0.parse::<usize>().ok())
+        .max()
+        .unwrap_or(0);
+    (top + 1..).map(|n| format!("{id}-{n}.{ext}")).find(|n| !dir.join(n).exists()).unwrap()
 }
 
 /// Moves a note file and its attachments between directories.

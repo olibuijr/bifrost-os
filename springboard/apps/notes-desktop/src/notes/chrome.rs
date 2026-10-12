@@ -7,7 +7,7 @@ use super::*;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{DETAIL_BG, LABEL, LABEL_2, SEPARATOR_C};
+use bifrost_app::kit::ui::{CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
 
@@ -322,6 +322,6 @@ impl Notes {
 
     /// The background of the content columns.
     pub(super) fn draw_background(&self, s: &mut Surface) {
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
     }
 }

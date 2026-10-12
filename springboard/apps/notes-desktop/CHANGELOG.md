@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.0 — 2026-10-12
+
+- Insert Sketch (the More menu in the editor) opens a sketch pad over the window. Drag with the mouse or a pen to draw black lines. The header has Cancel (closes without saving), Undo (removes the newest line) and Done (saves the sketch and puts its picture at the caret, where it shows inline like a photo).
+- Each sketch is kept beside the note twice: as a picture (a PNG) and as its drawing (a `.sketch` file with the line data). Moving, duplicating, recovering or deleting a note carries both files along.
+- Only pen lines are offered for now: no colours, marker or pencil, no erasing a single line, and no reopening a sketch to edit its lines. Pressure from a stylus is not recorded yet.
+- The note's background is now the content colour (white in Light, dark grey in Dark), the same as the rest of the content area, instead of the pure black used by the detail column.
+- Not in this version: checklist boxes keep their current drawing; symbol rendering modes are not applied to them yet.
+
 ## 1.11.0 — 2026-10-12
 
 - Check Spelling and Links (the More menu in the editor) now also flags street addresses and flight numbers, such as "FI 552" or "BA117", as one item each, next to the links, dates and phone numbers. Use the find arrows to step through them.
