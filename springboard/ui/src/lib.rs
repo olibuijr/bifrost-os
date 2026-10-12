@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod emitter;
+pub mod physics;
+pub mod tilemap;
