@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- Shortcuts can be used from other apps and from automation. A shortcut is found by its id or its name; a name that two shortcuts share asks for the id, and a name that matches none says so.
+- "Plan Shortcut" lists a shortcut's steps in order without running them. "Run Shortcut" finds the shortcut and then says that this device cannot run shortcut actions yet, so it never reports a run that did not happen.
+- A scripting view of the list: a shortcut's name and colour can be read and changed, and its action count is read-only. Changes are checked, saved, and an open window shows them at once.
+- Needs system 0.4.84, as before.
+
 ## 1.2.2
 
 - Compliance: grid tile sizes and the Remove badge's glyph come from named tokens; the badge's glyph bar is a capsule sized from the spacing token.
