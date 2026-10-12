@@ -339,6 +339,20 @@ fn fade(inst: &mut Instance, opacity: f32) {
     }
 }
 
+/// Places an instance built in its own coordinates (glyph quads) into a transform, clip and opacity, the way the
+/// op helpers place theirs.
+pub fn restate(inst: &mut Instance, xf: Transform2D, clip: Option<Clip>, opacity: f32) {
+    let p = placed(xf, clip);
+    inst.xform = p.xform;
+    inst.xform_t[0] = p.xform_t[0];
+    inst.xform_t[1] = p.xform_t[1];
+    inst.clip = p.clip;
+    inst.extra[2] = p.extra[2];
+    if opacity < 1.0 {
+        fade(inst, opacity.max(0.0));
+    }
+}
+
 /// The instances that draw one recorded op in the transform, clip and opacity state current when it was recorded.
 /// Images and masks return instances whose texture (`Op::Image::id`, `Op::ImageTinted::id`) the caller binds. Text,
 /// paths, materials and the state ops return nothing (they are the glyph, tessellation and material modules' ops).

@@ -336,8 +336,11 @@ fn with_cache<T>(device: &Device, f: impl FnOnce(vk::PipelineCache) -> Result<T>
     f(raw)
 }
 
-fn make_set_layout(d: &ash::Device, bindings: &[vk::DescriptorSetLayoutBinding<'_>]) -> Result<vk::DescriptorSetLayout> {
-    let info = vk::DescriptorSetLayoutCreateInfo::default().bindings(bindings);
+/// The set 0 layout. With push descriptors enabled on the device the encoders push bindings
+/// (`vkCmdPushDescriptorSetKHR`), which needs the layout to be created for it.
+fn make_set_layout(d: &ash::Device, bindings: &[vk::DescriptorSetLayoutBinding<'_>], push_descriptors: bool) -> Result<vk::DescriptorSetLayout> {
+    let flags = if push_descriptors { vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR } else { vk::DescriptorSetLayoutCreateFlags::empty() };
+    let info = vk::DescriptorSetLayoutCreateInfo::default().flags(flags).bindings(bindings);
     // SAFETY: `info` and the bindings it points to are valid for the call; the layout is destroyed by the owner.
     Ok(unsafe { d.create_descriptor_set_layout(&info, None) }?)
 }
@@ -365,7 +368,7 @@ fn stage_info(stage: vk::ShaderStageFlags, module: vk::ShaderModule) -> vk::Pipe
 pub(crate) fn new_render(device: &Device, desc: &RenderPipelineDescriptor) -> Result<RenderPipeline> {
     validate_render(desc)?;
     let d = &device.inner.device;
-    let set_layout = make_set_layout(d, &render_bindings(desc.textures, desc.samplers))?;
+    let set_layout = make_set_layout(d, &render_bindings(desc.textures, desc.samplers), device.inner.info.push_descriptors)?;
     let push = push_ranges(desc.push_constant_bytes, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT);
     let layout = match make_pipeline_layout(d, set_layout, &push) {
         Ok(l) => l,
@@ -465,7 +468,7 @@ fn create_render_pipeline(
 pub(crate) fn new_compute(device: &Device, desc: &ComputePipelineDescriptor) -> Result<ComputePipeline> {
     validate_compute(desc)?;
     let d = &device.inner.device;
-    let set_layout = make_set_layout(d, &compute_bindings(desc.sampled_textures, desc.storage_textures, desc.samplers))?;
+    let set_layout = make_set_layout(d, &compute_bindings(desc.sampled_textures, desc.storage_textures, desc.samplers), device.inner.info.push_descriptors)?;
     let push = push_ranges(desc.push_constant_bytes, vk::ShaderStageFlags::COMPUTE);
     let layout = match make_pipeline_layout(d, set_layout, &push) {
         Ok(l) => l,

@@ -20,7 +20,9 @@ use bifrost_gpu::{Device, Error as GpuError, PixelFormat, Region, Result, Textur
 use bifrost_render::canvas::TextRun;
 use bifrost_render::font::{Font, Style, Var};
 
-use crate::shapes::{Instance, Kind};
+use crate::shapes::Instance;
+#[cfg(test)]
+use crate::shapes::Kind;
 
 /// The atlas is square, in texels.
 pub const ATLAS_SIZE: u32 = 2048;
@@ -238,27 +240,14 @@ pub fn placements(font: &Font<'_>, run: &TextRun) -> Vec<Placement> {
     out
 }
 
-/// Straight RGBA 0..1 from a premultiplied packed colour.
-fn straight(c: u32) -> [f32; 4] {
-    let a = (c >> 24) & 255;
-    if a == 0 {
-        return [0.0; 4];
-    }
-    let part = |v: u32| (v as f32 / a as f32).min(1.0);
-    [part(c & 255), part((c >> 8) & 255), part((c >> 16) & 255), a as f32 / 255.0]
-}
 
-/// The quad for one placed glyph whose atlas rect is `entry`.
+/// The quad for one placed glyph whose atlas rect is `entry`, in the run's coordinates. The uv rect is normalised to
+/// the atlas size, as the shape shader samples it.
 pub fn mask_instance(x: i32, y: i32, entry: &AtlasEntry, color: u32) -> Instance {
-    Instance {
-        rect: [x as f32, y as f32, entry.w as f32, entry.h as f32],
-        params: [0.0, 0.0, Kind::Mask as u32 as f32, 0.0],
-        color: straight(color),
-        color2: [entry.x as f32, entry.y as f32, entry.w as f32, entry.h as f32],
-        xform: [1.0, 0.0, 0.0, 1.0],
-        xform_t: [0.0; 4],
-        clip: [0.0; 4],
-    }
+    let a = ATLAS_SIZE as f32;
+    let uv = [entry.x as f32 / a, entry.y as f32 / a, (entry.x + entry.w) as f32 / a, (entry.y + entry.h) as f32 / a];
+    let dst = bifrost_render::canvas::RectF::new(x as f32, y as f32, entry.w as f32, entry.h as f32);
+    crate::shapes::mask(dst, 0.0, uv, color, bifrost_render::canvas::Transform2D::IDENTITY, None)
 }
 
 /// The glyph atlas: one `R8Unorm` texture, the packer, and the glyph entries. A glyph is rasterised and uploaded the
@@ -290,6 +279,11 @@ impl GlyphAtlas {
     /// The atlas entry of a glyph already in the atlas.
     pub fn entry(&self, key: &GlyphKey) -> Option<AtlasEntry> {
         self.entries.get(key).copied()
+    }
+
+    /// How full the atlas shelves are, 0..1 of its height.
+    pub fn fill_ratio(&self) -> f32 {
+        self.packer.used_height() as f32 / ATLAS_SIZE as f32
     }
 
     /// Glyphs currently in the atlas.
@@ -459,7 +453,7 @@ mod tests {
     fn split_pen_rounds_to_quarters_and_carries() {
         assert_eq!(split_pen(3.0), (3, 0));
         assert_eq!(split_pen(3.1), (3, 0), "0.4 of a pixel rounds to 0 quarters");
-        assert_eq!(split_pen(3.2), (3, 3), "0.8 of a pixel is 3 quarters");
+        assert_eq!(split_pen(3.2), (3, 1), "0.2 px is 0.8 quarters, which rounds to 1");
         assert_eq!(split_pen(3.9), (4, 0), "3.6 quarters rounds up and carries");
         assert_eq!(split_pen(-0.5), (-1, 2));
         assert_eq!(split_pen(0.0), (0, 0));
@@ -524,7 +518,8 @@ mod tests {
         assert_eq!(i.rect, [5.0, 7.0, 9.0, 14.0]);
         assert_eq!(i.params[2], Kind::Mask as u32 as f32);
         assert_eq!(i.color, [1.0, 0.0, 0.0, 1.0]);
-        assert_eq!(i.color2, [100.0, 40.0, 9.0, 14.0]);
+        // normalised to the 2048 px atlas: (100, 40) to (109, 54)
+        assert_eq!(i.color2, [100.0 / 2048.0, 40.0 / 2048.0, 109.0 / 2048.0, 54.0 / 2048.0]);
         assert_eq!(i.xform, [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(i.clip, [0.0; 4]);
     }

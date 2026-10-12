@@ -7,3 +7,7 @@ description = "GPU executor for bifrost-render display lists (docs/graphics-arch
 [dependencies]
 bifrost-gpu = { path = "../gpu" }
 bifrost-render = { path = "../render" }
+
+[features]
+# tests that draw on a real Vulkan device
+gpu-tests = ["bifrost-gpu/gpu-tests"]

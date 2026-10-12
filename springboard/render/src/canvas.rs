@@ -373,6 +373,12 @@ pub fn face_data(face: u64) -> Option<&'static [u8]> {
     faces.iter().find(|(k, _)| *k == face).map(|(_, d)| *d)
 }
 
+/// Runs `f` on the parsed font of a registered face (the GPU text path lays out runs with the same font the CPU path
+/// draws with). `None` when the face is unknown or its data does not parse.
+pub fn with_face<R>(face: u64, f: impl FnOnce(&Font<'static>) -> R) -> Option<R> {
+    with_font(face, f)
+}
+
 /// Runs `f` on the parsed font of a registered face. `None` when the face is unknown or its data does not parse.
 pub(crate) fn with_font<R>(face: u64, f: impl FnOnce(&Font<'static>) -> R) -> Option<R> {
     let data = face_data(face)?;

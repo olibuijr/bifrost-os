@@ -162,6 +162,11 @@ impl ImageCache {
         self.forget(id)
     }
 
+    /// The resident texture of `id`, if any (does not count as a use).
+    pub fn texture(&self, id: u64) -> Option<Texture> {
+        self.textures.get(&id).cloned()
+    }
+
     pub fn contains(&self, id: u64) -> bool {
         self.book.contains(id)
     }
