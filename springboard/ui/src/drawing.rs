@@ -88,6 +88,117 @@ impl Stroke {
     }
 }
 
+/// Blends two points. Positions, times, sizes, opacity and stylus readings are interpolated linearly; an angle
+/// (azimuth) is blended as a plain number, which is exact for angles that do not wrap past pi.
+fn lerp_point(a: StrokePoint, b: StrokePoint, t: f32) -> StrokePoint {
+    let l = |x: f32, y: f32| x + (y - x) * t;
+    StrokePoint {
+        x: l(a.x, b.x),
+        y: l(a.y, b.y),
+        time_offset: l(a.time_offset, b.time_offset),
+        size: (l(a.size.0, b.size.0), l(a.size.1, b.size.1)),
+        opacity: l(a.opacity, b.opacity),
+        force: l(a.force, b.force),
+        azimuth: l(a.azimuth, b.azimuth),
+        altitude: l(a.altitude, b.altitude),
+    }
+}
+
+/// Blends two packed 0xAARRGGBB colours channel by channel, rounding to the nearest value.
+fn lerp_color(a: u32, b: u32, t: f32) -> u32 {
+    (0..4).fold(0u32, |out, i| {
+        let shift = i * 8;
+        let (ca, cb) = (((a >> shift) & 0xff) as f32, ((b >> shift) & 0xff) as f32);
+        let v = (ca + (cb - ca) * t).round().clamp(0.0, 255.0) as u32;
+        out | (v << shift)
+    })
+}
+
+impl Stroke {
+    /// The length of the stroke's polyline through its points.
+    pub fn length(&self) -> f32 {
+        self.points.windows(2).map(|w| seg_len(w[0], w[1])).sum()
+    }
+
+    /// The part of the stroke between `from` and `to`, given as fractions of its length (clamped to 0..=1). The
+    /// ends are interpolated and every point between them is kept. An empty range gives a stroke with no points.
+    pub fn slice(&self, from: f32, to: f32) -> Stroke {
+        let total = self.length();
+        let mut out = Stroke { ink: self.ink, points: Vec::new() };
+        let (a, b) = (from.clamp(0.0, 1.0) * total, to.clamp(0.0, 1.0) * total);
+        if total <= 0.0 || b <= a {
+            return out;
+        }
+        let mut at = 0.0f32;
+        for w in self.points.windows(2) {
+            let (p, q) = (w[0], w[1]);
+            let len = seg_len(p, q);
+            let (s0, s1) = (at, at + len);
+            at = s1;
+            if len <= 0.0 || s1 < a || s0 > b {
+                continue;
+            }
+            let (lo, hi) = (s0.max(a), s1.min(b));
+            if out.points.is_empty() {
+                out.points.push(lerp_point(p, q, (lo - s0) / len));
+            }
+            out.points.push(lerp_point(p, q, (hi - s0) / len));
+        }
+        out
+    }
+
+    /// `n` points spaced evenly by length along the stroke, the first at its start and the last at its end. A stroke
+    /// of zero length repeats its first point. A stroke with no points gives no points.
+    pub fn resampled(&self, n: usize) -> Stroke {
+        let mut out = Stroke { ink: self.ink, points: Vec::new() };
+        if n == 0 || self.points.is_empty() {
+            return out;
+        }
+        let total = self.length();
+        for i in 0..n {
+            let d = if n == 1 { 0.0 } else { total * i as f32 / (n - 1) as f32 };
+            out.points.push(self.point_at(d));
+        }
+        out
+    }
+
+    /// The point `d` units along the stroke. Distances past either end clamp to the end points.
+    fn point_at(&self, d: f32) -> StrokePoint {
+        let mut at = 0.0f32;
+        for w in self.points.windows(2) {
+            let len = seg_len(w[0], w[1]);
+            if len > 0.0 && d <= at + len {
+                return lerp_point(w[0], w[1], ((d - at) / len).clamp(0.0, 1.0));
+            }
+            at += len;
+        }
+        self.points.last().copied().unwrap_or(StrokePoint::at(0.0, 0.0))
+    }
+
+    /// The stroke at `t` between two strokes: each is resampled to the longer point count and the points are blended
+    /// pairwise. The ink colour and width blend too, and the kind switches at the halfway point. `t` is clamped to 0..=1.
+    pub fn blend(a: &Stroke, b: &Stroke, t: f32) -> Stroke {
+        let t = t.clamp(0.0, 1.0);
+        let n = a.points.len().max(b.points.len());
+        if n == 0 {
+            return Stroke { ink: Ink { kind: if t < 0.5 { a.ink.kind } else { b.ink.kind }, ..a.ink }, points: Vec::new() };
+        }
+        let (ra, rb) = (a.resampled(n), b.resampled(n));
+        let points = ra.points.iter().zip(&rb.points).map(|(&p, &q)| lerp_point(p, q, t)).collect();
+        let ink = Ink {
+            kind: if t < 0.5 { a.ink.kind } else { b.ink.kind },
+            color: lerp_color(a.ink.color, b.ink.color, t),
+            width: a.ink.width + (b.ink.width - a.ink.width) * t,
+        };
+        Stroke { ink, points }
+    }
+}
+
+/// The distance between two points.
+fn seg_len(p: StrokePoint, q: StrokePoint) -> f32 {
+    ((q.x - p.x).powi(2) + (q.y - p.y).powi(2)).sqrt()
+}
+
 /// A drawing (`NativeDrawing`): the strokes in the order they were drawn. The last stroke is on top.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Drawing {
@@ -101,6 +212,17 @@ impl Drawing {
 
     /// A drawing holding `strokes` in the given order.
     pub fn from_strokes(strokes: Vec<Stroke>) -> Self {
+        Drawing { strokes }
+    }
+
+    /// A drawing with one stroke per subpath of `path`, all in `ink`. Curves are flattened to points within
+    /// `tolerance` (the path import of the reference SDK). Subpaths that draw nothing add no stroke.
+    pub fn from_path(path: &crate::path::Path, tolerance: f32, ink: Ink) -> Drawing {
+        let strokes = path
+            .polylines(tolerance)
+            .into_iter()
+            .map(|line| Stroke { ink, points: line.into_iter().map(|(x, y)| StrokePoint::at(x, y)).collect() })
+            .collect();
         Drawing { strokes }
     }
 
@@ -328,5 +450,70 @@ mod tests {
         let a = Rect { x: 0.0, y: 0.0, w: 4.0, h: 4.0 };
         let b = Rect { x: 2.0, y: -2.0, w: 10.0, h: 3.0 };
         assert_eq!(union(a, b), Rect { x: 0.0, y: -2.0, w: 12.0, h: 6.0 });
+    }
+
+    fn xy(s: &Stroke) -> Vec<(f32, f32)> {
+        s.points.iter().map(|p| (p.x, p.y)).collect()
+    }
+
+    /// Right-angle L: 10 units along x, then 10 units along y. Total length 20.
+    fn corner() -> Stroke {
+        stroke(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)])
+    }
+
+    #[test]
+    fn slice_interpolates_the_ends_and_keeps_the_points_between() {
+        let s = corner();
+        assert_eq!(s.length(), 20.0);
+        // Fractions 0.25 to 0.75 are lengths 5 to 15: from (5,0) through the corner to (10,5).
+        assert_eq!(xy(&s.slice(0.25, 0.75)), vec![(5.0, 0.0), (10.0, 0.0), (10.0, 5.0)]);
+        assert_eq!(xy(&s.slice(0.0, 1.0)), xy(&s), "the whole stroke is unchanged");
+        assert!(s.slice(0.5, 0.5).points.is_empty(), "an empty range keeps no points");
+    }
+
+    #[test]
+    fn resample_spaces_points_evenly_by_length() {
+        let r = corner().resampled(5);
+        assert_eq!(xy(&r), vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0)]);
+        assert_eq!(corner().resampled(0).points.len(), 0);
+        let still = stroke(&[(3.0, 3.0), (3.0, 3.0)]).resampled(3);
+        assert_eq!(xy(&still), vec![(3.0, 3.0); 3], "zero length repeats the start");
+    }
+
+    #[test]
+    fn blend_moves_points_and_colours_halfway() {
+        let mut a = stroke(&[(0.0, 0.0), (10.0, 0.0)]);
+        a.ink = Ink { kind: InkKind::Pen, color: 0x0000_0000, width: 2.0 };
+        let mut b = stroke(&[(0.0, 10.0), (10.0, 10.0)]);
+        b.ink = Ink { kind: InkKind::Marker, color: 0xffff_ffff, width: 4.0 };
+        let mid = Stroke::blend(&a, &b, 0.5);
+        assert_eq!(xy(&mid), vec![(0.0, 5.0), (10.0, 5.0)]);
+        assert_eq!(mid.ink.color, 0x8080_8080, "127.5 rounds to 128 in each channel");
+        assert_eq!(mid.ink.width, 3.0);
+        assert_eq!(mid.ink.kind, InkKind::Marker, "the kind switches at the halfway point");
+        assert_eq!(xy(&Stroke::blend(&a, &b, 0.0)), xy(&a), "t of 0 gives the first stroke");
+    }
+
+    #[test]
+    fn blend_pads_the_shorter_stroke_by_resampling() {
+        // A 2-point line is resampled to 3 points, so its middle point lands at length 10.
+        let line = stroke(&[(0.0, 0.0), (20.0, 0.0)]);
+        let out = Stroke::blend(&line, &corner(), 0.0);
+        assert_eq!(xy(&out), vec![(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]);
+    }
+
+    #[test]
+    fn from_path_makes_one_stroke_per_subpath() {
+        let mut p = crate::path::Path::new();
+        p.move_to((0.0, 0.0));
+        p.cubic_to((10.0, 0.0), (20.0, 0.0), (30.0, 0.0));
+        p.move_to((5.0, 5.0));
+        let d = Drawing::from_path(&p, 1.0, ink());
+        assert_eq!(d.strokes().len(), 1, "a lone move draws nothing");
+        let pts = &d.strokes()[0].points;
+        assert!(pts.len() > 2, "the curve is split into several points");
+        assert_eq!(pts.last().map(|q| (q.x, q.y)), Some((30.0, 0.0)));
+        assert!(pts.iter().all(|q| q.y.abs() < 1e-4));
+        assert_eq!(d.strokes()[0].ink, ink());
     }
 }

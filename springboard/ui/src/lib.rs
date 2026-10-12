@@ -748,6 +748,7 @@ pub mod hfp;
 pub mod markup;
 pub mod drawing;
 pub mod markup_drawing;
+pub mod stylus;
 pub mod lasso;
 pub mod transcript;
 pub mod context_window;
