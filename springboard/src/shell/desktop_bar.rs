@@ -294,6 +294,8 @@ impl Shell {
     }
     pub(super) fn desktop_bar_event(&mut self,event:Event,t:f64)->Option<Vec<Effect>> {
         if !self.desk_active()||self.is_locked(){return None;}
+        // the preview panel takes the pointer inside its card while it is up
+        match event {Event::Down(x,y)=>{if self.quick_look_pointer(x,y,false){return Some(vec![]);}},Event::Up(x,y)=>{if self.quick_look_pointer(x,y,true){return Some(vec![]);}},_=>{}}
         // an open or save panel is modal over the desktop: it takes the pointer, a press elsewhere does nothing
         if self.desktop_menu==Some(Menu::Document) {
             if let (Event::Up(x,y),Some((left,top,_,_)))=(event,self.desktop_popup_rect()) {self.doc_click(x-left as f32,y-top as f32,t);}
