@@ -27,6 +27,9 @@ use springboard::shell::textfield::TextField;
 use springboard::shell::weather::data::{self, Forecast, Location, Quote, Sky, Store, Summary, Units};
 use springboard::shell::weather::glyph;
 use bifrost_app::controls::geo::{format_distance, Coordinate, DistanceUnits};
+use bifrost_app::controls::chart_marks::Frame;
+use bifrost_app::controls::location_auth::AuthorizationStatus;
+use crate::insights;
 use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, HashSet};
@@ -86,7 +89,21 @@ const DETAILS_TOP: f32 = DAILY_TOP + DAILY_H + 16.0;
 const TILE_H: f32 = 104.0;
 const TILE_GAP: f32 = 12.0;
 const DETAILS_H: f32 = 3.0 * TILE_H + 2.0 * TILE_GAP;
-const CONTENT_H: f32 = DETAILS_TOP + DETAILS_H + 32.0;
+/// The temperature chart card, below the detail tiles: its plot area and the axis labels' room, in points.
+const CHART_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
+const CHART_H: f32 = 176.0;
+const CHART_AXIS: f32 = 40.0;
+const CHART_PLOT_TOP: f32 = 36.0;
+const CHART_PLOT_H: f32 = 116.0;
+/// The map card, below the chart: the map area and the note under it, in points.
+const MAP_TOP: f32 = CHART_TOP + CHART_H + 16.0;
+const MAP_H: f32 = 200.0;
+const MAP_AREA_TOP: f32 = 36.0;
+const MAP_AREA_H: f32 = 124.0;
+const MAP_NOTE_TOP: f32 = 176.0;
+const CONTENT_H: f32 = MAP_TOP + MAP_H + 32.0;
+/// Location access for Weather. The shell gives apps no location service yet, so the status stays "not asked".
+const LOCATION: AuthorizationStatus = AuthorizationStatus::NotDetermined;
 /// Grouped cards and fields: the system card radius (`prefs_layout`).
 const RADIUS: f32 = m::CARD_RADIUS;
 /// a shown forecast is fetched again after this long (ms), a missing one after `RETRY_MS`
@@ -761,6 +778,9 @@ impl Weather {
             rows.push((Row::Result(i), top, ROW));
             top += ROW;
         }
+        // the location footer: plain words about what Weather may read (footnote size, secondary grey)
+        top += 12.0;
+        rows.push((Row::Head(insights::location_note(LOCATION, None)), top, HEAD));
         rows
     }
 
@@ -1207,6 +1227,77 @@ impl Weather {
             let note = ui.fit(note, MAC_FOOTNOTE_PT, tile_w - ui.pt(28.0));
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(86.0));
         }
+        // temperature chart: the hours as a line over labelled rules (points are in the card's own frame)
+        let card_pt = self.w as f32 / ui.pt(1.0) - 2.0 * MARGIN;
+        c.fill_rrect(card_x, p(CHART_TOP), card_w, ui.pt(CHART_H), ui.pt(RADIUS), card);
+        self.put(&mut c, ui, "TEMPERATURE", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(CHART_TOP + 16.0));
+        if let Some(scale) = insights::temperature_scale(&f.hours) {
+            let frame = Frame::new(CHART_AXIS as f64, CHART_PLOT_TOP as f64, (card_pt - CHART_AXIS - SPACE_L) as f64, CHART_PLOT_H as f64);
+            let plot = insights::temperature_plot(&scale, f.hours.len(), frame);
+            for &tick in &scale.ticks {
+                let y = plot.y.map(tick) as f32;
+                c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(WHITE, 40));
+                self.put(&mut c, ui, &units.degrees(tick), MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(CHART_AXIS - SPACE_S), p(CHART_TOP + y));
+            }
+            let d = ui.pt(2.0);
+            for pair in insights::temperature_line(&plot, &f.hours).windows(2) {
+                let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
+                let steps = ((bx - ax).abs().max((by - ay).abs()) / 0.5).ceil().max(1.0) as usize;
+                for k in 0..=steps {
+                    let t = k as f64 / steps as f64;
+                    let (x, y) = ((ax + (bx - ax) * t) as f32, (ay + (by - ay) * t) as f32);
+                    c.fill_rrect(card_x + ui.pt(x) - d / 2.0, p(CHART_TOP + y) - d / 2.0, d, d, d / 2.0, WHITE);
+                }
+            }
+            for (x, y) in insights::temperature_points(&f.hours) {
+                let (px, py) = plot.position(x, y);
+                let dot = ui.pt(5.0);
+                c.fill_rrect(card_x + ui.pt(px as f32) - dot / 2.0, p(CHART_TOP + py as f32) - dot / 2.0, dot, dot, dot / 2.0, WHITE);
+            }
+            let n = f.hours.len();
+            if n > 1 {
+                let (x0, _) = plot.position(0.0, scale.lo);
+                let (x1, _) = plot.position((n - 1) as f64, scale.lo);
+                let label_y = p(CHART_TOP + CHART_PLOT_TOP + CHART_PLOT_H + 14.0);
+                self.put(&mut c, ui, "Now", MAC_CAPTION1_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(x0 as f32), label_y);
+                self.put(&mut c, ui, &f.hours[n - 1].label, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(x1 as f32), label_y);
+            }
+        }
+        // map: a coordinate grid around the place with a centre mark and a scale bar; no map tiles are loaded
+        c.fill_rrect(card_x, p(MAP_TOP), card_w, ui.pt(MAP_H), ui.pt(RADIUS), card);
+        self.put(&mut c, ui, "MAP", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(MAP_TOP + 16.0));
+        let (plat, plon) = (self.place().lat, self.place().lon);
+        let area_w = card_pt - 2.0 * SPACE_L;
+        if let Some(view) = insights::map_view(plat, plon, area_w as f64, MAP_AREA_H as f64) {
+            let (ax, ay) = (card_x + ui.pt(SPACE_L), p(MAP_TOP + MAP_AREA_TOP));
+            let (aw, ah) = (ui.pt(area_w), ui.pt(MAP_AREA_H));
+            c.fill_rrect(ax, ay, aw, ah, ui.pt(SPACE_S), fade(WHITE, 24));
+            let grid = insights::grid(&view);
+            let line = fade(WHITE, 90);
+            for &(y, lat) in &grid.rows {
+                let yy = ay + ui.pt(y as f32);
+                c.fill_rrect(ax, yy, aw, 1.0, 0.0, line);
+                let text = insights::coordinate_label(lat, 'N', 'S');
+                self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Left, ax + ui.pt(SPACE_S), yy + ui.pt(SPACE_S));
+            }
+            for &(x, lon) in &grid.cols {
+                let xx = ax + ui.pt(x as f32);
+                c.fill_rrect(xx, ay, 1.0, ah, 0.0, line);
+                let text = insights::coordinate_label(lon, 'E', 'W');
+                self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Left, xx + ui.pt(SPACE_XS), ay + ah - ui.pt(SPACE_L));
+            }
+            let mark = ui.pt(10.0);
+            c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, WHITE);
+            if let Some(bar) = view.camera().scale_bar(insights::SCALE_MAX_PT) {
+                let bw = ui.pt(bar.width_px as f32);
+                let (bx, by) = (ax + aw - ui.pt(SPACE_S) - bw, ay + ah - ui.pt(SPACE_M));
+                c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, WHITE);
+                let text = insights::scale_text(bar.length_m, self.units);
+                self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Right, bx - ui.pt(SPACE_XS), by + ui.pt(1.5));
+            }
+            let note = ui.fit(&insights::map_note(view.map_type), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+            self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(MAP_TOP + MAP_NOTE_TOP));
+        }
     }
 
     fn draw_places(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
@@ -1474,6 +1565,18 @@ mod tests {
         assert_eq!(app.full_w, 900);
         assert_eq!(app.h, 700);
         assert!(app.dirty);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn places_end_with_the_location_note() {
+        let dir = temp("location-note");
+        let ui = test_ui();
+        let app = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
+        match app.place_rows().last() {
+            Some((Row::Head(text), _, _)) => assert!(text.starts_with("Location: not asked"), "{text}"),
+            _ => panic!("the list should end with the location note"),
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
