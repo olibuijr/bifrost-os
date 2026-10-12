@@ -143,6 +143,10 @@ pub(super) fn keep_whole_words(blocks: &[engine::Block], query: &str, hits: Vec<
 pub enum Panel {
     Contents,
     Bookmarks,
+    /// one row per page, with the page's first line as its text thumbnail
+    Pages,
+    /// the notes written on highlights, with the note field above the list
+    Notes,
     Search,
     Display,
 }
@@ -169,6 +173,7 @@ pub enum Target {
     Row(usize),
     RowRemove(usize),
     SearchField,
+    NoteField,
     SizeDown,
     SizeUp,
     ThemeButton(usize),
@@ -206,6 +211,10 @@ pub(super) struct Reader {
     pub images: HashMap<(usize, u32), Image>,
     /// the chapter being read aloud (Find menu), if any
     pub narration: Option<narrate::Narration>,
+    /// the note field of the Notes panel
+    pub note: TextField,
+    /// the highlight whose note the note field edits
+    pub note_target: Option<Span>,
 }
 
 struct Loading {
@@ -435,8 +444,11 @@ impl Books {
             highlight: None,
             images: HashMap::new(),
             narration: None,
+            note: TextField::new(ui, "Add a note", MAC_BODY_PT, false, 500),
+            note_target: None,
         };
         r.search.focused = false;
+        r.note.focused = false;
         self.reader = Some(r);
         self.screen = Screen::Reader;
         self.repaginate(ui, entry.map(|e| e.pos).unwrap_or_default());
@@ -636,6 +648,45 @@ impl Books {
     }
 
     /// Find menu: highlights the found text, or removes its highlight. True when it is now highlighted.
+    /// Find menu: writes a note on the match the last find went to. The match is highlighted first if it is not;
+    /// the Notes panel opens with the note field focused, showing the note the highlight already has.
+    pub fn add_note(&mut self, ui: &Ui) {
+        let Some((span, saved)) = self.match_span() else { return };
+        let Some(path) = self.reader.as_ref().map(|r| r.path.clone()) else { return };
+        if !saved {
+            self.store.toggle_highlight(&path, span);
+        }
+        let existing = self.store.note_of(&path, span).unwrap_or_default();
+        if let Some(r) = &mut self.reader {
+            r.panel = Some(Panel::Notes);
+            r.search.focused = false;
+            r.note_target = Some(span);
+            r.note.set_text(ui, &existing);
+            r.note.focused = true;
+        }
+        self.panel_scroll.jump_top();
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// Ends the note field's edit and writes its text as the note of the highlight it edits.
+    fn save_note(&mut self) {
+        let Some(r) = &mut self.reader else { return };
+        r.note.focused = false;
+        let Some(span) = r.note_target else { return };
+        let text = r.note.text().to_string();
+        let path = r.path.clone();
+        self.store.set_note(&path, span, &text);
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// The notes of the open book, in reading order.
+    pub(super) fn notes_list(&self) -> Vec<(Span, String)> {
+        let Some(r) = &self.reader else { return vec![] };
+        self.store.entry(&r.path).map_or_else(Vec::new, |e| e.notes.clone())
+    }
+
     pub fn toggle_match_highlight(&mut self) -> bool {
         let Some((span, _)) = self.match_span() else { return false };
         let Some(path) = self.reader.as_ref().map(|r| r.path.clone()) else { return false };
@@ -844,7 +895,7 @@ impl Books {
                 let marked = !self.page_marks(r.page).is_empty();
                 let panel = r.panel;
                 Toolbar::new(vec![
-                    ToolbarItem::icon(BAR_CONTENTS, "Contents", "list.bullet").in_group(1).selected(matches!(panel, Some(Panel::Contents | Panel::Bookmarks))),
+                    ToolbarItem::icon(BAR_CONTENTS, "Contents", "list.bullet").in_group(1).selected(matches!(panel, Some(Panel::Contents | Panel::Bookmarks | Panel::Pages | Panel::Notes))),
                     ToolbarItem::icon(BAR_MARK, if marked { "Remove Bookmark" } else { "Bookmark" }, "tag").in_group(1).selected(marked),
                     ToolbarItem::flexible_space(),
                     title,
@@ -993,6 +1044,8 @@ impl Books {
             Some(Panel::Contents) => r.book.toc.len(),
             Some(Panel::Bookmarks) => self.store.entry(&r.path).map_or(0, |e| e.bookmarks.len()),
             Some(Panel::Search) => r.hits.len(),
+            Some(Panel::Pages) => r.layout.pages.len(),
+            Some(Panel::Notes) => self.store.entry(&r.path).map_or(0, |e| e.notes.len()),
             _ => 0,
         }
     }
@@ -1001,7 +1054,11 @@ impl Books {
     pub(super) fn list_top(&self, ui: &Ui) -> f32 {
         let (_, py, _, _) = self.panel_rect(ui);
         match self.reader.as_ref().and_then(|r| r.panel) {
-            Some(Panel::Contents | Panel::Bookmarks) | Some(Panel::Search) => py + ui.pt(TAB_PT + 8.0),
+            Some(Panel::Contents | Panel::Bookmarks | Panel::Pages) | Some(Panel::Search) => py + ui.pt(TAB_PT + 8.0),
+            Some(Panel::Notes) => {
+                let (_, fy, _, fh) = self.note_field_rect(ui);
+                fy + fh + ui.pt(SPACE_S)
+            }
             _ => py,
         }
     }
@@ -1022,9 +1079,16 @@ impl Books {
     pub(super) fn tab_rects(&self, ui: &Ui) -> Vec<(Panel, (f32, f32, f32, f32))> {
         let (px, py, pw, _) = self.panel_rect(ui);
         let m = ui.pt(MARGIN_PT);
-        let tabs = [Panel::Contents, Panel::Bookmarks];
+        let tabs = [Panel::Contents, Panel::Bookmarks, Panel::Pages, Panel::Notes];
         let w = (pw - 2.0 * m) / tabs.len() as f32;
         tabs.iter().enumerate().map(|(i, &p)| (p, (px + m + w * i as f32, py + ui.pt(SPACE_S), w, ui.pt(TAB_PT - 6.0)))).collect()
+    }
+
+    /// The note field of the Notes panel: below the tabs.
+    pub(super) fn note_field_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (_, py, pw, _) = self.panel_rect(ui);
+        let m = ui.pt(MARGIN_PT);
+        (m, py + ui.pt(SPACE_S) + ui.pt(TAB_PT), pw - 2.0 * m, ui.pt(TAB_PT - 6.0))
     }
 
     pub(super) fn search_field_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
@@ -1100,13 +1164,18 @@ impl Books {
     fn panel_hit(&self, ui: &Ui, panel: Panel, x: f32, y: f32) -> Target {
         match panel {
             Panel::Display => self.display_buttons(ui).into_iter().find(|&(_, rect)| within(x, y, rect)).map_or(Target::PanelBody, |(t, _)| t),
-            Panel::Contents | Panel::Bookmarks | Panel::Search => {
+            Panel::Contents | Panel::Bookmarks | Panel::Pages | Panel::Notes | Panel::Search => {
                 if panel == Panel::Search {
                     if within(x, y, self.search_field_rect(ui)) {
                         return Target::SearchField;
                     }
-                } else if let Some((p, _)) = self.tab_rects(ui).into_iter().find(|&(_, rect)| within(x, y, rect)) {
-                    return Target::Tab(p);
+                } else {
+                    if panel == Panel::Notes && within(x, y, self.note_field_rect(ui)) {
+                        return Target::NoteField;
+                    }
+                    if let Some((p, _)) = self.tab_rects(ui).into_iter().find(|&(_, rect)| within(x, y, rect)) {
+                        return Target::Tab(p);
+                    }
                 }
                 if y < self.list_top(ui) {
                     return Target::PanelBody;
@@ -1143,6 +1212,19 @@ impl Books {
             return;
         }
         let Some(r) = &mut self.reader else { return };
+        if r.panel == Some(Panel::Notes) {
+            if !r.note.focused {
+                return;
+            }
+            match out {
+                Out::Hide => r.note.focused = false,
+                Out::Enter => self.save_note(),
+                other => {
+                    r.note.edit(ui, &other, t);
+                }
+            }
+            return;
+        }
         if r.panel != Some(Panel::Search) {
             return;
         }
@@ -1169,6 +1251,7 @@ impl Books {
         } else {
             r.search.focused = false;
         }
+        r.note.focused = false;
         // start the contents list at the current chapter
         if panel == Panel::Contents && r.panel.is_some() {
             let block = r.layout.pos_of(r.page).block;
@@ -1215,6 +1298,7 @@ impl Books {
                 if r.panel.is_some() {
                     r.panel = None;
                     r.search.focused = false;
+                    r.note.focused = false;
                     return;
                 }
                 let w = self.w as f32;
@@ -1229,6 +1313,7 @@ impl Books {
             Target::Tab(p) => {
                 if let Some(r) = &mut self.reader {
                     r.panel = Some(p);
+                    r.note.focused = false;
                 }
                 self.panel_scroll.jump_top();
             }
@@ -1251,6 +1336,17 @@ impl Books {
                         }
                     }
                     Some(Panel::Search) => self.open_hit(i, t),
+                    Some(Panel::Pages) => {
+                        self.close_panel();
+                        self.goto_page(i, t);
+                    }
+                    Some(Panel::Notes) => {
+                        let span = self.notes_list().get(i).map(|(span, _)| *span);
+                        if let Some(span) = span {
+                            self.close_panel();
+                            self.goto_pos(Pos { block: span.block, offset: span.offset }, t);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -1267,6 +1363,16 @@ impl Books {
                 if let Some(r) = &mut self.reader {
                     r.search.focused = true;
                     r.search.tap(ui, x - fx - ui.pt(SPACE_M), t);
+                }
+            }
+            Target::NoteField => {
+                let (fx, ..) = self.note_field_rect(ui);
+                if let Some(r) = &mut self.reader {
+                    // the field edits only a note that Add Note opened (see `add_note`)
+                    if r.note_target.is_some() {
+                        r.note.focused = true;
+                        r.note.tap(ui, x - fx - ui.pt(SPACE_M), t);
+                    }
                 }
             }
             Target::SizeDown | Target::SizeUp => {
@@ -1292,6 +1398,7 @@ impl Books {
         if let Some(r) = &mut self.reader {
             r.panel = None;
             r.search.focused = false;
+            r.note.focused = false;
         }
     }
 

@@ -18,6 +18,7 @@ const MENU_LOOK_UP: u32 = 7;
 const MENU_TRANSLATE: u32 = 8;
 const MENU_READ_ALOUD: u32 = 9;
 const MENU_STOP_READING: u32 = 10;
+const MENU_ADD_NOTE: u32 = 11;
 
 /// How the shelf reaches the search index: a book is sent when it is new or changed (see `books::search_index`).
 struct BooksApp {
@@ -69,6 +70,8 @@ impl App for BooksApp {
                     AppMenuItem::new(MENU_HIGHLIGHT, "Highlight Match").key("cmd+shift+y").enabled(highlight.is_some()).checked(highlight.is_some_and(|(_, saved)| saved)),
                     // the shell owns Edit; copying the match as a quote sits with the match's other actions
                     AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some()),
+                    // a note sits on the match's highlight; the Notes panel opens with the note field ready
+                    AppMenuItem::new(MENU_ADD_NOTE, "Add Note").enabled(highlight.is_some()),
                     AppMenuItem::separator(),
                     // Look Up and Translate act on the text the last find went to, like Copy Quote
                     AppMenuItem::new(MENU_LOOK_UP, "Look Up").enabled(highlight.is_some()),
@@ -91,7 +94,7 @@ impl App for BooksApp {
             }
             return false;
         }
-        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS | MENU_LOOK_UP | MENU_TRANSLATE | MENU_READ_ALOUD | MENU_STOP_READING) {
+        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS | MENU_LOOK_UP | MENU_TRANSLATE | MENU_READ_ALOUD | MENU_STOP_READING | MENU_ADD_NOTE) {
             let Some(books) = &mut self.books else { return false };
             let t = bifrost_app::proto::sys::now_ms();
             match id {
@@ -104,6 +107,7 @@ impl App for BooksApp {
                 MENU_TRANSLATE => books.translate(),
                 MENU_READ_ALOUD => books.read_aloud(t),
                 MENU_STOP_READING => books.stop_reading(),
+                MENU_ADD_NOTE => books.add_note(&ctx.ui),
                 _ => {
                     let on = !books.whole_words();
                     books.set_whole_words(on);

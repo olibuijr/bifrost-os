@@ -294,3 +294,49 @@ fn host_library_folders_open_documents_and_flush_private_state() {
     assert!(reopened.shelf.iter().any(|entry| entry.path == book));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn add_note_opens_the_notes_panel_and_saves_what_is_typed() {
+    let ui = ui();
+    let dir = scratch("add-note");
+    let mut b = reader(&dir, &ui);
+    // a find went to the word "Chapter" at the start of the second chapter's heading (block 121)
+    let span = Span { block: 121, offset: 0, len: 7 };
+    b.reader.as_mut().unwrap().highlight = Some((span.block, span.offset, span.len));
+    b.add_note(&ui);
+    {
+        let r = b.reader.as_ref().unwrap();
+        assert_eq!(r.panel, Some(Panel::Notes));
+        assert!(r.note.focused, "the note field takes the typing");
+        assert_eq!(r.note_target, Some(span));
+    }
+    assert!(b.match_span().unwrap().1, "Add Note highlights the match");
+    for c in "Hello".chars() {
+        b.key(&ui, Out::Text(c.to_string()), 2000.0);
+    }
+    b.key(&ui, Out::Enter, 2100.0);
+    assert_eq!(b.store.note_of(Path::new("/virtual/long.epub"), span).as_deref(), Some("Hello"));
+    assert!(!b.reader.as_ref().unwrap().note.focused, "Return ends the edit");
+    assert_eq!(b.panel_rows(), 1);
+    // tapping the note's row goes to its page and closes the panel
+    let want = b.reader.as_ref().unwrap().layout.page_of(Pos { block: span.block, offset: span.offset });
+    b.activate(&ui, Target::Row(0), 0.0, 3000.0);
+    assert_eq!(b.page().unwrap().0, want);
+    assert!(b.reader.as_ref().unwrap().panel.is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn pages_row_jumps_to_its_page() {
+    let ui = ui();
+    let dir = scratch("pages");
+    let mut b = reader(&dir, &ui);
+    let pages = b.reader.as_ref().unwrap().layout.pages.len();
+    assert!(pages > 3, "the long book paginates into several pages");
+    b.reader.as_mut().unwrap().panel = Some(Panel::Pages);
+    assert_eq!(b.panel_rows(), pages, "one row per page");
+    b.activate(&ui, Target::Row(2), 0.0, 1000.0);
+    assert_eq!(b.page().unwrap().0, 2);
+    assert!(b.reader.as_ref().unwrap().panel.is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}
