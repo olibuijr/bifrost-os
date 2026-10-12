@@ -219,6 +219,151 @@ impl DiskImage {
     }
 }
 
+/// Byte offset of the ISO 9660 primary volume descriptor: the system area is 16 sectors of 2048 bytes.
+const ISO_PVD_OFFSET: usize = 16 * 2048;
+/// Bytes of the primary volume descriptor that are read: up to the logical block size field at offset 128.
+const ISO_PVD_READ: usize = 132;
+
+/// The contents recognised from an image's first bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageContents {
+    /// No volume descriptor found: the bytes are taken as they are.
+    Raw,
+    /// An ISO 9660 volume (the optical disc layout).
+    Iso9660,
+}
+
+/// Properties read from an image file by `inspect`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageProperties {
+    /// Length of the image file in bytes.
+    pub length: u64,
+    /// The recognised contents.
+    pub contents: ImageContents,
+    /// Volume identifier from the descriptor, trailing spaces removed. `None` for raw images or an empty name.
+    pub volume_name: Option<String>,
+    /// Block count the descriptor declares.
+    pub declared_blocks: Option<u32>,
+    /// Logical block size the descriptor declares, in bytes.
+    pub declared_block_size: Option<u16>,
+}
+
+impl ImageProperties {
+    /// The size the descriptor declares (blocks times block size), when it declares both.
+    pub fn declared_size(&self) -> Option<u64> {
+        Some(u64::from(self.declared_blocks?) * u64::from(self.declared_block_size?))
+    }
+
+    /// False when the file is shorter than the descriptor says the volume is. True when there is no declared size.
+    pub fn is_complete(&self) -> bool {
+        match self.declared_size() {
+            Some(size) => self.length >= size,
+            None => true,
+        }
+    }
+}
+
+fn raw_properties(length: u64) -> ImageProperties {
+    ImageProperties {
+        length,
+        contents: ImageContents::Raw,
+        volume_name: None,
+        declared_blocks: None,
+        declared_block_size: None,
+    }
+}
+
+/// Reads the properties of an image from its first bytes and its total length. Pure: the caller reads the head of
+/// the file (at least 2 KB past the 32 KB system area to see the whole descriptor) and passes the file length.
+/// A head that is too short, or has no ISO 9660 descriptor, is reported as raw.
+pub fn inspect(head: &[u8], length: u64) -> ImageProperties {
+    let pvd = match head.get(ISO_PVD_OFFSET..ISO_PVD_OFFSET + ISO_PVD_READ) {
+        Some(p) => p,
+        None => return raw_properties(length),
+    };
+    // Descriptor type 1 (primary), identifier "CD001", version 1.
+    if pvd[0] != 1 || &pvd[1..6] != b"CD001" || pvd[6] != 1 {
+        return raw_properties(length);
+    }
+    let blocks = u32::from_le_bytes([pvd[80], pvd[81], pvd[82], pvd[83]]);
+    let block_size = u16::from_le_bytes([pvd[128], pvd[129]]);
+    let name = String::from_utf8_lossy(&pvd[40..72]).trim_end_matches(|c: char| c == ' ' || c == '\0').to_string();
+    ImageProperties {
+        length,
+        contents: ImageContents::Iso9660,
+        volume_name: if name.is_empty() { None } else { Some(name) },
+        declared_blocks: Some(blocks),
+        declared_block_size: Some(block_size),
+    }
+}
+
+#[cfg(test)]
+mod inspect_tests {
+    use super::*;
+
+    /// A head of one system area plus one descriptor sector, with the given name, block count and block size.
+    fn iso_head(name: &[u8], blocks: u32, block_size: u16) -> Vec<u8> {
+        let mut h = vec![0u8; ISO_PVD_OFFSET + 2048];
+        h[ISO_PVD_OFFSET] = 1;
+        h[ISO_PVD_OFFSET + 1..ISO_PVD_OFFSET + 6].copy_from_slice(b"CD001");
+        h[ISO_PVD_OFFSET + 6] = 1;
+        for b in &mut h[ISO_PVD_OFFSET + 40..ISO_PVD_OFFSET + 72] {
+            *b = b' ';
+        }
+        h[ISO_PVD_OFFSET + 40..ISO_PVD_OFFSET + 40 + name.len()].copy_from_slice(name);
+        h[ISO_PVD_OFFSET + 80..ISO_PVD_OFFSET + 84].copy_from_slice(&blocks.to_le_bytes());
+        h[ISO_PVD_OFFSET + 128..ISO_PVD_OFFSET + 130].copy_from_slice(&block_size.to_le_bytes());
+        h
+    }
+
+    #[test]
+    fn iso_descriptor_gives_name_and_declared_size() {
+        // 1000 blocks of 2048 bytes declare 2_048_000 bytes.
+        let head = iso_head(b"BIFROST", 1000, 2048);
+        let p = inspect(&head, 2_048_000);
+        assert_eq!(p.contents, ImageContents::Iso9660);
+        assert_eq!(p.volume_name.as_deref(), Some("BIFROST"));
+        assert_eq!(p.declared_blocks, Some(1000));
+        assert_eq!(p.declared_block_size, Some(2048));
+        assert_eq!(p.declared_size(), Some(2_048_000));
+        assert!(p.is_complete());
+    }
+
+    #[test]
+    fn a_file_shorter_than_the_declared_volume_is_incomplete() {
+        // Half of the declared 2_048_000 bytes is present.
+        let head = iso_head(b"BIFROST", 1000, 2048);
+        let p = inspect(&head, 1_024_000);
+        assert!(!p.is_complete());
+        assert_eq!(p.length, 1_024_000);
+    }
+
+    #[test]
+    fn a_blank_name_is_none() {
+        // The name field is all spaces, so the trimmed name is empty.
+        let head = iso_head(b"", 10, 2048);
+        assert_eq!(inspect(&head, 20480).volume_name, None);
+    }
+
+    #[test]
+    fn a_head_without_the_identifier_is_raw() {
+        let head = vec![0u8; ISO_PVD_OFFSET + 2048];
+        let p = inspect(&head, 500);
+        assert_eq!(p.contents, ImageContents::Raw);
+        assert_eq!(p.volume_name, None);
+        assert_eq!(p.declared_size(), None);
+        assert!(p.is_complete());
+    }
+
+    #[test]
+    fn a_short_head_is_raw_without_panicking() {
+        // Only 100 bytes: the descriptor is not in the head, so the image is read as raw.
+        let p = inspect(&[1u8; 100], 100);
+        assert_eq!(p.contents, ImageContents::Raw);
+        assert_eq!(p.length, 100);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

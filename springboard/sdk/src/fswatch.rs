@@ -6,7 +6,7 @@
 //! `NO_DEFER` delivers the first event after a quiet period at once, then coalesces the rest; `FILE_EVENTS` is
 //! accepted for parity (events are always per file here).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::os::unix::ffi::OsStrExt;
@@ -263,6 +263,138 @@ impl WatchStream {
 impl Drop for WatchStream {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+/// Sentinel `since` value for "events from now on" (the event-id since-now constant, `u64::MAX`).
+pub const SINCE_NOW: u64 = u64::MAX;
+
+/// What `EventJournal::replay_since` hands back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Replay {
+    /// `(event id, event)` pairs after the requested id, oldest first.
+    pub events: Vec<(u64, WatchEvent)>,
+    /// False when events after the requested id were already dropped from the journal.
+    pub complete: bool,
+}
+
+/// A bounded, numbered history of watch events: the event-id part of a change stream. Ids start at 1 and grow by
+/// one per recorded event. The newest `capacity` events are kept. The journal is held in memory, so it does not
+/// survive a restart: an id stored by an earlier run cannot be replayed across the restart.
+pub struct EventJournal {
+    capacity: usize,
+    next_id: u64,
+    entries: VecDeque<(u64, WatchEvent)>,
+}
+
+impl EventJournal {
+    /// An empty journal that keeps the newest `capacity` events (at least one).
+    pub fn new(capacity: usize) -> Self {
+        Self { capacity: capacity.max(1), next_id: 1, entries: VecDeque::new() }
+    }
+
+    /// Records an event and returns its id. Drops the oldest kept event when the journal is full.
+    pub fn record(&mut self, event: WatchEvent) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.entries.push_back((id, event));
+        while self.entries.len() > self.capacity {
+            self.entries.pop_front();
+        }
+        id
+    }
+
+    /// Id of the newest recorded event, or 0 when nothing has been recorded.
+    pub fn latest_id(&self) -> u64 {
+        self.next_id - 1
+    }
+
+    /// Id of the oldest event still kept, or `None` when the journal is empty.
+    pub fn oldest_id(&self) -> Option<u64> {
+        self.entries.front().map(|(id, _)| *id)
+    }
+
+    /// The events recorded after `since`. `complete` is false when an id the caller has not seen was dropped.
+    /// `SINCE_NOW` returns nothing.
+    pub fn replay_since(&self, since: u64) -> Replay {
+        if since == SINCE_NOW {
+            return Replay { events: Vec::new(), complete: true };
+        }
+        let events: Vec<(u64, WatchEvent)> = self.entries.iter().filter(|(id, _)| *id > since).cloned().collect();
+        let first_kept = self.oldest_id().unwrap_or(self.next_id);
+        Replay { events, complete: since.saturating_add(1) >= first_kept }
+    }
+}
+
+#[cfg(test)]
+mod journal_tests {
+    use super::*;
+
+    fn created(path: &str) -> WatchEvent {
+        WatchEvent { path: PathBuf::from(path), flags: WatchEventFlags::CREATED }
+    }
+
+    #[test]
+    fn ids_start_at_one_and_latest_tracks_the_newest() {
+        let mut j = EventJournal::new(10);
+        assert_eq!(j.latest_id(), 0);
+        assert_eq!(j.record(created("a")), 1);
+        assert_eq!(j.record(created("b")), 2);
+        assert_eq!(j.latest_id(), 2);
+        assert_eq!(j.oldest_id(), Some(1));
+    }
+
+    #[test]
+    fn a_full_journal_drops_the_oldest_events() {
+        // Capacity 2: after three records only ids 2 and 3 are kept.
+        let mut j = EventJournal::new(2);
+        j.record(created("a"));
+        j.record(created("b"));
+        j.record(created("c"));
+        assert_eq!(j.oldest_id(), Some(2));
+        assert_eq!(j.latest_id(), 3);
+    }
+
+    #[test]
+    fn replay_after_a_dropped_id_is_incomplete() {
+        // Ids 2 and 3 are kept. Replaying after 0 needs id 1, which is gone.
+        let mut j = EventJournal::new(2);
+        j.record(created("a"));
+        j.record(created("b"));
+        j.record(created("c"));
+        let r = j.replay_since(0);
+        assert_eq!(r.events.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![2, 3]);
+        assert!(!r.complete);
+    }
+
+    #[test]
+    fn replay_after_the_oldest_kept_id_is_complete() {
+        let mut j = EventJournal::new(2);
+        j.record(created("a"));
+        j.record(created("b"));
+        j.record(created("c"));
+        let r = j.replay_since(1);
+        assert_eq!(r.events.len(), 2);
+        assert!(r.complete);
+        assert_eq!(r.events[0].1.path, PathBuf::from("b"));
+    }
+
+    #[test]
+    fn replay_from_the_latest_id_or_since_now_is_empty_and_complete() {
+        let mut j = EventJournal::new(5);
+        j.record(created("a"));
+        assert_eq!(j.replay_since(1), Replay { events: Vec::new(), complete: true });
+        assert_eq!(j.replay_since(SINCE_NOW), Replay { events: Vec::new(), complete: true });
+    }
+
+    #[test]
+    fn an_empty_journal_replays_from_zero_completely_and_zero_capacity_keeps_one() {
+        let j = EventJournal::new(3);
+        assert_eq!(j.replay_since(0), Replay { events: Vec::new(), complete: true });
+        let mut one = EventJournal::new(0);
+        one.record(created("a"));
+        one.record(created("b"));
+        assert_eq!(one.oldest_id(), Some(2));
     }
 }
 
