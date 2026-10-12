@@ -101,6 +101,167 @@ impl MarkupElement {
             MarkupElement::Loupe(l) => l.frame,
         }
     }
+
+    /// The name of the feature that allows this element, as used in `MarkupError::FeatureDisabled`.
+    pub fn feature_name(&self) -> &'static str {
+        match self {
+            MarkupElement::Shape(s) if s.kind == ShapeKind::TextBox => "text boxes",
+            MarkupElement::Shape(_) => "shapes",
+            MarkupElement::Image(_) => "images",
+            MarkupElement::Link(_) => "links",
+            MarkupElement::Loupe(_) => "loupes",
+        }
+    }
+}
+
+/// The element kinds a canvas accepts (`FeatureSet`). Strokes are not elements, so drawing is not part of this set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FeatureSet(u8);
+
+impl FeatureSet {
+    pub const NONE: FeatureSet = FeatureSet(0);
+    pub const SHAPES: FeatureSet = FeatureSet(1);
+    pub const TEXT_BOXES: FeatureSet = FeatureSet(2);
+    pub const IMAGES: FeatureSet = FeatureSet(4);
+    pub const LINKS: FeatureSet = FeatureSet(8);
+    pub const LOUPES: FeatureSet = FeatureSet(16);
+    pub const ALL: FeatureSet = FeatureSet(31);
+
+    pub fn union(self, other: FeatureSet) -> FeatureSet {
+        FeatureSet(self.0 | other.0)
+    }
+
+    /// True when every feature in `other` is also in this set.
+    pub fn contains(self, other: FeatureSet) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// True when the set allows an element of this kind.
+    pub fn permits(self, element: &MarkupElement) -> bool {
+        self.contains(element_feature(element))
+    }
+}
+
+fn element_feature(element: &MarkupElement) -> FeatureSet {
+    match element {
+        MarkupElement::Shape(s) if s.kind == ShapeKind::TextBox => FeatureSet::TEXT_BOXES,
+        MarkupElement::Shape(_) => FeatureSet::SHAPES,
+        MarkupElement::Image(_) => FeatureSet::IMAGES,
+        MarkupElement::Link(_) => FeatureSet::LINKS,
+        MarkupElement::Loupe(_) => FeatureSet::LOUPES,
+    }
+}
+
+/// Items of the insertion menu (`MarkupEditViewController`, `MarkupToolbarViewController`): what a person can add to a
+/// canvas, in menu order (see [`Insertion::MENU`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Insertion {
+    Rectangle,
+    Ellipse,
+    Line,
+    TextBox,
+    Image,
+    Link,
+    Loupe,
+}
+
+/// Default ink for inserted shapes: opaque black, two points wide. Text boxes are one point wide.
+const DEFAULT_STROKE: u32 = 0xff00_0000;
+const DEFAULT_LINE_WIDTH: f32 = 2.0;
+const DEFAULT_TEXT_LINE_WIDTH: f32 = 1.0;
+/// Default magnification of an inserted loupe.
+const DEFAULT_MAGNIFICATION: f32 = 2.0;
+
+impl Insertion {
+    pub const MENU: [Insertion; 7] = [
+        Insertion::Rectangle,
+        Insertion::Ellipse,
+        Insertion::Line,
+        Insertion::TextBox,
+        Insertion::Image,
+        Insertion::Link,
+        Insertion::Loupe,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Insertion::Rectangle => "Rectangle",
+            Insertion::Ellipse => "Ellipse",
+            Insertion::Line => "Line",
+            Insertion::TextBox => "Text Box",
+            Insertion::Image => "Image",
+            Insertion::Link => "Link",
+            Insertion::Loupe => "Loupe",
+        }
+    }
+
+    /// The feature a menu item needs before it can be inserted.
+    pub fn feature(self) -> FeatureSet {
+        match self {
+            Insertion::Rectangle | Insertion::Ellipse | Insertion::Line => FeatureSet::SHAPES,
+            Insertion::TextBox => FeatureSet::TEXT_BOXES,
+            Insertion::Image => FeatureSet::IMAGES,
+            Insertion::Link => FeatureSet::LINKS,
+            Insertion::Loupe => FeatureSet::LOUPES,
+        }
+    }
+
+    /// The element a menu item inserts with its top left corner at `origin`, at its default size. `payload` is the
+    /// words of a text box, the asset name of an image or the URL of a link; the other items ignore it. The value is
+    /// not checked here: `MarkupDocument::insert` refuses an empty image source or link URL.
+    pub fn element(self, origin: (f32, f32), payload: &str) -> MarkupElement {
+        let (x, y) = origin;
+        let shape = |kind: ShapeKind, w: f32, h: f32, fill: Option<u32>, line_width: f32, text: String| {
+            MarkupElement::Shape(ShapeMarkup {
+                kind,
+                frame: Rect { x, y, w, h },
+                stroke: DEFAULT_STROKE,
+                fill,
+                line_width,
+                text,
+            })
+        };
+        match self {
+            Insertion::Rectangle => shape(ShapeKind::Rectangle, 120.0, 80.0, None, DEFAULT_LINE_WIDTH, String::new()),
+            Insertion::Ellipse => shape(ShapeKind::Ellipse, 80.0, 80.0, None, DEFAULT_LINE_WIDTH, String::new()),
+            Insertion::Line => shape(ShapeKind::Line, 120.0, 0.0, None, DEFAULT_LINE_WIDTH, String::new()),
+            Insertion::TextBox => {
+                shape(ShapeKind::TextBox, 160.0, 40.0, Some(0xffff_ffff), DEFAULT_TEXT_LINE_WIDTH, payload.to_string())
+            }
+            Insertion::Image => MarkupElement::Image(ImageMarkup {
+                frame: Rect { x, y, w: 160.0, h: 120.0 },
+                source: payload.to_string(),
+            }),
+            Insertion::Link => MarkupElement::Link(LinkMarkup {
+                frame: Rect { x, y, w: 120.0, h: 20.0 },
+                url: payload.to_string(),
+            }),
+            Insertion::Loupe => MarkupElement::Loupe(LoupeMarkup {
+                frame: Rect { x, y, w: 120.0, h: 120.0 },
+                magnification: DEFAULT_MAGNIFICATION,
+            }),
+        }
+    }
+}
+
+/// Automatic sizing of a canvas (`MarkupAutoresizing`). A flexible axis grows to reach the far edge of the content, so
+/// the canvas stays large enough to show every element. A canvas never shrinks below its requested size.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Autoresizing {
+    pub flexible_width: bool,
+    pub flexible_height: bool,
+}
+
+impl Autoresizing {
+    pub const FIXED: Autoresizing = Autoresizing { flexible_width: false, flexible_height: false };
+
+    /// The canvas size for `width` by `height` once the content of `doc` is laid out.
+    pub fn fitted_size(self, doc: &MarkupDocument, width: f32, height: f32) -> (f32, f32) {
+        let (content_w, content_h) = doc.content_extent();
+        let w = if self.flexible_width { width.max(content_w) } else { width };
+        let h = if self.flexible_height { height.max(content_h) } else { height };
+        (w, h)
+    }
 }
 
 /// Errors from editing and from reading a saved document (`NativeMarkupError`).
@@ -111,6 +272,8 @@ pub enum MarkupError {
     InvalidFrame,
     /// A field that cannot hold this value (named by the field).
     InvalidValue(&'static str),
+    /// The canvas's feature set does not allow this kind of element (named by the kind, see `MarkupElement::feature_name`).
+    FeatureDisabled(&'static str),
     /// A saved document that cannot be read. `line` is 1-based.
     Decode { line: usize, reason: &'static str },
 }
@@ -121,6 +284,7 @@ impl std::fmt::Display for MarkupError {
             MarkupError::UnknownId(id) => write!(f, "no markup element with id {}", id.0),
             MarkupError::InvalidFrame => write!(f, "frame must be finite with a non-negative size"),
             MarkupError::InvalidValue(field) => write!(f, "invalid {field}"),
+            MarkupError::FeatureDisabled(kind) => write!(f, "the feature set does not allow {kind}"),
             MarkupError::Decode { line, reason } => write!(f, "line {line}: {reason}"),
         }
     }
@@ -172,6 +336,15 @@ impl MarkupDocument {
     /// Stacking position of an element, 0 being the back.
     pub fn index_of(&self, id: MarkupId) -> Option<usize> {
         self.elements.iter().position(|(i, _)| *i == id)
+    }
+
+    /// The far corner of all elements (right and bottom edges): the smallest canvas that holds the content from the
+    /// origin. Zero for an empty document.
+    pub fn content_extent(&self) -> (f32, f32) {
+        self.elements.iter().fold((0.0_f32, 0.0_f32), |(w, h), (_, el)| {
+            let f = el.frame();
+            (w.max(f.x + f.w), h.max(f.y + f.h))
+        })
     }
 
     pub fn can_undo(&self) -> bool {
@@ -556,5 +729,66 @@ mod tests {
         assert_eq!(MarkupDocument::decode(&bad_escape), Err(MarkupError::Decode { line: 2, reason: "bad escape in text" }));
         let short = format!("{header}1\tlink\t0\t0\t4\t4\n");
         assert_eq!(MarkupDocument::decode(&short), Err(MarkupError::Decode { line: 2, reason: "wrong number of fields" }));
+    }
+
+    #[test]
+    fn feature_sets_combine_and_permit_elements_by_kind() {
+        let shapes_and_images = FeatureSet::SHAPES.union(FeatureSet::IMAGES);
+        assert!(shapes_and_images.contains(FeatureSet::IMAGES));
+        assert!(!shapes_and_images.contains(FeatureSet::ALL), "ALL needs every bit");
+        assert!(shapes_and_images.permits(&rectangle(0.0)));
+        assert!(!shapes_and_images.permits(&text_box("note")), "a text box needs the text box feature, not shapes");
+        assert!(FeatureSet::ALL.contains(FeatureSet::NONE));
+        let loupe = MarkupElement::Loupe(LoupeMarkup { frame: rect(0.0, 0.0, 4.0, 4.0), magnification: 2.0 });
+        assert!(!FeatureSet::NONE.permits(&loupe));
+        assert_eq!(loupe.feature_name(), "loupes");
+        assert_eq!(text_box("x").feature_name(), "text boxes");
+    }
+
+    #[test]
+    fn insertion_menu_items_build_their_default_elements() {
+        assert_eq!(Insertion::MENU.len(), 7);
+        assert_eq!(Insertion::TextBox.feature(), FeatureSet::TEXT_BOXES);
+        assert_eq!(Insertion::Ellipse.feature(), FeatureSet::SHAPES);
+        let loupe = Insertion::Loupe.element((10.0, 20.0), "");
+        assert_eq!(loupe, MarkupElement::Loupe(LoupeMarkup { frame: rect(10.0, 20.0, 120.0, 120.0), magnification: 2.0 }));
+        let note = Insertion::TextBox.element((4.0, 6.0), "hello");
+        assert_eq!(note.frame(), rect(4.0, 6.0, 160.0, 40.0));
+        match note {
+            MarkupElement::Shape(s) => assert_eq!((s.kind, s.text.as_str()), (ShapeKind::TextBox, "hello")),
+            other => panic!("expected a shape, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn content_extent_is_the_far_corner_of_all_elements() {
+        let mut doc = MarkupDocument::new();
+        assert_eq!(doc.content_extent(), (0.0, 0.0));
+        doc.insert(rectangle(250.0)).unwrap();
+        doc.insert(MarkupElement::Image(ImageMarkup { frame: rect(0.0, 90.0, 40.0, 30.0), source: "a".into() })).unwrap();
+        assert_eq!(doc.content_extent(), (260.0, 120.0), "right edge 250 + 10, bottom edge 90 + 30");
+    }
+
+    #[test]
+    fn autoresizing_grows_flexible_axes_to_the_content_and_never_shrinks() {
+        let mut doc = MarkupDocument::new();
+        doc.insert(rectangle(250.0)).unwrap();
+        let wide = Autoresizing { flexible_width: true, flexible_height: false };
+        assert_eq!(wide.fitted_size(&doc, 300.0, 200.0), (300.0, 200.0), "content fits inside 300 wide");
+        assert_eq!(wide.fitted_size(&doc, 200.0, 200.0), (260.0, 200.0), "width grows to the far edge");
+        assert_eq!(wide.fitted_size(&doc, 500.0, 200.0), (500.0, 200.0), "a larger width is kept");
+        assert_eq!(Autoresizing::FIXED.fitted_size(&doc, 200.0, 200.0), (200.0, 200.0));
+        let both = Autoresizing { flexible_width: true, flexible_height: true };
+        assert_eq!(both.fitted_size(&doc, 200.0, 4.0), (260.0, 10.0), "height grows to 10 as well");
+    }
+
+    #[test]
+    fn insertion_items_are_checked_like_any_other_element() {
+        let mut doc = MarkupDocument::new();
+        assert_eq!(doc.insert(Insertion::Image.element((0.0, 0.0), "")), Err(MarkupError::InvalidValue("image source")));
+        assert_eq!(doc.insert(Insertion::Link.element((0.0, 0.0), "")), Err(MarkupError::InvalidValue("link url")));
+        assert!(doc.insert(Insertion::Image.element((0.0, 0.0), "shot.png")).is_ok());
+        assert_eq!(doc.len(), 1, "refused items leave the document unchanged");
+        assert_eq!(MarkupError::FeatureDisabled("links").to_string(), "the feature set does not allow links");
     }
 }

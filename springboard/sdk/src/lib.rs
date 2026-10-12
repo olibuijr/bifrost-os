@@ -72,6 +72,7 @@ pub mod script_value;
 pub mod script_syntax;
 pub mod view;
 pub mod document;
+pub mod markup;
 pub mod log;
 pub mod signpost;
 pub mod dispatch;
