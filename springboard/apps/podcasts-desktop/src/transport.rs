@@ -1,18 +1,19 @@
-//! Transport maths for the player, on the parity models in bifrost-ui: interval skips (`skip_interval`) and the
-//! playback rate (`playback_rate`). Times here are milliseconds, as the audio service reports them; the models
-//! take seconds. Pure functions: nothing is sent to the service from this module.
+//! Transport maths for the player, on the parity models in bifrost-ui: interval skips (`skip_interval`). The speed menu
+//! keeps its rates here too. Times here are milliseconds, as the audio service reports them; the models take seconds.
+//! Pure functions: nothing is sent to the service from this module.
 
-use bifrost_app::controls::playback_rate::RateCommand;
 use bifrost_app::controls::skip_interval::{Direction, SkipCommand};
 
-/// The rates the player offers, slowest first. The audio service has no rate command yet, so the chosen rate
+/// The rates the speed menu offers, slowest first. The audio service has no rate command yet, so the chosen rate
 /// is kept for the session and shown; the engine plays at 1x.
 pub const RATES: [f64; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-/// Skip interval of the mini player's back and forward buttons, in seconds.
-pub const PLAYER_SKIP_S: f64 = 30.0;
-/// Skip interval of the Now Playing sheet's back button, in seconds (its forward button uses `PLAYER_SKIP_S`).
-pub const SHEET_BACK_S: f64 = 15.0;
+/// Back skip, in seconds: the mini player's back button, the Now Playing sheet's back button and the system's
+/// skip-backward command.
+pub const BACK_SKIP_S: f64 = 15.0;
+/// Forward skip, in seconds: the mini player's forward button, the sheet's forward button, the system's
+/// skip-forward command and the Right arrow key.
+pub const FORWARD_SKIP_S: f64 = 30.0;
 
 /// Where a skip lands, in milliseconds. `interval_s` is the preferred interval in seconds. `duration_ms` of zero
 /// (or less) means the episode's length is not known yet, so a forward skip is not clamped. A backward skip
@@ -26,16 +27,9 @@ pub fn skip_target_ms(backward: bool, interval_s: f64, position_ms: f64, duratio
     cmd.target(position_ms / 1000.0, duration) * 1000.0
 }
 
-/// The rate after one press of the speed control: the next faster rate in `RATES`, wrapping to the slowest
-/// after the fastest. A rate that is not in the list resolves to the nearest one first.
-pub fn next_rate(current: f64) -> f64 {
-    let Ok(cmd) = RateCommand::new(&RATES) else {
-        return current;
-    };
-    match cmd.step(current, true) {
-        Some(next) if next != current => next,
-        _ => cmd.rates().first().copied().unwrap_or(current),
-    }
+/// The position of `rate` in `RATES`, or `None` when the rate is not one the menu offers.
+pub fn rate_index(rate: f64) -> Option<usize> {
+    RATES.iter().position(|r| (r - rate).abs() < 1e-9)
 }
 
 /// The speed control's label, such as "Speed 1x" or "Speed 0.75x".
@@ -49,7 +43,14 @@ mod tests {
 
     #[test]
     fn a_forward_skip_moves_by_the_interval_in_milliseconds() {
-        assert_eq!(skip_target_ms(false, 30.0, 60_000.0, 600_000.0), 90_000.0);
+        assert_eq!(skip_target_ms(false, FORWARD_SKIP_S, 60_000.0, 600_000.0), 90_000.0);
+    }
+
+    #[test]
+    fn the_back_skip_is_15_seconds_and_the_forward_skip_is_30() {
+        assert_eq!(BACK_SKIP_S, 15.0);
+        assert_eq!(FORWARD_SKIP_S, 30.0);
+        assert_eq!(skip_target_ms(true, BACK_SKIP_S, 40_000.0, 600_000.0), 25_000.0);
     }
 
     #[test]
@@ -75,16 +76,11 @@ mod tests {
     }
 
     #[test]
-    fn the_speed_control_cycles_through_the_rates_and_wraps() {
-        assert_eq!(next_rate(1.0), 1.25);
-        assert_eq!(next_rate(0.5), 0.75);
-        assert_eq!(next_rate(2.0), 0.5);
-    }
-
-    #[test]
-    fn an_unlisted_rate_steps_from_the_rate_it_resolves_to() {
-        // 1.4 resolves to 1.5 in RATES, so the next press goes to 1.75.
-        assert_eq!(next_rate(1.4), 1.75);
+    fn the_menu_rates_have_positions_and_others_have_none() {
+        assert_eq!(rate_index(0.5), Some(0));
+        assert_eq!(rate_index(1.0), Some(2));
+        assert_eq!(rate_index(2.0), Some(6));
+        assert_eq!(rate_index(1.4), None);
     }
 
     #[test]
