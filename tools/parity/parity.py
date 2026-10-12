@@ -141,6 +141,65 @@ def missing_slugs(entries):
     return out
 
 
+# --- The OS layer (docs/macos-os-inventory.md): every component of the reference OS image -------------------------
+OS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "parity-matrix", "os")
+OS_STATUSES = ("parity", "partial", "os", "gap", "n/a", "unassessed")
+
+
+def load_os():
+    shards = []
+    if not os.path.isdir(OS_DIR):
+        return shards
+    for cat in sorted(os.listdir(OS_DIR)):
+        d = os.path.join(OS_DIR, cat)
+        if not os.path.isdir(d):
+            continue
+        for f in sorted(os.listdir(d)):
+            if f.endswith(".json"):
+                shards.append(json.load(open(os.path.join(d, f))))
+    return shards
+
+
+def os_totals(entries):
+    c = {s: 0 for s in OS_STATUSES}
+    for e in entries:
+        c[e.get("status", "unassessed") if e.get("status") in OS_STATUSES else "unassessed"] += 1
+    applicable = sum(c[s] for s in ("parity", "partial", "os", "gap"))
+    score = c["parity"] + 0.5 * (c["partial"] + c["os"])
+    return c, applicable, score
+
+
+def cmd_os_status(a):
+    shards = load_os()
+    if not shards:
+        print("OS layer: no entries yet (tools/parity/os_inventory.py ROOT)")
+        return
+    by = {}
+    for sh in shards:
+        by.setdefault(sh["category"], []).extend(sh["entries"])
+    allc, alln, alls = os_totals([e for es in by.values() for e in es])
+    print(f"OS layer ({shards[0].get('source', '')}): {sum(len(v) for v in by.values())} components, "
+          f"{allc['unassessed']} unassessed, coverage {pct(alls, alln)} of {alln} assessed applicable")
+    print(f"{'Category':<12} {'All':>6} {'Unass':>6} {'Parity':>6} {'Part':>5} {'OS':>4} {'Gap':>5} {'n/a':>5} {'Cov':>7}")
+    for cat, es in sorted(by.items()):
+        c, n, sc = os_totals(es)
+        print(f"{cat:<12} {len(es):>6} {c['unassessed']:>6} {c['parity']:>6} {c['partial']:>5} {c['os']:>4} {c['gap']:>5} {c['n/a']:>5} {pct(sc, n):>7}")
+
+
+def os_check():
+    problems = []
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    for sh in load_os():
+        for e in sh["entries"]:
+            if e.get("status") not in OS_STATUSES:
+                problems.append(f"os/{sh['category']}/{sh['shard']}: {e['id']}: bad status {e.get('status')!r}")
+            for part in re.split(r"[;,]\s*", e.get("bifrost", "") or ""):
+                m = re.match(r"(springboard/\S+|tools/\S+|packaging/\S+|docs/\S+)", part.strip())
+                if m and not os.path.exists(os.path.join(root, m.group(1).split(":")[0].rstrip(")."))):
+                    problems.append(f"os/{sh['category']}/{sh['shard']}: {e['id']}: cited path not found: {m.group(1)}")
+    return problems
+
+
 def cmd_status(a):
     entries, bad = load_entries()
     fw, rows, n, score = totals(entries)
@@ -244,6 +303,7 @@ def cmd_check(a):
     ok, missing = cited_paths(entries)
     problems += [f"{s}: cited path not found: {p}" for s, p in missing]
     miss = missing_slugs(entries)
+    problems += os_check()
     print(f"{len(entries)} entries, cited paths ok {ok}, not found {len(missing)}, not assessed {len(miss)}")
     if miss:
         print("not assessed: " + ", ".join(miss))
@@ -428,6 +488,32 @@ def cmd_db_export(a):
                "built": round(built_pct(rows), 1) if n else None, "gate": 80,
                "not_assessed": missing_slugs(entries), "generated_by": "bifrost pc parity db-export",
                "source": "developer.apple.com official documentation + bifrost-os repo"}
+    os_shards = load_os()
+    if os_shards:
+        os.makedirs(os.path.join(a.dir, "os"), exist_ok=True)
+        os_all = []
+        for sh in os_shards:
+            es = []
+            for e in sh["entries"]:
+                f = dict(e.get("facts", {}))
+                if isinstance(f.get("functions"), list) and len(f["functions"]) > 200:
+                    f["functions"] = f["functions"][:200] + [f"... {len(e['facts']['functions']) - 200} more"]
+                es.append({**{k: e.get(k, "") for k in ("id", "name", "path", "kind", "identifier", "version", "owner",
+                                                          "description", "role", "doc", "bifrost", "status", "note", "rea")}, "facts": f})
+            os_all.extend(sh["entries"])
+            c, n, sc = os_totals(sh["entries"])
+            doc = {"category": sh["category"], "shard": sh["shard"], "source": sh.get("source", ""), "counts": c, "entries": es}
+            did = f"{sh['category']}--{sh['shard']}"
+            p = os.path.join(a.dir, "os", did + ".json")
+            json.dump(doc, open(p, "w"))
+            writes.append({"op": "set", "collection": "os", "doc_id": did, "file_path": os.path.abspath(p)})
+        c, n, sc = os_totals(os_all)
+        cats = {}
+        for sh in os_shards:
+            cats.setdefault(sh["category"], []).extend(sh["entries"])
+        summary["os"] = {"source": os_shards[0].get("source", ""), "components": len(os_all), "status": c,
+                         "coverage": round(100 * sc / n, 1) if n else None,
+                         "categories": {k: dict(zip(("status", "applicable"), os_totals(v)[:2])) for k, v in cats.items()}}
     p = os.path.join(a.dir, "meta", "summary.json")
     json.dump(summary, open(p, "w"))
     writes.append({"op": "set", "collection": "meta", "doc_id": "summary", "file_path": os.path.abspath(p)})
@@ -564,6 +650,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
+    sub.add_parser("os-status")
     c = sub.add_parser("coverage")
     c.add_argument("--group")
     c.add_argument("--sort", choices=["coverage", "name", "group"], default="group")
@@ -596,7 +683,7 @@ def main(argv=None):
     t = sub.add_parser("themes")
     t.add_argument("--k", type=int)
     a = p.parse_args(argv)
-    {"status": cmd_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
+    {"status": cmd_status, "os-status": cmd_os_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
      "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index,
      "search": cmd_search, "related": cmd_related, "themes": cmd_themes, "apply": cmd_apply}[a.cmd](a)
 

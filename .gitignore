@@ -1,5 +1,5 @@
 springboard/target/
-springboard/target-agents/
+springboard/target-agents*/
 springboard/apps/*/target/
 ipad-ref/
 springboard/assets/
