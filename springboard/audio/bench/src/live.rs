@@ -39,6 +39,37 @@ const MAX_PLANES: usize = 8;
 /// How long to keep listening after the last impulse or note.
 const TAIL: Duration = Duration::from_millis(200);
 
+/// The largest latency a live measurement may report (ms). Anything outside `0..=MAX_SANE_MS` is a clock or unit
+/// mix-up in the bench, not a latency, and fails the run.
+pub const MAX_SANE_MS: f64 = 1000.0;
+/// The error text (and prefix) of an `audio-roundtrip --live` run that heard none of its first impulses; `main`
+/// exits with `EXIT_NO_LOOPBACK` for it so `tools/audio-bench.py` can show the bench as skipped.
+pub const NO_LOOPBACK: &str = "no loopback: connect line out to line in, or run with --aloop";
+pub const EXIT_NO_LOOPBACK: i32 = 4;
+/// Impulses that must be heard among the first ones sent, else there is no loopback.
+pub const LOOPBACK_PROBE: usize = 8;
+
+/// Fails when any latency is not a finite value in `0..=MAX_SANE_MS`.
+pub fn check_latencies_ms(ms: &[f64]) -> Result<(), String> {
+    match ms.iter().enumerate().find(|(_, v)| !v.is_finite() || **v < 0.0 || **v > MAX_SANE_MS) {
+        Some((i, v)) => Err(format!("measurement error: sample {i} is {v} ms, outside 0..{MAX_SANE_MS} ms (the send and receive stamps are not on one clock)")),
+        None => Ok(()),
+    }
+}
+
+/// True when none of the first `LOOPBACK_PROBE` (or fewer, if fewer were sent) impulses was heard.
+pub fn no_loopback(sent: &[f64], found: &[f64]) -> bool {
+    let probe = sent.len().min(LOOPBACK_PROBE);
+    probe > 0 && pair_times(sent, found)[..probe].iter().all(|p| p.is_none())
+}
+
+/// Host time (the server's `CLOCK_MONOTONIC_RAW`, the clock of `TimeStamp::host_ns`) at which the frame
+/// `offset + device_frames` after the start of an output buffer plays. Uses the nominal rate: the offset is a few
+/// hundred frames, and a (possibly noisy) `rate_scalar` must not move it.
+pub fn landing_ns(out_host_ns: u64, offset: u32, device_frames: f64, rate: f64) -> u64 {
+    out_host_ns + ((offset as f64 + device_frames) * 1e9 / rate).round() as u64
+}
+
 /// A fixed-capacity log that one real-time thread appends to and other threads read: no allocation, no lock.
 pub struct StampLog {
     vals: Box<[AtomicU64]>,
@@ -292,8 +323,12 @@ pub fn roundtrip(dev: &LiveDevice, o: &roundtrip::Opts, quantum: u32) -> Result<
     })?;
 
     let (sent_v, found_v) = (sent.values_f64(), found.values_f64());
+    if no_loopback(&sent_v, &found_v) {
+        return Err(NO_LOOPBACK.to_string());
+    }
     let trips = round_trips(&sent_v, &found_v, quantum);
     let ms: Vec<f64> = trips.iter().map(|f| dev.frames_to_ms(*f)).collect();
+    check_latencies_ms(&ms)?;
     let reported = match (dev.scope_total(Scope::Output), dev.scope_total(Scope::Input)) {
         (Some(a), Some(b)) => Some(a + b),
         _ => None,
@@ -391,13 +426,15 @@ pub fn midi_latency(dev: &LiveDevice, o: &midi_latency::Opts, quantum: u32) -> R
         while let Ok((ns, ev)) = rx.try_recv() {
             sched.push(ns, ev);
         }
-        let tl = Timeline::new(0.0, out_ts.host_ns, rate, out_ts.rate_scalar);
+        // re-anchored on every cycle's output stamp; the nominal rate is exact over one buffer (the server's DLL
+        // scalar is not trusted: a wrong one pushes every note into "later" or far into the future)
+        let tl = Timeline::new(0.0, out_ts.host_ns, rate, 1.0);
         let before = sched.late;
         sched.take_cycle(&tl, 0, ctx.frames, &mut evs);
         late2.fetch_add(sched.late - before, Ordering::Relaxed);
         render_into(&mut unit, ctx.frames as usize, out_ts.sample_time, &evs, out);
         for e in evs.iter().filter(|e| e.is_note_on()) {
-            l2.push(tl.host_of(e.offset as f64 + device_frames));
+            l2.push(landing_ns(out_ts.host_ns, e.offset, device_frames, rate));
         }
     });
     let buffer_ns = (quantum as f64 * 1e9 / rate) as u64;
@@ -432,6 +469,7 @@ pub fn midi_latency(dev: &LiveDevice, o: &midi_latency::Opts, quantum: u32) -> R
     let heard = landing.values();
     let n = stamps.len().min(heard.len());
     let latencies_ms: Vec<f64> = (0..n).map(|i| (heard[i] as f64 - stamps[i] as f64) / 1e6).collect();
+    check_latencies_ms(&latencies_ms)?;
     let extra = vec![
         ("notes_sent".to_string(), Json::Uint(stamps.len() as u64)),
         ("impulses".to_string(), Json::Uint(heard.len() as u64)),
@@ -521,6 +559,40 @@ mod tests {
         assert_eq!(wake_late_frames(&seen, 64), vec![1.0, 3.0, 0.0, 21.0]);
         assert!(wake_late_frames(&[], 64).is_empty());
         assert_eq!(wake_late_frames(&[7.0], 64), vec![0.0]);
+    }
+
+    #[test]
+    fn landing_is_on_the_host_clock_of_the_output_stamp() {
+        // uptime of 3 days in ns on CLOCK_MONOTONIC_RAW, 48 kHz, note at offset 5, 96 device frames: 101 frames
+        let out = 259_200_000_000_000u64;
+        let land = landing_ns(out, 5, 96.0, 48_000.0);
+        assert_eq!(land - out, 2_104_167);
+        // a note stamped 100 ms before the cycle on the same clock is heard about 102 ms later: sane
+        let ms = (land as f64 - (out - 100_000_000) as f64) / 1e6;
+        assert!((ms - 102.104).abs() < 0.001);
+        assert!(check_latencies_ms(&[ms, 3.2, 0.0]).is_ok());
+    }
+
+    #[test]
+    fn latencies_outside_zero_to_a_second_are_measurement_errors() {
+        assert!(check_latencies_ms(&[]).is_ok());
+        assert!(check_latencies_ms(&[1.0, 1000.0]).is_ok());
+        assert!(check_latencies_ms(&[1.0, -0.001]).is_err());
+        assert!(check_latencies_ms(&[1000.5]).is_err());
+        assert!(check_latencies_ms(&[f64::NAN]).is_err());
+        // a ns stamp against a sample time (the reported 6e10 ms) is caught
+        assert!(check_latencies_ms(&[60_740_487_042.663]).is_err());
+    }
+
+    #[test]
+    fn no_loopback_needs_silence_for_the_first_impulses() {
+        let sent: Vec<f64> = (0..10).map(|i| 1000.0 * (i + 1) as f64).collect();
+        assert!(no_loopback(&sent, &[]));
+        assert!(!no_loopback(&sent, &[1064.0]));
+        // the 8th impulse (8000) heard: inside the probe; the 9th (9000) heard: outside it
+        assert!(!no_loopback(&sent, &[8064.0]));
+        assert!(no_loopback(&sent, &[9064.0]));
+        assert!(!no_loopback(&[], &[]));
     }
 
     #[test]

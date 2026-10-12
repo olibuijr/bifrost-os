@@ -86,6 +86,43 @@ class T(unittest.TestCase):
         self.assertIn("cannot reach", failures[0])
         self.assertIn("no measurements", failures[1])
 
+    def test_pick_card_aloop(self):
+        self.assertEqual(ab.pick_card(["PCH", "Loopback"], prefer_loopback=True), "Loopback")
+        self.assertEqual(ab.pick_card(["PCH"], prefer_loopback=True), "PCH")
+
+    def test_insane_latency_is_a_problem(self):
+        self.assertIsNotNone(ab.result_problem(res("midi-latency", p50=60740487042.663, p99=1.0, mx=2.0)))
+        self.assertIsNotNone(ab.result_problem(res("midi-latency", p50=-1.0)))
+        self.assertIsNone(ab.result_problem(res("midi-latency", p50=1.0, p99=1000.0, mx=1000.0)))
+
+    def test_no_loopback_is_skipped_not_failed(self):
+        def fake(argv, bench, driver, quantum, timeout=120, live=False):
+            if bench == "audio-roundtrip":
+                raise ab.Skipped("no loopback: connect line out to line in, or run with --aloop")
+            return res(bench, q=quantum)
+
+        orig, ab.run_one = ab.run_one, fake
+        skipped = []
+        try:
+            results, failures = ab.collect(["x"], "alsa:PCH", ["midi-latency", "audio-roundtrip"], [16, 32], live=True, skipped=skipped)
+        finally:
+            ab.run_one = orig
+        self.assertEqual([(r["bench"], r["quantum"]) for r in results], [("midi-latency", 16), ("midi-latency", 32)])
+        self.assertEqual(failures, [])
+        self.assertEqual(len(skipped), 2)
+        self.assertIn("audio-roundtrip q16", skipped[0])
+
+    def test_exit_code_4_raises_skipped(self):
+        class P:
+            returncode, stdout, stderr = 4, "", "bifrost-audio-bench: no loopback: connect line out to line in, or run with --aloop"
+
+        orig, ab.subprocess.run = ab.subprocess.run, lambda *a, **k: P()
+        try:
+            with self.assertRaises(ab.Skipped):
+                ab.run_one(["x"], "audio-roundtrip", "alsa:PCH", 64, live=True)
+        finally:
+            ab.subprocess.run = orig
+
     def test_failed_run_exits_nonzero_and_appends_nothing(self):
         import io, contextlib, tempfile, sys
         appended = []

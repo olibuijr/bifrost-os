@@ -9,12 +9,26 @@ prints one JSON object (`bench`, `host`, `driver`, `rate`, `quantum`, `samples`,
 | Command | What it does |
 |---|---|
 | `bifrost pc audio-bench host` | every bench with `--driver loopback` at quantum 16, 32, 64, 128 (binary from `springboard/target/fast` or `release`) |
-| `bifrost pc audio-bench midget [--aloop]` | the same over `ssh midget` with `/usr/bin/bifrost-audio-bench` and `--driver alsa:<card>`; the card comes from `aplay -l` (a real card wins over Loopback); `--aloop` runs `modprobe snd-aloop` first |
+| `bifrost pc audio-bench midget [--aloop]` | the same over `ssh midget` with `/usr/bin/bifrost-audio-bench` and `--driver alsa:<card>`; the card comes from `aplay -l` (a real card wins over Loopback); `--aloop` runs `modprobe snd-aloop` first and picks the Loopback card |
 | `bifrost pc audio-bench compare` | p50/p99/max per bench and quantum against the previous run in `docs/perf-history.jsonl` |
 | `--append` | writes one line per result to `docs/perf-history.jsonl` (`date`, `git`, `bench: "audio-..."`, then the bench fields) |
 
 `tools/bench.py --audio [--midget]` adds `audio_<bench>_q<N>_p99_ms` keys. `python3 -m unittest tools/test_audio_bench.py`
 covers parsing, budgets and the table. Exit code 3 means a budget was exceeded.
+
+## Live method and the loopback requirement
+
+`--live` (Midget) measures through the running `bifrost-audiod`. Everything is on one clock, the server's host time
+(`CLOCK_MONOTONIC_RAW`, the `host_ns` of every HAL `TimeStamp`): `midi-latency` stamps notes with it, and each note's
+landing is the cycle's output `host_ns` plus `(offset + device frames)` at the nominal rate (`live::landing_ns`; the
+server's DLL `rate_scalar` is no longer used, a wrong one is the suspected cause of the 1e9 to 1e11 ms runs).
+`audio-roundtrip` counts frames on the HAL sample timeline. Any live latency outside 0..1000 ms is a measurement
+error: the bench exits 1, and `tools/audio-bench.py` marks it failed and never appends it.
+
+`audio-roundtrip --live` needs the output looped to an input: a cable from line out to line in, the codec's
+loopback/monitor mixer, or snd-aloop (`--aloop`, with the server pointed at the Loopback card). When none of the first
+8 impulses is heard the bench exits 4 with `no loopback: connect line out to line in, or run with --aloop`, and
+`tools/audio-bench.py` lists it under SKIPPED (neither a failure nor a result, never appended).
 
 ## Budgets
 
