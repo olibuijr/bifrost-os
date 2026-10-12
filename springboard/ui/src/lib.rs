@@ -929,6 +929,8 @@ pub mod highlight_rank;
 pub mod face_group;
 pub mod emitter;
 pub mod physics;
+pub mod physics3d;
+pub mod scene_source;
 pub mod node_constraint;
 pub mod tilemap;
 pub mod midi_thru;
