@@ -144,6 +144,14 @@ pub struct Stats {
     pub drawn_px: usize,
 }
 
+/// Bumped by the shell whenever it installs a new wallpaper, so a new picture that reuses the
+/// freed allocation of the old one (same address and size) is still uploaded (PR-5).
+static WALLPAPER_GEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+pub fn bump_wallpaper_generation() {
+    WALLPAPER_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub struct Presenter {
     egl: Egl,
     gl: Gles,
@@ -153,6 +161,7 @@ pub struct Presenter {
     surf: P,
     gbm: Gbm,
     linear: bool,
+    has_modifiers: bool,
     prog: Program,
     vao: u32,
     vbo: u32,
@@ -177,7 +186,7 @@ pub struct Presenter {
     live_on: bool,
     /// glass rects were owed: the next present draws even with empty content damage
     flush: bool,
-    wallpaper_key: (usize, usize, i32),
+    wallpaper_key: (usize, usize, i32, u32),
     pub renderer: String,
     pub stats: Stats,
     /// the driver syncs shared dma-bufs itself (Mesa); otherwise each pass is waited for
@@ -344,7 +353,9 @@ impl Presenter {
         }
         let linear = std::env::var_os("BIFROST_GPU_TILED").is_none();
         let implicit_sync = renderer.contains("Mesa") && std::env::var_os("BIFROST_GPU_WAIT").is_none();
+        let has_modifiers = has_extension(&exts, "EGL_EXT_image_dma_buf_import_modifiers");
         Ok(Presenter {
+            has_modifiers,
             egl,
             gl,
             ext,
@@ -369,7 +380,7 @@ impl Presenter {
             live_changed: false,
             live_on: true,
             flush: false,
-            wallpaper_key: (0, 0, 0),
+            wallpaper_key: (0, 0, 0, 0),
             renderer,
             stats: Stats::default(),
             implicit_sync,
@@ -389,8 +400,17 @@ impl Presenter {
         let mut ring = Vec::new();
         let mut infos = Vec::new();
         for _ in 0..n {
-            let bo = self.gbm.alloc(w, h, fourcc, self.linear)?;
-            let (image, tex, fbo) = self.import(&bo, w, h, fourcc)?;
+            let built = self.gbm.alloc(w, h, fourcc, self.linear).and_then(|bo| self.import(&bo, w, h, fourcc).map(|r| (bo, r)));
+            let (bo, (image, tex, fbo)) = match built {
+                Ok(v) => v,
+                Err(e) => {
+                    // PR-8: free the drawables already built, `Drawable` has no Drop
+                    for d in ring.drain(..) {
+                        self.release(d);
+                    }
+                    return Err(e);
+                }
+            };
             infos.push(BufferInfo { fd: bo.fd, stride: bo.stride, offset: bo.offset, modifier: bo.modifier, fourcc, w, h });
             ring.push(Drawable { _bo: bo, image, tex, fbo });
         }
@@ -682,7 +702,7 @@ impl Presenter {
     /// Uploads the wallpaper (once per change) at screen position (`x`, `y`) and blurs it on the GPU.
     pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32) {
         self.current();
-        let key = (wp.px.as_ptr() as usize, wp.px.len(), x);
+        let key = (wp.px.as_ptr() as usize, wp.px.len(), x, WALLPAPER_GEN.load(std::sync::atomic::Ordering::Relaxed));
         if key == self.wallpaper_key && self.wallpaper.is_some() {
             return;
         }
@@ -1080,7 +1100,7 @@ impl Presenter {
             EGL_DMA_BUF_PLANE0_PITCH_EXT,
             bo.stride as i32,
         ];
-        if bo.modifier != MOD_INVALID {
+        if bo.modifier != MOD_INVALID && self.has_modifiers {
             attrs.extend([EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, bo.modifier as u32 as i32, EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT, (bo.modifier >> 32) as u32 as i32]);
         }
         attrs.push(EGL_NONE);

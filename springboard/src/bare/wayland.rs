@@ -75,7 +75,7 @@ struct State {
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>,
     slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
-    pending: bool, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
+    pending: bool, desktop_flip: Option<f64>, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
 }
 /// The GPU presenter and what it needs between frames.
@@ -187,6 +187,8 @@ impl Display {
     pub fn size(&self) -> (usize,usize) { (self.state.size.0 as usize,self.state.size.1 as usize) }
     pub fn fd(&self) -> i32 { use std::os::fd::AsRawFd; self.conn.as_fd().as_raw_fd() }
     pub fn busy(&self) -> bool { self.state.pending }
+    /// The time of the desktop surface's last frame callback, once (PR-1).
+    pub fn take_flip(&mut self) -> Option<f64> { self.state.desktop_flip.take() }
     pub fn read(&mut self) -> io::Result<()> {
         self.queue.dispatch_pending(&mut self.state).map_err(err)?;
         if let Some(read) = self.conn.prepare_read() { transient(read.read())?; }
@@ -318,7 +320,7 @@ impl Display {
                 let s=&mut self.state.gpu_slots.get_mut(&key).unwrap()[slot];
                 w.surface.attach(Some(&s.buffer),0,0);
                 for a in &areas {w.surface.damage_buffer(a.x0 as i32,a.y0 as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
-                w.surface.frame(&qh,()); self.state.pending=true; w.surface.commit(); s.busy=true;
+                w.surface.frame(&qh,false); w.surface.commit(); s.busy=true;
             }
             // live materials: tell the presenter which windows sit behind the glass (z order, content origin)
             let stack:Vec<(u32,i32,i32)>=self.state.z.iter().filter_map(|id|self.state.windows.get(id).filter(|w|w.configured).map(|w|(GPU_WINDOW+*id,w.frame.x,w.frame.y))).collect();
@@ -379,7 +381,7 @@ impl Display {
             w.surface.attach(Some(&slot.buffer),0,0);
             for r in slot.damage.areas() { w.surface.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
             slot.damage.clear();
-            w.xdg.set_window_geometry(0,0,width as i32,height as i32); w.surface.frame(&qh,()); self.state.pending=true; w.surface.commit(); slot.busy=true;
+            w.xdg.set_window_geometry(0,0,width as i32,height as i32); w.surface.frame(&qh,false); w.surface.commit(); slot.busy=true;
 
         }
         if let Some((since,frames,pixels)) = &mut self.stats {
@@ -573,7 +575,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             s.attach(Some(&b.buffer), 0, 0);
             for r in &areas { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
             b.busy = true;
-            s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
+            s.frame(&self.queue.handle(), true); self.state.pending = true; s.commit();
             if !self.state.lock_wanted { self.state.main.attached(); }
             mark_first_frame();
             return transient(self.conn.flush());
@@ -588,7 +590,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         s.attach(Some(&slot.buffer), 0, 0);
         for r in slot.damage.areas() { s.damage_buffer(r.x0 as i32,r.y0 as i32,(r.x1-r.x0) as i32,(r.y1-r.y0) as i32); }
         slot.damage.clear(); slot.busy = true;
-        s.frame(&self.queue.handle(), ()); self.state.pending = true; s.commit();
+        s.frame(&self.queue.handle(), true); self.state.pending = true; s.commit();
         if !self.state.lock_wanted { self.state.main.attached(); }
         mark_first_frame();
         transient(self.conn.flush())
@@ -677,8 +679,11 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for State {
         }
     }
 }
-impl Dispatch<wl_callback::WlCallback, ()> for State {
-    fn event(s: &mut Self, _: &wl_callback::WlCallback, _: wl_callback::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) { s.pending = false; }
+impl Dispatch<wl_callback::WlCallback, bool> for State {
+    fn event(s: &mut Self, _: &wl_callback::WlCallback, ev: wl_callback::Event, desktop: &bool, _: &Connection, _: &QueueHandle<Self>) {
+        // only the desktop surface's frame callback is a vblank for the frame clock (PR-1)
+        if *desktop && matches!(ev, wl_callback::Event::Done { .. }) { s.pending = false; s.desktop_flip = Some(super::sys::now_ms()); }
+    }
 }
 impl Dispatch<wl_seat::WlSeat, ()> for State {
     fn event(s: &mut Self, seat: &wl_seat::WlSeat, e: wl_seat::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {

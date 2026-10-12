@@ -322,6 +322,8 @@ fn run() -> std::io::Result<()> {
     let mut panel: Vec<u32> = Vec::new();
     let mut events = Vec::new();
     let mut last_info = 0.0;
+    // `touch $dir/snap` is polled on the 1 s info tick, not every loop turn (SH-20)
+    let mut snap_due = false;
     let mut ready: Vec<bool> = Vec::new();
     let mut perf = Perf::default();
     let mut jank = springboard::bare::jank::Jank::default();
@@ -838,6 +840,7 @@ fn run() -> std::io::Result<()> {
                 Effect::Wallpaper(id) => match map_wallpaper(&dir, &id).and_then(|m| View::from_raw(m).map(|v| (m, v))) {
                     Some((m, view)) => {
                         shell.set_wallpaper(view);
+                        springboard::gpu::wl::bump_wallpaper_generation();
                         // the first-frame caches follow the new still (boot-08): rebuilt in the background
                         if let Some(path) = springboard::first_frame_cache::wallpaper_path(&dir, &id) {
                             springboard::first_frame_cache::spawn_build_here((w as u32, h as u32), &dir, &path);
@@ -894,6 +897,7 @@ fn run() -> std::io::Result<()> {
         let network_changed=wayland && springboard::shell::desktop_network::take_changed();
         if t - last_info > 1000.0 || network_changed {
             last_info = t;
+            snap_due = true;
             let mut info = gather(level, &current_wallpaper, &history);
             info.power_profile = boost.profile().label().into();
             if wayland {
@@ -1270,7 +1274,7 @@ fn run() -> std::io::Result<()> {
             bifrost_core::log::shell_logger("presenter").debug(format!("idle: {wakeups} wakeups, {frames} frames"));
         }
         // `touch $dir/snap` asks for the current frame as $dir/snap.raw
-        if fs::remove_file(format!("{dir}/snap")).is_ok() {
+        if std::mem::take(&mut snap_due) && fs::remove_file(format!("{dir}/snap")).is_ok() {
             let mut out = b"RIMG".to_vec();
             out.extend((fw as u32).to_le_bytes());
             out.extend((fh as u32).to_le_bytes());
