@@ -1,5 +1,5 @@
-//! `NativeDataDetector` (Foundation): finds links, email addresses, dates, street addresses, money amounts and
-//! phone numbers in plain text.
+//! `NativeDataDetector` (Foundation): finds links, email addresses, dates, street addresses, money amounts, flight
+//! numbers and phone numbers in plain text.
 //! Results are byte ranges into the input, cut only at ASCII bytes, so they are always char boundaries.
 //! Overlaps are resolved by kind priority (link, then date, then phone), so "2026-10-09" is a date, not a phone number.
 
@@ -16,6 +16,8 @@ pub enum Kind {
     Email,
     /// A number with a currency symbol or code, or `kr`: `$12.50`, `ISK 2.000`, `1.500 kr`, `12,99 EUR`.
     Money,
+    /// An airline code and a flight number, `FI 552` or `BA117` (the official flight match kind).
+    Flight,
 }
 
 /// One piece of text the detector recognised.
@@ -36,7 +38,7 @@ impl Match {
 pub fn find(text: &str, kinds: &[Kind]) -> Vec<Match> {
     let mut accepted: Vec<Match> = Vec::new();
     // Priority order, whatever order the caller listed the kinds in. A link wins over an address inside it.
-    for kind in [Kind::Link, Kind::Email, Kind::Date, Kind::Address, Kind::Money, Kind::Phone] {
+    for kind in [Kind::Link, Kind::Email, Kind::Date, Kind::Address, Kind::Money, Kind::Flight, Kind::Phone] {
         if !kinds.contains(&kind) {
             continue;
         }
@@ -46,6 +48,7 @@ pub fn find(text: &str, kinds: &[Kind]) -> Vec<Match> {
             Kind::Date => dates(text),
             Kind::Address => addresses(text),
             Kind::Money => money(text),
+            Kind::Flight => flights(text),
             Kind::Phone => phones(text),
         };
         for range in found {
@@ -257,6 +260,53 @@ fn addresses(text: &str) -> Vec<Range<usize>> {
         i += 1;
     }
     out
+}
+
+/// Flight numbers: a two-character airline code in capitals (a capital, then a capital or a digit), an optional single
+/// space, then one to four digits that end at a word boundary: `FI 552`, `BA117`. Lower-case letters do not count, so
+/// `is 12` is not a flight. Two capitals before digits can still be an ordinary word, so this rule is a heuristic.
+fn flights(text: &str) -> Vec<Range<usize>> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    for at in 0..bytes.len() {
+        if (at > 0 && is_word(bytes[at - 1])) || !bytes[at].is_ascii_uppercase() {
+            continue;
+        }
+        let second = match bytes.get(at + 1) {
+            Some(&b) => b,
+            None => break,
+        };
+        if !(second.is_ascii_uppercase() || second.is_ascii_digit()) {
+            continue;
+        }
+        let mut p = at + 2;
+        if bytes.get(p) == Some(&b' ') {
+            p += 1;
+        }
+        let digits_start = p;
+        while p < bytes.len() && bytes[p].is_ascii_digit() && p - digits_start < 4 {
+            p += 1;
+        }
+        if p == digits_start {
+            continue;
+        }
+        // a fifth digit, or any letter after the number, means this is not a flight number
+        if bytes.get(p).is_some_and(|&b| is_word(b)) {
+            continue;
+        }
+        out.push(at..p);
+    }
+    out
+}
+
+/// The airline code and the flight number of a flight match: `("FI", "552")` for `FI 552`. `None` when the text has
+/// no digits, or the code before the digits is not two characters.
+pub fn flight_parts(text: &str) -> Option<(&str, &str)> {
+    let at = text.find(|c: char| c.is_ascii_digit())?;
+    let airline = text[..at].trim_end();
+    let number = &text[at..];
+    let valid = airline.len() == 2 && number.bytes().all(|b| b.is_ascii_digit());
+    valid.then_some((airline, number))
 }
 
 /// Phone numbers: 7 to 15 digits (E.164 length) with spaces, dashes or brackets between them, and an
@@ -533,5 +583,31 @@ mod tests {
         assert_eq!(kinds, vec![Kind::Email, Kind::Money, Kind::Link, Kind::Date, Kind::Phone]);
         assert!(found.windows(2).all(|w| w[0].range.end <= w[1].range.start));
         assert!(find(s, &[Kind::Date]).iter().all(|m| m.kind == Kind::Date));
+    }
+
+    #[test]
+    fn flight_numbers_take_a_two_capital_code_and_one_to_four_digits() {
+        let all = [Kind::Flight];
+        assert_eq!(texts("Flugið FI 552 lendir kl. 10", &all), vec![(Kind::Flight, "FI 552".into())]);
+        assert_eq!(texts("BA117 and XY 1234.", &all), vec![(Kind::Flight, "BA117".into()), (Kind::Flight, "XY 1234".into())]);
+        assert!(texts("ABC 123", &all).is_empty(), "a three-letter code is not an airline code");
+        assert!(texts("AB 12345", &all).is_empty(), "five digits is not a flight number");
+        assert!(texts("is 12 times", &all).is_empty(), "lower-case code letters do not count");
+        assert!(texts("EX-12", &all).is_empty(), "a hyphen is not part of the code");
+    }
+
+    #[test]
+    fn flight_parts_split_the_code_from_the_number() {
+        assert_eq!(flight_parts("FI 552"), Some(("FI", "552")));
+        assert_eq!(flight_parts("BA117"), Some(("BA", "117")));
+        assert_eq!(flight_parts("FI"), None, "no number");
+        assert_eq!(flight_parts("ABC 12"), None, "the code is two characters");
+    }
+
+    #[test]
+    fn flights_sit_beside_dates_and_are_reported_only_when_asked() {
+        let found = texts("Dagur 2026-10-09 flug FI 552", &[Kind::Flight, Kind::Date]);
+        assert_eq!(found, vec![(Kind::Date, "2026-10-09".into()), (Kind::Flight, "FI 552".into())]);
+        assert!(texts("flug FI 552", &[Kind::Phone, Kind::Date]).is_empty(), "a kind that was not asked for is not reported");
     }
 }
