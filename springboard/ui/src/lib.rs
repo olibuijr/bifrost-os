@@ -752,6 +752,7 @@ pub mod value_query;
 pub mod widget_ax;
 pub mod widget_kind;
 pub mod widget_config;
+pub mod widget_arrange;
 pub mod widget_date;
 pub mod media_query;
 pub mod media_search;
