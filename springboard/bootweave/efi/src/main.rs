@@ -5,6 +5,7 @@
 #![no_std]
 extern crate alloc;
 mod boot_policy;
+mod screen;
 use alloc::vec::Vec;
 use uefi::boot::{self, LoadImageSource};
 use uefi::prelude::*;
@@ -185,19 +186,19 @@ fn main() -> Status {
         boot_policy::Choice::Previous => true,
     };
     if fallback {
-        return previous
-            .as_deref()
-            .map(|line| boot_line(image, dev, line))
-            .unwrap_or(Status::LOAD_ERROR);
+        return rollback(image, dev, previous.as_deref()).unwrap_or(Status::LOAD_ERROR);
     }
     let status = boot_line(image, dev, &current);
     if marker.is_some() && status != Status::SUCCESS {
-        return previous
-            .as_deref()
-            .map(|line| boot_line(image, dev, line))
-            .unwrap_or(status);
+        return rollback(image, dev, previous.as_deref()).unwrap_or(status);
     }
     status
+}
+/// Starts the previous generation under the rollback screen. `None` when there is no previous generation to start.
+fn rollback(image: Handle, dev: Handle, previous: Option<&str>) -> Option<Status> {
+    let line = previous?;
+    screen::show(bootweave_frame::Screen::Rollback);
+    Some(boot_line(image, dev, line))
 }
 fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
     let Ok(dp) = boot::open_protocol_exclusive::<DevicePath>(dev) else {

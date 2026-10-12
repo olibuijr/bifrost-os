@@ -16,6 +16,7 @@ pub mod layout;
 pub mod media;
 pub mod pager;
 pub mod pngenc;
+pub mod pstore;
 #[cfg(target_os = "linux")]
 pub mod privd;
 #[cfg(target_os = "linux")]

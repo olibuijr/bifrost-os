@@ -68,8 +68,13 @@ dependencies = [
 name = "bootweave-efi"
 version = "0.1.0"
 dependencies = [
+ "bootweave-frame",
  "uefi",
 ]
+
+[[package]]
+name = "bootweave-frame"
+version = "0.1.0"
 
 [[package]]
 name = "syn"

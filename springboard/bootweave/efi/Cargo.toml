@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 uefi = { version = "0.41", features = ["alloc", "panic_handler", "global_allocator"] }
+# the one boot frame (docs/boot-architecture.md); the loader draws its screens with it
+bootweave-frame = { path = "../frame" }
 
 [profile.release]
 opt-level = "s"
