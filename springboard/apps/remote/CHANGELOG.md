@@ -1,3 +1,9 @@
+## 0.2.0 — 2026-10-12
+
+- Nearby computers: Remote looks on the local network for other computers that share a desktop and lists them. Tap one to see its address.
+- Network: the window says whether this computer is connected by Ethernet, Wi-Fi or mobile data, or has no connection yet.
+- Not yet: this computer does not announce itself on the network, so other computers cannot list it.
+
 ## 0.1.9 — 2026-10-11
 
 - Full-size window (`window = "full-size"`, min system 0.4.84): the large title sits below the traffic-light band.
