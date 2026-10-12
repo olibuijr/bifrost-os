@@ -10,6 +10,10 @@
 //! Not mirrored: the service type (no named networks), the signed-in account (`account`) and the handler, which is the
 //! `URLSession` completion. Requests are not signed, so a service that needs a token gets one from the app.
 
+/// The compose sheet's content and state (`SLComposeViewController`), from `bifrost_ui::compose`. Showing the sheet is
+/// up to the shell; the sheet hands its draft to the share menu.
+pub use bifrost_ui::compose::{ComposeDraft, ComposeError, ComposeItem, ComposeResult, ComposeSheet, SheetState};
+
 use crate::multipart::MultipartBody;
 use crate::url::URLRequest;
 use std::collections::BTreeMap;
