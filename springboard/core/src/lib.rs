@@ -27,6 +27,7 @@ pub mod script_io;
 pub mod app_links;
 pub mod matter;
 pub mod matter_interaction;
+pub mod matter_cluster;
 pub mod extension_process;
 pub mod motion;
 pub mod sensor_log;
