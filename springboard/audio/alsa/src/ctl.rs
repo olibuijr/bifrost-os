@@ -3,11 +3,16 @@
 //! The uapi structs follow `include/uapi/sound/asound.h` on a 64-bit target (grown from `media/mixer.rs`); sizes
 //! and offsets are pinned by the tests.
 //!
+//! Channel maps: `pcm_chmaps` reads the TLV of a PCM's `Playback/Capture Channel Map` control into every map the
+//! device can take, `pcm_chmap` the map in use, and `pcm_layout` the device's channel layout from them (`chmap`).
+//!
 //! The one that bit before: `snd_ctl_elem_list` is `offset, space, used, count` (the caller says how much room it
 //! has in `space`; the kernel answers in `used` and `count`), and listing is a two-step dance: an empty query for
 //! `count`, then a second call with that much room.
 
+use crate::chmap::{current_map, map_for, parse_chmap_tlv, Chmap, CHMAP_CAPTURE_NAME, CHMAP_PLAYBACK_NAME};
 use crate::sys::{close_fd, ioc, ior, iowr, ioctl, open_dev, DIR_READ, DIR_WRITE};
+use bifrost_audio_types::ChannelLayout;
 use crate::uapi::PcmInfo;
 use std::io;
 use std::os::fd::RawFd;
@@ -116,6 +121,18 @@ pub const CTL_SUBSCRIBE_EVENTS: u32 = iowr::<i32>(b'U', 0x16);
 pub const CTL_TLV_READ: u32 = ioc(DIR_READ | DIR_WRITE, b'U', 0x1a, 8);
 pub const CTL_PCM_NEXT_DEVICE: u32 = ior::<i32>(b'U', 0x30);
 pub const CTL_PCM_INFO: u32 = iowr::<PcmInfo>(b'U', 0x31);
+
+/// The channel-map control of PCM `device`: interface PCM, the device number, `index` = the substream.
+pub fn chmap_id(device: u32, capture: bool, subdevice: u32) -> ElemId {
+    let mut id = ElemId::new(IFACE_PCM, device, if capture { CHMAP_CAPTURE_NAME } else { CHMAP_PLAYBACK_NAME });
+    id.index = subdevice;
+    id
+}
+
+/// Room for a channel-map TLV: 4 KiB holds the HDMI drivers' long lists; a driver that needs more (the kernel
+/// answers `ENOMEM`) gets one retry with the larger size.
+pub const TLV_ROOM: usize = 4096;
+pub const TLV_ROOM_MAX: usize = 65536;
 
 pub fn cstr(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes.split(|&b| b == 0).next().unwrap_or(&[])).into_owned()
@@ -410,6 +427,51 @@ impl Ctl {
         db_scale(&t.tlv)
     }
 
+    /// The TLV of element `numid`, up to `room` bytes, as the bytes after the header. `snd_ctl_tlv` is
+    /// `numid, length` (the room in bytes) followed by the data, so the buffer is header words plus room.
+    fn tlv_bytes(&self, numid: u32, room: usize) -> io::Result<Vec<u8>> {
+        let words = room / 4;
+        let mut buf = vec![0u32; 2 + words];
+        buf[0] = numid;
+        buf[1] = (words * 4) as u32;
+        // SAFETY: `buf` is a snd_ctl_tlv header (numid, length) followed by `length` bytes, alive for the call; the
+        // kernel writes at most `length` bytes after the header.
+        unsafe { ioctl(self.fd, CTL_TLV_READ, buf.as_mut_ptr()) }?;
+        Ok(buf[2..].iter().flat_map(|w| w.to_ne_bytes()).collect())
+    }
+
+    /// Every channel map PCM `device` (the `capture` side, substream `subdevice`) can take, from its chmap control's
+    /// TLV. `NotFound` when the driver registers no chmap control; empty when the control has no TLV.
+    pub fn pcm_chmaps(&self, device: u32, capture: bool, subdevice: u32) -> io::Result<Vec<Chmap>> {
+        let info = self.info(chmap_id(device, capture, subdevice), 0)?;
+        if info.access & ACCESS_TLV_READ == 0 {
+            return Ok(Vec::new());
+        }
+        let numid = info.id.numid;
+        let bytes = match self.tlv_bytes(numid, TLV_ROOM) {
+            Err(e) if e.raw_os_error() == Some(libc::ENOMEM) => self.tlv_bytes(numid, TLV_ROOM_MAX)?,
+            r => r?,
+        };
+        Ok(parse_chmap_tlv(&bytes))
+    }
+
+    /// The map in use on a configured stream of `channels` channels; `None` before hw params.
+    pub fn pcm_chmap(&self, device: u32, capture: bool, subdevice: u32, channels: usize) -> io::Result<Option<Chmap>> {
+        let info = self.info(chmap_id(device, capture, subdevice), 0)?;
+        let v = self.read(info.id)?;
+        Ok(current_map(&unpack_values(Kind::Int, info.count as usize, &v.value), channels))
+    }
+
+    /// The device's channel layout for `channels` channels: the map in use, else the first map the device offers
+    /// for that count. `None` when the driver has no chmap control or no map of that size.
+    pub fn pcm_layout(&self, device: u32, capture: bool, subdevice: u32, channels: usize) -> Option<ChannelLayout> {
+        if let Ok(Some(m)) = self.pcm_chmap(device, capture, subdevice, channels) {
+            return m.layout().ok();
+        }
+        let maps = self.pcm_chmaps(device, capture, subdevice).ok()?;
+        map_for(&maps, channels).and_then(|m| m.layout().ok())
+    }
+
     /// The control behind `id` with its range, items and current values.
     pub fn control(&self, id: ElemId) -> io::Result<Control> {
         let info = self.info(id, 0)?;
@@ -653,6 +715,16 @@ mod tests {
         assert!(ev(EVENT_MASK_VALUE | EVENT_MASK_INFO).is_value_change());
         assert!(!ev(EVENT_MASK_INFO).is_value_change());
         assert!(!ev(EVENT_MASK_REMOVE).is_value_change(), "removal sets every bit");
+    }
+
+    #[test]
+    fn chmap_controls_are_addressed_by_pcm_device_and_substream() {
+        let id = chmap_id(3, false, 0);
+        assert_eq!((id.numid, id.iface, id.device, id.index), (0, IFACE_PCM, 3, 0));
+        assert_eq!(cstr(&id.name), "Playback Channel Map");
+        let id = chmap_id(0, true, 2);
+        assert_eq!((id.iface, id.device, id.index), (IFACE_PCM, 0, 2));
+        assert_eq!(cstr(&id.name), "Capture Channel Map");
     }
 
     #[test]

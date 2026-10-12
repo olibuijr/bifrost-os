@@ -35,7 +35,7 @@ Packaging: `bifrost-audiod.service` allows `/dev/cpu_dma_latency`; `tmpfiles-bif
 
 - `AlsaDriver` is still not pushed into `main.rs`'s driver list (its comment says it lands there); no change to avoid
   a merge conflict with the wiring task.
-- Capture-side `PCM_DELAY` (only the FIFO counts for input).
+- Capture-side `PCM_DELAY` (only the FIFO counts for input): done in 25 (`Pcm::converter_latency`), wired by 24.
 - Threaded IRQs need the `threadirqs` kernel parameter; setting it is a boot-config decision, not made here.
 
 ## Midget verification (lead)

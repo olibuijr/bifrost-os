@@ -9,7 +9,7 @@
 //! stream on an underrun; the driver detects and recovers it, see `ring`), and no automatic start.
 
 use crate::convert::SampleFormat;
-use crate::ring::{ptr_add, unwrap_ptr, RingLayout};
+use crate::ring::{ptr_add, ptr_diff, unwrap_ptr, RingLayout};
 use crate::sys::{close_fd, ioctl, ioctl_int, ioctl_none, open_dev};
 use crate::uapi::*;
 use std::io;
@@ -65,7 +65,25 @@ pub fn low_latency_buffers(quantum: u32, low_latency: bool) -> Vec<u32> {
 /// Converter latency the playback side adds beyond the frames queued: the delay the kernel reports minus the
 /// frames queued ahead of the hardware (never negative).
 pub fn converter_delay(delay: i64, queued: i64) -> u32 {
-    (delay - queued).clamp(0, u32::MAX as i64) as u32
+    delay.saturating_sub(queued).clamp(0, u32::MAX as i64) as u32
+}
+
+/// Frames the ring holds between the two pointers, the part of the kernel's delay that is not the converter's.
+/// Playback: queued ahead of the hardware (`appl - hw`). Capture: captured but not yet read (`hw - appl`). Never
+/// negative (an underrun or overrun counts as an empty ring).
+pub fn ring_frames(dir: Direction, hw: u64, appl: u64, boundary: u64) -> i64 {
+    let d = match dir {
+        Direction::Playback => ptr_diff(appl, hw, boundary),
+        Direction::Capture => ptr_diff(hw, appl, boundary),
+    };
+    d.max(0)
+}
+
+/// Converter latency of either direction from one `PCM_DELAY` reading and the pointers it was taken at. The
+/// kernel's delay is the ring frames (`ring_frames`) plus the codec and link delay the driver knows
+/// (`runtime->delay`), for capture as for playback; the converter part is the difference.
+pub fn converter_frames(dir: Direction, delay: i64, hw: u64, appl: u64, boundary: u64) -> u32 {
+    converter_delay(delay, ring_frames(dir, hw, appl, boundary))
 }
 
 /// What a device offers, from `HW_REFINE` on a fresh parameter set.
@@ -466,6 +484,18 @@ impl Pcm {
         Ok(d as i64)
     }
 
+    /// The converter latency of this stream in frames, either direction: the hardware FIFO plus the codec and
+    /// link delay the kernel reports beyond the frames in the ring. For capture that delay is the frames captured
+    /// but not yet read plus the codec delay, so the input side now counts the ADC path too, not only the FIFO.
+    /// One `PCM_DELAY` (which syncs the hardware pointer) and then the status the kernel just updated; call it at
+    /// start, never in the cycle. A failed `PCM_DELAY` (stream not prepared or running) counts the FIFO alone.
+    pub fn converter_latency(&mut self) -> u32 {
+        let fifo = self.fifo_frames();
+        let Ok(delay) = self.delay_frames() else { return fifo };
+        let pos = self.status();
+        fifo.saturating_add(converter_frames(self.dir, delay, pos.hw_raw, self.appl, self.boundary))
+    }
+
     /// Asks the driver to read the hardware pointer now (needed with `no_period_wakeup`).
     pub fn hwsync(&self) -> io::Result<()> {
         ioctl_none(self.fd, PCM_HWSYNC)
@@ -785,6 +815,41 @@ mod tests {
         assert_eq!(converter_delay(150, 128), 22);
         assert_eq!(converter_delay(100, 128), 0);
         assert_eq!(converter_delay(-5, 0), 0);
+        assert_eq!(converter_delay(i64::MIN, 1), 0, "no overflow on a hostile delay");
+    }
+
+    #[test]
+    fn ring_frames_follow_the_direction() {
+        let b = 1 << 30;
+        // playback: queued ahead of the hardware
+        assert_eq!(ring_frames(Direction::Playback, 0, 128, b), 128);
+        assert_eq!(ring_frames(Direction::Playback, 16, 128, b), 112);
+        // an underrun (hardware past the application pointer) is an empty ring
+        assert_eq!(ring_frames(Direction::Playback, 32, 0, b), 0);
+        // capture: captured but not yet read
+        assert_eq!(ring_frames(Direction::Capture, 64, 0, b), 64);
+        assert_eq!(ring_frames(Direction::Capture, 0, 0, b), 0);
+        // across the boundary: hw wrapped to 10, appl still at 1000 of 1024 -> 34 frames
+        assert_eq!(ring_frames(Direction::Capture, 10, 1000, 1024), 34);
+        // a degenerate boundary has no ring
+        assert_eq!(ring_frames(Direction::Capture, 64, 0, 1), 0);
+    }
+
+    #[test]
+    fn capture_converter_latency_is_the_delay_beyond_the_captured_frames() {
+        let b = 1 << 30;
+        // at start nothing is captured yet: the whole delay is the converter's
+        assert_eq!(converter_frames(Direction::Capture, 24, 0, 0, b), 24);
+        // 64 captured, delay 70: 6 frames in the ADC path
+        assert_eq!(converter_frames(Direction::Capture, 70, 64, 0, b), 6);
+        // across the boundary: 34 captured, delay 40
+        assert_eq!(converter_frames(Direction::Capture, 40, 10, 1000, 1024), 6);
+        // a delay smaller than the captured frames (the pointer moved between the reads) is never negative
+        assert_eq!(converter_frames(Direction::Capture, 10, 64, 0, b), 0);
+        assert_eq!(converter_frames(Direction::Capture, -5, 0, 0, b), 0);
+        // playback keeps its meaning: prefill 128, 16 already played, delay 134 -> 22
+        assert_eq!(converter_frames(Direction::Playback, 134, 16, 128, b), 22);
+        assert_eq!(converter_frames(Direction::Playback, 150, 0, 128, b), 22);
     }
 
     #[test]
