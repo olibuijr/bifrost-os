@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.7.0
 
 - A contact can hold more than one phone number, email and address. The first of each is still the contact's main value; the others are kept beside it and show on the card under their labels (Mobile, Home, Work, Other).
