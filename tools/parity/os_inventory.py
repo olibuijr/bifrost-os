@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """Walk an extracted reference OS image into the OS layer of the parity matrix (docs/macos-os-inventory.md).
 
-Usage: os_inventory.py ROOT [--dyld-json FILE] [--out docs/parity-matrix/os] [--source "macOS 27.0.1 26A434"]
+Usage:
+  os_inventory.py --index INDEX.tsv [--repo DIR] [--out docs/parity-matrix/os] [--source "macOS 27 26A434"]
+  os_inventory.py ROOT [--dyld-json FILE] [--out docs/parity-matrix/os] [--source "macOS 27.0.1 26A434"]
+
+--index reads the reference file index (tab-separated type F/D/L, size, path, one line per file, e.g.
+~/Projects/macos-ref/extract/ref27-index.tsv) instead of an extracted tree. Index mode has names and paths only, so
+document types and URL schemes (which live in Info.plist contents) and dyld images need ROOT mode.
 
 ROOT is the extracted system volume (the tree with System/, usr/, Applications/ ...). The walker records names,
 identifiers, versions, structure and interfaces only (clean-room rule): no file contents are copied. It writes one
-JSON file per (category, shard) with entries whose description, BifrOSt counterpart and status are left for the
-assessment team (status "unassessed"). Re-running keeps every assessed field of an entry with the same id.
+JSON file per (category, shard). Each entry gets a heuristic BifrOSt counterpart and status (gap, partial, os or n/a)
+from names that exist in this repository (method "heuristic"); a person replaces that by setting status and dropping
+"method", after which re-running keeps the entry's assessed fields (matched by id). Heuristic entries are re-guessed
+on every run and keep only their description, role, doc and rea fields.
 """
 import argparse
 import json
@@ -16,8 +24,12 @@ import re
 import struct
 import sys
 
-CATEGORIES = ("apps", "system-ui", "settings", "daemons", "frameworks", "drivers", "shaders", "cli", "formats", "assets")
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CATEGORIES = ("apps", "system-ui", "settings", "daemons", "frameworks", "drivers", "shaders", "cli", "formats", "assets",
+              "input-methods")
 ASSESSED_FIELDS = ("description", "bifrost", "status", "note", "rea", "doc", "role")
+HEURISTIC_KEEP = ("description", "role", "doc", "rea")
+STATUSES = ("parity", "partial", "os", "gap", "n/a")
 SYSTEM_UI = {
     "Dock", "Finder", "ControlCenter", "NotificationCenter", "SystemUIServer", "Spotlight", "loginwindow",
     "WindowManager", "Siri", "TextInputMenuAgent", "Wallpaper", "WallpaperAgent", "AirPlayUIAgent", "Ticket Viewer",
@@ -209,20 +221,209 @@ def merge(existing, fresh):
     for e in fresh:
         o = old.get(e["id"])
         if o:
-            for k in ASSESSED_FIELDS:
+            keep = HEURISTIC_KEEP if o.get("method") == "heuristic" else ASSESSED_FIELDS
+            for k in keep:
                 if o.get(k):
                     e[k] = o[k]
     return fresh
 
 
+# ---- index mode: names and paths from the reference file index (no extracted tree needed) ----
+
+APP_ALIASES = {  # reference app name (lowercase, alphanumerics) -> BifrOSt counterpart path (checked to exist)
+    "systemsettings": "springboard/src/shell/settings.rs", "finder": "springboard/apps/files",
+    "safari": "springboard/apps/browser", "dock": "springboard/src/shell/desktop_dock.rs",
+    "controlcenter": "springboard/src/shell/control_center.rs",
+}
+SETTINGS_RE = re.compile(r"Settings|Preferences|Pref|About|Password|Privacy|Security|Display|Network|Sharing|Keyboard|"
+                         r"Mouse|Trackpad|Sound|Bluetooth|Battery|Wallpaper|Appearance|Accessibility|Notification|Focus|"
+                         r"Account|Passkey|Siri|Language|Region|Date|Time|Storage|Software|Update|Login|Users", re.I)
+UI_DAEMON_RE = re.compile(r"Spotlight|Dock|Finder|Notification|Wallpaper|Siri|Clipboard|Screen|Login|Window|Menu|"
+                          r"Control|Keyboard|Input|Search|Launchpad|Share", re.I)
+APPLE_CLI_RE = re.compile(r"^(codesign|xcrun|xcodebuild|defaults|plutil|lsregister|mdfind|mdutil|open|pbcopy|pbpaste|"
+                          r"osascript|scutil|networksetup|diskutil|hdiutil|tmutil|launchctl|sw_vers|softwareupdate|pmset|"
+                          r"system_profiler|say|screencapture|caffeinate|airport)$")
+INDEX_RULES = (  # (record type, regex on the relative path, category, kind)
+    ("D", r"^System/Applications/System Settings\.app/Contents/PlugIns/[^/]+\.appex$", "settings", "settings extension"),
+    ("D", r"/Input Methods/[^/]+\.(app|component|bundle)$", "input-methods", "input method"),
+    ("D", r"/Keyboard Layouts/[^/]+\.bundle$", "input-methods", "keyboard layout"),
+    ("D", r"^System/Applications/(Utilities/)?[^/]+\.app$", "apps", "app"),
+    ("D", r"^Applications/[^/]+\.app$", "apps", "bundled app"),
+    ("D", r"^System/Library/CoreServices/Applications/[^/]+\.app$", "apps", "core service app"),
+    ("D", r"^System/Library/CoreServices/[^/]+\.app$", "system-ui", "core service"),
+    ("D", r"^System/Library/ExtensionKit/Extensions/[^/]+\.appex$", "settings", "settings extension"),
+    ("D", r"^System/Library/PreferencePanes/[^/]+\.prefPane$", "settings", "settings pane"),
+    ("D", r"^System/Library/Frameworks/[^/]+\.framework$", "frameworks", "public framework"),
+    ("D", r"^System/Library/PrivateFrameworks/[^/]+\.framework$", "frameworks", "private framework"),
+    ("D", r"^System/(KernelKit/)?System/Library/Extensions/[^/]+\.kext$", "drivers", "kext"),
+    ("D", r"^System/Library/DriverExtensions/[^/]+\.dext$", "drivers", "dext"),
+    ("F", r"^System/Library/(LaunchDaemons|LaunchAgents)/[^/]+\.plist$", "daemons", "launchd plist"),
+    ("F", r"^(usr/bin|usr/sbin|usr/libexec|bin|sbin)/[^/]+$", "cli", "tool"),
+)
+INDEX_ASSET_DIRS = ("/Sounds/", "/Desktop Pictures/", "/Wallpaper", "/Cursors/", "/Fonts/")
+
+
+def parse_index_line(line):
+    """One reference index line: type, size, path. Returns None for headers, blanks and malformed lines."""
+    parts = line.rstrip("\r\n").split("\t")
+    if len(parts) < 3 or parts[0] not in ("F", "D", "L"):
+        return None
+    path = parts[2].strip("/")
+    if not path:
+        return None
+    try:
+        size = int(parts[1])
+    except ValueError:
+        size = 0
+    return {"type": parts[0], "size": size, "path": path}
+
+
+def classify_index_record(rec):
+    """Category, kind and name for one index record, or None when it is not an OS component this layer records."""
+    t, p = rec["type"], rec["path"]
+    base = p.rsplit("/", 1)[-1]
+    bundle = base.rsplit(".", 1)[0] if "." in base else base
+    for rt, rx, cat, kind in INDEX_RULES:
+        if rt != t or not re.search(rx, p):
+            continue
+        if cat == "daemons":
+            return cat, kind, base[:-len(".plist")], ""
+        if cat == "cli":
+            return cat, kind, base, ""
+        if cat == "settings" and kind == "settings extension" and "/PlugIns/" not in p and not SETTINGS_RE.search(base):
+            cat, kind = "system-ui", "system extension"
+        if cat == "system-ui" and bundle.endswith("Agent"):
+            kind = "core service agent"
+        if cat == "apps" and bundle in SYSTEM_UI:
+            cat = "system-ui"
+        owner = ""
+        if "/Contents/PlugIns/" in p:
+            owner = p.split("/Contents/PlugIns/")[0].rsplit("/", 1)[-1][:-len(".app")]
+        return cat, kind, bundle, owner
+    if t == "F" and base.endswith(".metallib"):
+        m = re.search(r"/([^/]+)\.(framework|app|bundle|dylib)/", "/" + p)
+        return "shaders", "metal library", base, m.group(1) if m else ""
+    ext = os.path.splitext(base)[1].lower()
+    if t == "F" and ext in (".ttf", ".otf", ".ttc"):
+        return "assets", "font", base, ""
+    if t == "F" and ext in ASSET_EXT and any(d in "/" + p for d in INDEX_ASSET_DIRS):
+        kind = "wallpaper" if re.search(r"Wallpaper|Desktop Pictures", p) else ASSET_EXT[ext]
+        return "assets", kind, base, ""
+    return None
+
+
+def walk_index(lines):
+    """Entries for every recorded OS component in a reference index (lines of the tab-separated file)."""
+    out = []
+    for line in lines:
+        rec = parse_index_line(line)
+        if not rec:
+            continue
+        hit = classify_index_record(rec)
+        if not hit:
+            continue
+        cat, kind, name, owner = hit
+        path = "/" + rec["path"]
+        out.append(entry(cat, f"path:{path}", path, kind, name, owner=owner, facts={"size": rec["size"]}))
+    return out
+
+
+class Assessor:
+    """Heuristic BifrOSt counterpart and status, from names that exist in the repository (cached file reads)."""
+
+    def __init__(self, repo):
+        self.repo = repo
+        self.cache = {}
+
+    def exists(self, rel):
+        return os.path.exists(os.path.join(self.repo, rel))
+
+    def text(self, rel):
+        if rel not in self.cache:
+            try:
+                with open(os.path.join(self.repo, rel), encoding="utf-8", errors="replace") as f:
+                    self.cache[rel] = re.sub(r"[^a-z0-9]", "", f.read().lower())
+            except OSError:
+                self.cache[rel] = ""
+        return self.cache[rel]
+
+    def app(self, name):
+        slug = re.sub(r"[^a-z0-9]", "", name.lower())
+        if APP_ALIASES.get(slug) and self.exists(APP_ALIASES[slug]):
+            return APP_ALIASES[slug]
+        apps = os.path.join(self.repo, "springboard", "apps")
+        if os.path.isdir(apps):
+            for d in sorted(os.listdir(apps)):
+                key = re.sub(r"[^a-z0-9]", "", d.lower())
+                if key.endswith("desktop"):
+                    key = key[:-len("desktop")]
+                if key == slug:
+                    return f"springboard/apps/{d}"
+        return ""
+
+    def guess(self, e):
+        cat, kind, name = e["category"], e["kind"], e["name"]
+        slug = re.sub(r"[^a-z0-9]", "", name.lower())
+        if cat in ("apps", "system-ui") and kind not in ("core service agent", "system extension", "core service"):
+            c = self.app(name)
+            return (c, "partial", "heuristic: app with a matching name") if c else ("", "gap", "no counterpart yet")
+        if cat == "settings":
+            if self.text("springboard/src/shell/pages.rs") and slug and slug in self.text("springboard/src/shell/pages.rs"):
+                return "springboard/src/shell/pages.rs", "partial", "heuristic: pane name appears in the settings specs"
+            home = "springboard/src/shell/pages.rs" if self.exists("springboard/src/shell/pages.rs") else ""
+            return home, "gap", "heuristic: candidate home is the settings specs"
+        if cat in ("system-ui", "daemons"):
+            if cat == "system-ui" and slug in APP_ALIASES and self.exists(APP_ALIASES[slug]):
+                return APP_ALIASES[slug], "partial", "heuristic: shell counterpart by name"
+            if cat == "daemons" and not UI_DAEMON_RE.search(name):
+                return "", "os", "heuristic: system service, provided by the Linux base or a BifrOSt unit"
+            return "", "gap", "heuristic: user-facing service or shell component"
+        if cat == "frameworks":
+            if kind == "private framework":
+                return "", "os", "heuristic: private framework, behaviour only, no binary"
+            data = "docs/parity-matrix/data/" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") + ".json"
+            if self.exists(data):
+                return data, "gap", "heuristic: no status evidence; rows in the framework data file decide"
+            return "", "gap", "heuristic: public framework without a data file"
+        if cat == "drivers":
+            return ("", "n/a", "heuristic: Apple hardware, not on PC") if name.startswith("Apple") else ("", "os", "heuristic: hardware driver, kernel side")
+        if cat == "cli":
+            return ("", "gap", "heuristic: Apple-specific tool") if APPLE_CLI_RE.match(name) else ("", "os", "heuristic: POSIX tool, Linux base")
+        if cat == "input-methods":
+            if kind == "keyboard layout" and self.exists("springboard/src/shell/kb_layouts.rs"):
+                return "springboard/src/shell/kb_layouts.rs", "partial", "heuristic: keyboard layouts module"
+            return "", "gap", "heuristic: no counterpart yet"
+        if cat == "shaders":
+            return "", "gap", "heuristic: BifrOSt writes its own shaders"
+        return "", "gap", "heuristic: asset, inventory only, never copied"
+
+
+def assess(entries, repo=REPO):
+    """Set the heuristic counterpart and status on every entry that has no person-assessed status yet."""
+    a = Assessor(repo)
+    for e in entries:
+        if e.get("status") in (None, "", "unassessed") or e.get("method") == "heuristic":
+            bifrost, status, note = a.guess(e)
+            e.update(bifrost=bifrost, status=status, note=note, method="heuristic")
+    return entries
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("root")
+    ap.add_argument("root", nargs="?", help="extracted system volume (ROOT mode)")
+    ap.add_argument("--index", help="reference file index TSV (index mode, no extracted tree)")
     ap.add_argument("--dyld-json")
+    ap.add_argument("--repo", default=REPO, help="repository the heuristic counterparts are checked against")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "..", "docs", "parity-matrix", "os"))
     ap.add_argument("--source", default="macOS 27.0.1 Golden Gate 26A434")
     a = ap.parse_args(argv)
-    entries = walk(a.root, a.dyld_json)
+    if bool(a.index) == bool(a.root):
+        ap.error("give either --index INDEX.tsv or ROOT")
+    if a.index:
+        with open(a.index, encoding="utf-8", errors="replace") as f:
+            entries = walk_index(f)
+    else:
+        entries = walk(a.root, a.dyld_json)
     seen = set()
     uniq = []
     for e in entries:
@@ -238,7 +439,7 @@ def main(argv=None):
         os.makedirs(d, exist_ok=True)
         p = os.path.join(d, shard + ".json")
         old = json.load(open(p)).get("entries", []) if os.path.exists(p) else []
-        es = merge(old, sorted(es, key=lambda e: e["id"]))
+        es = assess(merge(old, sorted(es, key=lambda e: e["id"])), a.repo)
         with open(p, "w") as f:
             json.dump({"category": cat, "shard": shard, "source": a.source, "entries": es}, f, indent=1, ensure_ascii=False)
             f.write("\n")
