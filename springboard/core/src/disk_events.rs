@@ -45,6 +45,46 @@ pub fn diff(prev: &[Disk], next: &[Disk]) -> Vec<DiskEvent> {
     out
 }
 
+/// The disk with this BSD device name, if the snapshot has one.
+pub fn find_by_bsd_name<'a>(disks: &'a [Disk], bsd_name: &str) -> Option<&'a Disk> {
+    disks.iter().find(|d| d.bsd_name == bsd_name)
+}
+
+/// The disk whose mounted volume sits at `path`. A trailing slash is ignored, except that the root stays `/`. An
+/// empty path matches nothing, and a disk that is not mounted never matches.
+pub fn find_by_volume_path<'a>(disks: &'a [Disk], path: &str) -> Option<&'a Disk> {
+    let wanted = normalize_path(path)?;
+    disks.iter().find(|d| d.mount_point.as_deref().and_then(normalize_path) == Some(wanted))
+}
+
+fn normalize_path(path: &str) -> Option<&str> {
+    if path.is_empty() {
+        return None;
+    }
+    if path == "/" {
+        return Some("/");
+    }
+    Some(path.trim_end_matches('/'))
+}
+
+/// The facts about a disk as name and value pairs. Values are text: the size in bytes, `true` or `false` for the
+/// flags, the model with spaces trimmed. A blank model and an unmounted disk leave their entries out.
+pub fn description(disk: &Disk) -> BTreeMap<&'static str, String> {
+    let mut out = BTreeMap::new();
+    out.insert("bsd_name", disk.bsd_name.clone());
+    out.insert("media_size", disk.size.to_string());
+    out.insert("media_removable", disk.removable.to_string());
+    out.insert("media_writable", (!disk.read_only).to_string());
+    let model = disk.model.trim();
+    if !model.is_empty() {
+        out.insert("device_model", model.to_string());
+    }
+    if let Some(path) = &disk.mount_point {
+        out.insert("volume_path", path.clone());
+    }
+    out
+}
+
 /// The requests that can be vetoed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
@@ -167,5 +207,54 @@ mod tests {
         approvals.register(|_, _| Err("second".to_string()));
         let err = approvals.approve(Operation::Eject, &disk("sdb", None)).unwrap_err();
         assert_eq!(err.reason, "removable");
+    }
+
+    #[test]
+    fn a_disk_is_found_by_its_bsd_name() {
+        let snap = vec![disk("sdb", None), disk("sdc", Some("/media/card"))];
+        assert_eq!(find_by_bsd_name(&snap, "sdc").map(|d| d.size), Some(1 << 30));
+        assert!(find_by_bsd_name(&snap, "sdd").is_none());
+    }
+
+    #[test]
+    fn a_volume_path_matches_its_mount_point_with_or_without_a_trailing_slash() {
+        let snap = vec![disk("sdb", None), disk("sdc", Some("/media/stick"))];
+        assert_eq!(find_by_volume_path(&snap, "/media/stick").map(|d| d.bsd_name.as_str()), Some("sdc"));
+        assert_eq!(find_by_volume_path(&snap, "/media/stick/").map(|d| d.bsd_name.as_str()), Some("sdc"));
+        assert!(find_by_volume_path(&snap, "/media").is_none());
+        assert!(find_by_volume_path(&snap, "").is_none());
+    }
+
+    #[test]
+    fn the_root_volume_path_matches_only_a_root_mount() {
+        let root = vec![disk("sda", Some("/"))];
+        assert_eq!(find_by_volume_path(&root, "/").map(|d| d.bsd_name.as_str()), Some("sda"));
+        let unmounted = vec![disk("sdb", None)];
+        assert!(find_by_volume_path(&unmounted, "/").is_none());
+    }
+
+    #[test]
+    fn a_description_lists_size_flags_model_and_volume_path() {
+        let mut stick = disk("sdb", Some("/media/stick"));
+        stick.model = "  Stick  ".to_string();
+        stick.read_only = true;
+        let d = description(&stick);
+        assert_eq!(d.get("bsd_name").map(String::as_str), Some("sdb"));
+        assert_eq!(d.get("media_size").map(String::as_str), Some("1073741824"));
+        assert_eq!(d.get("media_removable").map(String::as_str), Some("true"));
+        assert_eq!(d.get("media_writable").map(String::as_str), Some("false"));
+        assert_eq!(d.get("device_model").map(String::as_str), Some("Stick"));
+        assert_eq!(d.get("volume_path").map(String::as_str), Some("/media/stick"));
+        assert_eq!(d.len(), 6);
+    }
+
+    #[test]
+    fn a_blank_model_and_an_unmounted_disk_leave_their_entries_out() {
+        let mut bare = disk("sdb", None);
+        bare.model = "   ".to_string();
+        let d = description(&bare);
+        assert!(!d.contains_key("device_model"));
+        assert!(!d.contains_key("volume_path"));
+        assert_eq!(d.len(), 4);
     }
 }
