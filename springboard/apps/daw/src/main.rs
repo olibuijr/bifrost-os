@@ -4,13 +4,15 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{ui, Damage, Surface, Ui, Weight};
 use bifrost_app::layout::traffic_lights_trailing;
 use bifrost_app::controls::media_trim::{TrimResult, TrimSession};
+use bifrost_app::controls::plugin_host::PresetStore;
 use bifrost_app::now_playing::Command;
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_core::json::Json;
 use daw::ai;
-use daw::model::{Clip, Instrument, Project, Scene, Track};
+use daw::model::{Clip, Extra, Instrument, Project, Scene, Track};
 use daw::playback::Player;
+use daw::rack;
 use daw::render::{self, RenderOpts};
 use daw::store::{self, Summary};
 use daw::system::{self, Transport};
@@ -27,6 +29,26 @@ const SCENE_W: f32 = 120.0;
 const ROLL_H: f32 = 260.0;
 const PICK_ROWS: usize = 5;
 const PICK_ROW_H: f32 = 40.0;
+/// Rack inspector: the parameter rows start under the header, one slider row per parameter.
+const RACK_TOP: f32 = HEADER + 16.0;
+const RACK_ROW_H: f32 = 28.0;
+/// Width of the parameter names before the slider, and of the preset column on the right.
+const RACK_LABEL_W: f32 = 240.0;
+const RACK_PANEL_W: f32 = 240.0;
+/// Presets listed in the rack's preset column.
+const RACK_PRESET_ROWS: usize = 8;
+
+/// The preset column of the rack: its x and width in px.
+fn rack_panel(w: f32) -> (f32, f32) {
+    (w - RACK_PANEL_W, RACK_PANEL_W - MARGIN)
+}
+
+/// The slider of a rack row: its x and width in px. The value readout sits right of it.
+fn rack_slider(w: f32) -> (f32, f32) {
+    let sx = MARGIN + 8.0 + RACK_LABEL_W;
+    let end = w - RACK_PANEL_W - 90.0;
+    (sx, (end - sx).max(40.0))
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum View {
@@ -66,6 +88,8 @@ struct Daw {
     trim: Option<TrimSession>,
     /// an Import MIDI tap asked for the open panel; `event` opens it, since `touch` has no context
     pending_import: bool,
+    /// the user presets of the rack track's instrument kind, loaded when the rack opens or the track changes
+    rack_presets: Option<PresetStore>,
 }
 
 #[derive(Clone, Copy)]
@@ -91,6 +115,10 @@ enum Hit {
     ArrAdd(usize),
     ArrMute(usize),
     RackParam(usize),
+    RackTrack(i32),
+    RackSlider(usize, f32),
+    RackSavePreset,
+    RackLoadPreset(usize),
     ImportMidi,
     Trim,
     TrimStart,
@@ -125,7 +153,7 @@ impl Daw {
         let root = PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()));
         let instruments = load_instruments(&plugins);
         let player = std::env::var("BIFROST_SOCK").ok().map(|_| Player::new(&root, store_dir.join("render-cache"), plugins));
-        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false, trim: None, pending_import: false }
+        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false, trim: None, pending_import: false, rack_presets: None }
     }
 
     /// Writes the project to `<store>/projects/<id>.json`.
@@ -288,17 +316,38 @@ impl Daw {
                 if rect_contains((self.lead, 8.0, 80.0, 40.0), x, y) {
                     return Hit::Back;
                 }
+                if rect_contains((w - 220.0, 16.0, 100.0, 32.0), x, y) {
+                    return Hit::RackTrack(-1);
+                }
+                if rect_contains((w - 110.0, 16.0, 100.0, 32.0), x, y) {
+                    return Hit::RackTrack(1);
+                }
                 let Some(p) = &self.project else { return Hit::Nothing };
-                let row = ((y - HEADER - 16.0) / 28.0).floor();
-                if row < 0.0 || x < MARGIN {
+                let (px, pw) = rack_panel(w);
+                if rect_contains((px, RACK_TOP, pw, 32.0), x, y) {
+                    return Hit::RackSavePreset;
+                }
+                let presets = self.rack_presets.as_ref().map_or(0, |s| s.presets().len()).min(RACK_PRESET_ROWS);
+                for k in 0..presets {
+                    if rect_contains((px, RACK_TOP + 44.0 + k as f32 * 32.0, pw, 28.0), x, y) {
+                        return Hit::RackLoadPreset(k);
+                    }
+                }
+                if y < RACK_TOP || x < MARGIN {
                     return Hit::Nothing;
                 }
-                let i = row as usize;
-                if i < self.rack_rows(p).len() {
-                    Hit::RackParam(i)
-                } else {
-                    Hit::Nothing
+                let row = ((y - RACK_TOP) / RACK_ROW_H).floor() as usize;
+                if row >= self.rack_rows(p).len() {
+                    return Hit::Nothing;
                 }
+                let (sx, sw) = rack_slider(w);
+                if sw > 0.0 && x >= sx - 6.0 && x <= sx + sw + 6.0 {
+                    return Hit::RackSlider(row, ((x - sx) / sw).clamp(0.0, 1.0));
+                }
+                if x < sx {
+                    return Hit::RackParam(row);
+                }
+                Hit::Nothing
             }
             View::Session => {
                 if self.picker.is_some() {
@@ -382,24 +431,79 @@ impl Daw {
         }
     }
 
-    /// Rack rows: (automation key, label, spec min, spec max) for the instrument and every effect.
+    /// Rack rows: (automation key, label, spec min, spec max) for the instrument and every effect of the rack track.
     fn rack_rows(&self, p: &Project) -> Vec<(String, String, f64, f64)> {
-        let mut out = vec![];
-        if let Some(spec) = daw::devices::instrument_spec(&p.tracks.get(self.rack_track).map(|t| t.instrument.kind.clone()).unwrap_or_default()) {
-            for q in spec {
-                out.push((format!("inst.{}", q.name), format!("instrument · {}", q.name), q.min, q.max));
+        let Some(track) = p.tracks.get(self.rack_track) else { return vec![] };
+        rack::rows(track).into_iter().map(|r| (r.key, r.label, r.item.param().min, r.item.param().max)).collect()
+    }
+
+    /// The kind of the rack track's instrument, which names its preset file.
+    fn rack_kind(&self) -> Option<String> {
+        self.project.as_ref()?.tracks.get(self.rack_track).map(|t| t.instrument.kind.clone())
+    }
+
+    /// Loads the presets of the rack track's instrument kind from its file. A file that cannot be read is reported.
+    fn refresh_rack_presets(&mut self) {
+        let Some(kind) = self.rack_kind() else {
+            self.rack_presets = None;
+            return;
+        };
+        let path = rack::preset_path(&self.store_dir, &kind);
+        self.rack_presets = match rack::load_presets(&path) {
+            Ok(store) => Some(store),
+            Err(e) => {
+                self.status = format!("Presets could not be read: {e}");
+                None
             }
+        };
+    }
+
+    /// Moves the rack to the next or previous track, wrapping at the ends.
+    fn step_rack_track(&mut self, d: i32) {
+        let Some(n) = self.project.as_ref().map(|p| p.tracks.len()).filter(|n| *n > 0) else { return };
+        self.rack_track = (self.rack_track as i32 + d).rem_euclid(n as i32) as usize;
+        self.refresh_rack_presets();
+    }
+
+    /// A click on a slider: sets the parameter to the position across the slider, and saves the song.
+    fn rack_slide(&mut self, row: usize, position: f32) {
+        let Some(p) = self.project.as_mut() else { return };
+        let Some(track) = p.tracks.get_mut(self.rack_track) else { return };
+        let Some(item) = rack::rows(track).get(row).map(|r| (r.item, r.label.clone())) else { return };
+        let Some(extra) = rack::owner_extra_mut(track, item.0.owner) else { return };
+        let clamped = rack::set(&item.0, extra, rack::value_at(&item.0, position));
+        self.save();
+        self.status = format!("{}: {:.2}", item.1, clamped);
+    }
+
+    /// Saves the rack track's instrument values as a new preset, and writes the preset file.
+    fn rack_save_preset(&mut self) {
+        if self.rack_presets.is_none() {
+            self.refresh_rack_presets();
         }
-        if let Some(t) = p.tracks.get(self.rack_track) {
-            for e in &t.effects {
-                if let Some(spec) = daw::devices::effect_spec(&e.kind) {
-                    for q in spec {
-                        out.push((format!("{}.{}", e.id, q.name), format!("{} · {}", e.kind, q.name), q.min, q.max));
-                    }
-                }
-            }
-        }
-        out
+        let Some(kind) = self.rack_kind() else { return };
+        let path = rack::preset_path(&self.store_dir, &kind);
+        let Some(extra) = self.project.as_ref().and_then(|p| p.tracks.get(self.rack_track)).map(|t| t.instrument.params.clone()) else { return };
+        let Some(store) = self.rack_presets.as_mut() else { return };
+        let result = rack::add_preset(store, &kind, &extra).and_then(|name| rack::save_presets(&path, store).map(|()| name));
+        self.status = match result {
+            Ok(name) => format!("Saved {name}"),
+            Err(e) => e,
+        };
+    }
+
+    /// Sets the rack track's instrument values to a saved preset, and saves the song.
+    fn rack_load_preset(&mut self, k: usize) {
+        let Some(kind) = self.rack_kind() else { return };
+        let Some(store) = self.rack_presets.as_mut() else { return };
+        let Some(number) = store.presets().get(k).map(|p| p.number) else { return };
+        let Some(track) = self.project.as_mut().and_then(|p| p.tracks.get_mut(self.rack_track)) else { return };
+        let result = rack::load_preset(store, &kind, &mut track.instrument.params, number);
+        self.save();
+        self.status = match result {
+            Ok(name) => format!("Loaded {name}"),
+            Err(e) => e,
+        };
     }
 
     /// Automation-mode click in the roll: adds a point on the selected parameter lane, value from the pointer height.
@@ -545,7 +649,12 @@ impl Daw {
                     self.rack_track = r;
                 }
                 self.view = View::Rack;
+                self.refresh_rack_presets();
             }
+            Hit::RackTrack(d) => self.step_rack_track(d),
+            Hit::RackSlider(row, position) => self.rack_slide(row, position),
+            Hit::RackSavePreset => self.rack_save_preset(),
+            Hit::RackLoadPreset(k) => self.rack_load_preset(k),
             Hit::Auto => self.auto_mode = !self.auto_mode,
             Hit::ArrBars(i, d) => {
                 if let Some(p) = self.project.as_mut() {
@@ -969,16 +1078,60 @@ impl Daw {
         }
     }
 
+    /// The rack inspector: one slider per parameter of the track's instrument and effects (value in its own unit),
+    /// the track's stream format under the title, and the instrument's presets in the column on the right.
     fn draw_rack(&self, s: &mut Surface, ui: &Ui) {
         let Some(p) = &self.project else { return };
+        let w = s.w as f32;
         s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
         Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, ui::TINT, self.lead + 8.0, 18.0);
         let title = p.tracks.get(self.rack_track).map(|t| t.name.clone()).unwrap_or_default();
         Self::draw_text(s, ui, &format!("Rack · {title}"), ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
-        for (i, (key, label, lo, hi)) in self.rack_rows(p).iter().enumerate() {
-            let y = HEADER + 16.0 + i as f32 * 28.0;
-            let col = if self.param.as_deref() == Some(key.as_str()) { ui::TINT } else { ui::LABEL_2.now() };
-            Self::draw_text(s, ui, &format!("{label}  [{lo:.2} .. {hi:.2}]"), ui.pt(13.0), Weight::Regular, col, MARGIN + 8.0, y + 4.0);
+        let format = format!("Stream: {}", rack::describe(daw::render::DEFAULT_SR, 2));
+        Self::draw_text(s, ui, &format, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), self.lead + 110.0, 58.0);
+        for (label, x) in [("< Track", w - 220.0), ("Track >", w - 110.0)] {
+            s.fill_rect(x as usize, 16, 100, 32, ui::FIELD_BG.now());
+            Self::draw_text(s, ui, label, ui.pt(15.0), Weight::Semibold, ui::TINT, x + 22.0, 22.0);
+        }
+
+        let Some(track) = p.tracks.get(self.rack_track) else { return };
+        let (sx, sw) = rack_slider(w);
+        for (i, row) in rack::rows(track).iter().enumerate() {
+            let y = RACK_TOP + i as f32 * RACK_ROW_H;
+            let selected = self.param.as_deref() == Some(row.key.as_str());
+            let col = if selected { ui::TINT } else { ui::LABEL_2.now() };
+            Self::draw_text(s, ui, &row.label, ui.pt(13.0), Weight::Regular, col, MARGIN + 8.0, y + 4.0);
+            let empty = Extra::new();
+            let value = rack::value(&row.item, rack::owner_extra(track, row.item.owner).unwrap_or(&empty));
+            let pos = rack::position(&row.item, value);
+            let q = row.item.param();
+            s.fill_rect(sx as usize, (y + 11.0) as usize, sw as usize, 6, ui::FIELD_BG.now());
+            s.fill_rect(sx as usize, (y + 11.0) as usize, (sw * pos) as usize, 6, ui::TINT);
+            s.fill_rect((sx + sw * pos - 4.0).max(0.0) as usize, (y + 7.0) as usize, 8, 14, ui::LABEL.now());
+            let text = match (q.curve, q.unit) {
+                (daw::devices::Curve::Int, "") => format!("{value:.0}"),
+                (daw::devices::Curve::Int, unit) => format!("{value:.0} {unit}"),
+                (_, "") => format!("{value:.2}"),
+                (_, unit) => format!("{value:.2} {unit}"),
+            };
+            Self::draw_text(s, ui, &text, ui.pt(13.0), Weight::Regular, ui::LABEL_2.now(), sx + sw + 12.0, y + 4.0);
+        }
+
+        let (px, pw) = rack_panel(w);
+        s.fill_rect(px as usize, RACK_TOP as usize, pw as usize, 32, ui::FIELD_BG.now());
+        Self::draw_text(s, ui, "Save Preset", ui.pt(15.0), Weight::Semibold, ui::TINT, px + 12.0, RACK_TOP + 8.0);
+        match self.rack_presets.as_ref() {
+            Some(store) if !store.presets().is_empty() => {
+                for (k, preset) in store.presets().iter().take(RACK_PRESET_ROWS).enumerate() {
+                    let y = RACK_TOP + 44.0 + k as f32 * 32.0;
+                    let current = store.current() == Some(preset.number);
+                    let col = if current { ui::TINT } else { ui::LABEL.now() };
+                    s.fill_rect(px as usize, y as usize, pw as usize, 28, ui::FIELD_BG.now());
+                    Self::draw_text(s, ui, &preset.name, ui.pt(13.0), Weight::Regular, col, px + 12.0, y + 6.0);
+                }
+            }
+            Some(_) => Self::draw_text(s, ui, "No presets yet", ui.pt(13.0), Weight::Regular, ui::LABEL_2.now(), px, RACK_TOP + 50.0),
+            None => Self::draw_text(s, ui, "Presets unavailable", ui.pt(13.0), Weight::Regular, ui::LABEL_2.now(), px, RACK_TOP + 50.0),
         }
     }
 }
@@ -1013,7 +1166,11 @@ impl Daw {
                 buttons
             }
             View::Arrangement => vec![(1, "Back", back), (2, "Play", (w - 220.0, 16.0, 100.0, 32.0))],
-            View::Rack => vec![(1, "Back", back)],
+            View::Rack => vec![
+                (1, "Back", back),
+                (2, "Previous Track", (w - 220.0, 16.0, 100.0, 32.0)),
+                (3, "Next Track", (w - 110.0, 16.0, 100.0, 32.0)),
+            ],
         }
     }
 }
