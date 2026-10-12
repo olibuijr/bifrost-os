@@ -5,6 +5,10 @@
 
 use super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::music::nowplaying::Target as Media;
+use super::music::{draw_cc_controls, icons};
+use super::services::now_playing;
+use crate::shell::switcher::draw_scaled;
+use bifrost_ui::media_session::PlaybackState;
 use super::AppId;
 use super::ui::{Ui, Weight, SECONDARY, WHITE};
 use super::{Effect, Event, Info, Screen, Shell, WifiAction};
@@ -586,7 +590,7 @@ impl Shell {
                 vec![]
             }
             Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext => {
-                self.music_control(media_target(tile).unwrap_or(Media::Play));
+                self.media_control(media_target(tile).unwrap_or(Media::Play));
                 vec![]
             }
             Tile::Brightness | Tile::Volume => vec![],
@@ -630,7 +634,7 @@ impl Shell {
                     Expanded::NowPlaying => {
                         for tile in [Tile::MediaPrev, Tile::MediaPlay, Tile::MediaNext] {
                             if inside(panel_button(&self.ui, panel, tile), x, y) {
-                                self.music_control(media_target(tile).unwrap_or(Media::Play));
+                                self.media_control(media_target(tile).unwrap_or(Media::Play));
                             }
                         }
                         vec![]
@@ -751,7 +755,7 @@ impl Shell {
         // Now Playing
         let (kx, ky, kw, kh) = media_tile(ui, self.w);
         s.fill_rrect(kx, ky + slide, kw, kh, r, tile_bg);
-        self.draw_music_tile(s, (kx, ky + slide, kw, kh), (alpha * 255.0) as u32, pressed.and_then(media_target));
+        self.draw_media_tile(s, (kx, ky + slide, kw, kh), (alpha * 255.0) as u32, pressed.and_then(media_target));
 
         // rotation lock: a white tile with a red glyph while held, as on the bifrost
         let (rx, ry, rw, rh) = tile_rect(ui, self.w, Tile::RotationLock);
@@ -848,7 +852,7 @@ impl Shell {
                 s.blit(&name, (x + ui.pt(16.0)) as i32, (y + ui.pt(16.0)) as i32, 255, alpha);
             }
             Expanded::NowPlaying => {
-                self.draw_music_tile(s, panel, alpha, None);
+                self.draw_media_tile(s, panel, alpha, None);
             }
             Expanded::Connectivity => {
                 let on = self.info.wifi_on && !self.cc.airplane;
@@ -1113,6 +1117,7 @@ pub fn cluster_rect(ui: &Ui, w: i32) -> Rect {
 mod tests {
     use super::super::tests::{settle, shell, swipe, unlock};
     use super::super::{AppId, Effect, Event, Shell, WifiAction};
+    use bifrost_core::json::Json;
     use super::*;
     use crate::gfx::Surface;
 
@@ -1154,6 +1159,23 @@ mod tests {
         assert_eq!((rx, ry), (cluster(&sh.ui, sh.w).0, sh.ui.pt(68.0 + 152.0)));
         assert_eq!((lx - rx, ly), (sh.ui.pt(76.0), ry), "mirroring sits beside rotation lock");
         assert_eq!(hit(&sh.ui, sh.w, 10.0, 10.0), None);
+    }
+
+    #[test]
+    fn an_app_session_takes_the_media_tile_and_its_taps_go_to_the_app() {
+        use super::super::services::{now_playing, SystemService};
+        let mut sh = shell();
+        let body = bifrost_core::json::parse(r#"{"title":"Song","artist":"Band","state":"playing","commands":{"next":"enabled","play":"enabled"}}"#).unwrap();
+        let mut service = now_playing::NowPlaying;
+        service.call(&mut sh, "app.music", "publish", &body, 0.0).expect("published");
+        assert!(sh.media_active(), "the desktop media tile appears for an app session");
+        let shown = now_playing::current().expect("the session is shown");
+        assert_eq!(shown.content().map(|c| c.title.as_str()), Some("Song"));
+        assert_eq!(shown.snapshot().state, PlaybackState::Playing);
+        sh.media_control(Media::Next);
+        assert!(now_playing::current().is_some(), "a tap keeps the session until the owner clears it");
+        service.call(&mut sh, "app.music", "clear", &Json::Null, 0.0).expect("cleared");
+        assert!(!sh.media_active() || sh.svc_active(), "without a session only the audio service can show");
     }
 
     #[test]
@@ -1400,6 +1422,47 @@ pub(super) fn desk_glass(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), r:
 }
 
 impl Shell {
+    /// Whether the media tile has something to show: an app's published session or the audio service's track.
+    fn media_active(&self) -> bool {
+        now_playing::current().is_some() || self.svc_active()
+    }
+
+    /// A transport tap on the media tile. The newest app session gets the command (play or pause follows its state);
+    /// without one the audio service gets it.
+    fn media_control(&mut self, target: Media) {
+        if let Some(session) = now_playing::current() {
+            let playing = session.snapshot().state == PlaybackState::Playing;
+            if let Some(command) = now_playing::transport_for(target, playing) {
+                now_playing::send(command);
+            }
+            return;
+        }
+        self.music_control(target);
+    }
+
+    /// Paints the media tile: the app's published session (artwork placeholder, title, artist and the transport row)
+    /// when there is one, else what the audio service plays.
+    fn draw_media_tile(&self, s: &mut Surface, rect: (f32, f32, f32, f32), alpha: u32, pressed: Option<Media>) {
+        let Some(session) = now_playing::current() else {
+            return self.draw_music_tile(s, rect, alpha, pressed);
+        };
+        let ui = &self.ui;
+        let (x, y, w, h) = rect;
+        let size = ui.pt(44.0);
+        let r = Rect { x: (x + ui.pt(14.0)) as i32, y: (y + ui.pt(14.0)) as i32, w: size as i32, h: size as i32 };
+        draw_scaled(s, &icons::placeholder(64, 0.0), r, ui.pt(5.0), alpha);
+        let title = session.content().map_or("Now Playing".to_string(), |c| c.title.clone());
+        let artist = session.content().map(|c| c.subtitle()).unwrap_or_default();
+        let text_w = ui.pt(130.0);
+        let tx = (x + ui.pt(14.0) + size + ui.pt(10.0)) as i32;
+        let title = ui.text(&ui.fit(&title, 15.0, text_w), 15.0, Weight::Semibold, WHITE);
+        let artist = ui.text(&ui.fit(&artist, 13.0, text_w), 13.0, Weight::Regular, rgba(255, 255, 255, 150));
+        s.blit(&title, tx, (y + ui.pt(16.0)) as i32, 255, alpha);
+        s.blit(&artist, tx, (y + ui.pt(38.0)) as i32, 255, alpha);
+        let playing = session.snapshot().state == PlaybackState::Playing;
+        draw_cc_controls(s, ui, (x, y, w, h), playing, scale(WHITE, alpha), pressed);
+    }
+
     fn desk_wifi(&self) -> Option<(bool, Option<String>)> {
         let n = self.info.desktop_network.as_ref()?;
         n.wifi_available.then(|| (n.wifi_on, n.ssid.clone()))
@@ -1432,7 +1495,7 @@ impl Shell {
         }
         out.push((Tile::Volume, (x0, y, full, ui.pt(DK_ROW_PT))));
         // Now Playing: only with a player session; the transport buttons sit at thirds of the plate
-        if self.svc_active() {
+        if self.media_active() {
             y += ui.pt(DK_ROW_PT + DK_ROW_GAP_PT);
             out.push((Tile::MediaPlay, (x0, y, full, ui.pt(BIG_PT))));
         }
@@ -1569,7 +1632,7 @@ impl Shell {
                 }
                 Tile::MediaPlay => {
                     desk_glass(s, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
-                    self.draw_music_tile(s, (x, y, w, h), alpha, None);
+                    self.draw_media_tile(s, (x, y, w, h), alpha, None);
                 }
                 _ => {
                     desk_glass(s, (x, y, w, h), h / 2.0, alpha);
