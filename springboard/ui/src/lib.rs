@@ -692,6 +692,7 @@ pub mod pdfview;
 pub mod pdfform;
 pub mod transform3d;
 pub mod scene3d;
+pub mod scene_action;
 pub mod path;
 pub mod gradient;
 pub mod clip;
