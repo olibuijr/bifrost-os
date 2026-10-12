@@ -13,7 +13,7 @@ pub mod net;
 use super::cache::TextCache;
 use super::glyphs::{arc, disc, paint, ring, segment};
 use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, WHITE};
-use super::ui::{DETAIL_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_TITLEBAR_SOLID};
+use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_TITLEBAR_SOLID};
 use super::Event;
 use crate::deildu::jobs::Pool;
 use crate::deildu::scroll::Scroller;
@@ -52,7 +52,7 @@ const CARD_GAP: f32 = 34.0;
 const TODAY_MARGIN: f32 = 34.0;
 const LIST_ROW: f32 = 71.0;
 const LIST_TOP: f32 = 119.0;
-fn bg() -> u32 { DETAIL_BG.now() }
+fn bg() -> u32 { CONTENT_BG.now() }
 fn cell() -> u32 { CARD_BG.now() }
 fn fill() -> u32 { FIELD_BG.now() }
 fn sep() -> u32 { SEPARATOR_C.now() }
