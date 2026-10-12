@@ -28,6 +28,7 @@ pub mod occlusion;
 pub mod progress;
 pub mod notify_center;
 pub mod disk_events;
+pub mod disk_claim;
 pub mod txt_record;
 pub mod dnssd;
 pub mod oid;
