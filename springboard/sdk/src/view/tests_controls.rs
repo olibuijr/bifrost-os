@@ -1,7 +1,7 @@
 //! Contract tests for the the native toolkit-style controls in `controls.rs` and `forms.rs` that `tests.rs` does not cover:
 //! `NativeButton`, `NativeTextField` (label), `NativeSwitch`, `NativeSlider`, `NativeSegmentedControl`, `NativeStackView`, grouped forms.
 use super::*;
-use crate::kit::Font;
+use crate::kit::{Font, Surface};
 use crate::layout::ROW_PT;
 use crate::proto::InputTraits;
 use bifrost_ui::geometry::EdgeInsets;

@@ -385,6 +385,9 @@ fn run() -> std::io::Result<()> {
     eprintln!("springboard: {w}x{h} @ {}Hz", disp.mode.vrefresh);
 
     let mut fds = Vec::new();
+    // BIFROST_CHROME=1: the chrome clients' socket joins this loop (chrome_host/server.rs); the shell keeps drawing
+    // its own chrome until the clients take over.
+    let mut chrome_server = springboard::shell::chrome_host::server::start_if_requested();
     let mut idle_stats = springboard::bare::heartbeat::IdleStats::default();
     // what drawing and copying a frame costs, to start it as late as the vblank allows
     let mut frame_cost = kms::FrameCost::new(period);
@@ -438,6 +441,7 @@ fn run() -> std::io::Result<()> {
         let shell_fds_end = fds.len();
         fds.push(headset.as_ref().map_or(-1, |d| d.fd));
         fds.extend(inputs.fds());
+        if let Some(server) = &chrome_server { fds.extend(server.fds()); }
         // animating: wait for the frame interval and, when the flips are predictable, for the
         // moment the frame must start to be done by the vblank (ppoll: sub-millisecond, 120 Hz)
         let mut wait_ms = timeout as f64;
@@ -458,6 +462,7 @@ fn run() -> std::io::Result<()> {
             bifrost_core::host::pressure_relief();
         }
         kms::wait_precise(&fds, wait_ms, &mut ready);
+        if let Some(server) = chrome_server.as_mut() { let _ = server.service(); }
         let ready = &ready;
         let t = sys::now_ms();
         if ready[4..shell_fds_end].contains(&true) {

@@ -8,7 +8,11 @@
 //! `ViewApp` backs an `App` with a window in a few lines. Gaps (no Auto Layout, see animation.rs for the animation subset) are listed in
 //! docs/bifrost-ui.md "Retained views".
 use crate::kit::ui::DETAIL_BG;
-use crate::kit::{Damage, Event, Surface, Ui};
+use crate::kit::{Damage, Event, Ui};
+use bifrost_render::canvas::{Canvas, ImageRef, RectF};
+use crate::kit::gfx::Image;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use crate::proto::{KeyInput, CHORD_SHIFT};
 use bifrost_ui::focus::{self, Focusable};
 use bifrost_ui::responder::Responder;
@@ -166,7 +170,7 @@ pub trait View: 'static {
         }
     }
     /// Paints this view only (the window draws the children after it).
-    fn draw(&mut self, _s: &mut Surface, _ui: &Ui) {}
+    fn draw(&mut self, _s: &mut dyn Canvas, _ui: &Ui) {}
     /// Whether `(x, y)` (window points) is inside the view (`hitTest:` without recursion).
     fn hit_test(&self, x: f32, y: f32) -> bool {
         self.frame().contains(x, y)
@@ -252,7 +256,7 @@ pub trait View: 'static {
         self.base().frame
     }
     /// Paints above the whole tree after the normal pass (menus, tooltips).
-    fn draw_overlay(&mut self, _s: &mut Surface, _ui: &Ui) {}
+    fn draw_overlay(&mut self, _s: &mut dyn Canvas, _ui: &Ui) {}
     fn needs_display(&self) -> bool {
         self.base().dirty
     }
@@ -464,7 +468,29 @@ fn clear_dirty(v: &mut dyn View) {
     v.children_mut().iter_mut().for_each(|c| clear_dirty(c.as_mut()));
 }
 
-fn draw_subtree(v: &mut dyn View, s: &mut Surface, ui: &Ui) {
+/// Content key of a rendered image (`ImageRef::id`): equal pixels give equal ids, so the GPU side can reuse a texture.
+pub(super) fn image_key(img: &Image) -> u64 {
+    let mut h = DefaultHasher::new();
+    img.w.hash(&mut h);
+    img.h.hash(&mut h);
+    img.px.hash(&mut h);
+    h.finish()
+}
+
+/// Draws the rendered image `img` with its top-left corner at the device pixel `(x, y)`, source-over (what
+/// `Surface::blit` did for text and glyph images).
+pub(super) fn blit(c: &mut dyn Canvas, img: &Image, x: i32, y: i32) {
+    let dst = RectF::new(x as f32, y as f32, img.w as f32, img.h as f32);
+    c.image(ImageRef { id: image_key(img), image: img }, dst, 1.0);
+}
+
+/// The device-pixel rectangle covering `r`, as a canvas rectangle.
+fn px_rf(ui: &Ui, r: Rect) -> RectF {
+    let (x, y, w, h) = px_rect(ui, r);
+    RectF::new(x as f32, y as f32, w as f32, h as f32)
+}
+
+fn draw_subtree(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
     if v.base().hidden {
         return;
     }
@@ -473,50 +499,45 @@ fn draw_subtree(v: &mut dyn View, s: &mut Surface, ui: &Ui) {
         clear_dirty(v);
         return;
     }
-    // Group opacity: save the pixels under the frame, draw normally, then blend the result back over the saved ones.
-    let fade = (alpha < 1.0).then(|| {
-        let (x, y, w, h) = px_rect(ui, v.frame());
-        animation::Backdrop::save(s, x, y, w, h)
-    });
-    if let Some(c) = v.base().background {
-        let (x, y, w, h) = px_rect(ui, v.frame());
-        for row in y.max(s.y0)..(y + h).min(s.h) {
-            let base = (row - s.y0) * s.stride;
-            for d in &mut s.px[base + x.min(s.w)..base + (x + w).min(s.w)] {
-                *d = crate::kit::gfx::over(*d, c);
-            }
-        }
+    // Group opacity: the subtree is drawn at `alpha` as one group (`Canvas::push_opacity`), not blended afterwards.
+    if alpha < 1.0 {
+        c.push_opacity(alpha);
     }
-    v.draw(s, ui);
+    if let Some(bg) = v.base().background {
+        c.fill_rrect(px_rf(ui, v.frame()), 0.0, bg);
+    }
+    v.draw(c, ui);
     v.base_mut().dirty = false;
     scrolled(v, |v| {
         if v.clips_children() {
-            // Surface clips rows only: children are confined vertically; widths are the view's own (see ScrollView).
-            let (_, y, _, h) = px_rect(ui, v.frame());
-            let mut sub = s.rows(y, y + h);
-            v.children_mut().iter_mut().for_each(|c| draw_subtree(c.as_mut(), &mut sub, ui));
+            // children are confined vertically to the rows of the frame; widths are the view's own (see ScrollView)
+            let f = px_rf(ui, v.frame());
+            let full = c.size().0 as f32;
+            c.push_clip(RectF::new(0.0, f.y, full, f.h), 0.0);
+            v.children_mut().iter_mut().for_each(|ch| draw_subtree(ch.as_mut(), c, ui));
+            c.pop_clip();
         } else {
-            v.children_mut().iter_mut().for_each(|c| draw_subtree(c.as_mut(), s, ui));
+            v.children_mut().iter_mut().for_each(|ch| draw_subtree(ch.as_mut(), c, ui));
         }
     });
-    if let Some(b) = fade {
-        b.blend(s, (alpha * 255.0).round() as u32);
+    if alpha < 1.0 {
+        c.pop_opacity();
     }
 }
 
-fn draw_dirty(v: &mut dyn View, s: &mut Surface, ui: &Ui, d: &mut Damage) {
+fn draw_dirty(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui, d: &mut Damage) {
     if v.base().hidden {
         return;
     }
     // A dirty opaque ancestor repaints as a whole: clearing a child's frame to the window background inside a card
-    // would punch a hole in it, and Surface has no clip to confine the card's own redraw.
-    if v.needs_display() || (v.opaque_backdrop() && v.children().iter().any(|c| any_dirty(c.as_ref()))) {
+    // would punch a hole in it, and the canvas has no backing store of its own to confine the card's redraw.
+    if v.needs_display() || (v.opaque_backdrop() && v.children().iter().any(|ch| any_dirty(ch.as_ref()))) {
         let (x, y, w, h) = px_rect(ui, v.frame());
-        s.fill_rect(x, y, w, h, DETAIL_BG.now());
+        c.fill_rect(px_rf(ui, v.frame()), DETAIL_BG.now());
         d.add(x as i32, y as i32, w as i32, h as i32);
-        draw_subtree(v, s, ui);
+        draw_subtree(v, c, ui);
     } else {
-        v.children_mut().iter_mut().for_each(|c| draw_dirty(c.as_mut(), s, ui, d));
+        v.children_mut().iter_mut().for_each(|ch| draw_dirty(ch.as_mut(), c, ui, d));
     }
 }
 
@@ -525,12 +546,12 @@ fn wide_dirty(v: &dyn View) -> bool {
     !v.base().hidden && ((v.dirty_rect() != v.frame()) || v.children().iter().any(|c| wide_dirty(c.as_ref())))
 }
 
-fn draw_overlays(v: &mut dyn View, s: &mut Surface, ui: &Ui) {
+fn draw_overlays(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
     if v.base().hidden {
         return;
     }
-    v.draw_overlay(s, ui);
-    scrolled(v, |v| v.children_mut().iter_mut().for_each(|c| draw_overlays(c.as_mut(), s, ui)));
+    v.draw_overlay(c, ui);
+    scrolled(v, |v| v.children_mut().iter_mut().for_each(|ch| draw_overlays(ch.as_mut(), c, ui)));
 }
 
 fn tick_all(v: &mut dyn View, t: f64) {
@@ -883,17 +904,18 @@ impl<S: Responder> Window<S> {
     /// Paints what changed and returns the merged damage. After `layout` (or the first call) the whole window is
     /// repainted. Otherwise each dirty view's frame is cleared to the window background and the view and its subtree
     /// are drawn again; sibling views must not overlap.
-    pub fn draw(&mut self, s: &mut Surface, ui: &Ui) -> Damage {
-        let mut d = Damage::new(s.w, s.h);
+    pub fn draw(&mut self, c: &mut dyn Canvas, ui: &Ui) -> Damage {
+        let (w, h) = c.size();
+        let mut d = Damage::new(w as usize, h as usize);
         if self.full || (any_dirty(self.root()) && wide_dirty(self.root())) {
             self.full = false;
-            s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
-            draw_subtree(self.root.as_mut(), s, ui);
+            c.fill_rect(RectF::new(0.0, 0.0, w as f32, h as f32), DETAIL_BG.now());
+            draw_subtree(self.root.as_mut(), c, ui);
             d.all();
         } else {
-            draw_dirty(self.root.as_mut(), s, ui, &mut d);
+            draw_dirty(self.root.as_mut(), c, ui, &mut d);
         }
-        draw_overlays(self.root.as_mut(), s, ui);
+        draw_overlays(self.root.as_mut(), c, ui);
         self.clear_animation_damage();
         d
     }
@@ -1005,3 +1027,149 @@ mod tests_app;
 
 #[cfg(test)]
 mod tests_controls;
+
+/// Canvas drawing of the view tree: the image key, the image blit, backgrounds, group opacity and the display-list replay.
+#[cfg(test)]
+mod canvas_tests {
+    use super::*;
+    use crate::kit::gfx::{Image, Surface};
+    use crate::kit::Font;
+    use bifrost_render::display_list::DisplayList;
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+        Rect { x, y, w, h }
+    }
+
+    /// A view that paints only its background (`ViewBase::background`) and nothing else.
+    struct Plain {
+        base: ViewBase,
+    }
+    impl View for Plain {
+        crate::view_base!();
+    }
+    fn plain(bg: Option<u32>) -> Plain {
+        let mut p = Plain { base: ViewBase::default() };
+        p.base.background = bg;
+        p
+    }
+
+    fn surface(px: &mut Vec<u32>, w: usize, h: usize, fill: u32) -> Surface<'_> {
+        px.clear();
+        px.resize(w * h, fill);
+        Surface { w, h, stride: w, px, y0: 0 }
+    }
+
+    #[test]
+    fn image_key_is_a_hash_of_the_size_and_the_pixels() {
+        let a = Image { w: 2, h: 1, px: vec![1, 2] };
+        let same = Image { w: 2, h: 1, px: vec![1, 2] };
+        let other_pixel = Image { w: 2, h: 1, px: vec![1, 3] };
+        let other_shape = Image { w: 1, h: 2, px: vec![1, 2] };
+        assert_eq!(image_key(&a), image_key(&same));
+        assert_ne!(image_key(&a), image_key(&other_pixel));
+        assert_ne!(image_key(&a), image_key(&other_shape));
+    }
+
+    #[test]
+    fn blit_draws_source_over_at_the_top_left_corner() {
+        let mut px = Vec::new();
+        let mut s = surface(&mut px, 4, 4, 0xff00_0000);
+        let white = Image { w: 2, h: 2, px: vec![0xffff_ffff; 4] };
+        blit(&mut s, &white, 1, 1);
+        // columns 1..3 and rows 1..3 are white; the rest keeps its black
+        assert_eq!(s.px[5], 0xffff_ffff);
+        assert_eq!(s.px[6], 0xffff_ffff);
+        assert_eq!(s.px[10], 0xffff_ffff);
+        assert_eq!(s.px[0], 0xff00_0000);
+        assert_eq!(s.px[3], 0xff00_0000);
+        assert_eq!(s.px[12], 0xff00_0000);
+        assert_eq!(s.px[15], 0xff00_0000);
+    }
+
+    #[test]
+    fn blit_past_the_edge_is_clipped_not_wrapped() {
+        let mut px = Vec::new();
+        let mut s = surface(&mut px, 4, 4, 0xff00_0000);
+        let white = Image { w: 2, h: 2, px: vec![0xffff_ffff; 4] };
+        blit(&mut s, &white, 3, 3);
+        assert_eq!(s.px[15], 0xffff_ffff, "only the corner pixel lies inside the surface");
+        assert_eq!(s.px[14], 0xff00_0000, "the row is not wrapped to the next line");
+        assert_eq!(s.px[0], 0xff00_0000);
+    }
+
+    #[test]
+    fn a_background_fills_the_frame_opaque() {
+        let ui = ui();
+        let mut w: ViewTree = Window::new(plain(Some(0xff00_ff00)), 1);
+        w.layout(&ui, rect(0.0, 0.0, 4.0, 4.0));
+        let mut px = Vec::new();
+        let mut s = surface(&mut px, 4, 4, 0xff00_0000);
+        w.draw(&mut s, &ui);
+        assert!(s.px.iter().all(|&p| p == 0xff00_ff00), "the whole frame is the background colour");
+    }
+
+    #[test]
+    fn a_hidden_or_fully_transparent_view_paints_nothing() {
+        let ui = ui();
+        let mut hidden = plain(Some(0xffff_ffff));
+        hidden.base.hidden = true;
+        let mut faded = plain(Some(0xffff_ffff));
+        faded.base.opacity = 0.0;
+        for view in [hidden, faded] {
+            let mut w: ViewTree = Window::new(view, 1);
+            w.layout(&ui, rect(0.0, 0.0, 4.0, 4.0));
+            let mut px = Vec::new();
+            let mut s = surface(&mut px, 4, 4, 0xff00_0000);
+            w.draw(&mut s, &ui);
+            assert!(s.px.iter().all(|&p| p == DETAIL_BG.now()), "only the window background is left");
+        }
+    }
+
+    #[test]
+    fn group_opacity_mixes_the_subtree_with_what_is_behind_it() {
+        let ui = ui();
+        let mut child = plain(Some(0xffff_ffff));
+        child.base.opacity = 0.5;
+        let mut w: ViewTree = Window::new(Container::new(vec![Box::new(child)]), 1);
+        w.layout(&ui, rect(0.0, 0.0, 4.0, 4.0));
+        let mut px = Vec::new();
+        let mut s = surface(&mut px, 4, 4, 0xff00_0000);
+        w.draw(&mut s, &ui);
+        let bg = DETAIL_BG.now();
+        // the child is a 4x4 white frame at half opacity over the opaque window background: each channel is
+        // (255 + bg) / 2 within rounding
+        let inside = s.px[0];
+        for shift in [0, 8, 16] {
+            let want = (255 + ((bg >> shift) & 0xff)) / 2;
+            let got = (inside >> shift) & 0xff;
+            assert!(got.abs_diff(want) <= 2, "channel at shift {shift}: {got} vs {want}");
+        }
+    }
+
+    #[test]
+    fn replaying_the_recorded_tree_matches_drawing_it_directly() {
+        let ui = ui();
+        let build = || -> ViewTree {
+            let kids: Vec<Box<dyn View>> = vec![Box::new(plain(Some(0xff00_ff00))), Box::new(Label::new("Hi"))];
+            let mut w: ViewTree = Window::new(Container::new(kids), 1);
+            w.layout(&ui, rect(0.0, 0.0, 60.0, 30.0));
+            w
+        };
+        let (width, height) = (60usize, 30usize);
+        let mut direct_px = Vec::new();
+        let mut direct = surface(&mut direct_px, width, height, 0xff00_0000);
+        build().draw(&mut direct, &ui);
+
+        let mut list = DisplayList::new(width as u32, height as u32);
+        build().draw(&mut list, &ui);
+        let mut replayed_px = Vec::new();
+        let mut replayed = surface(&mut replayed_px, width, height, 0xff00_0000);
+        list.replay(&mut replayed);
+        assert_eq!(direct.px, replayed.px);
+    }
+}

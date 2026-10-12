@@ -39,7 +39,7 @@ package_bifrost_files() {
   install -Dm644 "$here/initcpio/install/bifrost-mounts" "$pkgdir/usr/lib/initcpio/install/bifrost-mounts"
   install -Dm644 "$here/initcpio/hooks/bifrost-mounts" "$pkgdir/usr/lib/initcpio/hooks/bifrost-mounts"
   install -Dm644 "$here/seatd-early.conf" "$pkgdir/usr/lib/systemd/system/seatd.service.d/bifrost-early.conf"
-  for file in session session-env; do
+  for file in session session-env session-policy; do
     install -Dm755 "$here/wayland/$file" "$pkgdir/usr/lib/bifrost/$file"
   done
   install -Dm755 "$here/wayland/video-arg" "$pkgdir/usr/lib/bifrost/video-arg"

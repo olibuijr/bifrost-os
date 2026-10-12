@@ -2,7 +2,7 @@
 //! input devices, libinput reads input, and Smithay's DRM compositor presents on the first connected display at its
 //! native size and fastest refresh.
 
-use std::{error::Error, path::Path, time::Duration};
+use std::{cell::Cell, error::Error, path::Path, rc::Rc, time::Duration};
 
 use smithay::{
     backend::{
@@ -41,7 +41,7 @@ use smithay::{
 
 use crate::{scene::SceneElement, state::WmState};
 
-const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
+pub(crate) const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
 
 
@@ -57,6 +57,8 @@ struct Drm {
     /// The loader's frame while the first session of a boot fades in (`BIFROST_BOOT_FADE`).
     boot: Option<Boot>,
     glass: crate::glass::Glass,
+    /// The Vulkan scanout, when `BIFROST_WM_RENDERER=vulkan` started it; `None` keeps GLES scanout.
+    vulkan: Option<crate::drm_vulkan::Vulkan>,
 }
 
 struct Boot {
@@ -100,15 +102,31 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let seat = session.seat();
     let gpu = primary_gpu(&seat)?.or_else(|| all_gpus(&seat).ok()?.into_iter().next()).ok_or("no GPU")?;
     eprintln!("bifrost-wm: GPU {}", gpu.display());
-    let drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle())?;
-    let backend = std::rc::Rc::new(std::cell::RefCell::new(drm));
+    // the page flip's vblank time, written by the DRM event source and read by the vblank callback below
+    let vblank_time: Rc<Cell<Option<Duration>>> = Rc::new(Cell::new(None));
+    let mut drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle(), vblank_time.clone())?;
+    // the Vulkan scanout on the same GPU; any failure keeps the GLES scanout that open_gpu just set up
+    if crate::render_server::selected() {
+        let size = drm.output.current_mode().map(|m| (m.size.w, m.size.h)).unwrap_or((0, 0));
+        let refresh = drm.output.current_mode().map(|m| m.refresh).unwrap_or(0);
+        match crate::drm_vulkan::start(&gpu, drm.compositor.surface(), size, refresh) {
+            Ok(v) => drm.vulkan = Some(v),
+            Err(e) => eprintln!("bifrost-wm: vulkan scanout unavailable, GLES: {e}"),
+        }
+    }
+    let backend = Rc::new(std::cell::RefCell::new(drm));
 
     // input
     let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
     libinput.udev_assign_seat(&seat).map_err(|_| "libinput: cannot assign seat")?;
     event_loop.handle().insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, state| {
-        if !matches!(event, InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }) {
-            state.process_input_event(event);
+        match event {
+            // a new device takes the shell's pointer and trackpad settings (input.rs)
+            InputEvent::DeviceAdded { mut device } => {
+                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()))
+            }
+            InputEvent::DeviceRemoved { .. } => {}
+            event => state.process_input_event(event),
         }
     })?;
 
@@ -123,6 +141,9 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             let mut d = b.borrow_mut();
             d.pending = false;
             let _ = d.compositor.reset_state();
+            if let Some(v) = d.vulkan.as_mut() {
+                v.reset();
+            }
         }
     })?;
 
@@ -149,7 +170,12 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let b = backend.clone();
     state.on_vblank = Some(Box::new(move |state| {
         let mut d = b.borrow_mut();
-        if let Err(e) = d.compositor.frame_submitted() {
+        if d.vulkan.is_some() {
+            let time = vblank_time.get();
+            if let Some(v) = d.vulkan.as_mut() {
+                v.on_vblank(time);
+            }
+        } else if let Err(e) = d.compositor.frame_submitted() {
             eprintln!("bifrost-wm: frame submitted: {e}");
         }
         d.pending = false;
@@ -168,7 +194,13 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-fn open_gpu(session: &mut LibSeatSession, path: &Path, state: &mut WmState, handle: LoopHandle<'static, WmState>) -> Result<Drm, Box<dyn Error>> {
+fn open_gpu(
+    session: &mut LibSeatSession,
+    path: &Path,
+    state: &mut WmState,
+    handle: LoopHandle<'static, WmState>,
+    vblank_time: Rc<Cell<Option<Duration>>>,
+) -> Result<Drm, Box<dyn Error>> {
     let fd = session.open(path, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK)?;
     let fd = DrmDeviceFd::new(DeviceFd::from(fd));
     // `false`: keep the connectors as the loader left them; resetting them would blank the display (one modeset per boot)
@@ -226,8 +258,12 @@ fn open_gpu(session: &mut LibSeatSession, path: &Path, state: &mut WmState, hand
     )
     .map_err(|e| format!("DRM compositor: {e}"))?;
 
-    handle.insert_source(notifier, |event, _, state: &mut WmState| match event {
+    handle.insert_source(notifier, move |event, meta, state: &mut WmState| match event {
         DrmEvent::VBlank(_) => {
+            vblank_time.set(meta.as_ref().map(|m| match m.time {
+                smithay::backend::drm::DrmEventTime::Monotonic(d) => d,
+                smithay::backend::drm::DrmEventTime::Realtime(t) => t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default(),
+            }));
             if let Some(mut f) = state.on_vblank.take() {
                 f(state);
                 state.on_vblank = Some(f);
@@ -242,12 +278,23 @@ fn open_gpu(session: &mut LibSeatSession, path: &Path, state: &mut WmState, hand
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass })
+    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None })
 }
 
 impl Drm {
     fn render(&mut self, state: &mut WmState) {
         let output = self.output.clone();
+        if let Some(v) = self.vulkan.as_mut() {
+            match v.frame(self.compositor.surface()) {
+                Ok(queued) => self.pending = queued,
+                Err(e) => {
+                    eprintln!("bifrost-wm: vulkan frame: {e}");
+                    self.pending = false;
+                }
+            }
+            state.send_frames(&output);
+            return;
+        }
         let mut top: Vec<SceneElement> = Vec::new();
         // front to back: the boot frame over everything while it fades, else the pointer on top
         let splash = self.boot.as_mut().and_then(|b| b.alpha().map(|a| (b.splash.clone(), a)));

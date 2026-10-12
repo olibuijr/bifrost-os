@@ -23,7 +23,20 @@ pub const KEEP_VISIBLE: i32 = 48;
 pub const MIN_W: i32 = 240;
 pub const MIN_H: i32 = 160;
 
-struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, minimized: bool }
+/// One half of the usable area, for the Ctrl+Super+Left and Ctrl+Super+Right keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side { Left, Right }
+
+/// The frame of `area` on one side: the left and right halves, the right one taking the odd pixel.
+pub fn half(area: Rect, side: Side) -> Rect {
+    let left = area.w / 2;
+    match side {
+        Side::Left => Rect::new(area.x, area.y, left, area.h),
+        Side::Right => Rect::new(area.x + left, area.y, area.w - left, area.h),
+    }
+}
+
+struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Side>, minimized: bool }
 
 /// An interactive move or resize in progress; `Wm::motion` applies the pointer to it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,7 +61,7 @@ impl Wm {
         let y = (a.y + (a.h - h) / 2 + step).min(a.y + a.h - h);
         let rect = Rect::new(x, y, w, h);
         self.windows.retain(|w| w.id != id);
-        self.windows.push(Window { id, rect, restore: None, minimized: false });
+        self.windows.push(Window { id, rect, restore: None, tiled: None, minimized: false });
         rect
     }
 
@@ -90,9 +103,11 @@ impl Wm {
     pub fn toggle_maximize(&mut self, id: WindowId) -> Option<Rect> {
         let area = self.area;
         let w = self.get_mut(id)?;
-        match w.restore.take() {
-            Some(old) => w.rect = old,
-            None => { w.restore = Some(w.rect); w.rect = area; }
+        match (w.restore.take(), w.tiled.take()) {
+            (Some(old), None) => w.rect = old,
+            // a snapped window keeps its frame from before the snap and fills the area
+            (Some(old), Some(_)) => { w.restore = Some(old); w.rect = area; }
+            (None, _) => { w.restore = Some(w.rect); w.rect = area; }
         }
         Some(w.rect)
     }
@@ -102,6 +117,7 @@ impl Wm {
     pub fn begin_move(&mut self, id: WindowId, x: i32, y: i32) -> Option<Grab> {
         let area = self.area;
         let w = self.get_mut(id)?;
+        w.tiled = None;
         if let Some(old) = w.restore.take() {
             let rel = (x - w.rect.x) as f32 / w.rect.w.max(1) as f32;
             w.rect = Rect::new(x - (rel * old.w as f32) as i32, area.y, old.w, old.h);
@@ -114,6 +130,7 @@ impl Wm {
     pub fn begin_resize(&mut self, id: WindowId, edges: Edges, x: i32, y: i32) -> Option<Grab> {
         let w = self.get_mut(id)?;
         w.restore = None;
+        w.tiled = None;
         let start = w.rect;
         self.raise(id);
         Some(Grab::Resize { id, edges, x, y, start })
@@ -137,15 +154,46 @@ impl Wm {
     pub fn set_area(&mut self, area: Rect) {
         self.area = area;
         for w in &mut self.windows {
-            w.rect = if w.restore.is_some() { area } else { keep_on_screen(w.rect, area) };
+            w.rect = match (w.restore.is_some(), w.tiled) {
+                (_, Some(side)) => half(area, side),
+                (true, None) => area,
+                (false, None) => keep_on_screen(w.rect, area),
+            };
         }
     }
 
-    pub fn is_maximized(&self, id: WindowId) -> bool { self.get(id).is_some_and(|w| w.restore.is_some()) }
+    /// Snaps `id` to one half of the usable area (Ctrl+Super+Left or Right). The frame from before the first snap is
+    /// kept, so the centre key can restore it.
+    pub fn snap(&mut self, id: WindowId, side: Side) -> Option<Rect> {
+        let area = self.area;
+        let w = self.get_mut(id)?;
+        if w.restore.is_none() { w.restore = Some(w.rect); }
+        w.tiled = Some(side);
+        w.rect = half(area, side);
+        Some(w.rect)
+    }
+
+    /// Ctrl+Super+Down: leaves maximized or snapped state and centres the window at its previous size (or its
+    /// current size when it was never moved aside). Returns the new frame.
+    pub fn restore_centre(&mut self, id: WindowId) -> Option<Rect> {
+        let area = self.area;
+        let w = self.get_mut(id)?;
+        let size = w.restore.take().unwrap_or(w.rect);
+        w.tiled = None;
+        let (cw, ch) = (size.w.min(area.w), size.h.min(area.h));
+        w.rect = Rect::new(area.x + (area.w - cw) / 2, area.y + (area.h - ch) / 2, cw, ch);
+        Some(w.rect)
+    }
+
+    /// Whether the window fills the area by the maximize key (a snapped window is not maximized).
+    pub fn is_maximized(&self, id: WindowId) -> bool { self.get(id).is_some_and(|w| w.restore.is_some() && w.tiled.is_none()) }
+
+    /// Which half the window is snapped to, if any.
+    pub fn snapped(&self, id: WindowId) -> Option<Side> { self.get(id).and_then(|w| w.tiled) }
 
     /// The client settled on a frame of its own (it chose its size, or finished a resize).
     pub fn set_frame(&mut self, id: WindowId, rect: Rect) {
-        if let Some(w) = self.get_mut(id) { w.rect = rect; }
+        if let Some(w) = self.get_mut(id) { w.rect = rect; w.tiled = None; }
     }
 
     fn get(&self, id: WindowId) -> Option<&Window> { self.windows.iter().find(|w| w.id == id) }
@@ -305,5 +353,55 @@ mod tests {
         wm.restore(2);
         assert_eq!(wm.focused(), Some(2), "restoring raises and focuses");
         assert!(wm.visible(2));
+    }
+
+    #[test]
+    fn snapping_puts_a_window_on_one_half_and_the_right_half_takes_the_odd_pixel() {
+        let mut wm = Wm::new(Rect::new(0, 28, 1921, 1052));
+        wm.map(1, 800, 600);
+        assert_eq!(wm.snap(1, Side::Left), Some(Rect::new(0, 28, 960, 1052)));
+        assert_eq!(wm.snap(1, Side::Right), Some(Rect::new(960, 28, 961, 1052)));
+        assert_eq!(wm.snapped(1), Some(Side::Right));
+        assert!(!wm.is_maximized(1), "a snapped window is not maximized");
+    }
+
+    #[test]
+    fn toggling_maximize_from_a_snap_fills_the_area_and_unmaximize_returns_to_the_frame_before_the_snap() {
+        let mut wm = Wm::new(AREA);
+        let r = wm.map(1, 800, 600);
+        wm.snap(1, Side::Left);
+        assert_eq!(wm.toggle_maximize(1), Some(AREA));
+        assert!(wm.is_maximized(1));
+        assert_eq!(wm.toggle_maximize(1), Some(r));
+        assert_eq!(wm.snapped(1), None);
+    }
+
+    #[test]
+    fn the_centre_key_restores_the_size_from_before_and_centres_it() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.snap(1, Side::Right);
+        wm.snap(1, Side::Left);
+        assert_eq!(wm.restore_centre(1), Some(Rect::new(560, 28 + 226, 800, 600)));
+        assert_eq!(wm.snapped(1), None);
+        // a window that was never moved aside is centred at its current size
+        wm.set_frame(1, Rect::new(0, 28, 400, 300));
+        assert_eq!(wm.restore_centre(1), Some(Rect::new(760, 28 + 376, 400, 300)));
+    }
+
+    #[test]
+    fn a_snapped_window_follows_a_new_usable_area() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.snap(1, Side::Left);
+        wm.set_area(Rect::new(0, 28, 1280, 692));
+        assert_eq!(wm.rect(1), Some(Rect::new(0, 28, 640, 692)));
+    }
+
+    #[test]
+    fn the_half_split_is_exact_for_even_and_odd_widths() {
+        assert_eq!(half(Rect::new(10, 0, 100, 50), Side::Left), Rect::new(10, 0, 50, 50));
+        assert_eq!(half(Rect::new(10, 0, 100, 50), Side::Right), Rect::new(60, 0, 50, 50));
+        assert_eq!(half(Rect::new(0, 0, 7, 1), Side::Left).w + half(Rect::new(0, 0, 7, 1), Side::Right).w, 7);
     }
 }

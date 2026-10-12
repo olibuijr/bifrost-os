@@ -1,0 +1,32 @@
+# Pure session policy, sourced by /usr/lib/bifrost/session (tested by tools/test_session_policy.py).
+# No side effects here: the caller passes paths and the time, and acts on the printed answer.
+
+# session_compositor_flags <compositor> <renderer> <chrome>
+# Prints the environment words the window server and the shell get when bifrost-wm is selected. labwc gets none.
+#   renderer: contents of /etc/bifrost/renderer (vulkan selects the Vulkan render server)
+#   chrome:   contents of the chrome switch (1 starts the separate chrome clients)
+session_compositor_flags() {
+    local compositor=$1 renderer=$2 chrome=$3
+    [[ "$compositor" == bifrost-wm ]] || return 0
+    printf '%s\n' BIFROST_DIRECT=1
+    [[ "$renderer" == vulkan ]] && printf '%s\n' BIFROST_WM_RENDERER=vulkan
+    [[ "$chrome" == 1 ]] && printf '%s\n' BIFROST_CHROME=1
+    return 0
+}
+
+# wm_exit_action <now> <exits_file>
+# Records one unplanned bifrost-wm exit at <now> (epoch seconds), keeps the exits of the last 60 s and prints
+# "fallback" when three exits fall in that window, otherwise "restart". The file survives session restarts (it
+# lives under /run/bifrost, cleared at boot), so the count spans the restarts systemd makes.
+wm_exit_action() {
+    local now=$1 file=$2 kept=() t
+    if [[ -f "$file" ]]; then
+        while read -r t; do
+            [[ "$t" =~ ^[0-9]+$ ]] || continue
+            (( now - t < 60 )) && kept+=("$t")
+        done < "$file"
+    fi
+    kept+=("$now")
+    printf '%s\n' "${kept[@]}" > "$file"
+    if (( ${#kept[@]} >= 3 )); then printf '%s\n' fallback; else printf '%s\n' restart; fi
+}

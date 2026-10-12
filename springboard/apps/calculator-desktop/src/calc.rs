@@ -11,7 +11,9 @@ use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
+use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::{clipboard, Event, Surface, TextCache};
+use crate::chrome;
 use crate::convert::{Category, Converter};
 use crate::copy_service::CopyRequest;
 use crate::engine::{Engine, Key, Operator};
@@ -663,27 +665,27 @@ impl Calculator {
     }
 
     /// Convert's chrome: the category segments, then the From, Swap and To controls.
-    fn draw_convert(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_convert(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let Some(conv) = self.convert.clone() else { return };
         let l = self.layout(ui);
         let (rx, ry, rw, rh) = (l.x, ui.pt(CATEGORY_TOP_PT), l.width, ui.pt(CATEGORY_H_PT));
-        s.fill_rrect(rx, ry, rw, rh, capsule(rw, rh), utility());
+        s.fill_rrect(RectF::new(rx, ry, rw, rh), capsule(rw, rh), utility());
         for (index, category) in Category::ALL.iter().enumerate() {
             let rect = self.category_rect(ui, index);
             let (x, y, w, h) = rect;
             if *category == conv.category {
                 let inset = ui.pt(SPACE_XXS);
-                s.fill_rrect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset, capsule(w, h), scientific());
+                s.fill_rrect(RectF::new(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset), capsule(w, h), scientific());
             }
             self.label(s, ui, category.title(), MAC_CALLOUT_PT, LABEL.now(), rect);
         }
         let [from, swap, to] = self.unit_rects(ui);
         let from_text = ui.fit(&format!("From: {}", conv.from_unit().name), MAC_BODY_PT, from.2 - ui.pt(SPACE_L));
-        s.fill_rrect(from.0, from.1, from.2, from.3, capsule(from.2, from.3), utility());
+        s.fill_rrect(RectF::new(from.0, from.1, from.2, from.3), capsule(from.2, from.3), utility());
         self.label(s, ui, &from_text, MAC_BODY_PT, LABEL.now(), from);
         self.label(s, ui, "Swap", MAC_BODY_PT, LINK, swap);
         let to_text = ui.fit(&format!("To: {}", conv.to_unit().name), MAC_BODY_PT, to.2 - ui.pt(SPACE_L));
-        s.fill_rrect(to.0, to.1, to.2, to.3, capsule(to.2, to.3), utility());
+        s.fill_rrect(RectF::new(to.0, to.1, to.2, to.3), capsule(to.2, to.3), utility());
         self.label(s, ui, &to_text, MAC_BODY_PT, LABEL.now(), to);
     }
 
@@ -1011,7 +1013,7 @@ impl Calculator {
 
     fn label(
         &mut self,
-        s: &mut Surface,
+        s: &mut dyn Canvas,
         ui: &Ui,
         text: &str,
         pt: f32,
@@ -1039,21 +1041,15 @@ impl Calculator {
             } else {
                 (left, left + base.w as f32)
             };
-            s.blit(power, power_x as i32, (top - pt * ui.s * 0.2) as i32, 255, 255);
-            s.blit(&base, base_x as i32, top as i32, 255, 255);
+            chrome::blit(s, power, power_x as i32, (top - pt * ui.s * 0.2) as i32);
+            chrome::blit(s, &base, base_x as i32, top as i32);
             return;
         }
         let image = self.cache.get(ui, text, pt, Weight::Regular, color);
-        s.blit(
-            image,
-            (x + (w - image.w as f32) / 2.0) as i32,
-            (y + (h - image.h as f32) / 2.0) as i32,
-            255,
-            255,
-        );
+        chrome::blit(s, image, (x + (w - image.w as f32) / 2.0) as i32, (y + (h - image.h as f32) / 2.0) as i32);
     }
 
-    fn draw_key(&mut self, s: &mut Surface, ui: &Ui, index: usize) {
+    fn draw_key(&mut self, s: &mut dyn Canvas, ui: &Ui, index: usize) {
         let rect = self.key_rect(ui, index);
         let (x, y, w, h) = rect;
         let sci_layout = self.sci_active(ui);
@@ -1071,7 +1067,7 @@ impl Calculator {
                 scientific()
             };
             let color = if second_on { CARD_BG.now() } else { LABEL.now() };
-            s.fill_rrect(x, y, w, h, capsule(w, h), fill);
+            s.fill_rrect(RectF::new(x, y, w, h), capsule(w, h), fill);
             let label = match act {
                 Act::Angle => if self.sci.angle == Angle::Deg { "Deg" } else { "Rad" },
                 _ if self.sci.second => def.label2,
@@ -1112,7 +1108,7 @@ impl Calculator {
         } else {
             LABEL.now()
         };
-        s.fill_rrect(x, y, w, h, capsule(w, h), fill);
+        s.fill_rrect(RectF::new(x, y, w, h), capsule(w, h), fill);
         let clear = if sci_layout {
             self.sci.clear_label()
         } else {
@@ -1138,11 +1134,11 @@ impl Calculator {
         self.label(s, ui, &label, pt, color, rect);
     }
 
-    fn draw_history(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_history(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let (x, y, w, h) = self.panel(ui);
         let locale = self.settings.locale;
-        s.fill_rect(x as usize, y as usize, w as usize, h as usize, SIDEBAR_BG.now());
-        s.fill_rect((x + w) as usize, y as usize, 1, h as usize, SEPARATOR_C.now());
+        s.fill_rect(chrome::whole(x, y, w, h), SIDEBAR_BG.now());
+        s.fill_rect(chrome::whole(x + w, y, 1.0, h), SEPARATOR_C.now());
         if self.store.is_empty() {
             self.label(
                 s,
@@ -1162,28 +1158,16 @@ impl Calculator {
             let result = localize(&entry.result, locale);
             let (rx, ry, rw, rh) = self.result_rect(ui, visual);
             if self.pressed == Some(Target::Result(index)) {
-                s.fill_rrect(rx, ry, rw, rh, ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
+                s.fill_rrect(RectF::new(rx, ry, rw, rh), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
             }
             let expression = ui.fit(&expression_text, MAC_CALLOUT_PT, rw - ui.pt(SPACE_XXL));
             let image = self
                 .cache
                 .get(ui, &expression, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            s.blit(
-                image,
-                (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32,
-                (ry + ui.pt(SPACE_XS)) as i32,
-                255,
-                255,
-            );
+            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + ui.pt(SPACE_XS)) as i32);
             let image = self.cache.get(ui, &result, MAC_LARGE_TITLE_PT, Weight::Regular, LABEL.now());
-            s.blit(
-                image,
-                (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32,
-                (ry + rh - ui.pt(SPACE_XS) - image.h as f32) as i32,
-                255,
-                255,
-            );
-            s.fill_rrect(rx, ry + rh - 1.0, rw, 1.0, 0.0, SEPARATOR_C.now());
+            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + rh - ui.pt(SPACE_XS) - image.h as f32) as i32);
+            s.fill_rrect(RectF::new(rx, ry + rh - 1.0, rw, 1.0), 0.0, SEPARATOR_C.now());
         }
         // Copy Tape takes the left half of the bottom row, Clear History the right half.
         let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
@@ -1192,10 +1176,10 @@ impl Calculator {
         self.label(s, ui, "Clear History", MAC_BODY_PT, DESTRUCTIVE, (x + half, row_y, w - half, ui.pt(64.0)));
     }
 
-    fn draw_menu(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_menu(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let (x, y, w, h) = self.menu_rect(ui);
-        s.fill_rrect(x, y, w, h, ui.pt(m::SELECTION_RADIUS), FIELD_BG.now());
-        s.fill_rrect(x + w / 2.0, y + ui.pt(SPACE_S), 1.0, h - ui.pt(SPACE_L), 0.0, SEPARATOR_C.now());
+        s.fill_rrect(RectF::new(x, y, w, h), ui.pt(m::SELECTION_RADIUS), FIELD_BG.now());
+        s.fill_rrect(RectF::new(x + w / 2.0, y + ui.pt(SPACE_S), 1.0, h - ui.pt(SPACE_L)), 0.0, SEPARATOR_C.now());
         let can_paste = clipboard::text()
             .is_some_and(|t| paste::parse(&t, self.settings.locale).is_some());
         let can_copy = self.copy_text(ui).is_some();
@@ -1205,7 +1189,7 @@ impl Calculator {
         self.label(s, ui, "Paste", MAC_BODY_PT, if can_paste { LABEL.now() } else { LABEL_3.now() }, paste_item);
     }
 
-    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
+    pub fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui, _t: f64) {
         self.dirty = false;
         let style = (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold);
         if style != self.cache_style {
@@ -1217,7 +1201,7 @@ impl Calculator {
         if self.cache.len() > 192 {
             self.cache.clear();
         }
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, CARD_BG.now());
+        s.fill_rect(chrome::whole(0.0, 0.0, self.w as f32, self.h as f32), CARD_BG.now());
         let sci_on = self.sci_active(ui);
         let l = self.layout(ui);
         let locale = self.settings.locale;
@@ -1233,28 +1217,16 @@ impl Calculator {
         let display = fit_tail(ui, &display, pt, room);
         let image = self.cache.get(ui, &display, pt, Weight::Regular, LABEL.now());
         let display_y = l.y - ui.pt(62.0) - image.h as f32;
-        s.blit(
-            image,
-            (l.x + l.width - ui.pt(SPACE_S) - image.w as f32) as i32,
-            display_y as i32,
-            255,
-            255,
-        );
+        chrome::blit(s, image, (l.x + l.width - ui.pt(SPACE_S) - image.w as f32) as i32, display_y as i32);
         let expression = localize(&self.expression_text(ui), locale);
         let expression = ui.fit(&expression, MAC_TITLE1_PT, l.width - ui.pt(SPACE_L));
         let image = self
             .cache
             .get(ui, &expression, MAC_TITLE1_PT, Weight::Regular, LABEL_2.now());
-        s.blit(
-            image,
-            (l.x + l.width - ui.pt(SPACE_S) - image.w as f32) as i32,
-            (display_y - image.h as f32 - ui.pt(SPACE_M)) as i32,
-            255,
-            255,
-        );
+        chrome::blit(s, image, (l.x + l.width - ui.pt(SPACE_S) - image.w as f32) as i32, (display_y - image.h as f32 - ui.pt(SPACE_M)) as i32);
         if sci_on && self.sci.memory != 0.0 {
             let image = self.cache.get(ui, "M", MAC_TITLE1_PT, Weight::Regular, LABEL_2.now());
-            s.blit(image, (l.x + ui.pt(SPACE_S)) as i32, display_y as i32, 255, 255);
+            chrome::blit(s, image, (l.x + ui.pt(SPACE_S)) as i32, display_y as i32);
         }
         self.label(s, ui, "Delete", MAC_CALLOUT_PT, LABEL_2.now(), self.backspace_button(ui));
         for i in 0..self.key_count(ui) {
@@ -1273,10 +1245,10 @@ impl Calculator {
     }
 
     /// The unified toolbar over the content (the band only right of an open history sidebar).
-    fn draw_bar(&mut self, s: &mut Surface, ui: &Ui) {
+    fn draw_bar(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let p = ui.pt(1.0);
         let side = if self.history_open { self.panel(ui).2 / p } else { 0.0 };
-        widgets::toolbar_band(s, ui, Rect { x: side, y: 0.0, w: self.w as f32 / p - side, h: UNIFIED_BAR_PT });
+        chrome::toolbar_band(s, ui, Rect { x: side, y: 0.0, w: self.w as f32 / p - side, h: UNIFIED_BAR_PT });
         let pressed = match self.pressed {
             Some(Target::History) | Some(Target::Done) => Some(BAR_HISTORY),
             Some(Target::Decimal) => Some(BAR_DECIMAL),
@@ -1284,7 +1256,7 @@ impl Calculator {
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
             _ => None,
         };
-        widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed);
+        chrome::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed);
     }
 }
 

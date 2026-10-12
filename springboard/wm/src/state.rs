@@ -5,10 +5,11 @@ use std::{ffi::OsString, sync::Arc, time::Instant};
 
 use smithay::{
     desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
+    wayland::seat::WaylandFocus,
     input::{Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{generic::Generic, EventLoop, Interest, LoopSignal, Mode, PostAction},
+        calloop::{generic::Generic, EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
@@ -19,6 +20,7 @@ use smithay::{
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         output::OutputManagerState,
+        presentation::PresentationState,
         selection::data_device::DataDeviceState,
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
@@ -43,6 +45,15 @@ pub struct WmState {
     pub on_vblank: Option<Box<dyn FnMut(&mut WmState)>>,
     /// Toplevels waiting for their first buffer before `wm` places them.
     pub pending: Vec<Window>,
+    /// The event loop's handle, for sources that wake the loop (acquire-point blockers in `sync`).
+    pub loop_handle: LoopHandle<'static, WmState>,
+    /// `wp_presentation` (clock: CLOCK_MONOTONIC, id 1).
+    pub presentation: PresentationState,
+    /// Presentation feedback of the frames in flight, presented at their vblank (`sync`).
+    pub frame_feedback: crate::sync::FrameFeedback,
+    /// `wp_linux_drm_syncobj_v1`, installed by the DRM backend when the kernel supports syncobj eventfds.
+    #[cfg(feature = "drm")]
+    pub drm_syncobj_state: Option<smithay::wayland::drm_syncobj::DrmSyncobjState>,
 
     /// `ext-background-effect-v1` (live glass); the renderer reads each surface's blur region.
     pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
@@ -63,16 +74,26 @@ pub struct WmState {
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
     pub seat: Seat<WmState>,
+    /// Pointer gestures that are running (begin and end paired per kind; see `input.rs`).
+    pub gestures: crate::input::GestureGate,
+    /// XWayland, its X11 window manager and the xwayland-shell global (`xwayland.rs`).
+    #[cfg(feature = "xwayland")]
+    pub xwayland: crate::xwayland::XWaylandState,
+    /// Session protocols: foreign toplevels, screencopy, output management and power, cursor shapes, activation.
+    pub session: crate::session_protocols::SessionState,
 }
 
 impl WmState {
     /// Listens on `socket` (or the next free `wayland-N`) and dispatches clients from `event_loop`.
     pub fn new(event_loop: &mut EventLoop<'static, WmState>, display: Display<WmState>, socket: Option<&str>) -> Self {
         let dh = display.handle();
+        let session = crate::session_protocols::SessionState::new(&dh);
         let mut seat_state = SeatState::new();
         let mut seat: Seat<WmState> = seat_state.new_wl_seat(&dh, "seat0");
-        seat.add_keyboard(Default::default(), 300, 30).expect("keyboard");
+        let prefs = crate::input::InputPrefs::load(&crate::input::prefs_path());
+        crate::input::add_keyboard(&mut seat, &prefs).expect("keyboard");
         seat.add_pointer();
+        crate::input::register_protocols(&dh);
 
         let listening = match socket {
             Some(name) => ListeningSocketSource::with_name(name).expect("wayland socket"),
@@ -80,6 +101,7 @@ impl WmState {
         };
         let socket_name = listening.socket_name().to_os_string();
         let handle = event_loop.handle();
+        let presentation = PresentationState::new::<WmState>(&dh, 1);
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
                 if let Err(e) = state.dh.insert_client(stream, Arc::new(ClientState::default())) {
@@ -103,6 +125,11 @@ impl WmState {
             wm: Wm::new(Rect::default()),
             next_id: 1,
             pending: Vec::new(),
+            loop_handle: handle.clone(),
+            presentation,
+            frame_feedback: Default::default(),
+            #[cfg(feature = "drm")]
+            drm_syncobj_state: None,
             on_vblank: None,
             background_effect: crate::background_effect::init(&dh),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
@@ -120,6 +147,10 @@ impl WmState {
             popups: PopupManager::default(),
             seat_state,
             seat,
+            gestures: Default::default(),
+            #[cfg(feature = "xwayland")]
+            xwayland: crate::xwayland::XWaylandState::new(&dh),
+            session,
             dh,
         }
     }
@@ -159,7 +190,7 @@ impl WmState {
     }
 
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
-        self.space.elements().find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface)).cloned()
+        self.space.elements().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)).cloned()
     }
 
     /// Moves every mapped window to the frame `wm` holds for it, in `wm` stacking order.
@@ -193,10 +224,11 @@ impl WmState {
                 t.send_pending_configure();
             }
         }
-        let surface = focused.and_then(|id| self.window(id)).and_then(|w| w.toplevel().map(|t| t.wl_surface().clone()));
+        let surface = focused.and_then(|id| self.window(id)).and_then(|w| w.wl_surface().map(|s| s.into_owned()));
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, surface, serial);
         }
+        self.sync_toplevels();
     }
 
     /// Frame callbacks after a composited frame: windows, layer surfaces and the lock surface draw their next frame.
