@@ -968,6 +968,8 @@ pub mod tilemap;
 pub mod scene2d;
 pub mod midi_thru;
 pub mod midi_events;
+pub mod midi_ble;
+pub mod midi_ble_picker;
 pub mod fourier;
 pub mod embedding;
 pub mod lexical_tags;
