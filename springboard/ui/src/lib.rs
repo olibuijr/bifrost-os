@@ -840,3 +840,6 @@ pub mod embedding;
 pub mod lexical_tags;
 pub mod filebadge;
 pub mod itemattrs;
+pub mod match_pattern;
+pub mod url_filter;
+pub mod call_directory;
