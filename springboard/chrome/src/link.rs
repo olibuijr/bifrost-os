@@ -6,7 +6,8 @@
 //! crate has no libc, so the safe std API is the only option. Datagrams keep one `model` message per packet, as
 //! seqpacket does. Each client binds its own socket path next to the host's (`bifrost-chrome-<client>-<pid>.sock`),
 //! connects it to the host, and the host replies to a client by the path the message came from. A client that
-//! exits removes its path; the host forgets a client when a send to it fails.
+//! exits removes its path; the host forgets a client whose path is gone or refuses. A model that finds a client's
+//! queue full is kept (the newest of each kind) and sent again on the next `poll`.
 //!
 //! Owner: wave G2 agent `chrome-core`.
 
@@ -112,6 +113,8 @@ pub struct HostLink {
     clients: Vec<(ClientId, PathBuf)>,
     next_id: u32,
     buf: Vec<u8>,
+    /// Models a full client queue refused: (client, message kind, bytes); the newest per kind and client.
+    pending: Vec<(ClientId, u8, Vec<u8>)>,
 }
 
 impl HostLink {
@@ -124,12 +127,13 @@ impl HostLink {
         let _ = std::fs::remove_file(path);
         let socket = UnixDatagram::bind(path)?;
         socket.set_nonblocking(true)?;
-        Ok(HostLink { socket, path: path.to_path_buf(), clients: Vec::new(), next_id: 1, buf: vec![0; model::MAX_LEN + 1] })
+        Ok(HostLink { socket, path: path.to_path_buf(), clients: Vec::new(), next_id: 1, buf: vec![0; model::MAX_LEN + 1], pending: Vec::new() })
     }
 
     /// Accepts new clients and returns every message waiting, with who sent it. A sender that has no path (it did
     /// not bind one) cannot be answered and its messages are dropped.
     pub fn poll(&mut self) -> Vec<(ClientId, FromChrome)> {
+        self.retry_pending();
         let mut out = Vec::new();
         loop {
             let (n, addr) = match self.socket.recv_from(&mut self.buf) {
@@ -162,7 +166,7 @@ impl HostLink {
     pub fn send(&mut self, to: ClientId, m: &ToChrome) {
         let bytes = model::encode_to_chrome(m);
         if let Some(path) = self.path_of(to) {
-            if !self.deliver(&path, &bytes) {
+            if !self.deliver(to, &path, bytes) {
                 self.forget(to);
             }
         }
@@ -173,7 +177,7 @@ impl HostLink {
         let bytes = model::encode_to_chrome(m);
         let targets = self.clients.clone();
         for (id, path) in targets {
-            if !self.deliver(&path, &bytes) {
+            if !self.deliver(id, &path, bytes.clone()) {
                 self.forget(id);
             }
         }
@@ -195,15 +199,37 @@ impl HostLink {
 
     fn forget(&mut self, id: ClientId) {
         self.clients.retain(|(c, _)| *c != id);
+        self.pending.retain(|(c, _, _)| *c != id);
     }
 
-    /// Whether the message left, or was dropped for a full queue (the client is still there). False when the
-    /// client's path is gone or refuses.
-    fn deliver(&self, path: &Path, bytes: &[u8]) -> bool {
-        match self.socket.send_to(bytes, path) {
-            Ok(_) => true,
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => true,
-            Err(_) => false,
+    /// Sends again what a full queue refused earlier.
+    fn retry_pending(&mut self) {
+        for (id, _kind, bytes) in std::mem::take(&mut self.pending) {
+            if let Some(path) = self.path_of(id) {
+                if !self.deliver(id, &path, bytes) {
+                    self.forget(id);
+                }
+            }
+        }
+    }
+
+    /// Whether the client is still there. A full queue keeps the message as the newest of its kind (resent by
+    /// `poll`); a message the transport refuses as too large is dropped but the client stays; only a path that is
+    /// gone or refuses connections ends the client.
+    fn deliver(&mut self, id: ClientId, path: &Path, bytes: Vec<u8>) -> bool {
+        let kind = bytes.get(1).copied().unwrap_or(0);
+        match self.socket.send_to(&bytes, path) {
+            Ok(_) => {
+                self.pending.retain(|(c, k, _)| !(*c == id && *k == kind));
+                true
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                self.pending.retain(|(c, k, _)| !(*c == id && *k == kind));
+                self.pending.push((id, kind, bytes));
+                true
+            }
+            Err(e) if matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused) => false,
+            Err(_) => true,
         }
     }
 }
@@ -305,6 +331,44 @@ mod tests {
         host.broadcast(&ToChrome::ShowPanel(String::new()));
         assert_eq!(host.client_count(), 1);
         assert_eq!(recv_until(&mut a, 1), vec![ToChrome::ShowPanel(String::new())]);
+    }
+
+    #[test]
+    fn a_full_client_queue_is_resent_and_a_huge_model_keeps_the_client() {
+        let dir = test_dir("full");
+        let server = dir.join("bifrost-chrome.sock");
+        let mut host = HostLink::bind_at(&server).expect("bind the host");
+        let mut link = Link::connect_to(&server, "chrome-panels").expect("connect");
+        let id = poll_until(&mut host, 1)[0].0;
+        let model = |n: u32| ToChrome::Dock(DockModel { items: vec![], size: n as f32, magnified: 0.0, position: DockPosition::Bottom, autohide: false });
+        // the client never reads: publish until the queue refuses and a model is held back
+        let mut n = 0;
+        while host.pending.is_empty() {
+            n += 1;
+            host.send(id, &model(n));
+            assert!(n < 100_000, "the queue must fill");
+        }
+        assert_eq!(host.client_count(), 1);
+        // the newest model is the held one; drain the client, let the host resend
+        let latest = model(n);
+        let _ = link.recv().expect("the host is up");
+        let mut got = Vec::new();
+        for _ in 0..200 {
+            host.poll();
+            got.extend(link.recv().expect("the host is up"));
+            if got.last() == Some(&latest) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(got.last(), Some(&latest), "the client ends with the newest model");
+        // a model over the socket's send buffer is refused by the transport, not a reason to forget the client
+        let big = ToChrome::Panels(crate::model::PanelsModel {
+            notifications: (0..3000).map(|i| crate::model::Notification { id: i, body: "x".repeat(100), ..Default::default() }).collect(),
+            controls: vec![],
+        });
+        host.send(id, &big);
+        assert_eq!(host.client_count(), 1);
     }
 
     #[test]
