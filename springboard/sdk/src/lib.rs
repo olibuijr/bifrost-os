@@ -119,6 +119,7 @@ pub mod ble_midi;
 pub mod device_registry;
 pub mod script_value;
 pub mod script_syntax;
+pub mod script_export;
 pub mod view;
 pub mod document;
 pub mod markup;
