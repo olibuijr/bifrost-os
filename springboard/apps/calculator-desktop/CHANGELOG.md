@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- Statistics on the paper tape: Copy Tape now ends with a Statistics block after the calculations. It gives the
+  count, the sum, the mean, the standard deviation (from two calculations on), and the smallest and largest result.
+- The statistics are worked out by the system's summary model, so a result that is not a number is left out.
+- Numbers in the statistics follow the calculator's language, the same as the results above them.
+
 ## 1.5.0 — 2026-10-12
 
 - Paper tape: the calculations in the history sidebar can be copied as a tape. Copy Tape sits at the left of the
