@@ -2,7 +2,7 @@
 
 ## 0.5.36 — 2026-10-12
 
-Reference-SDK parity, the wiring wave: the pure models from waves 1 to 5 now run in the shell and in the apps.
+Reference-SDK parity, the wiring and connect waves: the pure models from waves 1 to 5 now run in the shell and in the apps.
 
 - 17 new shell system services over the named service channel (no wire protocol change), each with a typed SDK
   client: audio devices and volume, Bluetooth, cursor stack, Dock tile (badge, progress, bounce), game controllers,
@@ -18,7 +18,14 @@ Reference-SDK parity, the wiring wave: the pure models from waves 1 to 5 now run
   `docs/parity/wire-*.md`.
 - Fixes found while integrating: language identification ignores links, email addresses and host names, so "com" no
   longer makes an English note Portuguese.
-- 9530 tests pass across the workspace.
+- The connect wave: 21 apps call the new services. Music and Podcasts drive Control Center's Now Playing; Files uses
+  the preview panel, typed pasteboard, search index and Dock progress; Calendar, Clock, News, Notes and Reminders
+  publish Notification Centre widgets; Shortcuts runs daily reminders and opens at login (after approval in Settings);
+  Console shows thermal and battery state and copies log lines; Browser shows download progress on its Dock icon and an
+  offline page; Assistant keeps the message when offline. Notes per app in `docs/parity/connect-*.md`.
+- BifrOSt is for PC: Settings shows the machine's DMI product name (or "PC") instead of the old tablet model, the
+  built-in web view reports an x86_64 desktop, and the Bluetooth and share names say BifrOSt.
+- 9732 tests pass across the workspace.
 
 ## 0.5.35 — 2026-10-12
 
