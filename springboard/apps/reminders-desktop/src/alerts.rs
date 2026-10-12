@@ -1,8 +1,10 @@
 //! Due-date alerts as notification triggers. Every alert still to come is handed to the shell as a pending request with
-//! a time-interval trigger, so the shell shows it on time whether or not
-//! Reminders is running. The app re-plans only when the data changes, when the zone changes, when the earliest planned
-//! alert is due, or once an hour; a plan that did not change sends nothing. Pure rules here, the calls in [`apply`].
+//! a time-interval trigger, so the shell shows it on time whether or not Reminders is running. The requests go through
+//! the `notification-schedule` service when the shell has it, and through the older `usernotif` path otherwise (see
+//! [`apply`]). The app re-plans only when the data changes, when the zone changes, when the earliest planned alert is
+//! due, or once an hour; a plan that did not change sends nothing. Pure rules here, the calls in [`apply`].
 use crate::model::{self, Reminder};
+use bifrost_app::notification_schedule::{self, Schedule};
 use bifrost_app::usernotif::{self, Request};
 use bifrost_app::Ctx;
 
@@ -117,9 +119,32 @@ pub fn step(
     }
 }
 
-/// Sends a change to the shell: `reset` removes every pending request of the app (an empty id list), otherwise only
-/// the removed identifiers. An empty list must never reach `remove_pending` without `reset`, since that removes all.
-pub fn apply(ctx: &Ctx, change: &Change) {
+/// The longest interval the `notification-schedule` service takes, in whole seconds.
+const MAX_INTERVAL_SECS: u32 = 4_294_967;
+
+/// Whole seconds for a delay in milliseconds, rounded up so an alert is never early; at least one second.
+pub fn interval_secs(delay_ms: u32) -> u32 {
+    ((u64::from(delay_ms) + 999) / 1000).clamp(1, u64::from(MAX_INTERVAL_SECS)) as u32
+}
+
+/// Sends a change to the shell. With `via_service` the requests go through the `notification-schedule` service (its
+/// interval trigger, one-shot); otherwise through the `usernotif` path that older shells have. `reset` removes every
+/// pending request of the app first (an empty id list); otherwise only the removed identifiers. An empty list must
+/// never reach the remove call without `reset`, since that removes all.
+pub fn apply(ctx: &Ctx, change: &Change, via_service: bool) {
+    if via_service {
+        if change.reset {
+            notification_schedule::remove(ctx, &[]);
+        } else if !change.remove.is_empty() {
+            let ids: Vec<&str> = change.remove.iter().map(String::as_str).collect();
+            notification_schedule::remove(ctx, &ids);
+        }
+        for p in &change.add {
+            let schedule = Schedule::interval(&p.id, &p.title, interval_secs(p.delay_ms), false).body(&p.body);
+            notification_schedule::add(ctx, &schedule);
+        }
+        return;
+    }
     if change.reset {
         usernotif::remove_pending(ctx, &[]);
     } else if !change.remove.is_empty() {
@@ -246,5 +271,75 @@ mod tests {
         step(&mut st, now, 0, || vec![due_at(1, 20_000, 660)], &|_| 0);
         let c = step(&mut st, now + 10, 0, || vec![due_at(1, 20_000, 660)], &|_| 3600);
         assert!(c.is_some(), "a new offset shifts the due moment, so the request is replaced");
+    }
+
+    #[test]
+    fn a_delay_becomes_whole_seconds_rounded_up() {
+        assert_eq!(interval_secs(0), 1);
+        assert_eq!(interval_secs(1), 1);
+        assert_eq!(interval_secs(1000), 1);
+        assert_eq!(interval_secs(1001), 2);
+        assert_eq!(interval_secs(3_600_000), 3600);
+        assert_eq!(interval_secs(u32::MAX), MAX_INTERVAL_SECS);
+    }
+
+    fn planned(id: &str, at: i64, delay_ms: u32) -> Planned {
+        Planned { id: id.into(), at, delay_ms, title: "T".into(), body: "B".into() }
+    }
+
+    fn service_calls(ctx: &Ctx) -> Vec<(String, String, bifrost_core::json::Json)> {
+        use bifrost_app::proto::ToShell;
+        ctx.take_sent()
+            .into_iter()
+            .map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } => (service, method, bifrost_core::json::parse(&body).unwrap()),
+                other => panic!("expected a service call, got {other:?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_reset_clears_then_schedules_through_the_service() {
+        let ctx = crate::system::test_ctx();
+        let change = Change { reset: true, remove: Vec::new(), add: vec![planned("reminder-2-due", 0, 2500)] };
+        apply(&ctx, &change, true);
+        let sent = service_calls(&ctx);
+        assert_eq!(sent.len(), 2);
+        assert_eq!((sent[0].0.as_str(), sent[0].1.as_str()), ("notification-schedule", "remove"));
+        assert_eq!(sent[0].2.get("ids").and_then(bifrost_core::json::Json::as_array).map(|a| a.len()), Some(0), "an empty list removes all");
+        assert_eq!((sent[1].0.as_str(), sent[1].1.as_str()), ("notification-schedule", "add"));
+        assert_eq!(sent[1].2.get("id").and_then(bifrost_core::json::Json::as_str), Some("reminder-2-due"));
+        let trigger = sent[1].2.get("trigger").unwrap();
+        assert_eq!(trigger.get("kind").and_then(bifrost_core::json::Json::as_str), Some("interval"));
+        assert_eq!(trigger.get("seconds").and_then(bifrost_core::json::Json::number), Some(3.0));
+        assert_eq!(trigger.get("repeats"), Some(&bifrost_core::json::Json::Bool(false)));
+    }
+
+    #[test]
+    fn an_edit_removes_only_the_named_ids_through_the_service() {
+        let ctx = crate::system::test_ctx();
+        let change = Change { reset: false, remove: vec!["reminder-1-due".into()], add: Vec::new() };
+        apply(&ctx, &change, true);
+        let sent = service_calls(&ctx);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].1, "remove");
+        assert_eq!(sent[0].2.get("ids").and_then(bifrost_core::json::Json::as_array).map(|a| a.len()), Some(1));
+    }
+
+    #[test]
+    fn nothing_to_remove_sends_no_remove_call() {
+        let ctx = crate::system::test_ctx();
+        apply(&ctx, &Change::default(), true);
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn without_the_service_the_older_path_is_used() {
+        use bifrost_app::proto::ToShell;
+        let ctx = crate::system::test_ctx();
+        apply(&ctx, &Change { reset: true, remove: Vec::new(), add: vec![planned("reminder-2-due", 0, 2500)] }, false);
+        let sent = ctx.take_sent();
+        assert!(sent.iter().all(|m| !matches!(m, ToShell::ServiceCall { service, .. } if service == "notification-schedule")));
+        assert!(!sent.is_empty());
     }
 }

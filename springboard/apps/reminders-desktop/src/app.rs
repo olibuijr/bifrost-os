@@ -334,6 +334,16 @@ impl Reminders {
         model::due_count(&self.data.items, self.today)
     }
 
+    /// Every reminder, for the Today widget timeline (`system.rs`).
+    pub fn items(&self) -> &[model::Reminder] {
+        &self.data.items
+    }
+
+    /// The local day number the app counts due dates from (the badge and the Today widget use it).
+    pub fn today(&self) -> i64 {
+        self.today
+    }
+
     /// Whether the list of reminders is on screen; the New, Find and Delete commands act only there.
     pub fn on_items(&self) -> bool {
         self.screen == Screen::Items

@@ -4,6 +4,9 @@
 
 - Due-date alerts are now scheduled with the system. Each upcoming alert (and each early alert) is handed to the shell as a notification with a time trigger, so it shows on time even when Reminders is closed, and it is replaced or removed when the reminder changes. The app keeps up to 32 alerts pending and re-plans when the list changes, when the time zone changes, and at least once an hour.
 - Repeating reminders schedule their next alert as soon as they are completed, through the same path.
+- Due-date alerts go through the shell's `notification-schedule` service. A shell without it falls back to the older notification path, so alerts keep working.
+- The Dock badge (the count of open reminders due today or earlier) is set through the `dock` service, with the older badge message as the fallback.
+- Today widget: a Notification Centre timeline lists today's open reminders and overdue ones, with a summary row. It is updated when reminders change, at each shell reload request, and at the next midnight.
 
 ## 1.9.4 — 2026-10-11
 
