@@ -612,6 +612,7 @@ pub mod textlist;
 pub mod metaquery;
 pub mod searchquery;
 pub mod pathbar;
+pub mod peripheral;
 pub mod constraint;
 pub mod table;
 pub mod panels;
