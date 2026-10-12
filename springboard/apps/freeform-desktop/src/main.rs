@@ -51,7 +51,8 @@ impl App for FreeformApp {
         match &mut self.app {
             Some(c) => c.set_size(w, h),
             None => {
-                self.app = Some(freeform::Freeform::new(&ctx.ui, w, h).with_save_dir(PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Pictures")))
+                let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+                self.app = Some(freeform::Freeform::new(&ctx.ui, w, h).with_save_dir(home.join("Pictures")).with_tips(tip_store(&home)))
             }
         }
         self.services.configure(ctx);
@@ -118,6 +119,16 @@ impl App for FreeformApp {
         self.services.event(ctx, service, event, body);
         self.sync_export(ctx);
         false
+    }
+}
+
+/// The first-use tip state, in the app's data folder. When that file cannot be read the tips live in memory only.
+fn tip_store(home: &std::path::Path) -> bifrost_app::controls::tips::Datastore {
+    use bifrost_app::controls::tips::{configure, ConfigOption};
+    let path = home.join(".local/share/is.olibuijr.freeform.desktop/tips.txt");
+    match configure(&[ConfigOption::DatastorePath(path)]) {
+        Ok(store) => store,
+        Err(_) => configure(&[]).expect("an in-memory tip store always loads"),
     }
 }
 

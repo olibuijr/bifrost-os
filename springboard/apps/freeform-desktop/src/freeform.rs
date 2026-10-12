@@ -11,6 +11,8 @@ use bifrost_app::controls::affine::AffineTransform;
 use bifrost_app::controls::cursor::Kind;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
 use bifrost_app::controls::lasso::{Lasso, Selection};
+use bifrost_app::controls::layout_protocol::{FlowLayout, Layout};
+use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, TipViewStyle};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{
@@ -41,6 +43,7 @@ const BAR_RECT: u32 = 9;
 const BAR_OVAL: u32 = 10;
 const BAR_DELETE: u32 = 11;
 const BAR_COPY: u32 = 12;
+const BAR_ARRANGE: u32 = 13;
 const UNDO_DEPTH: usize = 12;
 
 const COLORS: [u32; 7] = [
@@ -71,6 +74,7 @@ enum Target {
     Clear,
     Delete,
     Copy,
+    Arrange,
     Save,
 }
 
@@ -115,6 +119,10 @@ pub struct Freeform {
     export_scale: u32,
     /// The strokes Copy took, waiting for the app to put them on the pasteboard (`take_copy`).
     copied: Option<Drawing>,
+    /// The first-use tip state (`None` in tests that do not need it).
+    tips: Option<Datastore>,
+    /// The first-use tip was counted as shown in this run.
+    tip_marked: bool,
 }
 
 /// Width of the ink a tool draws, in points.
@@ -139,6 +147,7 @@ fn id_target(id: u32) -> Option<Target> {
         BAR_CLEAR => Target::Clear,
         BAR_DELETE => Target::Delete,
         BAR_COPY => Target::Copy,
+        BAR_ARRANGE => Target::Arrange,
         BAR_SAVE => Target::Save,
         _ => return None,
     })
@@ -157,6 +166,7 @@ fn target_id(t: Target) -> Option<u32> {
         Target::Clear => BAR_CLEAR,
         Target::Delete => BAR_DELETE,
         Target::Copy => BAR_COPY,
+        Target::Arrange => BAR_ARRANGE,
         Target::Save => BAR_SAVE,
         Target::Color(_) => return None,
     })
@@ -191,6 +201,8 @@ impl Freeform {
             shape: None,
             export_scale: 1,
             copied: None,
+            tips: None,
+            tip_marked: false,
         }
     }
 
@@ -223,6 +235,27 @@ impl Freeform {
                     Kind::Arrow
                 }
             }
+        }
+    }
+
+    /// The first-use tip state: the hint is shown until the person first presses the board.
+    pub fn with_tips(mut self, store: Datastore) -> Self {
+        self.tips = Some(store);
+        self
+    }
+
+    /// The first-use hint's sections at `now` (seconds). Empty once it was dismissed, or with no store.
+    fn tip_sections(&self, now: tips::Seconds) -> Vec<TipSection> {
+        match &self.tips {
+            Some(store) => TipView::new(&LassoHint, TipViewStyle::Mini).sections(store, now),
+            None => Vec::new(),
+        }
+    }
+
+    /// A press on the board dismisses the first-use hint for good (until the tip state is reset).
+    fn dismiss_tip(&mut self) {
+        if let Some(store) = &mut self.tips {
+            let _ = store.invalidate(LassoHint.id());
         }
     }
 
@@ -263,6 +296,7 @@ impl Freeform {
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_UNDO, "Undo").in_group(2).enabled(!self.undo.is_empty()),
             ToolbarItem::button(BAR_CLEAR, "Clear").in_group(2),
+            ToolbarItem::button(BAR_ARRANGE, "Arrange").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::button(BAR_COPY, "Copy").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::button(BAR_DELETE, "Delete").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::icon(BAR_SAVE, "Save to Photos", "square.and.arrow.up"),
@@ -575,6 +609,7 @@ impl Freeform {
             }
             Target::Delete => self.delete_selection(ui),
             Target::Copy => self.copy_selection(),
+            Target::Arrange => self.arrange_selection(ui),
             Target::Save => {
                 let msg = match self.save(ui) {
                     Ok(name) => format!("Saved {name} to Photos"),
@@ -584,6 +619,31 @@ impl Freeform {
             }
         }
         self.dirty = true;
+    }
+
+    /// Arrange: the selected strokes are lined up in a row, wrapping at the board's right edge, starting at the
+    /// selection's top-left corner. Each stroke keeps its shape; only its position changes. One undo step.
+    fn arrange_selection(&mut self, ui: &Ui) {
+        let Some(sel) = self.selection.clone() else { return };
+        let Some(origin) = sel.bounds(&self.model) else { return };
+        let parts: Vec<(usize, Rect)> = sel.indices().iter().filter_map(|&i| Some((i, self.model.strokes().get(i)?.bounds()?))).collect();
+        if parts.is_empty() {
+            return;
+        }
+        let sizes: Vec<(f32, f32)> = parts.iter().map(|(_, b)| (b.w, b.h)).collect();
+        let room = (self.cw as f32 - origin.x).max(0.0);
+        let gap = ui.pt(SPACE_M);
+        let placed = FlowLayout::new(gap, gap).place_subviews(origin, (room, f32::INFINITY), &sizes);
+        self.push_undo();
+        for ((i, b), r) in parts.iter().zip(placed) {
+            let (dx, dy) = (r.x - b.x, r.y - b.y);
+            if dx != 0.0 || dy != 0.0 {
+                if let Some(s) = self.model.stroke_mut(*i) {
+                    s.transform(AffineTransform::translate(dx, dy));
+                }
+            }
+        }
+        self.repaint(ui, None);
     }
 
     fn save(&self, ui: &Ui) -> Result<String, String> {
@@ -640,6 +700,7 @@ impl Freeform {
         let top = self.canvas_top(ui) as f32;
         match event {
             Event::Down(x, y) => {
+                self.dismiss_tip();
                 if y >= top {
                     self.canvas_down(ui, x, y);
                 } else {
@@ -749,6 +810,43 @@ impl Freeform {
             }
         }
         self.placed = Some(placed);
+        let now = now_seconds();
+        let sections = self.tip_sections(now);
+        if !sections.is_empty() && !self.tip_marked {
+            self.tip_marked = true;
+            if let Some(store) = &mut self.tips {
+                let _ = store.mark_shown(LassoHint.id(), now);
+            }
+        }
+        let lines: Vec<(String, Weight)> = sections
+            .iter()
+            .filter_map(|sec| match sec {
+                TipSection::Title(t) => Some((t.clone(), Weight::Semibold)),
+                TipSection::Message(m) => Some((m.clone(), Weight::Regular)),
+                TipSection::Actions(_) => None,
+            })
+            .collect();
+        if !lines.is_empty() {
+            let mut sizes = Vec::with_capacity(lines.len());
+            for (text, weight) in &lines {
+                let img = self.cache.get(ui, text, MAC_CALLOUT_PT, *weight, WHITE);
+                sizes.push((img.w as f32, img.h as f32));
+            }
+            let max_w = sizes.iter().fold(0.0f32, |a, s| a.max(s.0));
+            let text_h: f32 = sizes.iter().map(|s| s.1).sum::<f32>() + ui.pt(SPACE_XS) * (lines.len() - 1) as f32;
+            let pw = max_w + ui.pt(SPACE_XXXL);
+            let ph = text_h + ui.pt(SPACE_L);
+            let x = ui.pt(SPACE_L);
+            let y = self.h as f32 - ph - ui.pt(SPACE_XXL);
+            s.fill_rrect(x, y, pw, ph, 1.0e4, TOAST_FILL);
+            let mut cy = y + ui.pt(SPACE_S);
+            for (text, weight) in &lines {
+                let img = self.cache.get(ui, text, MAC_CALLOUT_PT, *weight, WHITE);
+                let h = img.h as f32;
+                s.blit(img, (x + ui.pt(SPACE_L)) as i32, cy as i32, 255, 255);
+                cy += h + ui.pt(SPACE_XS);
+            }
+        }
         if let Some((msg, _)) = self.toast.clone() {
             let img = self.cache.get(ui, &msg, MAC_CALLOUT_PT, Weight::Regular, WHITE);
             let pw = img.w as f32 + ui.pt(SPACE_XXXL);
@@ -759,6 +857,28 @@ impl Freeform {
             s.blit(img, (x + ui.pt(SPACE_L)) as i32, (y + ui.pt(SPACE_S)) as i32, 255, 255);
         }
     }
+}
+
+/// The first-use hint for the lasso and Arrange.
+struct LassoHint;
+
+impl Tip for LassoHint {
+    fn id(&self) -> &str {
+        "is.olibuijr.freeform.tip.lasso"
+    }
+
+    fn title(&self) -> &str {
+        "Select, then arrange"
+    }
+
+    fn message(&self) -> &str {
+        "Choose Lasso and drag a loop around strokes. Arrange lines them up in a row."
+    }
+}
+
+/// Seconds since the Unix epoch, for the tip's display gap.
+fn now_seconds() -> tips::Seconds {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Rough brightness for the marker's "keep the stronger mix" rule.
@@ -981,6 +1101,49 @@ mod model_tests {
         assert_eq!(dims(&app.export_png(&ui)), (w * 2, h * 2));
         app.set_export_scale(0);
         assert_eq!(dims(&app.export_png(&ui)), (w, h), "a zero factor is treated as 1");
+    }
+
+    #[test]
+    fn arrange_lines_the_selected_strokes_up_in_a_row_from_their_corner() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        let seg = |a: (f32, f32), b: (f32, f32)| Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
+            points: vec![StrokePoint::at(a.0, a.1), StrokePoint::at(b.0, b.1)],
+        };
+        // bounds: stroke 0 is (10,10) 20 x 10; stroke 1 is (100,50) 40 x 20; the union is (10,10) 130 x 60
+        app.model = Drawing::from_strokes(vec![seg((10.0, 10.0), (30.0, 20.0)), seg((100.0, 50.0), (140.0, 70.0))]);
+        let mut lasso = Lasso::new();
+        for (x, y) in [(0.0, 0.0), (200.0, 0.0), (200.0, 200.0), (0.0, 200.0)] {
+            lasso.add(x, y);
+        }
+        app.selection = Some(lasso.select(&app.model)).filter(|s| !s.is_empty());
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[0usize, 1]);
+        assert!(app.bar().items.iter().any(|i| i.id == BAR_ARRANGE && i.enabled));
+        let undo_before = app.undo.len();
+        app.activate(&ui, Target::Arrange);
+        // room = 200 - 10 = 190; the gap is 12 pt at scale 1.5625 = 18.75 px. Stroke 0 (20 wide) sits at x 0, stroke 1
+        // (40 wide) at 20 + 18.75 = 38.75, which fits on the row. Placed at (10,10) and (48.75,10).
+        assert_eq!(app.model.strokes()[0].points[0], StrokePoint::at(10.0, 10.0), "the first stroke is already in place");
+        assert_eq!(app.model.strokes()[1].points[0], StrokePoint::at(48.75, 10.0));
+        assert_eq!(app.model.strokes()[1].points[1], StrokePoint::at(88.75, 30.0));
+        assert_eq!(app.undo.len(), undo_before + 1, "arrange is one undo step");
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[0usize, 1], "the selection is kept");
+    }
+
+    #[test]
+    fn the_first_use_hint_shows_until_the_board_is_pressed() {
+        let ui = test_ui();
+        let store = tips::configure(&[]).unwrap();
+        let mut app = board(&ui).with_tips(store);
+        assert_eq!(
+            app.tip_sections(0),
+            vec![TipSection::Title("Select, then arrange".to_string()), TipSection::Message("Choose Lasso and drag a loop around strokes. Arrange lines them up in a row.".to_string())]
+        );
+        let top = app.canvas_top(&ui) as f32;
+        app.touch(&ui, Event::Down(10.0, top + 10.0), 0.0);
+        assert!(app.tip_sections(0).is_empty(), "a press on the board dismisses the hint");
+        assert!(board(&ui).tip_sections(0).is_empty(), "no store, no hint");
     }
 
     #[test]

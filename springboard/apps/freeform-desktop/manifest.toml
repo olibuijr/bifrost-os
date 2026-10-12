@@ -1,6 +1,6 @@
 id = "is.olibuijr.freeform.desktop"
 name = "Freeform"
-version = "1.3.0"
+version = "1.4.0"
 exec = "bifrost-freeform"
 icon = "icon.png"
 min_shell = "0.4.84"
