@@ -138,3 +138,44 @@ composed black by labwc. Check on Midget with a screenshot while Files is open, 
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
 6. Remove the presenter blur path and labwc after Midget acceptance.
+
+## Materials (2026-10-12)
+
+The window server composes all windows and backs every material, for built-in and external clients alike, the way
+the reference WindowServer does. Code: `wm/src/material_kind.rs` (recipes, pure), `wm/src/bifrost_material.rs`
+(protocol), `wm/src/render_server/scene_build.rs` (`material_nodes`), `render_server/material.rs` (blur passes),
+`wm/src/glass.rs` and `scene.rs` (GLES path).
+
+### `bifrost_material_v1` (`wm/protocol/bifrost-material-v1.xml`)
+
+`ext-background-effect-v1` has no material kind, so BifrOSt adds a private protocol. `bifrost_material_manager_v1.get_material(surface)`
+gives a `bifrost_material_surface_v1` (one per surface). Double-buffered, applied on `wl_surface.commit`:
+
+- `clear()` drops all regions; `destroy` removes them from the next commit.
+- `add_region(region, kind, state, blending, emphasized, radius_tl, radius_tr, radius_br, radius_bl)`: at most 16 per surface.
+  `kind`: titlebar, menu, popover, sidebar, header_view, sheet, window_background, hud_window, full_screen_ui, tool_tip,
+  content_background, under_window_background, under_page_background, glass_regular, glass_clear. `state`: follows_window,
+  active, inactive. `blending`: behind_window, within_window.
+- With any material region, the surface's `ext-background-effect-v1` blur region is ignored; without, the blur region
+  is a `Plain` material (a white veil at 25 %, never replaced by a plate).
+
+### Recipe and rules
+
+Each kind has a `Recipe` (blur radius, saturation, Dark and Light tint, opaque inactive plate, noise, always-active).
+Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
+
+- Behind-window: samples everything composited below the window (other clients, layers, wallpaper). The compose pass blurs
+  the target so far, so this is exact on the Vulkan path.
+- Active state: a `follows_window` region in a window that is not key draws the opaque inactive plate, except kinds that
+  follow no window state (menu, popover, sheet, HUD, tooltip, full-screen UI, plain). An explicit `active` or `inactive` wins.
+- Within-window: not isolated yet (the compose pass cannot sample one window's earlier pixels alone); resolves to the flat
+  plate of the kind. A gap, recorded in the parity rows.
+- Rounded mask: the largest corner radius masks a single-rectangle region with the compose shader's anti-aliased SDF.
+  Per-corner radii need a shader change (not done).
+- Emphasized: stronger tint (+10 % alpha) and saturation (+0.2).
+- Damage: unchanged. The Vulkan path blurs inside the frame damage; the GLES path re-blurs only when the signature of the
+  elements below (id, commit, geometry), the output size or the recipe saturation changes.
+- Budget: `budgeted_blur` lowers the number of dual-Kawase passes until the pyramid (levels written down and up) is at most
+  3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region runs 4 passes, a sidebar all of them.
+- Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client and applies the saturation.
+- Appearance comes from `WmState::material_dark` (`BIFROST_WM_APPEARANCE=light` for Light); no appearance protocol yet.

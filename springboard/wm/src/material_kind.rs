@@ -184,8 +184,8 @@ pub fn recipe(kind: MaterialKind) -> Recipe {
         UnderWindowBackground | UnderPageBackground => r(28.0, 1.8, c(24, 24, 27, 170), c(236, 236, 236, 175), SIDEBAR_PLATE, 0.02, false),
         GlassRegular => r(18.0, 1.8, c(255, 255, 255, 38), c(255, 255, 255, 70), TITLEBAR_PLATE, 0.0, false),
         GlassClear => r(10.0, 1.4, c(255, 255, 255, 18), c(255, 255, 255, 36), TITLEBAR_PLATE, 0.0, false),
-        // the plain ext-background-effect blur keeps its old look: a white veil at 25 %
-        Plain => r(20.0, 1.8, c(255, 255, 255, 64), c(255, 255, 255, 64), WINDOW_PLATE, 0.0, false),
+        // the plain ext-background-effect blur keeps its old look (a white veil at 25 %) and never falls back to a plate
+        Plain => r(20.0, 1.8, c(255, 255, 255, 64), c(255, 255, 255, 64), WINDOW_PLATE, 0.0, true),
     }
 }
 
@@ -337,6 +337,12 @@ mod tests {
         let mut s = spec(MaterialKind::Sidebar);
         s.blending = Blending::WithinWindow;
         assert!(matches!(resolve(&s, true, true), Resolved::Plate(_)));
+    }
+
+    #[test]
+    fn the_plain_blur_region_is_blurred_whatever_the_window_state() {
+        let s = MaterialSpec::plain(vec![rect(0, 0, 4, 4)]);
+        assert!(matches!(resolve(&s, false, true), Resolved::Glass { .. }));
     }
 
     #[test]
