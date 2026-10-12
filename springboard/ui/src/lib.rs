@@ -833,3 +833,5 @@ pub mod midi_events;
 pub mod fourier;
 pub mod embedding;
 pub mod lexical_tags;
+pub mod filebadge;
+pub mod itemattrs;

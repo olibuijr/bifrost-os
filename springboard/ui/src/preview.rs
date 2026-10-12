@@ -24,6 +24,8 @@ pub enum ModelError {
     DuplicateAttachment,
     /// A file reply or registration has no name or type.
     Empty,
+    /// A file URL is not an absolute path or `file://` URL naming a file, or a searchable item domain is malformed.
+    BadUrl,
     /// A thumbnail request asks for no representation.
     NoRepresentation,
 }
@@ -126,6 +128,8 @@ fn valid_id(id: &str) -> bool {
 #[derive(Clone, Debug, Default)]
 pub struct Registry {
     entries: Vec<(String, Vec<String>)>,
+    /// `(provider, domain)` for searchable items, see [`Registry::register_searchable`].
+    searchable: Vec<(String, String)>,
 }
 
 impl Registry {
@@ -164,6 +168,63 @@ impl Registry {
             }
         }
         best.map(|(_, p)| p)
+    }
+}
+
+/// What a view-based preview is asked for: `preparePreviewOfFile(at:completionHandler:)` gets a file URL, and
+/// `preparePreviewOfSearchableItem(identifier:queryString:completionHandler:)` gets the identifier of an item the app
+/// indexed for search, with the query that found it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Subject {
+    File { url: String },
+    SearchableItem { identifier: String, query: Option<String> },
+}
+
+impl Subject {
+    /// An absolute path or a `file://` URL that names a file: it must start with `/` after the optional scheme and must
+    /// not end in a slash.
+    pub fn file(url: &str) -> Result<Self, ModelError> {
+        let path = url.strip_prefix("file://").unwrap_or(url);
+        if !path.starts_with('/') || path.ends_with('/') {
+            return Err(ModelError::BadUrl);
+        }
+        Ok(Subject::File { url: url.to_string() })
+    }
+
+    /// An indexed item's identifier. A blank query is the same as no query, as in the system call.
+    pub fn searchable(identifier: &str, query: Option<&str>) -> Result<Self, ModelError> {
+        if identifier.trim().is_empty() {
+            return Err(ModelError::Empty);
+        }
+        let query = query.filter(|q| !q.trim().is_empty()).map(|q| q.to_string());
+        Ok(Subject::SearchableItem { identifier: identifier.to_string(), query })
+    }
+}
+
+impl Registry {
+    /// `provider` previews the searchable items under `domain`: items whose identifier is the domain itself or starts
+    /// with the domain and a `/`. Registering the same domain again replaces its provider.
+    pub fn register_searchable(&mut self, provider: &str, domain: &str) -> Result<(), ModelError> {
+        if provider.trim().is_empty() || domain.trim().is_empty() {
+            return Err(ModelError::Empty);
+        }
+        self.searchable.retain(|(_, d)| d != domain);
+        self.searchable.push((provider.to_string(), domain.to_string()));
+        Ok(())
+    }
+
+    /// The provider for a preview subject. A file is looked up by its name through the type registry. A searchable item
+    /// goes to the provider of the longest domain that contains it, so a narrow domain beats a broader one.
+    pub fn provider_for_subject(&self, subject: &Subject) -> Option<&str> {
+        match subject {
+            Subject::File { url } => self.provider_for(url.rsplit('/').next()?),
+            Subject::SearchableItem { identifier, .. } => self
+                .searchable
+                .iter()
+                .filter(|(_, d)| identifier == d || (identifier.starts_with(d.as_str()) && identifier[d.len()..].starts_with('/')))
+                .max_by_key(|(_, d)| d.len())
+                .map(|(p, _)| p.as_str()),
+        }
     }
 }
 
@@ -324,5 +385,65 @@ mod tests {
         assert_eq!(r.best_of(&[Representation::Thumbnail]), None);
         let all = ThumbnailRequest::new("u", (64.0, 64.0), 1.0, &Representation::ALL).unwrap();
         assert_eq!(all.best_of(&[Representation::Icon, Representation::Thumbnail]), Some(Representation::Thumbnail));
+    }
+
+    #[test]
+    fn file_subjects_must_be_absolute_and_name_a_file() {
+        assert_eq!(Subject::file("relative.txt"), Err(ModelError::BadUrl));
+        assert_eq!(Subject::file("/a/b/"), Err(ModelError::BadUrl));
+        assert_eq!(Subject::file(""), Err(ModelError::BadUrl));
+        assert_eq!(Subject::file("file:///a/b.pdf"), Ok(Subject::File { url: "file:///a/b.pdf".into() }));
+        assert_eq!(Subject::file("/a/b.pdf"), Ok(Subject::File { url: "/a/b.pdf".into() }));
+    }
+
+    #[test]
+    fn searchable_subjects_need_an_identifier_and_drop_a_blank_query() {
+        assert_eq!(Subject::searchable("  ", None), Err(ModelError::Empty));
+        assert_eq!(
+            Subject::searchable("n/1", Some("")),
+            Ok(Subject::SearchableItem { identifier: "n/1".into(), query: None })
+        );
+        assert_eq!(
+            Subject::searchable("n/1", Some("q")),
+            Ok(Subject::SearchableItem { identifier: "n/1".into(), query: Some("q".into()) })
+        );
+    }
+
+    #[test]
+    fn a_file_subject_goes_to_the_provider_of_its_type() {
+        let mut reg = Registry::new();
+        reg.register("md-preview", &["public.plain-text"]).unwrap();
+        let notes = Subject::file("/x/notes.txt").unwrap();
+        assert_eq!(reg.provider_for_subject(&notes), Some("md-preview"));
+        assert_eq!(reg.provider_for_subject(&Subject::file("/x/photo.png").unwrap()), None);
+    }
+
+    #[test]
+    fn a_searchable_item_matches_its_domain_on_a_slash_boundary() {
+        let mut reg = Registry::new();
+        reg.register_searchable("mail", "com.example.mail").unwrap();
+        let msg = Subject::searchable("com.example.mail/msg-7", Some("q")).unwrap();
+        assert_eq!(reg.provider_for_subject(&msg), Some("mail"));
+        assert_eq!(reg.provider_for_subject(&Subject::searchable("com.example.mail", None).unwrap()), Some("mail"));
+        assert_eq!(reg.provider_for_subject(&Subject::searchable("com.example.mailbox/1", None).unwrap()), None);
+    }
+
+    #[test]
+    fn the_longest_matching_domain_wins() {
+        let mut reg = Registry::new();
+        reg.register_searchable("all", "com.example").unwrap();
+        reg.register_searchable("mail", "com.example.mail").unwrap();
+        assert_eq!(reg.provider_for_subject(&Subject::searchable("com.example.mail/1", None).unwrap()), Some("mail"));
+        assert_eq!(reg.provider_for_subject(&Subject::searchable("com.example/2", None).unwrap()), Some("all"));
+    }
+
+    #[test]
+    fn registering_a_domain_again_replaces_its_provider() {
+        let mut reg = Registry::new();
+        reg.register_searchable("a", "d.x").unwrap();
+        reg.register_searchable("b", "d.x").unwrap();
+        assert_eq!(reg.searchable.len(), 1);
+        assert_eq!(reg.provider_for_subject(&Subject::searchable("d.x/1", None).unwrap()), Some("b"));
+        assert_eq!(reg.register_searchable("", "d.y"), Err(ModelError::Empty));
     }
 }

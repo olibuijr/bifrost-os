@@ -54,10 +54,20 @@ pub enum RegisterError {
     UnknownType(String),
 }
 
-/// The actions every app has registered, in registration order.
+/// Where the file manager shows an action: the menu for selected items, the menu for the folder background (the
+/// container, which is passed as its type identifier, for example `public.folder`), or the toolbar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Placement {
+    ItemsMenu,
+    ContainerMenu,
+    Toolbar,
+}
+
+/// The actions every app has registered, in registration order, and the placements each one is shown in.
 #[derive(Clone, Debug, Default)]
 pub struct ActionRegistry {
     actions: Vec<FileAction>,
+    placements: Vec<(ActionId, Placement)>,
 }
 
 impl ActionRegistry {
@@ -95,6 +105,7 @@ impl ActionRegistry {
     pub fn unregister(&mut self, id: &ActionId) -> bool {
         let before = self.actions.len();
         self.actions.retain(|a| &a.id != id);
+        self.placements.retain(|(a, _)| a != id);
         self.actions.len() != before
     }
 
@@ -102,7 +113,44 @@ impl ActionRegistry {
     pub fn unregister_owner(&mut self, owner: &str) -> usize {
         let before = self.actions.len();
         self.actions.retain(|a| a.id.owner() != owner);
+        self.placements.retain(|(a, _)| a.owner() != owner);
         before - self.actions.len()
+    }
+
+    /// Shows a registered action in a placement. Placing it twice in the same place changes nothing. `false` when the
+    /// action is not registered.
+    pub fn place(&mut self, id: &ActionId, placement: Placement) -> bool {
+        if self.get(id).is_none() {
+            return false;
+        }
+        if !self.placements.iter().any(|(a, p)| a == id && *p == placement) {
+            self.placements.push((id.clone(), placement));
+        }
+        true
+    }
+
+    /// Hides an action from a placement. `true` when it was shown there.
+    pub fn unplace(&mut self, id: &ActionId, placement: Placement) -> bool {
+        let before = self.placements.len();
+        self.placements.retain(|(a, p)| !(a == id && *p == placement));
+        self.placements.len() != before
+    }
+
+    /// The actions shown in a placement that apply to a selection, in registration order. The rule is the one of
+    /// [`ActionRegistry::actions_for`]. For [`Placement::ContainerMenu`], pass the folder's type identifier as the item.
+    pub fn placed_for(&self, placement: Placement, items: &[&str]) -> Vec<&FileAction> {
+        self.actions_for(items)
+            .into_iter()
+            .filter(|a| self.placements.iter().any(|(id, p)| id == &a.id && *p == placement))
+            .collect()
+    }
+
+    /// The actions shown in the toolbar, in registration order. The toolbar does not depend on the selection.
+    pub fn toolbar_actions(&self) -> Vec<&FileAction> {
+        self.actions
+            .iter()
+            .filter(|a| self.placements.iter().any(|(id, p)| id == &a.id && *p == Placement::Toolbar))
+            .collect()
     }
 
     /// The actions that apply to a selection of items, given by their uniform type identifiers. Every item must
@@ -200,5 +248,65 @@ mod tests {
         assert!(r.unregister(&id));
         assert!(!r.unregister(&id));
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn an_action_is_shown_only_in_the_placements_it_was_given() {
+        let mut r = ActionRegistry::new();
+        r.register(action("app", "resize", &["public.image"], None)).unwrap();
+        let id = ActionId::new("app", "resize").unwrap();
+        assert!(r.place(&id, Placement::ItemsMenu));
+        assert!(r.place(&id, Placement::ItemsMenu), "placing twice is allowed and changes nothing");
+        assert_eq!(r.placements.len(), 1);
+        assert_eq!(r.placed_for(Placement::ItemsMenu, &["public.png"]).len(), 1);
+        assert!(r.placed_for(Placement::ContainerMenu, &["public.png"]).is_empty());
+        assert!(r.unplace(&id, Placement::ItemsMenu));
+        assert!(!r.unplace(&id, Placement::ItemsMenu));
+        assert!(r.placed_for(Placement::ItemsMenu, &["public.png"]).is_empty());
+    }
+
+    #[test]
+    fn the_folder_background_menu_takes_the_folder_type() {
+        let mut r = ActionRegistry::new();
+        r.register(action("app", "new-note", &["public.folder"], None)).unwrap();
+        let id = ActionId::new("app", "new-note").unwrap();
+        r.place(&id, Placement::ContainerMenu);
+        assert_eq!(r.placed_for(Placement::ContainerMenu, &["public.folder"]).len(), 1);
+        assert!(r.placed_for(Placement::ContainerMenu, &["public.png"]).is_empty());
+        assert!(r.placed_for(Placement::ItemsMenu, &["public.folder"]).is_empty());
+    }
+
+    #[test]
+    fn placing_an_unregistered_action_is_refused() {
+        let mut r = ActionRegistry::new();
+        let id = ActionId::new("app", "ghost").unwrap();
+        assert!(!r.place(&id, Placement::Toolbar));
+        assert!(r.toolbar_actions().is_empty());
+    }
+
+    #[test]
+    fn toolbar_actions_ignore_the_selection() {
+        let mut r = ActionRegistry::new();
+        r.register(action("app", "sync", &["public.image"], None)).unwrap();
+        r.register(action("app", "hidden", &["public.image"], None)).unwrap();
+        r.place(&ActionId::new("app", "sync").unwrap(), Placement::Toolbar);
+        let shown: Vec<&str> = r.toolbar_actions().iter().map(|a| a.id.name()).collect();
+        assert_eq!(shown, vec!["sync"]);
+        assert_eq!(r.placed_for(Placement::Toolbar, &["com.adobe.pdf"]).len(), 0);
+        assert_eq!(r.placed_for(Placement::Toolbar, &["public.png"]).len(), 1);
+    }
+
+    #[test]
+    fn unregistering_removes_the_placements_too() {
+        let mut r = ActionRegistry::new();
+        r.register(action("a", "one", &["public.data"], None)).unwrap();
+        r.register(action("b", "two", &["public.data"], None)).unwrap();
+        r.place(&ActionId::new("a", "one").unwrap(), Placement::Toolbar);
+        r.place(&ActionId::new("b", "two").unwrap(), Placement::Toolbar);
+        assert_eq!(r.unregister_owner("a"), 1);
+        assert_eq!(r.placements.len(), 1);
+        assert_eq!(r.toolbar_actions().len(), 1);
+        assert!(r.unregister(&ActionId::new("b", "two").unwrap()));
+        assert!(r.placements.is_empty());
     }
 }
