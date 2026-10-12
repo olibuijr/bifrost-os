@@ -705,6 +705,7 @@ pub mod history;
 pub mod model_history;
 pub mod shape;
 pub mod assetpack;
+pub mod assetmock;
 pub mod downloadqueue;
 pub mod environment;
 pub mod preferences;
