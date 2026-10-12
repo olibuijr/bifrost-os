@@ -9,14 +9,14 @@ use bifrost_app::glyphs::glyph;
 use bifrost_app::kit::clipboard;
 use bifrost_app::kit::gfx::Surface;
 use bifrost_app::kit::ui::{
-    Ui, Weight, CARD_BG, DESTRUCTIVE, DETAIL_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT,
+    Ui, Weight, CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT,
     MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MATERIAL_HUD_SOLID, SELECTION, SEPARATOR_C,
     SIDEBAR_BG, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, WHITE,
 };
 use bifrost_app::kit::{Event, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
-use bifrost_app::controls::contact_card::Entry;
+use bifrost_app::controls::contact_card::{self, Card, Entry, Field, Kind};
 use bifrost_app::controls::contact_display::{ContactsDefaults, SortOrder};
 use bifrost_app::controls::contact_groups::Groups;
 use bifrost_app::controls::contact_picker::{Choice, Mode, Picker};
@@ -173,6 +173,37 @@ enum Target {
 
 /// The sort choices the Settings row cycles through, in order.
 const SORT_CHOICES: [SortOrder; 4] = [SortOrder::UserDefault, SortOrder::FamilyName, SortOrder::GivenName, SortOrder::None];
+
+/// The card model's entry for a contact: its phone, email and address with the labels the contact picked.
+fn card_entry(c: &Contact) -> Entry {
+    let values = [&c.phone, &c.email, &c.address];
+    let keys = [contact_card::Key::Phone, contact_card::Key::Email, contact_card::Key::Address];
+    let fields = keys
+        .into_iter()
+        .enumerate()
+        .map(|(k, key)| {
+            let labels = store::LABELS[k];
+            let label = labels[c.labels[k] as usize % labels.len()];
+            Field { key, label: label.to_string(), value: values[k].clone() }
+        })
+        .collect();
+    Entry { id: c.id, name: c.name.clone(), fields }
+}
+
+/// The value rows a contact's card shows, in card order. The model leaves out empty values.
+fn card_rows(c: &Contact) -> Vec<contact_card::Row> {
+    Card::new(Kind::Existing).rows(&card_entry(c))
+}
+
+/// The index of a card value in `Contact` order (phone 0, email 1, address 2). Other keys have no slot.
+fn value_slot(key: contact_card::Key) -> Option<usize> {
+    match key {
+        contact_card::Key::Phone => Some(0),
+        contact_card::Key::Email => Some(1),
+        contact_card::Key::Address => Some(2),
+        _ => None,
+    }
+}
 
 fn sort_label(order: SortOrder) -> &'static str {
     match order {
@@ -571,8 +602,8 @@ impl Contacts {
         y += MAC_TITLE1_PT + SPACE_S + SPACE_XL;
         let mut values = vec![];
         if let Some(c) = self.selected() {
-            for (k, v) in [&c.phone, &c.email, &c.address].into_iter().enumerate() {
-                if !v.is_empty() {
+            for row in card_rows(c) {
+                if let Some(k) = value_slot(row.key) {
                     values.push((k, rect(x, y, cw, VALUE_ROW)));
                     y += VALUE_ROW + m::CARD_GAP;
                 }
@@ -1780,12 +1811,11 @@ impl Contacts {
             let company = ui.fit(&contact.company, MAC_CALLOUT_PT, ui.pt(cw));
             self.centre_text(s, ui, &company, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, name_mid + MAC_TITLE1_PT);
         }
-        for &(k, r) in &l.values {
+        // the value rows come from the card model, in the same order as the layout's rects
+        for (row, &(_, r)) in card_rows(&contact).iter().zip(&l.values) {
             Self::fill(s, ui, r, m::CARD_RADIUS, CARD_BG.now());
-            let label = store::LABELS[k][contact.labels[k] as usize % store::LABELS[k].len()];
-            self.text(s, ui, label, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), r.x + SPACE_L, r.y + r.h * 0.3);
-            let value = [&contact.phone, &contact.email, &contact.address][k];
-            let value = ui.fit(value, MAC_BODY_PT, ui.pt(r.w - 2.0 * SPACE_L));
+            self.text(s, ui, &row.label, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), r.x + SPACE_L, r.y + r.h * 0.3);
+            let value = ui.fit(&row.value, MAC_BODY_PT, ui.pt(r.w - 2.0 * SPACE_L));
             self.text(s, ui, &value, MAC_BODY_PT, Weight::Regular, LINK, r.x + SPACE_L, r.y + r.h * 0.68);
         }
         let n = l.notes;
@@ -1851,7 +1881,7 @@ impl Contacts {
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
         self.sync_notes(ui);
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         // detail pane first, so the list and the bars draw over anything that scrolls under them
         let dx = ui.pt(self.detail_x());
         match self.screen {
@@ -1865,7 +1895,7 @@ impl Contacts {
             Screen::Settings => self.draw_settings(s, ui),
         }
         // the list column and the sidebar are opaque columns left of the detail pane
-        s.fill_rect(0, 0, dx as usize, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, dx as usize, s.h, CONTENT_BG.now());
         if self.sidebar_shown {
             let b = rect(0.0, 0.0, self.side(), self.h);
             s.fill_rect(0, 0, ui.pt(b.w) as usize, s.h, SIDEBAR_BG.now());
@@ -1876,7 +1906,7 @@ impl Contacts {
         s.fill_rect(dx as usize, 0, 1, s.h, SEPARATOR_C.now());
         // unified toolbar: one band over the list and the detail pane
         let band_x = ui.pt(self.side()) as usize;
-        s.fill_rect(band_x, 0, s.w - band_x, ui.pt(UNIFIED_BAR_PT) as usize, DETAIL_BG.now());
+        s.fill_rect(band_x, 0, s.w - band_x, ui.pt(UNIFIED_BAR_PT) as usize, CONTENT_BG.now());
         widgets::toolbar_band(s, ui, rect(self.side(), 0.0, self.w - self.side(), UNIFIED_BAR_PT));
         let pressed = match self.pressed {
             Some(Target::Bar(id)) => Some(id),
@@ -2036,6 +2066,27 @@ mod tests {
         app.finish_picking(&ui);
         assert_eq!(app.picking, None);
         assert_eq!(app.filter, Filter::Group(1));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_card_shows_the_values_a_contact_has_under_their_labels() {
+        let mut ann = contact(1, "Anna As");
+        ann.phone = "555 0100".into();
+        ann.labels = [2, 1, 0];
+        ann.address = "Hverfisgata 1".into();
+        let rows: Vec<(String, String)> = card_rows(&ann).into_iter().map(|r| (r.label, r.value)).collect();
+        assert_eq!(
+            rows,
+            vec![("work".to_string(), "555 0100".to_string()), ("home".to_string(), "Hverfisgata 1".to_string())],
+            "the empty email has no row; the phone is the third phone label"
+        );
+        let path = file_with("card-rows", &[ann]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.open_detail(&ui, 1);
+        let slots: Vec<usize> = app.card_layout(&ui).values.iter().map(|v| v.0).collect();
+        assert_eq!(slots, vec![0, 2], "phone and address rows, so copy and layout use the same slots");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
