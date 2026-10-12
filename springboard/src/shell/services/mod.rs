@@ -26,6 +26,7 @@ pub mod screens;
 pub mod cursor_service;
 pub mod system;
 pub mod widgets_timeline;
+pub mod accessibility_display;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -68,6 +69,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(notification_schedule::NotificationSchedule::default()),
         Box::new(screens::Displays::default()),
         Box::new(cursor_service::CursorService),
+        Box::new(accessibility_display::AccessibilityDisplay::default()),
     ]
 }
 

@@ -1,5 +1,6 @@
 //! Accessibility settings: Display Zoom, Reduce Motion, Increase Contrast,
-//! Reduce Transparency, Button Shapes and Touch Accommodations, persisted in
+//! Reduce Transparency, Button Shapes, Dim Flashing Lights and Touch
+//! Accommodations, persisted in
 //! `settings.ini`, plus the central hooks the rest of the shell queries.
 //!
 //! Larger Text and Bold Text keep living in `Options` (Display & Brightness
@@ -27,12 +28,14 @@ pub struct AccessibilitySettings {
     pub increase_contrast: bool,
     pub reduce_transparency: bool,
     pub button_shapes: bool,
+    /// Dim Flashing Lights: apps that read the setting (the `accessibility_display` service) dim flagged sequences.
+    pub dim_flashing_lights: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, hold: 0 };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, hold: 0 };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -47,6 +50,7 @@ impl AccessibilitySettings {
             increase_contrast: flag("a11y_contrast", d.increase_contrast),
             reduce_transparency: flag("a11y_reduce_transparency", d.reduce_transparency),
             button_shapes: flag("a11y_button_shapes", d.button_shapes),
+            dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
         }
     }
@@ -60,6 +64,7 @@ impl AccessibilitySettings {
             ("a11y_contrast", flag(self.increase_contrast)),
             ("a11y_reduce_transparency", flag(self.reduce_transparency)),
             ("a11y_button_shapes", flag(self.button_shapes)),
+            ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
             ("a11y_hold", &self.hold.to_string()),
         ]);
         if let Err(e) = result {
@@ -101,7 +106,7 @@ mod tests {
     #[test]
     fn save_and_load_round_trip() {
         let mut p = Prefs::memory();
-        let a = AccessibilitySettings { zoom: 1, reduce_motion: true, increase_contrast: true, reduce_transparency: true, button_shapes: true, hold: 3, ..Default::default() };
+        let a = AccessibilitySettings { zoom: 1, reduce_motion: true, increase_contrast: true, reduce_transparency: true, button_shapes: true, dim_flashing_lights: true, hold: 3, ..Default::default() };
         a.save(&mut p);
         assert_eq!(AccessibilitySettings::load(&p), a);
         assert_eq!(a.hold_ms(), 1500);

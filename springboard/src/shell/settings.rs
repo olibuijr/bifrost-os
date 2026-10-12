@@ -1934,6 +1934,7 @@ impl Settings {
             Toggle::IncreaseContrast => flip(&mut self.a11y.increase_contrast),
             Toggle::ReduceTransparency => flip(&mut self.a11y.reduce_transparency),
             Toggle::ButtonShapes => flip(&mut self.a11y.button_shapes),
+            Toggle::DimFlashingLights => flip(&mut self.a11y.dim_flashing_lights),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"

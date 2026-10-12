@@ -119,6 +119,8 @@ pub enum Toggle {
     IncreaseContrast,
     ReduceTransparency,
     ButtonShapes,
+    /// Accessibility > Dim Flashing Lights (`a11y_dim_flashing_lights`)
+    DimFlashingLights,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -826,6 +828,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Increase Contrast").switch(a.increase_contrast, Action::Toggle(Toggle::IncreaseContrast)),
                         reduce_transparency_item(a.reduce_transparency, a.increase_contrast),
                         Item::new("Show Borders").switch(a.button_shapes, Action::Toggle(Toggle::ButtonShapes)),
+                        Item::new("Dim Flashing Lights").switch(a.dim_flashing_lights, Action::Toggle(Toggle::DimFlashingLights)),
                     ])
                     .header("VISION"),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
@@ -1398,6 +1401,7 @@ mod tests {
         assert_eq!(t.groups[2].items[0].action, Action::TimeZone);
         let acc = spec(PageId::Accessibility, &m);
         assert_eq!(acc.groups[0].items[1].value, "130%");
+        assert_eq!(acc.groups[0].items[6].accessory, super::super::list::Accessory::Switch(false));
         for id in [PageId::General, PageId::About, PageId::Keyboard, PageId::Language, PageId::Reset, PageId::ControlCentre, PageId::Privacy] {
             assert!(!spec(id, &m).groups.is_empty(), "{id:?}");
         }
