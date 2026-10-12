@@ -675,6 +675,11 @@ impl QuickSearch {
         matches!(self.state, State::Shown)
     }
 
+    /// The search field, for an input method's composition (`compose_window`).
+    pub fn field_mut(&mut self) -> &mut TextField {
+        &mut self.field
+    }
+
     pub fn animating(&self) -> bool {
         matches!(self.state, State::Settling { .. }) || (self.active() && self.keyboard.animating())
     }

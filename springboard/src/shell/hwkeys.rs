@@ -384,7 +384,7 @@ impl Shell {
         }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
-            _ if self.quicksearch.is_shown() => self.quicksearch_key(out, t),
+            _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
                 self.type_out(out, t);
                 vec![]
