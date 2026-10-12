@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -1144,6 +1144,329 @@ def follow_install(t0, budget, live, every=10.0):
     return 0 if ok and mcp else 1
 
 
+# ---- qa-install: wipe Midget through the installer's real screens, like a QA tester ----
+
+STATE_FILE = "/run/bifrost-installer/state"
+
+
+def parse_installer_state(text):
+    """The installer's state file -> {size, screen, stage, percent, buttons{id: rect}, fields{id: (rect, focused)}}.
+    Rects are (x, y, w, h) in panel pixels."""
+    st = {"size": None, "screen": "", "stage": "", "percent": 0, "buttons": {}, "fields": {}}
+    for line in text.splitlines():
+        key, _, val = line.partition("=")
+        parts = val.split()
+        try:
+            if key == "size" and len(parts) == 2:
+                st["size"] = (int(parts[0]), int(parts[1]))
+            elif key == "screen":
+                st["screen"] = val.strip()
+            elif key == "stage":
+                st["stage"] = val.strip()
+            elif key == "percent":
+                st["percent"] = int(val)
+            elif key == "button" and len(parts) == 5:
+                st["buttons"][parts[0]] = tuple(int(v) for v in parts[1:5])
+            elif key == "field" and len(parts) == 6:
+                st["fields"][parts[0]] = (tuple(int(v) for v in parts[1:5]), parts[5] == "1")
+        except ValueError:
+            continue
+    return st
+
+
+def rect_centre(rect):
+    x, y, w, h = rect
+    return x + w // 2, y + h // 2
+
+
+def find_button(st, *ids, prefix=None):
+    """The centre of the first listed button id on screen, or of the first button starting with `prefix`; None when absent."""
+    for i in ids:
+        if i in st["buttons"]:
+            return rect_centre(st["buttons"][i])
+    if prefix:
+        for i in sorted(st["buttons"]):
+            if i.startswith(prefix):
+                return rect_centre(st["buttons"][i])
+    return None
+
+
+def abs_pointer(x, y, size, top=65535):
+    """Panel pixel (x, y) on a panel of `size` (w, h) -> uinput absolute axis values 0..top."""
+    w, h = size
+    cl = lambda v, hi: max(0, min(hi, v))
+    return (round(cl(x, w - 1) * top / max(1, w - 1)), round(cl(y, h - 1) * top / max(1, h - 1)))
+
+
+_UINPUT_PRELUDE = """import os,fcntl,struct,time
+fd=os.open('/dev/uinput',os.O_WRONLY|os.O_NONBLOCK)
+def ev(t,code,value):
+ os.write(fd,struct.pack('qqHHi',0,0,t,code,value))
+def syn():
+ ev(0,0,0); time.sleep(.03)
+"""
+
+
+def uinput_pointer_script(points):
+    """Python source run on Midget: a temporary absolute pointer that clicks each (ax, ay)."""
+    return _UINPUT_PRELUDE + f"""pts={points!r}
+try:
+ fcntl.ioctl(fd,0x40045564,1); fcntl.ioctl(fd,0x40045564,3)
+ fcntl.ioctl(fd,0x40045565,0x110)
+ fcntl.ioctl(fd,0x40045567,0); fcntl.ioctl(fd,0x40045567,1)
+ absmax=[65535,65535]+[0]*62
+ os.write(fd,struct.pack('80sHHHHI',b'BifrOSt remote pointer',3,1,2,1,0)+struct.pack('64i',*absmax)+bytes(768))
+ fcntl.ioctl(fd,0x5501)
+ time.sleep(.5)
+ for x,y in pts:
+  ev(3,0,x); ev(3,1,y); syn(); time.sleep(.1)
+  ev(1,0x110,1); syn(); time.sleep(.08)
+  ev(1,0x110,0); syn(); time.sleep(.2)
+ fcntl.ioctl(fd,0x5502)
+finally:
+ os.close(fd)
+"""
+
+
+def uinput_keys_script(seq):
+    """Python source run on Midget: a temporary keyboard typing [(shift, code)]."""
+    return _UINPUT_PRELUDE + f"""seq={seq!r}
+try:
+ fcntl.ioctl(fd,0x40045564,1)
+ for c in set([x[1] for x in seq]+[42]):
+  fcntl.ioctl(fd,0x40045565,c)
+ os.write(fd,struct.pack('80sHHHHI',b'BifrOSt remote keyboard',3,1,1,1,0)+bytes(1024))
+ fcntl.ioctl(fd,0x5501)
+ time.sleep(.5)
+ for shift,c in seq:
+  if shift: ev(1,42,1); syn()
+  ev(1,c,1); syn(); ev(1,c,0); syn()
+  if shift: ev(1,42,0); syn()
+ fcntl.ioctl(fd,0x5502)
+finally:
+ os.close(fd)
+"""
+
+
+def qa_tap(st, centre):
+    ax, ay = abs_pointer(centre[0], centre[1], st["size"])
+    return run(SSH + ["python3 -c " + shlex.quote(uinput_pointer_script([(ax, ay)]))], 30).returncode == 0
+
+
+def qa_type(text, secret=False):
+    seq = text_keys(text)
+    if seq is None:
+        return False
+    r = run(SSH + ["python3 -c " + shlex.quote(uinput_keys_script(seq))], 30)
+    if r.stderr:
+        print(r.stderr.replace(text, "***") if secret else r.stderr, end="", file=sys.stderr)
+    return r.returncode == 0
+
+
+def qa_state():
+    r = run(SSH + [f"cat {STATE_FILE} 2>/dev/null"], 15)
+    return parse_installer_state(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+
+
+def internal_disks():
+    return ssh("lsblk -dnpo NAME,TYPE,RM | awk '$2==\"disk\" && $3==0 {print $1}'", 10).split()
+
+
+def cmd_qa_install(args):
+    """`qa-install [--disk DEV] [--shots DIR] [--timeout S]`: wipe and reinstall Midget by driving the installer's real
+    screens with taps and typing (no unattended preset), then follow the first boot. Report: out/lab/logs/<stamp>-qa-install/report.md."""
+    opt = lambda n, d=None: args[args.index(n) + 1] if n in args and args.index(n) + 1 < len(args) else d
+    want_disk = opt("--disk")
+    budget = int(opt("--timeout", "2400"))
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    logdir = Path(REPO) / "out" / "lab" / "logs" / f"{stamp}-qa-install"
+    shots = Path(opt("--shots", str(logdir / "shots")))
+    shots.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    rows = []
+
+    def step(msg, shot=None):
+        _stamp(msg)
+        rows.append((time.strftime("%H:%M:%S"), time.time() - t0, msg, shot))
+
+    def report(result):
+        lines = [f"# qa-install {stamp}: {result}", "", "| time | +s | step | screenshot |", "|---|---|---|---|"]
+        for t, dt, msg, shot in rows:
+            lines.append(f"| {t} | {dt:.0f} | {msg} | {shot or ''} |")
+        (logdir / "report.md").write_text("\n".join(lines) + "\n")
+
+    def snap(label):
+        out = shots / time.strftime(f"%H%M%S-{label}.png")
+        try:
+            r = subprocess.run(SSH + ["cat /run/bifrost-screen.png"], capture_output=True, timeout=20)
+            if r.stdout[:4] == b"\x89PNG":
+                out.write_bytes(r.stdout)
+                return str(out)
+        except (subprocess.SubprocessError, OSError):
+            pass
+        return None
+
+    def fail(msg):
+        shot = snap("failure")
+        step(f"FAILED: {msg}" + (f" (last screenshot {shot})" if shot else ""), shot)
+        report("FAILED")
+        return 1
+
+    def screen(name, bound):
+        """Wait for the installer to publish screen `name`; its state, or None."""
+        box = {}
+        def seen():
+            s = qa_state()
+            if s and s["screen"] == name and s["size"]:
+                box["s"] = s
+                return True
+            return False
+        ssh("touch /run/bifrost-shot-on", 10)
+        return box["s"] if wait(seen, bound, 1.5) else None
+
+    st = state()
+    if st not in ("installed", "live"):
+        print(f"midget is {st}; qa-install starts from an installed or a live lab system")
+        return 1
+    password = login_password()
+    if password is None or text_keys(password) is None:
+        print("no typeable lab password: run `reinstall` once or write out/lab/<username>.password (US-layout ASCII)")
+        return 2
+    user, full_name = lab_account()
+    if st == "installed":
+        ssh("rm -f /boot/EFI/BIFROST/unattended.toml; sync", 15)
+        efi = ssh("efibootmgr", 10)
+        pxe = sorted([l for l in efi.splitlines() if l.startswith("Boot") and ("PXE" in l or "IPv4" in l or "IPV4" in l)],
+                     key=lambda l: ("IPv4" not in l and "IPV4" not in l, l))
+        if not pxe:
+            return fail("no PXE boot entry on Midget")
+        ssh(f"efibootmgr -n {pxe[0][4:8]} >/dev/null; sync; nohup sh -c 'sleep 1; systemctl reboot' >/dev/null 2>&1 &", 15)
+        step(f"stale preset removed; BootNext={pxe[0][4:8]} (PXE), rebooting")
+        if not wait(lambda: not ping(), 60, 1):
+            return fail("midget never went down")
+        if not wait(lambda: state() == "live", 600, 3):
+            return fail("no netboot into the live lab ISO")
+    else:
+        ssh("rm -f /run/bifrost-unattended.toml /run/bifrost-unattended.toml.disk; systemctl restart bifrost-installer", 30)
+    step("live lab ISO is up")
+    s = screen("welcome", 300)
+    if not s:
+        return fail("the installer state file never showed the Welcome screen")
+    step("Welcome screen", snap("welcome"))
+    if not qa_tap(s, find_button(s, "next") or (0, 0)):
+        return fail("no Continue button on Welcome")
+    s = screen("language", 60)
+    if not s:
+        return fail("the Language screen did not appear")
+    step("Language screen", snap("language"))
+    en = find_button(s, "lang0")
+    if en:
+        qa_tap(s, en)
+        s = qa_state() or s
+    if not qa_tap(s, find_button(s, "next") or (0, 0)):
+        return fail("no Continue button on Language")
+    s = screen("account", 60)
+    if not s:
+        return fail("the Account screen did not appear")
+    step("Account screen", snap("account"))
+    for fid, text, secret in (("name", full_name, False), ("username", user, False), ("password", password, True), ("verify", password, True)):
+        if fid not in s["fields"]:
+            return fail(f"no {fid} field on Account")
+        qa_tap(s, rect_centre(s["fields"][fid][0]))
+        time.sleep(0.4)
+        if not qa_type(text, secret):
+            return fail(f"could not type the {fid} field")
+        s = qa_state() or s
+    step("account typed (password not shown)", snap("account-filled"))
+    c = find_button(s, "next")
+    if not c or not qa_tap(s, c):
+        return fail("Continue is not available on Account (fields rejected?)")
+    s = screen("look", 8) or screen("disk", 60)
+    if s and s["screen"] == "look":
+        step("Look screen", snap("look"))
+        qa_tap(s, find_button(s, "next") or (0, 0))
+        s = screen("disk", 60)
+    if not s:
+        return fail("the Disk screen did not appear")
+    step("Disk screen", snap("disk"))
+    disks = sorted((i for i in s["buttons"] if re.fullmatch(r"disk\d+", i)), key=lambda i: int(i[4:]))
+    names = internal_disks()
+    target = want_disk
+    if not target:
+        nvme = [n for n in names if "nvme" in n]
+        if len(nvme) != 1:
+            return fail(f"expected one internal NVMe disk, found {nvme}; pass --disk")
+        target = nvme[0]
+    if target not in names:
+        return fail(f"disk {target} is not an internal disk on Midget ({names})")
+    pick = disks[names.index(target)] if len(disks) == len(names) else (disks[0] if len(disks) == 1 else None)
+    if pick is None:
+        return fail(f"cannot match {target} to the Disk-screen buttons {disks}")
+    qa_tap(s, rect_centre(s["buttons"][pick]))
+    time.sleep(0.5)
+    s = qa_state() or s
+    step(f"picked {pick} = {target}", snap("disk-picked"))
+    if not qa_tap(s, find_button(s, "install", "next") or (0, 0)):
+        return fail("no Install button on Disk")
+    s = screen("confirm", 30)
+    if not s:
+        return fail("the Confirm screen did not appear")
+    step("Confirm screen", snap("confirm"))
+    c = find_button(s, "erase", "install", "next")
+    if not c or not qa_tap(s, c):
+        return fail("no Erase/Install button on Confirm")
+    if not screen("progress", 60):
+        return fail("the Progress screen did not appear")
+    step("Progress screen", snap("progress"))
+    last, deadline = "", time.time() + min(budget, 1800)
+    s = None
+    while time.time() < deadline:
+        s = qa_state()
+        if s and s["screen"] in ("done", "failed"):
+            break
+        if s:
+            line = f"{s['stage']} {s['percent']}%"
+            if line != last:
+                print("    " + line, flush=True)
+                last = line
+        time.sleep(5)
+    if not s or s["screen"] != "done":
+        return fail(f"install did not reach Done (screen={s['screen'] if s else 'none'}, {last})")
+    step("Done screen", snap("done"))
+    c = find_button(s, "restart")
+    if not c or not qa_tap(s, c):
+        return fail("no Restart button on Done")
+    step("tapped Restart")
+    rc = qa_first_boot(step)
+    report("OK" if rc == 0 else "FAILED (first boot)")
+    return rc
+
+
+def qa_first_boot(step):
+    """Phases 4-7 of `reinstall`: installed system up, phase=accepted, the account's session, MCP."""
+    if not wait(lambda: not ping() or state() == "installed", 120, 2):
+        step("FAILED: midget neither went down nor came up after Restart")
+        return 1
+    if not wait(lambda: state() == "installed", 600, 3):
+        step("FAILED: the installed system did not answer on ssh")
+        return 1
+    step("installed system up")
+
+    def booted_ok():
+        g = ssh("bifrost-update-guard status", 15) or ""
+        return ("phase=accepted" in g or "phase=\n" in g + "\n") and "ready=1" in (control_text("state") or "")
+    ok = wait(booted_ok, 300, 5)
+    step("phase=accepted" if ok else "FAILED: the new system did not boot cleanly")
+    account = lab_account()[0]
+    up = wait(lambda: bool(ssh(f"getent passwd {account} >/dev/null && ps -u {account} -o comm= | head -n 1", 15).strip()), 180, 5)
+    if up and shell_screen() == "lock":
+        cmd_unlock()
+    step(f"{account} session " + ("running" if up else "NOT running"))
+    mcp = wait(lambda: port_open(7420) and "host=" in mcp_call("system", {"what": "overview"}, 20), 120, 5)
+    step("MCP " + ("reachable on :7420" if mcp else "NOT reachable"))
+    return 0 if ok and up and mcp else 1
+
+
 KBENCH_PACKAGES = "rt-tests stress-ng numactl"  # cyclictest needs libnuma (numactl)
 PERF_HISTORY = os.path.join(REPO, "docs/perf-history.jsonl")
 
@@ -1505,6 +1828,7 @@ def main():
         "recovery": lambda: cmd_recovery(),
         "idle": lambda: subprocess.call([sys.executable, str(Path(__file__).with_name("midget-idle-measure.py")), *rest]),
         "reinstall": lambda: cmd_reinstall_loop(rest),
+        "qa-install": lambda: cmd_qa_install(rest),
         "unlock": lambda: cmd_unlock(),
         "login-bypass": lambda: cmd_login_bypass(rest),
         # re-attach to a reinstall whose follower died: the install runs on its own, this picks up at the current phase

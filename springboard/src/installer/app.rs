@@ -102,6 +102,41 @@ pub struct App {
     bg: Vec<u32>,
     msg: (String, f64),
     t: f64,
+    published: String,
+}
+
+const FIELD_IDS: [&str; 4] = ["name", "username", "password", "verify"];
+
+fn act_id(a: Act) -> String {
+    match a {
+        Act::Next => "next".into(),
+        Act::Back => "back".into(),
+        Act::Lang(i) => format!("lang{i}"),
+        Act::Layout(i) => format!("layout{i}"),
+        Act::Focus(i) => format!("field{i}"),
+        Act::Look(_) => "look".into(),
+        Act::Tint(_) => "tint".into(),
+        Act::Wall(i) => format!("wall{i}"),
+        Act::Disk(i) => format!("disk{i}"),
+        Act::SetMode(_) => "mode".into(),
+        Act::Install => "install".into(),
+        Act::Erase => "erase".into(),
+        Act::Restart => "restart".into(),
+    }
+}
+
+type Rect = (f32, f32, f32, f32);
+
+/// The state file: one line per field, rectangles in panel pixels.
+pub fn format_state(size: (usize, usize), screen: &str, stage: &str, percent: u32, buttons: &[(String, Rect)], fields: &[(String, Rect, bool)]) -> String {
+    let mut o = format!("size={} {}\nscreen={screen}\nstage={stage}\npercent={percent}\n", size.0, size.1);
+    for (id, r) in buttons {
+        o += &format!("button={id} {} {} {} {}\n", r.0.round() as i32, r.1.round() as i32, r.2.round() as i32, r.3.round() as i32);
+    }
+    for (id, r, f) in fields {
+        o += &format!("field={id} {} {} {} {} {}\n", r.0.round() as i32, r.1.round() as i32, r.2.round() as i32, r.3.round() as i32, *f as u8);
+    }
+    o
 }
 
 fn inside(h: &Hit, x: f32, y: f32) -> bool {
@@ -131,7 +166,7 @@ impl App {
             user_edited: false, disks, disk: None, mode: Mode::Erase,
             look: ap::Mode::Dark, accent: Accent::Blue, look_row: 0, walls: vec![(String::new(), "Default".into(), None)], wall: 0, wall_cols: 4,
             wall_scaled: ((0, 0), vec![]), progress: Arc::new(Mutex::new(Progress::default())), want_install: None, want_restart: false,
-            hits: vec![], down: None, pointer: (w as f32 / 2.0, h as f32 / 2.0), hw_cursor: false, logo, bg: vec![], msg: (String::new(), 0.0), t: 0.0,
+            hits: vec![], down: None, pointer: (w as f32 / 2.0, h as f32 / 2.0), hw_cursor: false, logo, bg: vec![], msg: (String::new(), 0.0), t: 0.0, published: String::new(),
         };
         a.disk = (a.disks.len() == 1).then_some(0);
         a.bg = make_background(bg, w, h);
@@ -420,6 +455,51 @@ impl App {
         }
         if !self.hw_cursor {
             self.cursor(s);
+        }
+        self.publish_state();
+    }
+
+    fn page_name(&self) -> &'static str {
+        match self.page {
+            Page::Welcome => "welcome",
+            Page::Language => "language",
+            Page::Account => "account",
+            Page::Look => "look",
+            Page::Disk => "disk",
+            Page::Confirm => "confirm",
+            Page::Progress => "progress",
+            Page::Done => "done",
+            Page::Failed => "failed",
+        }
+    }
+
+    /// Publish the visible screen for the QA driver (`midget.py qa-install`), only when it changed.
+    fn publish_state(&mut self) {
+        let (stage, percent) = {
+            let p = self.progress.lock().unwrap();
+            let name = plan::STAGES.get(p.stage).map(|n| n.to_string()).unwrap_or_default();
+            (format!("{} {}", p.stage, if p.message.is_empty() { name } else { p.message.clone() }), p.percent as u32)
+        };
+        let mut buttons = Vec::new();
+        let mut fields = Vec::new();
+        for h in &self.hits {
+            let r = (h.0, h.1, h.2, h.3);
+            match h.4 {
+                Act::Focus(i) => fields.push((FIELD_IDS.get(i).copied().unwrap_or("field").to_string(), r, i == self.focus)),
+                a => buttons.push((act_id(a), r)),
+            }
+        }
+        let text = format_state((self.w, self.h), self.page_name(), &stage, percent, &buttons, &fields);
+        if text == self.published {
+            return;
+        }
+        self.published = text.clone();
+        let dir = std::path::Path::new("/run/bifrost-installer");
+        if std::fs::create_dir_all(dir).is_ok() {
+            let tmp = dir.join("state.tmp");
+            if std::fs::write(&tmp, text).is_ok() {
+                let _ = std::fs::rename(&tmp, dir.join("state"));
+            }
         }
     }
 
@@ -1224,6 +1304,12 @@ mod tests {
         b.progress.lock().unwrap().done = true;
         render(&mut b);
         assert_eq!(b.page, Page::Done);
+    }
+
+    #[test]
+    fn state_text_lists_buttons_and_fields() {
+        let t = format_state((1280, 800), "account", "0 Waiting", 5, &[("next".into(), (10.4, 20.0, 200.0, 44.0))], &[("name".into(), (1.0, 2.0, 3.0, 4.0), true)]);
+        assert_eq!(t, "size=1280 800\nscreen=account\nstage=0 Waiting\npercent=5\nbutton=next 10 20 200 44\nfield=name 1 2 3 4 1\n");
     }
 
     #[test]
