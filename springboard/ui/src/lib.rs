@@ -769,6 +769,7 @@ pub mod media_content;
 pub mod playback_rate;
 pub mod skip_interval;
 pub mod audio_hardware;
+pub mod process_tap;
 pub mod scan;
 pub mod analysis;
 pub mod docscan;
