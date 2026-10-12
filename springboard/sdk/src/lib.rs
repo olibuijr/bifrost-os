@@ -117,6 +117,7 @@ pub mod inference;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
+pub mod compression;
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};
 /// `NativeCache` parity (see `docs/bifrost-ui.md`, "Cache").
