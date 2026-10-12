@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use bifrost_app::kit::{pack, Image, Surface};
 use bifrost_app::kit::ui::SYSTEM_ORANGE as ORANGE;
 

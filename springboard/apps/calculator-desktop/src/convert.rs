@@ -224,6 +224,7 @@ impl Converter {
     }
 
     /// The state for `describe`: category, units and entry.
+    #[cfg(test)]
     pub fn describe(&self) -> String {
         format!("{}:{}->{}:{}", self.category.title(), self.from_unit().symbol, self.to_unit().symbol, self.entry_text())
     }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.8.0 — 2026-10-12
+
+- Warnings cleared: the test-only helpers (the hit-test rectangles used by the tests, `describe`, the converter's
+  `describe`, the calculator's icon) are compiled for tests only, and the Canvas drawing no longer imports the CPU
+  surface outside the tests.
+- Engine recall removed: a history result is recalled through `recall_value`, which the Calculator already used.
+- Scientific keypad: the second-function layer of the Memory Recall key (`mr`) now shows `ans`, which types the last
+  result, the way the Answer key does on other calculators.
+
 ## 1.7.0 — 2026-10-12
 
 - Drawing through Canvas (graphics wave G2, `app-canvas-pilot`): the calculator draws its display, keys, history
