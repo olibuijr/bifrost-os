@@ -468,6 +468,10 @@ impl Shell {
         if self.doc_panel.is_some() {
             return (!down || self.doc_key(code, t)).then(Vec::new);
         }
+        // the preview panel takes Esc, Space and the arrows while it is up
+        if self.quick_look_key(code, down).is_some() {
+            return Some(vec![]);
+        }
         #[cfg(feature = "desktop-wayland")]
         if self.desktop_menu.is_some() {
             return Some(if down { self.desktop_menu_key(code, t).unwrap_or_default() } else { vec![] });

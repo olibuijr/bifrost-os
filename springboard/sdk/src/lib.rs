@@ -101,6 +101,7 @@ pub mod quicksearch;
 pub mod visual_search;
 pub mod data_scanner;
 pub mod peek;
+pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
 pub mod now_playing;

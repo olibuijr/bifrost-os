@@ -823,6 +823,16 @@ impl Shell {
                     super::spotindex::apply(&a.manifest.id, m);
                 }
             }
+            ToShell::Preview { items, index } => {
+                let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
+                self.quick_look_show(&app_id, items, index as usize);
+            }
+            ToShell::PreviewClose => {
+                let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
+                if self.quick_look_owner() == Some(app_id.as_str()) {
+                    self.quick_look_hide();
+                }
+            }
             ToShell::ServiceCall { request, service, method, body } => {
                 let app_id = installed().get(slot as usize).map(|a| a.manifest.id.clone()).unwrap_or_default();
                 let (ok, body) = match self.service_call(&app_id, &service, &method, &body, t) {
@@ -1190,6 +1200,7 @@ impl Shell {
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::Preview { .. } | ToShell::PreviewClose) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]
