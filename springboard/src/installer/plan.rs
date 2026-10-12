@@ -185,6 +185,12 @@ pub fn cmdline_txt(root_uuid: &str, kernel: &str) -> String {
 pub const KERNEL_RT: &str = "linux-rt";
 pub const KERNEL_FALLBACK: &str = "linux";
 
+/// The kernel for a machine with these GPU packages. `nvidia-open` ships prebuilt modules that match only the stock
+/// `linux` kernel, and NVIDIA's modules refuse to build on PREEMPT_RT by default, so an NVIDIA machine gets `linux`.
+pub fn kernel_for(gpu: &[&str]) -> &'static str {
+    if gpu.contains(&"nvidia-open") { KERNEL_FALLBACK } else { KERNEL_RT }
+}
+
 fn cmdline_with(root_uuid: &str, kernel: &str, audio_core: Option<&str>) -> String {
     let isolate = audio_core.map(|c| format!(" isolcpus={c} nohz_full={c} rcu_nocbs={c}")).unwrap_or_default();
     format!("initrd=\\initramfs-{kernel}.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs{isolate}\n")
@@ -470,7 +476,14 @@ pub fn install(cfg: &Config, progress: &Shared) {
             let _ = std::fs::write("/etc/pacman.conf", conf.replace("ParallelDownloads = 5", "ParallelDownloads = 12"));
         }
         let mut args = vec!["pacstrap", "-K", "/mnt"];
-        let pkgs = packages();
+        let mut kernel = kernel_for(&gpu);
+        if kernel == KERNEL_RT && r.cmd(&["pacman", "-Sp", KERNEL_RT]).is_err() {
+            r.log(format!("{KERNEL_RT} is not in the package source; installing the stock {KERNEL_FALLBACK} kernel"));
+            kernel = KERNEL_FALLBACK;
+        } else if kernel != KERNEL_RT {
+            r.log(format!("NVIDIA GPU: installing the stock {KERNEL_FALLBACK} kernel (nvidia-open modules match it only)"));
+        }
+        let pkgs: Vec<&str> = packages().into_iter().map(|p| if p == KERNEL_RT { kernel } else { p }).collect();
         args.extend(pkgs.iter().copied());
         args.extend(gpu.iter().copied());
         let watcher = {
@@ -486,15 +499,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
                 }
             })
         };
-        let mut res = r.cmd(&args);
-        let mut kernel = KERNEL_RT;
-        if res.is_err() {
-            // never fail an install over the kernel choice: retry with the stock kernel
-            r.log(format!("pacstrap failed with {KERNEL_RT}; retrying with the stock {KERNEL_FALLBACK} kernel"));
-            let retry: Vec<&str> = args.iter().map(|a| if *a == KERNEL_RT { KERNEL_FALLBACK } else { *a }).collect();
-            res = r.cmd(&retry);
-            if res.is_ok() { kernel = KERNEL_FALLBACK; r.log(format!("installed the stock {KERNEL_FALLBACK} kernel (no {KERNEL_RT} in the package source)")); }
-        }
+        let res = r.cmd(&args);
         progress.lock().unwrap().stage = 2;
         let _ = watcher.join();
         res?;
@@ -928,6 +933,9 @@ mod tests {
         assert!(gpu_packages(amd).contains(&"vulkan-radeon") && !gpu_packages(amd).contains(&"nvidia-open"));
         let nv = "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [10de:2216]";
         assert!(gpu_packages(nv).contains(&"nvidia-open") && gpu_packages(nv).contains(&"libva-nvidia-driver"));
+        assert_eq!(kernel_for(&gpu_packages(nv)), KERNEL_FALLBACK, "nvidia-open matches the stock kernel only");
+        assert_eq!(kernel_for(&gpu_packages(amd)), KERNEL_RT);
+        assert_eq!(kernel_for(&gpu_packages(intel)), KERNEL_RT);
         let both = format!("{intel}\n{nv}");
         let p = gpu_packages(&both);
         assert!(p.contains(&"intel-media-driver") && p.contains(&"nvidia-utils"), "hybrid laptops get both stacks");

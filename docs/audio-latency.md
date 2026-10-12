@@ -35,7 +35,7 @@ Method: `stress-ng --cpu 8 --io 2 --vm 2 --vm-bytes 256M --hdd 1 --hdd-bytes 64M
 | stock 7.2.9-arch1-1 (PREEMPT_DYNAMIC full, `threadirqs`) | 206 us | 337 us | 259 / 648 / 0 |
 | linux-rt 7.2.9-rt3-arch1-1-rt (PREEMPT_RT) | 29 us | 38 us | 0 / 0 / 0 |
 
-Owner decision 2026-10-12: linux-rt becomes the default kernel. Packaging done: the installer installs `linux-rt` (`BASE_PACKAGES`), writes the `linux-rt` mkinitcpio preset and the `initramfs-linux-rt.img` boot line, the loader and update guard follow the image in `/boot`, and `tools/lab-mirror.sh` mirrors it. If the package source has no linux-rt, pacstrap is retried with the stock `linux` and the installer logs it (`docs/installer-and-boot.md` section 3); the live ISO stays on `linux`. Even the stock kernel needs a period of 128 frames (2.7 ms) to play clean under load; the RT kernel is clean at 32 frames (0.67 ms).
+Owner decision 2026-10-12: linux-rt becomes the default kernel. Packaging done: the installer installs `linux-rt` (`BASE_PACKAGES`), writes the `linux-rt` mkinitcpio preset and the `initramfs-linux-rt.img` boot line, the loader and update guard follow the image in `/boot`, and `tools/lab-mirror.sh` mirrors it. If the package source has no linux-rt (`pacman -Sp linux-rt` fails), or the machine has an NVIDIA GPU, the installer logs it and installs the stock `linux` (`docs/installer-and-boot.md` section 3); the live ISO stays on `linux`. Even the stock kernel needs a period of 128 frames (2.7 ms) to play clean under load; the RT kernel is clean at 32 frames (0.67 ms).
 
 ## The physical floor
 

@@ -77,8 +77,8 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
    (the i915 flags stop Skylake framebuffer-compression stripes).
 3. initramfs (mkinitcpio `linux-rt` preset) mounts `@system` and switches root.
    The installed kernel is `linux-rt` (Arch PREEMPT_RT, default since 2026-10-12, `docs/audio-latency.md` "Kernel"):
-   `/boot/vmlinuz-linux-rt`, `/boot/initramfs-linux-rt.img`. If pacstrap fails with `linux-rt` (the package source
-   lacks it) the installer logs it and retries with the stock `linux`, writing the `linux` preset and
+   `/boot/vmlinuz-linux-rt`, `/boot/initramfs-linux-rt.img`. Machines with an NVIDIA GPU get the stock `linux` (`kernel_for`: `nvidia-open` modules match only it, and NVIDIA modules
+   refuse PREEMPT_RT). If `pacman -Sp linux-rt` fails (the package source lacks it) the installer logs it and uses `linux`, writing the `linux` preset and
    `initramfs-linux.img`, so an install never fails over the kernel. The loader derives the kernel from the `initrd=`
    name (`initramfs-linux-rt.img` -> `vmlinuz-linux-rt`, anything else -> `vmlinuz-linux`), and the update guard
    (`packaging/arch/recovery/system.rs`) picks the kernel files, preset and UKI inputs by which image is in `/boot`,
