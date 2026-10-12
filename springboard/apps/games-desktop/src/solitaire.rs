@@ -6,6 +6,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXS};
 use bifrost_app::kit::ui::{MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::ui::{CARD_BG, FIELD_BG, LABEL, LABEL_2, SYSTEM_BLUE, SYSTEM_RED};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
+use bifrost_core::random::{RandomSource, Xorshift64};
 
 
 /// 0..52: suit = c / 13 (0 spades, 1 hearts, 2 diamonds, 3 clubs), rank = c % 13 (0 = ace).
@@ -72,11 +73,9 @@ impl Solitaire {
 
     pub fn deal(&mut self, seed: u32) {
         let mut deck: Vec<u8> = (0..52).collect();
-        let mut x = seed as u64 | 1;
+        let mut rng = Xorshift64::new(seed as u64 | 1);
         for i in (1..52).rev() {
-            x ^= x << 13;
-            x ^= x >> 7;
-            x ^= x << 17;
+            let x = rng.next_u64();
             deck.swap(i, (x >> 16) as usize % (i + 1));
         }
         let mut st = State { stock: vec![], waste: vec![], found: Default::default(), tab: Default::default(), moves: 0 };
