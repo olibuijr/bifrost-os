@@ -18,6 +18,7 @@ pub mod fontprefs;
 pub mod fontregistry;
 pub mod kern;
 pub mod filter;
+pub mod integral;
 pub mod mesh;
 pub mod texture;
 pub mod colorfx;
