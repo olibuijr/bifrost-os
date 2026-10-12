@@ -897,6 +897,8 @@ pub mod camera_device;
 pub mod video_device;
 pub mod video_property;
 pub mod camera_region;
+pub mod subject_lift;
+pub mod visual_lookup;
 pub mod capture_sync;
 pub mod geo;
 pub mod record_store;
