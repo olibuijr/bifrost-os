@@ -14,6 +14,7 @@ use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m as gg;
+use bifrost_app::controls::recording::Trim;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -39,6 +40,7 @@ fn pts(ui: &Ui, (x, y, w, h): (f32, f32, f32, f32)) -> bifrost_app::controls::Re
 /// Toolbar item ids (also the semantic control ids).
 const BAR_RENAME: u32 = 1;
 const BAR_DELETE: u32 = 2;
+const BAR_TRIM: u32 = 3;
 /// Corner radius of the rename field card (prefs layout card radius, points).
 const RADIUS: f32 = gg::CARD_RADIUS;
 /// Height of one recording row in the sidebar source list (points, two lines: title and date).
@@ -82,6 +84,7 @@ enum Target {
     Scrub,
     Rename,
     Delete,
+    Trim,
     Cancel,
     Done,
     List,
@@ -90,6 +93,14 @@ enum Target {
 struct Editor {
     memo: usize,
     field: TextField,
+}
+
+/// A trim in progress on the selected memo: the kept range in seconds, and which handle a drag moves
+/// (`Some(true)` the start handle, `Some(false)` the end handle).
+struct TrimEdit {
+    memo: usize,
+    range: Trim,
+    drag: Option<bool>,
 }
 
 pub struct VoiceMemos {
@@ -115,6 +126,7 @@ pub struct VoiceMemos {
     now: f64,
     position_ms: f64,
     editor: Option<Editor>,
+    trim: Option<TrimEdit>,
     field_touch: bool,
     scroll: Scroller,
     scrolling: bool,
@@ -153,6 +165,7 @@ impl VoiceMemos {
             now: 0.0,
             position_ms: 0.0,
             editor: None,
+            trim: None,
             field_touch: false,
             scroll: Scroller::new(),
             scrolling: false,
@@ -190,6 +203,7 @@ impl VoiceMemos {
             self.finish_recording();
         }
         self.editor = None;
+        self.trim = None;
         self.audio.pump();
     }
 
@@ -342,6 +356,73 @@ impl VoiceMemos {
         }
     }
 
+    /// Opens the trim of the selected memo, starting with the whole recording. Playback stops first.
+    fn begin_trim(&mut self) {
+        let Some(i) = self.selected else { return };
+        let Some(memo) = self.memos.get(i) else { return };
+        match Trim::full(memo.duration_ms as f64 / 1000.0) {
+            Some(range) => {
+                self.stop_playback();
+                self.error.clear();
+                self.trim = Some(TrimEdit { memo: i, range, drag: None });
+            }
+            None => self.error = "This recording is too short to trim".into(),
+        }
+    }
+
+    /// Closes the trim. Done writes the kept part as a new memo (`<title> trimmed`); the original stays.
+    fn end_trim(&mut self, commit: bool) {
+        let Some(edit) = self.trim.take() else { return };
+        let whole = edit.range.start() <= 0.0 && edit.range.end() >= edit.range.length();
+        if !commit || whole {
+            return;
+        }
+        let Some(memo) = self.memos.get(edit.memo).cloned() else { return };
+        match store::save_trim(&memo, edit.range) {
+            Ok(path) => {
+                self.reload();
+                self.selected = self.memos.iter().position(|m| m.path == path);
+                self.position_ms = 0.0;
+            }
+            Err(e) => self.error = format!("Cannot save the trimmed recording: {e}"),
+        }
+    }
+
+    /// Seconds at pixel x on the trim waveform.
+    fn trim_secs(&self, ui: &Ui, x: f32) -> f64 {
+        let Some(edit) = &self.trim else { return 0.0 };
+        let r = self.wave_rect(ui);
+        ((x - r.0) / r.2).clamp(0.0, 1.0) as f64 * edit.range.length()
+    }
+
+    /// Pixel x of `secs` on the trim waveform of a recording `length` seconds long.
+    fn trim_x(&self, ui: &Ui, secs: f64, length: f64) -> f32 {
+        let r = self.wave_rect(ui);
+        r.0 + r.2 * (secs / length).clamp(0.0, 1.0) as f32
+    }
+
+    /// A press on the waveform in trim mode grabs the handle nearer to it.
+    fn trim_grab(&mut self, ui: &Ui, x: f32) {
+        let secs = self.trim_secs(ui, x);
+        if let Some(edit) = self.trim.as_mut() {
+            edit.drag = Some((secs - edit.range.start()).abs() <= (secs - edit.range.end()).abs());
+        }
+        self.trim_move(ui, x);
+    }
+
+    /// Drags the grabbed handle to x. The model keeps it inside the recording and at least `MIN_TRIM` from the other.
+    fn trim_move(&mut self, ui: &Ui, x: f32) {
+        let secs = self.trim_secs(ui, x);
+        let Some(edit) = self.trim.as_mut() else { return };
+        let Some(start) = edit.drag else { return };
+        if start {
+            edit.range.set_start(secs);
+        } else {
+            edit.range.set_end(secs);
+        }
+        self.dirty = true;
+    }
+
     fn delete_selected(&mut self) {
         let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
         self.stop_playback();
@@ -446,7 +527,12 @@ impl VoiceMemos {
     fn bar(&self) -> Toolbar {
         let on = self.selected.is_some() && !self.recording;
         let delete = if self.confirm_delete { ToolbarItem::button(BAR_DELETE, "Confirm Delete") } else { ToolbarItem::icon(BAR_DELETE, "Delete", "trash") };
-        Toolbar::new(vec![ToolbarItem::flexible_space(), ToolbarItem::button(BAR_RENAME, "Rename").enabled(on), delete.enabled(on)])
+        Toolbar::new(vec![
+            ToolbarItem::flexible_space(),
+            ToolbarItem::button(BAR_TRIM, "Trim").enabled(on),
+            ToolbarItem::button(BAR_RENAME, "Rename").enabled(on),
+            delete.enabled(on),
+        ])
     }
 
     /// The toolbar's rectangle in points: the top band of the detail pane.
@@ -474,7 +560,7 @@ impl VoiceMemos {
     /// Toolbar buttons as semantic controls (points), so the shell does not drag the window over them.
     pub fn controls(&self, ui: &Ui) -> Vec<Node> {
         let mut nodes = Vec::new();
-        if self.editor.is_some() {
+        if self.editor.is_some() || self.trim.is_some() {
             let button = |id: u64, label: &str, r: (f32, f32, f32, f32)| Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds: pts(ui, r), enabled: true };
             nodes.push(button(CTL_CANCEL, "Cancel", self.cancel_rect(ui)));
             nodes.push(button(CTL_DONE, "Done", self.done_rect(ui)));
@@ -530,6 +616,19 @@ impl VoiceMemos {
         if y >= self.h as f32 - home_zone(ui) {
             return None;
         }
+        if self.trim.is_some() {
+            if Self::inside(self.cancel_rect(ui), x, y) {
+                return Some(Target::Cancel);
+            }
+            if Self::inside(self.done_rect(ui), x, y) {
+                return Some(Target::Done);
+            }
+            let w = self.wave_rect(ui);
+            if Self::inside((w.0, w.1 - ui.pt(SPACE_XL), w.2, w.3 + ui.pt(SPACE_HUGE)), x, y) {
+                return Some(Target::Scrub);
+            }
+            return None;
+        }
         if self.editor.is_some() {
             if Self::inside(self.cancel_rect(ui), x, y) {
                 return Some(Target::Cancel);
@@ -544,6 +643,7 @@ impl VoiceMemos {
         }
         if self.selected.is_some() {
             for (target, r) in [
+                (Target::Trim, self.bar_rect(ui, BAR_TRIM)),
                 (Target::Rename, self.rename_rect(ui)),
                 (Target::Delete, self.delete_rect(ui)),
                 (Target::Back, self.transport_rect(ui, 0)),
@@ -619,6 +719,7 @@ impl VoiceMemos {
             Target::Back => self.skip(-15_000.0),
             Target::Forward => self.skip(15_000.0),
             Target::Scrub => {}
+            Target::Trim => self.begin_trim(),
             Target::Rename => self.begin_rename(ui),
             Target::Delete => {
                 if self.confirm_delete {
@@ -628,6 +729,8 @@ impl VoiceMemos {
                     self.confirm_delete = true;
                 }
             }
+            Target::Cancel if self.trim.is_some() => self.end_trim(false),
+            Target::Done if self.trim.is_some() => self.end_trim(true),
             Target::Cancel => self.end_rename(false),
             Target::Done => self.end_rename(true),
             Target::List => {}
@@ -656,7 +759,11 @@ impl VoiceMemos {
                 self.pressed = self.hit(ui, x, y);
                 if self.pressed == Some(Target::Scrub) {
                     self.scrub = true;
-                    self.scrub_to(ui, x);
+                    if self.trim.is_some() {
+                        self.trim_grab(ui, x);
+                    } else {
+                        self.scrub_to(ui, x);
+                    }
                     return;
                 }
                 if matches!(self.pressed, Some(Target::Row(_) | Target::List)) {
@@ -672,7 +779,11 @@ impl VoiceMemos {
                     }
                     self.dirty = true;
                 } else if self.scrub {
-                    self.scrub_to(ui, x);
+                    if self.trim.is_some() {
+                        self.trim_move(ui, x);
+                    } else {
+                        self.scrub_to(ui, x);
+                    }
                 } else if self.scrolling {
                     self.scroll.moved(y, t);
                     if self.scroll.dragging() {
@@ -695,6 +806,9 @@ impl VoiceMemos {
                 }
                 if std::mem::take(&mut self.scrub) {
                     self.pressed = None;
+                    if let Some(edit) = self.trim.as_mut() {
+                        edit.drag = None;
+                    }
                     return;
                 }
                 let tap = if std::mem::take(&mut self.scrolling) { self.scroll.up(y, t) } else { true };
@@ -792,6 +906,10 @@ impl VoiceMemos {
             self.draw_editor(s, ui, t);
             return;
         }
+        if self.trim.is_some() {
+            self.draw_trim(s, ui);
+            return;
+        }
         let (px, pw) = self.pane(ui);
         let m = self.margin(ui);
         let side = self.side_w(ui);
@@ -815,7 +933,11 @@ impl VoiceMemos {
             let d = library::civil(memo.mtime, self.wall.offset);
             let title = ui.fit(&memo.title, MAC_TITLE1_PT, pw - 2.0 * m);
             self.text(s, ui, &title, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), px + m, ui.pt(TITLE_Y));
-            let sub = format!("{}  {}", library::day_title(&d), library::time_title(&d));
+            let mut sub = format!("{}  {}", library::day_title(&d), library::time_title(&d));
+            let format = store::format_title(memo.rate, memo.channels);
+            if !format.is_empty() {
+                sub = format!("{sub}  ·  {format}");
+            }
             self.text(s, ui, &sub, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), px + m, ui.pt(SUBTITLE_Y));
             let dur = memo.duration_ms.max(1) as f64;
             let frac = (self.position_ms / dur).clamp(0.0, 1.0) as f32;
@@ -872,7 +994,12 @@ impl VoiceMemos {
 
         // the detail pane's unified toolbar
         widgets::toolbar_band(s, ui, Rect { x: side / ui.pt(1.0), y: 0.0, w: pw / ui.pt(1.0), h: UNIFIED_BAR_PT });
-        let pressed = match self.pressed { Some(Target::Rename) => Some(BAR_RENAME), Some(Target::Delete) => Some(BAR_DELETE), _ => None };
+        let pressed = match self.pressed {
+            Some(Target::Trim) => Some(BAR_TRIM),
+            Some(Target::Rename) => Some(BAR_RENAME),
+            Some(Target::Delete) => Some(BAR_DELETE),
+            _ => None,
+        };
         widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(), pressed);
 
         // sidebar: the Golden Gate source list over the full-height shaded column, with the large title in the top
@@ -888,6 +1015,33 @@ impl VoiceMemos {
             self.centred(s, ui, "No Recordings", MAC_TITLE3_PT, LABEL_2.now(), (0.0, list_top, side, ui.pt(EMPTY_H)));
         }
         s.fill_rect(side as usize, 0, 1, bottom as usize, SEPARATOR_C.now());
+    }
+
+    /// Trim mode: the waveform with the start and end handles, and the kept length. Cancel and Done sit where the
+    /// rename sheet's do.
+    fn draw_trim(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some(edit) = self.trim.as_ref() else { return };
+        let (range, index) = (edit.range, edit.memo);
+        let Some(memo) = self.memos.get(index).cloned() else { return };
+        self.button(s, ui, Target::Cancel, "Cancel", BLUE, self.cancel_rect(ui));
+        self.button(s, ui, Target::Done, "Done", BLUE, self.done_rect(ui));
+        self.centred(s, ui, "Trim", MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
+        let wave = self.wave_rect(ui);
+        if self.peaks_for.as_deref() != Some(memo.path.as_path()) {
+            self.peaks = store::peaks(&memo.path, 256);
+            self.peaks_for = Some(memo.path.clone());
+        }
+        let peaks = self.peaks.clone();
+        Self::bars(s, ui, wave, &peaks, 0.0, false);
+        let length = range.length();
+        let (hw, top, hh) = (ui.pt(SPACE_XXS), wave.1 - ui.pt(SPACE_M), wave.3 + ui.pt(SPACE_XXL));
+        for secs in [range.start(), range.end()] {
+            let x = self.trim_x(ui, secs, length);
+            s.fill_rrect(x - hw / 2.0, top, hw, hh, hw / 2.0, BLUE);
+        }
+        let keep = format!("Keeps {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
+        let (px, pw) = self.pane(ui);
+        self.centred(s, ui, &keep, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, wave.1 + wave.3 + ui.pt(SPACE_XXL), pw, ui.pt(20.0)));
     }
 
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
@@ -941,6 +1095,28 @@ mod tests {
         assert!(app.confirm_delete && app.memos.len() == 1, "the first tap only asks");
         app.activate(&ui, Target::Delete);
         assert!(app.memos.is_empty());
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn trim_saves_the_kept_part_as_a_new_memo() {
+        let (mut app, ui) = app("trim");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(8000, 1, &samples), 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+        app.activate(&ui, Target::Trim);
+        assert!(app.trim.is_some(), "Trim opens the trim view");
+        if let Some(edit) = app.trim.as_mut() {
+            edit.range.set_start(0.25);
+            edit.range.set_end(0.5);
+        }
+        app.activate(&ui, Target::Done);
+        assert!(app.trim.is_none());
+        assert_eq!(app.memos.len(), 2, "the original stays");
+        let kept = &app.memos[app.selected.unwrap()];
+        assert_eq!(kept.duration_ms, 250);
+        assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 }
