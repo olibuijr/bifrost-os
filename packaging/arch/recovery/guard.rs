@@ -302,6 +302,8 @@ fn install() -> io::Result<()> {
     }
     run("systemctl", &["start", "bifrost-update-guard.service"])?;
     if let Err(e)=run("pacman",&["-Su","--noconfirm","--overwrite","/usr/bin/springboard,/usr/lib/systemd/system/springboard.service,/usr/lib/springboard/seed-data,/usr/bin/bifrost-update-guard,/usr/lib/systemd/system/bifrost-update-guard.service","springboard-shell"]){if full {system::fallback_reset()?;} else {restore(Path::new("/"),Path::new(STORE))?;}return Err(e);}
+    // the first frame's caches for the new shell, before the reboot (boot-08); best effort, the shell rebuilds on a miss
+    let _ = Command::new("/usr/bin/springboard").arg("--first-frame-cache").status();
     if full {
         system::ready()?;
         println!("System update staged; reboot required for kernel/root probation");
@@ -353,6 +355,10 @@ fn main() {
                     run("systemctl", &["restart", "springboard.service"])
                 }
             }
+            // Unified kernel image and per-machine initramfs (docs/boot-architecture.md): pacman's hook and the installer
+            // build it, the record unit (after desktop-ready) rebuilds it when the loaded modules change.
+            "uki" => system::build_boot_image(),
+            "record-modules" => system::record_modules().map(|_| ()),
             "rollback" if Path::new(STORE).join("previous-bootid").exists() => system::restore(),
             "rollback" => {
                 let _ = run("systemctl", &["stop", "springboard.service"]);

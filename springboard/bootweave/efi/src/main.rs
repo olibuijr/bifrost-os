@@ -1,31 +1,54 @@
-//! BifrOSt boot splash: paints the logo the moment firmware hands over control, then starts the
-//! Linux EFI stub from the same volume. The stub loads the initramfs itself (initrd= option), so the
-//! logo stays on screen for the whole kernel/initramfs read instead of a black screen.
+//! BifrOSt loader (UEFI). Draws boot frame 0 (`bootweave-frame`) at the panel's native mode, reads the boot timing
+//! record, drives the progress bar, offers the boot options on a held Shift, then starts the Linux EFI stub with the
+//! chosen command line. The bar's state is handed to the kernel side in the `BifrostBootProgress` variable.
+//! Contract: `docs/boot-architecture.md`, "One frame" and "The progress bar".
 #![no_main]
 #![no_std]
 extern crate alloc;
 mod boot_policy;
+
+use alloc::string::String;
+mod uki;
+mod cmdline;
+mod crypto;
+mod handover;
+mod luks;
+mod unlock;
+mod screen;
 use alloc::vec::Vec;
-use uefi::boot::{self, LoadImageSource};
+use bootweave_frame::progress::Progress;
+use bootweave_frame::render::{bar_rect, render_bar};
+use bootweave_frame::timing::{BootTiming, Handoff, Stage};
+use bootweave_frame::{render, Appearance, Frame, PixelOrder, Screen};
+use uefi::boot::{self, LoadImageSource, ScopedProtocol};
 use uefi::prelude::*;
-use uefi::proto::console::gop::{BltOp, BltPixel, GraphicsOutput};
+use uefi::proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput};
+use uefi::proto::console::text::{Input, InputEx, Key, ScanCode};
 use uefi::proto::device_path::build::{media::FilePath, DevicePathBuilder};
 use uefi::proto::device_path::DevicePath;
 use uefi::proto::loaded_image::LoadedImage;
+use uefi::runtime::{VariableAttributes, VariableVendor};
 use uefi::{cstr16, CStr16};
 
-const LOGO: &[u8] = include_bytes!("../logo.bgrx");
-const LOGO_PX: usize = 160;
 // EFI/BIFROST/boot.cfg is the installed-system contract; EFI/BOOT/cmdline.txt
 // is the removable-media (USB) copy.
 const CMDLINE_FILES: &[&CStr16] = &[
     cstr16!("\\EFI\\BIFROST\\boot.cfg"),
     cstr16!("\\EFI\\BOOT\\cmdline.txt"),
 ];
-const DEFAULT_CMDLINE: &str = "initrd=\\arch\\boot\\x86_64\\initramfs-linux.img quiet splash";
+const TIMING_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\boot-timing");
+const PREVIOUS_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\rollback.txt");
+const RECOVERY_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\recovery.txt");
+const PENDING_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\pending");
+/// The BifrOSt vendor GUID of the hand-off variable (`BifrostBootProgress`), read by Bootweave (task 06).
+const HANDOFF_VENDOR: VariableVendor = VariableVendor(uefi::guid!("d1f0b07c-5b2e-4a8d-9c3f-6e4a2b7d9f10"));
+/// Keyboard Shift bits of `EFI_KEY_STATE.KeyShiftState` (UEFI spec, Simple Text Input Ex): RIGHT_SHIFT, LEFT_SHIFT.
+const SHIFT_BITS: u32 = 0x0000_0003;
+/// Control bits of the same field: RIGHT_CONTROL, LEFT_CONTROL.
+const CONTROL_BITS: u32 = 0x0000_000c;
 
-/// Kernel command line from `\\EFI\\BOOT\\cmdline.txt` next to this loader (written at ISO build time).
-fn read_text(dev: Handle, path: &CStr16) -> Option<alloc::string::String> {
+/// Reads a whole small file from the boot volume, up to `cap` bytes.
+fn read_file(dev: Handle, path: &CStr16, cap: usize) -> Option<Vec<u8>> {
     use uefi::proto::media::file::{File, FileAttribute, FileMode};
     use uefi::proto::media::fs::SimpleFileSystem;
     let mut fs = boot::open_protocol_exclusive::<SimpleFileSystem>(dev).ok()?;
@@ -34,14 +57,22 @@ fn read_text(dev: Handle, path: &CStr16) -> Option<alloc::string::String> {
         .open(path, FileMode::Read, FileAttribute::empty())
         .ok()?
         .into_regular_file()?;
-    let mut buf = [0u8; 2048];
+    let mut buf = alloc::vec![0u8; cap];
     let n = file.read(&mut buf).ok()?;
-    Some(
-        alloc::string::String::from_utf8_lossy(&buf[..n])
-            .trim()
-            .into(),
-    )
+    buf.truncate(n);
+    Some(buf)
 }
+
+fn read_text(dev: Handle, path: &CStr16) -> Option<String> {
+    let bytes = read_file(dev, path, 2048)?;
+    Some(String::from_utf8_lossy(&bytes).trim().into())
+}
+
+/// A non-empty text file, for the boot lines that are optional.
+fn read_line(dev: Handle, path: &CStr16) -> Option<String> {
+    read_text(dev, path).filter(|t| !t.is_empty())
+}
+
 fn consume_attempt(dev: Handle) -> bool {
     use uefi::proto::media::file::{File, FileAttribute, FileMode};
     use uefi::proto::media::fs::SimpleFileSystem;
@@ -49,11 +80,7 @@ fn consume_attempt(dev: Handle) -> bool {
         let mut fs = boot::open_protocol_exclusive::<SimpleFileSystem>(dev).ok()?;
         let mut root = fs.open_volume().ok()?;
         let mut file = root
-            .open(
-                cstr16!("\\EFI\\BIFROST\\pending"),
-                FileMode::ReadWrite,
-                FileAttribute::empty(),
-            )
+            .open(PENDING_PATH, FileMode::ReadWrite, FileAttribute::empty())
             .ok()?
             .into_regular_file()?;
         file.write(b"1").ok()?;
@@ -62,28 +89,18 @@ fn consume_attempt(dev: Handle) -> bool {
     };
     write().is_some()
 }
-fn cmdline_from(dev: Handle, path: &CStr16) -> Option<alloc::string::String> {
-    use uefi::proto::media::file::{File, FileAttribute, FileMode, RegularFile};
-    use uefi::proto::media::fs::SimpleFileSystem;
-    let mut sfs = boot::open_protocol_exclusive::<SimpleFileSystem>(dev).ok()?;
-    let mut root = sfs.open_volume().ok()?;
-    let h = root.open(path, FileMode::Read, FileAttribute::empty()).ok()?;
-    let mut f: RegularFile = h.into_regular_file()?;
-    let mut buf = [0u8; 2048];
-    let n = f.read(&mut buf).ok()?;
-    let text: alloc::string::String = alloc::string::String::from_utf8_lossy(&buf[..n]).trim().into();
-    (!text.is_empty()).then_some(text)
-}
 
-fn cmdline(dev: Handle) -> alloc::string::String {
+fn cmdline(dev: Handle) -> String {
     CMDLINE_FILES
         .iter()
-        .find_map(|path| cmdline_from(dev, path))
-        .unwrap_or_else(|| DEFAULT_CMDLINE.into())
+        .find_map(|path| read_line(dev, path))
+        .unwrap_or_else(|| cmdline::DEFAULT_CMDLINE.into())
 }
 
 /// Microseconds since CPU reset from the TSC, the clock systemd's Boot Loader Interface expects.
 fn tsc() -> u64 {
+    // SAFETY: `_rdtsc` only reads the processor's time-stamp counter; it has no memory effects and is available on
+    // every x86_64 CPU that runs UEFI.
     unsafe { core::arch::x86_64::_rdtsc() }
 }
 static PER_US: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
@@ -102,7 +119,6 @@ fn tsc_per_us() -> u64 {
 }
 /// Boot Loader Interface: systemd-analyze reads these to report firmware and loader time.
 fn loader_var(name: &CStr16, text: &str) {
-    use uefi::runtime::{VariableAttributes, VariableVendor};
     const LOADER: VariableVendor = VariableVendor(uefi::guid!("4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"));
     let mut data: Vec<u8> = text.encode_utf16().chain(core::iter::once(0)).flat_map(u16::to_le_bytes).collect();
     data.shrink_to_fit();
@@ -121,50 +137,253 @@ fn native_mode(gop: &mut GraphicsOutput) {
     }
 }
 
-fn paint() {
-    let Ok(h) = boot::get_handle_for_protocol::<GraphicsOutput>() else {
-        return;
+/// A rendered pixel as the firmware's blit wants it: `0x00RRGGBB` (the `PixelOrder::Bgrx` value) to a blit pixel.
+fn to_blt(v: u32) -> BltPixel {
+    BltPixel::new(((v >> 16) & 0xff) as u8, ((v >> 8) & 0xff) as u8, (v & 0xff) as u8)
+}
+
+/// The panel's graphics output and an in-memory copy of the frame, drawn with `bootweave-frame`.
+struct Display {
+    gop: ScopedProtocol<GraphicsOutput>,
+    width: u32,
+    height: u32,
+    appearance: Appearance,
+    pixels: Vec<u32>,
+}
+
+impl Display {
+    fn open(appearance: Appearance) -> Option<Display> {
+        let h = boot::get_handle_for_protocol::<GraphicsOutput>().ok()?;
+        let mut gop = boot::open_protocol_exclusive::<GraphicsOutput>(h).ok()?;
+        native_mode(&mut gop);
+        let (w, hgt) = gop.current_mode_info().resolution();
+        Some(Display { gop, width: w as u32, height: hgt as u32, appearance, pixels: alloc::vec![0u32; w * hgt] })
+    }
+
+    fn frame(&self, screen: Screen, progress: Option<f32>) -> Frame {
+        Frame { width: self.width, height: self.height, appearance: self.appearance, progress, screen }
+    }
+
+    /// Renders `frame` into the copy and blits the whole panel.
+    fn draw(&mut self, frame: &Frame) {
+        render(frame, &mut self.pixels, self.width as usize, PixelOrder::Bgrx);
+        let px: Vec<BltPixel> = self.pixels.iter().map(|&v| to_blt(v)).collect();
+        let _ = self.gop.blt(BltOp::BufferToVideo {
+            buffer: &px,
+            src: BltRegion::Full,
+            dest: (0, 0),
+            dims: (self.width as usize, self.height as usize),
+        });
+    }
+
+    /// Moves only the progress bar: re-renders its rectangle and blits that rectangle.
+    fn tick(&mut self, progress: f32) {
+        render_bar(self.width, self.height, progress, self.appearance, &mut self.pixels, self.width as usize, PixelOrder::Bgrx);
+        let (x, y, bw, bh) = bar_rect(self.width, self.height);
+        let stride = self.width as usize;
+        let mut px = Vec::with_capacity((bw * bh) as usize);
+        for row in 0..bh as usize {
+            let start = (y as usize + row) * stride + x as usize;
+            px.extend(self.pixels[start..start + bw as usize].iter().map(|&v| to_blt(v)));
+        }
+        let _ = self.gop.blt(BltOp::BufferToVideo {
+            buffer: &px,
+            src: BltRegion::Full,
+            dest: (x as usize, y as usize),
+            dims: (bw as usize, bh as usize),
+        });
+    }
+}
+
+/// The boot options (held Shift): the user picks one of `entries` with the arrow keys and Enter. `None` when the
+/// keyboard cannot be read, so the normal boot goes on.
+fn choose_option(display: &mut Display, entries: &[(&str, String)]) -> Option<String> {
+    let h = boot::get_handle_for_protocol::<Input>().ok()?;
+    let mut input = boot::open_protocol_exclusive::<Input>(h).ok()?;
+    let labels: Vec<String> = entries.iter().map(|(label, _)| String::from(*label)).collect();
+    let mut selected: usize = 0;
+    loop {
+        let frame = display.frame(Screen::Options { entries: labels.clone(), selected: selected as u32 }, None);
+        display.draw(&frame);
+        let event = input.wait_for_key_event().ok()?;
+        boot::wait_for_event(&[event]).ok()?;
+        match input.read_key() {
+            Ok(Some(Key::Special(ScanCode::UP))) => selected = selected.saturating_sub(1),
+            Ok(Some(Key::Special(ScanCode::DOWN))) => selected = (selected + 1).min(entries.len().saturating_sub(1)),
+            Ok(Some(Key::Printable(c))) if u16::from(c) == 0x000d => return entries.get(selected).map(|(_, line)| line.clone()),
+            _ => {}
+        }
+    }
+}
+
+/// Keys already waiting in the firmware queue at loader start.
+#[derive(Clone, Copy, Default)]
+struct StartKeys {
+    /// A Shift key: show the boot options.
+    shift: bool,
+    /// Ctrl+V: boot this one time verbose (support).
+    verbose: bool,
+}
+
+/// Reads the keys already queued at loader start, once, for both the Shift and the Ctrl+V options (reading drains
+/// the queue, so two separate readers would each hide the other's key). Drains at most 32 keys and never waits, so
+/// the loader's time is not spent here. Firmware reports Ctrl+V either as the control character 0x16 or as `v` with
+/// a Control modifier, so both count.
+fn start_keys() -> StartKeys {
+    let mut keys = StartKeys::default();
+    let Ok(h) = boot::get_handle_for_protocol::<InputEx>() else {
+        return keys;
     };
-    let Ok(mut gop) = boot::open_protocol_exclusive::<GraphicsOutput>(h) else {
-        return;
+    let Ok(mut input) = boot::open_protocol_exclusive::<InputEx>(h) else {
+        return keys;
     };
-    native_mode(&mut gop);
-    let (w, hgt) = gop.current_mode_info().resolution();
-    let _ = gop.blt(BltOp::VideoFill {
-        color: BltPixel::new(0, 0, 0),
-        dest: (0, 0),
-        dims: (w, hgt),
-    });
-    // Layout as fractions of the screen height so the monitor's
-    // scaling of the firmware mode cannot change it: mark 160 px and bar 240x4 px at 1440p,
-    // mark top 110 px above the middle, bar 110 px below it.
-    let l = (LOGO_PX * hgt / 1440).max(16);
-    let px: Vec<BltPixel> = (0..l * l)
-        .map(|i| {
-            let (sx, sy) = ((i % l) * LOGO_PX / l, (i / l) * LOGO_PX / l);
-            let c = &LOGO[(sy * LOGO_PX + sx) * 4..][..4];
-            BltPixel::new(c[2], c[1], c[0])
-        })
-        .collect();
-    let (x, y) = ((w - l) / 2, (hgt / 2).saturating_sub(110 * hgt / 1440));
-    let _ = gop.blt(BltOp::BufferToVideo {
-        buffer: &px,
-        src: uefi::proto::console::gop::BltRegion::Full,
-        dest: (x, y),
-        dims: (l, l),
-    });
-    let (bw, bh) = (240 * hgt / 1440, (4 * hgt / 1440).max(2));
-    let _ = gop.blt(BltOp::VideoFill {
-        color: BltPixel::new(60, 60, 62),
-        dest: ((w - bw) / 2, hgt / 2 + 110 * hgt / 1440),
-        dims: (bw, bh),
-    });
+    for _ in 0..32 {
+        let Ok(Some(data)) = input.read_key() else {
+            break;
+        };
+        let state = data.key_state.key_shift_state.map_or(0, |s| s.bits());
+        if state & SHIFT_BITS != 0 {
+            keys.shift = true;
+        }
+        if let Key::Printable(c) = data.key {
+            let c = char::from(c);
+            if c == '\u{16}' || ((c == 'v' || c == 'V') && state & CONTROL_BITS != 0) {
+                keys.verbose = true;
+            }
+        }
+    }
+    keys
+}
+
+/// The loader's state for one boot: the progress bar, the boot frame, and the handles it boots with.
+struct Session {
+    image: Handle,
+    dev: Handle,
+    init: u64,
+    per_us: u64,
+    progress: Progress,
+    display: Option<Display>,
+}
+
+impl Session {
+    /// Milliseconds since the loader started.
+    fn elapsed_ms(&self) -> u32 {
+        (tsc().wrapping_sub(self.init) / self.per_us / 1000) as u32
+    }
+
+    /// Frame 0: the boot frame with the bar at its current position (0 at the first moment).
+    fn first_frame(&mut self) {
+        let pos = self.progress.at(self.elapsed_ms());
+        let visible = self.progress.visible();
+        if let Some(display) = self.display.as_mut() {
+            let frame = display.frame(Screen::Boot, visible.then_some(pos));
+            display.draw(&frame);
+        }
+    }
+
+    fn options(&mut self, entries: &[(&str, String)]) -> Option<String> {
+        choose_option(self.display.as_mut()?, entries)
+    }
+
+    /// Starts the previous generation under the rollback screen (task 11). `None` when there is no previous generation.
+    /// The screen goes through the session's display while it still holds the panel (a pending update that failed on
+    /// an earlier boot), else through `screen::show` (the display was released by a failed `boot_line`).
+    fn rollback(&mut self, previous: Option<&str>) -> Option<Status> {
+        let line = previous?;
+        match self.display.as_mut() {
+            Some(display) => {
+                let frame = display.frame(Screen::Rollback, None);
+                display.draw(&frame);
+            }
+            None => {
+                screen::show(Screen::Rollback);
+            }
+        }
+        Some(self.boot_line(line))
+    }
+
+    /// Starts the kernel stub with `line`. The loader's stage ends here: the bar snaps to the loader checkpoint, the
+    /// frame is dropped (the kernel side takes the panel over), and `BifrostBootProgress` carries the bar to Bootweave.
+    fn boot_line(&mut self, line: &str) -> Status {
+        let Ok(dp) = boot::open_protocol_exclusive::<DevicePath>(self.dev) else {
+            return Status::LOAD_ERROR;
+        };
+        let mut buf = Vec::new();
+        let mut b = DevicePathBuilder::with_vec(&mut buf);
+        for n in dp.node_iter() {
+            b = b.push(&n).unwrap();
+        }
+        // A unified image (`uki=`) starts directly with the options after it; otherwise the kernel next to the
+        // initramfs named by `initrd=` (the older install layout) starts with the whole line.
+        let (file, options) = match uki::target(line) {
+            Some(file) => (String::from(file), uki::options(line)),
+            None => {
+                let dir = line
+                    .split_whitespace()
+                    .find_map(|t| t.strip_prefix("initrd="))
+                    .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
+                    .unwrap_or("\\arch\\boot\\x86_64");
+                (alloc::format!("{dir}\\vmlinuz-linux"), String::from(line))
+            }
+        };
+        let kernel_path = uefi::CString16::try_from(file.as_str()).unwrap();
+        let full = b
+            .push(&FilePath {
+                path_name: &kernel_path,
+            })
+            .unwrap()
+            .finalize()
+            .unwrap();
+        let Ok(k) = boot::load_image(
+            self.image,
+            LoadImageSource::FromDevicePath {
+                device_path: full,
+                boot_policy: uefi::proto::BootPolicy::ExactMatch,
+            },
+        ) else {
+            return Status::NOT_FOUND;
+        };
+        let mut opts: Vec<u16> = options.encode_utf16().collect();
+        opts.push(0);
+        let Ok(mut kli) = boot::open_protocol_exclusive::<LoadedImage>(k) else {
+            return Status::LOAD_ERROR;
+        };
+        // SAFETY: `opts` is a NUL-terminated UTF-16 buffer that lives until `start_image` returns, and its byte length
+        // is `opts.len() * 2`, the length the LoadedImage protocol expects for load options.
+        unsafe { kli.set_load_options(opts.as_ptr() as *const u8, (opts.len() * 2) as u32) };
+        drop(kli);
+
+        self.progress.stage_done(Stage::Loader);
+        let pos = self.progress.at(self.elapsed_ms());
+        if self.progress.visible() {
+            if let Some(display) = self.display.as_mut() {
+                display.tick(pos);
+            }
+        }
+        self.display = None;
+
+        let handoff = Handoff {
+            timing: self.progress.timing,
+            loader_ms: self.elapsed_ms(),
+            shown_permille: (pos * 1000.0) as u32,
+        };
+        let _ = uefi::runtime::set_variable(
+            cstr16!("BifrostBootProgress"),
+            &HANDOFF_VENDOR,
+            VariableAttributes::BOOTSERVICE_ACCESS | VariableAttributes::RUNTIME_ACCESS,
+            &handoff.encode(),
+        );
+        loader_var(cstr16!("LoaderTimeExecUSec"), &alloc::format!("{}", tsc().wrapping_sub(self.init) / self.per_us));
+        match boot::start_image(k) {
+            Ok(()) => Status::SUCCESS,
+            Err(e) => e.status(),
+        }
+    }
 }
 
 #[entry]
 fn main() -> Status {
     let init = tsc();
-    paint();
     let per_us = tsc_per_us();
     loader_var(cstr16!("LoaderTimeInitUSec"), &alloc::format!("{}", init / per_us));
     loader_var(cstr16!("LoaderInfo"), "BifrOSt loader");
@@ -176,71 +395,67 @@ fn main() -> Status {
         return Status::LOAD_ERROR;
     };
     drop(li);
+
+    // Ctrl+V already in the firmware's key queue: this one boot is verbose (support). Never waits for a key.
+    let keys = start_keys();
+    let verbose = keys.verbose;
     let current = cmdline(dev);
-    let marker = read_text(dev, cstr16!("\\EFI\\BIFROST\\pending"));
-    let previous = read_text(dev, cstr16!("\\EFI\\BIFROST\\rollback.txt"));
+    let current = if verbose { cmdline::verbose(&current) } else { current };
+    // Unlock is login (task 10): on an encrypted root the Unlock screen takes the passphrase once. The volume key goes
+    // to the initramfs in a one-time volatile variable; the account in `bifrost.user=` is logged in by the shell. It runs
+    // before the session opens the panel (the Unlock screen opens the graphics output itself), and the loader's clock
+    // restarts after it so the time spent typing does not count as loader time in the learned boot timing.
+    let user = current
+        .split_whitespace()
+        .find_map(|t| t.strip_prefix("bifrost.user="))
+        .unwrap_or("");
+    let mut init = init;
+    if let Some(volume) = unlock::run(user) {
+        let _ = handover::publish(&volume);
+        init = tsc();
+    }
+    let marker = read_text(dev, PENDING_PATH);
+    let previous = read_line(dev, PREVIOUS_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
+    let recovery = read_line(dev, RECOVERY_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
+    let timing = read_file(dev, TIMING_PATH, 64)
+        .and_then(|bytes| BootTiming::decode(&bytes))
+        .unwrap_or(BootTiming::DEFAULT);
+
+    let mut session = Session {
+        image,
+        dev,
+        init,
+        per_us,
+        progress: Progress::new(timing),
+        display: Display::open(timing.appearance),
+    };
+    session.first_frame();
+
+    if keys.shift {
+        let mut entries = alloc::vec![("Current", current.clone())];
+        if let Some(line) = previous.clone() {
+            entries.push(("Previous", line));
+        }
+        if let Some(line) = recovery {
+            entries.push(("Recovery", line));
+        }
+        if let Some(line) = session.options(&entries) {
+            return session.boot_line(&line);
+        }
+    }
+
     let fallback = match boot_policy::choose(marker.as_deref()) {
         boot_policy::Choice::Current => false,
         boot_policy::Choice::Attempt => !consume_attempt(dev),
         boot_policy::Choice::Previous => true,
     };
     if fallback {
-        return previous
-            .as_deref()
-            .map(|line| boot_line(image, dev, line))
-            .unwrap_or(Status::LOAD_ERROR);
+        return session.rollback(previous.as_deref()).unwrap_or(Status::LOAD_ERROR);
     }
-    let status = boot_line(image, dev, &current);
-    if marker.is_some() && status != Status::SUCCESS {
-        return previous
-            .as_deref()
-            .map(|line| boot_line(image, dev, line))
-            .unwrap_or(status);
+    let status = session.boot_line(&current);
+    // A unified image that will not start falls back to the previous generation even without a pending update.
+    if (marker.is_some() || uki::target(&current).is_some()) && status != Status::SUCCESS {
+        return session.rollback(previous.as_deref()).unwrap_or(status);
     }
     status
-}
-fn boot_line(image: Handle, dev: Handle, line: &str) -> Status {
-    let Ok(dp) = boot::open_protocol_exclusive::<DevicePath>(dev) else {
-        return Status::LOAD_ERROR;
-    };
-    let mut buf = Vec::new();
-    let mut b = DevicePathBuilder::with_vec(&mut buf);
-    for n in dp.node_iter() {
-        b = b.push(&n).unwrap();
-    }
-    let dir = line
-        .split_whitespace()
-        .find_map(|t| t.strip_prefix("initrd="))
-        .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
-        .unwrap_or("\\arch\\boot\\x86_64");
-    let kernel_path =
-        uefi::CString16::try_from(alloc::format!("{dir}\\vmlinuz-linux").as_str()).unwrap();
-    let full = b
-        .push(&FilePath {
-            path_name: &kernel_path,
-        })
-        .unwrap()
-        .finalize()
-        .unwrap();
-    let Ok(k) = boot::load_image(
-        image,
-        LoadImageSource::FromDevicePath {
-            device_path: full,
-            boot_policy: uefi::proto::BootPolicy::ExactMatch,
-        },
-    ) else {
-        return Status::NOT_FOUND;
-    };
-    let mut opts: Vec<u16> = line.encode_utf16().collect();
-    opts.push(0);
-    let Ok(mut kli) = boot::open_protocol_exclusive::<LoadedImage>(k) else {
-        return Status::LOAD_ERROR;
-    };
-    unsafe { kli.set_load_options(opts.as_ptr() as *const u8, (opts.len() * 2) as u32) };
-    drop(kli);
-    loader_var(cstr16!("LoaderTimeExecUSec"), &alloc::format!("{}", tsc() / tsc_per_us()));
-    match boot::start_image(k) {
-        Ok(()) => Status::SUCCESS,
-        Err(e) => e.status(),
-    }
 }

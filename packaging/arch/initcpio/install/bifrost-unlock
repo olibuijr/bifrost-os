@@ -1,0 +1,18 @@
+#!/bin/bash
+build() {
+    add_runscript
+    add_module dm_crypt
+    add_module xts
+    add_binary cryptsetup
+    add_binary blkid
+    add_binary chattr
+    add_binary od
+    add_binary stat
+    add_binary mountpoint
+    add_binary tail
+    add_binary tr
+    add_binary sed
+}
+help() {
+    echo "Unlock is login: opens the encrypted root with the volume key the boot loader left in an EFI variable, and logs the account in."
+}

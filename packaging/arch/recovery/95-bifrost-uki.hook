@@ -1,0 +1,12 @@
+# Builds the BifrOSt unified kernel image (EFI/BIFROST/bifrost.efi) after a kernel is installed or upgraded.
+# Sorts after the linux package's mkinitcpio hook (90-mkinitcpio-install.hook), so the initramfs is already new.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Building the BifrOSt boot image...
+When = PostTransaction
+Exec = /usr/bin/bifrost-update-guard uki

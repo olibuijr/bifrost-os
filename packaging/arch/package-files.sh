@@ -8,6 +8,9 @@ package_bifrost_files() {
   install -Dm755 "$guard" "$pkgdir/usr/bin/bifrost-update-guard"
   install -Dm644 "$here/recovery/bifrost-update-guard.service" "$pkgdir/usr/lib/systemd/system/bifrost-update-guard.service"
   install -Dm644 "$here/recovery/bifrost-rollback.service" "$pkgdir/usr/lib/systemd/system/bifrost-rollback.service"
+  # unified kernel image after each kernel install (docs/boot-architecture.md, "Prepared, not probed")
+  install -Dm644 "$here/recovery/95-bifrost-uki.hook" "$pkgdir/usr/share/libalpm/hooks/95-bifrost-uki.hook"
+  install -Dm644 "$here/recovery/bifrost-modules-record.service" "$pkgdir/usr/lib/systemd/system/bifrost-modules-record.service"
   install -Dm755 "$binary" "$pkgdir/usr/bin/springboard"
   if [[ -n ${PC_BOOTWEAVE:-} && -x ${PC_BOOTWEAVE} ]]; then
     install -Dm755 "$PC_BOOTWEAVE" "$pkgdir/usr/bin/bifrost-bootweave"
@@ -21,6 +24,14 @@ package_bifrost_files() {
     install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
   fi
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
+  # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
+  # under, and the trigger that starts the target on the first desktop frame
+  if [[ -n ${PC_BIFROSTD:-} && -x ${PC_BIFROSTD} ]]; then
+    install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
+  fi
+  install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
+  install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
+  install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
   # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
@@ -56,6 +67,8 @@ package_bifrost_files() {
     install -Dm755 "$here/wayland/$file" "$pkgdir/usr/lib/bifrost/$file"
   done
   install -Dm755 "$here/wayland/video-arg" "$pkgdir/usr/lib/bifrost/video-arg"
+  # PID 1 status and log lines stay off the console (docs/boot-architecture.md, "Text-free on every path").
+  install -Dm644 "$here/systemd/50-bifrost-console.conf" "$pkgdir/usr/lib/systemd/system.conf.d/50-bifrost-console.conf"
   # Bootweave owns the EFI-frame-to-desktop lifecycle; no text console is exposed.
   for unit in getty@tty1.service; do
     install -d "$pkgdir/etc/systemd/system"

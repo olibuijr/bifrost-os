@@ -59,32 +59,40 @@ struct Drm {
     glass: crate::glass::Glass,
     /// The Vulkan scanout, when `BIFROST_WM_RENDERER=vulkan` started it; `None` keeps GLES scanout.
     vulkan: Option<crate::drm_vulkan::Vulkan>,
+    /// The boot frame back over the desktop at shutdown (`SHUTDOWN_REQUEST`).
+    shutdown: Shutdown,
+}
+
+/// The loader's frame as a render buffer of the panel's size (the boot's first fade and the shutdown fade share it).
+fn boot_frame_buffer(w: i32, h: i32) -> MemoryRenderBuffer {
+    let mut px = vec![0u32; (w * h) as usize];
+    bootweave_frame::render(&bootweave_frame::Frame::boot(w as u32, h as u32), &mut px, w as usize, bootweave_frame::PixelOrder::Bgrx);
+    let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
+    MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None)
 }
 
 struct Boot {
     splash: MemoryRenderBuffer,
-    /// When the shell's first desktop frame arrived (`$XDG_RUNTIME_DIR/shell-ready`).
-    ready_at: Option<std::time::Instant>,
+    /// Holds the boot frame until the desktop is ready (`bootreveal::Reveal`: the three desktop-part marks, 4 s ceiling).
+    reveal: crate::boot::Reveal,
+    /// The gate's clock: milliseconds are counted from here.
+    started: std::time::Instant,
 }
 
 impl Boot {
     fn new(w: i32, h: i32) -> Self {
-        let mut px = vec![0u32; (w * h) as usize];
-        crate::boot::paint(&mut px, w as usize, h as usize);
-        let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
-        Boot { splash: MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None), ready_at: None }
+        Boot { splash: boot_frame_buffer(w, h), reveal: crate::boot::Reveal::new(0.0), started: std::time::Instant::now() }
     }
 
-    /// The splash opacity for this frame, None once the fade is done.
+    /// The splash opacity for this frame: 1 while held, then the one fade; None once the fade is done.
     fn alpha(&mut self) -> Option<f32> {
-        if self.ready_at.is_none() {
-            let dir = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_default();
-            if dir.join("shell-ready").exists() {
-                self.ready_at = Some(std::time::Instant::now());
-                crate::boot::mark("desktop-first-ui");
-            }
+        let now = self.started.elapsed().as_secs_f64() * 1000.0;
+        let was_ready = self.reveal.ready_at().is_some();
+        let ready_at = self.reveal.poll(now, crate::boot::read_marks_file);
+        if ready_at.is_some() && !was_ready {
+            crate::boot::mark("desktop-ready");
         }
-        let a = crate::boot::splash_alpha(self.ready_at.map(|t| t.elapsed().as_secs_f64() * 1000.0));
+        let a = crate::boot::splash_alpha(ready_at.map(|t| now - t));
         if a.is_none() {
             crate::boot::mark("desktop-faded");
         }
@@ -278,10 +286,45 @@ fn open_gpu(
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None })
+    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default() })
+}
+
+/// The shutdown fade (`crate::boot::shutdown_alpha`): once `SHUTDOWN_REQUEST` exists the boot frame comes back over the
+/// desktop and then stays until power-off. Built on the first frame of a shutdown only.
+#[derive(Default)]
+struct Shutdown {
+    splash: Option<MemoryRenderBuffer>,
+    /// When the request was first seen.
+    since: Option<std::time::Instant>,
+    /// `SHUTDOWN_FADED` is written once.
+    faded_marked: bool,
 }
 
 impl Drm {
+    /// The boot frame over the desktop for the shutdown fade, with its opacity; None before a request.
+    fn shutdown_overlay(&mut self) -> Option<(MemoryRenderBuffer, f32)> {
+        let sd = &mut self.shutdown;
+        if sd.since.is_none() {
+            if !std::path::Path::new(crate::boot::SHUTDOWN_REQUEST).exists() {
+                return None;
+            }
+            sd.since = Some(std::time::Instant::now());
+            crate::boot::mark("shutdown-start");
+        }
+        let since = sd.since.map(|t| t.elapsed().as_secs_f64() * 1000.0);
+        if sd.splash.is_none() {
+            let mode = self.output.current_mode()?;
+            sd.splash = Some(boot_frame_buffer(mode.size.w, mode.size.h));
+        }
+        if crate::boot::shutdown_faded(since) && !sd.faded_marked {
+            sd.faded_marked = true;
+            // the account's runtime directory exists for the whole session; the marker is written once
+            let _ = std::fs::write(crate::boot::SHUTDOWN_FADED, b"1\n");
+            crate::boot::mark("shutdown-faded");
+        }
+        Some((sd.splash.clone()?, crate::boot::shutdown_alpha(since)?))
+    }
+
     fn render(&mut self, state: &mut WmState) {
         let output = self.output.clone();
         if let Some(v) = self.vulkan.as_mut() {
@@ -301,7 +344,9 @@ impl Drm {
         if splash.is_none() {
             self.boot = None;
         }
-        if let Some((buffer, alpha)) = splash {
+        // a shutdown replaces the boot's fade-in: the boot frame returns over the desktop and stays
+        let overlay = self.shutdown_overlay().or(splash);
+        if let Some((buffer, alpha)) = overlay {
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), &buffer, Some(alpha), None, None, Kind::Unspecified) {
                 top.push(SceneElement::Memory(e));
             }

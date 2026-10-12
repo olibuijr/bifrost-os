@@ -1,15 +1,22 @@
-//! `bifrostd`: keeps the `kind = "service"` packages running (docs/services.md).
+//! `bifrostd`: keeps the `kind = "service"` packages available, started on demand (docs/services.md,
+//! docs/boot-architecture.md "Services on demand").
 //!
-//! Services live like apps, under `<root>/apps/<id>/current/` with a `manifest.toml`. Each runs as
-//! a child process that listens on the unix socket named by `BIFROST_SERVICE_SOCK` and answers
-//! the `Ping` of `bifrost_proto::svc::common`. A service that exits is restarted with backoff and
-//! never given up on; a new `current` is swapped in only after it answers a ping, else the old
-//! version keeps running and the new one is not retried until `current` changes again.
+//! Services live like apps, under `<root>/apps/<id>/current/` with a `manifest.toml`. bifrostd binds each service's
+//! socket (`<root>/run/<id>.sock`) itself, and starts the service's child only when a client is waiting on that
+//! socket (socket activation). The waiting connection sits in the listen backlog until the child accepts it: the
+//! child gets the listening socket as its stdin and `BIFROST_ACTIVATED=1` (`bifrost_proto::svc::listen`). A child
+//! that exits is restarted on the next waiting connection, with backoff, and never given up on. A new `current` is
+//! swapped in only after it answers a ping on a side socket; else the old version keeps running and the new one is
+//! not retried until `current` changes again.
+//!
+//! `bifrostd desktop-ready` (run by `bifrost-desktop-ready.service`) starts `bifrost-after-desktop.target` once the
+//! first desktop frame is on screen, so the services that are not needed for the desktop start after it.
 
 use bifrost_proto::svc::{self, common};
 use std::collections::HashMap;
 use std::io;
-use std::os::unix::net::UnixStream;
+use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -20,6 +27,15 @@ pub const BACKOFF_MAX: Duration = Duration::from_secs(30);
 pub const STABLE_AFTER: Duration = Duration::from_secs(60);
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const STOP_GRACE: Duration = Duration::from_secs(3);
+/// How often the supervisor checks its children when nothing is waiting on a socket.
+pub const TICK: Duration = Duration::from_secs(2);
+/// The boot milestone log the shell and bootweave write (`<ms> <event>` lines).
+pub const BOOT_MARKS: &str = "/run/bifrost/boot-marks";
+/// The mark for the first complete desktop frame (wallpaper, menu bar and Dock presented).
+pub const DESKTOP_READY_MARK: &str = "desktop-ready";
+/// How long `desktop-ready` waits for the mark before starting the target anyway (the reveal's own ceiling is 4 s).
+pub const DESKTOP_READY_WAIT: Duration = Duration::from_secs(6);
+pub const AFTER_DESKTOP_TARGET: &str = "bifrost-after-desktop.target";
 
 /// What the supervisor needs from a service's `manifest.toml`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -120,21 +136,95 @@ pub fn healthy(sock: &Path, id: &str) -> bool {
     attempt().unwrap_or(false)
 }
 
-fn spawn(root: &Path, f: &Found, sock: &Path) -> io::Result<Child> {
-    let data = root.join("appdata").join(&f.manifest.id);
-    std::fs::create_dir_all(&data)?;
-    let _ = std::fs::remove_file(sock);
-    Command::new(f.exec_path())
-        .current_dir(&data)
-        .env("BIFROST_SERVICE_SOCK", sock)
-        .env("BIFROST_DATA", &data)
-        .env("BIFROST_SHELL_DIR", root)
-        .stdin(Stdio::null())
-        .spawn()
+/// Whether the boot marks text names `event` (lines `<ms> <event>`; the first mark of an event is the one kept).
+pub fn mark_seen(marks: &str, event: &str) -> bool {
+    marks.lines().any(|l| l.split_whitespace().nth(1) == Some(event))
 }
+
+/// Polls `marks` for `event` until it appears or `wait` passes; true when it was seen. `poll` is the pause between
+/// checks.
+pub fn wait_for_mark(marks: &Path, event: &str, wait: Duration, poll: Duration) -> bool {
+    let start = Instant::now();
+    loop {
+        if std::fs::read_to_string(marks).is_ok_and(|t| mark_seen(&t, event)) {
+            return true;
+        }
+        if start.elapsed() >= wait {
+            return false;
+        }
+        std::thread::sleep(poll);
+    }
+}
+
+/// `bifrostd desktop-ready`: waits for the first desktop frame (or the ceiling), then starts the after-desktop target
+/// without blocking. Returns whether the frame was seen before the ceiling.
+pub fn release_after_desktop(marks: &Path) -> bool {
+    let seen = wait_for_mark(marks, DESKTOP_READY_MARK, DESKTOP_READY_WAIT, Duration::from_millis(50));
+    if !seen {
+        eprintln!("bifrostd: no {DESKTOP_READY_MARK} mark within {DESKTOP_READY_WAIT:?}, starting {AFTER_DESKTOP_TARGET} anyway");
+    }
+    match Command::new("systemctl").args(["start", "--no-block", AFTER_DESKTOP_TARGET]).status() {
+        Ok(s) if s.success() => {}
+        other => eprintln!("bifrostd: cannot start {AFTER_DESKTOP_TARGET}: {other:?}"),
+    }
+    seen
+}
+
+/// The `pollfd` layout of `poll(2)`: a listening socket is readable when a connection is waiting on it.
+#[repr(C)]
+struct PollFd {
+    fd: i32,
+    events: i16,
+    revents: i16,
+}
+
+const POLLIN: i16 = 0x001;
 
 extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
+    fn poll(fds: *mut PollFd, nfds: u64, timeout: i32) -> i32;
+}
+
+/// Waits up to `timeout` for one of `fds` to become readable (a connection is waiting). With no fds it just sleeps.
+fn wait_readable(fds: &[i32], timeout: Duration) {
+    let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+    if fds.is_empty() {
+        std::thread::sleep(timeout);
+        return;
+    }
+    let mut set: Vec<PollFd> = fds.iter().map(|&fd| PollFd { fd, events: POLLIN, revents: 0 }).collect();
+    // SAFETY: `set` is a live array of `set.len()` `pollfd`-layout structs, borrowed exclusively for the whole call.
+    unsafe { poll(set.as_mut_ptr(), set.len() as u64, ms) };
+}
+
+/// Whether a connection is already waiting on `listener` (a zero-timeout poll).
+fn pending(listener: &UnixListener) -> bool {
+    let mut p = PollFd { fd: listener.as_raw_fd(), events: POLLIN, revents: 0 };
+    // SAFETY: `p` is one live `pollfd`-layout struct for the duration of the call.
+    let ready = unsafe { poll(&mut p, 1, 0) };
+    ready > 0 && p.revents & POLLIN != 0
+}
+
+/// Binds the service's socket, replacing a stale file from an earlier run.
+fn bind(root: &Path, id: &str) -> io::Result<UnixListener> {
+    let path = sock_path(root, id);
+    let _ = std::fs::remove_file(&path);
+    UnixListener::bind(&path)
+}
+
+/// Starts the child with `listener` as its stdin (socket activation).
+fn spawn(root: &Path, f: &Found, listener: &UnixListener) -> io::Result<Child> {
+    let data = root.join("appdata").join(&f.manifest.id);
+    std::fs::create_dir_all(&data)?;
+    let stdin: OwnedFd = listener.try_clone()?.into();
+    Command::new(f.exec_path())
+        .current_dir(&data)
+        .env("BIFROST_SERVICE_SOCK", sock_path(root, &f.manifest.id))
+        .env("BIFROST_DATA", &data)
+        .env("BIFROST_SHELL_DIR", root)
+        .env(svc::ACTIVATED_ENV, "1")
+        .stdin(Stdio::from(stdin))
+        .spawn()
 }
 
 /// SIGTERM, then SIGKILL after `STOP_GRACE`.
@@ -161,6 +251,8 @@ struct Running {
 
 #[derive(Default)]
 struct Slot {
+    /// the bound socket; a connection waiting here starts the service
+    listener: Option<UnixListener>,
     running: Option<Running>,
     backoff: Backoff,
     not_before: Option<Instant>,
@@ -179,21 +271,54 @@ impl Supervisor {
         Supervisor { root, slots: HashMap::new() }
     }
 
-    /// One pass: reap exits, start what is missing or due, swap changed versions, stop removed services.
+    /// How many services are running now (started on demand and not yet exited).
+    pub fn running(&self) -> usize {
+        self.slots.values().filter(|s| s.running.is_some()).count()
+    }
+
+    /// Waits up to `max` for a client to wait on an idle service's socket, or for a restart backoff to end. Returns at
+    /// once when one does, so a service starts without waiting for the periodic tick.
+    pub fn wait(&self, max: Duration) {
+        let now = Instant::now();
+        let mut timeout = max;
+        let mut fds = Vec::new();
+        for slot in self.slots.values() {
+            let (Some(l), None) = (&slot.listener, &slot.running) else { continue };
+            match slot.not_before {
+                Some(t) if t > now => timeout = timeout.min(t - now),
+                _ => fds.push(l.as_raw_fd()),
+            }
+        }
+        wait_readable(&fds, timeout);
+    }
+
+    /// One pass: bind the sockets of new services, reap exits, start idle services that have a waiting connection,
+    /// swap changed versions, stop removed services.
     pub fn tick(&mut self) {
         let found = scan(&self.root);
         let now = Instant::now();
         let gone: Vec<String> = self.slots.keys().filter(|id| !found.iter().any(|f| &f.manifest.id == *id)).cloned().collect();
         for id in gone {
-            if let Some(Slot { running: Some(mut r), .. }) = self.slots.remove(&id) {
+            if let Some(mut slot) = self.slots.remove(&id) {
                 eprintln!("bifrostd: {id} removed, stopping");
-                stop(&mut r.child);
+                if let Some(mut r) = slot.running.take() {
+                    stop(&mut r.child);
+                }
                 let _ = std::fs::remove_file(sock_path(&self.root, &id));
             }
         }
         for f in found {
             let id = f.manifest.id.clone();
             let slot = self.slots.entry(id.clone()).or_default();
+            if slot.listener.is_none() {
+                match bind(&self.root, &id) {
+                    Ok(l) => slot.listener = Some(l),
+                    Err(e) => {
+                        eprintln!("bifrostd: cannot bind {id}: {e}");
+                        continue;
+                    }
+                }
+            }
             if let Some(r) = &mut slot.running {
                 match r.child.try_wait() {
                     Ok(None) => {
@@ -210,24 +335,29 @@ impl Supervisor {
                 }
             }
             if slot.running.is_none() {
-                if slot.not_before.is_none_or(|t| now >= t) {
-                    let sock = sock_path(&self.root, &id);
-                    match spawn(&self.root, &f, &sock) {
-                        Ok(child) => {
-                            eprintln!("bifrostd: started {id} {}", f.manifest.version);
-                            slot.running = Some(Running { child, found: f, started: now, up: false });
-                        }
-                        Err(e) => {
-                            eprintln!("bifrostd: cannot start {id}: {e}");
-                            slot.not_before = Some(now + slot.backoff.failed(Duration::ZERO));
+                let due = slot.not_before.is_none_or(|t| now >= t);
+                let waiting = slot.listener.as_ref().is_some_and(pending);
+                if due && waiting {
+                    if let Some(listener) = slot.listener.as_ref() {
+                        match spawn(&self.root, &f, listener) {
+                            Ok(child) => {
+                                eprintln!("bifrostd: started {id} {} on demand", f.manifest.version);
+                                slot.running = Some(Running { child, found: f, started: now, up: false });
+                                slot.not_before = None;
+                            }
+                            Err(e) => {
+                                eprintln!("bifrostd: cannot start {id}: {e}");
+                                slot.not_before = Some(now + slot.backoff.failed(Duration::ZERO));
+                            }
                         }
                     }
                 }
             } else if slot.running.as_ref().is_some_and(|r| r.found.dir != f.dir) && slot.rejected.as_ref() != Some(&f.dir) {
-                let mut old = slot.running.take().unwrap();
-                match swap(&self.root, &mut old, &f) {
-                    Some(new) => {
+                let mut old = slot.running.take().expect("checked running above");
+                match swap(&self.root, &id, &mut old, &f) {
+                    Some((new, listener)) => {
                         slot.running = Some(new);
+                        slot.listener = Some(listener);
                         slot.rejected = None;
                     }
                     None => {
@@ -241,24 +371,33 @@ impl Supervisor {
 
     /// Stops every service (the supervisor is leaving).
     pub fn shutdown(&mut self) {
-        for (id, slot) in self.slots.drain() {
-            if let Some(mut r) = slot.running {
+        for (id, mut slot) in self.slots.drain() {
+            if let Some(mut r) = slot.running.take() {
                 stop(&mut r.child);
-                let _ = std::fs::remove_file(sock_path(&self.root, &id));
             }
+            let _ = std::fs::remove_file(sock_path(&self.root, &id));
         }
     }
 }
 
-/// Starts the new version on a side socket, waits for it to answer, then retires the old one and
-/// moves the socket into place. None (the old version stays) when the new one never answers.
-fn swap(root: &Path, old: &mut Running, new: &Found) -> Option<Running> {
-    let id = &new.manifest.id;
-    let side = run_dir(root).join(format!("{id}.sock.new"));
+/// Starts the new version on a side socket, waits for it to answer, then retires the old one and moves the side socket
+/// into place. None (the old version stays) when the new one never answers. The new version's listener is returned
+/// with it, so the supervisor keeps the socket that the running child accepts on.
+fn swap(root: &Path, id: &str, old: &mut Running, new: &Found) -> Option<(Running, UnixListener)> {
+    let side_path = run_dir(root).join(format!("{id}.sock.new"));
+    let _ = std::fs::remove_file(&side_path);
+    let side = match UnixListener::bind(&side_path) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("bifrostd: swap of {id} to {}: cannot bind: {e}", new.manifest.version);
+            return None;
+        }
+    };
     let mut child = match spawn(root, new, &side) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("bifrostd: swap of {id} to {}: cannot start: {e}", new.manifest.version);
+            let _ = std::fs::remove_file(&side_path);
             return None;
         }
     };
@@ -268,7 +407,7 @@ fn swap(root: &Path, old: &mut Running, new: &Found) -> Option<Running> {
         if child.try_wait().ok().flatten().is_some() {
             break;
         }
-        if healthy(&side, id) {
+        if healthy(&side_path, id) {
             ok = true;
             break;
         }
@@ -277,23 +416,23 @@ fn swap(root: &Path, old: &mut Running, new: &Found) -> Option<Running> {
     if !ok {
         eprintln!("bifrostd: swap of {id} to {} failed health check, keeping {}", new.manifest.version, old.found.manifest.version);
         stop(&mut child);
-        let _ = std::fs::remove_file(&side);
+        let _ = std::fs::remove_file(&side_path);
         return None;
     }
     stop(&mut old.child);
-    let main = sock_path(root, id);
-    if let Err(e) = std::fs::rename(&side, &main) {
+    if let Err(e) = std::fs::rename(&side_path, sock_path(root, id)) {
         eprintln!("bifrostd: swap of {id}: cannot move the socket: {e}");
         stop(&mut child);
         return None;
     }
     eprintln!("bifrostd: {id} now {}", new.manifest.version);
-    Some(Running { child, found: new.clone(), started: Instant::now(), up: true })
+    Some((Running { child, found: new.clone(), started: Instant::now(), up: true }, side))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn manifest_only_accepts_safe_services() {
@@ -310,5 +449,79 @@ mod tests {
         let secs: Vec<u64> = (0..8).map(|_| b.failed(Duration::from_secs(1)).as_secs()).collect();
         assert_eq!(secs, [1, 2, 4, 8, 16, 30, 30, 30]);
         assert_eq!(b.failed(STABLE_AFTER).as_secs(), 1);
+    }
+
+    #[test]
+    fn a_mark_is_matched_by_whole_event_name() {
+        let marks = "1200.5 supervisor-start\n3400.0 desktop-ready\n3500.0 desktop-first-ui\n";
+        assert!(mark_seen(marks, "desktop-ready"));
+        assert!(mark_seen(marks, "supervisor-start"));
+        assert!(!mark_seen(marks, "desktop"), "a prefix of an event is not the event");
+        assert!(!mark_seen(marks, "desktop-faded"));
+        assert!(!mark_seen("", "desktop-ready"));
+    }
+
+    #[test]
+    fn waiting_for_a_mark_returns_at_once_or_at_the_ceiling() {
+        let dir = std::env::temp_dir().join(format!("bifrostd-marks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let marks = dir.join("boot-marks");
+        std::fs::write(&marks, "10.0 desktop-ready\n").unwrap();
+        let t = Instant::now();
+        assert!(wait_for_mark(&marks, "desktop-ready", Duration::from_secs(5), Duration::from_millis(10)));
+        assert!(t.elapsed() < Duration::from_secs(1));
+        // the ceiling: a mark that never comes is reported as not seen once the wait has passed
+        let t = Instant::now();
+        assert!(!wait_for_mark(&marks, "desktop-faded", Duration::from_millis(60), Duration::from_millis(10)));
+        assert!(t.elapsed() >= Duration::from_millis(60));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A service exists on disk but is not started until a client connects to its socket.
+    #[test]
+    fn a_service_starts_only_when_a_client_is_waiting() {
+        let root = std::env::temp_dir().join(format!("bifrostd-activation-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let version = root.join("apps/is.test.echo/versions/1.0.0");
+        std::fs::create_dir_all(&version).unwrap();
+        std::fs::write(version.join("manifest.toml"), "id = \"is.test.echo\"\nversion = \"1.0.0\"\nkind = \"service\"\nexec = \"svc.sh\"\n").unwrap();
+        let exec = version.join("svc.sh");
+        std::fs::write(&exec, "#!/bin/sh\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&version, root.join("apps/is.test.echo/current")).unwrap();
+
+        let mut sup = Supervisor::new(root.clone());
+        sup.tick();
+        assert!(sock_path(&root, "is.test.echo").exists(), "the socket is bound before anyone connects");
+        assert_eq!(sup.running(), 0, "nothing starts without a client");
+
+        let _client = UnixStream::connect(sock_path(&root, "is.test.echo")).unwrap();
+        sup.tick();
+        assert_eq!(sup.running(), 1, "the waiting connection starts the service");
+        sup.shutdown();
+        assert_eq!(sup.running(), 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_socket_is_named_after_its_service_under_run() {
+        assert_eq!(sock_path(Path::new("/var/lib/springboard"), "is.olibuijr.audio"), PathBuf::from("/var/lib/springboard/run/is.olibuijr.audio.sock"));
+        assert_eq!(run_dir(Path::new("/x")), PathBuf::from("/x/run"));
+    }
+
+    #[test]
+    fn marks_skip_blank_and_one_word_lines() {
+        let marks = "\n desktop-ready\nbroken\n12.0 desktop-ready\n";
+        assert!(mark_seen(marks, "desktop-ready"), "a line with a time and an event name counts");
+        assert!(!mark_seen("\n\n", "desktop-ready"));
+        assert!(!mark_seen("broken\n", "broken"), "a line with no time has no event");
+    }
+
+    #[test]
+    fn the_desktop_ready_names_and_wait_are_the_contract() {
+        assert_eq!(DESKTOP_READY_MARK, "desktop-ready");
+        assert_eq!(AFTER_DESKTOP_TARGET, "bifrost-after-desktop.target");
+        assert!(DESKTOP_READY_WAIT > Duration::from_secs(4), "the reveal's own ceiling is 4 s");
+        assert!(TICK <= DESKTOP_READY_WAIT);
     }
 }

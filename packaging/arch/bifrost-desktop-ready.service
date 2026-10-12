@@ -1,0 +1,14 @@
+[Unit]
+Description=Start the services that wait for the first desktop frame
+Documentation=file:///usr/share/doc/bifrost/boot-architecture.md
+# Waits for the desktop-ready boot mark (6 s ceiling) and then starts bifrost-after-desktop.target.
+After=springboard.service
+Requires=springboard.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bifrostd desktop-ready
+
+[Install]
+WantedBy=graphical.target

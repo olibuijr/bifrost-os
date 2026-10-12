@@ -48,6 +48,7 @@ build() {
   rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols "$_repo/packaging/arch/recovery/guard.rs" -o "$srcdir/bifrost-update-guard"
   cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal --bin bifrost-privd ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-mcp ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked -p bifrostd ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-app --bin bifrost-log ${SPRINGBOARD_CARGO_FLAGS:---offline}
   # the new stack (docs/graphics-architecture.md): the window server and the chrome clients; shaders are compiled in
   cargo build --release --locked -p bifrost-wm --bin bifrost-wm ${SPRINGBOARD_CARGO_FLAGS:---offline}
@@ -65,6 +66,7 @@ package() {
   install -Dm755 "$srcdir/target/release/bifrost-portal" "$pkgdir/usr/bin/bifrost-portal"
   install -Dm755 "$srcdir/target/release/bifrost-privd" "$pkgdir/usr/bin/bifrost-privd"
   install -Dm755 "$srcdir/target/release/bifrost-mcp" "$pkgdir/usr/bin/bifrost-mcp"
+  install -Dm755 "$srcdir/target/release/bifrostd" "$pkgdir/usr/bin/bifrostd"
   install -Dm755 "$srcdir/target/release/bifrost-log" "$pkgdir/usr/bin/bifrost-log"
   install -Dm755 "$srcdir/target/release/bifrost-wm" "$pkgdir/usr/bin/bifrost-wm"
   for chrome in bifrost-menubar bifrost-dock bifrost-panels; do

@@ -1,0 +1,45 @@
+#!/usr/bin/ash
+# Unlock is login (docs/boot-architecture.md, task 10). The loader unlocked the encrypted root with the passphrase
+# and left the volume key in the one-time volatile EFI variable BifrostVolumeKey (payload: the segment's byte offset,
+# u64 little endian, then the key). This hook opens the root with it as a plain dm-crypt mapping (same cipher, key and
+# offset as the LUKS2 segment), deletes the variable at once, and remembers the account for the desktop's autologin.
+# No variable means no unlock at boot (an unencrypted machine, or a passphrase screen was skipped): nothing happens.
+# Order in HOOKS: `bifrost-unlock` must run before `filesystems`, and the kernel command line must name the root as
+# root=/dev/mapper/bifrost-root on an encrypted install, so the mapping this hook opens is the one that gets mounted.
+
+BIFROST_EFIVAR=BifrostVolumeKey-b9a7c3e1-3f2d-4e8a-9c61-0b5e7d2a4f10
+BIFROST_UNLOCKED_USER=/run/bifrost-unlocked-user
+
+run_hook() {
+    efivars=/sys/firmware/efi/efivars
+    var="$efivars/$BIFROST_EFIVAR"
+    mountpoint -q "$efivars" 2>/dev/null || mount -t efivarfs efivarfs "$efivars" 2>/dev/null || return 0
+    [ -r "$var" ] || return 0
+
+    user=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^bifrost\.user=//p')
+    # efivarfs files start with 4 attribute bytes; the payload follows.
+    offset=$(od -An -t u8 -j 4 -N 8 "$var" | tr -d ' ')
+    keyfile=/run/bifrost-volume-key
+    ( umask 077; tail -c +13 "$var" > "$keyfile" )
+    # One time only: the key leaves the EFI variable store here, before anything can fail.
+    chattr -i "$var" 2>/dev/null
+    rm -f "$var"
+
+    dev=$(blkid -t TYPE=crypto_LUKS -o device | head -n 1)
+    if [ -n "$dev" ] && [ -n "$offset" ] && [ -s "$keyfile" ]; then
+        bits=$(( $(stat -c %s "$keyfile") * 8 ))
+        cryptsetup open --type plain --cipher aes-xts-plain64 --key-size "$bits" \
+            --key-file "$keyfile" --offset $(( offset / 512 )) "$dev" bifrost-root
+    fi
+    rm -f "$keyfile"
+    [ -n "$user" ] && printf '%s\n' "$user" > "$BIFROST_UNLOCKED_USER"
+    return 0
+}
+
+run_latehook() {
+    # The desktop reads the account from /run after switch_root; the root's /run is the one it sees.
+    [ -s "$BIFROST_UNLOCKED_USER" ] || return 0
+    mkdir -p /new_root/run/bifrost
+    cp "$BIFROST_UNLOCKED_USER" /new_root/run/bifrost/autologin
+    rm -f "$BIFROST_UNLOCKED_USER"
+}

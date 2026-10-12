@@ -726,7 +726,8 @@ impl Shell {
             gallery_page: 0,
             chrome: Chrome::default(),
             info: Info::default(),
-            screen: Screen::Lock,
+            // An unlock at boot is the login: the desktop starts, no lock screen (task 10).
+            screen: if login::take_autologin().is_some() { Screen::Home } else { Screen::Lock },
             screen_on: true,
             anim: None,
             lock_drag: None,
@@ -2729,6 +2730,8 @@ impl Shell {
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
+        // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
+        self.audio.arm();
         self.dirty = false;
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);

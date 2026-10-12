@@ -1,10 +1,12 @@
 //! BifrOSt OS shell. Shared rendering and infrastructure live in independent
 //! bifrost-render, bifrost-ui and bifrost-core crates.
 
+pub mod bootreveal;
 pub mod bootsplash;
 pub mod catalog;
 pub mod cff;
 pub mod emoji;
+pub mod first_frame_cache;
 pub mod font;
 pub mod gfx;
 pub mod gpu;
@@ -16,6 +18,7 @@ pub mod layout;
 pub mod media;
 pub mod pager;
 pub mod pngenc;
+pub mod pstore;
 #[cfg(target_os = "linux")]
 pub mod privd;
 #[cfg(target_os = "linux")]

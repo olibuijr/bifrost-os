@@ -697,6 +697,7 @@ version = "0.1.0"
 dependencies = [
  "bifrost-gpu",
  "bifrost-layers",
+ "bootweave-frame",
  "png",
  "smithay",
  "tempfile",
@@ -919,6 +920,10 @@ dependencies = [
  "ryu-js",
  "static_assertions",
 ]
+
+[[package]]
+name = "bootweave-frame"
+version = "0.1.0"
 
 [[package]]
 name = "bumpalo"
@@ -3728,6 +3733,7 @@ dependencies = [
  "bifrost-render",
  "bifrost-ui",
  "boa_engine",
+ "bootweave-frame",
  "cssparser 0.37.0",
  "cssparser 0.38.0",
  "deildu-rust",

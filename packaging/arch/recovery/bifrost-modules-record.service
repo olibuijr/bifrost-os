@@ -1,0 +1,19 @@
+[Unit]
+Description=Record the kernel modules this machine used (BifrOSt boot image)
+# Runs once the desktop is up, so the list covers what the first desktop frame needed.
+After=springboard.service
+Wants=springboard.service
+
+[Service]
+Type=oneshot
+# The boot marks are written by the session (docs/boot-architecture.md, "Reveal once"); wait for desktop-ready, the
+# first complete desktop frame, for at most 10 minutes.
+ExecStartPre=/bin/sh -c 'for i in $(seq 600); do grep -qsE "desktop-ready|desktop-first-ui" /run/bifrost/boot-marks && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/bin/bifrost-update-guard record-modules
+# Rebuilding the initramfs is slow and must never compete with the desktop.
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
