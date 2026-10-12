@@ -3,8 +3,10 @@
 //! hosts it through the SDK for the Wayland desktop.
 
 use notes::notes;
+use notes::notes::system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::widgets_timeline;
 use bifrost_app::KeyInput;
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
@@ -26,6 +28,8 @@ struct NotesApp {
     next_index: f64,
     /// what state restoration last saw (the list's view and the open note id), to notice a change
     restorable: Option<(notes::View, Option<String>)>,
+    /// the recent-note titles last given to the widget timeline (sent again only when they change)
+    widget: Option<Vec<String>>,
 }
 
 /// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
@@ -70,7 +74,7 @@ impl NotesApp {
         for (note, folder) in n.indexable() {
             current.insert(note.id.clone(), note.modified);
             if self.indexed.get(&note.id) != Some(&note.modified) {
-                let body: String = note.text.lines().map(str::trim).filter(|l| !l.is_empty()).skip(1).take(3).collect::<Vec<_>>().join(" ");
+                let body = system::index_body(&note.text);
                 let mut set = CSSearchableItemAttributeSet::new(note.title()).content_description(&body);
                 if !folder.is_empty() {
                     set = set.keywords(&[folder]);
@@ -88,6 +92,18 @@ impl NotesApp {
         }
         self.indexed = current;
     }
+
+    /// Gives the widget timeline the newest notes when their titles or order changed (or on `force`, when the shell
+    /// asked for a reload). Nothing is sent while the list is the same.
+    fn sync_widget(&mut self, ctx: &Ctx, force: bool) {
+        let Some(n) = &self.notes else { return };
+        let titles = system::recent_titles(&n.indexable());
+        if !force && self.widget.as_ref() == Some(&titles) {
+            return;
+        }
+        system::reload_widget(ctx, &titles, bifrost_app::proto::sys::now_ms() / 1000.0);
+        self.widget = Some(titles);
+    }
 }
 
 /// evdev O: Cmd+O is File > Import to Notes.
@@ -101,6 +117,8 @@ const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
 /// evdev Z (the Undo and Redo chords are the editor's: Cmd+Z, Cmd+Shift+Z).
 const KEY_Z: u32 = 44;
+/// evdev C: Cmd+C copies the editor's selection to the pasteboard (rich text with a plain fallback).
+const KEY_C: u32 = 46;
 
 impl NotesApp {
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
@@ -305,6 +323,13 @@ impl App for NotesApp {
                         self.open_import(ctx);
                         return false;
                     }
+                    // Copy with a selection in the editor goes to the pasteboard; without one the chord is left alone
+                    if key == KEY_C && mods & (CHORD_CTRL | CHORD_META) != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 {
+                        if let Some(md) = n.selected_markdown() {
+                            system::copy(ctx, &md);
+                            return false;
+                        }
+                    }
                     return n.chord(&ctx.ui, key, mods, bifrost_app::proto::sys::now_ms());
                 }
                 if k == KeyInput::Code(1) {
@@ -390,6 +415,25 @@ impl App for NotesApp {
         }
     }
 
+    /// The widget timeline's reload request from the shell: the recent notes are sent again.
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if let Some(widgets_timeline::Event::Reload { kind }) = widgets_timeline::parse_event(service, event, body) {
+            if kind == system::WIDGET_KIND {
+                self.sync_widget(ctx, true);
+            }
+        }
+        false
+    }
+
+    /// A service call's error (an older shell answers "no service ..." for a service it does not have) is logged;
+    /// the app keeps going without the feature.
+    fn service_reply(&mut self, ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+        if let Err(e) = result {
+            ctx.log(&format!("service: {e}"));
+        }
+        true
+    }
+
     fn continue_activity(&mut self, ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
         let now = bifrost_app::proto::sys::now_ms();
         activity.activity_type == bifrost_app::quicksearch::ACTION_TYPE && self.notes.as_mut().is_some_and(|n| n.show_note(&ctx.ui, &activity.unique_identifier, now))
@@ -399,6 +443,7 @@ impl App for NotesApp {
         if t >= self.next_index && self.notes.is_some() {
             self.next_index = t + INDEX_EVERY_MS;
             self.sync_index(ctx);
+            self.sync_widget(ctx, false);
         }
         let Some(n) = &mut self.notes else { return false };
         if t - self.last_wall >= 1000.0 {
@@ -426,5 +471,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None });
 }
