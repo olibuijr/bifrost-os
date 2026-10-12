@@ -86,4 +86,5 @@ pub mod surface_registry;
 pub mod exception_policy;
 pub mod resource_exception;
 pub mod usb_pipe;
+pub mod usb_printer;
 pub mod serial_line;

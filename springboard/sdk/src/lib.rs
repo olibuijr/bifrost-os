@@ -67,6 +67,7 @@ pub mod status_item;
 pub mod share;
 pub mod print;
 pub mod print_panel;
+pub mod usb_printer;
 pub mod pasteboard;
 pub mod dnd;
 pub mod review;
