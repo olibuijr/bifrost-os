@@ -4,13 +4,42 @@
 mod games;
 mod phase;
 mod solitaire;
+mod system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;
 use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_core::json::Json;
+use system::{Act, Link};
 
 struct GamesApp {
     app: Option<games::Games>,
+    /// the shell's controller, power and display services, as the games see them
+    link: Link,
+}
+
+impl GamesApp {
+    /// Passes the power and display state on to the game (it draws less motion in Low Power Mode).
+    fn sync(&mut self) {
+        if let Some(c) = &mut self.app {
+            c.set_reduced_effects(self.link.reduce_effects());
+            c.set_display(self.link.display());
+        }
+    }
+
+    /// Runs what a system event asked for. Returns true when the screen needs a frame.
+    fn handle(&mut self, act: Option<Act>) -> bool {
+        self.sync();
+        let Some(act) = act else { return false };
+        let Some(c) = &mut self.app else { return false };
+        match act {
+            Act::Slide(dir) => c.gamepad_slide(dir),
+            Act::NewGame => c.gamepad_new_game(),
+            Act::Notice(text) => c.set_notice(Some(text)),
+            Act::State => {}
+        }
+        true
+    }
 }
 
 impl App for GamesApp {
@@ -20,14 +49,16 @@ impl App for GamesApp {
 
     fn configure(&mut self, ctx: &Ctx) {
         let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
-        match &mut self.app {
-            Some(c) => c.set_size(w, h),
-            None => {
-                // Best scores are written when they are set, and a game in progress is not kept: nothing is unsaved.
-                ctx.enable_sudden_termination();
-                self.app = Some(games::Games::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone()));
-            }
+        if let Some(c) = &mut self.app {
+            c.set_size(w, h);
+            return;
         }
+        // Best scores are written when they are set, and a game in progress is not kept: nothing is unsaved.
+        ctx.enable_sudden_termination();
+        self.app = Some(games::Games::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone()));
+        // once, when the app opens: the replies arrive in `service_reply`, the changes in `service_event`
+        self.link.start(ctx);
+        self.sync();
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -47,6 +78,22 @@ impl App for GamesApp {
         };
         let _ = c.touch(&ctx.ui, e, t);
         true
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        let taken = self.link.on_reply(request, result);
+        if taken {
+            self.sync();
+        }
+        taken
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        let act = self.link.on_event(service, event, body);
+        if act.is_none() {
+            return false;
+        }
+        self.handle(act)
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
@@ -72,5 +119,5 @@ impl App for GamesApp {
 }
 
 fn main() {
-    bifrost_app::run(GamesApp { app: None });
+    bifrost_app::run(GamesApp { app: None, link: Link::new() });
 }

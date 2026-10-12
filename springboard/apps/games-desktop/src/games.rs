@@ -87,6 +87,12 @@ pub struct Games {
     dirty: bool,
     cache: TextCache,
     cache_style: (u32, u32, bool, u32),
+    /// Low Power Mode or a serious thermal state: the clock redraws less often (see `clock_step`).
+    reduced: bool,
+    /// The main display's visible size in points, from the shell's `screens` service.
+    display: Option<(f32, f32)>,
+    /// A line from the system (a controller plugged in or out) shown in the message row until the next touch.
+    notice: Option<String>,
 }
 
 /// A non-zero xorshift seed taken from the wall clock, so every launch deals differently.
@@ -121,6 +127,9 @@ impl Games {
             dirty: true,
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold, LABEL.now()),
+            reduced: false,
+            display: None,
+            notice: None,
         };
         g.new_2048();
         g
@@ -139,6 +148,34 @@ impl Games {
         self.w = w;
         self.h = h;
         self.dirty = true;
+    }
+
+    /// Lower the motion of the game (Low Power Mode, serious heat) or restore it.
+    pub fn set_reduced_effects(&mut self, on: bool) {
+        if self.reduced != on {
+            self.reduced = on;
+            self.dirty = true;
+        }
+    }
+
+    /// The main display's visible size in points, or None when the shell has not reported a display.
+    pub fn set_display(&mut self, display: Option<(f32, f32)>) {
+        self.display = display;
+    }
+
+    /// Shows `text` in the message row until the next touch; `None` restores the game's own hint.
+    pub fn set_notice(&mut self, text: Option<String>) {
+        self.notice = text;
+        self.dirty = true;
+    }
+
+    /// Seconds between two redraws of the Minesweeper clock: every second, or every 5 s with reduced effects.
+    fn clock_step(&self) -> u32 {
+        if self.reduced {
+            5
+        } else {
+            1
+        }
     }
 
     fn rand(&mut self) -> u32 {
@@ -412,6 +449,28 @@ impl Games {
         self.dirty = true;
     }
 
+    /// A slide from a controller's direction pad or left stick (`dir` as `shift`: 0 left, 1 right, 2 up, 3 down).
+    /// Only 2048 slides; the other games have no cursor for a controller yet.
+    pub fn gamepad_slide(&mut self, dir: u8) {
+        if self.game == Game::G2048 {
+            self.shift(dir);
+            self.dirty = true;
+        }
+    }
+
+    /// The controller's South button: a new game, but only once the current one is over, so a game in progress is
+    /// never dropped by a stray press. A won 2048 board can still be played on, so only a lost one counts as over.
+    pub fn gamepad_new_game(&mut self) {
+        let over = match self.game {
+            Game::G2048 => self.p2048.phase() == Phase::Lost,
+            Game::Mines => self.pm.phase() != Phase::Playing,
+            Game::Solitaire => self.sol.won(),
+        };
+        if over {
+            self.command(BAR_NEW);
+        }
+    }
+
     /// The board sits under the status and message rows, centred in what is left of the content area.
     fn board(&self, ui: &Ui) -> (f32, f32, f32) {
         let (cx, cy, cw, ch) = self.content(ui);
@@ -449,6 +508,7 @@ impl Games {
         match ev {
             Event::Down(x, y) => {
                 self.down = (x, y);
+                self.notice = None;
                 if self.game == Game::Solitaire && in_content(x, y) {
                     let seed = self.rand();
                     self.sol.touch(ui, ev, cwi, self.h, seed);
@@ -508,9 +568,13 @@ impl Games {
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
         if let (Some(t0), Game::Mines, Phase::Playing) = (self.started, self.game, self.pm.phase()) {
+            // the shown time is whole seconds, rounded down to the redraw step; the best time is taken from the exact
+            // moment of the winning dig (see `dig`), so a slower redraw never changes a record
+            let step = self.clock_step();
             let e = ((t - t0) / 1000.0) as u32;
-            if e != self.elapsed {
-                self.elapsed = e;
+            let shown = e - e % step;
+            if shown != self.elapsed {
+                self.elapsed = shown;
                 self.dirty = true;
             }
         }
@@ -519,13 +583,25 @@ impl Games {
 
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
         let t0 = self.started?;
-        (self.game == Game::Mines && self.pm.phase() == Phase::Playing).then(|| t0 + (self.elapsed as f64 + 1.0) * 1000.0)
+        (self.game == Game::Mines && self.pm.phase() == Phase::Playing)
+            .then(|| t0 + (self.elapsed as f64 + self.clock_step() as f64) * 1000.0)
     }
 
     pub fn describe(&self) -> String {
+        let display = match self.display {
+            Some((w, h)) => format!("{w}x{h}"),
+            None => "none".to_string(),
+        };
         format!(
-            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\n{}",
-            self.game, self.score, self.best_2048, self.pm.phase(), self.best_mines, self.sol.describe()
+            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\n{}",
+            self.game,
+            self.score,
+            self.best_2048,
+            self.pm.phase(),
+            self.best_mines,
+            if self.reduced { "reduced" } else { "full" },
+            display,
+            self.sol.describe()
         )
     }
 
@@ -580,17 +656,26 @@ impl Games {
         };
         let r = (cx, cy + ui.pt(STATUS_TOP_PT), cw, ui.pt(ROW_PT));
         self.text_c(s, ui, &status, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), r);
-        let msg = match (self.game, self.p2048.phase(), self.pm.phase()) {
-            (Game::G2048, Phase::Won, _) => "You made 2048!",
-            (Game::G2048, Phase::Lost, _) => "No moves left",
-            (Game::Mines, _, Phase::Won) => "Cleared!",
-            (Game::Mines, _, Phase::Lost) => "Boom",
-            (Game::G2048, _, _) => "Swipe or drag to slide tiles",
+        let result = match (self.game, self.p2048.phase(), self.pm.phase()) {
+            (Game::G2048, Phase::Won, _) => Some("You made 2048!"),
+            (Game::G2048, Phase::Lost, _) => Some("No moves left"),
+            (Game::Mines, _, Phase::Won) => Some("Cleared!"),
+            (Game::Mines, _, Phase::Lost) => Some("Boom"),
+            _ => None,
+        };
+        let hint = match self.game {
+            Game::G2048 => "Swipe or drag to slide tiles",
             _ => if self.flag_mode { "Flag mode: click to mark" } else { "Click to dig" },
+        };
+        // a result always wins the row; a system notice (a controller) replaces only the hint
+        let msg: String = match (result, &self.notice) {
+            (Some(m), _) => m.to_string(),
+            (None, Some(n)) => ui.fit(n, MAC_BODY_PT, cw),
+            (None, None) => hint.to_string(),
         };
         let r = (cx, cy + ui.pt(MSG_TOP_PT), cw, ui.pt(ROW_PT));
         let color = if msg == "Boom" || msg == "No moves left" { SYSTEM_RED } else if msg == "Cleared!" || msg.starts_with("You") { SYSTEM_GREEN } else { LABEL.now() };
-        self.text_c(s, ui, msg, MAC_BODY_PT, Weight::Semibold, color, r);
+        self.text_c(s, ui, &msg, MAC_BODY_PT, Weight::Semibold, color, r);
         match self.game {
             Game::G2048 => self.draw_2048(s, ui),
             Game::Mines => self.draw_mines(s, ui),
@@ -648,18 +733,20 @@ impl Games {
     }
 }
 
+/// The kit with the shell's font and symbols, for tests of the app and of its glue (`system.rs`).
+#[cfg(test)]
+pub(crate) fn test_ui() -> Ui {
+    use bifrost_app::kit::Font;
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+    let data: &'static [u8] = Box::leak(std::fs::read(format!("{dir}/SFUI.ttf")).unwrap().into_boxed_slice());
+    let mut ui = Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
+    ui.symbols = springboard::symbols::Symbols::load(dir);
+    ui
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_ui() -> Ui {
-        use bifrost_app::kit::Font;
-        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
-        let data: &'static [u8] = Box::leak(std::fs::read(format!("{dir}/SFUI.ttf")).unwrap().into_boxed_slice());
-        let mut ui = Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
-        ui.symbols = springboard::symbols::Symbols::load(dir);
-        ui
-    }
 
     fn centre(r: (f32, f32, f32, f32)) -> (f32, f32) {
         (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
@@ -793,6 +880,63 @@ mod slide_tests {
     fn an_empty_or_full_unmatched_line_is_unchanged() {
         assert_eq!(Games::slide([0, 0, 0, 0]), ([0, 0, 0, 0], 0));
         assert_eq!(Games::slide([2, 4, 8, 16]), ([2, 4, 8, 16], 0));
+    }
+
+    #[test]
+    fn a_controller_slides_only_the_2048_board() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.grid = [[0; N]; N];
+        g.grid[0][0] = 2;
+        g.game = Game::Mines;
+        g.gamepad_slide(1);
+        assert_eq!(g.grid[0][0], 2, "a slide on the minesweeper board must not touch the 2048 grid");
+        g.game = Game::G2048;
+        g.gamepad_slide(1);
+        // the tile slides to the right edge; a spawn can only fill an empty cell, so the 2 stays there
+        assert_eq!(g.grid[0][N - 1], 2);
+    }
+
+    #[test]
+    fn a_controller_starts_a_new_game_only_once_the_game_is_over() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.score = 77;
+        g.gamepad_new_game();
+        assert_eq!(g.score, 77, "a game in progress is not dropped by a stray press");
+        g.p2048.go(Phase::Lost);
+        g.gamepad_new_game();
+        assert_eq!(g.score, 0);
+        assert_eq!(g.p2048.phase(), Phase::Playing);
+    }
+
+    #[test]
+    fn reduced_effects_redraw_the_clock_every_five_seconds_and_the_record_stays_exact() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.game = Game::Mines;
+        g.new_mines();
+        g.started = Some(0.0);
+        g.set_reduced_effects(true);
+        g.tick(&ui, 2000.0);
+        assert_eq!(g.elapsed, 0, "two seconds are not shown with a 5 s step");
+        assert_eq!(g.next_wake(2000.0), Some(5000.0));
+        g.tick(&ui, 5000.0);
+        assert_eq!(g.elapsed, 5);
+        g.set_reduced_effects(false);
+        g.tick(&ui, 6000.0);
+        assert_eq!(g.elapsed, 6);
+        assert_eq!(g.next_wake(6000.0), Some(7000.0));
+    }
+
+    #[test]
+    fn the_describe_dump_reports_the_effects_and_the_display() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        assert!(g.describe().contains("games_effects=full\ngames_display_pt=none\n"));
+        g.set_reduced_effects(true);
+        g.set_display(Some((1440.0, 816.0)));
+        assert!(g.describe().contains("games_effects=reduced\ngames_display_pt=1440x816\n"));
     }
 }
 
