@@ -861,6 +861,8 @@ pub mod text_markup;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod gatt_server;
+pub mod advertising;
 pub mod pip_window;
 pub mod content_proposal;
 pub mod route_auth;

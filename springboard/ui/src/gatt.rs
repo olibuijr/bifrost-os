@@ -112,6 +112,11 @@ impl Uuid {
     pub fn to_bytes_le(&self) -> [u8; 16] {
         self.0.to_le_bytes()
     }
+
+    /// Inverse of `to_bytes_le`: builds a 128-bit UUID from its little-endian bytes.
+    pub fn from_bytes_le(bytes: [u8; 16]) -> Uuid {
+        Uuid(u128::from_le_bytes(bytes))
+    }
 }
 
 /// Characteristic properties: which operations the remote characteristic allows. Bit values follow the
