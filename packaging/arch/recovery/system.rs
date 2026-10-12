@@ -293,8 +293,91 @@ fn module_path(name: &str) -> Option<String> {
 }
 
 /// The mkinitcpio drop-in for a module list. It overrides the generic `MODULES=` of `/etc/mkinitcpio.conf`.
+///
+/// It also keeps the image small: the generic `microcode` hook is dropped (the image carries one early cpio for this
+/// CPU only, see `cpu_microcode`), `bifrost-firmware` prunes `usr/lib/firmware` to what the drivers requested on the
+/// recorded boot, and zstd -19 shrinks the archive (decompression speed is the same at any level).
 pub fn modules_conf(names: &[String]) -> String {
-    format!("MODULES=({})\n", names.join(" "))
+    format!(
+        "MODULES=({})\nHOOKS=($(printf '%s\\n' \"${{HOOKS[@]}}\" | grep -vx microcode))\nHOOKS+=(bifrost-firmware)\nCOMPRESSION=\"zstd\"\nCOMPRESSION_OPTIONS=(-19)\n",
+        names.join(" ")
+    )
+}
+
+/// Firmware file names the kernel log says were requested (`i915/skl_dmc_ver1_27.bin`), without the compression
+/// suffix, sorted and unique. Only relative paths with a firmware extension count.
+pub fn firmware_names(dmesg: &str) -> Vec<String> {
+    const EXT: &[&str] = &[".bin", ".ucode", ".fw", ".hex", ".sbin", ".mbn", ".elf"];
+    let mut names: Vec<String> = dmesg
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| matches!(c, '\'' | '"' | ',' | ';' | ':' | '(' | ')' | '[' | ']')))
+        .map(|t| t.strip_suffix(".zst").or_else(|| t.strip_suffix(".xz")).unwrap_or(t))
+        .filter(|t| {
+            !t.starts_with('/')
+                && !t.contains("..")
+                && t.contains('/')
+                && EXT.iter().any(|e| t.ends_with(e))
+                && t.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'_' | b'-' | b'.'))
+        })
+        .map(str::to_owned)
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// The early cpio entry and the firmware file holding the microcode for the CPU in `cpuinfo` (`/proc/cpuinfo`):
+/// Intel ships one file per family-model-stepping, AMD one per family. `None` for anything else.
+pub fn cpu_microcode(cpuinfo: &str) -> Option<(&'static str, String)> {
+    let field = |k: &str| {
+        cpuinfo
+            .lines()
+            .find(|l| l.split(':').next().is_some_and(|n| n.trim() == k))
+            .and_then(|l| l.split_once(':'))
+            .map(|(_, v)| v.trim().to_owned())
+    };
+    let num = |k: &str| field(k)?.parse::<u32>().ok();
+    match field("vendor_id")?.as_str() {
+        "GenuineIntel" => Some((
+            "GenuineIntel.bin",
+            format!(
+                "/usr/lib/firmware/intel-ucode/{:02x}-{:02x}-{:02x}",
+                num("cpu family")?,
+                num("model")?,
+                num("stepping")?
+            ),
+        )),
+        "AuthenticAMD" => {
+            let fam = num("cpu family")?;
+            Some(("AuthenticAMD.bin", format!("/usr/lib/firmware/amd-ucode/microcode_amd_fam{fam:x}h.bin")))
+        }
+        _ => None,
+    }
+}
+
+/// Writes an uncompressed early cpio holding only this CPU's microcode. `None` when it cannot be made; the caller
+/// then falls back to the distribution's full `*-ucode.img`.
+fn build_microcode_cpio() -> Option<String> {
+    let (name, source) = cpu_microcode(&fs::read_to_string("/proc/cpuinfo").ok()?)?;
+    let stage = Path::new("/run/bifrost-ucode");
+    let _ = fs::remove_dir_all(stage);
+    let dir = stage.join("kernel/x86/microcode");
+    fs::create_dir_all(&dir).ok()?;
+    fs::copy(&source, dir.join(name)).ok()?;
+    let out = "/run/bifrost-ucode.cpio";
+    let stage_s = stage.to_string_lossy().into_owned();
+    run("bsdtar", &["--format", "newc", "-cf", out, "-C", &stage_s, "kernel"]).ok()?;
+    let _ = fs::remove_dir_all(stage);
+    Some(out.to_owned())
+}
+
+/// Whether the mkinitcpio configuration text already embeds microcode in the initramfs (`microcode` in `HOOKS`),
+/// in which case passing the `*-ucode.img` files as well would carry it twice.
+pub fn hooks_embed_microcode(conf: &str) -> bool {
+    conf.lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("HOOKS=") || l.starts_with("HOOKS+="))
+        .any(|l| l.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').any(|w| w == "microcode"))
 }
 
 /// FNV-1a (64 bit) over the sorted, unique hardware ids: changes when a device is added, removed or swapped.
@@ -372,7 +455,19 @@ pub fn record_modules() -> io::Result<bool> {
         return Err(err("No loaded modules to record"));
     }
     let hardware = hardware_now();
-    let same = fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names)
+    // the firmware the drivers requested this boot; an empty log leaves the recorded list (and the image) alone
+    let firmware = Command::new("dmesg")
+        .output()
+        .map(|o| firmware_names(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default();
+    let fw_text = firmware.join("\n");
+    let fw_changed = !firmware.is_empty()
+        && fs::read_to_string(store.join("firmware")).map_or(true, |s| s.trim() != fw_text);
+    if fw_changed {
+        save(&store.join("firmware"), fw_text.as_bytes())?;
+    }
+    let same = !fw_changed
+        && fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names)
         && fs::read_to_string(store.join("hardware")).is_ok_and(|s| s.trim() == hardware);
     if same {
         // the list is the same, but an update can change how the drop-in is made from it (0.6.3 kept only the boot
@@ -383,6 +478,12 @@ pub fn record_modules() -> io::Result<bool> {
             return Ok(true);
         }
         return Ok(false);
+    }
+    if fw_changed && fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names) {
+        // modules and drop-in are unchanged, but the firmware list is a build input of the initramfs
+        reconcile_modules()?;
+        run("mkinitcpio", &["-p", kernel()])?;
+        return build_uki().map(|_| true);
     }
     save(&store.join("modules"), names.join("\n").as_bytes())?;
     save(&store.join("hardware"), hardware.as_bytes())?;
@@ -398,18 +499,34 @@ pub fn build_boot_image() -> io::Result<()> {
     build_uki().map(|_| ())
 }
 
+fn ucode_images() -> io::Result<Vec<String>> {
+    let mut v: Vec<String> = fs::read_dir("/boot")?
+        .flatten()
+        .map(|e| e.path().to_string_lossy().into_owned())
+        .filter(|p| p.ends_with("-ucode.img"))
+        .collect();
+    v.sort();
+    Ok(v)
+}
+
 /// Builds `EFI/BIFROST/bifrost.efi` from the kernel, the microcode and the initramfs, with the boot line's options.
 /// The old image becomes `bifrost-previous.efi`. `boot.cfg` is rewritten only after the new image exists, so a
 /// failed build leaves the last good boot line in place. Returns whether the image changed.
 pub fn build_uki() -> io::Result<bool> {
     let esp = Path::new(ESP);
     let line = fs::read_to_string(boot_config())?;
-    let mut microcode: Vec<String> = fs::read_dir("/boot")?
-        .flatten()
-        .map(|e| e.path().to_string_lossy().into_owned())
-        .filter(|p| p.ends_with("-ucode.img"))
-        .collect();
-    microcode.sort();
+    // One early cpio, this CPU's microcode only. Without the per-machine drop-in the initramfs' own microcode hook
+    // already embeds it (never pass the ucode images on top of that); with a drop-in but no cpio, fall back to them.
+    let conf = fs::read_to_string("/etc/mkinitcpio.conf").unwrap_or_default();
+    let mut microcode: Vec<String> = Vec::new();
+    if Path::new(MODULES_DROPIN).exists() {
+        match build_microcode_cpio() {
+            Some(cpio) => microcode.push(cpio),
+            None => microcode = ucode_images()?,
+        }
+    } else if !hooks_embed_microcode(&conf) {
+        microcode = ucode_images()?;
+    }
     let out = esp.join("bifrost.efi");
     let tmp = esp.join("bifrost.efi.new");
     let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{}", kernel())];
@@ -499,7 +616,40 @@ mod uki_tests {
 
     #[test]
     fn modules_conf_overrides_the_generic_set() {
-        assert_eq!(modules_conf(&module_names("uas 1 0\nbtrfs 1 0\n")), "MODULES=(btrfs uas)\n");
+        let conf = modules_conf(&module_names("uas 1 0\nbtrfs 1 0\n"));
+        assert!(conf.starts_with("MODULES=(btrfs uas)\n"));
+        assert!(conf.contains("grep -vx microcode"));
+        assert!(conf.contains("HOOKS+=(bifrost-firmware)"));
+        assert!(conf.contains("COMPRESSION=\"zstd\""));
+    }
+
+    #[test]
+    fn firmware_names_come_from_the_kernel_log() {
+        let log = "[ 1.0] i915 0000:00:02.0: [drm] Finished loading DMC firmware i915/skl_dmc_ver1_27.bin (v1.27)\n\
+                   [ 1.1] i915 0000:00:02.0: [drm] GuC firmware i915/skl_guc_70.1.1.bin.zst: fetch\n\
+                   [ 1.2] loading /lib/modules/x/kernel/foo.bin and ../evil/x.bin and nvme0n1";
+        assert_eq!(firmware_names(log), vec!["i915/skl_dmc_ver1_27.bin", "i915/skl_guc_70.1.1.bin"]);
+    }
+
+    #[test]
+    fn microcode_is_picked_for_this_cpu_only() {
+        let intel = "vendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 94\nstepping\t: 3\n";
+        assert_eq!(
+            cpu_microcode(intel),
+            Some(("GenuineIntel.bin", "/usr/lib/firmware/intel-ucode/06-5e-03".to_owned()))
+        );
+        let amd = "vendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\n";
+        assert_eq!(
+            cpu_microcode(amd),
+            Some(("AuthenticAMD.bin", "/usr/lib/firmware/amd-ucode/microcode_amd_fam19h.bin".to_owned()))
+        );
+        assert_eq!(cpu_microcode("vendor_id : Other\n"), None);
+    }
+
+    #[test]
+    fn microcode_hook_in_hooks_is_detected() {
+        assert!(hooks_embed_microcode("HOOKS=(base udev autodetect microcode modconf)\n"));
+        assert!(!hooks_embed_microcode("# HOOKS=(microcode)\nHOOKS=(base udev)\n"));
     }
 
     #[test]
