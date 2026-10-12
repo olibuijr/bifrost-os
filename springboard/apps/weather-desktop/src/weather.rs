@@ -1241,8 +1241,17 @@ impl Weather {
                 c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(WHITE, 40));
                 self.put(&mut c, ui, &units.degrees(tick), MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(CHART_AXIS - SPACE_S), p(CHART_TOP + y));
             }
+            // area mark: the fill from the line down to the plot's bottom edge, one column per point
+            let line = insights::temperature_line(&plot, &f.hours);
+            let base = CHART_PLOT_TOP + CHART_PLOT_H;
+            let col = ui.pt(1.0) + 1.0;
+            for (x, top) in insights::area_columns(&line, 1.0) {
+                let top_px = p(CHART_TOP + top as f32);
+                let bottom_px = p(CHART_TOP + base);
+                c.fill_rrect(card_x + ui.pt(x as f32), top_px, col, bottom_px - top_px, 0.0, fade(WHITE, 40));
+            }
             let d = ui.pt(2.0);
-            for pair in insights::temperature_line(&plot, &f.hours).windows(2) {
+            for pair in line.windows(2) {
                 let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
                 let steps = ((bx - ax).abs().max((by - ay).abs()) / 0.5).ceil().max(1.0) as usize;
                 for k in 0..=steps {

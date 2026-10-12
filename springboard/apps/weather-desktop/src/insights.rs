@@ -62,6 +62,29 @@ pub fn temperature_line(plot: &Plot, hours: &[Hour]) -> Vec<(f64, f64)> {
     line_path(plot, &temperature_points(hours), Interpolation::Linear)
 }
 
+/// The area under the temperature line as a set of columns: one per `step` points across the line, each with the y of
+/// the line at that x (the top of the fill). Empty for fewer than two points or a step that is not positive.
+pub fn area_columns(line: &[(f64, f64)], step: f64) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    if line.len() < 2 || !(step > 0.0) {
+        return out;
+    }
+    let x1 = line[line.len() - 1].0;
+    let mut x = line[0].0;
+    let mut seg = 0;
+    while x <= x1 + 1e-9 {
+        while seg + 2 < line.len() && line[seg + 1].0 < x {
+            seg += 1;
+        }
+        let (ax, ay) = line[seg];
+        let (bx, by) = line[seg + 1];
+        let t = if bx > ax { ((x - ax) / (bx - ax)).clamp(0.0, 1.0) } else { 0.0 };
+        out.push((x, ay + (by - ay) * t));
+        x += step;
+    }
+    out
+}
+
 /// A map view centred on a place, at [`MAP_ZOOM`], for a viewport of `w` by `h` points. None for coordinates that
 /// are out of range or a viewport that is not positive.
 pub fn map_view(lat: f64, lon: f64, w: f64, h: f64) -> Option<MapView> {
@@ -210,6 +233,16 @@ mod tests {
     #[test]
     fn points_keep_the_hour_position_and_skip_missing_temperatures() {
         assert_eq!(temperature_points(&[hour(1.0), hour(f64::NAN), hour(3.0)]), vec![(0.0, 1.0), (2.0, 3.0)]);
+    }
+
+    #[test]
+    fn area_columns_follow_the_line_at_each_step() {
+        // two segments: (0,10)-(10,20) then (10,20)-(20,0); a step of 5 gives x = 0, 5, 10, 15, 20
+        let line = [(0.0, 10.0), (10.0, 20.0), (20.0, 0.0)];
+        assert_eq!(area_columns(&line, 5.0), vec![(0.0, 10.0), (5.0, 15.0), (10.0, 20.0), (15.0, 10.0), (20.0, 0.0)]);
+        // one point, or a step that is not positive, gives no area
+        assert!(area_columns(&[(0.0, 1.0)], 1.0).is_empty());
+        assert!(area_columns(&line, 0.0).is_empty());
     }
 
     #[test]

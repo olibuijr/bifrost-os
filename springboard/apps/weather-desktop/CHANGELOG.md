@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- The temperature chart has an area fill under its line, so the warm and cold hours of the day read at a glance.
+
 ## 1.4.0 — 2026-10-12
 
 - The bottom of the forecast says where the data comes from: "Weather data from Open-Meteo", so the source is credited on
