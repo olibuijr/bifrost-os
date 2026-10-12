@@ -385,7 +385,6 @@ pub(crate) fn create(device: &Device, desc: &TextureDescriptor) -> Result<Textur
 
 /// Serialises queue submissions made from this module (a Vulkan queue is not thread-safe). The command module must
 /// take the same lock when it submits to this device's queue.
-static SUBMIT_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock_layout(inner: &Inner) -> MutexGuard<'_, vk::ImageLayout> {
     inner.layout.lock().unwrap_or_else(|e| e.into_inner())
@@ -513,11 +512,7 @@ fn one_shot(device: &Device, record: impl FnOnce(&ash::Device, vk::CommandBuffer
 
     let infos = [vk::CommandBufferSubmitInfo::default().command_buffer(cb)];
     let submit = [vk::SubmitInfo2::default().command_buffer_infos(&infos)];
-    {
-        let _lock = SUBMIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        // SAFETY: the command buffer is complete, and the fence is unsignalled.
-        unsafe { dev.queue_submit2(device.inner.queue, &submit, guard.fence) }?;
-    }
+    device.submit(&submit, guard.fence)?;
     // SAFETY: the fence was submitted above; waiting makes the copy finished before the staging buffer is freed.
     unsafe { dev.wait_for_fences(&[guard.fence], true, u64::MAX) }?;
     Ok(())

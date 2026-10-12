@@ -51,6 +51,12 @@ pub(crate) struct Inner {
     pub(crate) queue_family: u32,
     pub(crate) info: DeviceInfo,
     pub(crate) memory_properties: ash::vk::PhysicalDeviceMemoryProperties,
+    /// Vulkan requires a queue to be externally synchronised: every submission goes through `Device::submit`, which
+    /// holds this lock.
+    pub(crate) submit_lock: std::sync::Mutex<()>,
+    /// Dropped submissions the GPU had not finished yet: their fence and keep-alive list, released by `reap` once
+    /// the fence signals. Dropping a `Submission` never blocks the CPU.
+    pub(crate) retired: std::sync::Mutex<Vec<crate::command::Retired>>,
 }
 
 impl Drop for Inner {
@@ -120,6 +126,8 @@ impl Device {
                 queue_family: opened.family,
                 info: opened.info,
                 memory_properties: opened.memory,
+                submit_lock: std::sync::Mutex::new(()),
+                retired: std::sync::Mutex::new(Vec::new()),
             }),
         })
     }
@@ -174,10 +182,33 @@ impl Device {
         crate::sync::create(self)
     }
 
-    /// Waits until the device has finished all submitted work (teardown and tests only).
+    /// Waits until the device has finished all submitted work (teardown and tests only), then releases every
+    /// retired submission.
     pub fn wait_idle(&self) -> Result<()> {
         // SAFETY: the device handle is valid while `self.inner` is alive.
-        unsafe { self.inner.device.device_wait_idle() }.map_err(Error::from)
+        unsafe { self.inner.device.device_wait_idle() }.map_err(Error::from)?;
+        self.reap();
+        Ok(())
+    }
+
+    /// Submits to the device queue under the queue lock. The one place `vkQueueSubmit2` is called.
+    pub(crate) fn submit(&self, submits: &[ash::vk::SubmitInfo2<'_>], fence: ash::vk::Fence) -> Result<()> {
+        let _lock = self.inner.submit_lock.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: the queue belongs to this device and the lock makes this the only submission in progress; callers
+        // keep every object the submits refer to alive until `fence` (or a later fence) signals.
+        unsafe { self.inner.device.queue_submit2(self.inner.queue, submits, fence) }.map_err(Error::from)
+    }
+
+    /// Releases retired submissions whose fence has signalled (called at every commit and by `wait_idle`).
+    pub fn reap(&self) {
+        let done: Vec<crate::command::Retired> = {
+            let mut list = self.inner.retired.lock().unwrap_or_else(|e| e.into_inner());
+            let (done, pending): (Vec<_>, Vec<_>) = std::mem::take(&mut *list).into_iter().partition(|r| r.signalled(self));
+            *list = pending;
+            done
+        };
+        // Dropped outside the lock: releasing a keep list may drop textures and buffers.
+        drop(done);
     }
 }
 

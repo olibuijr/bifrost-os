@@ -30,7 +30,6 @@ use std::os::fd::{AsRawFd, IntoRawFd, OwnedFd};
 use std::sync::{Arc, Mutex};
 
 /// Serialises every `vkQueueSubmit2`: a `VkQueue` needs external synchronisation.
-static SUBMIT_LOCK: Mutex<()> = Mutex::new(());
 
 /// The most push constant bytes a pipeline may use (the Vulkan minimum limit).
 pub const MAX_PUSH_BYTES: usize = 128;
@@ -450,6 +449,8 @@ impl CommandBuffer {
 
     /// Submits the buffer. Images used as dma-buf targets are released to the foreign queue family at the end.
     pub fn commit(mut self) -> Result<Submission> {
+        // Release whatever earlier dropped submissions the GPU has finished since the last commit.
+        self.device.reap();
         let inner = self.device.inner.clone();
         let dev = &inner.device;
         let family = inner.queue_family;
@@ -503,26 +504,28 @@ impl CommandBuffer {
         for (ev, value) in &self.waits {
             wait_infos.push(vk::SemaphoreSubmitInfo::default().semaphore(ev.inner.semaphore).value(*value).stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS));
         }
-        let signal_infos: Vec<vk::SemaphoreSubmitInfo> = self
+        let mut signal_infos: Vec<vk::SemaphoreSubmitInfo> = self
             .signals
             .iter()
             .map(|(ev, value)| vk::SemaphoreSubmitInfo::default().semaphore(ev.inner.semaphore).value(*value).stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS))
             .collect();
+        // Every submission also signals an exportable binary semaphore, so `Submission::sync_file` can hand the
+        // display or a client a sync_file for this work without stalling.
+        let mut export = vk::ExportSemaphoreCreateInfo::default().handle_types(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD);
+        // SAFETY: a binary semaphore create on the live device; destroyed by its `Retire` guard after completion.
+        let done_sem = unsafe { dev.create_semaphore(&vk::SemaphoreCreateInfo::default().push_next(&mut export), None) }?;
+        temp.push(Arc::new(Retire::Semaphore { device: self.device.clone(), sem: done_sem }));
+        signal_infos.push(vk::SemaphoreSubmitInfo::default().semaphore(done_sem).stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS));
 
         // 3. Submit with a fence.
         // SAFETY: a plain fence create on the live device; destroyed by `Submission`'s drop, or below on failure.
         let fence = unsafe { dev.create_fence(&vk::FenceCreateInfo::default(), None) }?;
         let cb_infos = [vk::CommandBufferSubmitInfo::default().command_buffer(self.raw)];
         let submit = vk::SubmitInfo2::default().wait_semaphore_infos(&wait_infos).command_buffer_infos(&cb_infos).signal_semaphore_infos(&signal_infos);
-        let result = {
-            let _lock = SUBMIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            // SAFETY: every image, buffer and semaphore in the submission is kept alive by `keep` or `temp` below.
-            unsafe { dev.queue_submit2(inner.queue, &[submit], fence) }
-        };
-        if let Err(e) = result {
+        if let Err(e) = self.device.submit(&[submit], fence) {
             // SAFETY: the submission failed, so nothing refers to the fence.
             unsafe { dev.destroy_fence(fence, None) };
-            return Err(e.into());
+            return Err(e);
         }
 
         // 4. The GPU now owns the work: publish the layouts and keep everything alive until the fence signals.
@@ -532,7 +535,7 @@ impl CommandBuffer {
         }
         let mut keep = std::mem::take(&mut self.keep);
         keep.extend(temp.into_iter().map(Keep::Retire));
-        Ok(Submission { device: self.device.clone(), fence, keep })
+        Ok(Submission { device: self.device.clone(), fence, keep, done_sem, sync_file: Mutex::new(None) })
     }
 
     /// Records the state of one use of `tex`: emits a barrier when one is needed and updates the buffer's view of the
@@ -852,6 +855,38 @@ pub struct Submission {
     /// Held until the fence signals (RAII keep-alive; read by `Drop` through the guards).
     #[allow(dead_code)]
     pub(crate) keep: Vec<Keep>,
+    /// The exportable binary semaphore the submission signals (destroyed by its guard in `keep`).
+    pub(crate) done_sem: vk::Semaphore,
+    /// The sync_file exported from `done_sem` (a SYNC_FD export can happen once; later calls duplicate it).
+    pub(crate) sync_file: Mutex<Option<OwnedFd>>,
+}
+
+/// A dropped submission still running on the GPU: released by `Device::reap` once its fence signals.
+pub(crate) struct Retired {
+    fence: vk::Fence,
+    #[allow(dead_code)]
+    keep: Vec<Keep>,
+    device: ash::Device,
+}
+
+/// Hands a binary semaphore signalled by a submission with `fence` to the device's retired list.
+pub(crate) fn retire_semaphore(device: &Device, fence: vk::Fence, sem: vk::Semaphore) {
+    let keep = vec![Keep::Retire(Arc::new(Retire::Semaphore { device: device.clone(), sem }))];
+    device.inner.retired.lock().unwrap_or_else(|e| e.into_inner()).push(Retired { fence, keep, device: device.inner.device.clone() });
+}
+
+impl Retired {
+    pub(crate) fn signalled(&self, _device: &Device) -> bool {
+        // SAFETY: the fence belongs to this device and is destroyed only by this `Retired`.
+        unsafe { self.device.get_fence_status(self.fence) }.unwrap_or(true)
+    }
+}
+
+impl Drop for Retired {
+    fn drop(&mut self) {
+        // SAFETY: reaped only after the fence signalled (or the device was lost), so the GPU no longer uses `keep`.
+        unsafe { self.device.destroy_fence(self.fence, None) };
+    }
 }
 
 impl Submission {
@@ -870,17 +905,39 @@ impl Submission {
 
     /// A sync_file that signals when the work completes (for KMS in-fences and client release fences).
     pub fn sync_file(&self) -> Result<OwnedFd> {
-        todo!("gpu-sync")
+        let mut cached = self.sync_file.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(fd) = cached.as_ref() {
+            return fd.try_clone().map_err(|e| Error::Invalid(format!("dup sync_file: {e}")));
+        }
+        let inner = &self.device.inner;
+        let ext = ash::khr::external_semaphore_fd::Device::new(&inner.instance, &inner.device);
+        let get = vk::SemaphoreGetFdInfoKHR::default().semaphore(self.done_sem).handle_type(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD);
+        // SAFETY: `done_sem` was created exportable as SYNC_FD and has a signal operation pending or completed (it was
+        // submitted with this work); it is exported at most once, guarded by `cached`.
+        let fd = unsafe { ext.get_semaphore_fd(&get) }?;
+        let file = if fd < 0 {
+            // Already signalled: the driver hands back no file. An empty, already signalled sync_file is not
+            // representable portably, so report it; callers treat `Unsupported` here as "done".
+            return Err(Error::Unsupported("the submission already completed; no sync_file needed".into()));
+        } else {
+            // SAFETY: a new descriptor returned by `vkGetSemaphoreFdKHR` for this call; nothing else owns it.
+            unsafe { <OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) }
+        };
+        let out = file.try_clone().map_err(|e| Error::Invalid(format!("dup sync_file: {e}")))?;
+        *cached = Some(file);
+        Ok(out)
     }
 }
 
 impl Drop for Submission {
     fn drop(&mut self) {
-        // The keep list must outlive the GPU's use of it: wait before anything is released.
-        // SAFETY: the fence belongs to this device and is destroyed exactly once, here.
-        unsafe {
-            let _ = self.device.inner.device.wait_for_fences(&[self.fence], true, u64::MAX);
-            self.device.inner.device.destroy_fence(self.fence, None);
+        // Never block: an unfinished submission moves its fence and keep list to the device's retired list, which
+        // `Device::reap` (run at every commit) releases once the fence signals.
+        let retired = Retired { fence: self.fence, keep: std::mem::take(&mut self.keep), device: self.device.inner.device.clone() };
+        if retired.signalled(&self.device) {
+            drop(retired);
+        } else {
+            self.device.inner.retired.lock().unwrap_or_else(|e| e.into_inner()).push(retired);
         }
     }
 }
@@ -1016,5 +1073,62 @@ mod gpu_tests {
         cb.commit().expect("commit").wait().expect("wait");
         let px = tex.read_region(Region { x: 0, y: 0, width: 16, height: 8 }).expect("readback");
         assert_eq!(&px[..4], &[255, 0, 0, 255]);
+    }
+
+    fn target(device: &Device) -> Texture {
+        device
+            .new_texture(&TextureDescriptor { width: 64, height: 64, format: PixelFormat::Rgba8Unorm, usage: TextureUsage::RENDER_TARGET | TextureUsage::COPY_SRC, exportable: false, modifiers: vec![] })
+            .expect("texture")
+    }
+
+    /// Dropping an unfinished submission must not wait for the GPU: it moves to the retired list, and the next
+    /// commit or `wait_idle` releases it.
+    #[test]
+    fn dropping_a_submission_retires_it_without_waiting() {
+        let device = Device::open(None).expect("a Vulkan 1.3 device");
+        let queue = device.new_command_queue();
+        let tex = target(&device);
+        for _ in 0..8 {
+            let mut cb = queue.command_buffer().expect("command buffer");
+            let pass = RenderPassDescriptor { target: tex.clone(), load: LoadAction::Clear([0.0, 1.0, 0.0, 1.0]), store: StoreAction::Store, render_area: None };
+            drop(cb.render_encoder(&pass).expect("pass"));
+            drop(cb.commit().expect("commit"));
+        }
+        device.wait_idle().expect("idle");
+        assert!(device.inner.retired.lock().unwrap().is_empty(), "wait_idle reaps every retired submission");
+        let px = tex.read_region(Region { x: 0, y: 0, width: 1, height: 1 }).expect("readback");
+        assert_eq!(px, vec![0, 255, 0, 255]);
+    }
+
+    /// A submission hands out a sync_file for the display's in-fence, and the same file again on a second call.
+    #[test]
+    fn a_submission_exports_a_sync_file_once_and_duplicates_it() {
+        let device = Device::open(None).expect("a Vulkan 1.3 device");
+        let queue = device.new_command_queue();
+        let tex = target(&device);
+        let mut cb = queue.command_buffer().expect("command buffer");
+        let pass = RenderPassDescriptor { target: tex.clone(), load: LoadAction::Clear([0.0, 0.0, 1.0, 1.0]), store: StoreAction::Store, render_area: None };
+        drop(cb.render_encoder(&pass).expect("pass"));
+        let sub = cb.commit().expect("commit");
+        match (sub.sync_file(), sub.sync_file()) {
+            (Ok(a), Ok(b)) => assert_ne!(std::os::fd::AsRawFd::as_raw_fd(&a), std::os::fd::AsRawFd::as_raw_fd(&b), "the second call is a duplicate"),
+            // A driver may already have finished and hand back no file; that is the documented `Unsupported`.
+            (Err(Error::Unsupported(_)), _) => {}
+            other => panic!("unexpected sync_file results: {:?}", (other.0.is_ok(), other.1.is_ok())),
+        }
+        sub.wait().expect("wait");
+    }
+
+    /// A timeline value exported as a sync_file keeps its binary semaphore alive until the export's fence signals.
+    #[test]
+    fn exporting_a_pending_timeline_value_retires_the_semaphore() {
+        let device = Device::open(None).expect("a Vulkan 1.3 device");
+        let ev = device.new_shared_event().expect("event");
+        let file = ev.export_sync_file(1).expect("a pending value exports a sync_file");
+        assert!(!device.inner.retired.lock().unwrap().is_empty(), "the export's semaphore waits in the retired list");
+        ev.signal(1).expect("signal");
+        drop(file);
+        device.wait_idle().expect("idle");
+        assert!(device.inner.retired.lock().unwrap().is_empty());
     }
 }

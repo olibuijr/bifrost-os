@@ -12,7 +12,7 @@
 use crate::{Device, Error, Result};
 use ash::vk;
 use std::os::fd::{FromRawFd, OwnedFd};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
 pub(crate) struct Inner {
     pub(crate) device: crate::Device,
@@ -33,14 +33,6 @@ impl Drop for Inner {
 #[derive(Clone)]
 pub struct SharedEvent {
     pub(crate) inner: Arc<Inner>,
-}
-
-/// Serialises `vkQueueSubmit2` on the device queue: Vulkan requires a queue to be externally synchronised. Every
-/// submission to the device queue takes this lock.
-pub(crate) static QUEUE_LOCK: Mutex<()> = Mutex::new(());
-
-pub(crate) fn lock_queue() -> MutexGuard<'static, ()> {
-    QUEUE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Makes a timeline semaphore starting at 0. Called by `Device::new_shared_event`.
@@ -102,38 +94,39 @@ impl SharedEvent {
 
     /// A sync_file that signals when the value reaches `value` (exported through a binary semaphore).
     pub fn export_sync_file(&self, value: u64) -> Result<OwnedFd> {
-        let device = &self.inner.device.inner.device;
+        let dev = &self.inner.device;
+        let raw = &dev.inner.device;
         let mut export = vk::ExportSemaphoreCreateInfo::default().handle_types(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD);
         let binary_info = vk::SemaphoreCreateInfo::default().push_next(&mut export);
         // SAFETY: the create info is complete and chains an export structure with the SYNC_FD handle type.
-        let binary = unsafe { device.create_semaphore(&binary_info, None) }.map_err(Error::from)?;
-        let result = self.export_through(binary, value);
-        // SAFETY: the export call has returned, and the submission that signalled `binary` (if it was made) is
-        // complete from the sync_file's point of view: its payload has been transferred to the sync_file.
-        unsafe { device.destroy_semaphore(binary, None) };
-        result
-    }
-
-    /// Submits a wait on the timeline value and a signal of `binary`, then exports `binary` as a sync_file.
-    fn export_through(&self, binary: vk::Semaphore, value: u64) -> Result<OwnedFd> {
-        let device = &self.inner.device;
-        let waits = [vk::SemaphoreSubmitInfo::default()
-            .semaphore(self.inner.semaphore)
-            .value(value)
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
-        let signals = [vk::SemaphoreSubmitInfo::default()
-            .semaphore(binary)
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+        let binary = unsafe { raw.create_semaphore(&binary_info, None) }.map_err(Error::from)?;
+        // SAFETY: a plain fence on the live device; owned by the retired entry below.
+        let fence = match unsafe { raw.create_fence(&vk::FenceCreateInfo::default(), None) } {
+            Ok(f) => f,
+            Err(e) => {
+                // SAFETY: nothing was submitted with `binary`.
+                unsafe { raw.destroy_semaphore(binary, None) };
+                return Err(e.into());
+            }
+        };
+        let waits = [vk::SemaphoreSubmitInfo::default().semaphore(self.inner.semaphore).value(value).stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+        let signals = [vk::SemaphoreSubmitInfo::default().semaphore(binary).stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
         let submit = vk::SubmitInfo2::default().wait_semaphore_infos(&waits).signal_semaphore_infos(&signals);
-        {
-            let _queue = lock_queue();
-            // SAFETY: the queue belongs to this device; the submit holds no command buffers, and the arrays it points at
-            // live until the call returns. The queue lock makes this the only submission in flight on the queue.
-            unsafe { device.inner.device.queue_submit2(device.inner.queue, &[submit], vk::Fence::null()) }.map_err(Error::from)?;
+        if let Err(e) = dev.submit(&[submit], fence) {
+            // SAFETY: the submission failed, so nothing refers to either object.
+            unsafe {
+                raw.destroy_fence(fence, None);
+                raw.destroy_semaphore(binary, None);
+            }
+            return Err(e);
         }
-        let external = ash::khr::external_semaphore_fd::Device::new(&device.inner.instance, &device.inner.device);
+        // The semaphore may only be destroyed after the submission that signals it completes: it goes to the
+        // device's retired list with the fence, released by `Device::reap`.
+        crate::command::retire_semaphore(dev, fence, binary);
+        let external = ash::khr::external_semaphore_fd::Device::new(&dev.inner.instance, raw);
         let get = vk::SemaphoreGetFdInfoKHR::default().semaphore(binary).handle_type(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD);
-        // SAFETY: `binary` was created with SYNC_FD export and is pending a signal, which is what a sync_file export needs.
+        // SAFETY: `binary` was created with SYNC_FD export and has a signal operation pending, as a sync_file export
+        // needs; it stays alive until its fence signals (retired list above).
         let fd = unsafe { external.get_semaphore_fd(&get) }.map_err(Error::from)?;
         sync_file_from_fd(fd)
     }
@@ -170,13 +163,6 @@ mod tests {
         let owned = sync_file_from_fd(raw).expect("valid fd");
         assert_eq!(std::os::fd::AsRawFd::as_raw_fd(&owned), raw);
         drop(owned);
-    }
-
-    #[test]
-    fn queue_lock_can_be_taken_again_after_release() {
-        // The lock is taken and released per submission; two sequential takes must both succeed.
-        drop(lock_queue());
-        drop(lock_queue());
     }
 
     #[cfg(feature = "gpu-tests")]
