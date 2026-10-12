@@ -51,6 +51,35 @@ pub(crate) fn image_rows(head: &[u8], length: u64) -> Vec<(&'static str, String)
     rows
 }
 
+/// The owner and group rows for Get Info: the account name from the password and group tables (`/etc/passwd`,
+/// `/etc/group`), with the numeric id in brackets, or the id alone when the table has no such account.
+pub(crate) fn permission_rows(st: &bifrost_app::file_stat::FileStat, passwd: &str, group: &str) -> Vec<(&'static str, String)> {
+    let mode = st.mode.to_string();
+    let octal = format!("{:o}", st.permissions().bits());
+    vec![
+        ("Permissions", format!("{mode} ({octal})")),
+        ("Owner", named(account_name(passwd, st.user_id), st.user_id)),
+        ("Group", named(account_name(group, st.group_id), st.group_id)),
+    ]
+}
+
+/// The name for an id in a colon-separated account table, such as `/etc/passwd` (name, password, id, ...).
+pub(crate) fn account_name(table: &str, id: u32) -> Option<String> {
+    table.lines().find_map(|line| {
+        let mut fields = line.split(':');
+        let name = fields.next()?;
+        let _password = fields.next()?;
+        (fields.next()?.parse::<u32>().ok()? == id && !name.is_empty()).then(|| name.to_string())
+    })
+}
+
+fn named(name: Option<String>, id: u32) -> String {
+    match name {
+        Some(name) => format!("{name} ({id})"),
+        None => id.to_string(),
+    }
+}
+
 /// The Get Info panel: a name and labelled rows.
 pub(crate) struct Info {
     pub(crate) name: String,
@@ -120,6 +149,11 @@ impl Files {
         if !entry.is_dir {
             rows.extend(disk_image_rows(&entry.path, entry.size));
         }
+        if let Ok(st) = bifrost_app::file_stat::stat(&entry.path) {
+            let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
+            let group = std::fs::read_to_string("/etc/group").unwrap_or_default();
+            rows.extend(permission_rows(&st, &passwd, &group));
+        }
         self.preview = None;
         self.info = Some(Info { name: entry.name.clone(), rows });
         self.revision += 1;
@@ -157,6 +191,66 @@ impl Files {
             }
             text(s, ui, "Press Escape or click to close", 11., LABEL_2.now(), x + 20., y + 56. + info.rows.len() as f32 * 26. + 12., w - x - 56.);
         }
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+    use bifrost_app::file_stat::{FileStat, Timestamp};
+    use bifrost_core::file_mode::FileMode;
+
+    fn stat_with(mode: u32, uid: u32, gid: u32) -> FileStat {
+        let t = Timestamp { secs: 0, nanos: 0 };
+        FileStat {
+            device: 1,
+            inode: 2,
+            mode: FileMode::from_raw(mode),
+            link_count: 1,
+            user_id: uid,
+            group_id: gid,
+            size: 0,
+            blocks_allocated: 0,
+            block_size: 4096,
+            accessed: t,
+            modified: t,
+            changed: t,
+        }
+    }
+
+    const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nolibuijr:x:1000:1000::/home/olibuijr:/bin/zsh\n";
+    const GROUP: &str = "root:x:0:\nusers:x:100:olibuijr\n";
+
+    #[test]
+    fn a_regular_file_shows_its_mode_bits_and_owner() {
+        let rows = permission_rows(&stat_with(0o100644, 1000, 100), PASSWD, GROUP);
+        assert_eq!(rows[0], ("Permissions", "-rw-r--r-- (644)".to_string()));
+        assert_eq!(rows[1], ("Owner", "olibuijr (1000)".to_string()));
+        assert_eq!(rows[2], ("Group", "users (100)".to_string()));
+    }
+
+    #[test]
+    fn a_directory_and_a_set_user_id_file_show_their_type_and_special_bits() {
+        let dir = permission_rows(&stat_with(0o040755, 0, 0), PASSWD, GROUP);
+        assert_eq!(dir[0].1, "drwxr-xr-x (755)");
+        let suid = permission_rows(&stat_with(0o104755, 0, 0), PASSWD, GROUP);
+        assert_eq!(suid[0].1, "-rwsr-xr-x (4755)");
+    }
+
+    #[test]
+    fn an_id_without_an_account_shows_the_number_alone() {
+        let rows = permission_rows(&stat_with(0o100600, 1234, 4321), PASSWD, GROUP);
+        assert_eq!(rows[0].1, "-rw------- (600)");
+        assert_eq!(rows[1], ("Owner", "1234".to_string()));
+        assert_eq!(rows[2], ("Group", "4321".to_string()));
+    }
+
+    #[test]
+    fn account_names_come_from_the_id_field_only() {
+        assert_eq!(account_name(PASSWD, 0).as_deref(), Some("root"));
+        assert_eq!(account_name(PASSWD, 1000).as_deref(), Some("olibuijr"));
+        assert_eq!(account_name(PASSWD, 42), None);
+        assert_eq!(account_name("", 0), None);
     }
 }
 
