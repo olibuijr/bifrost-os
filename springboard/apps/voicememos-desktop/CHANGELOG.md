@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.1 — 2026-10-12
 
 - The wall clock is re-read on every tick, so day titles and timestamps follow midnight and time-zone changes. Removed the unused sidebar parameter and imports.
