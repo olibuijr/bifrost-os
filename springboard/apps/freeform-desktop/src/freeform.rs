@@ -7,6 +7,7 @@
 //! stays the picture that is drawn and saved.
 
 use crate::ink;
+use crate::style::{self, Bitmap, Fill, Style, OPACITY_STEPS};
 use bifrost_app::controls::affine::AffineTransform;
 use bifrost_app::controls::cursor::Kind;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
@@ -20,7 +21,7 @@ use bifrost_app::kit::ui::{
     TOAST_FILL, WHITE,
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S, SPACE_XXL, SPACE_XXXL};
-use bifrost_app::kit::ui::MAC_CALLOUT_PT;
+use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, SIDEBAR_BG, LABEL_2};
 use bifrost_app::kit::{Event, Surface, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
@@ -44,7 +45,102 @@ const BAR_OVAL: u32 = 10;
 const BAR_DELETE: u32 = 11;
 const BAR_COPY: u32 = 12;
 const BAR_ARRANGE: u32 = 13;
+const BAR_INSPECTOR: u32 = 14;
+
 const UNDO_DEPTH: usize = 12;
+
+/// Width of the shape inspector's panel on the right, in points.
+const PANEL_PT: f32 = 220.0;
+/// Inspector layout (points, below the toolbar): the heading band, then one row per setting.
+const HEAD_PT: f32 = 40.0;
+const CAPTION_PT: f32 = 16.0;
+const CONTROL_PT: f32 = 24.0;
+const ROW_PT: f32 = 60.0;
+
+/// The inspector's settings rows, each a segmented control: the row, its caption and its segment labels.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Row {
+    Fill,
+    Width,
+    Dash,
+    Shadow,
+    Opacity,
+    Transform,
+}
+
+const ROWS: [(Row, &str, &[&str]); 6] = [
+    (Row::Fill, "Fill", &["None", "Solid", "Gradient"]),
+    (Row::Width, "Stroke width", &["Thin", "Medium", "Thick"]),
+    (Row::Dash, "Dash", &["Solid", "Dashed"]),
+    (Row::Shadow, "Shadow", &["Off", "On"]),
+    (Row::Opacity, "Opacity", &["100%", "50%", "25%"]),
+    (Row::Transform, "Transform", &["Turn", "Smaller", "Larger"]),
+];
+
+/// One change the inspector makes to the selected strokes.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Edit {
+    Fill(usize),
+    Width(usize),
+    Dash(usize),
+    Shadow(usize),
+    Opacity(usize),
+    /// Rotate 15 degrees about the selection's centre.
+    Turn,
+    /// Scale to 80 per cent about the selection's centre.
+    Smaller,
+    /// Scale to 125 per cent about the selection's centre.
+    Larger,
+}
+
+/// The stroke widths the inspector offers, from the pen's width: half, the pen's, and twice.
+fn width_steps() -> [f32; 3] {
+    let base = ink_width(Tool::Pen);
+    [base * 0.5, base, base * 2.0]
+}
+
+/// The index of the value nearest to `v`.
+fn nearest(values: &[f32], v: f32) -> usize {
+    values
+        .iter()
+        .enumerate()
+        .min_by(|a, b| (a.1 - v).abs().partial_cmp(&(b.1 - v).abs()).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(i, _)| i)
+        .unwrap_or(0)
+}
+
+/// The segment of `row` that `i` selects.
+fn edit_for(row: Row, i: usize) -> Edit {
+    match row {
+        Row::Fill => Edit::Fill(i),
+        Row::Width => Edit::Width(i),
+        Row::Dash => Edit::Dash(i),
+        Row::Shadow => Edit::Shadow(i),
+        Row::Opacity => Edit::Opacity(i),
+        Row::Transform => match i {
+            0 => Edit::Turn,
+            1 => Edit::Smaller,
+            _ => Edit::Larger,
+        },
+    }
+}
+
+/// Changes the look of one stroke for a style edit (the width is on the ink, handled by the caller).
+fn apply_style(st: &mut Style, e: Edit, color: u32, next: u32) {
+    match e {
+        Edit::Fill(k) => {
+            st.fill = match k {
+                0 => Fill::None,
+                1 => Fill::Solid(color),
+                _ => Fill::Gradient(color, next),
+            }
+        }
+        Edit::Dash(k) => st.dashed = k == 1,
+        Edit::Shadow(k) => st.shadow = k == 1,
+        Edit::Opacity(k) => st.opacity = OPACITY_STEPS[k.min(OPACITY_STEPS.len() - 1)],
+        _ => {}
+    }
+}
 
 const COLORS: [u32; 7] = [
     BLACK,
@@ -76,10 +172,14 @@ enum Target {
     Copy,
     Arrange,
     Save,
+    /// Shows or hides the shape inspector.
+    Inspector,
+    /// A change from the inspector's panel.
+    Edit(Edit),
 }
 
-/// What undo puts back: the pixels and the strokes they were made of.
-type Snapshot = (Vec<u32>, Drawing);
+/// What undo puts back: the pixels, the strokes they were made of, and their looks.
+type Snapshot = (Vec<u32>, Drawing, Vec<Style>);
 
 pub struct Freeform {
     w: i32,
@@ -123,6 +223,10 @@ pub struct Freeform {
     tips: Option<Datastore>,
     /// The first-use tip was counted as shown in this run.
     tip_marked: bool,
+    /// The look of each stroke in `model`, at the same index (see `style`). Kept in step by `sync_styles`.
+    styles: Vec<Style>,
+    /// The shape inspector panel is shown on the right of the board.
+    inspector: bool,
 }
 
 /// Width of the ink a tool draws, in points.
@@ -149,6 +253,7 @@ fn id_target(id: u32) -> Option<Target> {
         BAR_COPY => Target::Copy,
         BAR_ARRANGE => Target::Arrange,
         BAR_SAVE => Target::Save,
+        BAR_INSPECTOR => Target::Inspector,
         _ => return None,
     })
 }
@@ -168,7 +273,8 @@ fn target_id(t: Target) -> Option<u32> {
         Target::Copy => BAR_COPY,
         Target::Arrange => BAR_ARRANGE,
         Target::Save => BAR_SAVE,
-        Target::Color(_) => return None,
+        Target::Inspector => BAR_INSPECTOR,
+        Target::Color(_) | Target::Edit(_) => return None,
     })
 }
 
@@ -203,6 +309,113 @@ impl Freeform {
             copied: None,
             tips: None,
             tip_marked: false,
+            styles: Vec::new(),
+            inspector: false,
+        }
+    }
+
+    /// Whether the board has any strokes to export.
+    pub fn has_strokes(&self) -> bool {
+        !self.model.is_empty()
+    }
+
+    /// Keeps one `Style` per stroke of the model: new strokes get the default look, removed ones lose theirs.
+    fn sync_styles(&mut self) {
+        let n = self.model.strokes().len();
+        self.styles.resize(n, Style::default());
+    }
+
+    /// The board's width in pixels: the window, less the inspector panel when it is shown.
+    fn board_px(&self, ui: &Ui) -> i32 {
+        if self.inspector {
+            (self.w - ui.pt(PANEL_PT) as i32).max(1)
+        } else {
+            self.w.max(1)
+        }
+    }
+
+    /// The inspector panel's left edge, in points.
+    fn panel_x(&self, ui: &Ui) -> f32 {
+        self.board_px(ui) as f32 / ui.s
+    }
+
+    /// The inspector panel's width, in points.
+    fn panel_width(&self, ui: &Ui) -> f32 {
+        (self.w - self.board_px(ui)) as f32 / ui.s
+    }
+
+    /// The segmented control of inspector row `i`, in points.
+    fn row_control(&self, ui: &Ui, i: usize) -> Rect {
+        Rect {
+            x: self.panel_x(ui) + SPACE_M,
+            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT + CAPTION_PT,
+            w: self.panel_width(ui) - 2.0 * SPACE_M,
+            h: CONTROL_PT,
+        }
+    }
+
+    /// The first selected stroke's look and ink, or `None` with no selection.
+    fn selected_look(&self) -> Option<(Style, Ink)> {
+        let sel = self.selection.as_ref()?;
+        let i = *sel.indices().first()?;
+        let ink = self.model.strokes().get(i)?.ink;
+        Some((self.styles.get(i).copied().unwrap_or_default(), ink))
+    }
+
+    /// The segment the first selected stroke has in `row`, or `None` for a row with no state (Transform).
+    fn current_index(row: Row, st: &Style, ink: &Ink) -> Option<usize> {
+        Some(match row {
+            Row::Fill => match st.fill {
+                Fill::None => 0,
+                Fill::Solid(_) => 1,
+                Fill::Gradient(..) => 2,
+            },
+            Row::Width => nearest(&width_steps(), ink.width),
+            Row::Dash => st.dashed as usize,
+            Row::Shadow => st.shadow as usize,
+            Row::Opacity => nearest(&OPACITY_STEPS, st.opacity),
+            Row::Transform => return None,
+        })
+    }
+
+    /// The inspector control under point (x, y) (points), if the panel is shown and there is a selection to change.
+    fn inspector_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        if !self.inspector || x < self.panel_x(ui) || !self.selection.as_ref().is_some_and(|s| !s.is_empty()) {
+            return None;
+        }
+        for (i, (row, _, labels)) in ROWS.iter().enumerate() {
+            let r = self.row_control(ui, i);
+            if x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h {
+                let n = labels.len();
+                let idx = (((x - r.x) / r.w * n as f32).floor().max(0.0) as usize).min(n - 1);
+                return Some(Target::Edit(edit_for(*row, idx)));
+            }
+        }
+        None
+    }
+
+    /// Draws the inspector panel: a heading, then one segmented control per setting, with its caption.
+    fn draw_inspector(&self, s: &mut Surface, ui: &Ui) {
+        let top = self.canvas_top(ui);
+        let x = self.board_px(ui);
+        s.fill_rrect(x as f32, top as f32, (self.w - x) as f32, (self.h - top).max(0) as f32, 0.0, SIDEBAR_BG.now());
+        s.fill_rect(x as usize, top as usize, ui.pt(1.0).max(1.0) as usize, (self.h - top).max(0) as usize, SEPARATOR_C.now());
+        let head = ui.text("Inspector", MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
+        s.blit(&head, ui.pt(self.panel_x(ui) + SPACE_M) as i32, ui.pt(UNIFIED_BAR_PT + SPACE_M) as i32, 255, 255);
+        let look = self.selected_look();
+        let enabled = look.is_some();
+        for (i, (row, caption, labels)) in ROWS.iter().enumerate() {
+            let r = self.row_control(ui, i);
+            let cap = ui.text(caption, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+            s.blit(&cap, ui.pt(r.x) as i32, ui.pt(r.y - CAPTION_PT) as i32, 255, 255);
+            let current = look.as_ref().and_then(|(st, ink)| Self::current_index(*row, st, ink)).unwrap_or(labels.len());
+            widgets::segmented(s, ui, r, *labels, current, enabled);
+        }
+        if !enabled {
+            let max_px = ui.pt(self.panel_width(ui) - 2.0 * SPACE_M);
+            let msg = ui.fit("Select strokes with Lasso to change them.", MAC_FOOTNOTE_PT, max_px);
+            let img = ui.text(&msg, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+            s.blit(&img, ui.pt(self.panel_x(ui) + SPACE_M) as i32, ui.pt(UNIFIED_BAR_PT + HEAD_PT + ROWS.len() as f32 * ROW_PT) as i32, 255, 255);
         }
     }
 
@@ -299,6 +512,7 @@ impl Freeform {
             ToolbarItem::button(BAR_ARRANGE, "Arrange").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::button(BAR_COPY, "Copy").in_group(2).enabled(self.selection.is_some()),
             ToolbarItem::button(BAR_DELETE, "Delete").in_group(2).enabled(self.selection.is_some()),
+            ToolbarItem::button(BAR_INSPECTOR, "Inspector").in_group(3).selected(self.inspector),
             ToolbarItem::icon(BAR_SAVE, "Save to Photos", "square.and.arrow.up"),
         ])
     }
@@ -322,11 +536,12 @@ impl Freeform {
 
     /// (Re)allocates the canvas for the current pane, keeping what fits.
     fn ensure_canvas(&mut self, ui: &Ui) {
-        let nw = self.w.max(1) as usize;
+        let nw = self.board_px(ui) as usize;
         let nh = (self.h - self.canvas_top(ui)).max(1) as usize;
         if nw == self.cw && nh == self.ch && !self.canvas.is_empty() {
             return;
         }
+        let resized = !self.canvas.is_empty();
         let remap = |old: &Vec<u32>, ow: usize, oh: usize| {
             let mut px = vec![PAPER; nw * nh];
             for y in 0..oh.min(nh) {
@@ -347,6 +562,10 @@ impl Freeform {
         }
         self.cw = nw;
         self.ch = nh;
+        if resized {
+            // the strokes are the picture: a board that grew or shrank (the inspector came or went) is painted again
+            self.repaint(ui, None);
+        }
     }
 
     fn radius(&self, ui: &Ui) -> f32 {
@@ -354,10 +573,11 @@ impl Freeform {
     }
 
     fn push_undo(&mut self) {
+        self.sync_styles();
         if self.undo.len() >= UNDO_DEPTH {
             self.undo.remove(0);
         }
-        self.undo.push((self.canvas.clone(), self.model.clone()));
+        self.undo.push((self.canvas.clone(), self.model.clone(), self.styles.clone()));
     }
 
     /// Stamps a filled disc at canvas coordinates (x, y), in the live tool's ink.
@@ -438,9 +658,11 @@ impl Freeform {
 
     /// Repaints the picture from the strokes, with an optional unsaved preview (a shape being dragged) on top.
     fn repaint(&mut self, ui: &Ui, preview: Option<&Drawing>) {
+        self.sync_styles();
         let mut px = vec![PAPER; self.cw * self.ch];
-        for s in self.model.strokes().iter().chain(preview.into_iter().flat_map(|d| d.strokes().iter())) {
-            ink::paint_stroke(&mut px, self.cw, self.ch, s, ui.s);
+        style::paint_strokes(&mut px, self.cw, self.ch, self.model.strokes(), &self.styles, ui.s);
+        if let Some(p) = preview {
+            style::paint_strokes(&mut px, self.cw, self.ch, p.strokes(), &[], ui.s);
         }
         self.canvas = px;
         self.dirty = true;
@@ -450,6 +672,7 @@ impl Freeform {
     fn delete_selection(&mut self, ui: &Ui) {
         let Some(sel) = self.selection.take() else { return };
         self.push_undo();
+        self.sync_styles();
         let kept: Vec<Stroke> = self
             .model
             .strokes()
@@ -458,7 +681,53 @@ impl Freeform {
             .filter(|(i, _)| !sel.contains_stroke(*i))
             .map(|(_, s)| s.clone())
             .collect();
+        let kept_looks: Vec<Style> = self
+            .styles
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !sel.contains_stroke(*i))
+            .map(|(_, st)| *st)
+            .collect();
         self.model = Drawing::from_strokes(kept);
+        self.styles = kept_looks;
+        self.repaint(ui, None);
+    }
+
+    /// The inspector's change to the selected strokes, as one undo step. A rotate or scale turns the selection about
+    /// its centre; a width, fill, dash, shadow or opacity is set on each selected stroke.
+    fn edit(&mut self, ui: &Ui, e: Edit) {
+        self.sync_styles();
+        let Some(sel) = self.selection.clone() else { return };
+        match e {
+            Edit::Turn | Edit::Smaller | Edit::Larger => {
+                let Some(b) = sel.bounds(&self.model) else { return };
+                let (cx, cy) = (b.x + b.w / 2.0, b.y + b.h / 2.0);
+                let t = match e {
+                    Edit::Turn => AffineTransform::rotate(15f32.to_radians()),
+                    Edit::Smaller => AffineTransform::scale(0.8, 0.8),
+                    _ => AffineTransform::scale(1.25, 1.25),
+                };
+                let about = AffineTransform::translate(-cx, -cy).then(t).then(AffineTransform::translate(cx, cy));
+                self.push_undo();
+                sel.transform(&mut self.model, about);
+            }
+            _ => {
+                let widths = width_steps();
+                let color = COLORS[self.color];
+                let next = COLORS[(self.color + 1) % COLORS.len()];
+                self.push_undo();
+                for &i in sel.indices() {
+                    if let Edit::Width(k) = e {
+                        if let Some(s) = self.model.stroke_mut(i) {
+                            s.ink.width = widths[k.min(widths.len() - 1)];
+                        }
+                    }
+                    if let Some(st) = self.styles.get_mut(i) {
+                        apply_style(st, e, color, next);
+                    }
+                }
+            }
+        }
         self.repaint(ui, None);
     }
 
@@ -543,14 +812,22 @@ impl Freeform {
             self.moving = None;
         } else if let Some(a) = self.shape.take() {
             if (cx - a.0).abs() < 2.0 && (cy - a.1).abs() < 2.0 {
-                if let Some((c, d)) = self.undo.pop() {
+                if let Some((c, d, looks)) = self.undo.pop() {
                     self.canvas = c;
                     self.model = d;
+                    self.styles = looks;
                 }
             } else {
                 let shape = ink::shape_drawing(a, (cx, cy), self.tool == Tool::Oval, self.shape_ink());
+                self.sync_styles();
+                let base = self.model.strokes().len();
                 for s in shape.strokes() {
                     self.model.push(s.clone());
+                }
+                self.sync_styles();
+                // a rectangle or oval is a shape: the inspector can fill it
+                for st in self.styles.iter_mut().skip(base) {
+                    st.shape = true;
                 }
                 self.repaint(ui, None);
             }
@@ -561,6 +838,9 @@ impl Freeform {
     /// The control under pixel (x, y); a colour well inside the colour slot resolves to its colour.
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
         let (px, py) = (x / ui.s, y / ui.s);
+        if let Some(t) = self.inspector_hit(ui, px, py) {
+            return Some(t);
+        }
         let id = self.placed.as_ref()?.hit(px, py)?;
         if id == BAR_COLORS {
             let r = self.placed.as_ref()?.rect_of(BAR_COLORS)?;
@@ -580,6 +860,17 @@ impl Freeform {
         true
     }
 
+    /// The File menu's Export as PNG: the whole board, painted through a bitmap context at the display's factor, is
+    /// written to the Photos folder. The toast names the file (or the failure).
+    pub fn export_as_png(&mut self, ui: &Ui) {
+        let msg = match self.save(ui) {
+            Ok(name) => format!("Exported {name} as PNG"),
+            Err(e) => format!("Could not export: {e}"),
+        };
+        self.toast = Some((msg, self.now + 2500.0));
+        self.dirty = true;
+    }
+
     fn activate(&mut self, ui: &Ui, t: Target) {
         match t {
             Target::Tool(tool) => {
@@ -595,9 +886,10 @@ impl Freeform {
                 }
             }
             Target::Undo => {
-                if let Some((canvas, model)) = self.undo.pop() {
+                if let Some((canvas, model, looks)) = self.undo.pop() {
                     self.canvas = canvas;
                     self.model = model;
+                    self.styles = looks;
                     self.selection = None;
                 }
             }
@@ -605,8 +897,11 @@ impl Freeform {
                 self.push_undo();
                 self.canvas.iter_mut().for_each(|p| *p = PAPER);
                 self.model = Drawing::new();
+                self.styles.clear();
                 self.selection = None;
             }
+            Target::Inspector => self.inspector = !self.inspector,
+            Target::Edit(e) => self.edit(ui, e),
             Target::Delete => self.delete_selection(ui),
             Target::Copy => self.copy_selection(),
             Target::Arrange => self.arrange_selection(ui),
@@ -663,17 +958,13 @@ impl Freeform {
     /// so the file is sharp; otherwise the canvas itself is written.
     fn export_png(&self, ui: &Ui) -> Vec<u8> {
         let k = self.export_scale.max(1) as usize;
-        if k == 1 {
-            return springboard::pngenc::encode_rgb(self.cw, self.ch, &self.canvas);
-        }
         let mut big = self.model.clone();
         big.transform(AffineTransform::scale(k as f32, k as f32));
-        let (w, h) = (self.cw * k, self.ch * k);
-        let mut px = vec![PAPER; w * h];
-        for s in big.strokes() {
-            ink::paint_stroke(&mut px, w, h, s, ui.s * k as f32);
-        }
-        springboard::pngenc::encode_rgb(w, h, &px)
+        // the picture is painted into a bitmap context of the export size, with each stroke's look
+        let mut bmp = Bitmap::new(self.cw * k, self.ch * k, PAPER);
+        let (w, h) = (bmp.w, bmp.h);
+        style::paint_strokes(&mut bmp.px, w, h, big.strokes(), &self.styles, ui.s * k as f32);
+        bmp.png()
     }
 
     /// Copy: the selected strokes go to `copied` for the app to put on the pasteboard.
@@ -701,7 +992,7 @@ impl Freeform {
         match event {
             Event::Down(x, y) => {
                 self.dismiss_tip();
-                if y >= top {
+                if y >= top && x < self.board_px(ui) as f32 {
                     self.canvas_down(ui, x, y);
                 } else {
                     self.pressed = self.hit(ui, x, y);
@@ -794,6 +1085,9 @@ impl Freeform {
             for &(x, y) in self.lasso.points().iter().step_by(2) {
                 s.fill_rrect(x, y + top as f32, d, d, d / 2.0, TINT);
             }
+        }
+        if self.inspector {
+            self.draw_inspector(s, ui);
         }
         widgets::toolbar_band(s, ui, Rect { x: 0.0, y: 0.0, w: self.w as f32 / ui.s, h: UNIFIED_BAR_PT });
         let pressed = self.pressed.and_then(target_id);
@@ -1162,5 +1456,83 @@ mod model_tests {
         assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::OpenHand, "over the selected stroke");
         app.moving = Some((0.0, 0.0));
         assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::ClosedHand, "while it is dragged");
+    }
+
+    /// A whole-board lasso, so every stroke is selected.
+    fn select_all(app: &mut Freeform) {
+        let mut lasso = Lasso::new();
+        for (x, y) in [(0.0, 0.0), (400.0, 0.0), (400.0, 400.0), (0.0, 400.0)] {
+            lasso.add(x, y);
+        }
+        app.selection = Some(lasso.select(&app.model)).filter(|s| !s.is_empty());
+    }
+
+    #[test]
+    fn the_inspector_width_and_fill_set_the_selected_strokes_look() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = Drawing::from_strokes(vec![Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
+            points: vec![StrokePoint::at(5.0, 5.0), StrokePoint::at(12.0, 5.0)],
+        }]);
+        select_all(&mut app);
+        let undo_before = app.undo.len();
+        app.edit(&ui, Edit::Width(2));
+        assert_eq!(app.model.strokes()[0].ink.width, ink_width(Tool::Pen) * 2.0, "thick is twice the pen's width");
+        app.edit(&ui, Edit::Fill(1));
+        assert_eq!(app.styles[0].fill, Fill::Solid(COLORS[0]));
+        app.edit(&ui, Edit::Dash(1));
+        assert!(app.styles[0].dashed);
+        assert_eq!(app.undo.len(), undo_before + 3, "each inspector change is one undo step");
+        app.activate(&ui, Target::Undo);
+        assert!(!app.styles[0].dashed, "undo puts the look back");
+    }
+
+    #[test]
+    fn larger_scales_the_selection_about_its_centre() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = Drawing::from_strokes(vec![Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
+            points: vec![StrokePoint::at(10.0, 10.0), StrokePoint::at(30.0, 10.0)],
+        }]);
+        select_all(&mut app);
+        // the centre is (20, 10); 1.25 times the distance from it: 10 becomes 7.5 and 30 becomes 32.5
+        app.edit(&ui, Edit::Larger);
+        let pts = &app.model.strokes()[0].points;
+        assert_eq!((pts[0].x, pts[0].y), (7.5, 10.0));
+        assert_eq!((pts[1].x, pts[1].y), (32.5, 10.0));
+    }
+
+    #[test]
+    fn the_inspector_panel_narrows_the_board_and_its_rows_hit_their_segments() {
+        let ui = test_ui();
+        let mut app = Freeform::new(&ui, 800, 600);
+        app.ensure_canvas(&ui);
+        assert_eq!(app.cw, 800);
+        app.activate(&ui, Target::Inspector);
+        app.ensure_canvas(&ui);
+        // the panel is 220 points, 343.75 pixels at 1.5625, which truncates to 343
+        assert_eq!(app.cw, 800 - 343);
+        app.model = two_lines();
+        select_at(&mut app, 5.0, 5.0);
+        // the middle segment of the Fill row (Solid) is hit at its centre
+        let r = app.row_control(&ui, 0);
+        assert_eq!(app.inspector_hit(&ui, r.x + r.w / 2.0, r.y + r.h / 2.0), Some(Target::Edit(Edit::Fill(1))));
+        app.selection = None;
+        assert_eq!(app.inspector_hit(&ui, r.x + r.w / 2.0, r.y + r.h / 2.0), None, "no selection, no control");
+    }
+
+    #[test]
+    fn the_export_is_a_png_of_the_board_size_at_the_display_factor() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        app.set_export_scale(2);
+        assert!(app.has_strokes());
+        let png = app.export_png(&ui);
+        assert_eq!(&png[1..4], b"PNG");
+        assert_eq!(u32::from_be_bytes([png[16], png[17], png[18], png[19]]) as usize, app.cw * 2);
+        assert_eq!(u32::from_be_bytes([png[20], png[21], png[22], png[23]]) as usize, app.ch * 2);
     }
 }

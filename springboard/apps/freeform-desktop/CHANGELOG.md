@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0
+
+- New Inspector button in the toolbar opens a panel on the right for the strokes you selected with Lasso. Rectangles and ovals can be filled with a solid colour or a gradient from the current colour to the next one in the palette.
+- The inspector also sets the stroke width (thin, medium, thick), a dashed outline, a soft drop shadow, and opacity (100, 50 or 25 per cent). Each change is one undo step.
+- Turn, Smaller and Larger turn the selection 15 degrees or scale it to 80 or 125 per cent, around its middle. Undo puts it back.
+- File > Export as PNG writes the whole board to the Photos folder at the display's sharpness, with fills, dashes, shadows and opacity as you see them. Its shortcut is Command-Shift-E.
+- Stroke looks are kept for undo and Delete. Copy takes the stroke shapes only, without their looks.
+
 ## 1.4.0
 
 - New Arrange button in the toolbar, beside Copy: with strokes selected, it lines them up in a row from the top-left corner of the selection, wrapping to a new row at the board's right edge. Each stroke keeps its shape, and Undo puts them back.
