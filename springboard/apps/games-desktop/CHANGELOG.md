@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Games use the shared random source from the core crate for every shuffle and spawn. The numbers are the same as before, so a seeded deal and the 2048 tile placement do not change.
+- Each game's won or lost state is now a small state machine with explicit rules: a game in progress can be won or lost, a won game can still end, and a finished game only starts over with a new game. A stray end or move on a finished board is refused.
+- Gamepads are not used yet: the app does not receive controller input from the system.
+
 ## 1.2.3
 
 - App compliance re-check: the source list and the unified toolbar are drawn on the first screen at 1200x780 (Light and Dark), so their rows and buttons are published as controls; no visual or behaviour change.
