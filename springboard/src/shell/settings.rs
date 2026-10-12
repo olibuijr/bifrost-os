@@ -21,7 +21,7 @@ use super::storage::Scanner;
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
 use super::{backup, backup_page, diag, diagnostics_page};
-use super::ui::{AlertCard, Ui, Weight, DETAIL_BG, SEPARATOR_C, SIDEBAR_BG};
+use super::ui::{AlertCard, Ui, Weight, CONTENT_BG, SEPARATOR_C, SIDEBAR_BG};
 use super::wallpaper_page::{Tap, Target, Wallpaper, WallpaperPage};
 use super::controls::{notch, slider_value};
 pub use super::list::fill_row;
@@ -188,7 +188,7 @@ pub struct PageView<'a> {
 
 impl PageView<'_> {
     pub fn draw(&self, s: &mut Surface, ui: &Ui, t: f64) {
-        s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, DETAIL_BG.now());
+        s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, CONTENT_BG.now());
         self.page.draw(s, ui, self.pressed, t);
     }
 }
@@ -2201,7 +2201,7 @@ impl Settings {
     }
 
     fn draw_entry(&self, s: &mut Surface, entry: &Entry, ui: &Ui, pressed: Option<Hit>, t: f64) {
-        s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, DETAIL_BG.now());
+        s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, CONTENT_BG.now());
         match &entry.view {
             View::List(p) => p.draw(s, ui, pressed, t),
             View::Wallpaper(p) => {
