@@ -160,6 +160,7 @@ pub mod inference;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
+pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod pixel_buffer;
 pub mod display_link;
