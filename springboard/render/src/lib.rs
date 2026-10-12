@@ -16,6 +16,7 @@ pub mod motion;
 pub mod assets;
 pub mod fontprefs;
 pub mod filter;
+pub mod integral;
 pub mod mesh;
 pub mod texture;
 pub mod colorfx;
