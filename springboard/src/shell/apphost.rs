@@ -26,6 +26,9 @@ pub struct Manifest {
     pub summary: String,
     pub category: String,
     pub permissions: Vec<String>,
+    /// `keychain_groups = ["is.example.group"]`: keychain access groups the app shares items through (the
+    /// `keychain-groups` service). Honoured only with the `keychain` permission; see `services::keychain_groups`.
+    pub keychain_groups: Vec<String>,
     /// `entitlements = ["log-store"]`: privileged capabilities, honoured only for the kinds that may hold them
     /// (`log-store`: `system-app`; see `app_policy::Policy::with_entitlements`).
     pub entitlements: Vec<String>,
@@ -117,6 +120,7 @@ impl Manifest {
                 "summary" => m.summary = unquote(v),
                 "category" => m.category = unquote(v),
                 "permissions" => m.permissions = strs(),
+                "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
                 "provides" => m.provides = strs(),
                 "handles" => m.handles = strs(),

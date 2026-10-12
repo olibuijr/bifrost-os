@@ -72,6 +72,21 @@ impl Error {
     }
 }
 
+impl Error {
+    /// The error for an `OSStatus` code (as [`Error::code`] gives it); `None` for errSecSuccess (0). Codes this store
+    /// does not produce are I/O errors.
+    pub fn from_code(code: i32) -> Option<Error> {
+        Some(match code {
+            0 => return None,
+            -25299 => Error::DuplicateItem,
+            -25300 => Error::ItemNotFound,
+            -25291 => Error::NotPermitted,
+            -50 => Error::Param,
+            other => Error::Io(format!("OSStatus {other}")),
+        })
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -109,6 +124,21 @@ impl Store {
         make_private_dir(dir)?;
         let master = master_key(&dir.join(".master"))?;
         Ok(Store { path, keys: Some(derive(&master, app_id)) })
+    }
+
+    /// The store of an access group under the shell data dir `root`: `<root>/keychain/groups/<group>.kc`. Every app
+    /// that lists `group` in its manifest opens this one file, keyed by the group rather than by any app id. The
+    /// master key is the same one the app stores use. Refuses names that are not a plain file name.
+    pub fn open_group(root: &Path, group: &str) -> Result<Store, Error> {
+        if !group_ok(group) {
+            return Err(Error::Param);
+        }
+        let dir = root.join("keychain");
+        let groups = dir.join("groups");
+        make_private_dir(&groups)?;
+        let master = master_key(&dir.join(".master"))?;
+        let path = groups.join(format!("{group}.kc"));
+        Ok(Store { path, keys: Some(derive(&master, &format!("group:{group}"))) })
     }
 
     /// An encrypted store with a caller-supplied master key (tests, and a future key source such as a TPM).
@@ -201,12 +231,16 @@ fn check(service: &str, account: &str, value: Option<&[u8]>) -> Result<(), Error
     Ok(())
 }
 
+/// A plain file-name id: the alphabet and length of an app id, so it cannot escape the keychain directory.
+fn group_ok(group: &str) -> bool {
+    !group.is_empty()
+        && group.len() <= 128
+        && !group.starts_with('.')
+        && group.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-' || b == b'_')
+}
+
 fn file_for(root: &Path, app_id: &str) -> Result<PathBuf, Error> {
-    let plain = !app_id.is_empty()
-        && app_id.len() <= 128
-        && !app_id.starts_with('.')
-        && app_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-' || b == b'_');
-    if !plain {
+    if !group_ok(app_id) {
         return Err(Error::Param);
     }
     Ok(root.join("keychain").join(format!("{app_id}.kc")))
@@ -236,11 +270,13 @@ fn parse(text: &[u8]) -> Result<Items, Error> {
     Ok(items)
 }
 
-fn hex(b: &[u8]) -> String {
+/// Lowercase hex of `b`: the form a secret takes in the service JSON.
+pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-fn unhex(s: &str) -> Option<Vec<u8>> {
+/// The bytes of a hex string; `None` when it is odd-length or not hex.
+pub fn unhex(s: &str) -> Option<Vec<u8>> {
     if s.len() % 2 != 0 || !s.is_ascii() {
         return None;
     }
@@ -549,5 +585,48 @@ mod tests {
         assert_eq!(Error::from_status(KeychainStatus::Ok), None);
         assert_eq!(Error::from_status(KeychainStatus::Duplicate), Some(Error::DuplicateItem));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_group_is_one_file_shared_by_name_and_not_an_app_file() {
+        let d = dir("group");
+        let a = Store::open_group(&d, "is.olibuijr.keys").unwrap();
+        a.add("svc", "me", b"shared").unwrap();
+        // a second open of the same group sees the item; the group file is not an app file
+        let b = Store::open_group(&d, "is.olibuijr.keys").unwrap();
+        assert_eq!(b.get("svc", "me"), Ok(b"shared".to_vec()));
+        assert!(d.join("keychain").join("groups").join("is.olibuijr.keys.kc").exists());
+        assert!(!d.join("keychain").join("is.olibuijr.keys.kc").exists());
+        // another group is another file: no item leaks between groups
+        let other = Store::open_group(&d, "is.olibuijr.other").unwrap();
+        assert_eq!(other.get("svc", "me"), Err(Error::ItemNotFound));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn group_names_are_plain_file_names() {
+        let d = dir("group-names");
+        for bad in ["", ".hidden", "../escape", "a/b", "a b", "a:b"] {
+            assert!(matches!(Store::open_group(&d, bad), Err(Error::Param)), "{bad:?}");
+        }
+        assert!(Store::open_group(&d, "is.olibuijr.ok-1_2").is_ok());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn os_status_codes_map_back_to_errors() {
+        assert_eq!(Error::from_code(0), None);
+        for e in [Error::DuplicateItem, Error::ItemNotFound, Error::NotPermitted, Error::Param] {
+            assert_eq!(Error::from_code(e.code()), Some(e));
+        }
+        assert_eq!(Error::from_code(-36), Some(Error::Io("OSStatus -36".into())));
+    }
+
+    #[test]
+    fn hex_round_trips_and_refuses_bad_text() {
+        assert_eq!(hex(&[0, 0xab, 0xff]), "00abff");
+        assert_eq!(unhex("00abff"), Some(vec![0, 0xab, 0xff]));
+        assert_eq!(unhex("zz"), None);
+        assert_eq!(unhex("abc"), None);
     }
 }
