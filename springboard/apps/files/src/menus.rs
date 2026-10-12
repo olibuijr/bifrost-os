@@ -106,7 +106,7 @@ impl Files {
     pub(crate) fn context_action(&mut self, id: u32) -> bool {
         match id {
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
-            MENU_QUICK_LOOK => self.peek(),
+            MENU_QUICK_LOOK => self.quick_look(),
             MENU_INFO => self.get_info(),
             MENU_COMPRESS => self.compress(),
             MENU_TAGS => self.open_tags(),

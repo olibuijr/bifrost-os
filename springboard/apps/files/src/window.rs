@@ -125,6 +125,7 @@ impl Files {
         let Some(e) = self.rows.get(i).cloned() else {
             return;
         };
+        self.index_opened(&e);
         if e.is_dir {
             self.navigate(e.path, true)
         } else {

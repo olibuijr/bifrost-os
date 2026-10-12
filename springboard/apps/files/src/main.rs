@@ -54,6 +54,7 @@ mod peek;
 mod search;
 mod sidebar;
 mod statusbar;
+mod system;
 mod toolbar;
 mod undo;
 mod views;
@@ -70,6 +71,7 @@ use peek::*;
 use search::*;
 use sidebar::*;
 use statusbar::*;
+use system::*;
 use toolbar::*;
 use undo::*;
 use window::*;
@@ -152,6 +154,8 @@ struct Files {
     undo: Vec<Undo>,
     /// Go to Folder, spring-loaded folders and the copy-drag flag.
     fx: FileManagerState,
+    /// Service calls (preview panel, pasteboard, search index, Dock progress) and the replies they wait for.
+    sys: SystemState,
 }
 fn home() -> PathBuf {
     let account = std::fs::read_to_string("/var/lib/springboard/account").unwrap_or_default();
@@ -232,6 +236,7 @@ impl Files {
             vo: ViewOpts::default(),
             data_dir: None,
             labels: new_labels(),
+            sys: SystemState::default(),
         };
         // a folder given on the command line opens there (Show in Files)
         let start = std::env::args().nth(1).map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| f.home.clone());
@@ -273,13 +278,21 @@ impl App for Files {
             .with(Command::Undo, !self.undo.is_empty())
             .with(Command::Copy, !self.selection.is_empty())
             .with(Command::Cut, !self.selection.is_empty())
-            .with(Command::Paste, self.clip.is_some())
+            .with(Command::Paste, !self.in_recents())
             .with(Command::SelectAll, true)
     }
     fn undo_titles(&self, _: &Ctx) -> (String, String) {
         if self.naming.is_some() || self.searching { (String::new(), String::new()) } else { self.file_undo_titles() }
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
+        let handled = self.route_input(ctx, input);
+        self.flush_services(ctx);
+        handled
+    }
+}
+impl Files {
+    /// Routes one input to its handler. `event` sends the service calls the handler queued.
+    fn route_input(&mut self, ctx: &Ctx, input: Input) -> bool {
         if self.goto_input(&input) {
             self.update_controls();
             return true;
@@ -429,7 +442,7 @@ impl App for Files {
                     self.query.push_str(&s);
                     self.query_changed();
                 } else if s == " " {
-                    self.peek();
+                    self.quick_look();
                 }
             }
             Input::Key(k) if k.as_chord().is_some() => {
@@ -483,7 +496,7 @@ impl App for Files {
                                 self.open(i)
                             }
                         }
-                        32 => self.peek(),
+                        32 => self.quick_look(),
                         38 | 40 => self.move_focus(code == 40),
                         _ => {}
                     }
@@ -493,6 +506,20 @@ impl App for Files {
         }
         self.update_controls();
         true
+    }
+}
+impl App for Files {
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        self.service_answer(request, result)
+    }
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
+        if !bifrost_app::quick_look::is_quick_look(service) {
+            return false;
+        }
+        match bifrost_app::quick_look::event(event, body) {
+            Some(e) => self.preview_event(e),
+            None => false,
+        }
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         let mut changed = self.poll_search();
@@ -550,7 +577,9 @@ impl App for Files {
                 }
             }
         }
+        self.sys.track_dock(self.work.as_ref());
         if let Some(report) = finished {
+            self.sys.end_dock();
             if let Some(work) = self.work.take() {
                 self.ctl_job_done(&report);
                 self.finish_job(work, report);
@@ -558,6 +587,7 @@ impl App for Files {
             changed = true;
         }
         self.ctl_tick();
+        self.flush_services(ctx);
         if changed {
             self.revision += 1;
         }
@@ -627,7 +657,7 @@ mod tests {
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
         }
     }
     fn folder(name: &str) -> Entry {

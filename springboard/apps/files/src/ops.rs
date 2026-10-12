@@ -197,6 +197,7 @@ impl Files {
     pub(crate) fn copy_selected(&mut self, cut: bool) {
         let paths = self.selected_paths();
         if !paths.is_empty() {
+            self.sys.effects.push(Effect::CopyToBoard(paths.clone()));
             self.clip = Some((paths, cut));
         }
     }
@@ -375,17 +376,12 @@ impl Files {
         self.start_job("Duplicating", JobKind::Duplicate, paths, dest);
     }
     pub(crate) fn paste(&mut self) {
-        let Some((sources, cut)) = self.clip.clone() else {
-            return;
-        };
         if self.in_recents() {
             self.notice = Some("Open a folder to paste into it".into());
             return;
         }
-        let op = if cut { Op::Move } else { Op::Copy };
-        let title = if cut { "Moving" } else { "Copying" };
-        let dest = self.path.clone();
-        self.start_job(title, JobKind::Transfer(op), sources, dest);
+        // the shared pasteboard decides what is pasted; its reply starts the job (system.rs `service_answer`)
+        self.sys.effects.push(Effect::ReadBoard(self.path.clone()));
     }
     pub(crate) fn new_folder(&mut self) {
         if self.in_bin() || self.in_recents() {
