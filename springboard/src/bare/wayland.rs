@@ -392,7 +392,7 @@ impl Display {
 /// Anchors a chrome surface and reserves its edge. The menu bar (id 0) spans the top edge and the Dock (id 2) sits on
 /// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
 /// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
-/// the top-left corner and reserves nothing.
+/// the top-left corner, reserves nothing and ignores the others' zones.
 fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32)) {
     match frame.id {
         0 => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left|surface::Anchor::Right);l.set_margin(frame.y,0,0,0);l.set_exclusive_zone(frame.height as i32+frame.y.max(0));}
@@ -400,7 +400,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             let bottom=(screen.1 as i32-frame.y-frame.height as i32).max(0);
             l.set_anchor(surface::Anchor::Bottom);l.set_margin(0,0,bottom,0);l.set_exclusive_zone(frame.height as i32+bottom);
         }
-        _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(0);}
+        // -1: placed from the screen's corner, not pushed below the menu bar's or the Dock's exclusive zone
+        _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(-1);}
     }
 }
 

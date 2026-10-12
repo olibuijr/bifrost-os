@@ -415,10 +415,16 @@ impl Shell {
         if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
         effects
     }
+    /// Control Center (chrome id 4) and Notification Center (id 5) as overlay surfaces above every window, each with
+    /// room for its shadow: drawn only into the desktop frame they would sit under the windows of the session.
+    fn desk_panel_overlays(&self)->Vec<(u32,usize,usize,usize,usize)> {
+        let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
+        [(4,self.cc_desk_rect()),(5,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|(id,x,y,w,h)).collect()
+    }
     #[cfg(feature="desktop-wayland")]
     pub fn desktop_chrome_frames(&self,pixels:&[u32],width:usize,height:usize)->Vec<crate::bare::wayland::ChromeFrame> {
         if !self.desk_active()||self.is_locked()||self.anim.is_some(){return vec![];}
-        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_overlay_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(self.desktop_popup_rect().map(|(x,y,w,h)|(1,x,y,w,h))) {
+        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_overlay_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(self.desktop_popup_rect().map(|(x,y,w,h)|(1,x,y,w,h))).chain(self.desk_panel_overlays()) {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}if id==1 {let mask=crate::gfx::rrect_mask(w,h,self.ui.pt(MENU_RADIUS_PT));let mut image=Image{w,h,px:data};image.apply_mask(&mask);data=image.px;}frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data});
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
@@ -580,5 +586,20 @@ mod menu_damage_tests {
         let (x, y, w, h) = popup_damage_rect((300, 34, 180, 220), 28, 12, 2);
         assert!(x <= 300 && y <= 34);
         assert!(x + w >= 300 + 180 && y + h >= 34 + 220);
+    }
+}
+
+/// A panel's overlay rectangle in whole px: the panel grown by its shadow reach `g`, clipped at the screen's top-left.
+fn panel_overlay_rect((x,y,w,h):(f32,f32,f32,f32),g:f32)->(usize,usize,usize,usize) {
+    let (x0,y0)=((x-g).max(0.),(y-g).max(0.));
+    (x0 as usize,y0 as usize,(x+w+g-x0).max(0.).ceil() as usize,(y+h+g-y0).max(0.).ceil() as usize)
+}
+
+#[cfg(test)]
+mod panel_overlay_tests {
+    #[test]
+    fn a_panel_overlay_covers_the_panel_and_its_shadow() {
+        assert_eq!(super::panel_overlay_rect((100.,50.,200.,300.),10.),(90,40,220,320));
+        assert_eq!(super::panel_overlay_rect((5.,5.,20.,20.),10.),(0,0,35,35),"clipped at the top-left corner");
     }
 }

@@ -3494,7 +3494,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.5.40"
+version = "0.5.41"
 dependencies = [
  "bifrost-core",
  "bifrost-proto",

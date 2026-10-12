@@ -468,6 +468,11 @@ type GalleryRow = (usize, R4, R4, R4, R4);
 
 type R4 = (f32, f32, f32, f32);
 
+/// The capsule's top: `gap` under the column's content ending at `end`, but no lower than `floor` (above the dock).
+fn edit_capsule_y(end: f32, gap: f32, floor: f32) -> f32 {
+    (end + gap).min(floor)
+}
+
 fn within((x, y, w, h): R4, px: f32, py: f32) -> bool {
     px >= x && py >= y && px < x + w && py < y + h
 }
@@ -518,12 +523,19 @@ impl Shell {
         out
     }
 
-    /// The Edit Widgets capsule: the column's width, at the foot of the column above the dock.
+    /// The Edit Widgets capsule: the column's width, just under the last widget or notification (under the title when
+    /// the column is empty), and never lower than the room kept free above the dock.
     fn center_edit_rect(&self) -> R4 {
         let ui = &self.ui;
         let w = ui.pt(NC_W_PT);
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
-        (x, self.h as f32 - ui.pt(NC_BOTTOM_PT) + ui.pt(NC_EDIT_TOP_PT), w, ui.pt(NC_EDIT_PT))
+        let (title, _, cards) = self.center_desk_layout();
+        let widgets = self.center_widget_rects();
+        let below = |r: &R4| r.1 + r.3;
+        let end = widgets.iter().map(|(r, _)| below(r)).chain(cards.iter().map(|(_, r, _)| below(r))).fold(below(&title), f32::max);
+        let h = ui.pt(NC_EDIT_PT);
+        let floor = self.h as f32 - ui.pt(NC_BOTTOM_PT) - h;
+        (x, edit_capsule_y(end, ui.pt(NC_EDIT_TOP_PT), floor), w, h)
     }
 
     /// The gallery's title row (with Done at its trailing end), then one row per widget in the listing that fits.
@@ -818,5 +830,15 @@ impl Shell {
                 s.blit(&t, (cx0 + (cw - t.w as f32) / 2.0) as i32, (cy0 + (ch - t.h as f32) / 2.0) as i32, 255, alpha);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod edit_capsule_tests {
+    #[test]
+    fn the_edit_widgets_capsule_follows_the_column_and_stays_above_the_dock() {
+        assert_eq!(super::edit_capsule_y(200.0, 12.0, 900.0), 212.0, "just under the last row");
+        assert_eq!(super::edit_capsule_y(895.0, 12.0, 900.0), 900.0, "a full column keeps it above the dock");
+        assert_eq!(super::edit_capsule_y(0.0, 0.0, 0.0), 0.0);
     }
 }
