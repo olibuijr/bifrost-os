@@ -669,6 +669,8 @@ pub mod widget_action;
 pub mod skip_interval;
 pub mod reading_list;
 pub mod content_rules;
+pub mod browser_sheet;
+pub mod bookmark_import;
 pub mod tips;
 pub mod chart;
 pub mod chart_ax;
