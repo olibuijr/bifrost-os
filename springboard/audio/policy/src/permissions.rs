@@ -83,7 +83,12 @@ impl Permissions {
     }
 
     pub fn save(&self) -> String {
-        self.stored.iter().map(|((a, k), v)| format!("{a}\t{k}\t{}\n", u8::from(*v))).collect()
+        // An app id with a tab or newline would break the line format; such ids are not stored.
+        self.stored
+            .iter()
+            .filter(|((a, _), _)| !a.contains(|c| matches!(c, '\t' | '\n' | '\r')))
+            .map(|((a, k), v)| format!("{a}\t{k}\t{}\n", u8::from(*v)))
+            .collect()
     }
 
     pub fn load(&mut self, text: &str) {
@@ -128,5 +133,56 @@ mod tests {
         assert!(p.indicator());
         p.input_running(8, "memos", false);
         assert!(!p.indicator());
+    }
+
+    #[test]
+    fn a_denial_is_stored_and_survives_a_reload() {
+        let mut p = Permissions::default();
+        assert_eq!(p.request("rec", Kind::Exclusive), Decision::Prompt);
+        p.answer("rec", Kind::Exclusive, false);
+        assert_eq!(p.request("rec", Kind::Exclusive), Decision::Deny);
+        assert_eq!(p.save(), "rec\taudio-exclusive\t0\n");
+        let mut q = Permissions::default();
+        q.load(&p.save());
+        assert_eq!(q.request("rec", Kind::Exclusive), Decision::Deny);
+    }
+
+    #[test]
+    fn prompts_are_per_app_and_kind() {
+        let mut p = Permissions::default();
+        assert_eq!(p.request("a", Kind::Microphone), Decision::Prompt);
+        assert_eq!(p.request("b", Kind::Microphone), Decision::Prompt);
+        assert_eq!(p.request("a", Kind::Capture), Decision::Prompt);
+        p.answer("a", Kind::Microphone, true);
+        assert_eq!(p.request("b", Kind::Microphone), Decision::Deny, "b's prompt is still showing");
+        assert_eq!(p.request("a", Kind::Capture), Decision::Deny);
+    }
+
+    #[test]
+    fn load_ignores_garbage_and_unknown_kinds() {
+        let mut p = Permissions::default();
+        p.load("junk\nx\tcamera\t1\ny\tmicrophone\nz\tmicrophone\t1\textra\nok\taudio-capture\t1\n");
+        assert_eq!(p.save(), "ok\taudio-capture\t1\n");
+    }
+
+    #[test]
+    fn ids_that_would_break_the_file_are_not_saved() {
+        let mut p = Permissions::default();
+        p.answer("bad\tid", Kind::Microphone, true);
+        p.answer("bad\nid", Kind::Microphone, true);
+        p.answer("good", Kind::Microphone, true);
+        assert_eq!(p.save(), "good\tmicrophone\t1\n");
+        assert_eq!(p.request("bad\tid", Kind::Microphone), Decision::Allow, "kept for this session");
+    }
+
+    #[test]
+    fn indicator_lists_each_app_once_in_order() {
+        let mut p = Permissions::default();
+        p.input_running(1, "zed", true);
+        p.input_running(2, "alpha", true);
+        p.input_running(3, "zed", true);
+        assert_eq!(p.indicator_apps(), vec!["alpha", "zed"]);
+        p.input_running(9, "never", false);
+        assert_eq!(p.indicator_apps().len(), 2);
     }
 }

@@ -118,8 +118,12 @@ impl Defaults {
             let Some(h) = self.devices.iter().find(|d| d.headphones && d.output).map(|d| d.uid.clone()) else {
                 return a;
             };
-            self.before_jack = self.effective(Role::Output).map(String::from);
-            if self.before_jack.as_deref() != Some(h.as_str()) {
+            let current = self.effective(Role::Output).map(String::from);
+            if current.as_deref() == Some(h.as_str()) {
+                // Already on the headphones: nothing to restore when they go.
+                self.before_jack = None;
+            } else {
+                self.before_jack = current;
                 self.chosen[Role::Output.slot()] = Some(h.clone());
                 a.set.push((Role::Output, h));
             }
@@ -142,7 +146,7 @@ impl Defaults {
 
     pub fn load(&mut self, text: &str) {
         for line in text.lines() {
-            if let Some((k, v)) = line.split_once('=') {
+            if let Some((k, v)) = line.split_once('=').filter(|(_, v)| !v.is_empty()) {
                 if let Some(r) = Role::ALL.iter().find(|r| r.key() == k) {
                     self.chosen[r.slot()] = Some(v.to_string());
                 }
@@ -194,5 +198,65 @@ mod tests {
         let mut e = Defaults::new();
         e.load(&d.save());
         assert_eq!(e.save(), d.save());
+    }
+
+    #[test]
+    fn input_takes_only_input_devices_and_effects_follow_outputs() {
+        let mut d = Defaults::new();
+        let a = d.device_added(dev("spk", false));
+        assert_eq!(a.set, vec![(Role::Output, "spk".to_string()), (Role::SoundEffects, "spk".to_string())]);
+        let mic = Device { uid: "mic".into(), output: false, input: true, headphones: false };
+        assert_eq!(d.device_added(mic).set, vec![(Role::Input, "mic".to_string())]);
+        d.choose(Role::Input, "spk");
+        assert_eq!(d.effective(Role::Input), Some("mic"), "an output-only device cannot be the input");
+        assert!(d.device_removed("nothing").set.is_empty());
+    }
+
+    #[test]
+    fn removing_the_last_device_sets_nothing() {
+        let mut d = Defaults::new();
+        d.device_added(dev("spk", false));
+        assert!(d.device_removed("spk").set.is_empty());
+        assert_eq!(d.effective(Role::Output), None);
+    }
+
+    #[test]
+    fn jack_without_a_headphone_device_only_shows_the_indicator() {
+        let mut d = Defaults::new();
+        d.device_added(dev("spk", false));
+        let a = d.jack_changed(true);
+        assert!(a.set.is_empty() && a.show_indicator && !a.pause_media);
+        let a = d.jack_changed(false);
+        assert!(a.set.is_empty() && a.pause_media);
+    }
+
+    #[test]
+    fn jack_out_does_not_restore_the_headphones_themselves() {
+        let mut d = Defaults::new();
+        d.device_added(dev("spk", false));
+        d.device_added(dev("hp", true));
+        d.choose(Role::Output, "hp");
+        assert!(d.jack_changed(true).set.is_empty());
+        let a = d.jack_changed(false);
+        assert!(a.set.is_empty() && a.pause_media);
+    }
+
+    #[test]
+    fn jack_out_skips_a_previous_output_that_went_away() {
+        let mut d = Defaults::new();
+        d.device_added(dev("usb", false));
+        d.device_added(dev("hp", true));
+        d.jack_changed(true);
+        d.device_removed("usb");
+        let a = d.jack_changed(false);
+        assert!(a.set.is_empty());
+        assert_eq!(d.effective(Role::Output), Some("hp"));
+    }
+
+    #[test]
+    fn load_ignores_unknown_keys_and_empty_values() {
+        let mut d = Defaults::new();
+        d.load("default_output=\nvolume=3\nnonsense\ndefault_input=mic\n");
+        assert_eq!(d.save(), "default_input=mic\n");
     }
 }

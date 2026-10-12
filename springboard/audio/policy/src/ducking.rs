@@ -73,4 +73,44 @@ mod tests {
         }
         assert_eq!(d.gain(), 1.0);
     }
+
+    #[test]
+    fn ramps_are_monotonic_and_stay_in_range() {
+        let mut d = Ducker::default();
+        d.set(Reason::Notification, true);
+        let mut last = d.gain();
+        for _ in 0..10 {
+            let g = d.tick();
+            assert!(g <= last && g >= DUCK_GAIN);
+            last = g;
+        }
+        d.set(Reason::Notification, false);
+        let mut ticks = 0;
+        while d.gain() < 1.0 {
+            let g = d.tick();
+            assert!(g >= last && g <= 1.0);
+            last = g;
+            ticks += 1;
+            assert!(ticks < 100, "release never finished");
+        }
+        // (1.0 - 0.3) / 0.05 = 14 ticks, allowing one for float rounding
+        assert!((14..=15).contains(&ticks), "{ticks}");
+    }
+
+    #[test]
+    fn ducking_again_mid_release_turns_around_at_attack_speed() {
+        let mut d = Ducker::default();
+        d.set(Reason::Speech, true);
+        for _ in 0..5 {
+            d.tick();
+        }
+        d.set(Reason::Speech, false);
+        for _ in 0..4 {
+            d.tick();
+        }
+        let g = d.gain();
+        assert!((g - 0.5).abs() < 1e-5, "{g}");
+        d.set(Reason::Speech, true);
+        assert!((d.tick() - DUCK_GAIN).abs() < 1e-5);
+    }
 }

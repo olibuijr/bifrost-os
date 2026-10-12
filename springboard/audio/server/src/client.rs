@@ -160,4 +160,58 @@ mod tests {
         // SAFETY: getuid cannot fail.
         assert_eq!(uid, unsafe { libc::getuid() });
     }
+
+    fn eventfd() -> OwnedFd {
+        // SAFETY: eventfd takes no pointers.
+        unsafe { OwnedFd::from_raw_fd(libc::eventfd(0, libc::EFD_CLOEXEC)) }
+    }
+
+    #[test]
+    fn the_most_descriptors_arrive_in_order_and_close_on_exec() {
+        let (a, b) = pair();
+        let sent: Vec<OwnedFd> = (0..MAX_FDS).map(|_| eventfd()).collect();
+        let raw: Vec<RawFd> = sent.iter().map(|f| f.as_raw_fd()).collect();
+        send_msg(a.as_raw_fd(), b"four", &raw).unwrap();
+        let mut buf = [0u8; 16];
+        let (n, fds) = recv_msg(b.as_raw_fd(), &mut buf).unwrap();
+        assert_eq!((n, fds.len()), (4, MAX_FDS));
+        for (i, f) in fds.iter().enumerate() {
+            let v = (i + 1) as u64;
+            // SAFETY: valid fds and 8-byte buffers.
+            unsafe { libc::write(f.as_raw_fd(), &v as *const u64 as *const libc::c_void, 8) };
+            let mut got = 0u64;
+            unsafe { libc::read(sent[i].as_raw_fd(), &mut got as *mut u64 as *mut libc::c_void, 8) };
+            assert_eq!(got, v, "descriptor {i} arrived out of order");
+            // SAFETY: F_GETFD on a valid fd.
+            let flags = unsafe { libc::fcntl(f.as_raw_fd(), libc::F_GETFD) };
+            assert_ne!(flags & libc::FD_CLOEXEC, 0);
+        }
+    }
+
+    #[test]
+    fn a_packet_larger_than_the_buffer_is_refused() {
+        let (a, b) = pair();
+        send_msg(a.as_raw_fd(), &[7u8; 32], &[]).unwrap();
+        let mut small = [0u8; 8];
+        let e = recv_msg(b.as_raw_fd(), &mut small).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn sending_to_a_closed_peer_is_an_error_not_a_signal() {
+        let (a, b) = pair();
+        drop(b);
+        let e = send_msg(a.as_raw_fd(), b"gone", &[]).unwrap_err();
+        assert_eq!(e.raw_os_error(), Some(libc::EPIPE));
+    }
+
+    #[test]
+    fn packets_keep_their_boundaries() {
+        let (a, b) = pair();
+        send_msg(a.as_raw_fd(), b"one", &[]).unwrap();
+        send_msg(a.as_raw_fd(), b"three", &[]).unwrap();
+        let mut buf = [0u8; 64];
+        assert_eq!(recv_msg(b.as_raw_fd(), &mut buf).unwrap().0, 3);
+        assert_eq!(recv_msg(b.as_raw_fd(), &mut buf).unwrap().0, 5);
+    }
 }

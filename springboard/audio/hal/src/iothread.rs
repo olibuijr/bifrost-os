@@ -207,7 +207,10 @@ pub(crate) fn cycle_once(
     // timestamps: the zero stamp is the anchor; this cycle's input was captured one buffer before `now`, and the
     // output plays one buffer after it
     let z = zs.read();
-    let rate = if act.rate == 0 { DEFAULT_RATE } else { act.rate as f64 };
+    let rate = match act.rate.load(Ordering::Acquire) {
+        0 => DEFAULT_RATE,
+        r => r as f64,
+    };
     let zero = TimeStamp { sample_time: z.sample_time as f64, host_ns: z.host_ns, rate_scalar: z.rate_scalar, word_clock: 0, flags: flag_all() };
     let now_st = zero.sample_time_at(now, rate);
     let in_st = now_st - frames as f64;

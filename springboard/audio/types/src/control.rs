@@ -642,4 +642,75 @@ mod tests {
         assert_eq!(decode_request(&vec![0u8; MAX_LEN + 1]), Err(DecodeError::TooLong));
         assert_eq!(decode_reply(&[6, 200]), Err(DecodeError::BadValue));
     }
+
+    #[test]
+    fn every_error_round_trips_and_the_table_is_complete() {
+        for (i, e) in ERRORS.iter().enumerate() {
+            let b = encode_reply(&Reply::Error(*e));
+            assert_eq!(b, [6, i as u8]);
+            assert_eq!(decode_reply(&b), Ok(Reply::Error(*e)));
+        }
+        for (i, a) in ERRORS.iter().enumerate() {
+            assert!(!ERRORS[i + 1..].contains(a), "{a:?} is listed twice");
+        }
+    }
+
+    #[test]
+    fn every_truncation_of_every_message_fails_cleanly() {
+        let a = PropertyAddress::scoped(props::STREAMS, Scope::Input);
+        let reqs = [
+            Request::Hello { version: 1, client: "x".into(), policy: false },
+            Request::Set { object: ObjectId(1), address: a, value: PropertyValue::Formats(vec![fmt()]) },
+            Request::AddIoProc(IoProcRequest { device: ObjectId(4), input_channels: 0, output_channels: 2, buffer_frames: 128 }),
+            Request::PromoteThread { tid: 77 },
+        ];
+        for m in &reqs {
+            let b = encode_request(m);
+            for n in 0..b.len() {
+                assert!(decode_request(&b[..n]).is_err(), "{m:?} cut at {n}");
+            }
+        }
+        let reps = [
+            Reply::Welcome { version: 1, client_id: 2 },
+            Reply::Value(PropertyValue::Rates(vec![(8000.0, 192000.0)])),
+            Reply::Objects(vec![ObjectId(1), ObjectId(2)]),
+            Reply::IoProcAdded { id: 1, layout: ShmLayout::default() },
+            Reply::Changed(vec![(ObjectId(2), a)]),
+            Reply::Overload { id: 1, count: 1 },
+        ];
+        for m in &reps {
+            let b = encode_reply(m);
+            for n in 0..b.len() {
+                assert!(decode_reply(&b[..n]).is_err(), "{m:?} cut at {n}");
+            }
+        }
+    }
+
+    #[test]
+    fn strings_must_be_utf8() {
+        let mut b = encode_request(&Request::Hello { version: 1, client: "ab".into(), policy: false });
+        // tag, version (4), length (4), then the two string bytes
+        b[9] = 0xff;
+        assert_eq!(decode_request(&b), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn random_bytes_never_panic() {
+        // A fixed LCG so the sweep is reproducible; decoding must return, not panic or over-allocate.
+        let mut x: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut buf = Vec::new();
+        for round in 0..20_000 {
+            buf.clear();
+            let len = round % 64;
+            for _ in 0..len {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                buf.push((x >> 56) as u8);
+            }
+            if let Some(t) = buf.first_mut() {
+                *t %= 12;
+            }
+            let _ = decode_request(&buf);
+            let _ = decode_reply(&buf);
+        }
+    }
 }

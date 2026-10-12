@@ -523,8 +523,8 @@ mod tests {
                 (*h).channels = 2;
             }
             let act = (region.addr + layout.activation as usize) as *mut bifrost_audio_shm::Activation;
-            (*act).rate = 48_000;
-            (*act).quantum = 4;
+            (*act).rate.store(48_000, std::sync::atomic::Ordering::Relaxed);
+            (*act).quantum.store(4, std::sync::atomic::Ordering::Relaxed);
         }
         let (a, b) = conn::socket_pair();
         let r2 = region.clone();

@@ -391,3 +391,105 @@ fn render_player(p: &mut PlayerRt, out: &mut [Vec<f32>], n: usize) {
     }
     c.position.store(pos as u64, Ordering::Relaxed);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn planes(ch: usize, n: usize) -> Vec<Vec<f32>> {
+        vec![vec![0.0; n]; ch]
+    }
+
+    #[test]
+    fn mix_spreads_mono_and_pairs_equal_counts() {
+        let mut dst = planes(2, 3);
+        mix(&mut dst, &[vec![1.0, 2.0, 3.0]], 0.5, 3);
+        assert_eq!(dst, vec![vec![0.5, 1.0, 1.5], vec![0.5, 1.0, 1.5]]);
+        mix(&mut dst, &[vec![1.0; 3], vec![2.0; 3]], 1.0, 2);
+        assert_eq!(dst, vec![vec![1.5, 2.0, 1.5], vec![2.5, 3.0, 1.5]], "only the first n frames are touched");
+    }
+
+    #[test]
+    fn mix_drops_extra_source_channels() {
+        let mut dst = planes(1, 2);
+        mix(&mut dst, &[vec![1.0, 1.0], vec![9.0, 9.0]], 1.0, 2);
+        assert_eq!(dst, vec![vec![1.0, 1.0]]);
+    }
+
+    #[test]
+    fn zero_clears_only_n_frames() {
+        let mut p = vec![vec![1.0; 4]];
+        zero(&mut p, 2);
+        assert_eq!(p, vec![vec![0.0, 0.0, 1.0, 1.0]]);
+    }
+
+    fn player(samples: Vec<f32>) -> PlayerRt {
+        let frames = samples.len();
+        PlayerRt { samples: vec![samples], frames, ctl: PlayerHandle::new(frames as u64) }
+    }
+
+    #[test]
+    fn a_player_that_ends_exactly_on_the_block_edge_finishes() {
+        let mut p = player(vec![1.0, 2.0, 3.0, 4.0]);
+        p.ctl.play();
+        let mut out = planes(1, 4);
+        render_player(&mut p, &mut out, 4);
+        assert_eq!(out[0], vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(p.ctl.is_finished());
+        assert!(!p.ctl.is_playing());
+        assert_eq!(p.ctl.position(), 4);
+        render_player(&mut p, &mut out, 4);
+        assert_eq!(out[0], vec![0.0; 4], "a finished player renders silence");
+    }
+
+    #[test]
+    fn a_looping_player_wraps_inside_one_block() {
+        let mut p = player(vec![1.0, 2.0, 3.0]);
+        p.ctl.set_looping(true);
+        p.ctl.play();
+        let mut out = planes(1, 7);
+        render_player(&mut p, &mut out, 7);
+        assert_eq!(out[0], vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]);
+        assert_eq!(p.ctl.position(), 1);
+        assert!(p.ctl.is_playing());
+    }
+
+    #[test]
+    fn a_paused_player_holds_its_position_and_seek_applies_on_the_next_block() {
+        let mut p = player(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = planes(1, 2);
+        render_player(&mut p, &mut out, 2);
+        assert_eq!((out[0].clone(), p.ctl.position()), (vec![0.0, 0.0], 0));
+        p.ctl.seek(2);
+        p.ctl.play();
+        render_player(&mut p, &mut out, 2);
+        assert_eq!(out[0], vec![3.0, 4.0]);
+    }
+
+    #[test]
+    fn an_empty_player_renders_silence_without_spinning() {
+        let mut p = player(Vec::new());
+        p.ctl.play();
+        let mut out = planes(1, 4);
+        render_player(&mut p, &mut out, 4);
+        assert_eq!(out[0], vec![0.0; 4]);
+    }
+
+    #[test]
+    fn depends_on_follows_input_edges() {
+        let mut g = Graph::new(48_000.0, 1, 4);
+        g.nodes.push(Node::new(Kind::Mixer, 1));
+        g.nodes.push(Node::new(Kind::Mixer, 1));
+        let e = |from| Edge { from, gain: Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits())) };
+        g.nodes[0].inputs.push(e(1));
+        g.nodes[1].inputs.push(e(2));
+        assert!(g.depends_on(0, 2));
+        assert!(!g.depends_on(2, 0));
+        assert_eq!(g.deterministic_order(), vec![2, 1, 0]);
+        g.prepare().unwrap();
+        let mut o = [0.0f32; 4];
+        assert_eq!(g.render_block(5, &mut [&mut o[..]]), Err(UnitError::TooManyFrames));
+        g.render_block(4, &mut [&mut o[..]]).unwrap();
+        assert_eq!(g.sample_time, 4);
+    }
+}

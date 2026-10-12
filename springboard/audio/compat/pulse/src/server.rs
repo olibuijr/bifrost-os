@@ -271,4 +271,52 @@ mod tests {
         assert!(bind(&path).is_ok());
         let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
     }
+
+    #[test]
+    fn an_oversized_frame_drops_only_that_client() {
+        use crate::proto::MAX_FRAME;
+        let path = socket_path("oversized");
+        let mut server = Server::new(bind(&path).unwrap(), Box::new(MockBackend::standard())).unwrap();
+        let mut good = UnixStream::connect(&path).unwrap();
+        let mut bad = UnixStream::connect(&path).unwrap();
+        good.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+        server.step(20).unwrap();
+        assert_eq!(server.clients(), 2);
+        let d = Descriptor { length: MAX_FRAME as u32 + 1, channel: 0, offset: 0, flags: 0 };
+        bad.write_all(&d.encode()).unwrap();
+        for _ in 0..3 {
+            server.step(20).unwrap();
+        }
+        assert_eq!(server.clients(), 1);
+        let mut w = Writer::new();
+        w.u32(cmd::AUTH).u32(1).u32(35).arbitrary(&[0; 256]);
+        good.write_all(&command_frame(&w.buf)).unwrap();
+        for _ in 0..3 {
+            server.step(20).unwrap();
+        }
+        assert_eq!(Reader::new(&read_frame(&mut good)).u32(), Ok(cmd::REPLY));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
+    }
+
+    #[test]
+    fn an_idle_step_returns_after_its_timeout() {
+        let path = socket_path("idle");
+        let mut server = Server::new(bind(&path).unwrap(), Box::new(MockBackend::standard())).unwrap();
+        let t0 = std::time::Instant::now();
+        server.step(30).unwrap();
+        let dt = t0.elapsed();
+        assert!(dt >= std::time::Duration::from_millis(25) && dt < std::time::Duration::from_secs(2), "{dt:?}");
+        assert_eq!(server.clients(), 0);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
+    }
+
+    #[test]
+    fn the_socket_directory_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = socket_path("mode");
+        let _l = bind(&path).unwrap();
+        let mode = std::fs::metadata(path.parent().unwrap()).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
+    }
 }
