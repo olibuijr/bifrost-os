@@ -1,4 +1,9 @@
 # Changelog
+
+## 1.2.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.2.0 — 2026-10-12
 
 - Every answer is checked before you see it. An answer longer than 20,000 characters is cut, and the chat says so. Phrases you list in `guardrail.txt` in the app's data folder (one per line, lines starting with `#` are notes) are masked as `[removed]`. A part of a listed phrase is never shown while the answer is still arriving.

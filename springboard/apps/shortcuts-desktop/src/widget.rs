@@ -6,7 +6,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPAC
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use crate::model;
 use bifrost_app::kit::ui::{
-    Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, DETAIL_BG, LABEL, LABEL_2, LABEL_3, LINK,
+    Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, CONTENT_BG, LABEL, LABEL_2, LABEL_3, LINK,
     MAC_TITLE3_PT, PRESSED, ROW_PRESSED, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK,
     SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, TOAST_FILL, WHITE,
 };
@@ -608,7 +608,7 @@ impl Shortcuts {
         self.scroll = self.scroll.clamp(0.0, self.max_scroll(ui));
         let (cells, _) = self.layout(ui);
         let (top, x0) = (Self::top(ui), Self::side(ui));
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         let r = ui.pt(CELL_RADIUS_PT);
         for c in cells.iter() {
             let (x, y, cw, ch) = c.rect;

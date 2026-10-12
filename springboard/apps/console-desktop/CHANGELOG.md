@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.2.0 — 2026-10-12
 
 - Security Events: a new row under Reports lists the endpoint security events BifrOSt can subscribe to: socket bind and

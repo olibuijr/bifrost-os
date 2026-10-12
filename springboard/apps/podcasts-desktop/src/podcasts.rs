@@ -5,7 +5,7 @@
 
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
-use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
 use crate::refresh;
 use crate::media::{self, Bar, Shown};
@@ -1182,7 +1182,7 @@ impl Podcasts {
         if self.cache.len() > 256 {
             self.cache.clear();
         }
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         let x0 = self.side(ui);
         let cw = self.content_w(ui);
         let m = self.margin(ui);
@@ -1213,7 +1213,7 @@ impl Podcasts {
         widgets::source_list(s, ui, self.sidebar_bounds(ui), &self.sidebar(), SIDEBAR_SCROLL, pressed_side);
         s.fill_rect((x0 - 1.0).max(0.0) as usize, 0, 1, self.h as usize, SEPARATOR_C.now());
         let w_pt = self.w as f32 / ui.s;
-        s.fill_rect(x0 as usize, 0, cw as usize, ui.pt(UNIFIED_BAR_PT) as usize, DETAIL_BG.now());
+        s.fill_rect(x0 as usize, 0, cw as usize, ui.pt(UNIFIED_BAR_PT) as usize, CONTENT_BG.now());
         widgets::toolbar_band(s, ui, Rect { x: SIDEBAR_W, y: 0.0, w: w_pt - SIDEBAR_W, h: UNIFIED_BAR_PT });
         let pressed_bar = match self.pressed {
             Some(Target::Add) => Some(BAR_ADD),

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.4.0
 
 - The library follows the music folders. Every few seconds Music checks the files it holds: a song that was added,

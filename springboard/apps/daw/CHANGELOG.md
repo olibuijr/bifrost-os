@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 0.3.0 — 2026-10-12
 
 - Import MIDI: the "Import MIDI" button under the track list opens a panel for a Standard MIDI File (.mid). The notes become a new track on the synth, placed in the scene of the selected clip (or the first scene), and the clip grows to whole bars that fit them. Notes keep their timing at the song tempo.

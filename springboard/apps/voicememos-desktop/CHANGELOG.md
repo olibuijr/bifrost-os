@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.4.0 — 2026-10-12
 
 - Recording menu: a new menu between the app menu and the standard menus with Trim, Notes, Rename and Export to Downloads.

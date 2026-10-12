@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.4.0
 
 - Winning a game now shows a short burst of confetti over the board. It plays once for each win: a game that is already won does not repeat it, and the next game's win shows it again. The burst lasts about two seconds and fades out.

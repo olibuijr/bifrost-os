@@ -7,7 +7,7 @@ use crate::model::Level;
 use crate::signposts::{self, Mark};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::appearance::Pair;
-use bifrost_app::kit::ui::{CARD_BG, DETAIL_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -117,7 +117,7 @@ impl Console {
         let g = self.geo(ui);
         let max = self.fit_scroll(ui);
         self.set_stick_bottom(max);
-        fill(s, ui, 0.0, 0.0, g.w, g.h, DETAIL_BG.now());
+        fill(s, ui, 0.0, 0.0, g.w, g.h, CONTENT_BG.now());
         self.draw_sidebar(ui, s);
         self.draw_rows(ui, s, &g);
         if let Some(x) = g.pane_x {
@@ -251,7 +251,7 @@ impl Console {
         }
 
         let table_w = g.table_right - g.table_x;
-        fill(s, ui, g.table_x, UNIFIED_BAR_PT, table_w, HEAD_PT, DETAIL_BG.now());
+        fill(s, ui, g.table_x, UNIFIED_BAR_PT, table_w, HEAD_PT, CONTENT_BG.now());
         for &(col, x, w) in &g.cols {
             let (title, pad) = match col {
                 Col::Type => ("Type", TYPE_PAD),
@@ -266,7 +266,7 @@ impl Console {
         fill(s, ui, g.table_x, UNIFIED_BAR_PT + HEAD_PT - 1.0, table_w, 1.0, SEPARATOR_C.now());
 
         let fy = g.h - FOOT_PT;
-        fill(s, ui, x0, fy, g.w - x0, FOOT_PT, DETAIL_BG.now());
+        fill(s, ui, x0, fy, g.w - x0, FOOT_PT, CONTENT_BG.now());
         fill(s, ui, x0, fy, g.w - x0, 1.0, SEPARATOR_C.now());
         let footer = self.footer_text();
         text(&mut self.labels, s, ui, &footer, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x0 + 12.0, fy + FOOT_PT / 2.0, g.w - x0 - 24.0);
