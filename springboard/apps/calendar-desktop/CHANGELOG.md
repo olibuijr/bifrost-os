@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.4
+
+- Calendar's change counter is now the shared store-change model (the EventKit change notification): every save or import posts one change, and the alert state rescans once per change, however many saves came in between.
+- Alerts, repeats and the calendar store were already wired in the app; this round adds the store-change model and its tests (`tests/store_changes.rs`). Calendar notification triggers and time-zone database pickers are still gaps and are listed in `docs/parity/wire-app-calendar.md`.
+
 ## 1.8.3 — 2026-10-11
 
 - Compliance: the calendar list is shown on the first screen (macOS Calendar shows it by default; it still folds away below 640 pt and with the toolbar toggle), so the source list is published as Row controls in the compliance test.
