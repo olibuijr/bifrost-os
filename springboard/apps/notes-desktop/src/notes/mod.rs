@@ -16,6 +16,7 @@ mod chrome;
 pub mod icon;
 pub mod rpc;
 pub mod sketch;
+pub mod smart;
 
 mod parity;
 mod picker;
@@ -122,6 +123,8 @@ pub enum View {
     All,
     Folder(String),
     Trash,
+    /// A smart folder: the notes its predicate picks out (outside the bin).
+    Smart(smart::Smart),
 }
 
 /// A formatting button: inline emphasis or a list style for the paragraphs.
@@ -164,7 +167,22 @@ enum Act {
     ToggleWholeWord,
     /// Check Spelling and Links in the open note
     CheckSpelling,
+    /// Find > Replace: opens the replace card for the find text
+    Replace,
 }
+
+/// Find > Replace: the replacement text being typed in the replace card over the editor.
+struct Replacing {
+    field: TextField,
+}
+
+/// The replace card's height and its rows (pt): the label and buttons row, then the field.
+const REPLACE_CARD_PT: f32 = 80.0;
+const REPLACE_BAR_PT: f32 = 32.0;
+const REPLACE_FIELD_PT: f32 = 36.0;
+/// Width of the Replace and Replace All buttons' hit zones (pt).
+const REPLACE_ONE_PT: f32 = 84.0;
+const REPLACE_ALL_PT: f32 = 104.0;
 
 /// A popover list of actions (folders and sorting in the list, note actions
 /// in the editor). `bool` marks the current choice.
@@ -282,6 +300,10 @@ pub struct Notes {
     pick_drag: Option<f32>,
     pick_moved: bool,
     naming: Option<Naming>,
+    /// the replace card over the open note (Find > Replace)
+    replacing: Option<Replacing>,
+    /// the time of the last list rebuild (frame clock, ms): smart folders measure "this week" from it
+    now_t: f64,
     /// a transient error line (folder or move failures)
     notice: Option<String>,
     /// The last delete, for a short Undo bar.
@@ -384,6 +406,8 @@ impl Notes {
             pick_drag: None,
             pick_moved: false,
             naming: None,
+            replacing: None,
+            now_t: 0.0,
             notice: None,
             undo_toast: None,
             hl: vec![],
@@ -498,6 +522,7 @@ impl Notes {
             View::All => "all".to_string(),
             View::Folder(f) => format!("folder:{f}"),
             View::Trash => "trash".to_string(),
+            View::Smart(s) => format!("smart:{}", s.key()),
         };
         format!("notes_screen={screen}\nnotes_count={}\nnotes_shown={}\nnotes_keyboard={}\nnotes_pinned={}\nnotes_pin_error={}\nnotes_view={view}\nnotes_folders={}\nnotes_sort={}\n", self.notes.len(), self.shown.len(), self.keyboard.shown(), self.notes.iter().filter(|n| self.is_pinned(&n.id)).count(), self.pin_error.is_some(), self.folders.len(), self.prefs.sort.label())
     }
@@ -524,14 +549,20 @@ impl Notes {
 
     /// Whether note `i` belongs in the current view; a search looks through
     /// every folder but never the bin (unless the bin is open).
-    fn visible(&self, i: usize, searching: bool) -> bool {
+    fn visible(&self, i: usize, searching: bool, cutoff: i64) -> bool {
         let loc = self.loc_of(&self.notes[i].id);
         match &self.view {
             View::Trash => loc == folders::TRASH,
             _ if loc == folders::TRASH => false,
             View::All => true,
             View::Folder(f) => searching || loc == f,
+            View::Smart(s) => s.matches(&self.notes[i], self.is_pinned(&self.notes[i].id), cutoff),
         }
+    }
+
+    /// The Unix time before which a note is not "Edited This Week": a week before the last list rebuild.
+    fn smart_cutoff(&self) -> i64 {
+        self.wall.now(self.now_t) - smart::WEEK_SECS
     }
 
     pub fn view(&self) -> &View {
@@ -571,6 +602,7 @@ impl Notes {
             View::All => "Notes".to_string(),
             View::Folder(f) => f.clone(),
             View::Trash => "Recently Deleted".to_string(),
+            View::Smart(s) => s.label().to_string(),
         }
     }
 
@@ -578,6 +610,7 @@ impl Notes {
 
     /// Sorts, filters and re-renders the list rows at time `t`.
     fn rebuild(&mut self, ui: &Ui, t: f64) {
+        self.now_t = t;
         // sorting moves notes: the open one is found again by id
         let open = self.editing().map(|n| n.id.clone());
         store::sort_by_key(&mut self.notes, self.prefs.sort, &self.pinned);
@@ -589,7 +622,8 @@ impl Notes {
         let query = self.search.text().to_string();
         let searching = !query.trim().is_empty();
         let ranked = store::search_ranked(&self.notes, &query, &self.pinned);
-        self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching)).collect();
+        let cutoff = self.smart_cutoff();
+        self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching, cutoff)).collect();
         self.shown_pinned = self.shown.iter().filter(|&&i| self.is_pinned(&self.notes[i].id)).count();
         let now = self.wall.now(t);
         let text_w = self.list_px(ui).1 - 2.0 * ui.pt(SPACE_S + SPACE_L);
@@ -1407,6 +1441,11 @@ impl Notes {
             items.push((format!("{f}\t{}", count(Some(f))), Act::View(View::Folder(f.clone())), self.view == View::Folder(f.clone())));
         }
         items.push((format!("Recently Deleted\t{}", count(Some(folders::TRASH))), Act::View(View::Trash), self.view == View::Trash));
+        for s in smart::Smart::ALL {
+            let view = View::Smart(s);
+            let current = self.view == view;
+            items.push((format!("{}\t{}", s.label(), self.count_in(&view)), Act::View(view), current));
+        }
         items.push(("New Folder".to_string(), Act::NewFolder, false));
         if matches!(self.view, View::Folder(_)) {
             items.push(("Rename Folder".to_string(), Act::RenameFolder, false));
@@ -1439,6 +1478,7 @@ impl Notes {
             ("Insert Sketch".to_string(), Act::InsertSketch, false),
             ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
             ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
+            ("Replace in Note".to_string(), Act::Replace, false),
         ];
         if here != folders::TRASH {
             if !here.is_empty() {
@@ -1504,6 +1544,105 @@ impl Notes {
             }
             Err(error) => self.notice = Some(format!("Unable to save folder: {error}")),
         }
+    }
+
+    // --- find and replace ---
+
+    /// Find > Replace: opens the replace card over the open note. The find text is the search field's text as the
+    /// note last found it, so without find text there is nothing to replace and the note says so.
+    fn start_replacing(&mut self, ui: &Ui, t: f64) {
+        if !self.is_editing() || self.hl_query.is_empty() {
+            self.notice = Some("Search for text first, then replace it".to_string());
+            self.dirty = true;
+            return;
+        }
+        let mut field = TextField::new(ui, "Replacement", MAC_BODY_PT, false, 100);
+        field.focused = true;
+        self.replacing = Some(Replacing { field });
+        self.searching = false;
+        self.search.focused = false;
+        self.keyboard.set_shown(!self.hw_kb, t);
+        self.dirty = true;
+    }
+
+    fn cancel_replacing(&mut self, t: f64) {
+        self.replacing = None;
+        self.keyboard.set_shown(false, t);
+        self.dirty = true;
+    }
+
+    /// The replacement text the card holds.
+    fn replacement(&self) -> String {
+        self.replacing.as_ref().map_or_else(String::new, |r| r.field.text().to_string())
+    }
+
+    /// Replace (the card's left button): the selected match becomes the replacement, and the find bar moves on to
+    /// the next match.
+    fn replace_one(&mut self, ui: &Ui, t: f64) {
+        if self.hl_query.is_empty() {
+            return;
+        }
+        let Some(r) = self.hl.get(self.hl_cur).cloned() else { return };
+        let with = self.replacement();
+        self.editor.replace_range(ui, r.clone(), &with, t, false);
+        self.editor.set_caret(r.start + with.chars().count());
+        self.changed(ui, t);
+        self.scroll_to_match(ui);
+        self.dirty = true;
+    }
+
+    /// Replace All (the card's right button, or Enter): every match of the find text in the open note becomes the
+    /// replacement, as one undo step. The card closes.
+    fn replace_all(&mut self, ui: &Ui, t: f64) {
+        if !self.is_editing() || self.hl_query.is_empty() {
+            self.cancel_replacing(t);
+            return;
+        }
+        let text = self.editor.text().to_string();
+        let ranges = parity::find_ranges(&text, &self.hl_query, self.whole_word);
+        if !ranges.is_empty() {
+            let caret = self.editor.caret();
+            let new = parity::replace_ranges(&text, &ranges, &self.replacement());
+            let end = self.editor.len();
+            let n = new.chars().count();
+            self.editor.replace_range(ui, 0..end, &new, t, false);
+            self.editor.set_caret(caret.min(n));
+        }
+        self.cancel_replacing(t);
+        self.changed(ui, t);
+    }
+
+    /// The replace card's rectangle (px): over the editor column, below the toolbar band.
+    fn replacing_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (ex, ew) = self.ed_px(ui);
+        let pad = ui.pt(SPACE_S);
+        (ex + pad, ui.pt(nav_bottom_pt()) + pad, ew - 2.0 * pad, ui.pt(REPLACE_CARD_PT))
+    }
+
+    /// The card's buttons (px): Replace, then Replace All at the right edge of the label row.
+    fn replace_buttons(&self, ui: &Ui) -> ((f32, f32, f32, f32), (f32, f32, f32, f32)) {
+        let (x, y, w, _) = self.replacing_rect(ui);
+        let (one_w, all_w, h) = (ui.pt(REPLACE_ONE_PT), ui.pt(REPLACE_ALL_PT), ui.pt(REPLACE_BAR_PT));
+        let right = x + w - ui.pt(SPACE_S);
+        ((right - all_w - one_w, y, one_w, h), (right - all_w, y, all_w, h))
+    }
+
+    fn draw_replacing(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some(text) = self.replacing.as_ref().map(|r| r.field.text().to_string()) else { return };
+        let (x, y, w, h) = self.replacing_rect(ui);
+        let (one, all) = self.replace_buttons(ui);
+        s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
+        s.stroke_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), 1.0, SEPARATOR_C.now());
+        let label = self.labels.get(ui, "Replace With", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now());
+        s.blit(label, (x + ui.pt(SPACE_S)) as i32, (y + ui.pt(REPLACE_BAR_PT) / 2.0 - label.h as f32 / 2.0) as i32, 255, 255);
+        let one_label = self.labels.get(ui, "Replace", MAC_FOOTNOTE_PT, Weight::Semibold, LINK);
+        s.blit(one_label, (one.0 + one.2 / 2.0 - one_label.w as f32 / 2.0) as i32, (one.1 + one.3 / 2.0 - one_label.h as f32 / 2.0) as i32, 255, 255);
+        let all_label = self.labels.get(ui, "Replace All", MAC_FOOTNOTE_PT, Weight::Semibold, LINK);
+        s.blit(all_label, (all.0 + all.2 / 2.0 - all_label.w as f32 / 2.0) as i32, (all.1 + all.3 / 2.0 - all_label.h as f32 / 2.0) as i32, 255, 255);
+        let mut field = bifrost_app::controls::TextField::new();
+        field.push_str(&text);
+        let r = chrome::pt_rect(ui, (x + ui.pt(SPACE_S), y + ui.pt(REPLACE_BAR_PT), w - 2.0 * ui.pt(SPACE_S), ui.pt(REPLACE_FIELD_PT)));
+        bifrost_app::widgets::text_field(s, ui, &field, r, "Replacement", true);
     }
 
     /// Runs a menu action.
@@ -1610,6 +1749,7 @@ impl Notes {
                 self.dirty = true;
             }
             Act::CheckSpelling => self.check_note(ui),
+            Act::Replace => self.start_replacing(ui, t),
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
         }
     }
@@ -1860,9 +2000,21 @@ impl Notes {
             return;
         }
         // the search field and the folder-name prompt take the keys over the note beside them
-        let list_keys = self.screen == Screen::List || self.search.focused || self.naming.is_some();
+        let list_keys = self.screen == Screen::List || self.search.focused || self.naming.is_some() || self.replacing.is_some();
         match list_keys {
             true => {
+                if self.replacing.is_some() {
+                    match out {
+                        Out::Enter => self.replace_all(ui, t),
+                        Out::Hide => self.cancel_replacing(t),
+                        _ => {
+                            if let Some(r) = &mut self.replacing {
+                                r.field.edit(ui, &out, t);
+                            }
+                        }
+                    }
+                    return;
+                }
                 if self.naming.is_some() {
                     match out {
                         Out::Enter => self.commit_name(ui, t),
@@ -1941,6 +2093,10 @@ impl Notes {
 
     /// Escape: cancels a name prompt, closes the open note, or leaves the search field.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.replacing.is_some() {
+            self.cancel_replacing(t);
+            return true;
+        }
         if self.naming.is_some() {
             self.cancel_naming(t);
             return true;
@@ -2078,6 +2234,20 @@ impl Notes {
                 self.menu = None;
                 if let Some(act) = act {
                     self.run(ui, act, t);
+                }
+            }
+            return;
+        }
+        if self.replacing.is_some() && !(self.keyboard.shown() && y >= kb_top) && !self.kb_touch {
+            // the replace card takes its own taps: Replace, Replace All, or a tap outside it closes it
+            if let Event::Up(..) = ev {
+                let (one, all) = self.replace_buttons(ui);
+                if within(x, y, all) {
+                    self.replace_all(ui, t);
+                } else if within(x, y, one) {
+                    self.replace_one(ui, t);
+                } else if !within(x, y, self.replacing_rect(ui)) {
+                    self.cancel_replacing(t);
                 }
             }
             return;
@@ -2224,6 +2394,7 @@ impl Notes {
         }
         let blink = match self.screen {
             _ if self.naming.is_some() => self.naming.as_ref().and_then(|n| n.field.next_blink(t)),
+            _ if self.replacing.is_some() => self.replacing.as_ref().and_then(|r| r.field.next_blink(t)),
             _ if self.search.focused => self.search.next_blink(t),
             Screen::Editor(_) if self.keyboard.shown() => self.editor.next_blink(t),
             _ => None,
@@ -2451,6 +2622,7 @@ impl Notes {
         self.draw_editor(s, ui, t);
         self.draw_chrome(s, ui);
         self.draw_naming(s, ui);
+        self.draw_replacing(s, ui);
         self.draw_menu(s, ui);
         self.draw_picker(s, ui);
         self.draw_sketch(s, ui);
@@ -2643,6 +2815,88 @@ mod tests {
         }
         n.rebuild(ui, 0.0);
         n
+    }
+
+    /// The ids a view lists, in list order.
+    fn listed_ids(n: &mut Notes, ui: &Ui, view: View) -> Vec<String> {
+        n.view = view;
+        n.rebuild(ui, 10.0);
+        n.listed().iter().map(|(id, _)| id.to_string()).collect()
+    }
+
+    #[test]
+    fn smart_folders_pick_notes_by_their_fields() {
+        let ui = ui();
+        let dir = scratch("smart");
+        let mut n = seeded(&ui, &dir);
+        // Note 1 is an old picture note, note 2 a checklist changed a second ago (the week's cutoff is wall - 604800 s).
+        let now = wall().unix;
+        for note in &mut n.notes {
+            note.modified = now - 40 * 86_400;
+            if note.id == "1" {
+                note.text = "Trip\n![image](a-1.png)".into();
+            } else {
+                note.text = "Shopping\n- [ ] milk\n- [x] eggs".into();
+                note.modified = now - 1;
+            }
+        }
+        n.loc.remove("1");
+        n.loc.remove("2");
+        n.pinned.insert("1".to_string());
+        assert_eq!(listed_ids(&mut n, &ui, View::Smart(smart::Smart::Checklists)), vec!["2"]);
+        assert_eq!(listed_ids(&mut n, &ui, View::Smart(smart::Smart::Photos)), vec!["1"]);
+        assert_eq!(listed_ids(&mut n, &ui, View::Smart(smart::Smart::Pinned)), vec!["1"]);
+        assert_eq!(listed_ids(&mut n, &ui, View::Smart(smart::Smart::Recent)), vec!["2"]);
+        // the sidebar and the list menu count the same notes
+        assert_eq!(n.count_in(&View::Smart(smart::Smart::Checklists)), 1);
+        assert_eq!(n.count_in(&View::Smart(smart::Smart::Pinned)), 1);
+        // a bin note never shows in a smart folder
+        n.loc.insert("2".to_string(), folders::TRASH.to_string());
+        assert_eq!(listed_ids(&mut n, &ui, View::Smart(smart::Smart::Checklists)), Vec::<String>::new());
+        assert_eq!(n.view_title(), "Checklists");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replace_one_and_replace_all_change_the_open_note() {
+        let ui = ui();
+        let dir = scratch("replace");
+        let mut n = seeded(&ui, &dir);
+        n.new_note(&ui, 0.0);
+        n.editor.set_text(&ui, "one cat, cat\nthe Cat sat");
+        n.changed(&ui, 0.5);
+        n.hl_query = "cat".to_string();
+        n.refresh_highlights(&ui, false);
+        assert_eq!(n.hl.len(), 3);
+        n.start_replacing(&ui, 1.0);
+        assert!(n.replacing.is_some() && n.keyboard_shown());
+        n.replacing.as_mut().unwrap().field.set_text(&ui, "dog");
+        // Replace changes the selected match only; the bar moves on to the next one
+        n.replace_one(&ui, 2.0);
+        assert_eq!(n.editor.text(), "one dog, cat\nthe Cat sat");
+        assert_eq!(n.hl.len(), 2);
+        assert_eq!(n.hl_cur, 0);
+        // Replace All changes the rest in one step and closes the card
+        n.replace_all(&ui, 3.0);
+        assert_eq!(n.editor.text(), "one dog, dog\nthe dog sat");
+        assert!(n.replacing.is_none() && !n.keyboard_shown());
+        assert_eq!(n.editing().map(|note| note.text.as_str()), Some("one dog, dog\nthe dog sat"));
+        assert!(n.editor.undo(&ui, 4.0));
+        assert_eq!(n.editor.text(), "one dog, cat\nthe Cat sat", "one undo step takes back Replace All");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replace_needs_find_text_first() {
+        let ui = ui();
+        let dir = scratch("replace-none");
+        let mut n = seeded(&ui, &dir);
+        n.new_note(&ui, 0.0);
+        n.hl_query.clear();
+        n.start_replacing(&ui, 1.0);
+        assert!(n.replacing.is_none(), "without find text the card does not open");
+        assert_eq!(n.notice.as_deref(), Some("Search for text first, then replace it"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -3226,7 +3480,9 @@ mod tests {
             bifrost_app::controls::sidebar::SidebarItem::Row { label, count, .. } => Some((label.clone(), *count)),
             _ => None,
         }).collect();
-        assert_eq!(rows, vec![("All Notes".into(), Some(2)), ("Work".into(), Some(0)), ("Recently Deleted".into(), Some(0))]);
+        assert_eq!(rows.len(), 7, "All Notes, the folder, the bin, then the four smart folders");
+        assert_eq!(rows[..3].to_vec(), vec![("All Notes".into(), Some(2)), ("Work".into(), Some(0)), ("Recently Deleted".into(), Some(0))]);
+        assert_eq!(rows[3].0, "Pinned");
         // a click on All Notes in the sidebar shows every note again
         let bounds = bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: n.side_pt(&ui), h: 1500.0 / ui.pt(1.0) };
         let r = list.item_rect(1, bounds, -(bifrost_app::layout::UNIFIED_BAR_PT + 4.0));

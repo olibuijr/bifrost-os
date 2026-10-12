@@ -38,13 +38,19 @@ fn view_key(view: &notes::View) -> String {
         notes::View::All => "all".into(),
         notes::View::Trash => "trash".into(),
         notes::View::Folder(f) => format!("folder:{f}"),
+        notes::View::Smart(s) => format!("smart:{}", s.key()),
     }
 }
 
 fn view_from_key(key: &str) -> notes::View {
     match key {
         "trash" => notes::View::Trash,
-        k => k.strip_prefix("folder:").map_or(notes::View::All, |f| notes::View::Folder(f.to_string())),
+        k => {
+            if let Some(s) = k.strip_prefix("smart:").and_then(notes::smart::Smart::from_key) {
+                return notes::View::Smart(s);
+            }
+            k.strip_prefix("folder:").map_or(notes::View::All, |f| notes::View::Folder(f.to_string()))
+        }
     }
 }
 

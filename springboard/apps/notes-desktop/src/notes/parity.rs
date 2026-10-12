@@ -65,6 +65,25 @@ pub fn find_ranges(text: &str, query: &str, whole_word: bool) -> Vec<Range<usize
     textfind::find_all(text, query.trim(), opts).into_iter().map(|r| to_chars(text, r)).collect()
 }
 
+/// `text` with each char range of `ranges` replaced by `with` (Replace All). The ranges are in order and do not overlap,
+/// as `find_ranges` returns them; a range that starts inside the previous one is skipped.
+pub fn replace_ranges(text: &str, ranges: &[Range<usize>], with: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for r in ranges {
+        let (start, end) = (r.start.min(chars.len()), r.end.min(chars.len()));
+        if start < at {
+            continue;
+        }
+        out.extend(chars[at..start].iter());
+        out.push_str(with);
+        at = end;
+    }
+    out.extend(chars[at..].iter());
+    out
+}
+
 /// A spelling checker for a word list of `lang`.
 fn checker(words: &str, lang: &str) -> SpellChecker {
     let list = words.lines().filter_map(|line| line.split_whitespace().next());
@@ -147,6 +166,21 @@ mod tests {
         let text = "wrold hello wrold https://example.com wrold";
         let r = check_ranges(text);
         assert!(r.windows(2).all(|w| w[0].end <= w[1].start), "{r:?}");
+    }
+
+    #[test]
+    fn replace_all_swaps_each_match_in_order() {
+        // "one cat, cat": the matches are 4..7 and 9..12
+        let text = "one cat, cat";
+        let ranges = find_ranges(text, "cat", false);
+        assert_eq!(replace_ranges(text, &ranges, "dog"), "one dog, dog");
+        assert_eq!(replace_ranges(text, &ranges, ""), "one , ", "an empty replacement deletes the matches");
+        assert_eq!(replace_ranges(text, &[], "dog"), text, "no matches leave the text alone");
+        // char offsets, so accented text swaps correctly: "Árni" is 0..4 and "árni" is 8..12
+        let accented = "Árni og árni";
+        let found = find_ranges(accented, "árni", false);
+        assert_eq!(found, vec![0..4, 8..12]);
+        assert_eq!(replace_ranges(accented, &found, "Jón"), "Jón og Jón");
     }
 
     #[test]
