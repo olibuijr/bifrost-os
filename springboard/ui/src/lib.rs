@@ -946,3 +946,5 @@ pub mod surface_attach;
 
 pub mod braille;
 pub mod run_delegate;
+pub mod live_activity;
+pub mod remote_view;
