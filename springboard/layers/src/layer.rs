@@ -2,6 +2,7 @@
 //!
 //! Owner: wave G1 agent `layers-model`.
 
+use crate::animation::Value;
 use crate::geometry::{Affine, Color, Point, Rect};
 
 /// A layer's id, unique within one tree (one layer context). 0 is never used.
@@ -146,6 +147,40 @@ impl Layer {
         }
     }
 
+    /// The model value of an animatable property, as the `Value` kind that property takes. `None` for properties
+    /// that are not animatable (they change through their own `Change`).
+    pub fn value(&self, key: Property) -> Option<Value> {
+        Some(match key {
+            Property::Bounds => Value::Rect(self.bounds),
+            Property::Position => Value::Point(self.position),
+            Property::AnchorPoint => Value::Point(self.anchor_point),
+            Property::Transform => Value::Transform(self.transform),
+            Property::Opacity => Value::Scalar(self.opacity),
+            Property::CornerRadius => Value::Scalar(self.corner_radius),
+            Property::BackgroundColor => Value::Color(self.background_color),
+            Property::Shadow => Value::Shadow(self.shadow),
+            Property::ZPosition => Value::Scalar(self.z_position),
+            Property::Border | Property::Material | Property::Hidden | Property::MasksToBounds | Property::Contents | Property::ContentsGravity => return None,
+        })
+    }
+
+    /// Sets a model value. Returns false (and changes nothing) when the value's kind is not the property's kind.
+    pub fn set_value(&mut self, key: Property, value: Value) -> bool {
+        match (key, value) {
+            (Property::Bounds, Value::Rect(v)) => self.bounds = v,
+            (Property::Position, Value::Point(v)) => self.position = v,
+            (Property::AnchorPoint, Value::Point(v)) => self.anchor_point = v,
+            (Property::Transform, Value::Transform(v)) => self.transform = v,
+            (Property::Opacity, Value::Scalar(v)) => self.opacity = v,
+            (Property::CornerRadius, Value::Scalar(v)) => self.corner_radius = v,
+            (Property::BackgroundColor, Value::Color(v)) => self.background_color = v,
+            (Property::Shadow, Value::Shadow(v)) => self.shadow = v,
+            (Property::ZPosition, Value::Scalar(v)) => self.z_position = v,
+            _ => return false,
+        }
+        true
+    }
+
     /// The transform from this layer's coordinate space to its superlayer's.
     pub fn to_superlayer(&self) -> Affine {
         let ax = self.bounds.x + self.anchor_point.x * self.bounds.w;
@@ -157,6 +192,25 @@ impl Layer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn value_kinds_follow_the_property() {
+        let mut l = Layer::new(LayerId(1));
+        assert_eq!(l.value(Property::Opacity), Some(Value::Scalar(1.0)));
+        assert_eq!(l.value(Property::AnchorPoint), Some(Value::Point(Point { x: 0.5, y: 0.5 })));
+        assert_eq!(l.value(Property::Hidden), None);
+        assert_eq!(l.value(Property::Border), None);
+        assert!(l.set_value(Property::Opacity, Value::Scalar(0.25)));
+        assert_eq!(l.opacity, 0.25);
+    }
+
+    #[test]
+    fn set_value_refuses_a_mismatched_kind() {
+        let mut l = Layer::new(LayerId(1));
+        assert!(!l.set_value(Property::Position, Value::Scalar(3.0)));
+        assert!(!l.set_value(Property::Hidden, Value::Scalar(1.0)));
+        assert_eq!(l.position, Point::default());
+    }
 
     #[test]
     fn frame_puts_the_anchor_on_the_position() {
@@ -174,5 +228,42 @@ mod tests {
         l.bounds = Rect::new(0.0, 0.0, 100.0, 40.0);
         l.position = Point { x: 150.0, y: 120.0 };
         assert_eq!(l.to_superlayer().apply(Point::default()), Point { x: 100.0, y: 100.0 });
+    }
+
+    #[test]
+    fn new_layer_has_the_documented_defaults() {
+        let l = Layer::new(LayerId(3));
+        assert_eq!(l.bounds, Rect::ZERO);
+        assert_eq!(l.anchor_point, Point { x: 0.5, y: 0.5 });
+        assert_eq!(l.opacity, 1.0);
+        assert!(!l.hidden);
+        assert_eq!(l.contents, LayerContents::None);
+        assert_eq!(l.material, Material::None);
+        assert_eq!(l.contents_gravity, ContentsGravity::Resize);
+        assert!(l.sublayers.is_empty());
+        assert_eq!(l.superlayer, None);
+    }
+
+    #[test]
+    fn only_the_interpolating_properties_are_animatable() {
+        assert!(Property::Opacity.animatable());
+        assert!(Property::Border.animatable());
+        assert!(Property::Shadow.animatable());
+        assert!(!Property::Hidden.animatable());
+        assert!(!Property::MasksToBounds.animatable());
+        assert!(!Property::Contents.animatable());
+        assert!(!Property::ContentsGravity.animatable());
+    }
+
+    #[test]
+    fn to_superlayer_applies_the_transform_about_the_anchor() {
+        let mut l = Layer::new(LayerId(1));
+        l.bounds = Rect::new(0.0, 0.0, 100.0, 40.0);
+        l.position = Point { x: 150.0, y: 120.0 };
+        l.transform = Affine::scale(2.0, 2.0);
+        // The bounds origin is 50, 20 from the anchor: scaled to -100, -40, then moved to the position.
+        assert_eq!(l.to_superlayer().apply(Point::default()), Point { x: 50.0, y: 80.0 });
+        // The anchor itself always lands on the position, whatever the transform.
+        assert_eq!(l.to_superlayer().apply(Point { x: 50.0, y: 20.0 }), Point { x: 150.0, y: 120.0 });
     }
 }
