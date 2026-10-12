@@ -1226,6 +1226,7 @@ mod tests {
 
     #[test]
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
+        use bifrost_ui::capture_access::CaptureAccess;
         let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default() }];
         let s = permissions_page(&rows);
         assert_eq!(s.groups.len(), 3, "camera, microphone, screen recording");
