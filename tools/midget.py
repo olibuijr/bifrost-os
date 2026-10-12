@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|esc|tab|space|backspace|up|down|left|right|cmd+o | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -10,21 +10,36 @@ full-size app window (manifest window = "full-size") the window-local origin is 
 Reaches a live lab ISO and, because the lab installer leaves the lab key, an installed system. Power-on of a switched-off machine is Wake-on-LAN
 (needs it enabled in the BIOS) or, if the board has Intel AMT, `amt`. Every call is bounded; nothing here erases a disk.
 Stdlib only (PIL optional for `screen` on an installed system).
+Host: $MIDGET_HOST, else the first of 192.168.20.140 (VLAN 20), 10.99.0.200 (lab NIC), 192.168.1.187 (Wi-Fi) whose ssh answers
+(all probed at once, 1.5 s); with none answering it uses the lab NIC 10.99.0.200.
+`kbench`/`kab` measure kernel latency (tools/midget/kbench.sh, docs/audio-latency.md "Kernel"); `amt-info`/`amt-activate`/`power`
+are Intel AMT (docs/bifrost-pc-workflow.md "AMT findings"); the AMT password is only ever read from out/lab/amt.password.
 """
 from pathlib import Path
 import contextlib, io, json, os, re, shlex, socket, struct, subprocess, sys, time, urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-def _reachable_host():
-    """VLAN 20 first, then the lab NIC (eno2) and Wi-Fi: the first that answers ssh within a second."""
-    import socket
-    for h in ("192.168.20.140", "10.99.0.200", "192.168.1.187"):
+HOST_ORDER = ("192.168.20.140", "10.99.0.200", "192.168.1.187")  # VLAN 20, lab NIC (eno2), Wi-Fi
+
+
+def pick_host(answered, order=HOST_ORDER):
+    """First address of `order` in `answered` (a set of addresses whose ssh port connected), else the lab NIC:
+    the lab NIC is the link that is always wired, so it is the fallback when nothing answers (VLAN 20 can be down)."""
+    return next((h for h in order if h in answered), "10.99.0.200")
+
+
+def _reachable_host(order=HOST_ORDER, timeout=1.5):
+    """Probe every address at once (a dead one cannot delay the rest) and take the first in `order` that opens ssh."""
+    import concurrent.futures
+
+    def probe(h):
         try:
-            socket.create_connection((h, 22), 1).close()
+            socket.create_connection((h, 22), timeout).close()
             return h
         except OSError:
-            pass
-    return "192.168.20.140"
+            return None
+    with concurrent.futures.ThreadPoolExecutor(len(order)) as pool:
+        return pick_host({h for h in pool.map(probe, order) if h}, order)
 
 
 HOST = os.environ.get("MIDGET_HOST") or _reachable_host()
@@ -472,6 +487,12 @@ def cmd_logs(n):
 BIOS_BASE = "/sys/class/firmware-attributes/thinklmi"
 
 
+def bios_find(rows, word):
+    """`NAME=current|possible` rows whose attribute name, value or choices contain WORD (case-insensitive substring)."""
+    word = word.lower()
+    return [r for r in rows if word in r.lower()]
+
+
 def cmd_bios(args):
     """BIOS settings through the kernel's think-lmi driver (Lenovo WMI): read, search, change and save from the OS, no keyboard in the BIOS.
     A supervisor password, if one is set, goes in $BIOS_PASSWORD (never stored). Changes apply at the next boot."""
@@ -481,15 +502,16 @@ def cmd_bios(args):
         return 1
     probe = f"modprobe think-lmi 2>/dev/null; [ -d {BIOS_BASE}/attributes ] || {{ echo NOLMI; ls /sys/bus/wmi/devices 2>/dev/null | head -20; dmidecode -s bios-version 2>/dev/null; exit 3; }}"
     if op in ("list", "dump", "find"):
-        out = ssh(probe + f"; cd {BIOS_BASE}/attributes; for a in *; do [ -f $a/current_value ] || continue; "
-                  "echo \"$a=$(cat $a/current_value)|$(cat $a/possible_values 2>/dev/null)\"; done", 60)
+        # attribute names hold spaces and parentheses ("Intel(R) Manageability Control"): every expansion is quoted
+        out = ssh(probe + f"; cd {BIOS_BASE}/attributes; for a in *; do [ -f \"$a/current_value\" ] || continue; "
+                  "echo \"$a=$(cat \"$a/current_value\")|$(cat \"$a/possible_values\" 2>/dev/null)\"; done", 60)
         if out.startswith("NOLMI"):
             print("think-lmi is not available on this kernel/BIOS (the WMI interface is missing). WMI devices seen:\n" + out[6:])
             print("Fallbacks: efibootmgr (`efi`, `bootnext`), Wake-on-LAN, AMT (`amt`), or the BIOS menu by hand (F1).")
             return 1
         rows = [l for l in out.splitlines() if "=" in l]
         if op == "find":
-            rows = [l for l in rows if args[1].lower() in l.lower()] if len(args) > 1 else rows
+            rows = bios_find(rows, args[1] if len(args) > 1 else "")
         if op == "dump":
             d = os.path.join(REPO, "out/lab/bios")
             os.makedirs(d, exist_ok=True)
@@ -500,15 +522,20 @@ def cmd_bios(args):
         print("\n".join(rows) or "no attributes")
         return 0
     if op == "get" and len(args) > 1:
-        print(ssh(probe + f"; cat {BIOS_BASE}/attributes/{args[1]}/current_value; cat {BIOS_BASE}/attributes/{args[1]}/possible_values 2>/dev/null"))
+        d = shlex.quote(f"{BIOS_BASE}/attributes/{args[1]}")  # exact attribute name; spaces and parentheses are fine
+        print(ssh(probe + f"; [ -d {d} ] || {{ echo 'no such attribute (try: bios find WORD)'; exit 4; }}; "
+                  f"echo \"current_value: $(cat {d}/current_value)\"; echo \"possible_values: $(cat {d}/possible_values 2>/dev/null)\""))
         return 0
     if op == "set" and len(args) > 2:
         name, value = args[1], args[2]
+        d = shlex.quote(f"{BIOS_BASE}/attributes/{name}")
         pw = os.environ.get("BIOS_PASSWORD", "")
-        auth = f"echo '{pw}' > {BIOS_BASE}/authentication/Admin/current_password; " if pw else ""
-        out = ssh(probe + f"; {auth}echo '{value}' > {BIOS_BASE}/attributes/{name}/current_value && echo save > {BIOS_BASE}/attributes/save_settings && echo saved; "
-                  f"cat {BIOS_BASE}/attributes/{name}/current_value", 40)
-        print(out)
+        auth = f"printf %s {shlex.quote(pw)} > {BIOS_BASE}/authentication/Admin/current_password; " if pw else ""
+        out = ssh(probe + f"; [ -d {d} ] || {{ echo 'no such attribute (try: bios find WORD)'; exit 4; }}; "
+                  f"echo \"possible_values: $(cat {d}/possible_values 2>/dev/null)\"; {auth}"
+                  f"printf %s {shlex.quote(value)} > {d}/current_value && echo save > {BIOS_BASE}/attributes/save_settings && echo saved; "
+                  f"echo \"current_value: $(cat {d}/current_value)\"", 40)
+        print(out.replace(pw, "***") if pw else out)
         return 0 if "saved" in out else 1
     print("usage: bios list | find WORD | get NAME | set NAME VALUE | dump")
     return 2
@@ -1098,6 +1125,354 @@ def follow_install(t0, budget, live, every=10.0):
     return 0 if ok and mcp else 1
 
 
+KBENCH_PACKAGES = "rt-tests stress-ng numactl"  # cyclictest needs libnuma (numactl)
+PERF_HISTORY = os.path.join(REPO, "docs/perf-history.jsonl")
+
+
+def parse_cyclic(text):
+    """cyclictest output -> {"min": [us per CPU], "avg": [...], "max": [...]} from its `# Min/Avg/Max Latencies:` lines."""
+    out = {}
+    for key in ("Min", "Avg", "Max"):
+        m = re.search(rf"^# {key} Latencies:\s*(.+)$", text, re.M)
+        out[key.lower()] = [int(v) for v in m.group(1).split()] if m else []
+    return out
+
+
+def count_underruns(text):
+    """aplay prints `underrun!!!` for every xrun."""
+    return sum(1 for l in text.splitlines() if "underrun" in l)
+
+
+def kbench_result(label, files, seconds=60):
+    """The record `kbench` appends to docs/perf-history.jsonl from the raw files of /root/kbench/LABEL
+    (keys: kernel, cyclic-idle, cyclic-stress, aplay-32/64/128). Underruns are per minute: scaled when SECONDS is not 60."""
+    kernel = (files.get("kernel", "").splitlines() or [""])[0].split()
+    idle, stress = parse_cyclic(files.get("cyclic-idle", "")), parse_cyclic(files.get("cyclic-stress", ""))
+    scale = 60.0 / seconds if seconds else 1.0
+    return {"date": time.strftime("%Y-%m-%d %H:%M"), "bench": "kernel-latency", "label": label,
+            "kernel": kernel[2] if len(kernel) > 2 else "",
+            "max_us_idle": max(idle["max"], default=None), "max_us_stress": max(stress["max"], default=None),
+            "underruns": {p: round(count_underruns(files.get("aplay-" + p, "")) * scale) for p in ("32", "64", "128")}}
+
+
+def kbench_summary(rec, files):
+    """Printable summary: kernel, cyclictest Min/Avg/Max per CPU idle and stressed, aplay underruns per period."""
+    lines = [f"kernel {rec['kernel']} ({rec['label']})"]
+    for name, key in (("idle", "cyclic-idle"), ("stress", "cyclic-stress")):
+        c = parse_cyclic(files.get(key, ""))
+        lines.append(f"cyclictest {name} (us per CPU)")
+        for k in ("min", "avg", "max"):
+            lines.append(f"  {k.capitalize():3} " + " ".join(f"{v:4}" for v in c[k]))
+    lines.append("aplay underruns per minute: " + "  ".join(f"{p} frames={n}" for p, n in rec["underruns"].items()))
+    return "\n".join(lines)
+
+
+def kbench_fetch(label):
+    """Raw result files of /root/kbench/LABEL as {name: text}."""
+    names = "kernel.txt cyclic-idle.txt cyclic-stress.txt aplay-32.txt aplay-64.txt aplay-128.txt"
+    out = ssh(f"cd /root/kbench/{shlex.quote(label)} && for f in {names}; do echo \"=====$f\"; cat $f; done", 60)
+    files, cur = {}, None
+    for line in out.splitlines(keepends=True):
+        if line.startswith("====="):
+            cur = line[5:].strip().removesuffix(".txt")
+            files[cur] = ""
+        elif cur:
+            files[cur] += line
+    return files
+
+
+def seconds_arg(args, default=60):
+    return int(args[args.index("--seconds") + 1]) if "--seconds" in args else default
+
+
+def kbench_start(label, seconds):
+    """Install tools/midget/kbench.sh, make sure the packages are there and start it detached. Returns False on failure."""
+    script = Path(REPO, "tools/midget/kbench.sh").read_bytes()
+    r = subprocess.run(SSH + ["cat > /root/kbench.sh && chmod +x /root/kbench.sh"], input=script, capture_output=True, timeout=30)
+    if r.returncode:
+        print("could not install /root/kbench.sh")
+        return False
+    pac = run(SSH + [f"pacman -S --needed --noconfirm {KBENCH_PACKAGES} 2>&1 | tail -3"], 300)
+    print(pac.stdout, end="")
+    ssh(f"rm -rf /root/kbench/{shlex.quote(label)}; nohup /root/kbench.sh {shlex.quote(label)} {seconds} > /root/kbench-{shlex.quote(label)}.log 2>&1 &", 15)
+    return True
+
+
+def kbench_wait(label, seconds):
+    """Wait for /root/kbench/LABEL/DONE (cyclictest twice + aplay three times + margin)."""
+    return wait(lambda: ssh(f"test -f /root/kbench/{shlex.quote(label)}/DONE && echo yes", 15).strip() == "yes", seconds * 6 + 180, 10)
+
+
+def kbench_run(label, seconds):
+    """Run one bench, print its summary and append a JSON line to docs/perf-history.jsonl. Returns the record or None."""
+    if state() != "installed":
+        print(f"midget is {state()}: kbench needs an installed system over ssh")
+        return None
+    print(f"kbench {label}: about {seconds * 5 // 60 + 1} min")
+    if not kbench_start(label, seconds) or not kbench_wait(label, seconds):
+        print("kbench did not finish")
+        return None
+    files = kbench_fetch(label)
+    rec = kbench_result(label, files, seconds)
+    print(kbench_summary(rec, files))
+    with open(PERF_HISTORY, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+    return rec
+
+
+def cmd_kbench(args):
+    """`kbench LABEL [--seconds N]`: kernel latency bench on the running kernel (default 60 s per step)."""
+    if not args or args[0].startswith("--"):
+        print("usage: kbench LABEL [--seconds N]")
+        return 2
+    return 0 if kbench_run(args[0], seconds_arg(args)) else 1
+
+
+RT_ENTRY = "BifrOSt RT bench"
+# efibootmgr -C (create only): the entry is not put into BootOrder; BootNext boots it once. The kernel line is the
+# current one with its initrd swapped for the RT image, and panic=10 so a failed boot falls back to the disk entry.
+RT_ENTRY_SCRIPT = r"""
+n=$(efibootmgr | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\? BifrOSt RT bench.*/\1/p' | head -1)
+if [ -z "$n" ]; then
+  esp=$(findmnt -no SOURCE /boot/efi || findmnt -no SOURCE /efi || findmnt -no SOURCE /boot)
+  b=$(basename "$esp"); disk=/dev/$(lsblk -no PKNAME "$esp"); part=$(cat /sys/class/block/$b/partition)
+  args="$(sed 's/initrd=[^ ]*//g' /proc/cmdline) initrd=\\initramfs-linux-rt.img panic=10"
+  efibootmgr -C -d "$disk" -p "$part" -L 'BifrOSt RT bench' -l '\vmlinuz-linux-rt' -u "$args" >/dev/null
+  n=$(efibootmgr | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\? BifrOSt RT bench.*/\1/p' | head -1)
+fi
+[ -n "$n" ] && efibootmgr -n "$n" >/dev/null && echo "$n"
+"""
+
+
+def cmd_kab(args):
+    """`kab [--seconds N]`: kernel A/B. kbench on the running (stock) kernel, one boot into linux-rt through a create-only
+    EFI entry plus BootNext, kbench there, both summaries side by side. Stops when the RT kernel did not come up
+    (the entry sets panic=10, so a failed boot returns to the disk entry)."""
+    seconds = seconds_arg(args)
+    stock = kbench_run("stock", seconds)
+    if not stock:
+        return 1
+    num = ssh(RT_ENTRY_SCRIPT, 30).strip().splitlines()
+    if not num or len(num[-1]) != 4:
+        print("could not create or select the 'BifrOSt RT bench' EFI entry (is linux-rt installed? pacman -S linux-rt)")
+        return 1
+    print(f"BootNext={num[-1]}; rebooting into linux-rt")
+    schedule_power("reboot")
+    wait(lambda: not ping(), 60, 1)
+    if not wait(lambda: state() == "installed", 300, 5):
+        print("did not come back in 5 min")
+        return 1
+    kernel = ssh("uname -r", 15).strip()
+    if "rt" not in kernel:
+        print(f"booted {kernel!r}, not linux-rt (panic fallback or BootNext ignored); stopping")
+        return 2
+    time.sleep(20)  # services settle after boot
+    rt = kbench_run("rt", seconds)
+    if not rt:
+        return 1
+    print("\n" + "-" * 60)
+    sf, rf = kbench_fetch("stock"), kbench_fetch("rt")
+    a, b = kbench_summary(stock, sf).splitlines(), kbench_summary(rt, rf).splitlines()
+    width = max(len(l) for l in a) + 3
+    for i in range(max(len(a), len(b))):
+        print((a[i] if i < len(a) else "").ljust(width) + (b[i] if i < len(b) else ""))
+    return 0
+
+
+AMT_PASSWORD_FILE = os.path.join(os.path.dirname(KEY), "amt.password")
+AMT_ADDRESS = "10.99.0.201"
+RPC_VERSION = "v2.52.7"
+RPC_URL = f"https://github.com/device-management-toolkit/rpc-go/releases/download/{RPC_VERSION}/rpc_linux_x64.tar.gz"
+RPC_BIN = "/root/rpc/rpc_linux_x64"
+
+
+def amt_password(create=False):
+    """The AMT admin password from out/lab/amt.password (untracked, mode 0600). With `create`, a missing file is generated:
+    AMT wants 8 to 32 characters with upper, lower, digit and a special one. Never printed."""
+    path = AMT_PASSWORD_FILE
+    if not os.path.exists(path):
+        if not create:
+            return None
+        import secrets, string
+        pw = "Bf" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)) + "7!"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(pw + "\n")
+    st = os.stat(path)
+    if st.st_mode & 0o077:
+        raise SystemExit(f"{path} must be mode 600 (chmod 600 {path}); refusing to read it")
+    return open(path).read().strip() or None
+
+
+def redact(text, secret):
+    return text.replace(secret, "<amt-password>") if secret else text
+
+
+def rpc_install():
+    """Intel's rpc-go (pinned release) in /root/rpc on midget, fetched on the machine when missing."""
+    r = run(SSH + [f"[ -x {RPC_BIN} ] || {{ mkdir -p /root/rpc && cd /root/rpc && curl -fsSL {RPC_URL} | tar xz; }}; [ -x {RPC_BIN} ] && echo ok"], 120)
+    return r.stdout.strip().endswith("ok")
+
+
+def cmd_amt_info():
+    """`amt-info`: rpc-go `amtinfo` on midget (ME firmware, AMT version, control mode, provisioning state, LAN)."""
+    if state() not in ("live", "installed"):
+        print(f"midget is {state()}: needs ssh")
+        return 1
+    if not rpc_install():
+        print(f"could not fetch rpc-go {RPC_VERSION} on midget (no internet from the lab?): {RPC_URL}")
+        return 1
+    print(ssh(f"{RPC_BIN} amtinfo 2>&1", 60))
+    return 0
+
+
+def cmd_amt_activate():
+    """`amt-activate`: client control mode (CCM) activation with rpc-go, then the static AMT address 10.99.0.201/24 gw 10.99.0.1.
+    The password comes from out/lab/amt.password (created 0600 when missing) and is redacted from all output.
+    Known on midget (2026-10-12): activation fails with EBUSY on the LME client (the MEI LME client allows one connection,
+    max_conn 1) with rpc-go v2.52.7 and v2.39.0 on both kernels. Next: Intel LMS (the Local Manageability Service holds that
+    connection), then an ME firmware update, only with the owner's go-ahead (a failed flash can brick an M900 Tiny)."""
+    if state() not in ("live", "installed"):
+        print(f"midget is {state()}: needs ssh")
+        return 1
+    pw = amt_password(create=True)
+    if not rpc_install():
+        print(f"could not fetch rpc-go {RPC_VERSION} on midget: {RPC_URL}")
+        return 1
+    q = shlex.quote(pw)
+    steps = [("activate (CCM)", f"{RPC_BIN} activate -local -ccm -password {q} 2>&1 | tail -5"),
+             ("static address on the shared wired port",
+              f"{RPC_BIN} configure wired -static -ipaddress {AMT_ADDRESS} -subnetmask 255.255.255.0 -gateway 10.99.0.1 -primarydns 10.99.0.1 -password {q} 2>&1 | tail -5"),
+             ("state", f"{RPC_BIN} amtinfo 2>&1 | grep -E 'Control Mode|AMT IP Address|Link Status' | head -4")]
+    code = 0
+    for title, cmd in steps:
+        print(f"== {title}")
+        r = run(SSH + [cmd], 180)
+        out = redact(r.stdout + r.stderr, pw)
+        print(out, end="" if out.endswith("\n") else "\n")
+        if title.startswith("activate") and ("EBUSY" in out or "busy" in out.lower()):
+            print("activation blocked: the LME client is busy (single connection). See `amt-activate` in the docstring: try Intel LMS next.")
+            code = 1
+            break
+    return code
+
+
+WSMAN_NS = {"cim": "http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/", "a": "http://schemas.xmlsoap.org/ws/2004/08/addressing",
+            "w": "http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd", "s": "http://www.w3.org/2003/05/soap-envelope"}
+POWER_STATES = {"on": 2, "off": 8, "cycle": 5, "reset": 10}  # CIM_PowerManagementService PowerState values (Intel AMT)
+POWER_NAMES = {2: "on", 3: "sleep (light)", 4: "sleep (deep)", 7: "hibernate", 8: "off (soft)", 12: "off (hard)"}
+
+
+def wsman_envelope(address, resource, action, body, selectors=""):
+    """A WS-Management SOAP request to http://ADDRESS:16992/wsman for `action` on `resource` (a CIM class name)."""
+    return (f'<?xml version="1.0" encoding="UTF-8"?>'
+            f'<s:Envelope xmlns:s="{WSMAN_NS["s"]}" xmlns:a="{WSMAN_NS["a"]}" xmlns:w="{WSMAN_NS["w"]}"><s:Header>'
+            f'<a:To>http://{address}:16992/wsman</a:To>'
+            f'<w:ResourceURI s:mustUnderstand="true">{WSMAN_NS["cim"]}{resource}</w:ResourceURI>'
+            f'<a:ReplyTo><a:Address s:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>'
+            f'<a:Action s:mustUnderstand="true">{action}</a:Action>'
+            f'<a:MessageID>uuid:00000000-0000-0000-0000-000000000001</a:MessageID>'
+            f'{selectors}<w:OperationTimeout>PT30S</w:OperationTimeout></s:Header><s:Body>{body}</s:Body></s:Envelope>')
+
+
+def power_request_xml(address, state_name):
+    """RequestPowerStateChange on CIM_PowerManagementService: PowerState 2 on, 8 off, 5 cycle, 10 reset."""
+    code = POWER_STATES[state_name]
+    cim = WSMAN_NS["cim"]
+    body = (f'<p:RequestPowerStateChange_INPUT xmlns:p="{cim}CIM_PowerManagementService"><p:PowerState>{code}</p:PowerState>'
+            f'<p:ManagedElement><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>'
+            f'<a:ReferenceParameters><w:ResourceURI>{cim}CIM_ComputerSystem</w:ResourceURI><w:SelectorSet>'
+            f'<w:Selector Name="CreationClassName">CIM_ComputerSystem</w:Selector><w:Selector Name="Name">ManagedSystem</w:Selector>'
+            f'</w:SelectorSet></a:ReferenceParameters></p:ManagedElement></p:RequestPowerStateChange_INPUT>')
+    return wsman_envelope(address, "CIM_PowerManagementService",
+                          f"{cim}CIM_PowerManagementService/RequestPowerStateChange", body)
+
+
+def power_state_xml(address):
+    """Get CIM_AssociatedPowerManagementService, whose PowerState is the current state."""
+    cim = WSMAN_NS["cim"]
+    return wsman_envelope(address, "CIM_AssociatedPowerManagementService",
+                          "http://schemas.xmlsoap.org/ws/2004/09/transfer/Get", "")
+
+
+def parse_power_response(xml_text):
+    """-> {"power_state": int|None, "return_value": int|None, "fault": str|None} from a WS-Management reply (namespaces ignored)."""
+    import xml.etree.ElementTree as ET
+    out = {"power_state": None, "return_value": None, "fault": None}
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        out["fault"] = "reply is not XML"
+        return out
+    for el in root.iter():
+        tag = el.tag.rsplit("}", 1)[-1]
+        text = (el.text or "").strip()
+        if tag == "PowerState" and text.lstrip("-").isdigit() and out["power_state"] is None:
+            out["power_state"] = int(text)
+        elif tag == "ReturnValue" and text.isdigit():
+            out["return_value"] = int(text)
+        elif tag in ("Text", "faultstring") and text and out["fault"] is None:
+            out["fault"] = text
+    return out
+
+
+def power_describe(parsed, action=None):
+    """One line for the user from a parsed reply."""
+    if parsed["fault"]:
+        return "AMT fault: " + parsed["fault"]
+    if action:
+        return f"power {action}: " + ("accepted" if parsed["return_value"] == 0 else f"ReturnValue {parsed['return_value']}")
+    n = parsed["power_state"]
+    return "power state: " + (f"{POWER_NAMES.get(n, 'unknown')} ({n})" if n is not None else "unknown")
+
+
+def amt_post(xml_body, pw, host=AMT_ADDRESS, timeout=15):
+    """POST a WS-Management request with HTTP digest auth (user admin). Raises OSError when AMT does not answer."""
+    url = f"http://{host}:16992/wsman"
+    mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    mgr.add_password(None, url, "admin", pw)
+    opener = urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(mgr))
+    req = urllib.request.Request(url, data=xml_body.encode(), headers={"Content-Type": "application/soap+xml;charset=UTF-8"})
+    try:
+        return opener.open(req, timeout=timeout).read().decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.read().decode(errors="replace") or f"HTTP {e.code}"
+
+
+def cmd_power(args):
+    """`power state|on|off|cycle|reset`: AMT power control from titan to 10.99.0.201:16992 (WS-Management, digest auth, user admin,
+    password from out/lab/amt.password). Works only once AMT is activated (`amt-activate`); until then it says so."""
+    op = args[0] if args else ""
+    if op not in ("state", *POWER_STATES):
+        print("usage: power state|on|off|cycle|reset")
+        return 2
+    pw = amt_password()
+    if not pw:
+        print(f"AMT is not set up: {AMT_PASSWORD_FILE} does not exist. Run `amt-activate` first (it currently fails on midget with EBUSY on the LME client).")
+        return 1
+    if not port_open_at(AMT_ADDRESS, 16992):
+        print(f"AMT does not answer on {AMT_ADDRESS}:16992: it is not activated yet (or has no address). `amt-activate` first; "
+              "until then use `wake` (Wake-on-LAN), `reboot` and `poweroff`.")
+        return 1
+    xml_body = power_state_xml(AMT_ADDRESS) if op == "state" else power_request_xml(AMT_ADDRESS, op)
+    try:
+        reply = amt_post(xml_body, pw)
+    except OSError as e:
+        print(redact(f"AMT request failed: {e}", pw))
+        return 1
+    print(power_describe(parse_power_response(reply), None if op == "state" else op))
+    return 0
+
+
+def port_open_at(host, port, timeout=2.0):
+    try:
+        socket.create_connection((host, port), timeout).close()
+        return True
+    except OSError:
+        return False
+
+
 def main():
     a = sys.argv[1:] or ["status"]
     op, rest = a[0], a[1:]
@@ -1150,6 +1525,11 @@ def main():
         "labboot": lambda: cmd_labboot(rest),
         "me": lambda: cmd_me(),
         "bios": lambda: cmd_bios(rest),
+        "kbench": lambda: cmd_kbench(rest),
+        "kab": lambda: cmd_kab(rest),
+        "amt-info": lambda: cmd_amt_info(),
+        "amt-activate": lambda: cmd_amt_activate(),
+        "power": lambda: cmd_power(rest),
         "ssh": lambda: (print(ssh(" ".join(rest), 120), end=""), 0)[1],
     }
     if op not in table:
