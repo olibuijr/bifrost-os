@@ -2,14 +2,19 @@
 //! hosted through the SDK. The calendar itself is the library (`bifrost_calendar::calendar`).
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::widgets_timeline;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::{self, Command};
+use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
 use springboard::shell::keyboard::Out;
 
 struct CalendarApp {
     cal: Option<calendar::Calendar>,
     last_wall: f64,
+    /// Shell services: alert requests, the Up Next timeline and the Dock badge.
+    connect: Connect,
 }
 
 impl App for CalendarApp {
@@ -143,10 +148,42 @@ impl App for CalendarApp {
             self.last_wall = t;
             c.set_wall(Wall::sample(t));
         }
-        for alert in c.take_alerts(t) {
-            ctx.notify(&alert.title, &alert.body);
+        // Services run on real changes only: a save, delete or import, or the local day rolling over.
+        let wall = c.wall();
+        let now = wall.now(t);
+        let day = connect::local_day(now, wall.offset);
+        let gen = c.store_generation();
+        if self.connect.is_stale(gen, day) {
+            let rich = c.rich_events();
+            self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, now, offset: wall.offset }, gen, day);
+        }
+        // Without the alert service (an older shell), the app posts its own alerts as before.
+        if self.connect.fallback() {
+            for alert in c.take_alerts(t) {
+                ctx.notify(&alert.title, &alert.body);
+            }
         }
         c.tick(&ctx.ui, t)
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+        self.connect.on_reply(result);
+        true
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        let Some(widgets_timeline::Event::Reload { kind }) = widgets_timeline::parse_event(service, event, body) else {
+            return false;
+        };
+        if kind != connect::UP_NEXT {
+            return false;
+        }
+        let Some(c) = &self.cal else { return false };
+        let wall = Wall::sample(0.0);
+        let rich = c.rich_events();
+        let snap = Snap { events: c.events(), rich: &rich, now: wall.unix, offset: wall.offset };
+        self.connect.refresh_up_next(ctx, &snap);
+        false
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
@@ -164,5 +201,5 @@ impl App for CalendarApp {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0 });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default() });
 }
