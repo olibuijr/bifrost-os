@@ -2351,7 +2351,7 @@ mod tests {
     use crate::shell::Network;
 
     fn info() -> Info {
-        Info { battery: 42, charging: true, online: false, wifi: "Off".into(), model: "SM-X200".into(), kernel: "4.14".into(), memory: "2.4 GB".into(), brightness: 0.5, ..Info::default() }
+        Info { battery: 42, charging: true, online: false, wifi: "Off".into(), model: "Midget".into(), kernel: "6.12".into(), memory: "2.4 GB".into(), brightness: 0.5, ..Info::default() }
     }
 
     fn net(ssid: &str, secure: bool, saved: bool) -> Network {

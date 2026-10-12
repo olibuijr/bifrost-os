@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Update store for the Tab A8: serves ~/.local/share/tab-a8-updates (Software Update
+"""Legacy LAN update store: serves ~/.local/share/bifrost-updates (Software Update
 reads springboard/latest.json from it) and accepts diagnostics bundles.
 
-  POST /diag/<name>   body = text bundle, saved as ~/.local/share/tab-a8-updates/diag/<name>
+  POST /diag/<name>   body = text bundle, saved as ~/.local/share/bifrost-updates/diag/<name>
                       (name: letters, digits, . _ -, at most 100 characters; 2 MB limit)
 
 Usage: updates-server.py [port]   (default 8190, all interfaces)
@@ -13,7 +13,7 @@ import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT = os.path.expanduser("~/.local/share/tab-a8-updates")
+ROOT = os.path.expanduser("~/.local/share/bifrost-updates")
 MAX_BODY = 2 * 1024 * 1024
 NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 

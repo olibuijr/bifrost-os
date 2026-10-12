@@ -280,7 +280,7 @@ fn render_terminal_panels_for_visual_review() {
     let mut sh = terminal(&[
         "/bin/sh",
         "-c",
-        "printf 'Welcome to Terminal\\nRust shell on Galaxy Tab A8\\n$ '; read x",
+        "printf 'Welcome to Terminal\\nRust shell on BifrOSt\\n$ '; read x",
     ]);
     pump_until(&mut sh, |sh| {
         sh.term.as_ref().unwrap().viewport_text().contains("Welcome")

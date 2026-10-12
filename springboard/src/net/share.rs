@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn beacon_round_trips() {
-        let b = Beacon { name: "Tab A8".into(), port: 40123, fingerprint: fingerprint("nearby") };
+        let b = Beacon { name: "Midget".into(), port: 40123, fingerprint: fingerprint("nearby") };
         let e = b.encode();
         assert_eq!(&e[..4], b"TSB1");
         assert_eq!(Beacon::decode(&e), Some(b));

@@ -1,5 +1,5 @@
 //! Host benchmark of the CPU copy-out that zero-copy scanout removes (OLI-695):
-//! full-frame and typical-damage copies at the Tab A8 panel size (1920x1200),
+//! full-frame and typical-damage copies at a 1920x1200 panel,
 //! with and without the red/blue swap, on 1..N threads.
 //! Run with `cargo run --release --example scanout_bench`.
 use springboard::bare::kms::copy_into;

@@ -1038,7 +1038,7 @@ mod tests {
     #[test]
     fn decodes_a_rendered_code_in_every_mask() {
         for mask in 0..8 {
-            roundtrip("Hello, Tab A8", Mode::Byte, Ecl::M, mask, 4);
+            roundtrip("Hello, BifrOSt", Mode::Byte, Ecl::M, mask, 4);
         }
     }
 

@@ -1175,14 +1175,14 @@ mod tests {
             ip: "192.168.1.40".into(),
             router: "192.168.1.1".into(),
             mac: "AC:E4:B5:35:20:F0".into(),
-            model: "SM-X200".into(),
+            model: "Midget".into(),
             kernel: "4.14.186".into(),
             memory: "3.6 GB".into(),
             cpu: "Unisoc T618, 8 cores".into(),
             storage_total: 32_000_000_000,
             storage_free: 17_900_000_000,
             uptime_min: 1_500,
-            name: "Tab A8".into(),
+            name: "Midget".into(),
             serial: "R9XR40ABC".into(),
             timezone: "Atlantic/Reykjavik".into(),
             hour: 14,
@@ -1268,8 +1268,8 @@ mod tests {
         assert_eq!(uptime(127), "2h 7m");
         assert_eq!(uptime(1_500), "1d 1h 0m");
         let a = about(&info());
-        assert_eq!(a[0][0], ("Name", "Tab A8".into()));
-        assert_eq!(a[0][2], ("Model", "SM-X200".into()));
+        assert_eq!(a[0][0], ("Name", "Midget".into()));
+        assert_eq!(a[0][2], ("Model", "Midget".into()));
         assert_eq!(a[1][0], ("Capacity", "32.0 GB".into()));
         assert_eq!(a[2][0], ("Wi-Fi Address", "AC:E4:B5:35:20:F0".into()));
         assert_eq!(a[2][3], ("Uptime", "1d 1h 0m".into()));

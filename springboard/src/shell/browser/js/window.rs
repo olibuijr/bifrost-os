@@ -74,9 +74,9 @@ Object.defineProperty(globalThis, 'location', {
 });
 
 globalThis.navigator = {
-  userAgent: 'Mozilla/5.0 (Linux; Android 13; SM-X200) WebKit/537.36 (KHTML, like Gecko) SpringBoard/1.0 Mobile WebBrowser/537.36',
+  userAgent: 'Mozilla/5.0 (X11; Linux x86_64) WebKit/537.36 (KHTML, like Gecko) BifrOSt/1.0 WebBrowser/537.36',
   appName: 'Netscape', appVersion: '5.0', product: 'Gecko', vendor: 'SpringBoard',
-  platform: 'Linux armv8l', language: 'en-US', languages: ['en-US', 'en'], onLine: true, cookieEnabled: true,
+  platform: 'Linux x86_64', language: 'en-US', languages: ['en-US', 'en'], onLine: true, cookieEnabled: true,
   hardwareConcurrency: 4, maxTouchPoints: 5, doNotTrack: null, webdriver: false,
   sendBeacon() { return false; },
   clipboard: { writeText() { return Promise.resolve(); }, readText() { return Promise.resolve(''); } },

@@ -77,7 +77,7 @@ fn tree() -> PathBuf {
     }
     stdfs::write(home.join("Documents/notes.md"), "# Notes\n\nShopping list for the week:\n\n- milk\n- bread\n- coffee\n").unwrap();
     stdfs::write(home.join("Documents/report.txt"), (1..=80).map(|i| format!("Line {i}: the quick brown fox jumps over the lazy dog\n")).collect::<String>()).unwrap();
-    stdfs::write(home.join("README.md"), "# SpringBoard\n\nA pure-Rust bifrost-style shell for the Tab A8.\n\n## Build\n\n    cargo build --release\n").unwrap();
+    stdfs::write(home.join("README.md"), "# SpringBoard\n\nThe pure-Rust BifrOSt desktop shell for PC.\n\n## Build\n\n    cargo build --release\n").unwrap();
     stdfs::write(home.join("boot.log"), "[0.000] springboard: 1200x1920 @ 60Hz\n[0.120] wifi: scanning\n[1.400] wifi: connected\n").unwrap();
     stdfs::write(home.join("sunset.png"), gradient_png(640, 480)).unwrap();
     stdfs::write(home.join("Movies/clip.mp4"), vec![0u8; 2_300_000]).unwrap();

@@ -444,7 +444,7 @@ pub(crate) mod tests {
     }
 
     fn full(le: bool) -> Vec<u8> {
-        let ifd0 = vec![ascii(0x010F, "Samsung"), ascii(0x0110, "Samsung SM-X200"), short(le, 0x0112, 6)];
+        let ifd0 = vec![ascii(0x010F, "Fjord"), ascii(0x0110, "Fjord F1"), short(le, 0x0112, 6)];
         let exif = vec![
             rationals(le, 0x829A, &[(1, 250)]),
             rationals(le, 0x829D, &[(28, 10)]),
@@ -467,8 +467,8 @@ pub(crate) mod tests {
     fn reads_every_field_in_both_byte_orders() {
         for le in [true, false] {
             let e = parse(&full(le)).unwrap();
-            assert_eq!(e.make.as_deref(), Some("Samsung"));
-            assert_eq!(e.camera().as_deref(), Some("Samsung SM-X200"), "make is not repeated");
+            assert_eq!(e.make.as_deref(), Some("Fjord"));
+            assert_eq!(e.camera().as_deref(), Some("Fjord F1"), "make is not repeated");
             assert_eq!(e.orientation, Some(6));
             assert_eq!(e.exposure, Some((1, 250)));
             assert_eq!(e.f_number, Some(2.8));
@@ -487,7 +487,7 @@ pub(crate) mod tests {
         let rows = parse(&full(true)).unwrap().rows();
         let get = |k: &str| rows.iter().find(|(l, _)| *l == k).map(|(_, v)| v.as_str());
         assert_eq!(get("Date"), Some("4 October 2026, 12:30"));
-        assert_eq!(get("Camera"), Some("Samsung SM-X200"));
+        assert_eq!(get("Camera"), Some("Fjord F1"));
         assert_eq!(get("Exposure"), Some("1/250 s  f/2.8  ISO 100  4 mm"));
         assert_eq!(get("Size"), Some("4000 x 3000"));
         assert_eq!(get("Location"), Some("64.1467 N, 21.9333 W"));
@@ -548,7 +548,7 @@ pub(crate) mod tests {
         }
         let _ = parse(&bad);
         // an entry pointing outside the block is skipped
-        let mut t = tiff(true, vec![ascii(0x010F, "Samsung")], vec![], vec![]);
+        let mut t = tiff(true, vec![ascii(0x010F, "Fjord")], vec![], vec![]);
         let at = t.len();
         t[8 + 2 + 8..8 + 2 + 12].copy_from_slice(&((at + 100) as u32).to_le_bytes());
         assert_eq!(parse(&jpeg(&t, 1, 1)).unwrap().make, None);

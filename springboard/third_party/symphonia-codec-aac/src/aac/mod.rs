@@ -90,7 +90,7 @@ impl AacDecoder {
         // Check complexity.
         if asc.object_type != AudioObjectType::Lc
             || asc.sbr_present
-            // tab-a8: multichannel (up to 7.1) is decoded as-is; the caller downmixes
+            // bifrost: multichannel (up to 7.1) is decoded as-is; the caller downmixes
             || channels.count() > 8
             || asc.samples != 1024
         {

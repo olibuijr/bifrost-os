@@ -154,6 +154,6 @@
     "Virtio device configuration for app-created guests: storage, network, entropy, memory balloon, serial console",
     "Shared directories and clipboard bridging between host and guest",
     "Guest audio and USB passthrough",
-    "Documentation note: tools/vm-click.py hardcodes an out/arch-vm path under /home/olibuijr/Projects/tab-a8 and is not portable; docs/arch-vm.md does not exist (the doc is docs/arch-x86-vm.md)"
+    "Documentation note: docs/arch-vm.md does not exist (the doc is docs/arch-x86-vm.md)"
   ]
 }

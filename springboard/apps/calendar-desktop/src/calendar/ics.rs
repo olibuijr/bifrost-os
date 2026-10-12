@@ -521,7 +521,7 @@ pub fn write(cal: &IcsCalendar, stamp: &str) -> String {
     let add = |out: &mut String, s: String| out.push_str(&fold(&s));
     add(&mut out, "BEGIN:VCALENDAR".into());
     add(&mut out, "VERSION:2.0".into());
-    add(&mut out, "PRODID:-//Tab A8//SpringBoard Calendar//EN".into());
+    add(&mut out, "PRODID:-//BifrOSt//Calendar//EN".into());
     add(&mut out, "CALSCALE:GREGORIAN".into());
     if !cal.name.is_empty() {
         add(&mut out, format!("X-WR-CALNAME:{}", escape(&cal.name)));

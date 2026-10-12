@@ -72,7 +72,7 @@ const FOUND_CONFIRM_NAME: u32 = 0x04;
 const SCAN_MS: u64 = 12_000;
 /// A pairing that has not finished after this long is given up on.
 const PAIR_MS: u64 = 40_000;
-const LOCAL_NAME: &str = "Tab A8";
+const LOCAL_NAME: &str = "BifrOSt";
 
 const BREDR: u8 = 0;
 

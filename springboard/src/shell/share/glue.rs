@@ -15,7 +15,7 @@ pub fn received_dir() -> PathBuf {
 }
 
 fn device_name() -> String {
-    std::fs::read_to_string("/proc/sys/kernel/hostname").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "Tab A8".into())
+    std::fs::read_to_string("/proc/sys/kernel/hostname").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "BifrOSt".into())
 }
 
 /// Sends an item on a worker thread; the result is reported through the log.

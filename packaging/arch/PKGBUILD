@@ -15,7 +15,7 @@ source=(springboard.service seed-data bifrost-privd.service pam-bifrost-login sy
 sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP)
 
 # Inputs (override from the environment):
-#   SPRINGBOARD_REPO    tab-a8 checkout            (default: two levels above this PKGBUILD)
+#   SPRINGBOARD_REPO    bifrost-os checkout        (default: two levels above this PKGBUILD)
 #   SPRINGBOARD_DEPS    parent dir of the sibling repos iOSTerm, ipad-deildu-rust
 #                       (default: the checkout parent, where sibling repositories live)
 #   SPRINGBOARD_ASSETS  packed assets dir          (default: <repo>/springboard/assets, from tools/pack.py)

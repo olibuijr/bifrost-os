@@ -1508,11 +1508,13 @@ fn map_file(path: &str) -> std::io::Result<&'static [u8]> {
 
 #[cfg(target_os = "linux")]
 fn model() -> String {
-    std::fs::read_to_string("/sys/firmware/devicetree/base/model")
-        .ok()
+    // a PC names itself in DMI; a devicetree board in its model node
+    ["/sys/class/dmi/id/product_name", "/sys/firmware/devicetree/base/model"]
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
         .map(|s| s.trim_end_matches('\0').trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "SM-X200".into())
+        .find(|s| !s.is_empty())
+        .unwrap_or_else(|| "PC".into())
 }
 
 #[cfg(target_os = "linux")]

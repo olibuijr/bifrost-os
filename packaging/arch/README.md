@@ -22,7 +22,7 @@ makepkg -f            # or: makepkg --nobuild --nodeps   for a source/prepare ch
 (`/home/olibuijr/Projects/{iOSTerm,ipad-deildu-rust}`). `prepare()` copies the checkout and those
 repos (without `target/` and `.git`) into `$srcdir/tree` and rewrites the paths there, so the build tree is
 self-contained and the checkout is untouched. Point it elsewhere with `SPRINGBOARD_DEPS=<parent dir of the
-two repos>`, `SPRINGBOARD_REPO=<tab-a8 checkout>`, `SPRINGBOARD_ASSETS=<assets dir>`.
+two repos>`, `SPRINGBOARD_REPO=<bifrost-os checkout>`, `SPRINGBOARD_ASSETS=<assets dir>`.
 Crates are not vendored: cargo runs `--offline` against the local registry cache (`CARGO_HOME`), so warm it
 first with `cargo fetch` in `springboard/` (or pass `SPRINGBOARD_CARGO_FLAGS=` to allow network).
 Use `BUILDDIR=` to keep `src/`/`pkg/` out of the checkout.
