@@ -4,6 +4,7 @@ mod feed;
 mod icon;
 mod news;
 mod pictures;
+mod wire;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind};
