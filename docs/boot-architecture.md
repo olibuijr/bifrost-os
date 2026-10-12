@@ -200,3 +200,30 @@ from it.
 | 3 | Prepared boot: UKI, minimal initramfs, caches; services on demand | 04, 07, 08 |
 | 4 | Reveal once in the window server; failure screens; symmetric shutdown | 09, 11, 12 |
 | 5 | Unlock is login | 10 |
+
+## Session restart after a shell stall (0.6.2 incident)
+
+After the shell stalled (heartbeat exit 5) four times in a row, every new session ended about a second after labwc's
+autostart, with no shell error in the journal, and only a reboot recovered. The chain:
+
+1. Each shell start adds one to `/var/lib/springboard/boot_attempts` (`bare/takeover.rs`) and clears it after 60 s
+   healthy. A stall exits after 20 s, so four stalls in a row left the counter at 3.
+2. The next start found the counter at `MAX_FAILED_BOOTS`, wrote the reason only to `DIR/log` (not the journal) and
+   exited 70 at once. The latch stays for 10 minutes (`ATTEMPTS_STALE_SECS`).
+3. The session script saw the shell end, exited, and Bootweave's supervisor counted a quick failure (`after_exit`: under
+   20 s). Three of those show the start-failure screen, which holds the service until Restart is chosen: that is the
+   frame the lead saw and why no restart fixed it. `Session terminated, killing shell...` is `runuser` receiving
+   SIGTERM when the session's cgroup was torn down.
+
+Fixes: a stall now gives its attempt back (`takeover::forgive_stall`; a stall is not a start failure), the latch prints
+to stderr as well as `DIR/log`, and the session script prints one journal line for the shell's exit status
+(`shell_exit_note` in `session-policy`: 3, 5, 70 are named). Stale files under `/run/bifrost/user` were not the cause:
+the script already removes `wayland-*` (which includes `wayland-0.lock`), `session.json`, `shell-ready` and `bus` before
+each start.
+
+The two noise sources in the log: `/etc/bifrost/{compositor,renderer,chrome}: No such file` came from `tr < file
+2>/dev/null` (the failed redirect prints before the `2>/dev/null` applies); the script now reads them through
+`session_switch`, which checks the file first. `dbus-update-activation-environment: unable to connect` was the launchers
+starting before the session bus socket existed; the script now waits up to 2 s for `$runtime/bus`.
+Tests: `tools/test_session_policy.py` (`session_switch`, `shell_exit_note`), `bare/takeover.rs` (`after_stall`).
+Unverified on hardware.
