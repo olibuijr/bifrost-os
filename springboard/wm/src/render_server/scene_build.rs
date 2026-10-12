@@ -43,6 +43,7 @@ use bifrost_layers::tree::PresentedLayer;
 use bifrost_layers::Color;
 
 use crate::bifrost_material::effective_regions;
+use crate::material_filter::Tone;
 use crate::material_kind::{budgeted_blur, premultiply, MaterialSpec, Resolved};
 use crate::render_server::compose::{self, Glass as GlassMat, SceneNode};
 use crate::render_server::import::{dmabuf_to_gpu, Importer};
@@ -73,9 +74,9 @@ pub fn material_nodes(spec: &MaterialSpec, origin: Point<i32, Logical>, scale: f
             n.scale = scale;
             n.corner_radius = radius;
             match resolved {
-                Resolved::Glass { blur, saturation, tint, .. } => {
+                Resolved::Glass { blur, saturation, tone, tint, .. } => {
                     let blur = budgeted_blur(blur, (rect[2] * scale).ceil() as u32, (rect[3] * scale).ceil() as u32, scale);
-                    n.material = Some(GlassMat { blur, tint: premultiply(tint), saturation });
+                    n.material = Some(GlassMat { blur, tint: premultiply(tint), saturation, tone });
                 }
                 Resolved::Plate(c) => n.color = premultiply(c),
             }
@@ -167,7 +168,7 @@ pub fn layer_nodes(pl: &PresentedLayer, bound: &dyn Fn(ContentsId) -> Option<u64
     // glass: a transparent node whose material blurs what is behind the layer
     if let Material::Glass { blur, tint, saturation } = l.material {
         let mut n = node(full, [0.0; 4], radius);
-        n.material = Some(GlassMat { blur, tint: premult(tint), saturation });
+        n.material = Some(GlassMat { blur, tint: premult(tint), saturation, tone: Tone::NONE });
         out.push(n);
     }
 

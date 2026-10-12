@@ -14,6 +14,7 @@ pub mod handlers;
 pub mod headless;
 pub mod input;
 pub mod lock;
+pub mod material_filter;
 pub mod material_kind;
 pub mod render_server;
 #[cfg(feature = "nested")]

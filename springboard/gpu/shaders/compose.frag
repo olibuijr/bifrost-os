@@ -1,7 +1,9 @@
 #version 450
 // Composes one quad into the target (premultiplied output, blended source-over by the pipeline). Flags (see
 // wm/src/render_server/compose.rs): 1 samples the texture, 2 draws a shadow of shadow_rect, 4 is glass: the sampled
-// backdrop with saturation and the tint (color, premultiplied) over it. Every path is multiplied by the opacity and
+// backdrop with saturation, the tone (brightness and luminance mapping, carried in the shadow fields: shadow_sigma is
+// the brightness, shadow_radius the luminance amount, shadow_rect the four luminance values) and the tint (color,
+// premultiplied) over it. Every path is multiplied by the opacity and
 // by the rounded clip's coverage when clip.z > 0.
 layout(push_constant) uniform Push {
     vec2 p0;
@@ -37,6 +39,12 @@ float rrect_sdf(vec2 p, vec4 r, float rad) {
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
 }
 
+// The luminance curve: the cubic Bezier through four control values (wm/src/material_filter.rs, curve).
+float lum_curve(vec4 v, float x) {
+    float u = 1.0 - x;
+    return u * u * u * v.x + 3.0 * u * u * x * v.y + 3.0 * u * x * x * v.z + x * x * x * v.w;
+}
+
 void main() {
     float cov = 1.0;
     if (pc.clip.z > 0.0) {
@@ -57,7 +65,13 @@ void main() {
 
     if ((pc.flags & 4u) != 0u) {
         float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-        c.rgb = mix(vec3(lum), c.rgb, pc.saturation);
+        c.rgb = clamp(mix(vec3(lum), c.rgb, pc.saturation), 0.0, 1.0);
+        if (pc.shadow_radius != 0.0) {
+            // luminance mapping: every channel moves by how far the luma moves towards the curve
+            float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+            c.rgb = clamp(c.rgb + pc.shadow_radius * (lum_curve(pc.shadow_rect, clamp(l, 0.0, 1.0)) - l), 0.0, 1.0);
+        }
+        c.rgb = clamp(c.rgb + pc.shadow_sigma, 0.0, 1.0);
         // premultiplied tint over the saturated backdrop
         c = pc.color + c * (1.0 - pc.color.a);
     }
