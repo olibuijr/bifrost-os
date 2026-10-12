@@ -593,8 +593,8 @@ impl Engine {
         if muted {
             self.pcm.iter_mut().for_each(|s| *s = 0);
         } else {
-            // the shell's curve (media::volume), applied once; the codec gain stays on the HAL's value
-            super::volume::scale(&mut self.pcm, super::volume::software_gain());
+            // the shell's curve (media::volume) on this player's own volume, applied once
+            super::volume::scale(&mut self.pcm, super::volume::Volume::new(volume).linear());
         }
         if std::mem::take(&mut self.fade_in) {
             fade_in(&mut self.pcm, FADE_FRAMES);
@@ -620,6 +620,15 @@ mod tests {
     use super::super::stream::Phase;
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn player_volume_scales_samples_by_the_volume_curve() {
+        let mut pcm = vec![10000i16, -10000];
+        let g = super::super::volume::Volume::new(0.5).linear();
+        super::super::volume::scale(&mut pcm, g);
+        assert!((pcm[0] as f32 - 10000.0 * g).abs() <= 1.0 && pcm[0] == -pcm[1]);
+        assert!(g > 0.0 && g < 1.0);
+    }
 
     #[test]
     fn fade_in_ramps_from_silence_and_leaves_the_rest() {

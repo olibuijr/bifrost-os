@@ -645,7 +645,6 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 resampler.retune(decoder.rate(), decoder.channels());
                 pcm.clear();
                 resampler.convert(&samples, &mut pcm);
-                super::volume::scale(&mut pcm, super::volume::software_gain());
                 if let Err(e) = super::audio_out::write_with_retry(&mut *out, &pcm, &super::audio_out::WRITE_RETRY_BACKOFF) {
                     shared.lock().unwrap().error = Some(format!("audio output: {e}"));
                     notify(notify_fd);
