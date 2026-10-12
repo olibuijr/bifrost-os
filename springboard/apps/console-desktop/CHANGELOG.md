@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0 — 2026-10-12
+
+- Log positions: every message has a position in the log's order (shown as Position in the detail pane). Log, Show
+  Messages After Selected lists only the messages newer than the selected one, and Show All Messages returns to the
+  full list. The walk keeps up with new messages while the journal streams.
+- Subsystem filter: Log, Show Only This Subsystem adds a `subsystem:` search token for the selected message's subsystem.
+- Signposts: a new Signposts row under Reports lists the signpost intervals and events in the journal. Each interval's
+  duration is in the detail pane, and the footer totals every name (count, total, longest). The Console times its own
+  view loads as a signpost (`view.load`) in its log subsystem.
+- Activity filters are not available yet: journal lines carry no activity identifier.
+
 ## 1.0.3 — 2026-10-11
 
 - The toolbar search field is always open, as in the stock Console (`widgets::search_field`, a labelled text field), so the

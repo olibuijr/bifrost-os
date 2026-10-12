@@ -55,7 +55,7 @@ impl Level {
     }
 }
 
-/// One message: what `log show` and `OSLogEntryLog` give (date, process, pid, subsystem, category, level, message).
+/// One message: what `log show` gives (date, process, pid, subsystem, category, level, message).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LogEntry {
     /// Unix time in microseconds, 0 when unknown.
