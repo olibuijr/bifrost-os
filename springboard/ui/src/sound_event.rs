@@ -3,7 +3,7 @@
 //! envelopes over a value. `play` walks the tree and returns the leaf sounds with their gains. Pure Rust: the caller
 //! supplies the switch key, the random roll (0.0..1.0) and the blend value, so the result is deterministic.
 
-use crate::sound_envelope::Envelope;
+use crate::event_envelope::Envelope;
 
 /// One sound that is audible, with its gain after every node on the way down.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,7 +86,7 @@ impl EventNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sound_envelope::{CurveType, EnvelopeSegment};
+    use crate::event_envelope::{CurveType, EnvelopeSegment};
 
     fn leaf(name: &str) -> EventNode {
         EventNode::Sound(name.to_string())

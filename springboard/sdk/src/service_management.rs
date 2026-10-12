@@ -19,58 +19,6 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 static LAST: AtomicU8 = AtomicU8::new(0);
 
-/// The errors `SMAppService` reports, one per constant of the official "Service Management Errors" list. The
-/// documentation gives no numeric codes, so the variants carry none.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ServiceError {
-    AlreadyRegistered,
-    AuthorizationFailure,
-    InternalFailure,
-    InvalidPlist,
-    InvalidSignature,
-    JobMustBeEnabled,
-    JobNotFound,
-    JobPlistNotFound,
-    LaunchDeniedByUser,
-    ServiceUnavailable,
-    ToolNotValid,
-}
-
-impl ServiceError {
-    /// Every variant, in the order of the official list.
-    pub const ALL: [ServiceError; 11] = [
-        ServiceError::AlreadyRegistered,
-        ServiceError::AuthorizationFailure,
-        ServiceError::InternalFailure,
-        ServiceError::InvalidPlist,
-        ServiceError::InvalidSignature,
-        ServiceError::JobMustBeEnabled,
-        ServiceError::JobNotFound,
-        ServiceError::JobPlistNotFound,
-        ServiceError::LaunchDeniedByUser,
-        ServiceError::ServiceUnavailable,
-        ServiceError::ToolNotValid,
-    ];
-}
-
-impl fmt::Display for ServiceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            ServiceError::AlreadyRegistered => "The application is already registered.",
-            ServiceError::AuthorizationFailure => "The authorization requested failed.",
-            ServiceError::InternalFailure => "An internal failure has occurred.",
-            ServiceError::InvalidPlist => "The app's property list is invalid.",
-            ServiceError::InvalidSignature => "The app's code signature doesn't meet the requirements to perform the operation.",
-            ServiceError::JobMustBeEnabled => "The job must be enabled first.",
-            ServiceError::JobNotFound => "The system can't find the specified job.",
-            ServiceError::JobPlistNotFound => "The job's property list was not found in the app bundle.",
-            ServiceError::LaunchDeniedByUser => "The user denied the app's launch request.",
-            ServiceError::ServiceUnavailable => "The service necessary to perform this operation is unavailable or is no longer accepting requests.",
-            ServiceError::ToolNotValid => "The specified path doesn't exist or the helper tool at the specified path isn't valid.",
-        })
-    }
-}
-
 impl std::error::Error for ServiceError {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -215,6 +163,9 @@ const ALL_ERRORS: [ServiceError; 11] = [
 ];
 
 impl ServiceError {
+    /// Every case, in the order of the official list.
+    pub const ALL: [ServiceError; 11] = ALL_ERRORS;
+
     /// Every case, in declaration order.
     pub fn all() -> &'static [ServiceError] {
         &ALL_ERRORS
@@ -242,17 +193,17 @@ impl ServiceError {
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            ServiceError::AlreadyRegistered => "The app is already registered.",
+            ServiceError::AlreadyRegistered => "The application is already registered.",
             ServiceError::AuthorizationFailure => "The authorization requested failed.",
             ServiceError::InternalFailure => "An internal failure has occurred.",
             ServiceError::InvalidPlist => "The app's property list is invalid.",
-            ServiceError::InvalidSignature => "The app's code signature does not meet the requirements for the operation.",
+            ServiceError::InvalidSignature => "The app's code signature doesn't meet the requirements to perform the operation.",
             ServiceError::JobMustBeEnabled => "The job must be enabled first.",
-            ServiceError::JobNotFound => "The system cannot find the specified job.",
-            ServiceError::JobPlistNotFound => "The job's property list was not found.",
+            ServiceError::JobNotFound => "The system can't find the specified job.",
+            ServiceError::JobPlistNotFound => "The job's property list was not found in the app bundle.",
             ServiceError::LaunchDeniedByUser => "The user denied the app's launch request.",
-            ServiceError::ServiceUnavailable => "The service needed for the operation is unavailable.",
-            ServiceError::ToolNotValid => "The path does not exist, or the helper tool at it is not valid.",
+            ServiceError::ServiceUnavailable => "The service necessary to perform this operation is unavailable or is no longer accepting requests.",
+            ServiceError::ToolNotValid => "The specified path doesn't exist or the helper tool at the specified path isn't valid.",
         })
     }
 }
@@ -296,8 +247,8 @@ mod tests {
 
     #[test]
     fn display_text_matches_the_reference_wording() {
-        assert_eq!(ServiceError::AlreadyRegistered.to_string(), "The app is already registered.");
-        assert_eq!(ServiceError::InvalidSignature.to_string(), "The app's code signature does not meet the requirements for the operation.");
+        assert_eq!(ServiceError::AlreadyRegistered.to_string(), "The application is already registered.");
+        assert_eq!(ServiceError::InvalidSignature.to_string(), "The app's code signature doesn't meet the requirements to perform the operation.");
     }
 
     #[test]

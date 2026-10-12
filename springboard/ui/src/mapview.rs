@@ -262,7 +262,9 @@ mod tests {
         assert!(cam.zoom.abs() < 1e-9, "a full-width region fits at zoom 0, got {}", cam.zoom);
         let small = CoordinateRegion::new(c(64.0, -22.0), crate::geo::CoordinateSpan::new(0.5, 0.5));
         let cam = MapCamera::fitting(small, 500.0, 500.0).expect("valid camera");
-        assert!(cam.zoom > 10.0 && cam.zoom < 11.0, "zoom was {}", cam.zoom);
+        // At 64 degrees north the projection stretches the 0.5 degree latitude span about 2.28 times, so the height
+        // decides: log2(500 / 256 * 360 / 1.14) is about 9.27.
+        assert!(cam.zoom > 9.0 && cam.zoom < 9.5, "zoom was {}", cam.zoom);
         let (shown, wanted) = (cam.visible_rect(), small.map_rect());
         assert!(shown.width >= wanted.width * 0.999 && shown.height >= wanted.height * 0.999);
     }

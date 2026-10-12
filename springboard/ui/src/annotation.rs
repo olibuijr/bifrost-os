@@ -3,7 +3,7 @@
 //! drawing. A page keeps its annotations in stacking order, hit-tests points against them, and can hide them as a whole.
 //! The model does not parse or write PDF files: the reader or writer maps its annotation objects onto these values.
 
-use crate::drawing::Drawing;
+use crate::markup_drawing::Drawing;
 use crate::Rect;
 
 /// The kinds of annotation, named as the reference SDK lists them.
@@ -126,7 +126,7 @@ impl PageAnnotations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::drawing::{Ink, InkKind, Stroke, StrokePoint};
+    use crate::markup_drawing::{Ink, InkKind, Stroke, StrokePoint};
 
     fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect { x, y, w, h }

@@ -99,6 +99,7 @@ impl Purchase {
     pub fn complete(&mut self, outcome: Outcome) -> bool {
         let next = match (&self.step, &outcome) {
             (Step::ConfirmationShown, Outcome::Pending) => Step::Pending,
+            (Step::Pending, Outcome::Pending) => return false,
             (Step::ConfirmationShown | Step::Pending, _) => Step::Finished(outcome.clone()),
             _ => return false,
         };

@@ -53,7 +53,7 @@ impl Entity {
         self.components.iter().find(|c| c.kind() == kind).map(|c| c.as_ref())
     }
 
-    pub fn component_mut(&mut self, kind: &str) -> Option<&mut dyn Component> {
+    pub fn component_mut(&mut self, kind: &str) -> Option<&mut (dyn Component + 'static)> {
         self.components.iter_mut().find(|c| c.kind() == kind).map(|c| c.as_mut())
     }
 

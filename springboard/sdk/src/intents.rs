@@ -694,7 +694,7 @@ mod tests {
         assert!(pay.validate(&ok).is_ok());
         let bad = json::parse(r#"{"price":{"amount":9.99,"code":"usd"}}"#).unwrap();
         assert!(pay.validate(&bad).is_err());
-        assert!(pay.manifest_toml().contains(""price:currency""));
+        assert!(pay.manifest_toml().contains(r#""price:currency""#));
     }
 
     use super::*;
