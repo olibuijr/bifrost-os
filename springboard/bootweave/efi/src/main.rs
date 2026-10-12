@@ -9,6 +9,7 @@ mod boot_policy;
 
 use alloc::string::String;
 mod uki;
+mod cmdline;
 use alloc::vec::Vec;
 use bootweave_frame::progress::Progress;
 use bootweave_frame::render::{bar_rect, render_bar};
@@ -30,7 +31,6 @@ const CMDLINE_FILES: &[&CStr16] = &[
     cstr16!("\\EFI\\BIFROST\\boot.cfg"),
     cstr16!("\\EFI\\BOOT\\cmdline.txt"),
 ];
-const DEFAULT_CMDLINE: &str = "initrd=\\arch\\boot\\x86_64\\initramfs-linux.img quiet splash";
 const TIMING_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\boot-timing");
 const PREVIOUS_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\rollback.txt");
 const RECOVERY_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\recovery.txt");
@@ -39,6 +39,8 @@ const PENDING_PATH: &CStr16 = cstr16!("\\EFI\\BIFROST\\pending");
 const HANDOFF_VENDOR: VariableVendor = VariableVendor(uefi::guid!("d1f0b07c-5b2e-4a8d-9c3f-6e4a2b7d9f10"));
 /// Keyboard Shift bits of `EFI_KEY_STATE.KeyShiftState` (UEFI spec, Simple Text Input Ex): RIGHT_SHIFT, LEFT_SHIFT.
 const SHIFT_BITS: u32 = 0x0000_0003;
+/// Control bits of the same field: RIGHT_CONTROL, LEFT_CONTROL.
+const CONTROL_BITS: u32 = 0x0000_000c;
 
 /// Reads a whole small file from the boot volume, up to `cap` bytes.
 fn read_file(dev: Handle, path: &CStr16, cap: usize) -> Option<Vec<u8>> {
@@ -87,7 +89,7 @@ fn cmdline(dev: Handle) -> String {
     CMDLINE_FILES
         .iter()
         .find_map(|path| read_line(dev, path))
-        .unwrap_or_else(|| DEFAULT_CMDLINE.into())
+        .unwrap_or_else(|| cmdline::DEFAULT_CMDLINE.into())
 }
 
 /// Microseconds since CPU reset from the TSC, the clock systemd's Boot Loader Interface expects.
@@ -209,22 +211,43 @@ fn choose_option(display: &mut Display, entries: &[(&str, String)]) -> Option<St
     }
 }
 
-/// Whether a Shift key was pressed in the keys already waiting at loader start. Drains them; never waits, so the
-/// loader's time is not spent here.
-fn shift_at_start() -> bool {
+/// Keys already waiting in the firmware queue at loader start.
+#[derive(Clone, Copy, Default)]
+struct StartKeys {
+    /// A Shift key: show the boot options.
+    shift: bool,
+    /// Ctrl+V: boot this one time verbose (support).
+    verbose: bool,
+}
+
+/// Reads the keys already queued at loader start, once, for both the Shift and the Ctrl+V options (reading drains
+/// the queue, so two separate readers would each hide the other's key). Drains at most 32 keys and never waits, so
+/// the loader's time is not spent here. Firmware reports Ctrl+V either as the control character 0x16 or as `v` with
+/// a Control modifier, so both count.
+fn start_keys() -> StartKeys {
+    let mut keys = StartKeys::default();
     let Ok(h) = boot::get_handle_for_protocol::<InputEx>() else {
-        return false;
+        return keys;
     };
     let Ok(mut input) = boot::open_protocol_exclusive::<InputEx>(h) else {
-        return false;
+        return keys;
     };
-    let mut shift = false;
-    while let Ok(Some(key)) = input.read_key() {
-        if key.key_state.key_shift_state.is_some_and(|s| s.bits() & SHIFT_BITS != 0) {
-            shift = true;
+    for _ in 0..32 {
+        let Ok(Some(data)) = input.read_key() else {
+            break;
+        };
+        let state = data.key_state.key_shift_state.map_or(0, |s| s.bits());
+        if state & SHIFT_BITS != 0 {
+            keys.shift = true;
+        }
+        if let Key::Printable(c) = data.key {
+            let c = char::from(c);
+            if c == '\u{16}' || ((c == 'v' || c == 'V') && state & CONTROL_BITS != 0) {
+                keys.verbose = true;
+            }
         }
     }
-    shift
+    keys
 }
 
 /// The loader's state for one boot: the progress bar, the boot frame, and the handles it boots with.
@@ -351,10 +374,14 @@ fn main() -> Status {
     };
     drop(li);
 
+    // Ctrl+V already in the firmware's key queue: this one boot is verbose (support). Never waits for a key.
+    let keys = start_keys();
+    let verbose = keys.verbose;
     let current = cmdline(dev);
+    let current = if verbose { cmdline::verbose(&current) } else { current };
     let marker = read_text(dev, PENDING_PATH);
-    let previous = read_line(dev, PREVIOUS_PATH);
-    let recovery = read_line(dev, RECOVERY_PATH);
+    let previous = read_line(dev, PREVIOUS_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
+    let recovery = read_line(dev, RECOVERY_PATH).map(|line| if verbose { cmdline::verbose(&line) } else { line });
     let timing = read_file(dev, TIMING_PATH, 64)
         .and_then(|bytes| BootTiming::decode(&bytes))
         .unwrap_or(BootTiming::DEFAULT);
@@ -369,7 +396,7 @@ fn main() -> Status {
     };
     session.first_frame();
 
-    if shift_at_start() {
+    if keys.shift {
         let mut entries = alloc::vec![("Current", current.clone())];
         if let Some(line) = previous.clone() {
             entries.push(("Previous", line));

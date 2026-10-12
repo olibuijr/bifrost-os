@@ -171,7 +171,7 @@ pub fn cmdline_txt(root_uuid: &str) -> String {
 
 fn cmdline_with(root_uuid: &str, audio_core: Option<&str>) -> String {
     let isolate = audio_core.map(|c| format!(" isolcpus={c} nohz_full={c} rcu_nocbs={c}")).unwrap_or_default();
-    format!("initrd=\\initramfs-linux.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs{isolate}\n")
+    format!("initrd=\\initramfs-linux.img root=UUID={root_uuid} rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs{isolate}\n")
 }
 
 /// HDA codec power saving off (B2): the kernel's default suspends the codec after 10 s idle, and the wake-up
@@ -799,6 +799,11 @@ mod tests {
         assert!(!INITRAMFS_HOOKS.contains("systemd") && !INITRAMFS_HOOKS.contains("fsck") && INITRAMFS_HOOKS.contains(" kms "));
         assert!(c.contains(" threadirqs") && !c.contains("isolcpus"));
         assert!(c.contains(" systemd.tty.rows.console= "));
+        // Text-free baseline (docs/boot-architecture.md): every console log level and status line off.
+        for flag in ["quiet", "loglevel=3", "udev.log_level=3", "rd.udev.log_level=3", "systemd.show_status=false", "rd.systemd.show_status=false", "systemd.log_target=journal", "vt.global_cursor_default=0"] {
+            assert!(c.split_whitespace().any(|t| t == flag), "missing {flag}");
+        }
+        assert!(!c.split_whitespace().any(|t| t == "splash" || t == "plymouth"));
         let iso = cmdline_with("abcd", Some("7"));
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
