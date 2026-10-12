@@ -819,3 +819,5 @@ pub mod disk_image;
 pub mod keyframe_pick;
 pub mod highlight_rank;
 pub mod face_group;
+pub mod sound_envelope;
+pub mod sound_distance;
