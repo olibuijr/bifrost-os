@@ -755,3 +755,5 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod pip_window;
+pub mod content_proposal;
