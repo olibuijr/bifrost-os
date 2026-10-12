@@ -85,6 +85,11 @@ impl Importer {
         Ok(SurfaceTexture { texture, zero_copy: false, width, height })
     }
 
+    /// The texture cached under `key` (a dma-buf import or a surface's shm upload), for composition.
+    pub fn texture(&self, key: u64) -> Option<Texture> {
+        self.dmabufs.get(&key).map(|t| t.texture.clone()).or_else(|| self.shm.get(&key).cloned())
+    }
+
     /// Drops everything cached for a buffer or a surface that was destroyed.
     pub fn forget(&mut self, key: u64) {
         self.dmabufs.remove(&key);

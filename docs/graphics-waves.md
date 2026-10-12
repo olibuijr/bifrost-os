@@ -27,9 +27,9 @@ the window server directly, and the bench shows the frame budgets. Facts this pl
   Magnifier, AppStore) and draws the menu bar, Dock and panels itself (`desktop_bar.rs`, `desktop_dock.rs`,
   `control_center.rs`, `notify/`), all on one event loop.
 
-Lead skeleton before launch: the `render_server::Server` entry point (`new(device, outputs)`, `frame(state, now)`),
-`App::draw_canvas` with its default bridge, the menu-model control messages for the chrome clients, the new crates
-`springboard/chrome` (menu bar, Dock and panels clients), and the `tests/vulkan_*.rs` harness layout.
+Lead skeleton (commit after G1's merge): `render_server::Server` (`new(render_node, format)`, `frame(nodes, target,
+damage, load)`, GPU-tested), `App::draws_canvas`/`draw_canvas`, the `springboard/chrome` crate (model, link, surface
+APIs, three client binaries) with `src/shell/chrome_host/`, Smithay's `xwayland` feature, and `wm/tests/vulkan_*.rs`.
 
 | # | Agent | Owns | Work |
 |---|---|---|---|
@@ -43,14 +43,14 @@ Lead skeleton before launch: the `render_server::Server` entry point (`new(devic
 | 8 | `wm-xwayland` | new `wm/src/xwayland.rs` | XWayland via Smithay's xwayland support, X11 windows in the same stack. |
 | 9 | `kit-canvas` | `sdk/src/widgets.rs`, `glyphs.rs` | The SDK kit draws through `&mut dyn Canvas` (Surface still works because it implements Canvas). |
 | 10 | `kit-canvas-views` | `sdk/src/view/*` | Views, controls, forms, scroll and animation draw through `Canvas`. |
-| 11 | `sdk-draw-canvas` | `sdk/src/lib.rs` App trait, `restoration.rs`, `webview.rs`, testapp | `App::draw_canvas(ctx, &mut dyn Canvas, t)`, defaulting to `draw` through a `Surface` bridge; migration guide in `docs/bifrost-ui.md`. |
+| 11 | `app-canvas-pilot` | `apps/calculator-desktop` | The first app on `draws_canvas`/`draw_canvas` (skeleton in `sdk/src/lib.rs`), proving one drawing routine on the CPU and GPU paths; migration guide in `docs/bifrost-ui.md`. |
 | 12 | `sdk-layer-views` | new `sdk/src/layers.rs`, `view/scroll.rs` integration | Layer-backed views: views map to layers; scrolling is a layer offset with server-run deceleration; `animate(duration, curve, \|\| ...)` sets the transaction's implicit animation; hover and press are property changes. |
 | 13 | `sdk-direct-runtime` | `sdk/src/runtime.rs` | The runtime runs the direct path when `BIFROST_DIRECT=1`: one loop over the Wayland fd and the shell control socket; pixels and input never go to the shell. |
 | 14 | `shell-apphost-direct` | `src/shell/apphost.rs`, `desk.rs` glue | The shell stops making a toplevel for a direct app; window list from foreign-toplevel, switcher and crash thumbnails from screencopy. |
 | 15 | `chrome-menubar` | `springboard/chrome/src/menubar.rs` | The menu bar and its menus as a separate layer-shell client drawn with `Canvas` + `bifrost-2d` + layers; the menu model comes from the shell over the control socket. |
 | 16 | `chrome-dock` | `springboard/chrome/src/dock.rs` | The Dock as a separate client: layer-tree magnification, launch bounce and minimize target published to the window server. |
 | 17 | `chrome-panels` | `springboard/chrome/src/panels.rs` | Notification Center, Control Center and search as one panels client, with glass materials from the window server. |
-| 18 | `app-store-out` | new `apps/appstore-desktop` | The App Store as an SDK app (from `src/shell/store/`), first of the built-in apps to leave the shell. |
+| 18 | `chrome-core` | `chrome/src/{surface,link,model}.rs`, `src/shell/chrome_host/server.rs` | The chrome clients' Wayland connection, GPU surfaces and layer trees, the shell link on both ends, the model codec. (The App Store's move out of the shell goes to G3.) |
 | 19 | `bench-graphics` | `tools/bench.py` graphics suite | Midget: window-server frame stats (`bifrost-wm-frames.jsonl`), input-to-photon (uinput click to the first presented frame that shows it), animation drops, app redraw time; budget gate against `docs/graphics-architecture.md`. |
 | 20 | `session-switch` | `packaging/arch/wayland/session`, PKGBUILD, Settings > Developer | Ship `bifrost-wm` and its shaders, a Developer toggle for the new window server and direct apps, and a crash-loop fallback to labwc. |
 

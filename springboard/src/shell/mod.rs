@@ -66,6 +66,7 @@ pub mod spotindex;
 pub mod sharing;
 pub mod workspace;
 pub mod services;
+pub mod chrome_host;
 pub mod game_controllers_page;
 mod now_playing_menu;
 pub mod dnd;

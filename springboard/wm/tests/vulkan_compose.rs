@@ -41,3 +41,20 @@ fn glass_blurs_the_edge_behind_it_and_nothing_else() {
     assert!(at(63, row) < 245 && at(64, row) > 10, "the edge is no longer a step: {ramp:?}");
     assert!(at(40, row) > 200 && at(88, row) < 55, "far from the edge the glass keeps the backdrop colour");
 }
+
+#[test]
+fn the_server_composites_a_scene_frame() {
+    use bifrost_wm::render_server::compose::SceneNode;
+    use bifrost_wm::render_server::server::Server;
+    let mut server = Server::new(None, PixelFormat::Rgba8Unorm).expect("server");
+    let target = server
+        .device
+        .new_texture(&TextureDescriptor { width: 32, height: 32, format: PixelFormat::Rgba8Unorm, usage: TextureUsage::RENDER_TARGET | TextureUsage::SAMPLED | TextureUsage::COPY_SRC, exportable: false, modifiers: vec![] })
+        .expect("target");
+    let nodes = vec![SceneNode::solid([0.0, 0.0, 32.0, 32.0], [0.0, 0.0, 1.0, 1.0]), SceneNode::solid([8.0, 8.0, 16.0, 16.0], [1.0, 0.0, 0.0, 1.0])];
+    server.frame(&nodes, &target, &vec![[0, 0, 32, 32]], LoadAction::Clear([0.0; 4])).expect("frame").wait().expect("wait");
+    let corner = target.read_region(Region { x: 1, y: 1, width: 1, height: 1 }).unwrap();
+    let centre = target.read_region(Region { x: 16, y: 16, width: 1, height: 1 }).unwrap();
+    assert_eq!((corner, centre), (vec![0, 0, 255, 255], vec![255, 0, 0, 255]));
+    assert_eq!(server.stats.frames.len(), 1);
+}

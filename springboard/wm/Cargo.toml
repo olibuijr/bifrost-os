@@ -13,11 +13,13 @@ name = "bifrost-wm"
 path = "src/main.rs"
 
 [features]
-default = ["nested", "drm"]
+default = ["nested", "drm", "xwayland"]
 # real hardware and the VM: libseat, udev, libinput, GBM and KMS
 drm = ["smithay/backend_drm", "smithay/backend_gbm", "smithay/backend_libinput", "smithay/backend_udev", "smithay/backend_session_libseat"]
 # a window on another Wayland or X11 desktop, for development
 nested = ["smithay/backend_winit"]
+# X11 apps through XWayland (wm/src/xwayland.rs)
+xwayland = ["smithay/xwayland"]
 # tests that render on a real Vulkan device
 gpu-tests = ["bifrost-gpu/gpu-tests"]
 

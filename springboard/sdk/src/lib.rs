@@ -285,6 +285,20 @@ pub trait App {
     /// Draws into `surface` (premultiplied pixels, stride = width) and returns what changed.
     /// The first frame after a (re)allocation is always sent in full.
     fn draw(&mut self, ctx: &Ctx, surface: &mut Surface, t: f64) -> Damage;
+    /// Whether the app draws through `draw_canvas` (the GPU path, docs/graphics-architecture.md). Apps that return
+    /// `true` are drawn with `draw_canvas` on the direct path and with `draw_canvas` on a CPU `Surface` (which
+    /// implements `Canvas`) on the shared-memory path, so one drawing routine serves both. The default `false` keeps
+    /// `draw`.
+    fn draws_canvas(&self) -> bool {
+        false
+    }
+    /// Draws through the drawing vocabulary of `bifrost_render::canvas::Canvas` and returns what changed. Called
+    /// instead of `draw` when `draws_canvas` is `true`.
+    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn bifrost_render::canvas::Canvas, t: f64) -> Damage {
+        let _ = (ctx, t);
+        let (w, h) = canvas.size();
+        Damage::new(w as usize, h as usize)
+    }
     /// The app left the foreground: save state. No frames are drawn until `resume`.
     fn suspend(&mut self, _ctx: &Ctx) {}
     fn resume(&mut self, _ctx: &Ctx) {}
