@@ -9,6 +9,8 @@ use bifrost_proto::{ContextItem, Payload};
 
 /// The target id of Copy in `ShareDone`.
 pub const COPY: &str = "copy";
+/// The target id of Compose Post: the share opens the compose sheet (`compose_sheet`) instead of an app.
+pub const COMPOSE: &str = "compose-post";
 /// Context-menu ids of the share menu start here (`ToApp::ContextAction` is never sent for them).
 pub const MENU_BASE: u32 = 0x5348_0000;
 /// Document requests with this bit set were not asked for by the receiving app (shared or dropped items).
@@ -71,6 +73,15 @@ pub fn targets(cands: &[Candidate], sender: &str, items: &[Payload]) -> Vec<Targ
     out.dedup_by(|a, b| a.id == b.id);
     out.push(Target { id: COPY.into(), name: "Copy".into() });
     out
+}
+
+/// Puts Compose Post in front of Copy when there is something to share.
+pub fn with_compose(mut list: Vec<Target>, items: &[Payload]) -> Vec<Target> {
+    if !items.is_empty() {
+        let at = list.len().saturating_sub(1);
+        list.insert(at, Target { id: COMPOSE.into(), name: "Compose Post".into() });
+    }
+    list
 }
 
 /// The menu for `targets`, ids `MENU_BASE + index`.
@@ -158,7 +169,7 @@ impl super::Shell {
             .filter(|a| !a.manifest.is_system())
             .map(|a| Candidate { id: &a.manifest.id, name: &a.manifest.name, handles: &a.manifest.handles, schemes: &a.manifest.schemes })
             .collect();
-        let list = targets(&cands, &sender, &items);
+        let list = with_compose(targets(&cands, &sender, &items), &items);
         let body = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(slot)).map(|i| d.wins[i].body(&self.desk_metrics())));
         let Some(body) = body else { return self.share_finish(slot, request, "") };
         let (x, y) = (anchor.x + body.x as f32, anchor.y + anchor.h + body.y as f32);
@@ -168,7 +179,7 @@ impl super::Shell {
         self.dirty = true;
     }
 
-    fn share_finish(&mut self, slot: u8, request: u32, target: &str) {
+    pub(super) fn share_finish(&mut self, slot: u8, request: u32, target: &str) {
         self.ext_send(slot as usize, &bifrost_proto::ToApp::ShareDone { request, target: target.into() });
     }
 
@@ -193,6 +204,13 @@ impl super::Shell {
             self.share_finish(p.slot, p.request, "");
             return true;
         };
+        if target.id == COMPOSE {
+            // the compose sheet reports back when the user finishes with it
+            self.compose = Some(super::compose_sheet::ComposeOverlay::new(&self.ui, p.slot, p.request, &p.items));
+            self.dirty = true;
+            self.drawn = super::Drawn::Nothing;
+            return true;
+        }
         let delivered = if target.id == COPY { self.share_copy(&p) } else { self.share_deliver(&p, &target.id, t) };
         self.share_finish(p.slot, p.request, if delivered { &target.id } else { "" });
         true
@@ -283,6 +301,14 @@ mod tests {
         // a file URL is matched by its extension, not its scheme
         let f = Payload::Url("file:///home/a/b.png".into());
         assert_eq!(names(&targets(&cands(&table), "other", &[f])), ["Files", "Photos", "Copy"]);
+    }
+
+    #[test]
+    fn compose_post_sits_before_copy_when_there_is_something_to_share() {
+        let t = vec![Target { id: "a".into(), name: "A".into() }, Target { id: COPY.into(), name: "Copy".into() }];
+        let with = with_compose(t.clone(), &[Payload::Text("hi".into())]);
+        assert_eq!(with.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["a", COMPOSE, COPY]);
+        assert_eq!(with_compose(t.clone(), &[]), t, "nothing shared, no compose");
     }
 
     #[test]

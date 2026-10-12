@@ -76,6 +76,7 @@ pub mod pageedit;
 pub mod pages;
 pub mod axmap;
 pub mod power_menu;
+mod compose_sheet;
 pub mod session;
 pub mod prefs;
 pub mod markup;
@@ -563,6 +564,8 @@ pub struct Shell {
     corner_start: Option<(f32, f32)>,
     /// the slide-to-power-off sheet (Power held for a second)
     power_menu: Option<power_menu::PowerMenu>,
+    /// the compose post sheet opened from the share menu
+    compose: Option<compose_sheet::ComposeOverlay>,
     /// the share sheet, the nearby service and the incoming-file prompt
     share: Option<share::Sheet>,
     share_svc: Option<crate::net::share::Service>,
@@ -790,6 +793,7 @@ impl Shell {
             last_input: 0.0,
             corner_start: None,
             power_menu: None,
+            compose: None,
             share: None,
             share_svc: None,
             share_prompt: None,
@@ -1044,6 +1048,17 @@ impl Shell {
         };
         if let Some(fx) = self.share_modal(ev) {
             return Some(fx);
+        }
+        if let Some(sheet) = &mut self.compose {
+            let outcome = sheet.event(&self.ui, self.w, self.h, ev);
+            self.drawn = Drawn::Nothing;
+            return Some(match outcome {
+                compose_sheet::Outcome::Finish(send) => {
+                    self.compose_done(send);
+                    vec![]
+                }
+                compose_sheet::Outcome::Idle | compose_sheet::Outcome::Redraw => vec![],
+            });
         }
         if let Some(menu) = &mut self.power_menu {
             let outcome = menu.event(&self.ui, self.w, self.h, ev);
@@ -2988,7 +3003,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.compose.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3000,6 +3015,9 @@ impl Shell {
             }
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(c) = &self.compose {
+                c.draw(s, &self.ui, self.w, self.h);
             }
         }
         self.draw_share(s);
