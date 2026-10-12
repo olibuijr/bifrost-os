@@ -103,6 +103,8 @@ fn device_json(d: &Device) -> Json {
         ("connected".to_string(), Json::Bool(d.connected)),
         ("audio".to_string(), Json::Bool(d.audio)),
         ("rssi".to_string(), d.rssi.map_or(Json::Null, |r| Json::Num(f64::from(r)))),
+        ("class".to_string(), d.class.map_or(Json::Null, |c| Json::Num(f64::from(c)))),
+        ("type".to_string(), Json::Str(d.type_label().to_string())),
     ])
 }
 
@@ -226,7 +228,7 @@ mod tests {
     use super::*;
 
     fn dev(addr: &str, name: &str, paired: bool, connected: bool) -> Device {
-        Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: true, rssi: Some(-50) }
+        Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: true, rssi: Some(-50), class: None }
     }
 
     fn radio(state: State, devices: Vec<Device>) -> Status {

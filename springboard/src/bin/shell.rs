@@ -773,6 +773,11 @@ fn run() -> std::io::Result<()> {
                     WifiAction::Move { ssid, up } => Cmd::Move { ssid, up },
                 }),
                 Effect::Bluetooth(c) => bluetooth.send(c),
+                Effect::BluetoothOutput => {
+                    if let Err(e) = shell.use_bluetooth_output(t) {
+                        eprintln!("springboard: sound output: {e}");
+                    }
+                }
                 // sound comes later; the full-screen alert already shows
                 Effect::Alarm => eprintln!("springboard: alarm"),
                 Effect::WakeAt(at) => rtc_wake(at),

@@ -20,6 +20,8 @@
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
+use bifrost_core::bt_address::{ClassOfDevice, DeviceKind};
+
 // ---- the mgmt wire format (linux/include/net/bluetooth/mgmt.h) ----
 
 const OP_READ_INDEX_LIST: u16 = 0x0003;
@@ -201,11 +203,34 @@ pub struct Device {
     /// headphones, speaker, car kit: something that can be the sound's route
     pub audio: bool,
     pub rssi: Option<i8>,
+    /// the 24-bit class of device from the inquiry (None until a scan has heard it, and for LE devices)
+    pub class: Option<u32>,
 }
 
 impl Device {
     fn new(addr: String, kind: u8) -> Device {
-        Device { addr, kind, name: String::new(), paired: false, connected: false, audio: false, rssi: None }
+        Device { addr, kind, name: String::new(), paired: false, connected: false, audio: false, rssi: None, class: None }
+    }
+
+    /// What the device is, from its class of device: "Headphones", "Keyboard" and so on. "Unknown" when no class
+    /// is known (a device the scan has not described, or an LE device).
+    pub fn type_label(&self) -> &'static str {
+        match self.class.and_then(ClassOfDevice::new) {
+            None => "Unknown",
+            Some(c) => match c.kind() {
+                DeviceKind::Computer => "Computer",
+                DeviceKind::Phone => "Phone",
+                DeviceKind::Headset => "Headset",
+                DeviceKind::HandsFree => "Hands-Free",
+                DeviceKind::Microphone => "Microphone",
+                DeviceKind::Loudspeaker => "Speaker",
+                DeviceKind::Headphones => "Headphones",
+                DeviceKind::Keyboard => "Keyboard",
+                DeviceKind::Pointer => "Pointing Device",
+                DeviceKind::KeyboardAndPointer => "Keyboard and Pointing Device",
+                DeviceKind::Other => "Device",
+            },
+        }
     }
 
     /// The name, or the address of a device that never told us one.
@@ -566,6 +591,9 @@ impl Core {
         let d = self.entry(addr, kind);
         if let Some(n) = e.name {
             d.name = n;
+        }
+        if e.class.is_some() {
+            d.class = e.class;
         }
         d.audio |= e.audio_uuid || e.class.is_some_and(class_is_audio);
     }
@@ -1210,6 +1238,28 @@ mod tests {
         assert_eq!(parse_eir(&[4, 0x0D, 0x14, 0x04, 0x24]).class, Some(0x240414));
         assert!(class_is_audio(0x240414) && !class_is_audio(0x000104));
         assert_eq!(parse_eir(&[9, 0x09, b'x']), Eir::default(), "a length past the end stops the parse");
+    }
+
+    #[test]
+    fn a_device_is_labelled_by_its_class_of_device() {
+        let mut d = Device::new("AA:BB:CC:DD:EE:01".into(), 0);
+        assert_eq!(d.type_label(), "Unknown", "no class heard yet");
+        // major 4 (audio/video) with minor 6 (headphones) is 0x240418; minor 2 is hands-free, minor 5 a loudspeaker
+        d.class = Some(0x240418);
+        assert_eq!(d.type_label(), "Headphones");
+        d.class = Some(0x240408);
+        assert_eq!(d.type_label(), "Hands-Free");
+        d.class = Some(0x240414);
+        assert_eq!(d.type_label(), "Speaker");
+        // major 5 (peripheral) with bit 6 set is a keyboard
+        d.class = Some(0x000540);
+        assert_eq!(d.type_label(), "Keyboard");
+        // major 1 is a computer
+        d.class = Some(0x000100);
+        assert_eq!(d.type_label(), "Computer");
+        // a value above 24 bits is not a class
+        d.class = Some(0x0100_0000);
+        assert_eq!(d.type_label(), "Unknown");
     }
 
     #[test]
