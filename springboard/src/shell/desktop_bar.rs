@@ -37,6 +37,16 @@ const MENU_ROW_PT:f32=24.;const MENU_SEP_PT:f32=11.;const MENU_PAD_PT:f32=5.;
 const MENU_GAP_PT:f32=6.;
 /// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z").
 fn shortcut_spaced(k:&str)->String {let mut c:Vec<char>=k.chars().collect();match c.pop(){Some(last) if !c.is_empty()=>format!("{} {last}",c.into_iter().collect::<String>()),_=>k.to_string()}}
+/// The screen rectangle (x, y, w, h in px) an open desktop popup owes a repaint: the popup and its shadow
+/// `reach` px out on the sides and bottom, and `reach` px up on top, clamped to the bottom of the menu bar
+/// (the bar repaints its own strip). The shadow above the popup lies in the gap under the bar, so a
+/// rectangle that starts at the popup's top edge would leave a thin shadow line behind when the menu closes.
+pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:i32,lip:i32)->(i32,i32,i32,i32) {
+    let (x,y,w,h)=(popup.0 as i32,popup.1 as i32,popup.2 as i32,popup.3 as i32);
+    let left=(x-reach).max(0);let right=x+w+reach;
+    let top=(y-reach).max(bar_h);let bottom=y+h+reach+lip;
+    (left,top,right-left,bottom-top)
+}
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
@@ -223,7 +233,9 @@ impl Shell {
     pub(super) fn desk_regions_now(&self)->Option<Vec<(i32,i32,i32,i32)>> {
         if !bifrost_render::glass::gpu()||self.is_locked(){return None;}
         let mut v=vec![(0,0,self.w,self.desktop_bar_height() as i32)];
-        if let Some((x,y,w,h))=self.desktop_popup_rect(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(((x as i32-g).max(0),y as i32,w as i32+2*g,h as i32+g+self.ui.pt(2.) as i32));}
+        // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
+        // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
+        if let Some(popup)=self.desktop_popup_rect(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(popup_damage_rect(popup,self.desktop_bar_height() as i32,g,self.ui.pt(2.) as i32));}
         let d=self.dock_overlay_rect();let m=self.ui.pt(120.) as i32;
         v.push(((d.x-m).max(0),(d.y-m).max(0),d.w+2*m,d.h+2*m));
         // the desktop Control Center and Notification Center panels, with room for their shadow
@@ -534,5 +546,39 @@ mod bar_ink_tests {
     #[test]
     fn an_empty_wallpaper_is_not_light() {
         assert!(!wallpaper_is_light(View { w: 0, h: 0, px: &[] }, 8));
+    }
+}
+
+#[cfg(test)]
+mod menu_damage_tests {
+    use super::popup_damage_rect;
+
+    // A menu bar 28 px tall, a shadow reach of 12 px (10 pt + 2 at scale 1) and a 2 px lip.
+    #[test]
+    fn a_menu_below_the_bar_owes_its_shadow_up_to_the_bar() {
+        // popup at (100, 34) 200 x 150: the top shadow would start at y 22, clamped to the bar's bottom (28);
+        // left 88, right 100 + 200 + 12 = 312 (width 224); bottom 34 + 150 + 12 + 2 = 198 (height 170)
+        assert_eq!(popup_damage_rect((100, 34, 200, 150), 28, 12, 2), (88, 28, 224, 170));
+    }
+
+    #[test]
+    fn a_popup_lower_on_screen_starts_its_damage_above_its_top_edge() {
+        // top shadow starts at 70 - 12 = 58, which is inside the gap under the bar, so it is damaged
+        let (_, top, _, _) = popup_damage_rect((10, 70, 100, 80), 28, 12, 2);
+        assert_eq!(top, 58);
+    }
+
+    #[test]
+    fn a_menu_at_the_left_edge_is_clamped_to_the_screen() {
+        // x 5 - 12 is negative, so the rectangle starts at 0 and reaches 5 + 100 + 12 = 117 (width 117);
+        // top 34 - 12 = 22 clamps to 28; bottom 34 + 40 + 12 + 2 = 88 (height 60)
+        assert_eq!(popup_damage_rect((5, 34, 100, 40), 28, 12, 2), (0, 28, 117, 60));
+    }
+
+    #[test]
+    fn the_rectangle_always_contains_the_popup() {
+        let (x, y, w, h) = popup_damage_rect((300, 34, 180, 220), 28, 12, 2);
+        assert!(x <= 300 && y <= 34);
+        assert!(x + w >= 300 + 180 && y + h >= 34 + 220);
     }
 }
