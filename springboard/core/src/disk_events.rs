@@ -86,6 +86,48 @@ impl Approvals {
     }
 }
 
+/// The description of a device as name and value pairs in a fixed order. `mount_point` is left out while the device
+/// is not mounted, so a missing key always means "no such property" rather than an empty value.
+pub fn description(disk: &Disk) -> Vec<(&'static str, String)> {
+    let mut out = vec![
+        ("bsd_name", disk.bsd_name.clone()),
+        ("size", disk.size.to_string()),
+        ("removable", disk.removable.to_string()),
+        ("writable", (!disk.read_only).to_string()),
+        ("model", disk.model.clone()),
+    ];
+    if let Some(mount) = &disk.mount_point {
+        out.push(("mount_point", mount.clone()));
+    }
+    out
+}
+
+/// The device with this name (for example `sdb` or `nvme0n1p1`), when the snapshot holds it.
+pub fn lookup_bsd_name<'a>(disks: &'a [Disk], name: &str) -> Option<&'a Disk> {
+    disks.iter().find(|d| d.bsd_name == name)
+}
+
+/// The mounted device whose mount point is the deepest directory that contains `path`. Containment is by path
+/// component, so `/media/stick` does not contain `/media/sticky`. A root mount (`/`) contains every absolute path.
+pub fn lookup_volume_path<'a>(disks: &'a [Disk], path: &str) -> Option<&'a Disk> {
+    disks
+        .iter()
+        .filter_map(|d| {
+            let mount = d.mount_point.as_deref()?.trim_end_matches('/');
+            contains(mount, path).then_some((mount.len(), d))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, d)| d)
+}
+
+/// Whether the directory `dir` (already without a trailing slash, empty for the root) contains `path`.
+fn contains(dir: &str, path: &str) -> bool {
+    if dir.is_empty() {
+        return path.starts_with('/');
+    }
+    path == dir || path.strip_prefix(dir).is_some_and(|rest| rest.starts_with('/'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,5 +209,57 @@ mod tests {
         approvals.register(|_, _| Err("second".to_string()));
         let err = approvals.approve(Operation::Eject, &disk("sdb", None)).unwrap_err();
         assert_eq!(err.reason, "removable");
+    }
+
+    #[test]
+    fn description_lists_fixed_keys_and_omits_an_unmounted_mount_point() {
+        let stick = disk("sdb", None);
+        let keys: Vec<&str> = description(&stick).iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys, vec!["bsd_name", "size", "removable", "writable", "model"]);
+        let values = description(&disk("sdb", Some("/media/stick")));
+        assert_eq!(values.last(), Some(&("mount_point", "/media/stick".to_string())));
+    }
+
+    #[test]
+    fn description_reports_writable_as_the_negation_of_read_only() {
+        let mut ro = disk("sr0", None);
+        ro.read_only = true;
+        let writable = description(&ro).into_iter().find(|(k, _)| *k == "writable").unwrap();
+        assert_eq!(writable.1, "false");
+        assert_eq!(description(&disk("sdb", None))[3].1, "true");
+    }
+
+    #[test]
+    fn lookup_by_bsd_name_finds_the_exact_name_only() {
+        let snap = vec![disk("sda", Some("/")), disk("sdb1", None)];
+        assert_eq!(lookup_bsd_name(&snap, "sdb1").map(|d| d.bsd_name.as_str()), Some("sdb1"));
+        assert!(lookup_bsd_name(&snap, "sdb").is_none());
+    }
+
+    #[test]
+    fn lookup_by_volume_path_takes_the_deepest_containing_mount() {
+        let snap = vec![
+            disk("sda1", Some("/")),
+            disk("sdb1", Some("/media/stick")),
+            disk("sdc1", Some("/media/stick/photos")),
+        ];
+        let found = lookup_volume_path(&snap, "/media/stick/photos/2026/a.jpg");
+        assert_eq!(found.map(|d| d.bsd_name.as_str()), Some("sdc1"));
+        let found = lookup_volume_path(&snap, "/media/stick/notes.txt");
+        assert_eq!(found.map(|d| d.bsd_name.as_str()), Some("sdb1"));
+    }
+
+    #[test]
+    fn lookup_by_volume_path_matches_whole_components_only() {
+        let snap = vec![disk("sdb1", Some("/media/stick"))];
+        assert!(lookup_volume_path(&snap, "/media/sticky/file").is_none());
+        assert_eq!(lookup_volume_path(&snap, "/media/stick/").map(|d| d.bsd_name.as_str()), Some("sdb1"));
+    }
+
+    #[test]
+    fn a_root_mount_contains_every_absolute_path_and_relative_paths_match_nothing() {
+        let snap = vec![disk("sda1", Some("/"))];
+        assert_eq!(lookup_volume_path(&snap, "/home/user").map(|d| d.bsd_name.as_str()), Some("sda1"));
+        assert!(lookup_volume_path(&snap, "home/user").is_none());
     }
 }
