@@ -642,6 +642,7 @@ pub mod scene_object;
 pub mod view_camera;
 pub mod animated_values;
 pub mod mesh;
+pub mod material_request;
 pub mod scene_material;
 pub mod visual_effect;
 pub mod vibrancy;

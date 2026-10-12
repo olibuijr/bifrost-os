@@ -8,6 +8,7 @@ use super::music::nowplaying::Target as Media;
 use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
 use crate::shell::switcher::draw_scaled;
+use bifrost_ui::material_request::{MaterialKind, MaterialRequest, MaterialState, ShellSurface};
 use bifrost_ui::media_session::PlaybackState;
 use bifrost_ui::symbol_effect::{Effect as SymbolFx, Options as SymbolOptions, SymbolEffect};
 use super::AppId;
@@ -1477,19 +1478,64 @@ fn desk_backlight() -> bool {
     std::fs::read_dir("/sys/class/backlight").is_ok_and(|mut d| d.next().is_some())
 }
 
-/// A glass plate: the presenter's blur under a tinted fill on the GPU path,
-/// the solid material with Reduce Transparency, the translucent tint otherwise.
-pub(super) fn desk_glass(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
+/// The presenter's glass shape for a shell surface's reference material. Surfaces that float over the
+/// desktop (menus, panels, Search, the Dock) have no window active state to follow, so they are `Chrome`;
+/// the window-background families keep their own kinds.
+pub(super) fn shell_glass_rect(req: &MaterialRequest) -> bifrost_render::glass::Rect {
+    use bifrost_render::glass::Kind;
+    let kind = match req.kind {
+        MaterialKind::Sidebar => Kind::Sidebar,
+        MaterialKind::Titlebar | MaterialKind::HeaderView => Kind::Titlebar,
+        _ => Kind::Chrome,
+    };
+    let active = match req.state {
+        MaterialState::FollowsWindowActiveState => None,
+        MaterialState::Active => Some(true),
+        MaterialState::Inactive => Some(false),
+    };
+    let (x, y, w, h) = req.rect;
+    bifrost_render::glass::Rect { x, y, w, h, r: req.radius, kind, active }
+}
+
+/// Declare a shell surface's material: the presenter's blur under it on the GPU path (nothing under
+/// Reduce Transparency or on the CPU fallback). Returns the fill colour for the surface, which is the
+/// named material tint (`MENU_TINT`), the solid material with Reduce Transparency, or the plain tint.
+pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
     use super::ui::{MENU_SOLID, MENU_TINT};
-    let fill = if bifrost_render::glass::gpu() && bifrost_render::appearance::reduce_transparency() {
+    if bifrost_render::glass::gpu() && bifrost_render::appearance::reduce_transparency() {
         MENU_SOLID.now()
     } else if bifrost_render::glass::gpu() {
-        bifrost_render::glass::push(bifrost_render::glass::Rect { x, y, w, h, r, ..Default::default() });
+        bifrost_render::glass::push(shell_glass_rect(&req));
         bifrost_render::glass::tint(MENU_TINT.now())
     } else {
         MENU_TINT.now()
-    };
+    }
+}
+
+/// A glass plate for a shell surface (see `request_shell_material`), filled with `alpha`.
+pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
+    let fill = request_shell_material(MaterialRequest::for_surface(surface, (x, y, w, h), r));
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
+}
+
+#[cfg(test)]
+mod shell_material_tests {
+    use super::*;
+
+    #[test]
+    fn shell_surfaces_map_to_presenter_kinds() {
+        use bifrost_render::glass::Kind;
+        for (surface, kind) in [
+            (ShellSurface::SettingsSidebar, Kind::Sidebar),
+            (ShellSurface::SettingsToolbar, Kind::Titlebar),
+            (ShellSurface::Dock, Kind::Chrome),
+            (ShellSurface::Spotlight, Kind::Chrome),
+            (ShellSurface::MenuBarMenu, Kind::Chrome),
+        ] {
+            let r = shell_glass_rect(&MaterialRequest::for_surface(surface, (0.0, 0.0, 10.0, 10.0), 4.0));
+            assert_eq!(r.kind, kind, "{surface:?}");
+        }
+    }
 }
 
 impl Shell {
@@ -1708,7 +1754,7 @@ impl Shell {
             let y = y - lift;
             match tile {
                 Tile::Brightness | Tile::Volume => {
-                    desk_glass(s, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     let name = ui.text(if tile == Tile::Brightness { "Display" } else { "Sound" }, MAC_HEADLINE_PT, Weight::Semibold, label);
                     s.blit(&name, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha);
                     let (l, r, cy) = self.desk_track((x, y, w, h));
@@ -1726,11 +1772,11 @@ impl Shell {
                     }
                 }
                 Tile::MediaPlay => {
-                    desk_glass(s, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
                 }
                 _ => {
-                    desk_glass(s, (x, y, w, h), h / 2.0, alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
                     let (on, title, sub) = match tile {
                         Tile::Wifi => {
                             let (on, ssid) = self.desk_wifi().unwrap_or((false, None));

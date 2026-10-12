@@ -1906,18 +1906,20 @@ mod tests {
     }
 }
 
-/// The desktop Search material: the presenter's glass (blur) under the menu tint, the solid menu colour with
-/// Reduce Transparency, and the tint alone when no GPU presenter runs (the panel fades in with `alpha`).
+/// The desktop Search material: the shared `HudWindow` material request (the presenter's blur under the named
+/// menu tint, the solid colour with Reduce Transparency, the tint alone without a GPU presenter). The panel
+/// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
 fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
-    use bifrost_render::{appearance, glass};
-    if appearance::reduce_transparency() {
-        s.fill_rrect(x, y, w, h, r, scale(MENU_SOLID.now(), alpha));
+    use bifrost_ui::material_request::{MaterialRequest, ShellSurface};
+    let req = MaterialRequest::for_surface(ShellSurface::Spotlight, (x, y, w, h), r);
+    let fill = if alpha == 255 {
+        super::control_center::request_shell_material(req)
+    } else if bifrost_render::appearance::reduce_transparency() {
+        MENU_SOLID.now()
     } else {
-        if glass::gpu() && alpha == 255 {
-            glass::push(glass::Rect { x, y, w, h, r, ..Default::default() });
-        }
-        s.fill_rrect(x, y, w, h, r, scale(glass::tint(MENU_TINT.now()), alpha));
-    }
+        bifrost_render::glass::tint(MENU_TINT.now())
+    };
+    s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
 }
 
 #[cfg(test)]

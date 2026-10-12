@@ -339,7 +339,7 @@ impl Shell {
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,MENU_SOLID.now());
         } else if bifrost_render::glass::gpu() {
             let r=self.ui.pt(MENU_RADIUS_PT);
-            bifrost_render::glass::push(bifrost_render::glass::Rect{x:x as f32,y:y as f32,w:w as f32,h:h as f32,r,..Default::default()});
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::MaterialRequest::for_surface(bifrost_ui::material_request::ShellSurface::MenuBarMenu,(x as f32,y as f32,w as f32,h as f32),r)));
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,bifrost_render::glass::tint(MENU_TINT.now()));
         } else {let mut image=Image::new(w,h);let mut bg=Surface{w,h,stride:w,px:&mut image.px,y0:0};bg.fill_rect(0,0,w,h,CELL);{let wp=self.home_still();bg.copy(wp,(self.w-wp.w as i32)/2-x as i32,-(y as i32));}image.blur_material(self.ui.pt(10.) as usize);s.blit(&image,x as i32,y as i32,255,255);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,self.ui.pt(MENU_RADIUS_PT),MENU_TINT.now());}
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
