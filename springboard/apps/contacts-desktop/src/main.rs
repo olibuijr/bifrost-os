@@ -11,7 +11,7 @@ mod services;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;
-use bifrost_app::{App, Commands, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, Commands, Ctx, Input, KeyInput, TouchKind};
 use springboard::shell::keyboard::Out;
 use std::collections::BTreeMap;
 
@@ -123,6 +123,17 @@ impl App for ContactsApp {
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
         self.app.as_ref().map(|c| c.commands()).unwrap_or_default()
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.app.as_ref().map(|c| c.main_menu()).unwrap_or_default()
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(c) = &mut self.app else { return false };
+        let handled = c.menu_action(&ctx.ui, id);
+        self.after_input(ctx);
+        handled
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {

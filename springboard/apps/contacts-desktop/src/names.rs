@@ -95,6 +95,24 @@ pub fn section(display: &str) -> char {
     }
 }
 
+/// The order a name is shown in (View menu): given name first, or family name first.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NameOrder {
+    #[default]
+    FirstLast,
+    LastFirst,
+}
+
+/// The name as the list and the card show it: "Ada Lovelace" in first-name order, or "Lovelace, Ada" in last-name
+/// order. A name with only one part is shown as it is.
+pub fn shown(name: &str, order: NameOrder) -> String {
+    let (given, family) = split(name);
+    match order {
+        NameOrder::LastFirst if !given.is_empty() && !family.is_empty() => format!("{family}, {given}"),
+        _ => name.trim().to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +159,16 @@ mod tests {
         assert_eq!(section("Acme"), 'A', "a one-word name sorts by that word");
         assert_eq!(section("Taxi 1800"), '#', "a family name that starts with a digit goes under #");
         assert_eq!(section(""), '#');
+    }
+
+    #[test]
+    fn the_name_order_decides_which_part_leads() {
+        assert_eq!(shown("Ada Lovelace", NameOrder::FirstLast), "Ada Lovelace");
+        assert_eq!(shown("Ada Lovelace", NameOrder::LastFirst), "Lovelace, Ada");
+        assert_eq!(shown("  Ada  Lovelace ", NameOrder::LastFirst), "Lovelace, Ada");
+        assert_eq!(shown("Cher", NameOrder::LastFirst), "Cher", "a one-word name has no family name to lead with");
+        assert_eq!(shown("Acme Inc", NameOrder::LastFirst), "Inc, Acme");
+        assert_eq!(shown("", NameOrder::LastFirst), "");
+        assert_eq!(NameOrder::default(), NameOrder::FirstLast);
     }
 }
