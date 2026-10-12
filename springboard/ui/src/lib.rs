@@ -866,3 +866,7 @@ pub mod annotation;
 pub mod ecs;
 pub mod rules;
 pub mod decision;
+pub mod capture_content;
+pub mod capture_filter;
+pub mod capture_config;
+pub mod capture_error;
