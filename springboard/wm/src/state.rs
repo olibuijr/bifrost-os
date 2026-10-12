@@ -63,6 +63,8 @@ pub struct WmState {
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
     pub seat: Seat<WmState>,
+    /// Pointer gestures that are running (begin and end paired per kind; see `input.rs`).
+    pub gestures: crate::input::GestureGate,
 }
 
 impl WmState {
@@ -71,8 +73,10 @@ impl WmState {
         let dh = display.handle();
         let mut seat_state = SeatState::new();
         let mut seat: Seat<WmState> = seat_state.new_wl_seat(&dh, "seat0");
-        seat.add_keyboard(Default::default(), 300, 30).expect("keyboard");
+        let prefs = crate::input::InputPrefs::load(&crate::input::prefs_path());
+        crate::input::add_keyboard(&mut seat, &prefs).expect("keyboard");
         seat.add_pointer();
+        crate::input::register_protocols(&dh);
 
         let listening = match socket {
             Some(name) => ListeningSocketSource::with_name(name).expect("wayland socket"),
@@ -120,6 +124,7 @@ impl WmState {
             popups: PopupManager::default(),
             seat_state,
             seat,
+            gestures: Default::default(),
             dh,
         }
     }
