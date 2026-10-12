@@ -1005,3 +1005,8 @@ pub mod media_timebase;
 pub mod media_type_names;
 pub mod audio_processing_tap;
 pub mod format_readers;
+
+// Media export, frame grab and render timeline models (parity wave 5, AVFoundation playback and editing)
+pub mod export_session;
+pub mod frame_grab;
+pub mod render_synchronizer;
