@@ -7,6 +7,7 @@
 //! Layers, bottom up:
 //! - `sys`: ioctl encoding and calls, device open, the clocks.
 //! - `uapi` (PCM) and `ctl` (control device): kernel structs, request numbers, element access, jacks, ELD.
+//! - `chmap`: the PCM channel-map TLV and values parsed into a channel layout (pure, host-testable).
 //! - `convert` and `ring`: sample formats and the DMA ring arithmetic (pure, host-testable).
 //! - `pcm`: one stream (negotiation, mmap, position, application pointer, linking).
 //! - `dll` and `timer`: the clock model and the timerfd the server sleeps on.
@@ -14,6 +15,7 @@
 //!
 //! libasound is not used. `unsafe` is confined to the syscalls and the mmapped pages, each with a SAFETY comment.
 
+pub mod chmap;
 pub mod convert;
 pub mod ctl;
 pub mod dll;
@@ -24,6 +26,7 @@ pub mod sys;
 pub mod timer;
 pub mod uapi;
 
+pub use chmap::Chmap;
 pub use ctl::{Control, Ctl, Jack};
 pub use dll::Dll;
 pub use driver::{AlsaDriver, AlsaIo, AlsaOptions};
