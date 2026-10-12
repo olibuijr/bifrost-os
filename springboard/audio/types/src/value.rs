@@ -29,3 +29,17 @@ pub enum PropertyValue {
     /// Raw bytes (a layout, a workgroup token).
     Bytes(Vec<u8>),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn values_compare_and_clone() {
+        let v = PropertyValue::Rates(alloc::vec![(44100.0, 48000.0)]);
+        assert_eq!(v.clone(), v);
+        assert_ne!(PropertyValue::U32(1), PropertyValue::I32(1));
+        let f = PropertyValue::Format(StreamFormat::float32(48000.0, 2));
+        assert_eq!(f.clone(), f);
+    }
+}
