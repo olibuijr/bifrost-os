@@ -82,6 +82,7 @@ impl Server {
         Ok(Server { listener, backend, conns: Vec::new(), next_client: 1 })
     }
 
+    #[cfg(test)]
     pub fn clients(&self) -> usize {
         self.conns.len()
     }

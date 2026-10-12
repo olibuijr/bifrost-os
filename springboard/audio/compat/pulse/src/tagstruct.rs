@@ -71,6 +71,7 @@ impl Writer {
         }
         self
     }
+    #[cfg(test)]
     pub fn arbitrary(&mut self, v: &[u8]) -> &mut Self {
         self.buf.push(T_ARBITRARY);
         self.buf.extend_from_slice(&(v.len() as u32).to_be_bytes());
@@ -83,6 +84,7 @@ impl Writer {
         self.buf.extend_from_slice(&usec.to_be_bytes());
         self
     }
+    #[cfg(test)]
     pub fn sample_spec(&mut self, format: u8, channels: u8, rate: u32) -> &mut Self {
         self.buf.push(T_SAMPLE_SPEC);
         self.buf.push(format);
@@ -90,6 +92,7 @@ impl Writer {
         self.buf.extend_from_slice(&rate.to_be_bytes());
         self
     }
+    #[cfg(test)]
     pub fn channel_map(&mut self, map: &[u8]) -> &mut Self {
         self.buf.push(T_CHANNEL_MAP);
         self.buf.push(map.len() as u8);
@@ -143,6 +146,7 @@ impl<'a> Reader<'a> {
     pub fn new(data: &'a [u8]) -> Reader<'a> {
         Reader { data, pos: 0 }
     }
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.pos >= self.data.len()
     }
@@ -164,18 +168,24 @@ impl<'a> Reader<'a> {
         self.tag(T_U32)?;
         Ok(u32::from_be_bytes(self.take(4)?.try_into().unwrap()))
     }
+    /// Wire primitive the server does not read yet (no incoming command carries it).
+    #[allow(dead_code)]
     pub fn u8(&mut self) -> Result<u8, Malformed> {
         self.tag(T_U8)?;
         Ok(self.take(1)?[0])
     }
+    /// Wire primitive the server does not read yet (no incoming command carries it).
+    #[allow(dead_code)]
     pub fn u64(&mut self) -> Result<u64, Malformed> {
         self.tag(T_U64)?;
         Ok(u64::from_be_bytes(self.take(8)?.try_into().unwrap()))
     }
+    #[cfg(test)]
     pub fn s64(&mut self) -> Result<i64, Malformed> {
         self.tag(T_S64)?;
         Ok(i64::from_be_bytes(self.take(8)?.try_into().unwrap()))
     }
+    #[cfg(test)]
     pub fn usec(&mut self) -> Result<u64, Malformed> {
         self.tag(T_USEC)?;
         Ok(u64::from_be_bytes(self.take(8)?.try_into().unwrap()))
@@ -239,6 +249,8 @@ impl<'a> Reader<'a> {
         }
         Ok(v)
     }
+    /// Wire primitive the server does not read yet (volumes arrive as cvolume).
+    #[allow(dead_code)]
     pub fn volume(&mut self) -> Result<u32, Malformed> {
         self.tag(T_VOLUME)?;
         Ok(u32::from_be_bytes(self.take(4)?.try_into().unwrap()))
@@ -256,7 +268,9 @@ impl<'a> Reader<'a> {
         }
         Ok(out)
     }
+    // Not read by the server yet: the client's format list is not parsed.
     /// Skips a format info; returns its encoding.
+    #[allow(dead_code)]
     pub fn format_info(&mut self) -> Result<u8, Malformed> {
         self.tag(T_FORMAT_INFO)?;
         let enc = self.u8()?;

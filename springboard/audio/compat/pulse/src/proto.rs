@@ -87,11 +87,15 @@ pub mod cmd {
 /// Protocol error codes (`pa_error_code_t`).
 pub mod err {
     pub const ACCESS: u32 = 1;
+    /// Unknown command; the session answers unknown commands with NOTIMPLEMENTED instead.
+    #[allow(dead_code)]
     pub const COMMAND: u32 = 2;
     pub const INVALID: u32 = 3;
     pub const NOENTITY: u32 = 5;
     pub const PROTOCOL: u32 = 7;
     pub const INTERNAL: u32 = 10;
+    /// Operation in a stream state that does not allow it; no command reaches that check yet.
+    #[allow(dead_code)]
     pub const BADSTATE: u32 = 15;
     pub const VERSION: u32 = 17;
     pub const NOTSUPPORTED: u32 = 19;
