@@ -1686,3 +1686,24 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 - `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
 - Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
   layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).
+
+### Accessibility display options (Reduce Transparency, Increase Contrast)
+
+Settings > Accessibility > Display holds the toggles (`a11y_reduce_transparency`, `a11y_contrast`, `a11y_button_shapes` in
+`settings.ini`; Increase Contrast turns Reduce Transparency on and locks it). `AccessibilitySettings::publish` mirrors them into
+`bifrost_render::appearance`, sends them to apps in `ToApp::Appearance` flags, and writes `/run/bifrost/user/accessibility`
+for the window server (`docs/window-server.md`).
+
+Apps read them through `kit::appearance`, the mirror of NSWorkspace:
+
+| Apple | BifrOSt |
+|---|---|
+| `accessibilityDisplayShouldReduceTransparency` | `appearance::reduce_transparency()` |
+| `accessibilityDisplayShouldIncreaseContrast` | `appearance::increase_contrast()` |
+| `accessibilityDisplayShouldDifferentiateWithoutColor` | `appearance::differentiate_without_color()` (Button Shapes) |
+| `accessibilityDisplayOptionsDidChangeNotification` | `appearance::observe_display_options(f)` / `remove_observer(token)`; fires only when a value moves |
+| SwiftUI `accessibilityReduceTransparency`, `colorSchemeContrast` | `reduce_transparency()`, `color_scheme_contrast()` |
+
+`appearance::display_options()` returns all three as a `DisplayOptions`. Increase Contrast adds a material outline
+(`ui::MATERIAL_BORDER_CONTRAST`, `ui::material_border()`) and stronger separators (`SEPARATOR_CONTRAST`, `separator_now()`).
+Gap: the shell's materials do not yet all draw `material_border()`; adoption is per surface. Not built or run on Midget.

@@ -98,6 +98,8 @@ impl AccessibilitySettings {
             increase_contrast: self.increase_contrast, reduce_transparency: self.reduce_transparency,
             button_shapes: self.button_shapes,
         });
+        // The window server polls this value (docs/window-server.md); the directory exists only on the device.
+        let _ = bifrost_render::appearance::display_options().write_to(bifrost_render::appearance::DISPLAY_FILE);
     }
 }
 
@@ -121,6 +123,18 @@ mod tests {
         assert_eq!(AccessibilitySettings::load(&p), a);
         assert_eq!(a.hold_ms(), 1500);
         assert!((a.zoom_factor() - 1.15).abs() < 1e-6);
+    }
+
+    #[test]
+    fn display_toggles_round_trip_through_prefs() {
+        let mut p = Prefs::memory();
+        let mut a = AccessibilitySettings::DEFAULT;
+        a.reduce_transparency = true;
+        a.increase_contrast = true;
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert!(b.reduce_transparency && b.increase_contrast);
+        assert!(!AccessibilitySettings::load(&Prefs::memory()).increase_contrast);
     }
 
     #[test]

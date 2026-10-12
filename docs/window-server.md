@@ -138,3 +138,11 @@ composed black by labwc. Check on Midget with a screenshot while Files is open, 
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
 6. Remove the presenter blur path and labwc after Midget acceptance.
+
+## Accessibility display options (for the window server)
+
+The shell writes `/run/bifrost/user/accessibility` (atomic rename) whenever Settings > Accessibility > Display changes
+Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines for `reduce_transparency`,
+`increase_contrast`, `differentiate_without_color`. Increase Contrast implies Reduce Transparency (the reader applies it).
+A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
+it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.
