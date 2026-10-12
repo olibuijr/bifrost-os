@@ -12,12 +12,21 @@ pub struct Conn {
     pub id: u32,
     pub pid: i32,
     pub uid: u32,
+    /// When the connection was accepted: a client that never says Hello is dropped (`HELLO_TIMEOUT`).
+    pub accepted: std::time::Instant,
+    /// Replies in a row that found the client's socket full: a client that stops reading is dropped (`MAX_STALLED`).
+    pub stalled: u32,
 }
+
+/// A connection that has not sent Hello after this long is closed.
+pub const HELLO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+/// Consecutive replies or notices that found the client's receive queue full before the client is dropped.
+pub const MAX_STALLED: u32 = 64;
 
 impl Conn {
     pub fn new(fd: OwnedFd, id: u32) -> Conn {
         let (pid, uid) = peer_cred(fd.as_raw_fd()).unwrap_or((0, u32::MAX));
-        Conn { fd, id, pid, uid }
+        Conn { fd, id, pid, uid, accepted: std::time::Instant::now(), stalled: 0 }
     }
 }
 

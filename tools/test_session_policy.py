@@ -96,5 +96,46 @@ class WmExitAction(unittest.TestCase):
         self.assertEqual(self.read(), ["970", "1000"])
 
 
+def run_policy_full(call, *args):
+    quoted = " ".join("'" + a.replace("'", "'\\''") + "'" for a in args)
+    return subprocess.run(
+        ["bash", "-c", f"set -euo pipefail; source '{POLICY}'; {call} {quoted}"],
+        capture_output=True, text=True, check=True,
+    )
+
+
+class SessionSwitch(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_a_missing_file_prints_nothing_and_says_nothing(self):
+        proc = run_policy_full("session_switch", os.path.join(self.dir.name, "compositor"), "a-z-")
+        self.assertEqual((proc.stdout, proc.stderr), ("", ""))
+
+    def test_the_contents_are_reduced_to_the_allowed_characters(self):
+        path = os.path.join(self.dir.name, "compositor")
+        with open(path, "w") as f:
+            f.write("bifrost-wm\n; rm -rf /\n")
+        self.assertEqual(run_policy_full("session_switch", path, "a-z-").stdout, "bifrost-wmrm-rf")
+
+
+class ShellExitNote(unittest.TestCase):
+    def note(self, status):
+        return run_policy("shell_exit_note", status).strip()
+
+    def test_a_clean_exit_needs_no_note(self):
+        self.assertEqual(self.note("0"), "")
+
+    def test_the_stall_and_the_latch_are_named(self):
+        self.assertIn("UI loop stalled", self.note("5"))
+        self.assertIn("crash-loop latch", self.note("70"))
+
+    def test_other_statuses_are_reported_plainly(self):
+        self.assertEqual(self.note("139"), "shell exited 139")
+
+
 if __name__ == "__main__":
     unittest.main()

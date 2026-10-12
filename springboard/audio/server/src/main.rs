@@ -115,6 +115,35 @@ fn signal_fd() -> Option<OwnedFd> {
     }
 }
 
+/// Backstop for SIGTERM: the serve loop ends on the signalfd by itself, but if it is stuck in a driver call the
+/// signal would go unanswered and systemd would wait out its stop timeout. This thread sees the same readable
+/// descriptor; when the process is still here `grace` later, it removes the socket and exits.
+fn spawn_stop_watchdog(sig_fd: std::os::fd::RawFd, socket: String, grace: std::time::Duration) {
+    // SAFETY: dup of a valid descriptor; the copy is owned by the thread and only polled.
+    let fd = unsafe { libc::dup(sig_fd) };
+    if fd < 0 {
+        return;
+    }
+    let _ = std::thread::Builder::new().name("stop-watchdog".into()).spawn(move || {
+        let mut p = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
+        loop {
+            // SAFETY: one valid pollfd.
+            let n = unsafe { libc::poll(&mut p, 1, -1) };
+            if n > 0 {
+                break;
+            }
+            if n < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+                return;
+            }
+        }
+        std::thread::sleep(grace);
+        log("io", "the serve loop did not stop after the termination signal; exiting");
+        let _ = std::fs::remove_file(&socket);
+        // SAFETY: _exit ends the process without running destructors, which is the point.
+        unsafe { libc::_exit(0) };
+    });
+}
+
 fn main() {
     let mut socket = default_socket().to_string();
     let mut driver_list = std::env::var("BIFROST_AUDIO_DRIVERS").unwrap_or_else(|_| DEFAULT_DRIVERS.into());
@@ -163,6 +192,9 @@ fn main() {
     // Lock memory after setup so everything setup allocated is resident too (MCL_CURRENT | MCL_FUTURE).
     bifrost_audiod::rt::lock_memory();
     let stop = AtomicBool::new(false);
+    if let Some(f) = sigs.as_ref() {
+        spawn_stop_watchdog(f.as_raw_fd(), socket.clone(), std::time::Duration::from_secs(2));
+    }
     serve(&mut core, &listener, &stop, sigs.as_ref().map(|f| f.as_raw_fd()));
     let _ = std::fs::remove_file(&socket);
     log("io", "stopped");

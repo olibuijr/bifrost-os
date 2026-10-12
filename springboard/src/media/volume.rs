@@ -139,9 +139,10 @@ impl VolumeTarget for bifrost_audio_hal::Device {
     }
 }
 
-/// The default output device, or None when the audio server is not running.
+/// The default output device, or None when the audio server is not running or does not answer within 100 ms.
+/// Call from a worker thread only.
 pub fn default_output() -> Option<bifrost_audio_hal::Device> {
-    let system = bifrost_audio_hal::System::connect(super::speaker::CLIENT).ok()?;
+    let system = bifrost_audio_hal::System::connect_within(super::speaker::CLIENT, std::time::Duration::from_millis(100)).ok()?;
     system.default_device(bifrost_audio_hal::Role::Output).ok()
 }
 

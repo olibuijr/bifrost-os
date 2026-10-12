@@ -7,7 +7,7 @@
 //! Device lifecycle: a device starts when its first IO procedure starts running and stops `idle_stop` (2 s) after
 //! the last one stopped. With no running device the loop blocks in `poll` with no timeout: no wakeups when idle.
 
-use crate::client::{recv_msg, send_msg, Conn};
+use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
 use crate::io::{
     log, set_realtime, ClientSlot, DeviceRunner, RunnerConfig, Shared, WaitPolicy, CLIENT_PRIORITY, DEFAULT_QUANTUM,
     MAX_CH, MAX_QUANTUM, MIN_QUANTUM,
@@ -200,6 +200,11 @@ impl ServerCore {
         self.clients.remove(&id);
         self.objects.client_gone(id);
         log("client", &format!("client {id} gone"));
+    }
+
+    /// Whether the client has said Hello.
+    pub fn greeted(&self, id: u32) -> bool {
+        self.clients.get(&id).map_or(false, |c| c.name.is_some())
     }
 
     pub fn handle(&mut self, client: u32, req: Request) -> Handled {
@@ -415,7 +420,17 @@ impl ServerCore {
         }
         d.shared.stop.store(true, Ordering::Release);
         if let Some(h) = d.thread.take() {
-            let _ = h.join();
+            // The IO thread may sit in a driver call; the control loop must not wait for it forever (it answers every
+            // client and SIGTERM). Give it `STOP_WAIT`, then detach it: it ends by itself once the driver returns.
+            let until = Instant::now() + STOP_WAIT;
+            while !h.is_finished() && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            if h.is_finished() {
+                let _ = h.join();
+            } else {
+                log("io", &format!("device {} did not stop within {:?}; detached", d.desc.uid, STOP_WAIT));
+            }
             crate::rt::device_stopped();
         }
         d.shared.fallback_floor.store(0, Ordering::Release);
@@ -553,14 +568,26 @@ pub fn listen(path: &str) -> std::io::Result<OwnedFd> {
     Ok(owned)
 }
 
-fn send_reply(fd: RawFd, reply: &Reply, fds: &[RawFd]) {
+/// Sends without ever waiting (the socket is non-blocking). Returns true when the client's queue was full, so the
+/// caller can count stalls and drop a client that stopped reading.
+fn send_reply(fd: RawFd, reply: &Reply, fds: &[RawFd]) -> bool {
     let bytes = encode_reply(reply);
     if let Err(e) = send_msg(fd, &bytes, fds) {
-        if e.kind() != std::io::ErrorKind::WouldBlock {
-            log("client", &format!("send failed: {e}"));
+        if e.kind() == std::io::ErrorKind::WouldBlock {
+            return true;
         }
+        log("client", &format!("send failed: {e}"));
     }
+    false
 }
+
+/// How long the control loop waits for a device's IO thread to end before it detaches it.
+const STOP_WAIT: Duration = Duration::from_millis(500);
+
+/// At most this many requests from one client per round of the loop, so one chatty client cannot starve the others.
+const MAX_PER_ROUND: usize = 32;
+/// The loop wakes at least this often to drop clients that never said Hello.
+const HOUSEKEEPING_MS: i32 = 1000;
 
 /// Runs the server until `stop` is set: accept, read requests, reply, deliver notices, start and stop devices.
 ///
@@ -577,7 +604,7 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
         for c in &conns {
             pfds.push(libc::pollfd { fd: c.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
-        let timeout_ms = core.next_timeout(Instant::now()).map_or(-1, |d| d.as_millis().max(1) as i32);
+        let timeout_ms = core.next_timeout(Instant::now()).map_or(HOUSEKEEPING_MS, |d| (d.as_millis().max(1) as i32).min(HOUSEKEEPING_MS));
         // SAFETY: `pfds` is a valid array of `len` pollfd structs for the call.
         let n = unsafe { libc::poll(pfds.as_mut_ptr(), pfds.len() as libc::nfds_t, timeout_ms) };
         if n < 0 {
@@ -608,11 +635,17 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
         }
         let mut dead = Vec::new();
         // Only the connections that were polled have a `pfds` entry; the ones accepted above start next round.
-        for (i, c) in conns.iter().enumerate().take(pfds.len() - 2) {
+        for (i, c) in conns.iter_mut().enumerate().take(pfds.len() - 2) {
             if pfds[i + 2].revents == 0 {
                 continue;
             }
+            let mut served = 0;
             loop {
+                if served >= MAX_PER_ROUND {
+                    // the rest is still queued: poll reports the socket readable again next round
+                    break;
+                }
+                served += 1;
                 match recv_msg(c.fd.as_raw_fd(), &mut buf) {
                     Ok((0, _)) => {
                         dead.push(c.id);
@@ -626,7 +659,11 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
                             Err(_) => err(AudioError::Protocol),
                         };
                         let raw: Vec<RawFd> = h.fds.iter().map(|f| f.as_raw_fd()).collect();
-                        send_reply(c.fd.as_raw_fd(), &h.reply, &raw);
+                        if send_reply(c.fd.as_raw_fd(), &h.reply, &raw) {
+                            c.stalled += 1;
+                        } else {
+                            c.stalled = 0;
+                        }
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -637,14 +674,28 @@ pub fn serve(core: &mut ServerCore, listener: &OwnedFd, stop: &AtomicBool, wake:
                 }
             }
         }
+        // a client that connected and never said Hello, or stopped reading its replies, is dropped
+        let now = Instant::now();
+        for c in &conns {
+            if (!core.greeted(c.id) && now.duration_since(c.accepted) >= HELLO_TIMEOUT) || c.stalled >= MAX_STALLED {
+                log("client", &format!("client {} dropped ({})", c.id, if c.stalled >= MAX_STALLED { "not reading" } else { "no Hello" }));
+                if !dead.contains(&c.id) {
+                    dead.push(c.id);
+                }
+            }
+        }
         for id in dead {
             conns.retain(|c| c.id != id);
             core.remove_client(id);
         }
         core.tick(Instant::now());
         for (client, reply) in core.take_overloads().into_iter().chain(core.take_changes()) {
-            if let Some(c) = conns.iter().find(|c| c.id == client) {
-                send_reply(c.fd.as_raw_fd(), &reply, &[]);
+            if let Some(c) = conns.iter_mut().find(|c| c.id == client) {
+                if send_reply(c.fd.as_raw_fd(), &reply, &[]) {
+                    c.stalled += 1;
+                } else {
+                    c.stalled = 0;
+                }
             }
         }
     }
@@ -854,6 +905,48 @@ mod tests {
         assert!(matches!(reply, Reply::Welcome { version: PROTOCOL_VERSION, .. }));
         stop.store(true, Ordering::Release);
         // Closing the connection wakes the poll, which then sees the stop flag.
+        drop(sock);
+        let _ = t.join();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn connect_to(path: &str) -> OwnedFd {
+        // SAFETY: socket and connect with a valid sockaddr_un built below.
+        let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
+        let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+        addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
+        for (d, s) in addr.sun_path.iter_mut().zip(path.as_bytes()) {
+            *d = *s as libc::c_char;
+        }
+        let r = unsafe { libc::connect(fd, &addr as *const _ as *const libc::sockaddr, std::mem::size_of::<libc::sockaddr_un>() as u32) };
+        assert_eq!(r, 0);
+        // SAFETY: a fresh descriptor.
+        unsafe { OwnedFd::from_raw_fd(fd) }
+    }
+
+    #[test]
+    fn a_silent_client_neither_blocks_the_others_nor_stays() {
+        let path = format!("/tmp/bifrost-audio-test-silent-{}.sock", std::process::id());
+        let l = listen(&path).unwrap();
+        let (mut core, _) = core();
+        let stop = Arc::new(AtomicBool::new(false));
+        let s2 = stop.clone();
+        let t = std::thread::spawn(move || serve(&mut core, &l, &s2, None));
+        // connects and never sends Hello (the wedged bench)
+        let silent = connect_to(&path);
+        let sock = connect_to(&path);
+        let msg = bifrost_audio_types::control::encode_request(&Request::Hello { version: PROTOCOL_VERSION, client: "t".into(), policy: false });
+        send_msg(sock.as_raw_fd(), &msg, &[]).unwrap();
+        let mut buf = vec![0u8; MAX_LEN];
+        let began = Instant::now();
+        let (n, _) = recv_msg(sock.as_raw_fd(), &mut buf).unwrap();
+        assert!(matches!(bifrost_audio_types::control::decode_reply(&buf[..n]).unwrap(), Reply::Welcome { .. }));
+        assert!(began.elapsed() < Duration::from_millis(500), "{:?}", began.elapsed());
+        // after HELLO_TIMEOUT the server has closed the silent connection: end of stream, not a wait
+        std::thread::sleep(HELLO_TIMEOUT + Duration::from_millis(1500));
+        let (n, _) = recv_msg(silent.as_raw_fd(), &mut buf).unwrap();
+        assert_eq!(n, 0);
+        stop.store(true, Ordering::Release);
         drop(sock);
         let _ = t.join();
         let _ = std::fs::remove_file(&path);

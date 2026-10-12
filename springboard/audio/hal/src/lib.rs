@@ -155,6 +155,17 @@ impl System {
 
     /// Like [`System::connect_path`], but a failure says which step failed, the path and the OS error.
     pub fn connect_detailed(path: &str, client: &str) -> Result<System, ConnectError> {
+        System::connect_detailed_within(path, client, None)
+    }
+
+    /// Like [`System::connect`], but gives up after `limit`: the connect does not block (a full accept queue fails at
+    /// once) and the Welcome must arrive within `limit`. A server that accepts and never answers costs at most `limit`.
+    /// Only workers use this (100 ms); the shell's UI thread never connects.
+    pub fn connect_within(client: &str, limit: Duration) -> Result<System, AudioError> {
+        System::connect_detailed_within(CONTROL_SOCKET, client, Some(limit)).map_err(|e| e.error)
+    }
+
+    fn connect_detailed_within(path: &str, client: &str, limit: Option<Duration>) -> Result<System, ConnectError> {
         let fail = |stage: &'static str, error: AudioError, os: Option<std::io::Error>| ConnectError { path: path.to_string(), stage, error, os };
         // SAFETY: plain socket(2); a negative result is an error.
         let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
@@ -174,17 +185,29 @@ impl System {
             *d = *s as _;
         }
         // SAFETY: `addr` is a valid sockaddr_un and the length is its size.
+        if limit.is_some() {
+            // SAFETY: fcntl on a valid fd; non-blocking for the connect only, so a full accept queue fails with EAGAIN.
+            unsafe { libc::fcntl(sock.as_raw_fd(), libc::F_SETFL, libc::O_NONBLOCK) };
+        }
         let r = unsafe { libc::connect(sock.as_raw_fd(), &addr as *const _ as *const libc::sockaddr, std::mem::size_of::<libc::sockaddr_un>() as u32) };
         if r < 0 {
             return Err(fail("connect", AudioError::NoServer, Some(std::io::Error::last_os_error())));
         }
-        System::from_socket(sock, client).map_err(|e| fail("hello", e, None))
+        if limit.is_some() {
+            // SAFETY: fcntl on a valid fd; blocking again for the reader thread.
+            unsafe { libc::fcntl(sock.as_raw_fd(), libc::F_SETFL, 0) };
+        }
+        System::from_socket_within(sock, client, limit.unwrap_or(conn::REPLY_TIMEOUT)).map_err(|e| fail("hello", e, None))
     }
 
     /// Takes an already connected SEQPACKET socket and says hello on it.
     pub fn from_socket(sock: OwnedFd, client: &str) -> Result<System, AudioError> {
+        System::from_socket_within(sock, client, conn::REPLY_TIMEOUT)
+    }
+
+    fn from_socket_within(sock: OwnedFd, client: &str, limit: Duration) -> Result<System, AudioError> {
         let conn = Conn::new(sock);
-        match conn.request(&Request::Hello { version: PROTOCOL_VERSION, client: client.to_string(), policy: false }, &[])? {
+        match conn.request_within(&Request::Hello { version: PROTOCOL_VERSION, client: client.to_string(), policy: false }, &[], limit)? {
             (Reply::Welcome { version, .. }, _) if version == PROTOCOL_VERSION => {}
             (Reply::Welcome { .. }, _) => return Err(AudioError::Protocol),
             _ => return unexpected(),

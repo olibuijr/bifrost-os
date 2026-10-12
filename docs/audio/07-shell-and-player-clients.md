@@ -85,3 +85,43 @@ reply path (reader thread), without that line at the server's accept loop.
 A bench that exits non-zero, prints usage text, prints no JSON, times out or reports all-zero statistics is now a
 failure: it is listed on stderr, the script exits 1, and `--append` writes nothing (not even the benches that passed)
 to `docs/perf-history.jsonl`.
+
+## The shell never waits on the audio server (0.6.2 incident)
+
+Midget 0.6.2 (first release that enables bifrost-audiod): the lead ran `bifrost-audio-bench --live` several times, each
+failed with `Io` (no Welcome in 5 s), then the desktop froze on Bootweave's frame (`ui loop stalled for 23s`, then 20 s
+on every restart) and only a reboot recovered. Findings and fixes:
+
+**Shell side (found by reading, confirmed in code).** Every HAL call on the UI thread could cost up to 5 s per request
+(`Conn::request`, `REPLY_TIMEOUT`), and `System::connect` blocks on a full accept queue:
+
+- `services/audio_devices.rs` `probe_microphone` connected and asked for the default input inside the service tick, every
+  2 s. Now a worker thread (`audio-probe`) owns the connection and publishes one `AtomicBool`; the tick only reads it.
+- `bin/shell.rs` `apply_volume` connected and set the volume and mute properties from the event loop (start-up, jack
+  route change, the volume effect). Now a `volume` worker takes levels over a channel, newest wins.
+- `media/speaker.rs` `SpeakerOut::write` opened the stream under the session mutex, and `played()`/`pause()` take the
+  same mutex, so a status poll waited behind the connect. Now `Session::ensure` starts the open on a `speaker-open`
+  thread and returns `WouldBlock` until it finishes (the first frames are dropped); the stream is dropped on a
+  `speaker-close` thread because dropping asks the server to stop and remove the IO proc.
+- `media/capture.rs` `Recorder`/`discover` are used by bifrost-audiod's own player daemon and the audio-setup app, not by
+  the shell's UI thread; unchanged. `system_sound.rs` clicks go through `SpeakerOut`, so they are covered.
+- New `System::connect_within(client, limit)`: non-blocking connect (a full accept queue fails at once) and a Welcome
+  within `limit`. Workers use 100 ms. Later requests on an open connection keep the 5 s timeout, which only a worker pays.
+
+**Server side.** `control::serve` is a single poll loop over non-blocking sockets, so a client that stalls cannot block
+accept or other clients through its socket. What can stall it is work done inline on that thread: `start_device`
+(driver open), `stop_device` (`JoinHandle::join` of the IO thread, which may sit in a driver call), and a client that
+floods requests. The exact cause of the missing Welcome on Midget is not confirmed (no access to the machine); the
+suspects in order are the IO-thread join in `tick`/`shutdown`, a driver open, and RT-priority client threads
+(`PromoteThread`, SCHED_FIFO) starving the normal-priority control thread on the small machine. Changes:
+
+- the IO thread join waits at most 500 ms (`STOP_WAIT`) and then detaches the thread;
+- at most 32 requests per client per loop round;
+- a connection that never says Hello is closed after 3 s; one whose reply queue is full 64 times in a row is closed;
+- the loop wakes at least once a second for that housekeeping;
+- SIGTERM: the serve loop ends on the signalfd, and a `stop-watchdog` thread exits the process 2 s after the signal
+  even if the loop is stuck; the unit has `TimeoutStopSec=5` and `KillMode=mixed`, so a stuck stop no longer waits 90 s.
+
+Unverified (nothing was built or run): the new code compiles, the 100 ms connect limit is enough on a loaded Midget,
+and the Welcome stall is really fixed. To confirm: run `bifrost-audio-bench audio-roundtrip --live` with the journal
+open and look for `client N: ... dropped (no Hello)` or `did not stop within`.

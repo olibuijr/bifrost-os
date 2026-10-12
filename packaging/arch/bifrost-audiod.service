@@ -27,6 +27,9 @@ ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/run/bifrost/audio
 Restart=on-failure
+# SIGTERM ends the loop within 2 s (stop watchdog); a stuck driver call is killed after 5 s, not 90.
+TimeoutStopSec=5
+KillMode=mixed
 RestartSec=1
 StandardOutput=journal
 StandardError=journal

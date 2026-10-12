@@ -120,13 +120,14 @@ fn run() -> std::io::Result<()> {
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
     // the volume is the default output device's volume control on the audio server (connected lazily)
-    let mut out_dev: Option<bifrost_audio_hal::Device> = None;
+    // (a worker thread owns the connection: the UI thread never waits on the audio server)
+    let volume_tx = spawn_volume_worker();
     // the headset jack: its input device reports plug state as switch events
     let mut headset = input::Device::by_hint(route::JACK_DEVICE_HINTS).and_then(|p| input::Device::open(&p).map_err(|e| eprintln!("springboard: headset {p}: {e}")).ok());
     let mut jack = headset.as_ref().map_or_else(route::Jack::default, |d| route::Jack::from_bits(d.switches()));
     let mut router = route::Router::from_prefs(|k| prefs.get(k).map(String::from), jack.plugged());
     let mut vol = router.volume();
-    apply_volume(vol, &mut out_dev);
+    let _ = volume_tx.send(vol);
     let mut jack_events = Vec::new();
     // a fresh install (no wallpaper chosen yet) starts on a random Icelandic still, kept from then on
     if prefs.get("wallpaper").is_none() {
@@ -726,7 +727,7 @@ fn run() -> std::io::Result<()> {
                     shell.pause_music();
                 }
                 vol = change.volume;
-                apply_volume(vol, &mut out_dev);
+                let _ = volume_tx.send(vol);
                 shell.set_route(change.route, vol.level(), change.hud, t);
                 shell.save_prefs(&change.prefs);
             }
@@ -782,7 +783,7 @@ fn run() -> std::io::Result<()> {
                 }
                 Effect::Volume(v) => {
                     vol = Volume::new(v);
-                    apply_volume(vol, &mut out_dev);
+                    let _ = volume_tx.send(vol);
                     shell.set_volume(v);
                     shell.save_prefs(&router.set_level(v));
                 }
@@ -1316,6 +1317,25 @@ fn wifi_settled(wifi: &springboard::net::wifi::Wifi) -> bool {
 /// Sets the level `v` on the default output device of the audio server (volume and mute controls);
 /// the player's software gain carries it when the server is not there. Connects lazily, so the
 /// shell may start before bifrost-audiod. Never an amplifier or a route.
+#[cfg(target_os = "linux")]
+fn spawn_volume_worker() -> std::sync::mpsc::Sender<springboard::media::volume::Volume> {
+    let (tx, rx) = std::sync::mpsc::channel::<springboard::media::volume::Volume>();
+    let spawned = std::thread::Builder::new().name("volume".into()).spawn(move || {
+        let mut dev: Option<bifrost_audio_hal::Device> = None;
+        // newest level wins: a slider drag while the server is slow collapses to one write
+        while let Ok(mut v) = rx.recv() {
+            while let Ok(newer) = rx.try_recv() {
+                v = newer;
+            }
+            apply_volume(v, &mut dev);
+        }
+    });
+    if let Err(e) = spawned {
+        eprintln!("springboard: volume worker: {e}");
+    }
+    tx
+}
+
 #[cfg(target_os = "linux")]
 fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_audio_hal::Device>) {
     use springboard::media::volume::{default_output, software_gain, VolumeTarget};
