@@ -19,6 +19,7 @@ pub mod gamepad_service;
 pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
+pub mod dock_tile;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -45,6 +46,7 @@ pub struct Event {
 /// Every service, in registration order. One line per service.
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
+        Box::new(dock_tile::DockService),
         Box::new(system::System),
         Box::new(pasteboard_types::Pasteboards::default()),
         Box::new(keychain_groups::KeychainGroups::default()),
