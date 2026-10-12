@@ -1686,3 +1686,24 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 - `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
 - Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
   layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).
+
+## Glass and materials for apps
+
+Module `springboard/ui/src/material_style.rs`. Views are imperative, so each SwiftUI modifier is a builder that yields
+`MaterialRequest`s (rect, per-corner radii, fill, optional merge group), one per shape, for the window server.
+
+| SwiftUI | Ours |
+|---|---|
+| `Material` (ultraThin, thin, regular, thick, ultraThick, bar) | `Material`; `level()` 0..4 is the blur rank, `Bar` is the chrome material |
+| `.background(material, in: shape)` | `background(material, MatShape, rect)` |
+| `glassEffect(_:in:)`, `Glass.regular/clear/tint/interactive` | `glass_effect(Glass, MatShape, rect)`, `Glass::REGULAR/CLEAR`, `.tint()`, `.interactive()` |
+| `GlassEffectContainer(spacing:)` | `GlassContainer`: shapes within `spacing` merge, transitively; regular and clear do not merge by proximity; `requests()` tags merged shapes with a group |
+| `glassEffectUnion(id:)` | `GlassItem.union`: the same id always merges, near or far |
+| `glassEffectID` and morphing | `GlassIds::frame` starts a `Morph` (spring, response 0.35 s, damping 0.8, the shell's panel-reveal feel) when an id changes geometry; an interrupted morph retargets without a jump |
+| `backgroundExtensionEffect()` | `background_extension(content, bounds)` returns the edge strips to mirror and blur |
+| `.glass`, `.glassProminent` | `GlassButtonStyle`: interactive capsule; prominent is tinted with the accent |
+
+Mapping note: agent 1's shared material request was not on `integration` when this landed, so `Material` and `Fill`
+are minimal compatible definitions; `Fill::Blur(Material)` converts onto the shared type by level. Morphs interpolate a
+uniform corner radius (the largest corner), so uneven corners snap to it while moving. Not built or tested (no builds
+in this wave); not tried on Midget.
