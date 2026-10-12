@@ -1453,6 +1453,15 @@ def cmd_qa_install(args):
     else:
         ssh("rm -f /run/bifrost-unattended.toml /run/bifrost-unattended.toml.disk; systemctl restart bifrost-installer", 30)
     step("live lab ISO is up")
+    # the lab sync fetches the current installer beside the running one and restarts it when it changed: taps and keys
+    # sent before that land in the process being stopped, and the new one starts again at Welcome (2026-10-12)
+    settled = ("s=$(systemctl show -p ActiveState --value bifrost-lab-sync 2>/dev/null); "
+               "[ \"$s\" != activating ] && systemctl is-active -q bifrost-installer && "
+               "t=$(systemctl show -p ActiveEnterTimestampMonotonic --value bifrost-installer) && "
+               "[ $(( $(cut -d' ' -f1 /proc/uptime | tr -d .)0000 - t )) -gt 3000000 ] && echo settled")
+    if not wait(lambda: ssh(settled, 10).strip() == "settled", 300, 2):
+        return fail("the live installer did not settle (lab sync still running or the installer restarting)")
+    step("lab sync done, installer settled")
     s = screen("welcome", 300)
     if not s:
         return fail("the installer state file never showed the Welcome screen")
