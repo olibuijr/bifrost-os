@@ -46,6 +46,8 @@ pub mod blend;
 pub mod blur_kernels;
 pub mod effect_chain;
 pub mod gamma_fade;
+pub mod video_transfer;
+pub mod block_motion;
 
 #[cfg(test)]
 mod tests {
