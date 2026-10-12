@@ -4,6 +4,7 @@
 
 use crate::console::{Col, Console, Geo, B_SEARCH, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use crate::model::Level;
+use crate::signposts::{self, Mark};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::appearance::Pair;
 use bifrost_app::kit::ui::{CARD_BG, DETAIL_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
@@ -201,7 +202,13 @@ impl Console {
         let pid = if e.pid > 0 { e.pid.to_string() } else { "-".to_string() };
         let subsystem = if e.subsystem.is_empty() { "-".to_string() } else { e.subsystem.clone() };
         let category = if e.category.is_empty() { "-".to_string() } else { e.category.clone() };
-        let fields = [("Date", full_date(e.date)), ("PID", pid), ("Subsystem", subsystem), ("Category", category)];
+        let mut fields: Vec<(&str, String)> = vec![("Date", full_date(e.date)), ("PID", pid), ("Subsystem", subsystem), ("Category", category)];
+        if let Some(position) = self.position.clone() {
+            fields.push(("Position", position));
+        }
+        if let Some(Mark::Interval(interval)) = signposts::parse(&e.message) {
+            fields.push(("Duration", signposts::duration_text(interval.duration_ns())));
+        }
         for (key, value) in fields {
             text(&mut self.labels, s, ui, key, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x0, y + 8.0, KEY_W - 8.0);
             text(&mut self.labels, s, ui, &value, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x0 + KEY_W, y + 8.0, inner - KEY_W);
