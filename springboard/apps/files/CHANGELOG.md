@@ -1,3 +1,11 @@
+## 1.21.0 — 2026-10-12
+
+- Picture thumbnails in the icon view are made through the system's image source: the size of a picture is read from its header first, and a picture too large to decode is refused before its pixels are loaded.
+- Get Info shows the EXIF details of a JPEG when it has them: the date taken, the camera, the exposure, the dimensions (as Dimensions, next to the file Size) and the location when the photo has GPS.
+- Open With… in the context menu of a file lists the apps that can open it, the default one marked "(Default)". Press Escape or click to close. The list is read-only for now: choose the default in Settings > General > Default Apps. Opening a file in a chosen app from this list is not available yet.
+- Recents, Favorites and Tags were already in the sidebar; nothing changed there.
+- Not yet: quarantine details for downloads and archive formats other than ZIP.
+
 ## 1.20.0 — 2026-10-12
 
 - Copy, Move, Paste, Duplicate, Compress and Extract hold the destination folder for writing while they work. A file that another coordinating app has open for reading is no longer replaced under it: the operation waits up to five seconds, then reports "The item is in use by another app." and leaves that item alone.

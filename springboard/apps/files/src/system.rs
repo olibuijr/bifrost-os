@@ -41,6 +41,8 @@ pub(crate) enum Effect {
     IndexDocument(PathBuf),
     /// The Dock tile's progress bar (None clears it).
     DockProgress(Option<f32>),
+    /// Open With: ask the launch service which apps open this file.
+    OpenWithApps(PathBuf),
 }
 
 /// What a waiting reply is for.
@@ -48,6 +50,8 @@ pub(crate) enum Effect {
 pub(crate) enum Waiting {
     Preview,
     Paste(PathBuf),
+    /// The Open With panel's reply, for the file at this path.
+    OpenWith(PathBuf),
 }
 
 /// The app's system-service state. Lives in `Files`.
@@ -85,6 +89,10 @@ impl SystemState {
                 Effect::IndexDocument(path) => index_document(ctx, &path),
                 Effect::DockProgress(fraction) => {
                     let _ = dock_tile::set_progress(ctx, fraction);
+                }
+                Effect::OpenWithApps(path) => {
+                    let id = bifrost_app::launch_services::open_with(ctx, &file_name_of(&path));
+                    self.wait(id, Waiting::OpenWith(path));
                 }
             }
         }
@@ -286,6 +294,12 @@ impl Files {
                         self.start_job(title, JobKind::Transfer(op), paths, dest);
                     }
                     None => self.notice = Some("Nothing to paste. Copy files first.".into()),
+                }
+            }
+            Waiting::OpenWith(path) => {
+                // the panel may have closed or moved to another file while the reply was on its way
+                if let Some(panel) = self.open_with.as_mut().filter(|p| p.path == path) {
+                    panel.apps = Some(bifrost_app::launch_services::candidates(result));
                 }
             }
         }
