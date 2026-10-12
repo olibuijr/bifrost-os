@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- The Songs list shows each song's tempo in beats per minute, in a column left of its length. Music reads the start of
+  each song in the background while the list is on screen, two songs at a time, so the numbers fill in over a few
+  minutes for a large library. A song with no clear beat, and a MIDI file, shows no number.
+
 ## 1.5.0 — 2026-10-12
 
 - Up Next can be cleared. A "Clear Up Next" line sits at the end of the queue when songs are waiting. It takes every

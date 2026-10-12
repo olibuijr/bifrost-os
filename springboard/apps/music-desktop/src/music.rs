@@ -17,6 +17,7 @@ pub mod library;
 pub mod nowplay;
 pub mod playlists;
 pub mod system;
+pub mod tempo;
 pub mod upnext;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
@@ -62,6 +63,10 @@ pub enum Effect {}
 const SHEET: u32 = bifrost_app::kit::ui::DESKTOP_MENU_SOLID;
 /// Text room kept clear of the song duration on a row, the mini player's text, and the song menu's width.
 const SONG_TRAIL_PT: f32 = 110.0;
+/// Where the tempo column of a song row ends, from the window's trailing edge (left of the duration).
+const BPM_RIGHT_PT: f32 = 96.0;
+/// Tempo analyses run at once, at most; each reads the start of one song.
+const TEMPO_JOBS: usize = 2;
 const MINI_TEXT_PT: f32 = 240.0;
 const MENU_MAX_W_PT: f32 = 360.0;
 
@@ -196,6 +201,10 @@ pub struct Music {
     w: i32,
     h: i32,
     pool: Jobs<Done>,
+    /// tempo jobs: the beats per minute of a song, by its path (`music/tempo.rs`)
+    tempo: Jobs<(PathBuf, f64)>,
+    bpm: HashMap<PathBuf, f64>,
+    bpm_pending: HashSet<PathBuf>,
     /// network jobs (station list, logos), apart from `pool` so a slow
     /// connection never holds up the library
     net: Jobs<Done>,
@@ -327,6 +336,9 @@ impl Music {
             h,
             pool,
             net,
+            tempo: Jobs::new(Qos::Utility),
+            bpm: HashMap::new(),
+            bpm_pending: HashSet::new(),
             fetcher: Arc::new(radio::Http::default()),
             radio: Radio::default(),
             logo_pending: HashSet::new(),
@@ -478,10 +490,41 @@ impl Music {
         for done in finished {
             self.apply(done);
         }
+        for (path, bpm) in self.tempo.drain() {
+            self.bpm_pending.remove(&path);
+            self.bpm.insert(path, bpm);
+            changed = true;
+        }
+        self.start_tempo();
         self.player.drain(now_ms());
         changed |= self.refresh(ui);
         self.dirty |= changed;
         changed
+    }
+
+    /// While the Songs list is on screen, starts tempo analyses for its songs not yet known, in list order, at most
+    /// `TEMPO_JOBS` at a time.
+    fn start_tempo(&mut self) {
+        if self.scanning || self.np || self.tab != Tab::Songs || self.page() != Page::Root {
+            return;
+        }
+        for i in 0..self.view.len() {
+            if self.bpm_pending.len() >= TEMPO_JOBS {
+                break;
+            }
+            let path = {
+                let known = &self.library.songs[self.view[i]].path;
+                if self.bpm.contains_key(known) || self.bpm_pending.contains(known) {
+                    continue;
+                }
+                known.clone()
+            };
+            self.bpm_pending.insert(path.clone());
+            self.tempo.spawn(move || {
+                let bpm = tempo::bpm_of(&path);
+                (path, bpm)
+            });
+        }
     }
 
     fn apply(&mut self, done: Done) {
@@ -1636,6 +1679,7 @@ impl Music {
             }
             let song = &self.library.songs[id];
             let (title, artist, track, dur) = (song.title.clone(), song.artist.clone(), song.track, song.duration_ms);
+            let path = song.path.clone();
             let mid = y + row / 2.0;
             let is_current = playing == Some(id);
             if thumbs {
@@ -1650,6 +1694,9 @@ impl Music {
                 self.label(s, ui, &title, MAC_BODY_PT, Weight::Regular, color, text_x, mid - ui.pt(SPACE_M), 0.0);
                 if let Some(d) = dur {
                     self.label(s, ui, &clock(d), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 - ui.pt(60.0), mid, 1.0);
+                }
+                if let Some(bpm) = self.bpm.get(&path).and_then(|b| tempo::label(*b)) {
+                    self.label(s, ui, &bpm, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 - ui.pt(BPM_RIGHT_PT), mid, 1.0);
                 }
                 let sub = ui.fit(&artist, MAC_FOOTNOTE_PT, self.w as f32 - text_x - m - ui.pt(SONG_TRAIL_PT));
                 self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
