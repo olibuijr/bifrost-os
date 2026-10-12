@@ -930,3 +930,6 @@ pub mod capture_config;
 pub mod capture_error;
 pub mod surface_use;
 pub mod surface_attach;
+
+pub mod braille;
+pub mod run_delegate;

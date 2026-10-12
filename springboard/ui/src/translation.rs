@@ -144,6 +144,91 @@ impl LanguageAvailability {
     }
 }
 
+/// Separator that joins the runs of a formatted text for one engine call. It is a private-use character, so real
+/// text does not contain it; a text that already has it cannot be split back and fails with `InternalError`.
+pub const RUN_SEPARATOR: char = '\u{E000}';
+
+/// Translates formatted text run by run, the model behind `translate(_:)` on an attributed string. The non-empty runs
+/// are joined with `RUN_SEPARATOR`, one engine call translates the whole text, and the separators in the result mark
+/// the new run boundaries. The n-th translated piece takes the attributes of the n-th run, so formatting survives
+/// while the words inside a run may move. An engine that drops or adds separators fails with `InternalError`.
+pub fn translate_runs<T: Clone>(
+    runs: &[(&str, T)],
+    translate: &dyn Fn(&str) -> Result<String, TranslationError>,
+) -> Result<Vec<(String, T)>, TranslationError> {
+    let kept: Vec<(&str, &T)> = runs.iter().filter(|(s, _)| !s.is_empty()).map(|(s, a)| (*s, a)).collect();
+    if kept.iter().all(|(s, _)| s.trim().is_empty()) {
+        return Err(TranslationError::NothingToTranslate);
+    }
+    if kept.iter().any(|(s, _)| s.contains(RUN_SEPARATOR)) {
+        return Err(TranslationError::InternalError);
+    }
+    let joined: Vec<&str> = kept.iter().map(|(s, _)| *s).collect();
+    let sep = RUN_SEPARATOR.to_string();
+    let translated = translate(&joined.join(sep.as_str()))?;
+    let pieces: Vec<&str> = translated.split(RUN_SEPARATOR).collect();
+    if pieces.len() != kept.len() {
+        return Err(TranslationError::InternalError);
+    }
+    Ok(pieces
+        .into_iter()
+        .zip(kept.iter())
+        .filter(|(p, _)| !p.is_empty())
+        .map(|(p, (_, a))| (p.to_string(), (**a).clone()))
+        .collect())
+}
+
+#[cfg(test)]
+mod run_tests {
+    use super::*;
+
+    fn replace_words(s: &str) -> Result<String, TranslationError> {
+        Ok(s.replace("Open", "Opna").replace("file", "skra"))
+    }
+
+    #[test]
+    fn each_translated_piece_keeps_the_attributes_of_its_run() {
+        let runs = [("Open", "bold"), (" file", "plain")];
+        let out = translate_runs(&runs, &replace_words).unwrap();
+        assert_eq!(out, vec![("Opna".to_string(), "bold"), (" skra".to_string(), "plain")]);
+    }
+
+    #[test]
+    fn empty_runs_are_dropped_and_need_no_separator() {
+        let runs = [("", 1), ("Save", 2), ("", 3)];
+        let out = translate_runs(&runs, &|s: &str| Ok(s.to_string())).unwrap();
+        assert_eq!(out, vec![("Save".to_string(), 2)]);
+    }
+
+    #[test]
+    fn only_blank_text_is_nothing_to_translate() {
+        let runs = [("  ", 1), ("", 2)];
+        let r = translate_runs(&runs, &|s: &str| Ok(s.to_string()));
+        assert_eq!(r, Err(TranslationError::NothingToTranslate));
+    }
+
+    #[test]
+    fn an_engine_that_drops_a_separator_fails_with_internal_error() {
+        let runs = [("A", 1), ("B", 2)];
+        let drop_sep = |s: &str| -> Result<String, TranslationError> { Ok(s.replace(RUN_SEPARATOR, "")) };
+        assert_eq!(translate_runs(&runs, &drop_sep), Err(TranslationError::InternalError));
+    }
+
+    #[test]
+    fn text_that_already_holds_the_separator_is_refused() {
+        let runs = [("x\u{E000}y", 1)];
+        let r = translate_runs(&runs, &|s: &str| Ok(s.to_string()));
+        assert_eq!(r, Err(TranslationError::InternalError));
+    }
+
+    #[test]
+    fn engine_errors_pass_through_unchanged() {
+        let runs = [("Open", 1)];
+        let r = translate_runs(&runs, &|_: &str| Err(TranslationError::NotInstalled));
+        assert_eq!(r, Err(TranslationError::NotInstalled));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,6 +3,7 @@
 //! language packs or system translation popover; `TranslationMemory` is the built-in engine, a table of strings
 //! translated ahead of time.
 
+use crate::attributed::{AttributedString, Attrs};
 use crate::error::ErrorCode;
 use bifrost_ui::translation::{language_code, LanguageAvailability};
 pub use bifrost_ui::translation::TranslationError;
@@ -102,6 +103,25 @@ impl TranslationSession {
     /// `translations(from:)`: several strings. The results come back in input order, one per string.
     pub fn translate_batch<S: AsRef<str>>(&self, texts: &[S]) -> Vec<Result<String, TranslationError>> {
         texts.iter().map(|t| self.translate(t.as_ref())).collect()
+    }
+
+    /// `translate(_:)` for a formatted string (`AttributedString` input): the text goes to the engine run by run, and
+    /// each translated piece keeps the attributes of its run. Blank text fails before the engine runs, as for `translate`.
+    pub fn translate_attributed(&self, text: &AttributedString) -> Result<AttributedString, TranslationError> {
+        if self.cancelled.get() {
+            return Err(TranslationError::AlreadyCancelled);
+        }
+        if text.string().trim().is_empty() {
+            return Err(TranslationError::NothingToTranslate);
+        }
+        let runs: Vec<(&str, Attrs)> = text.runs().map(|(s, a)| (s, a.clone())).collect();
+        let engine = |t: &str| self.engine.translate(&self.source, &self.target, t);
+        let pieces = bifrost_ui::translation::translate_runs(&runs, &engine)?;
+        let mut out = AttributedString::new();
+        for (s, a) in pieces {
+            out.append(&s, a);
+        }
+        Ok(out)
     }
 
     /// `cancel()`: every later call fails with `AlreadyCancelled`.
@@ -207,6 +227,32 @@ mod tests {
                 Ok("Opna".to_string()),
             ]
         );
+    }
+
+    struct Upper;
+
+    impl Translator for Upper {
+        fn translate(&self, _source: &str, _target: &str, text: &str) -> Result<String, TranslationError> {
+            Ok(text.to_uppercase())
+        }
+    }
+
+    #[test]
+    fn formatted_text_keeps_the_attributes_of_each_run() {
+        let s = TranslationSession::new(&installed(), "en", "is", Box::new(Upper)).ok().unwrap();
+        let mut text = AttributedString::with_attrs("Open", Attrs { bold: true, ..Default::default() });
+        text.append(" file", Attrs::default());
+        let out = s.translate_attributed(&text).unwrap();
+        assert_eq!(out.string(), "OPEN FILE");
+        assert!(out.attributes_at(0).bold);
+        assert!(!out.attributes_at(4).bold);
+    }
+
+    #[test]
+    fn blank_formatted_text_is_nothing_to_translate() {
+        let s = TranslationSession::new(&installed(), "en", "is", Box::new(Upper)).ok().unwrap();
+        let text = AttributedString::with_attrs("   ", Attrs::default());
+        assert_eq!(s.translate_attributed(&text).err(), Some(TranslationError::NothingToTranslate));
     }
 
     #[test]
