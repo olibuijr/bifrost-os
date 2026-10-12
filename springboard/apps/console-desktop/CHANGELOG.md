@@ -10,6 +10,11 @@
   duration is in the detail pane, and the footer totals every name (count, total, longest). The Console times its own
   view loads as a signpost (`view.load`) in its log subsystem.
 - Activity filters are not available yet: journal lines carry no activity identifier.
+- Power: the footer shows the machine's thermal state, the battery (charge, charging or discharging, and the time left) and
+  Low Power Mode, from the system power service. It updates when the machine reports a change.
+- Copy Message: Log menu copies the selected line (time, process, level, subsystem, category and message) to the
+  clipboard, through the system pasteboard service. An older system copies it to the plain clipboard instead.
+- Energy impact per process is not shown yet: the system does not measure energy per process.
 
 ## 1.0.3 — 2026-10-11
 
