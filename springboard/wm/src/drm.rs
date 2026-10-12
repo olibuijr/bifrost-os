@@ -101,6 +101,13 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let gpu = primary_gpu(&seat)?.or_else(|| all_gpus(&seat).ok()?.into_iter().next()).ok_or("no GPU")?;
     eprintln!("bifrost-wm: GPU {}", gpu.display());
     let drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle())?;
+    // the Vulkan render server opens on the same GPU; its frame loop is not wired yet, so scanout stays on GLES
+    if crate::render_server::selected() {
+        match crate::drm_vulkan::probe(&gpu) {
+            Ok(_server) => eprintln!("bifrost-wm: vulkan render server ready on {}; scanout stays GLES", gpu.display()),
+            Err(e) => eprintln!("bifrost-wm: vulkan render server unavailable, GLES: {e}"),
+        }
+    }
     let backend = std::rc::Rc::new(std::cell::RefCell::new(drm));
 
     // input
