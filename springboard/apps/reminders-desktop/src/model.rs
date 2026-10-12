@@ -469,16 +469,6 @@ pub fn indent(items: &mut [Reminder], id: u64) -> bool {
     true
 }
 
-pub fn outdent(items: &mut [Reminder], id: u64) -> bool {
-    match items.iter_mut().find(|r| r.id == id) {
-        Some(r) if r.parent.is_some() => {
-            r.parent = None;
-            true
-        }
-        _ => false,
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Completion {
     Done,
@@ -864,8 +854,6 @@ mod tests {
         assert_eq!(progress(&items, 1), (0, 2));
         items[1].completed = true;
         assert_eq!(progress(&items, 1), (1, 2));
-        assert!(outdent(&mut items, 2));
-        assert!(!outdent(&mut items, 2));
     }
     #[test]
     fn completion_advances_repeats() {

@@ -250,6 +250,8 @@ impl Query {
         q
     }
 
+    /// True when no token is set (the search box is blank). Only the tests ask.
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.process.is_empty()
             && self.subsystem.is_empty()
@@ -344,6 +346,7 @@ impl Buffer {
         self.items.len()
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }

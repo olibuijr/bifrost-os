@@ -7,7 +7,7 @@ use bifrost_app::controls::chart_marks::{Frame, Interpolation, Plot, line_path};
 use bifrost_app::controls::geo::{Coordinate, DistanceUnits, format_distance};
 use bifrost_app::controls::location_auth::{AuthorizationStatus, LocationError};
 use bifrost_app::controls::mapview::{MapCamera, MapType, MapView};
-use bifrost_app::controls::weather_alert::{WeatherAlert, WeatherAvailability, most_severe};
+use bifrost_app::controls::weather_alert::WeatherAvailability;
 use bifrost_app::controls::weather_attribution::WeatherAttribution;
 use springboard::shell::weather::data::{Hour, Units};
 
@@ -196,16 +196,6 @@ pub fn footer_lines() -> Vec<String> {
     lines
 }
 
-/// The alert banner text for the most serious alert: its event, its region when it has one, and the threat level in
-/// words. None when there are no alerts, so no banner is drawn.
-pub fn alert_banner(alerts: &[WeatherAlert]) -> Option<String> {
-    let alert = most_severe(alerts)?;
-    Some(match &alert.region {
-        Some(region) => format!("{} for {}: {}", alert.summary, region, alert.severity.description()),
-        None => format!("{}: {}", alert.summary, alert.severity.description()),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,28 +306,4 @@ mod tests {
         assert_eq!(lines[1], "Weather data from Open-Meteo");
     }
 
-    #[test]
-    fn alert_banner_is_absent_without_alerts() {
-        assert_eq!(alert_banner(&[]), None);
-    }
-
-    #[test]
-    fn alert_banner_names_the_most_severe_alert_with_its_trimmed_region() {
-        use bifrost_app::controls::weather_alert::Severity;
-        let alerts = vec![
-            WeatherAlert::new("Wind advisory", None, Severity::Moderate, "Met", None),
-            WeatherAlert::new("Flood warning", Some(" South "), Severity::Severe, "Met", None),
-        ];
-        assert_eq!(
-            alert_banner(&alerts).as_deref(),
-            Some("Flood warning for South: Significant threat")
-        );
-    }
-
-    #[test]
-    fn alert_banner_without_region_omits_the_for_clause() {
-        use bifrost_app::controls::weather_alert::Severity;
-        let alerts = vec![WeatherAlert::new("Frost", None, Severity::Minor, "Met", None)];
-        assert_eq!(alert_banner(&alerts).as_deref(), Some("Frost: Minimal or no known threat"));
-    }
 }

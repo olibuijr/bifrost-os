@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.2 — 2026-10-12
+
+- Removed `model::outdent`, which nothing called. Make Regular Reminder on the Indent row already clears the draft's
+  parent, so that is the one outdent path.
+
 ## 1.13.1 — 2026-10-12
 
 - Removed the unused procedural icon and the unused badge drawing, and the state dump for tests that are not built; the app uses its icon.png.
