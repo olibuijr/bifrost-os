@@ -83,6 +83,7 @@ pub mod print;
 pub mod print_panel;
 pub mod usb_printer;
 pub mod pasteboard;
+pub mod pasteboard_types;
 pub mod dnd;
 pub mod review;
 pub mod app_transaction;
