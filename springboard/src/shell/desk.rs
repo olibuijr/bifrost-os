@@ -26,6 +26,8 @@ const DOCK_PAD_PT: f32 = 10.0;
 const DOCK_GAP_PT: f32 = 10.0;
 const DOCK_MARGIN_PT: f32 = 10.0;
 const DOCK_SEP_PT: f32 = 14.0;
+/// How far past the Dock a dragged icon must be released to leave it, in pt.
+const DOCK_REMOVE_PT: f32 = 40.0;
 /// The dock's Trash slot in the `desk_dock` list (after the divider, always last).
 pub(super) const DOCK_TRASH: usize = usize::MAX;
 /// The Files app the Trash opens, and the XDG trash it shows.
@@ -1203,7 +1205,7 @@ impl Shell {
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
-        let (_, icons) = self.dock_live(bar0, &icons, t / 1000.0);
+        let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
         match ev {
             Event::Down(x, y) => {
                 self.desk.as_mut()?.grab = None;
@@ -1347,7 +1349,10 @@ impl Shell {
                         // the neighbours already show the final order, so dropping them in place is seamless
                         let slot=self.desk.as_mut()?.dock_drop.take();
                         self.desk.as_ref()?.dock_slide.borrow_mut().clear();
-                        if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
+                        // an app pinned in the Dock and dragged well off it leaves the Dock (its Pin toggles off)
+                        if slot.is_none() && self.dock_removable(list[k]) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
+                            self.dock_change(super::desktop_dock::Change::Pin(list[k]), t);
+                        } else if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
                         Some(vec![])
                     },
                     Some(Grab::DockDrag{from:k,..}) => {
