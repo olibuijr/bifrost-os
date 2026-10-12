@@ -3,7 +3,10 @@
 
 Benchmarks are #[ignore]d tests that print `BENCH <name> <value> ms`. Each run records the git sha,
 system version and host, prints the change against the previous run, and flags regressions over 15 %.
-Usage: tools/bench.py [--no-record] [--history] [--midget [--reboot] [--apps]]
+Usage: tools/bench.py [--no-record] [--history] [--midget [--reboot] [--apps]] [--graphics [--click X Y]]
+--graphics (with --midget) adds the window-server graphics suite (tools/graphics_bench.py: compose CPU and GPU
+percentiles, present latency, dropped frames, input-to-photon with --click) and gates it against
+docs/graphics-architecture.md ("Performance budgets"); a breach exits 3.
 --midget records the shell's on-device GPU presenter averages (journal line "gpu present") and the Midget idle and
 footprint numbers (midget_* keys: tools/midget-idle-measure.py, tools/midget-memory.py). It then checks every key in
 docs/budgets.toml [midget] (a maximum) and exits 3 listing each key over budget. Acceptance runs it with --no-record.
@@ -344,13 +347,19 @@ def main():
             print(n, " -> ".join(f'{h["results"][n]:.2f}' for h in hist if n in h["results"]))
         return
     res = midget() if "--midget" in sys.argv else run()
+    graphics_breaches = []
+    if "--graphics" in sys.argv:  # window-server frame stats, tools/graphics_bench.py (budgets in docs/graphics-architecture.md)
+        import graphics_bench
+        click = tuple(sys.argv[sys.argv.index("--click") + 1:sys.argv.index("--click") + 3]) if "--click" in sys.argv else None
+        res.update(graphics_bench.midget_results(click))
+        graphics_breaches = graphics_bench.gate(res)
     if "--browser" in sys.argv:  # needs a running desktop session with the browser open
         for fn in (bench_browser_startup, bench_browser_idle, bench_browser_memory):
             res.update(fn())
         for k, lim in BROWSER_BUDGETS.items():
             if res.get(k, 0) > lim:
                 print(f"over budget: {k} {res[k]:.1f} > {lim}")
-    breaches = budget_check(res) if "--midget" in sys.argv else []
+    breaches = (budget_check(res) if "--midget" in sys.argv else []) + graphics_breaches
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     ver = re.search(r'^version = "([^"]+)"', open(os.path.join(ROOT, "springboard", "Cargo.toml")).read(), re.M).group(1)
     prev = hist[-1]["results"] if hist else {}
