@@ -32,6 +32,10 @@ impl<K: Eq + Hash + Clone, V> Cache<K, V> {
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
+    /// Whether a value is held. Unlike `get`, this does not mark the entry as recently used.
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.map.contains_key(key)
+    }
     pub fn total_cost(&self) -> usize {
         self.cost
     }
@@ -121,6 +125,16 @@ mod tests {
         assert_eq!((c.len(), c.total_cost(), c.get(&"a").copied()), (1, 3, Some(2)));
         c.put("big", 9, 11);
         assert!(c.get(&"big").is_none());
+    }
+    #[test]
+    fn contains_key_does_not_refresh_recency() {
+        let mut c = Cache::new(8);
+        c.put("a", 1, 4);
+        c.put("b", 2, 4);
+        assert!(c.contains_key(&"a"));
+        c.put("c", 3, 4); // "a" was not touched, so it is the oldest and goes
+        assert!(!c.contains_key(&"a"));
+        assert!(c.contains_key(&"b") && c.contains_key(&"c"));
     }
     #[test]
     fn slots_are_reused() {
