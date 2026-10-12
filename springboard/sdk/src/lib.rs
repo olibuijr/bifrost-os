@@ -127,6 +127,8 @@ pub mod error;
 pub mod coding;
 pub mod peer_session;
 pub mod peer_mesh;
+pub mod peer_identity;
+pub mod nearby_service;
 pub mod restoration;
 pub use restoration::RestorableState;
 pub mod attributed;
