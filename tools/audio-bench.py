@@ -2,6 +2,7 @@
 """Run the audio benches (bifrost-audio-bench) on the host or Midget, compare with history, check budgets.
 
 Usage: tools/audio-bench.py host|midget|compare [--append] [--quanta 16,32,64,128] [--bench NAME] [--aloop]
+On Midget the device benches run with --live: through the running bifrost-audiod (HAL client), driver "live:<uid>".
 Every bench prints one JSON object (docs/audio-latency.md). Budgets (a breach exits 3):
   midi-latency    p99 <= quantum + output latency + 0.5 ms
   audio-roundtrip measured p50 within 1 frame of reported_ms
@@ -16,6 +17,8 @@ QUANTA = [16, 32, 64, 128]
 REMOTE_BIN = "/usr/bin/bifrost-audio-bench"
 SLACK_MS = 0.5
 MAX_SWEEP_QUANTUM = 64
+# benches that have a --live mode (midi-throughput measures the scheduler only)
+LIVE_BENCHES = ("midi-latency", "audio-roundtrip", "xrun-sweep")
 
 
 def parse_result(text):
@@ -115,20 +118,27 @@ def find_local_bin():
     sys.exit("audio-bench: bifrost-audio-bench is not built (springboard/target/fast or release)")
 
 
-def run_one(argv, bench, driver, quantum, timeout=120):
+def bench_cmd(argv, bench, driver, quantum, live=False):
     cmd = argv + [bench, "--driver", driver, "--quantum", str(quantum), "--json"]
+    if live and bench in LIVE_BENCHES:
+        cmd.append("--live")
+    return cmd
+
+
+def run_one(argv, bench, driver, quantum, timeout=120, live=False):
+    cmd = bench_cmd(argv, bench, driver, quantum, live)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if p.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)}: exit {p.returncode}: {p.stderr.strip()[:300]}")
     return parse_result(p.stdout)
 
 
-def collect(argv, driver, benches, quanta):
+def collect(argv, driver, benches, quanta, live=False):
     out = []
     for b in benches:
         # the sweep chooses its own quanta; run it once
         for q in ([min(quanta)] if b == "xrun-sweep" else quanta):
-            out.append(run_one(argv, b, driver, q))
+            out.append(run_one(argv, b, driver, q, live=live))
     return out
 
 
@@ -145,7 +155,7 @@ def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
         argv, driver = ssh + [REMOTE_BIN], "alsa:" + card
     else:
         argv, driver = [find_local_bin()], "loopback"
-    results = collect(argv, driver, benches, quanta)
+    results = collect(argv, driver, benches, quanta, live=midget)
     return results, [x for r in results for x in budget_breaches(r, midget)]
 
 

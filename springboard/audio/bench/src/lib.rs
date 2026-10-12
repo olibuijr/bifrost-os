@@ -2,11 +2,13 @@
 //!
 //! Pure modules (`stats`, `onset`, `schedule`, `json`, `args`) are tested on known inputs; `instrument` is the
 //! virtual MIDI instrument; `rig` is the model of the server's IO cycle around a driver; the four benches
-//! (`midi_latency`, `roundtrip`, `sweep`, `throughput`) each return one `json::Report`.
+//! (`midi_latency`, `roundtrip`, `sweep`, `throughput`) each return one `json::Report`. `live` runs the device
+//! benches against the running `bifrost-audiod` through the HAL client (`--live`).
 
 pub mod args;
 pub mod instrument;
 pub mod json;
+pub mod live;
 pub mod midi_latency;
 pub mod onset;
 pub mod rig;
