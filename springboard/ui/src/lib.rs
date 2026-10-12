@@ -980,6 +980,8 @@ pub mod call_directory;
 pub mod conference;
 pub mod annotation;
 pub mod ecs;
+pub mod scene_loop;
+pub mod strategist;
 pub mod rules;
 pub mod decision;
 pub mod capture_access;
