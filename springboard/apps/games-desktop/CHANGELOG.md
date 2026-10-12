@@ -4,7 +4,11 @@
 
 - Games use the shared random source from the core crate for every shuffle and spawn. The numbers are the same as before, so a seeded deal and the 2048 tile placement do not change.
 - Each game's won or lost state is now a small state machine with explicit rules: a game in progress can be won or lost, a won game can still end, and a finished game only starts over with a new game. A stray end or move on a finished board is refused.
-- Gamepads are not used yet: the app does not receive controller input from the system.
+- Game controllers work with 2048: the direction pad or the left stick slides the tiles, and the South button starts a new game once the current one is over (a game in progress is never dropped by a press).
+- A controller plugged in or out shows a line in the message row ("Controller connected: <name>"); the line goes when you next touch the board.
+- Low Power Mode, or a device running hot, lowers the motion: the Minesweeper clock redraws every 5 seconds instead of every second. Best times are still exact.
+- The app knows the main display's visible size from the system, and reports it in its state dump. It does not change the layout yet.
+- Minesweeper and Solitaire have no controller cursor yet; a controller only starts a new game in them, once the game is over.
 
 ## 1.2.3
 
