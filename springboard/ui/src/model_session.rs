@@ -208,6 +208,11 @@ impl Session {
         self.history.push(Entry::Response(segments));
     }
 
+    /// Records an entry a turn produced itself, such as the tool calls the model made and their outputs.
+    pub fn record(&mut self, entry: Entry) {
+        self.history.push(entry);
+    }
+
     /// The instructions for the next request, evaluated now. Empty when every part left itself out.
     pub fn instructions(&self) -> String {
         let frame = Frame { turn: self.turn(), properties: &self.properties };
