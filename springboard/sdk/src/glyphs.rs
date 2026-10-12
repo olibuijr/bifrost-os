@@ -2,11 +2,69 @@
 //! to any size and need no symbol font (the device has none). Toolbars, source lists, search and path bars take a
 //! symbol name; `glyph` draws it.
 use crate::kit::ui::FIELD_BG;
-use crate::kit::{Surface, Ui};
+use crate::kit::Ui;
+use crate::widgets::blit;
+use bifrost_render::canvas::{Canvas, PathData, PathPaint, PathVerb, RectF};
 use bifrost_ui::symbol_effect::{Pose, SymbolEffect};
 use bifrost_ui::Rect;
-use springboard::shell::icons::{arc, disc, line, polygon, ring};
 use std::f32::consts::PI;
+
+// The line, disc, ring, arc and polygon primitives of the symbol set, on the `Canvas` vocabulary. Same geometry as the
+// shell's Surface helpers: a line is a stroke of width `w` with round ends, a ring is a stroke inside radius `r`, an arc
+// is a stroke of width `t` centred on radius `r` between `a0` and `a1` (clockwise from +x), a polygon fills even-odd.
+
+/// A straight stroke of width `w` between two points, round at both ends.
+pub fn line(c: &mut dyn Canvas, a: (f32, f32), b: (f32, f32), w: f32, color: u32) {
+    let path = PathData { verbs: vec![PathVerb::Move(a.0, a.1), PathVerb::Line(b.0, b.1)] };
+    c.path(&path, PathPaint::Stroke(w), color);
+}
+
+/// A filled disc of radius `r` centred on (`cx`, `cy`).
+pub fn disc(c: &mut dyn Canvas, cx: f32, cy: f32, r: f32, color: u32) {
+    c.fill_rrect(RectF::new(cx - r, cy - r, 2.0 * r, 2.0 * r), r, color);
+}
+
+/// A circle outline of radius `r`, `t` px thick (inside the radius).
+pub fn ring(c: &mut dyn Canvas, cx: f32, cy: f32, r: f32, t: f32, color: u32) {
+    c.stroke_rrect(RectF::new(cx - r, cy - r, 2.0 * r, 2.0 * r), r, t, color);
+}
+
+/// An arc of radius `r`, `t` px thick, between angles `a0..a1` (radians, clockwise from +x on screen). The arc is a
+/// polyline of 4 segments per 90 degrees, stroked with round ends.
+#[allow(clippy::too_many_arguments)]
+pub fn arc(c: &mut dyn Canvas, cx: f32, cy: f32, r: f32, t: f32, a0: f32, a1: f32, color: u32) {
+    c.path(&PathData { verbs: arc_verbs(cx, cy, r, a0, a1) }, PathPaint::Stroke(t), color);
+}
+
+/// The polyline of an arc: one move and at least one segment per 22.5 degrees (`PI / 8`), at least one segment.
+pub fn arc_verbs(cx: f32, cy: f32, r: f32, a0: f32, a1: f32) -> Vec<PathVerb> {
+    let steps = (((a1 - a0).abs() / (PI / 8.0)).ceil() as usize).max(1);
+    (0..=steps)
+        .map(|k| {
+            let a = a0 + (a1 - a0) * k as f32 / steps as f32;
+            let (x, y) = (cx + r * a.cos(), cy + r * a.sin());
+            if k == 0 { PathVerb::Move(x, y) } else { PathVerb::Line(x, y) }
+        })
+        .collect()
+}
+
+/// A filled polygon (even-odd), `pts` in order.
+pub fn polygon(c: &mut dyn Canvas, pts: &[(f32, f32)], color: u32) {
+    if pts.is_empty() {
+        return;
+    }
+    c.path(&PathData { verbs: polygon_verbs(pts) }, PathPaint::FillEvenOdd, color);
+}
+
+/// The closed outline of a polygon: a move to the first point, a line to each other point, and a close.
+pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
+    let mut verbs = Vec::with_capacity(pts.len() + 1);
+    for (k, &(x, y)) in pts.iter().enumerate() {
+        verbs.push(if k == 0 { PathVerb::Move(x, y) } else { PathVerb::Line(x, y) });
+    }
+    verbs.push(PathVerb::Close);
+    verbs
+}
 
 /// Every name `glyph` draws, for galleries and tests.
 pub const NAMES: [&str; 59] = [
@@ -44,13 +102,13 @@ pub fn posed_color(color: u32, opacity: f32) -> u32 {
 /// Draws symbol `name` with `effect` applied at `now` seconds (see `springboard::ui::symbol_effect`). Scale and offset
 /// move the bounds and opacity fades the colour. Rotation is not drawn yet: glyphs have no rotation transform, so a
 /// spinning or wiggling glyph draws upright. False when the name is unknown.
-pub fn glyph_effect(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32, effect: &SymbolEffect, now: f64) -> bool {
+pub fn glyph_effect(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32, effect: &SymbolEffect, now: f64) -> bool {
     let pose = effect.pose(now);
     glyph(s, ui, name, posed_bounds(bounds, pose), posed_color(color, pose.opacity))
 }
 
 /// Draws symbol `name` centred in `bounds` (points) in `color`; false when the name is unknown (nothing drawn).
-pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> bool {
+pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) -> bool {
     if !has(name) {
         return false;
     }
@@ -58,7 +116,7 @@ pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> 
     let (x0, y0) = (ui.pt(bounds.x) + (ui.pt(bounds.w) - side) / 2.0, ui.pt(bounds.y) + (ui.pt(bounds.h) - side) / 2.0);
     let t = (side * 0.085).max(1.2);
     let p = |u: f32, v: f32| (x0 + u * side, y0 + v * side);
-    let poly = |s: &mut Surface, pts: &[(f32, f32)], closed: bool| {
+    let poly = |s: &mut dyn Canvas, pts: &[(f32, f32)], closed: bool| {
         for w in pts.windows(2) {
             line(s, p(w[0].0, w[0].1), p(w[1].0, w[1].1), t, color);
         }
@@ -67,17 +125,17 @@ pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> 
             line(s, p(a.0, a.1), p(b.0, b.1), t, color);
         }
     };
-    let rbox = |s: &mut Surface, u: f32, v: f32, w: f32, h: f32, r: f32| {
-        s.stroke_rrect(x0 + u * side, y0 + v * side, w * side, h * side, r * side, t, color);
+    let rbox = |s: &mut dyn Canvas, u: f32, v: f32, w: f32, h: f32, r: f32| {
+        s.stroke_rrect(RectF::new(x0 + u * side, y0 + v * side, w * side, h * side), r * side, t, color);
     };
-    let dot = |s: &mut Surface, u: f32, v: f32, r: f32| disc(s, x0 + u * side, y0 + v * side, r * side, color);
-    let circle = |s: &mut Surface, u: f32, v: f32, r: f32| ring(s, x0 + u * side, y0 + v * side, r * side, t, color);
-    let fill = |s: &mut Surface, pts: &[(f32, f32)]| {
+    let dot = |s: &mut dyn Canvas, u: f32, v: f32, r: f32| disc(s, x0 + u * side, y0 + v * side, r * side, color);
+    let circle = |s: &mut dyn Canvas, u: f32, v: f32, r: f32| ring(s, x0 + u * side, y0 + v * side, r * side, t, color);
+    let fill = |s: &mut dyn Canvas, pts: &[(f32, f32)]| {
         let v: Vec<(f32, f32)> = pts.iter().map(|&(u, v)| p(u, v)).collect();
         polygon(s, &v, color);
     };
-    let bar = |s: &mut Surface, u: f32, v: f32, w: f32, h: f32| s.fill_rrect(x0 + u * side, y0 + v * side, w * side, h * side, w * side / 2.0, color);
-    let arcd = |s: &mut Surface, u: f32, v: f32, r: f32, a0: f32, a1: f32| arc(s, x0 + u * side, y0 + v * side, r * side, t, a0, a1, color);
+    let bar = |s: &mut dyn Canvas, u: f32, v: f32, w: f32, h: f32| s.fill_rrect(RectF::new(x0 + u * side, y0 + v * side, w * side, h * side), w * side / 2.0, color);
+    let arcd = |s: &mut dyn Canvas, u: f32, v: f32, r: f32, a0: f32, a1: f32| arc(s, x0 + u * side, y0 + v * side, r * side, t, a0, a1, color);
     // a five-point star around (0.5, 0.53)
     let star: Vec<(f32, f32)> = (0..10)
         .map(|k| {
@@ -86,10 +144,10 @@ pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> 
             (0.5 + r * a.cos(), 0.53 + r * a.sin())
         })
         .collect();
-    let numeral = |s: &mut Surface, text: &str| {
+    let numeral = |s: &mut dyn Canvas, text: &str| {
         let img = ui.text(text, (side * 0.3 / ui.pt(1.0)).max(5.0), crate::kit::Weight::Semibold, color);
         let (cx, cy) = p(0.5, 0.54);
-        s.blit(&img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2, 255, 255);
+        blit(s, &img, cx as i32 - img.w as i32 / 2, cy as i32 - img.h as i32 / 2);
     };
     let folder = [(0.08, 0.22), (0.38, 0.22), (0.46, 0.32), (0.92, 0.32), (0.92, 0.80), (0.08, 0.80)];
     match name {
@@ -406,6 +464,7 @@ pub fn glyph(s: &mut Surface, ui: &Ui, name: &str, bounds: Rect, color: u32) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kit::Surface;
 
     #[test]
     fn every_named_glyph_draws_ink_and_unknown_names_draw_nothing() {
@@ -461,3 +520,96 @@ mod tests {
         assert_eq!(posed_color(0xff00_0000, p.opacity), 0xff00_0000);
     }
 }
+
+#[cfg(test)]
+mod canvas_tests {
+    use super::*;
+    use crate::widgets::recorder::{Op, Rec};
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(crate::kit::Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn near(a: (f32, f32), b: (f32, f32)) -> bool {
+        (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3
+    }
+
+    #[test]
+    fn a_quarter_arc_is_four_segments_from_three_oclock_to_six_oclock() {
+        let v = arc_verbs(10.0, 20.0, 5.0, 0.0, PI / 2.0);
+        assert_eq!(v.len(), 5, "ceil((pi/2) / (pi/8)) = 4 segments, five points");
+        match (v[0], v[4]) {
+            (PathVerb::Move(x0, y0), PathVerb::Line(x1, y1)) => {
+                assert!(near((x0, y0), (15.0, 20.0)), "start at (cx + r, cy)");
+                assert!(near((x1, y1), (10.0, 25.0)), "end at (cx, cy + r)");
+            }
+            other => panic!("unexpected verbs {other:?}"),
+        }
+        assert!(v[1..].iter().all(|p| matches!(p, PathVerb::Line(..))));
+    }
+
+    #[test]
+    fn a_zero_span_arc_still_has_one_segment() {
+        let v = arc_verbs(0.0, 0.0, 4.0, 1.0, 1.0);
+        assert_eq!(v.len(), 2);
+        match (v[0], v[1]) {
+            (PathVerb::Move(x0, y0), PathVerb::Line(x1, y1)) => assert!(near((x0, y0), (x1, y1)), "no span, no length"),
+            other => panic!("unexpected verbs {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_triangle_outline_is_a_move_two_lines_and_a_close() {
+        let v = polygon_verbs(&[(0.0, 0.0), (4.0, 0.0), (0.0, 3.0)]);
+        assert_eq!(
+            v,
+            vec![PathVerb::Move(0.0, 0.0), PathVerb::Line(4.0, 0.0), PathVerb::Line(0.0, 3.0), PathVerb::Close]
+        );
+    }
+
+    #[test]
+    fn an_empty_polygon_draws_nothing() {
+        let mut r = Rec::default();
+        polygon(&mut r, &[], 0xffff_ffff);
+        assert!(r.ops.is_empty());
+    }
+
+    #[test]
+    fn a_line_is_a_round_stroke_of_its_width_between_its_ends() {
+        let mut r = Rec::default();
+        line(&mut r, (1.0, 2.0), (9.0, 2.0), 3.0, 0xff11_2233);
+        assert_eq!(
+            r.ops,
+            vec![Op::Path(vec![PathVerb::Move(1.0, 2.0), PathVerb::Line(9.0, 2.0)], PathPaint::Stroke(3.0), 0xff11_2233)]
+        );
+    }
+
+    #[test]
+    fn a_disc_is_a_fill_of_its_bounding_square_with_the_radius_as_corner() {
+        let mut r = Rec::default();
+        disc(&mut r, 10.0, 10.0, 4.0, 0xff00_00ff);
+        assert_eq!(r.ops, vec![Op::Fill(RectF::new(6.0, 6.0, 8.0, 8.0), 4.0, 0xff00_00ff)]);
+    }
+
+    #[test]
+    fn a_ring_is_a_stroke_inside_its_bounding_square() {
+        let mut r = Rec::default();
+        ring(&mut r, 10.0, 10.0, 5.0, 1.5, 0xffff_ffff);
+        assert_eq!(r.ops, vec![Op::Stroke(RectF::new(5.0, 5.0, 10.0, 10.0), 5.0, 1.5, 0xffff_ffff)]);
+    }
+
+    #[test]
+    fn a_chevron_draws_its_two_segments_and_an_unknown_name_draws_nothing() {
+        let u = ui();
+        let mut r = Rec::default();
+        assert!(glyph(&mut r, &u, "chevron.left", Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, 0xffff_ffff));
+        let strokes = r.ops.iter().filter(|o| matches!(o, Op::Path(_, PathPaint::Stroke(_), _))).count();
+        assert_eq!(strokes, 2, "an open three-point chevron is two segments");
+
+        let mut none = Rec::default();
+        assert!(!glyph(&mut none, &u, "no.such.symbol", Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, 0xffff_ffff));
+        assert!(none.ops.is_empty());
+    }
+}
+
