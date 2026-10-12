@@ -215,6 +215,138 @@ pub fn compass_visible(heading_deg: f64) -> bool {
     h > 0.5 && h < 359.5
 }
 
+/// The presentation a map view shows: a street map, a satellite image with road labels on top, or imagery alone.
+/// These are the three official map configurations (standard, hybrid and imagery).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapType {
+    Standard,
+    Hybrid,
+    Imagery,
+}
+
+/// Which gestures the user may use on a map view. The four flags mirror the official zoom, scroll, pitch and rotate
+/// switches. The official defaults are not stated in the reference, so every flag starts on here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MapInteraction {
+    pub zoom: bool,
+    pub scroll: bool,
+    pub pitch: bool,
+    pub rotate: bool,
+}
+
+impl Default for MapInteraction {
+    fn default() -> Self {
+        MapInteraction { zoom: true, scroll: true, pitch: true, rotate: true }
+    }
+}
+
+/// Largest pitch a map view accepts, in degrees. This module's own limit: a top-down view is 0 and a horizon view
+/// is 90.
+pub const MAX_PITCH_DEG: f64 = 90.0;
+
+/// A map view: the camera it looks through, the presentation, the gestures it accepts and its two optional buttons.
+/// It answers gestures with the new state and returns `false` when the gesture is switched off.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapView {
+    camera: MapCamera,
+    pitch_deg: f64,
+    pub map_type: MapType,
+    pub interaction: MapInteraction,
+    pub show_tracking_button: bool,
+    pub show_pitch_button: bool,
+}
+
+impl MapView {
+    /// A view with the standard map, every gesture on and both buttons hidden.
+    pub fn new(camera: MapCamera) -> Self {
+        MapView {
+            camera,
+            pitch_deg: 0.0,
+            map_type: MapType::Standard,
+            interaction: MapInteraction::default(),
+            show_tracking_button: false,
+            show_pitch_button: false,
+        }
+    }
+
+    pub fn camera(&self) -> &MapCamera {
+        &self.camera
+    }
+
+    /// Pitch in degrees, 0..=MAX_PITCH_DEG.
+    pub fn pitch_deg(&self) -> f64 {
+        self.pitch_deg
+    }
+
+    /// The region the view currently shows.
+    pub fn region(&self) -> CoordinateRegion {
+        CoordinateRegion::from_map_rect(self.camera.visible_rect())
+    }
+
+    /// Changes the visible region, as `setRegion(_:animated:)` does, by refitting the camera to it. Returns `false`
+    /// when the region cannot be fitted.
+    pub fn set_region(&mut self, region: CoordinateRegion) -> bool {
+        match MapCamera::fitting(region, self.camera.viewport_w, self.camera.viewport_h) {
+            Some(cam) => {
+                self.camera.center = cam.center;
+                self.camera.zoom = cam.zoom;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Centres the view on a coordinate and keeps the zoom.
+    pub fn set_center(&mut self, center: Coordinate) {
+        self.camera.center = center;
+    }
+
+    /// Sets the visible region so that every coordinate in `points` is inside it, with `padding` as the margin the
+    /// fitting leaves around them. Returns `false` when there are no points or the fit fails.
+    pub fn show_coordinates(&mut self, points: &[Coordinate], padding: f64) -> bool {
+        match CoordinateRegion::fitting(points, padding) {
+            Some(region) => self.set_region(region),
+            None => false,
+        }
+    }
+
+    /// Pinch gesture: adds `delta` zoom levels. Off when zoom is disabled.
+    pub fn pinch(&mut self, delta: f64) -> bool {
+        if !self.interaction.zoom {
+            return false;
+        }
+        self.camera.zoom_by(delta);
+        true
+    }
+
+    /// Drag gesture: pans by a pixel offset. Off when scrolling is disabled.
+    pub fn drag(&mut self, dx: f64, dy: f64) -> bool {
+        if !self.interaction.scroll {
+            return false;
+        }
+        self.camera.pan_pixels(dx, dy);
+        true
+    }
+
+    /// Two-finger twist: turns the map by `delta_deg` clockwise. Off when rotation is disabled.
+    pub fn rotate(&mut self, delta_deg: f64) -> bool {
+        if !self.interaction.rotate || !delta_deg.is_finite() {
+            return false;
+        }
+        self.camera.set_heading(self.camera.heading_deg + delta_deg);
+        true
+    }
+
+    /// Tilts the view by `delta_deg`, clamped to 0..=MAX_PITCH_DEG. Off when pitch is disabled.
+    pub fn tilt(&mut self, delta_deg: f64) -> bool {
+        if !self.interaction.pitch || !delta_deg.is_finite() {
+            return false;
+        }
+        self.pitch_deg = (self.pitch_deg + delta_deg).clamp(0.0, MAX_PITCH_DEG);
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +456,73 @@ mod tests {
         assert!(!compass_visible(359.8), "within half a degree of north");
         assert!(compass_visible(-90.0), "-90 is 270, which is turned");
         assert!(!compass_visible(f64::NAN));
+    }
+
+    fn view_at_zoom_zero() -> MapView {
+        MapView::new(MapCamera::new(c(0.0, 0.0), 0.0, 256.0, 256.0).expect("valid camera"))
+    }
+
+    #[test]
+    fn a_new_map_view_is_standard_with_every_gesture_on() {
+        let view = view_at_zoom_zero();
+        assert_eq!(view.map_type, MapType::Standard);
+        assert_eq!(view.interaction, MapInteraction { zoom: true, scroll: true, pitch: true, rotate: true });
+        assert!(!view.show_tracking_button && !view.show_pitch_button);
+        assert_eq!(view.pitch_deg(), 0.0);
+    }
+
+    #[test]
+    fn disabled_gestures_change_nothing() {
+        let mut view = view_at_zoom_zero();
+        view.interaction = MapInteraction { zoom: false, scroll: false, pitch: false, rotate: false };
+        assert!(!view.pinch(3.0));
+        assert!(!view.drag(50.0, 0.0));
+        assert!(!view.rotate(45.0));
+        assert!(!view.tilt(20.0));
+        assert_eq!(view.camera().zoom, 0.0);
+        assert_eq!(view.camera().center, c(0.0, 0.0));
+        assert_eq!(view.camera().heading_deg, 0.0);
+        assert_eq!(view.pitch_deg(), 0.0);
+    }
+
+    #[test]
+    fn a_drag_of_half_the_world_at_zoom_zero_crosses_the_antimeridian() {
+        // At zoom 0 one pixel is WORLD_POINTS / 256 points. The centre starts at x = WORLD / 2, and 128 pixels
+        // move it by WORLD / 2, to x = 0, which is longitude -180.
+        let mut view = view_at_zoom_zero();
+        assert!(view.drag(128.0, 0.0));
+        assert!((view.camera().center.longitude + 180.0).abs() < 1e-6, "longitude {}", view.camera().center.longitude);
+    }
+
+    #[test]
+    fn rotation_wraps_into_0_360_and_tilt_is_clamped() {
+        let mut view = view_at_zoom_zero();
+        assert!(view.rotate(-30.0));
+        assert!((view.camera().heading_deg - 330.0).abs() < 1e-9);
+        assert!(view.tilt(120.0));
+        assert_eq!(view.pitch_deg(), MAX_PITCH_DEG);
+        assert!(view.tilt(-200.0));
+        assert_eq!(view.pitch_deg(), 0.0);
+        assert!(!view.rotate(f64::NAN));
+    }
+
+    #[test]
+    fn pinch_zooms_by_levels_and_stops_at_the_limits() {
+        let mut view = view_at_zoom_zero();
+        assert!(view.pinch(2.5));
+        assert!((view.camera().zoom - 2.5).abs() < 1e-12);
+        assert!(view.pinch(100.0));
+        assert_eq!(view.camera().zoom, MAX_ZOOM);
+    }
+
+    #[test]
+    fn set_region_centres_the_view_and_region_reads_back_the_centre() {
+        let mut view = view_at_zoom_zero();
+        let region = CoordinateRegion::from_meters(c(64.0, -22.0), 20_000.0, 20_000.0);
+        assert!(view.set_region(region));
+        let back = view.region();
+        assert!((back.center.latitude - 64.0).abs() < 1e-6, "latitude {}", back.center.latitude);
+        assert!((back.center.longitude + 22.0).abs() < 1e-6, "longitude {}", back.center.longitude);
+        assert!(view.camera().zoom > 0.0, "a 20 km region zooms in from the world view");
     }
 }
