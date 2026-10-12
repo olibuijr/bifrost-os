@@ -3,6 +3,12 @@
 //! adaptive resampler that aggregates and drift compensation use). The `varispeed` API below is shared by tasks 11
 //! and 13, so it is fixed here.
 
+pub mod converter;
+pub mod file;
+pub mod queue;
+pub mod resample;
+pub mod system_sound;
+
 /// The adaptive resampler for drift compensation: cheap, low latency (a short polyphase or cubic kernel), its ratio
 /// changed every cycle from a device DLL's rate without clicks.
 pub mod varispeed {
