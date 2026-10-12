@@ -2600,6 +2600,8 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        // app requests for the Bluetooth radio (services/bluetooth_service.rs)
+        effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
         self.perf_only = perf_changed && !self.dirty;
         self.dirty |= perf_changed;
         effects
