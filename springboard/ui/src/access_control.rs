@@ -224,6 +224,53 @@ fn check_right_name(name: &str) -> Result<(), Error> {
     if ok { Ok(()) } else { Err(Error::BadName) }
 }
 
+/// An operation on an asymmetric key pair.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyOperation {
+    /// Creates a signature with the private key.
+    Sign,
+    /// Decrypts with the private key.
+    Decrypt,
+    /// Performs a key agreement with the private key.
+    Exchange,
+    /// Encrypts with the public key.
+    Encrypt,
+    /// Verifies a signature with the public key.
+    Verify,
+    /// Exports the bytes of the public key.
+    Export,
+}
+
+impl KeyOperation {
+    /// Whether the operation uses the private half, the only half that needs user presence.
+    pub fn uses_private_key(self) -> bool {
+        matches!(self, KeyOperation::Sign | KeyOperation::Decrypt | KeyOperation::Exchange)
+    }
+}
+
+/// The access rule of a key pair. The private half is gated by an [`AccessControl`]. The public half is not
+/// secret, so its operations need no presence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyPairPolicy {
+    private: AccessControl,
+}
+
+impl KeyPairPolicy {
+    /// Makes the policy for the private half from a valid expression.
+    pub fn new(expr: Expr) -> Result<KeyPairPolicy, Error> {
+        Ok(KeyPairPolicy { private: AccessControl::new(expr)? })
+    }
+
+    /// Whether the presence allows the operation.
+    pub fn allows(&self, op: KeyOperation, p: &Presence) -> bool {
+        if op.uses_private_key() {
+            self.private.allows(p)
+        } else {
+            true
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,5 +393,54 @@ mod tests {
         }
         assert_eq!(store.grant("r.extra", 0, None), Err(Error::TooManyRights));
         assert_eq!(store.grant("r.n0", 1, None), Ok(()), "renewing an existing right is not a new one");
+    }
+
+    #[test]
+    fn key_pair_private_operations_need_presence_public_ones_do_not() {
+        let policy = KeyPairPolicy::new(Expr::Constraint(Constraint::BiometryAny)).unwrap();
+        let none = Presence::default();
+        let face = Presence { biometry: true, ..Presence::default() };
+        assert!(!policy.allows(KeyOperation::Sign, &none));
+        assert!(!policy.allows(KeyOperation::Decrypt, &none));
+        assert!(!policy.allows(KeyOperation::Exchange, &none));
+        assert!(policy.allows(KeyOperation::Encrypt, &none));
+        assert!(policy.allows(KeyOperation::Verify, &none));
+        assert!(policy.allows(KeyOperation::Export, &none));
+        assert!(policy.allows(KeyOperation::Sign, &face));
+    }
+
+    #[test]
+    fn key_pair_current_set_locks_when_enrollment_changes() {
+        let policy = KeyPairPolicy::new(Expr::Constraint(Constraint::BiometryCurrentSet)).unwrap();
+        let changed = Presence { biometry: true, enrolled_set_unchanged: false, ..Presence::default() };
+        let same = Presence { biometry: true, enrolled_set_unchanged: true, ..Presence::default() };
+        assert!(!policy.allows(KeyOperation::Sign, &changed));
+        assert!(policy.allows(KeyOperation::Sign, &same));
+        assert!(policy.allows(KeyOperation::Verify, &changed), "the public half stays usable");
+    }
+
+    #[test]
+    fn key_pair_and_expression_needs_every_part() {
+        let expr = Expr::And(vec![Expr::Constraint(Constraint::DevicePasscode), Expr::Constraint(Constraint::Watch)]);
+        let policy = KeyPairPolicy::new(expr).unwrap();
+        let passcode_only = Presence { passcode: true, ..Presence::default() };
+        let both = Presence { passcode: true, watch: true, ..Presence::default() };
+        assert!(!policy.allows(KeyOperation::Decrypt, &passcode_only));
+        assert!(policy.allows(KeyOperation::Decrypt, &both));
+    }
+
+    #[test]
+    fn key_pair_rejects_an_empty_expression() {
+        assert_eq!(KeyPairPolicy::new(Expr::And(Vec::new())), Err(Error::EmptyConjunction));
+    }
+
+    #[test]
+    fn only_sign_decrypt_and_exchange_use_the_private_half() {
+        for op in [KeyOperation::Sign, KeyOperation::Decrypt, KeyOperation::Exchange] {
+            assert!(op.uses_private_key(), "{op:?}");
+        }
+        for op in [KeyOperation::Encrypt, KeyOperation::Verify, KeyOperation::Export] {
+            assert!(!op.uses_private_key(), "{op:?}");
+        }
     }
 }
