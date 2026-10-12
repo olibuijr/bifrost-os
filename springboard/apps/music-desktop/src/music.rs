@@ -14,6 +14,7 @@ pub mod chrome;
 pub mod engine;
 pub mod jobs;
 pub mod library;
+pub mod nowplay;
 pub mod playlists;
 pub mod upnext;
 
@@ -212,6 +213,8 @@ pub struct Music {
     cache: TextCache,
     labels: Option<Labels>,
     snap: Snapshot,
+    /// the app's Now Playing session, kept in step with `snap`
+    now_playing: Option<bifrost_app::now_playing::MediaSession>,
     /// the Now Playing sheet: shown, and its slide (from, to, start)
     np: bool,
     np_anim: Option<(f32, f32, f64)>,
@@ -278,6 +281,7 @@ impl Music {
         });
         let snap = player.snapshot();
         Ok(Music {
+            now_playing: nowplay::session(),
             w,
             h,
             pool,
@@ -488,6 +492,7 @@ impl Music {
         let sec = (snap.position_ms / 1000.0) as i64;
         let changed = snap.playing != self.snap.playing || snap.index != self.snap.index || snap.shuffle != self.snap.shuffle || snap.repeat != self.snap.repeat || sec != self.drawn_sec || snap.error != self.snap.error || snap.live != self.snap.live;
         self.snap = snap;
+        self.sync_now_playing();
         changed
     }
 
@@ -1021,6 +1026,30 @@ impl Music {
         let mut snap = self.player.snapshot();
         snap.shuffle = self.queue.shuffled();
         self.snap = snap;
+        self.sync_now_playing();
+    }
+
+    /// Keeps the app's Now Playing session in step with the engine's snapshot: the playing song or station as content.
+    fn sync_now_playing(&mut self) {
+        let content = self.snap.track.as_ref().and_then(|t| {
+            let (_, live, title, artist) = self.texts(t, self.snap.live.as_ref());
+            let album = if live { String::new() } else { self.library.songs.get(t.id as usize).map(|s| s.album.clone()).unwrap_or_default() };
+            nowplay::content(t, &title, &artist, &album, self.snap.duration_ms)
+        });
+        let snap = &self.snap;
+        if let Some(session) = self.now_playing.as_mut() {
+            nowplay::sync(session, snap, content);
+        }
+    }
+
+    /// Runs a system playback command (by its name: play, pause, toggle, next, previous) on the transport. False when
+    /// the command is unknown or the session does not allow it now.
+    pub fn remote_command(&mut self, name: &str) -> bool {
+        let Some(cmd) = nowplay::command_named(name) else { return false };
+        let playing = self.snap.playing;
+        let Some(target) = self.now_playing.as_ref().and_then(|s| nowplay::route(s, cmd, playing)) else { return false };
+        self.control(target);
+        true
     }
 
     /// Hands the queue to the engine in play order (shuffle is done here, so

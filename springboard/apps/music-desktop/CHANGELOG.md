@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- Now Playing: Music keeps a system Now Playing session in step with what is playing. The current song (title, artist,
+  album, length) or station (a live item) is the session's content, and the playback state and position follow the
+  audio service.
+- Transport commands are checked before they run: Play, Pause, Toggle, Next and Previous are offered only when they can
+  act now (Next only with a following song, or with Repeat All; Pause only while playing). Stop and skips are not offered.
+- A system playback command (play, pause, toggle, next, previous) runs the same transport as the buttons do.
+
 ## 1.2.3
 
 - The Songs search field is always open in the toolbar, as Music's is: a kit search field (a labelled text field
