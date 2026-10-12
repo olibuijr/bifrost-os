@@ -1,3 +1,10 @@
+## 1.20.0 — 2026-10-12
+
+- Copy, Move, Paste, Duplicate, Compress and Extract hold the destination folder for writing while they work. A file that another coordinating app has open for reading is no longer replaced under it: the operation waits up to five seconds, then reports "The item is in use by another app." and leaves that item alone.
+- Get Info shows the permissions of an item as `ls -l` shows them, with the octal value in brackets (for example `-rw-r--r-- (644)`, `drwxr-xr-x (755)`, `-rwsr-xr-x (4755)`).
+- Get Info shows the owner and group by name when the system knows them, with the numeric id in brackets; an id without an account shows the number alone.
+- Extended attributes are not listed yet: reading them needs a system call the app cannot make without extra code.
+
 ## 1.19.0 — 2026-10-12
 
 - Go > Connect to Server (Command-K) opens an address sheet. Type an ftp:// address (or a host name; ftp:// is added for you) and press Return. The server's folder appears in a sheet: Return opens a folder, Delete goes up one level, Escape disconnects. Anonymous login is used unless the address has a user name.

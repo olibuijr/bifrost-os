@@ -123,7 +123,12 @@ pub(crate) fn transfer_now(op: Op, sources: &[PathBuf], dest: &Path, cancel: &At
         }
         !cancel.load(Ordering::Relaxed)
     };
-    batch::transfer(op, sources, dest, &mut ask, &mut tick)
+    // the destination folder is held for writing for the whole batch, so a file open in another coordinating app
+    // is not replaced under it; a folder held by another app for longer than the timeout refuses the batch
+    match crate::coordinate::writing_in(dest, || batch::transfer(op, sources, dest, &mut ask, &mut tick)) {
+        Ok(report) => report,
+        Err(e) => crate::coordinate::refused(sources, &e),
+    }
 }
 
 /// Writes a .zip of `sources` into `dest` on this thread.
@@ -133,10 +138,13 @@ pub(crate) fn compress_now(sources: &[PathBuf], dest: &Path, cancel: &AtomicBool
         let _ = tx.send(Event::Progress(Progress { bytes_done: done, bytes_total: total, items_total: sources.len(), ..Default::default() }));
         !cancel.load(Ordering::Relaxed)
     };
-    match zip::create(sources, dest, &mut tick) {
-        Ok(out) => report.done.push(out),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
-        Err(e) => report.failed.push((sources.first().cloned().unwrap_or_default(), e.to_string())),
+    // the archive is written into the folder, which is held for writing while it is made
+    let made = crate::coordinate::writing_in(dest, || zip::create(sources, dest, &mut tick));
+    match made {
+        Ok(Ok(out)) => report.done.push(out),
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
+        Ok(Err(e)) => report.failed.push((sources.first().cloned().unwrap_or_default(), e.to_string())),
+        Err(e) => return crate::coordinate::refused(sources, &e),
     }
     report
 }
@@ -148,10 +156,12 @@ pub(crate) fn extract_now(archive: &Path, dest: &Path, cancel: &AtomicBool, tx: 
         let _ = tx.send(Event::Progress(Progress { bytes_done: done, bytes_total: total, items_total: 1, ..Default::default() }));
         !cancel.load(Ordering::Relaxed)
     };
-    match zip::extract(archive, dest, &mut tick) {
-        Ok(out) => report.done.push(out.dir),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
-        Err(e) => report.failed.push((archive.to_path_buf(), e.to_string())),
+    // the new folder is made in `dest`, so `dest` is held for writing while the archive unpacks
+    match crate::coordinate::writing_in(dest, || zip::extract(archive, dest, &mut tick)) {
+        Ok(Ok(out)) => report.done.push(out.dir),
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
+        Ok(Err(e)) => report.failed.push((archive.to_path_buf(), e.to_string())),
+        Err(e) => return crate::coordinate::refused(&[archive.to_path_buf()], &e),
     }
     report
 }
