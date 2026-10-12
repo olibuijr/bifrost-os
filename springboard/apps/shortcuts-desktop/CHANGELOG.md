@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.4.0 — 2026-10-12
 
 - The shortcut picker results are built from one typed list: each shortcut has its position as its id, its name, its colour and its step count, so searches from other apps read the same values as the window.

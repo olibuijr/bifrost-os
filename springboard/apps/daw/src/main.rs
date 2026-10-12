@@ -1116,7 +1116,7 @@ impl App for Daw {
             self.system.sync_session(ctx, transport, &title, position);
         }
         let ui: &Ui = &ctx.ui;
-        s.fill_rect(0, 0, s.w, s.h, ui::DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, ui::CONTENT_BG.now());
         match self.view {
             View::Songs => self.draw_songs(s, ui),
             View::Session => self.draw_session(s, ui),

@@ -7,7 +7,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_XL, SPACE_XS, SPACE_XXL, S
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::store::{self, Memo};
 use bifrost_app::audio::{self, Track};
-use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, DETAIL_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, SIDEBAR_BG};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{Layout, SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT};
 use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
@@ -1213,7 +1213,7 @@ impl VoiceMemos {
         if self.cache.len() > 256 {
             self.cache.clear();
         }
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         if self.editor.is_some() {
             self.draw_editor(s, ui, t);
             return;

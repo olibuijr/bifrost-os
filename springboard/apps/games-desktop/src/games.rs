@@ -14,7 +14,7 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_app::kit::ui::{
-    CARD_BG, CARD_RADIUS_PT, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE,
+    CARD_BG, CONTENT_BG, CARD_RADIUS_PT, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE,
     SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, WHITE,
 };
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
@@ -685,7 +685,7 @@ impl Games {
         self.place_sol(ui);
         let (bx, by, side) = self.board(ui);
         self.board_centre = (bx + side / 2.0, by + side / 2.0);
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         // Golden Gate full-size window: the sidebar runs to the top under the traffic lights (the shell draws them)
         let sb = self.sidebar_bounds(ui);
         widgets::source_list(s, ui, sb, &self.sidebar(), SIDEBAR_SCROLL, None);

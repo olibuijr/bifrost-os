@@ -13,7 +13,7 @@ use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::keychain::{self, Error as KeyError};
 use bifrost_app::controls::prefs_layout::m;
-use bifrost_app::kit::ui::{CARD_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, WHITE};
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::{clipboard, colors, Scroller, Surface, TextCache, Ui, Weight};
@@ -953,12 +953,12 @@ impl Assistant {
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui) {
         let g = self.geo(ui);
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         self.ensure_laid(ui, g.cont_w);
         self.draw_transcript(s, ui, &g);
         // composer area over the transcript's tail
         let det_x = g.side as usize;
-        s.fill_rect(det_x, g.bottom as usize, s.w.saturating_sub(det_x), s.h.saturating_sub(g.bottom as usize), DETAIL_BG.now());
+        s.fill_rect(det_x, g.bottom as usize, s.w.saturating_sub(det_x), s.h.saturating_sub(g.bottom as usize), CONTENT_BG.now());
         self.draw_composer(s, ui, &g);
         self.draw_chrome(s, ui, &g);
         if self.sheet.is_some() {

@@ -20,7 +20,7 @@ pub mod system;
 pub mod upnext;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
-use bifrost_app::kit::ui::{CARD_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, ROW_PRESSED, SEPARATOR_C};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, ROW_PRESSED, SEPARATOR_C};
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::ui::{MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
@@ -1521,7 +1521,7 @@ impl Music {
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
         self.drawn_sec = (self.snap.position_ms / 1000.0) as i64;
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         let p = self.sheet_progress(t);
         if p < 1.0 {
             self.draw_library(s, ui);
@@ -1595,8 +1595,8 @@ impl Music {
                 }
             }
         }
-        s.fill_rect(0, 0, self.w as usize, top as usize, DETAIL_BG.now());
-        s.fill_rect(0, bottom as usize, self.w as usize, (self.h as f32 - bottom).max(0.0) as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, top as usize, CONTENT_BG.now());
+        s.fill_rect(0, bottom as usize, self.w as usize, (self.h as f32 - bottom).max(0.0) as usize, CONTENT_BG.now());
         if self.menu.is_some() {
             self.draw_menu(s, ui, pressed);
         }

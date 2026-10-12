@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.5.0
 
 - While feeds load, the list says how many are done, for example "Updating feeds, 1 of 3", instead of only

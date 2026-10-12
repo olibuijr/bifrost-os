@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1 — 2026-10-12
+
+- Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
+
 ## 1.3.0
 
 - The forecast has a Temperature chart: the hours as a line, with labelled temperatures on the side and the times

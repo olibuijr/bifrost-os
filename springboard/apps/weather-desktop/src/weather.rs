@@ -18,7 +18,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPAC
 use bifrost_app::kit::ui::{DISPLAY_LARGE_PT};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE3_PT};
 use springboard::layout::in_rect as within;
-use bifrost_app::kit::ui::{home_zone, CARD_BG, DETAIL_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{pack, Event, Image, Surface, TextCache, Ui, Weight};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::keyboard::Out;
@@ -1347,7 +1347,7 @@ impl Weather {
                 }
             }
         }
-        s.fill_rect(0, 0, self.w as usize, top, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, top, CONTENT_BG.now());
         for (u, label) in [(Units::Celsius, "\u{b0}C"), (Units::Fahrenheit, "\u{b0}F")] {
             let r = self.units_rect(ui, u);
             let on = self.units == u;
@@ -1391,14 +1391,14 @@ impl Weather {
                 self.put(&mut c, ui, &e, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Centre, self.w as f32 / 2.0, y);
             }
         }
-        s.fill_rect(0, 0, self.w as usize, top, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, top, CONTENT_BG.now());
         self.draw_field(s, ui, t);
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.relayout(ui);
         self.dirty = false;
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         if self.side > 0.0 {
             self.draw_sidebar(s, ui);
         }
