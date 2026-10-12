@@ -954,6 +954,8 @@ pub mod rules;
 pub mod decision;
 pub mod capture_access;
 pub mod audio_settings;
+pub mod echo_cancel;
+pub mod pcm_convert;
 pub mod capture_content;
 pub mod capture_filter;
 pub mod capture_config;
