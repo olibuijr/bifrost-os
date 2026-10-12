@@ -90,10 +90,6 @@ impl Reminders {
             either(segment(a, b, 2.5), segment(b, c, 2.5)),
         );
     }
-    fn badge(&mut self, s: &mut Surface, ui: &Ui, (cx, cy): (f32, f32), r: f32, color: u32, glyph: &str) {
-        paint(s, (cx - r - 1.0, cy - r - 1.0, 2.0 * r + 2.0, 2.0 * r + 2.0), color, disc((cx, cy), r));
-        self.center(s, ui, glyph, MAC_BODY_PT, Weight::Bold, WHITE, cx, cy);
-    }
     fn toggle(&mut self, s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, f32), on: bool) {
         let (tw, th) = (ui.pt(51.0), ui.pt(31.0));
         let (tx, ty) = (x + w - tw - ui.pt(SPACE_L), y + (h - th) / 2.0);

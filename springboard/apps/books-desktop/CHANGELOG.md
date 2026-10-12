@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1
+
+- Removed the unused constructor, the default folder helper, the unused forget and needs_frame helpers; the host passes its library folders.
+
 ## 1.6.0
 
 - View menu: Single Page shows one page of a book at a time, as before. Two Pages shows a spread: two pages side by

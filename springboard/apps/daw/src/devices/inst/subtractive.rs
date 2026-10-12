@@ -296,7 +296,7 @@ impl Sub {
     fn build_oscs(&mut self, pitch: f64, vel: f32) -> Vec<Oscillator> {
         let base = mtof(pitch + 12.0 * self.p.get("octave")) as f32;
         let mut out = vec![];
-        let mut rnd = |rng: &mut Rng| rng.bipolar();
+        let rnd = |rng: &mut Rng| rng.bipolar();
         match self.kind.as_str() {
             "synth" => {
                 let n = (self.p.get("voices").round() as usize).clamp(1, 7);

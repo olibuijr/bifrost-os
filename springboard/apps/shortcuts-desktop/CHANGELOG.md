@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1 — 2026-10-12
+
+- Removed the unused procedural icon and the unused state dump; the app uses its icon.png.
+
 ## 1.6.0 — 2026-10-12
 
 - "Plan Shortcut" shows its result in a panel at the bottom of the window instead of a one-line message: the shortcut's name, how many steps it has, and each step on its own numbered row. Long plans show the first eight rows and then "and N more".

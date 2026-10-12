@@ -7,7 +7,7 @@
 
 use crate::assets;
 use crate::devices::{p, Ctx, Curve, Instrument, Params, P};
-use crate::dsp::{mtof, Adsr, Biquad, Delay, FilterKind, Rng, Wave};
+use crate::dsp::{mtof, Biquad, Delay, FilterKind, Rng};
 use crate::model::Instrument as Model;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -141,7 +141,6 @@ struct PluckVoice {
     decay_coeff: f32,
     released: bool,
     done: bool,
-    rng: Rng,
 }
 
 struct Pluck {
@@ -180,7 +179,6 @@ impl Instrument for Pluck {
             decay_coeff: (-1.0 / (decay * self.sr / 5.0)).exp(),
             released: false,
             done: false,
-            rng,
         });
         if self.voices.len() > 32 {
             self.voices.remove(0);
@@ -936,7 +934,6 @@ impl Instrument for DrumRack {
 
 struct Sampler {
     p: Params,
-    sr: f32,
     audio: Option<Arc<assets::Audio>>,
     voices: Vec<PadVoice>,
 }
@@ -949,7 +946,7 @@ impl Sampler {
             _ => None,
         };
         let audio = name.and_then(|n| assets::cached(&samples_dir(ctx).join(n), sr));
-        Sampler { p, sr, audio, voices: vec![] }
+        Sampler { p, audio, voices: vec![] }
     }
 }
 

@@ -1,3 +1,7 @@
+## 1.21.1 — 2026-10-12
+
+- Removed the unused icon grid constants; the cell size comes from the icon size.
+
 ## 1.21.0 — 2026-10-12
 
 - Picture thumbnails in the icon view are made through the system's image source: the size of a picture is read from its header first, and a picture too large to decode is refused before its pixels are loaded.

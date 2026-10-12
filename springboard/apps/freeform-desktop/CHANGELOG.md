@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1
+
+- Removed the unused procedural icon module; the app uses its icon.png.
+
 ## 1.6.0
 
 - New Pencil tool in the toolbar, beside Pen: a thinner line with pencil ink, half the pen's width. It is in the same segmented group as Pen, Marker and Eraser.

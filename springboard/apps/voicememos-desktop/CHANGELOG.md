@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1 — 2026-10-12
+
+- The wall clock is re-read on every tick, so day titles and timestamps follow midnight and time-zone changes. Removed the unused sidebar parameter and imports.
+
 ## 1.6.0 — 2026-10-12
 
 - Split at Playhead: the Recording menu has a new item that cuts the take that is playing into two recordings,

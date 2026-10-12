@@ -61,12 +61,6 @@ pub fn new(kind: &str, params: &Params, ctx: &Ctx) -> Box<dyn Effect> {
 
 // ---------- helpers ----------
 
-/// Tanh-based saturation over [-1, 1] (a WaveShaper curve in the web app).
-#[inline]
-fn tanh_shape(x: f32, drive: f32) -> f32 {
-    (drive * x).tanh() / drive.tanh()
-}
-
 // ---------- Filter ----------
 
 const FILTER: &[P] = &[p("type", 0.0, 2.0, 0.0, INT, ""), p("freq", 40.0, 18000.0, 18000.0, LOG, "Hz"), p("q", 0.0, 20.0, 1.0, LIN, "")];
@@ -443,7 +437,6 @@ const TREMOLO: &[P] = &[
 
 struct Tremolo {
     p: Params,
-    sr: f32,
     bpm: f64,
     lfo: Osc,
     shape: Wave,
@@ -451,7 +444,7 @@ struct Tremolo {
 
 impl Tremolo {
     fn new(p: Params, sr: f32) -> Self {
-        Tremolo { p, sr, bpm: 120.0, lfo: Osc::new(sr, 1.0), shape: Wave::Sine }
+        Tremolo { p, bpm: 120.0, lfo: Osc::new(sr, 1.0), shape: Wave::Sine }
     }
     fn retune(&mut self) {
         let hz = 1.0 / (self.p.get("rate") * 60.0 / self.bpm / 4.0);

@@ -402,7 +402,6 @@ impl Instrument for Zones {
             atk_frames: ((attack * sr) as f32).max(1.0),
             peak,
             env: 0.0,
-            choke: zone0.choke.clone(),
             filter,
             pan: (pl * std::f32::consts::SQRT_2, pr * std::f32::consts::SQRT_2),
             done: false,

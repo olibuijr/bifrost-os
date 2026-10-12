@@ -4,7 +4,7 @@
 //! speaker until the user taps Record or Play, and both stop when the app is left.
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS};
-use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
+use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::store::{self, Memo};
 use bifrost_app::audio::{self, Track};
 use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, SIDEBAR_BG};
@@ -886,7 +886,7 @@ impl VoiceMemos {
     }
 
     /// The recordings as a Golden Gate source list: title and date, the duration (or position while playing) trailing.
-    fn sidebar(&self, ui: &Ui) -> SourceList {
+    fn sidebar(&self) -> SourceList {
         let items = self.memos.iter().enumerate().map(|(i, memo)| {
             let day = library::day_title(&library::civil(memo.mtime, self.wall.offset));
             let shown = if self.playing.as_deref() == Some(memo.path.as_path()) {
@@ -1110,7 +1110,7 @@ impl VoiceMemos {
         }
         if x < self.side_w(ui) && y >= ui.pt(LIST_TOP) && y < self.list_bottom(ui) {
             let p = ui.pt(1.0);
-            if let Some(id) = self.sidebar(ui).hit(self.column(ui), self.scroll.offset() / p, x / p, y / p) {
+            if let Some(id) = self.sidebar().hit(self.column(ui), self.scroll.offset() / p, x / p, y / p) {
                 return Some(Target::Row(id as usize));
             }
             return Some(Target::List);
@@ -1510,7 +1510,7 @@ impl VoiceMemos {
         // band (beside the traffic lights) and the home zone below. Rows scrolled under the title repaint it.
         s.fill_rect(0, 0, side as usize, self.h as usize, SIDEBAR_BG.now());
         let pressed = match self.pressed { Some(Target::Row(i)) => Some(i as u32), _ => None };
-        widgets::source_list(s, ui, self.column(ui), &self.sidebar(ui), self.scroll.offset() / ui.pt(1.0), pressed);
+        widgets::source_list(s, ui, self.column(ui), &self.sidebar(), self.scroll.offset() / ui.pt(1.0), pressed);
         let list_top = ui.pt(LIST_TOP);
         s.fill_rect(0, 0, side as usize, list_top as usize - 1, SIDEBAR_BG.now());
         s.fill_rect(0, bottom as usize, side as usize, (self.h as f32 - bottom) as usize, SIDEBAR_BG.now());
@@ -1655,7 +1655,7 @@ mod tests {
         store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
         app.reload();
         assert_eq!(app.memos.len(), 1);
-        let r = app.sidebar(&ui).item_rect(0, app.column(&ui), 0.0);
+        let r = app.sidebar().item_rect(0, app.column(&ui), 0.0);
         let (x, y) = (ui.pt(r.x + 10.0), ui.pt(r.y + 10.0));
         app.touch(&ui, Event::Down(x, y), 0.0);
         app.touch(&ui, Event::Up(x, y), 10.0);

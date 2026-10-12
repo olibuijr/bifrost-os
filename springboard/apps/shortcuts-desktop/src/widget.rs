@@ -724,10 +724,6 @@ impl Shortcuts {
         }
     }
 
-    pub fn describe(&self) -> String {
-        format!("shortcuts={} shortcuts_view={:?}", self.list.len(), self.view)
-    }
-
     fn put(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, x: f32, y: f32, h: f32, align: i8) {
         let img = self.cache.get(ui, text, pt, weight, color);
         let ix = match align {

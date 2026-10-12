@@ -521,14 +521,12 @@ impl Weather {
         widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(), pressed);
     }
 
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
-    }
-
     pub fn keyboard_shown(&self) -> bool {
         self.kb_on
     }
 
+    /// The state dump the tests check (`weather_*` keys); `tick` already reports when a frame is needed.
+    #[cfg(test)]
     pub fn describe(&self) -> String {
         format!(
             "weather_screen={:?}\nweather_place={}\nweather_units={}\nweather_places={}\nweather_loaded={}\nweather_watch={}\nweather_quotes={}\nweather_error={}\n",

@@ -580,10 +580,6 @@ impl Games {
         (cx + (cw - side) / 2.0, cy + ui.pt(BOARD_TOP_PT), side)
     }
 
-    fn inside(r: (f32, f32, f32, f32), x: f32, y: f32) -> bool {
-        x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3
-    }
-
     fn mine_at(&self, ui: &Ui, x: f32, y: f32) -> Option<usize> {
         let (bx, by, side) = self.board(ui);
         if x < bx || y < by || x >= bx + side || y >= by + side {
@@ -944,10 +940,6 @@ pub(crate) fn test_ui() -> Ui {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn centre(r: (f32, f32, f32, f32)) -> (f32, f32) {
-        (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
-    }
 
     /// Centre of toolbar button `id` in window pixels.
     fn bar_centre(g: &Games, ui: &Ui, id: u32) -> (f32, f32) {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0 — 2026-10-12
+
+- The remote state dump is now served as the notes.state control method, so an agent can read the open screen and state without the screen.
+
 ## 1.13.0 — 2026-10-12
 
 - Replace (Replace in Note in the More menu of an open note) changes the text you searched for. Type the replacement in the card at the top of the note: Replace changes the selected match and moves on to the next one, Replace All changes every match in one step (one Undo takes it back). Enter does Replace All, Escape closes the card. The card needs find text first: type it in the search field, then choose Replace.

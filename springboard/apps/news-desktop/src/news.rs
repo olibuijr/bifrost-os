@@ -225,30 +225,9 @@ impl News {
         }
     }
 
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
-    }
-
-    pub fn describe(&self) -> String {
-        format!(
-            "news_screen={}\nnews_tab={}\nnews_items={}\nnews_pending={}\nnews_error={}\nnews_online={}\n",
-            if self.open.is_some() { "article" } else { "list" },
-            self.tab,
-            self.list.len(),
-            self.pending.len(),
-            self.error.as_deref().unwrap_or(""),
-            self.online
-        )
-    }
-
     /// The cached feeds, one list per feed, in feed order.
     pub fn items(&self) -> &[Vec<Item>] {
         &self.items
-    }
-
-    /// Whether the shell reports a usable network path.
-    pub fn online(&self) -> bool {
-        self.online
     }
 
     /// Records the shell's network path. Going online refetches every feed at once; going offline stops fetches

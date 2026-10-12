@@ -308,13 +308,7 @@ pub struct Books {
 }
 
 impl Books {
-    /// Opens the app with its state in `dir`; scans the standard folders
-    /// (and `dir` itself) for books in the background.
-    pub fn new(ui: &Ui, w: i32, h: i32, dir: PathBuf) -> Self {
-        Self::with_library_dirs(ui, w, h, dir, store::dirs())
-    }
-
-    /// Hosts may supply their platform's document folders while keeping state private.
+    /// Hosts may supply their platform's document folders while keeping state private. their platform's document folders while keeping state private.
     pub fn with_library_dirs(ui: &Ui, w: i32, h: i32, dir: PathBuf, additional: Vec<PathBuf>) -> Self {
         let store = Store::load(dir.join("state.tsv"));
         let mut dirs: Vec<PathBuf> = vec![dir.clone()];
@@ -395,10 +389,6 @@ impl Books {
 
     pub(super) fn screen_is_reader(&self) -> bool {
         self.screen == Screen::Reader
-    }
-
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
     }
 
     /// True while the reader hides the status bar and home indicator.

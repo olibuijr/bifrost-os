@@ -164,8 +164,7 @@ struct Geo {
     done: Rect,
     foot1_y: f32,
     foot2_y: f32,
-    /// Panel content height in pt and the largest scroll.
-    full_h: f32,
+    /// The largest scroll of the panel content, in pt.
     max_scroll: f32,
 }
 
@@ -217,7 +216,7 @@ impl Sheet {
         let clear_data = row(&group2, 1.0);
         let foot2_y = group2.y + group2.h + 3.0;
         let done = Rect { x: panel.x + panel.w - PAD - 56.0, y: title_y - 3.0, w: 56.0, h: TITLE_H + 6.0 };
-        Geo { panel, title_y, group1, group2, home, segs, restore_row, toggle, import_row, clear_history, clear_data, done, foot1_y, foot2_y, full_h, max_scroll }
+        Geo { panel, title_y, group1, group2, home, segs, restore_row, toggle, import_row, clear_history, clear_data, done, foot1_y, foot2_y, max_scroll }
     }
 
     fn ask(&mut self, ui: &Ui, action: Action, title: &str, message: &str, confirm: &str) {

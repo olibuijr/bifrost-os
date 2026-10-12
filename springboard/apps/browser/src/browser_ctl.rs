@@ -34,10 +34,6 @@ impl CtlState {
     pub fn take_relayout(&mut self) -> bool {
         std::mem::take(&mut self.relayout)
     }
-
-    pub fn is_idle(&self) -> bool {
-        self.pend.is_empty()
-    }
 }
 
 struct Pend {

@@ -3,7 +3,6 @@
 //! sent over the app protocol yet and are only logged.
 
 mod automation;
-mod icon;
 mod model;
 mod services;
 mod widget;

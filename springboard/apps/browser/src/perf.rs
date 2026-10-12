@@ -1,6 +1,5 @@
 //! Performance hooks the app loop and the devtools features call (main.rs gets one-line call sites only).
 use crate::store::Store;
-use std::time::Instant;
 
 /// Call once per loop turn / timer: flushes debounced history writes. Cheap when nothing is pending.
 pub fn tick(store: &mut Store) {
@@ -10,11 +9,6 @@ pub fn tick(store: &mut Store) {
 /// Call on quit paths that skip destructors (`process::exit`).
 pub fn on_exit(store: &mut Store) {
     store.flush();
-}
-
-/// Milliseconds since `start`; log it at the first drawn frame for `bench_browser_startup`.
-pub fn first_frame_ms(start: Instant) -> u128 {
-    start.elapsed().as_millis()
 }
 
 /// Proportional set size in KiB of process `pid` (`/proc/PID/smaps_rollup`), for app, engine and content processes.
