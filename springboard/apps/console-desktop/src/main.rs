@@ -19,7 +19,7 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_app::power_service;
 use bifrost_core::json::Json;
-use console::{Console, View, MENU_AFTER, MENU_CLEAR, MENU_COPY, MENU_DEBUG, MENU_FIND, MENU_INFO, MENU_STREAM, MENU_SUBSYSTEM};
+use console::{Console, View, MENU_AFTER, MENU_CLEAR, MENU_COPY, MENU_DEBUG, MENU_DELETE_SEARCH, MENU_FIND, MENU_INFO, MENU_SAVE_SEARCH, MENU_STREAM, MENU_SUBSYSTEM};
 use services::PowerNote;
 
 struct ConsoleApp {
@@ -142,6 +142,8 @@ impl App for ConsoleApp {
                 AppMenuItem::new(MENU_DEBUG, "Include Debug Messages").checked(c.levels.debug),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_FIND, "Find Message").key("cmd+f"),
+                AppMenuItem::new(MENU_SAVE_SEARCH, "Save Search").enabled(c.can_save_search()),
+                AppMenuItem::new(MENU_DELETE_SEARCH, "Delete Saved Search").enabled(c.can_delete_search()),
                 AppMenuItem::new(MENU_CLEAR, "Clear Display").key("cmd+k"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_AFTER, if c.after.is_some() { "Show All Messages" } else { "Show Messages After Selected" })

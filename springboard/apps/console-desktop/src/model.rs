@@ -161,13 +161,16 @@ pub fn parse_coredump_list(text: &str) -> Option<Vec<LogEntry>> {
     )
 }
 
-/// A parsed search: `process:`, `subsystem:` and `category:` take substrings (each one must match), `type:` a level,
-/// and anything else is free text that must appear in the message, process, subsystem or category.
+/// A parsed search: `process:`, `subsystem:`, `category:` and `message:` take substrings (each one must match),
+/// `type:` or `level:` a level, and anything else is free text that must appear in the message, process, subsystem
+/// or category.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Query {
     pub process: Vec<String>,
     pub subsystem: Vec<String>,
     pub category: Vec<String>,
+    /// `message:` tokens: each must appear in the message text only (the predicate's `message CONTAINS`).
+    pub message: Vec<String>,
     pub level: Option<Level>,
     pub text: Vec<String>,
 }
@@ -226,7 +229,11 @@ impl Query {
                             q.category.push(value);
                             continue;
                         }
-                        "type" => {
+                        "message" => {
+                            q.message.push(value);
+                            continue;
+                        }
+                        "type" | "level" => {
                             if let Some(level) = Level::parse_word(&value) {
                                 q.level = Some(level);
                                 continue;
@@ -244,7 +251,12 @@ impl Query {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.process.is_empty() && self.subsystem.is_empty() && self.category.is_empty() && self.level.is_none() && self.text.is_empty()
+        self.process.is_empty()
+            && self.subsystem.is_empty()
+            && self.category.is_empty()
+            && self.message.is_empty()
+            && self.level.is_none()
+            && self.text.is_empty()
     }
 
     pub fn matches(&self, e: &LogEntry) -> bool {
@@ -254,8 +266,33 @@ impl Query {
         self.process.iter().all(|n| has(&e.process, n))
             && self.subsystem.iter().all(|n| has(&e.subsystem, n))
             && self.category.iter().all(|n| has(&e.category, n))
+            && self.message.iter().all(|n| has(&e.message, n))
             && self.text.iter().all(|n| has(&e.message, n) || has(&e.process, n) || has(&e.subsystem, n) || has(&e.category, n))
     }
+}
+
+/// A search the user kept in the sidebar. Its text is parsed with `Query::parse` when the row is chosen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SavedSearch {
+    pub text: String,
+}
+
+/// Keeps `text` as a saved search, unless it is blank or already saved. Returns true when the list changed.
+pub fn save_search(saved: &mut Vec<SavedSearch>, text: &str) -> bool {
+    let text = text.trim();
+    if text.is_empty() || saved.iter().any(|s| s.text == text) {
+        return false;
+    }
+    saved.push(SavedSearch { text: text.to_string() });
+    true
+}
+
+/// Removes the saved search with exactly this text. Returns true when one was removed.
+pub fn remove_search(saved: &mut Vec<SavedSearch>, text: &str) -> bool {
+    let text = text.trim();
+    let before = saved.len();
+    saved.retain(|s| s.text != text);
+    saved.len() != before
 }
 
 /// The toolbar toggles. Default, Error and Fault always show; Info and Debug only when their toggle is on.
@@ -417,6 +454,35 @@ mod tests {
         assert!(!Query::parse("type:info").matches(&e));
         assert!(!Query::parse("process:calendar").matches(&e));
         assert!(!Query::parse("timeout process:calendar").matches(&e), "every token must match");
+    }
+
+    #[test]
+    fn level_and_message_tokens_filter_like_type_and_the_message_predicate() {
+        let e = entry("bifrost-notes", "is.olibuijr.notes", "sync", Level::Error, "sync failed: timeout");
+        assert_eq!(Query::parse("level:error").level, Some(Level::Error));
+        assert!(Query::parse("level:error").matches(&e));
+        assert!(!Query::parse("level:info").matches(&e));
+        assert_eq!(Query::parse("message:timeout").message, vec!["timeout".to_string()]);
+        assert!(Query::parse("message:timeout").matches(&e));
+        assert!(Query::parse("message:failed process:notes").matches(&e));
+        assert!(!Query::parse("message:notes").matches(&e), "message: looks only at the message text");
+        assert!(!Query::parse("message:bogus").matches(&e));
+        assert!(!Query::parse("message:timeout").is_empty());
+        // a bare `message:` has no value, so it is free text, as before
+        assert_eq!(Query::parse("message:").text, vec!["message:".to_string()]);
+    }
+
+    #[test]
+    fn saved_searches_keep_trimmed_unique_text_and_can_be_removed() {
+        let mut saved = Vec::new();
+        assert!(save_search(&mut saved, "  type:error "));
+        assert_eq!(saved, vec![SavedSearch { text: "type:error".into() }]);
+        assert!(!save_search(&mut saved, "type:error"), "a second copy is not added");
+        assert!(!save_search(&mut saved, "   "), "a blank search is not saved");
+        assert_eq!(saved.len(), 1);
+        assert!(remove_search(&mut saved, "type:error"));
+        assert!(saved.is_empty());
+        assert!(!remove_search(&mut saved, "type:error"));
     }
 
     #[test]

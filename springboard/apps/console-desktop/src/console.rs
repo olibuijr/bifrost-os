@@ -2,7 +2,7 @@
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
 use crate::cursor;
-use crate::model::{Buffer, Levels, LogEntry, Query, MAX_ENTRIES};
+use crate::model::{self, Buffer, Levels, LogEntry, Query, SavedSearch, MAX_ENTRIES};
 use crate::signposts;
 use crate::security::{self, Security};
 use crate::source::{Coredumps, Follow, Journal, LogFile, Sink, Source};
@@ -42,12 +42,13 @@ const LOAD: usize = 500;
 /// Messages waiting for the window while the reader runs ahead of it (the rest are dropped).
 const PENDING_MAX: usize = 20_000;
 
-// Sidebar row ids: This Mac, Crash Reports, then log file `i` as `FILE_ROW + i`.
+// Sidebar row ids: This Mac, Crash Reports, then log file `i` as `FILE_ROW + i`, saved search `i` as `SAVED_ROW + i`.
 const ROW_LIVE: u32 = 1;
 const ROW_CRASH: u32 = 2;
 const ROW_SIGNPOST: u32 = 3;
 const ROW_SECURITY: u32 = 4;
 const FILE_ROW: u32 = 100;
+const SAVED_ROW: u32 = 200;
 
 // Toolbar item ids (also the published control ids).
 pub const B_STREAM: u32 = 1;
@@ -109,6 +110,8 @@ pub struct Console {
     /// Sequence numbers of the shown entries, oldest first.
     pub visible: Vec<u64>,
     pub query: Query,
+    /// Searches kept in the sidebar, in the order they were saved. Choosing one shows the live journal with its text.
+    pub saved: Vec<SavedSearch>,
     pub search: TextField,
     pub search_focused: bool,
     pub levels: Levels,
@@ -147,6 +150,7 @@ impl Console {
             buffer: Buffer::new(MAX_ENTRIES),
             visible: Vec::new(),
             query: Query::default(),
+            saved: Vec::new(),
             search: TextField::new(),
             search_focused: false,
             levels: Levels { info: false, debug: false },
@@ -340,6 +344,13 @@ impl Console {
         items.push(SidebarItem::row(ROW_CRASH, "Crash Reports").with_symbol("xmark.circle.fill"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
         items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
+        // the section appears once a search is saved, so the default sidebar is unchanged
+        if !self.saved.is_empty() {
+            items.push(SidebarItem::header("Saved Searches"));
+            for (i, s) in self.saved.iter().enumerate() {
+                items.push(SidebarItem::row(SAVED_ROW + i as u32, &s.text).with_symbol("magnifyingglass"));
+            }
+        }
         items.push(SidebarItem::header("Log Files"));
         for (i, f) in self.files.iter().enumerate() {
             let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -365,6 +376,10 @@ impl Console {
     }
 
     fn select_row(&mut self, id: u32) {
+        if id >= SAVED_ROW {
+            self.open_saved((id - SAVED_ROW) as usize);
+            return;
+        }
         let view = match id {
             ROW_LIVE => View::Live,
             ROW_CRASH => View::Crashes,
@@ -376,6 +391,42 @@ impl Console {
         if view != self.view {
             self.open_view(view);
         }
+    }
+
+    /// Chooses a saved search: shows the live journal with the saved text in the search field.
+    pub fn open_saved(&mut self, i: usize) {
+        let Some(text) = self.saved.get(i).map(|s| s.text.clone()) else { return };
+        if !self.is_live() {
+            self.open_view(View::Live);
+        }
+        self.search.clear();
+        self.search.push_str(&text);
+        self.search_focused = false;
+        self.search_changed();
+    }
+
+    /// Whether the search field holds a search that is not saved yet (the Save Search item).
+    pub fn can_save_search(&self) -> bool {
+        let text = self.search.trim();
+        !text.is_empty() && !self.saved.iter().any(|s| s.text == text)
+    }
+
+    /// Whether the search field holds a saved search (the Delete Saved Search item).
+    pub fn can_delete_search(&self) -> bool {
+        let text = self.search.trim();
+        self.saved.iter().any(|s| s.text == text)
+    }
+
+    /// Log menu: Save Search. Keeps the search field's text as a sidebar row.
+    fn keep_search(&mut self) {
+        let text = self.search.to_string();
+        model::save_search(&mut self.saved, &text);
+    }
+
+    /// Log menu: Delete Saved Search. Removes the sidebar row whose text is the search field's.
+    fn drop_search(&mut self) {
+        let text = self.search.to_string();
+        model::remove_search(&mut self.saved, &text);
     }
 
     // --- geometry (points) ---
@@ -640,6 +691,8 @@ impl Console {
             MENU_FIND => self.focus_search(),
             MENU_AFTER => self.toggle_after(),
             MENU_SUBSYSTEM => self.show_subsystem(),
+            MENU_SAVE_SEARCH => self.keep_search(),
+            MENU_DELETE_SEARCH => self.drop_search(),
             _ => return false,
         }
         true
@@ -777,6 +830,9 @@ pub const MENU_AFTER: u32 = 6;
 pub const MENU_SUBSYSTEM: u32 = 7;
 /// Log menu: Copy Message. Handled by the app (it needs the shell's pasteboard service), not by `menu`.
 pub const MENU_COPY: u32 = 8;
+/// Log menu: Save Search and Delete Saved Search, for the search field's text.
+pub const MENU_SAVE_SEARCH: u32 = 9;
+pub const MENU_DELETE_SEARCH: u32 = 10;
 
 #[cfg(test)]
 mod tests {

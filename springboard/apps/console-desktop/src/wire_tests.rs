@@ -1,8 +1,8 @@
 //! The window's log-position, walk, subsystem and signpost behaviour, tested on the window's plain state (no kit `Ui`
 //! is needed for these: `rebuild`, the Log menu actions and the footer are state, and the drawing reads them).
 
-use crate::console::{Console, View};
-use crate::model::{Level, LogEntry};
+use crate::console::{Console, View, MENU_DELETE_SEARCH, MENU_SAVE_SEARCH};
+use crate::model::{Level, LogEntry, Query};
 
 fn msg(date: i64, subsystem: &str, message: &str) -> LogEntry {
     LogEntry { date, process: "notes".into(), pid: 1, subsystem: subsystem.into(), category: "sync".into(), level: Level::Notice, message: message.into() }
@@ -74,6 +74,61 @@ fn show_only_this_subsystem_does_nothing_for_a_message_without_one() {
     c.show_subsystem();
     assert!(c.search.to_string().is_empty());
     assert_eq!(c.visible, vec![0]);
+}
+
+#[test]
+fn a_saved_search_is_kept_from_the_search_field_and_chosen_from_the_sidebar() {
+    let mut c = console_with(vec![
+        msg(10, "a.b", "one"),
+        LogEntry { level: Level::Error, ..msg(20, "a.b", "two") },
+        LogEntry { level: Level::Error, ..msg(30, "a.b", "three") },
+    ]);
+    c.focus_search();
+    assert!(c.text("type:error"));
+    assert_eq!(c.visible, vec![1, 2]);
+    assert!(c.can_save_search());
+    assert!(!c.can_delete_search());
+    assert!(c.menu(MENU_SAVE_SEARCH));
+    assert_eq!(c.saved.len(), 1);
+    assert!(!c.can_save_search(), "a saved search is not offered again");
+    assert!(c.can_delete_search());
+    // a second save of the same text adds nothing
+    c.menu(MENU_SAVE_SEARCH);
+    assert_eq!(c.saved.len(), 1);
+
+    // clear the search, then choose the saved one: the live journal shows with its text
+    c.search.clear();
+    c.query = Query::default();
+    c.rebuild();
+    assert_eq!(c.visible, vec![0, 1, 2]);
+    c.open_saved(0);
+    assert_eq!(c.search.to_string(), "type:error");
+    assert_eq!(c.visible, vec![1, 2]);
+    assert!(!c.search_focused);
+
+    assert!(c.menu(MENU_DELETE_SEARCH));
+    assert!(c.saved.is_empty());
+    assert!(!c.can_delete_search());
+}
+
+#[test]
+fn a_blank_search_cannot_be_saved() {
+    let mut c = console_with(vec![msg(10, "a.b", "one")]);
+    assert!(!c.can_save_search());
+    c.menu(MENU_SAVE_SEARCH);
+    assert!(c.saved.is_empty());
+}
+
+#[test]
+fn the_message_token_and_the_level_token_narrow_the_table() {
+    let mut c = console_with(vec![
+        msg(10, "a.b", "disk full"),
+        LogEntry { level: Level::Error, ..msg(20, "a.b", "disk slow") },
+        LogEntry { level: Level::Error, ..msg(30, "a.b", "network down") },
+    ]);
+    c.focus_search();
+    assert!(c.text("level:error message:disk"));
+    assert_eq!(c.visible, vec![1]);
 }
 
 #[test]
