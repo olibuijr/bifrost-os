@@ -517,6 +517,9 @@ fn keeps_inherited(inherited: &ModeInfo, selected: &ModeInfo) -> bool {
     same_timings || inherited.hdisplay == selected.hdisplay && inherited.vdisplay == selected.vdisplay && inherited.vrefresh >= selected.vrefresh
 }
 
+#[cfg(feature = "desktop-wayland")]
+static WAYLAND_FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub struct Display {
     #[cfg(feature = "desktop-wayland")]
     wayland: Option<super::wayland::Display>,
@@ -726,13 +729,8 @@ impl Display {
         let mut display = Self::virtual_panel(w,h,60);
         display.mode.vrefresh = backend.refresh();
         display.wayland = Some(backend);
-        if std::env::var_os("BIFROST_BOOT_FADE").is_some() {
-            display.boot_fade = Some((
-                bootweave_frame::Handoff::new(w as u32, h as u32, bootweave_frame::Appearance::Dark, bootweave_frame::PixelOrder::Bgrx),
-                vec![],
-                crate::bootreveal::Reveal::new(crate::bootsplash::boottime_ms()),
-            ));
-        }
+        // No shell copy of the boot frame under labwc: its surface can be scaled, so a frame drawn here would not
+        // match the loader's mark box in panel pixels. Bootweave's frame stays up until the first present.
         Ok(display)
     }
     #[cfg(feature = "desktop-wayland")]
@@ -993,6 +991,12 @@ impl Display {
         }
         #[cfg(feature = "desktop-wayland")]
         if let Some(w) = &mut self.wayland {
+            if std::env::var_os("BIFROST_BOOT_FADE").is_some() && !WAYLAND_FIRST.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                // the boot milestones the shell's own fade used to write (bench and boot-time learning read them)
+                crate::bootsplash::mark("desktop-ready");
+                crate::bootsplash::mark("desktop-first-ui");
+                crate::bootsplash::mark("desktop-faded");
+            }
             w.present(frame, damage).unwrap_or_else(|e| { eprintln!("springboard: Wayland present: {e}"); std::process::exit(1) });
             return;
         }

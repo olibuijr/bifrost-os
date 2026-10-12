@@ -34,12 +34,11 @@ pub fn decode_progress(bytes: &[u8]) -> Option<(f32, bootweave_frame::Appearance
     Some(((h.shown_permille as f32 / 1000.0).clamp(0.0, 1.0), h.timing.appearance))
 }
 
-/// The held boot frame: continues from the supervisor's bar and appearance when it published them, else the loader's
-/// frame at 0 in Dark. `last` is the position already shown; the bar never moves back from it.
-pub fn held_frame(w: u32, h: u32, record: Option<&[u8]>, last: f32) -> bootweave_frame::Frame {
+/// The held boot frame: the mark alone (no bar), in the appearance the supervisor published, else Dark. `_last` is
+/// kept for callers; there is no bar to hold back.
+pub fn held_frame(w: u32, h: u32, record: Option<&[u8]>, _last: f32) -> bootweave_frame::Frame {
     let mut f = bootweave_frame::Frame::boot(w, h);
-    if let Some((p, a)) = record.and_then(decode_progress) {
-        f.progress = Some(p.max(last));
+    if let Some((_, a)) = record.and_then(decode_progress) {
         f.appearance = a;
     }
     f
@@ -82,17 +81,15 @@ pub fn shutdown_faded(since_request: Option<f64>) -> bool {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn the_held_frame_continues_from_the_supervisors_bar() {
+    fn the_held_frame_takes_the_supervisors_appearance_and_has_no_bar() {
         use bootweave_frame::{timing::{BootTiming, Handoff}, Appearance};
         let timing = BootTiming { loader_ms: 100, kernel_ms: 200, userspace_ms: 300, samples: 1, appearance: Appearance::Light };
         let rec = Handoff { timing, loader_ms: 10, shown_permille: 420 }.encode();
         let f = super::held_frame(64, 32, Some(&rec), 0.0);
-        assert_eq!(f.progress, Some(0.42));
+        assert_eq!(f.progress, None);
         assert_eq!(f.appearance, Appearance::Light);
-        // never back from what was shown
-        assert_eq!(super::held_frame(64, 32, Some(&rec), 0.9).progress, Some(0.9));
         // no record: the loader's frame
-        assert_eq!(super::held_frame(64, 32, None, 0.0).progress, Some(0.0));
+        assert_eq!(super::held_frame(64, 32, None, 0.0).progress, None);
         assert_eq!(super::held_frame(64, 32, Some(&[1, 2]), 0.0).appearance, Appearance::Dark);
     }
 
