@@ -326,6 +326,8 @@ pub struct AppHost {
     quit_at: Option<f64>,
     /// The dock badge the app set (`ToShell::SetBadge`), already cleaned by `clean_badge`.
     pub badge: String,
+    /// Progress and attention bounce the app set on its Dock tile (the `dock` service).
+    pub tile: super::desktop_dock::TileState,
     /// `ToShell::DocumentState`: the document's title, unsaved-changes flag and file name (cleaned by `clean_badge`-style trimming).
     pub doc_title: String,
     pub doc_edited: bool,
@@ -408,6 +410,7 @@ impl AppHost {
             announcements: Vec::new(),
             last_notification: None,
             badge: String::new(),
+            tile: Default::default(),
             sudden: false,
             activity: 0,
             quit_at: None,

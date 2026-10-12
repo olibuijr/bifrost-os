@@ -8,6 +8,7 @@
 use super::Shell;
 use bifrost_core::json::Json;
 
+pub mod dock_tile;
 pub mod system;
 
 /// A named service in the shell.
@@ -33,6 +34,7 @@ pub struct Event {
 /// Every service, in registration order. One line per service.
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
+        Box::new(dock_tile::DockService),
         Box::new(system::System),
     ]
 }

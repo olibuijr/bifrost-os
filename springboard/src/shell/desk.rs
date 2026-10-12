@@ -1652,6 +1652,7 @@ impl Shell {
                     });
                 }
             }
+            self.dock_tile_progress(s, i, r, t);
         }
         // the hover label fades in and out (Reduce Motion: it just appears)
         let (label_slot, label_alpha) = self.dock_label_state(t);

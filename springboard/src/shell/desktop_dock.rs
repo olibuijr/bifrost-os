@@ -1,5 +1,9 @@
 //! Persistent desktop dock choices; app identities survive registry changes.
+//! It also draws what an app sets on its Dock tile through the `dock` service: a progress bar and an attention bounce.
 use super::{apps,Shell,Effect,AppId,desktop_bar::Menu,desk::{Rect,DOCK_TRASH}};
+use super::ui::{FILL_GRAY,LINK};
+use crate::gfx::Surface;
+use bifrost_ui::values::Progress;
 use bifrost_render::motion::{self,Anim,Curve,Kind};
 #[derive(Clone,Copy,PartialEq,Debug)] pub enum Position {Bottom,Left,Right}
 #[derive(Clone,Debug)] pub struct Preferences {pub position:Position,pub size:f32,pub autohide:bool,pub pinned:Vec<String>,
@@ -9,6 +13,16 @@ impl Default for Preferences {fn default()->Self{Self{position:Position::Bottom,
 impl Preferences {
  pub fn load(path:&std::path::Path)->Self {let mut p=Self::default();if let Ok(text)=std::fs::read_to_string(path.join("desktop-dock.ini")){for line in text.lines(){if let Some((key,value))=line.split_once('='){match key {"position"=>p.position=match value{"left"=>Position::Left,"right"=>Position::Right,_=>Position::Bottom},"size"=>p.size=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(48.).clamp(32.,80.),"autohide"=>p.autohide=value=="true","dock_magnification"=>p.magnification=value!="false","dock_magnification_size"=>p.magnified=value.parse::<f32>().ok().filter(|v|v.is_finite()).unwrap_or(80.).clamp(48.,128.),"pinned"=>p.pinned=value.split(',').filter(|s|!s.is_empty()).take(256).map(str::to_string).collect(),_=>{}}}}}for key in &mut p.pinned{if key=="is.olibuijr.browser"&&apps().iter().any(|a|a.icon=="is.olibuijr.browser.desktop"){*key="is.olibuijr.browser.desktop".into();}if key=="bifrost.files"&&apps().iter().any(|a|a.icon=="is.olibuijr.files.desktop"){*key="is.olibuijr.files.desktop".into();}}p}
  pub fn save(&self,path:&std::path::Path){let text=format!("position={}\nsize={}\nautohide={}\ndock_magnification={}\ndock_magnification_size={}\npinned={}\n",match self.position{Position::Bottom=>"bottom",Position::Left=>"left",Position::Right=>"right"},self.size,self.autohide,self.magnification,self.magnified,self.pinned.join(","));let dest=path.join("desktop-dock.ini");let tmp=path.join("desktop-dock.ini.tmp");if std::fs::write(&tmp,text).and_then(|_|std::fs::rename(tmp,dest)).is_err(){eprintln!("BifrOSt: could not save dock preferences");}}
+}
+/// What an app set on its Dock tile through the `dock` service: a progress bar (`None` for none) and an attention
+/// bounce as a window on the shell clock in seconds (`None` for none).
+#[derive(Clone,Copy,Debug,Default,PartialEq)] pub struct TileState {pub progress:Option<Progress>,pub bounce:Option<(f64,f64)>}
+/// The seconds one sweep of an indeterminate Dock progress bar takes.
+const PROGRESS_PERIOD_S:f64=1.2;
+/// One attention hop, lifting the icon `icon * 0.5` px at its peak: the same kinematics as the launch bounce.
+pub(super) fn bounce_lift(now:f64,start:f64,end:f64,hop:f64,icon:i32)->i32 {
+ if hop<=0.||now<start||now>=end {return 0;}
+ let ph=((now-start)/hop).fract() as f32;(icon as f32*0.5*4.*ph*(1.-ph)).round() as i32
 }
 pub enum Pointer {Hover(f32,f32),Context(f32,f32)}
 #[derive(Clone,Debug,PartialEq)] pub(super) enum Change {Position(Position),Size(f32),Autohide,Magnification,MagnifiedSize(f32),Pin(usize),Open(usize),Quit(usize)}
@@ -144,8 +158,34 @@ impl Shell {
   if entry==apps().len()||entry==DOCK_TRASH||dock_min_index(entry).is_some()||self.dock_item_running(entry){return;}
   if let Some(d)=self.desk.as_mut(){if !d.dock_bounce.iter().any(|b|b.0==entry){d.dock_bounce.push((entry,t/1000.));self.dirty=true;}}
  }
- /// The bounce offset in px (dx, dy) of list entry `entry` at `now` seconds: hops of `Kind::DockBounce` length, none under Reduce Motion.
+ /// The bounce offset in px (dx, dy) of list entry `entry` at `now` seconds: the launch bounce plus the attention bounce.
  pub(super) fn dock_bounce_offset(&self,entry:usize,now:f64,icon:i32)->(i32,i32){
+  let (lx,ly)=self.dock_launch_offset(entry,now,icon);let (ax,ay)=self.dock_tile_bounce(entry,now,icon);(lx+ax,ly+ay)
+ }
+ /// The Dock tile state of list entry `entry` when it is an installed app.
+ fn dock_tile_state(&self,entry:usize)->Option<&TileState> {
+  let Some(AppId::External(slot))=apps().get(entry).map(|a|a.id) else {return None;};
+  self.ext.get(slot as usize).and_then(Option::as_ref).map(|h|&h.tile)
+ }
+ /// The attention bounce offset (px) of the Dock tile of `entry` at `now` seconds, while the app's `bounce` window is open.
+ fn dock_tile_bounce(&self,entry:usize,now:f64,icon:i32)->(i32,i32){
+  let Some((start,end))=self.dock_tile_state(entry).and_then(|st|st.bounce) else {return(0,0);};
+  let lift=bounce_lift(now,start,end,motion::duration(Kind::DockBounce) as f64,icon);
+  match self.dock_preferences().position{Position::Bottom=>(0,-lift),Position::Left=>(lift,0),Position::Right=>(-lift,0)}
+ }
+ /// Draws the progress of the Dock tile of `entry` (`dock` service `progress`): a thin bar across the lower part of the
+ /// icon, filled to the fraction, or sweeping while indeterminate.
+ pub(super) fn dock_tile_progress(&self,s:&mut Surface,entry:usize,r:&Rect,t:f64){
+  let Some(p)=self.dock_tile_state(entry).and_then(|st|st.progress) else {return;};
+  let ui=&self.ui;
+  let inset=r.w as f32*0.15;let h=ui.pt(4.);
+  let track=bifrost_ui::Rect{x:r.x as f32+inset,y:(r.y+r.h) as f32-ui.pt(12.),w:r.w as f32-2.*inset,h};
+  s.fill_rrect(track.x,track.y,track.w,track.h,h/2.,FILL_GRAY);
+  let fill=p.filled(track,t/1000.,PROGRESS_PERIOD_S);
+  if fill.w>0.{s.fill_rrect(fill.x,fill.y,fill.w,fill.h,h/2.,LINK);}
+ }
+ /// The launch bounce offset of list entry `entry`: hops of `Kind::DockBounce` length, none under Reduce Motion.
+ fn dock_launch_offset(&self,entry:usize,now:f64,icon:i32)->(i32,i32){
   let Some(d)=self.desk.as_ref()else{return(0,0);};
   let Some(&(_,start))=d.dock_bounce.iter().find(|b|b.0==entry)else{return(0,0);};
   let dur=motion::duration(Kind::DockBounce) as f64;let el=now-start;
@@ -183,10 +223,11 @@ impl Shell {
   let k=if dur<=0.{1.}else{motion::ease(Curve::EaseOut,(el/dur) as f32)};
   match(d.dock_hover,d.dock_label_last){(Some(h),_)=>(Some(h),k),(None,Some(l))=>(Some(l),1.-k),_=>(None,0.)}
  }
- /// True while any dock animation (slide, magnify, label fade, launch bounce) needs frames; `next_wake` polls it.
+ /// True while any dock animation (slide, magnify, label fade, launch bounce, app attention bounce or an indeterminate
+ /// progress bar) needs frames; `next_wake` polls it.
  pub fn dock_animating(&self,t:f64)->bool{
   let Some(d)=self.desk.as_ref()else{return false;};let now=t/1000.;
-  d.dock_vis_anim.as_ref().is_some_and(|a|!a.done(now))||d.dock_mag.as_ref().is_some_and(|a|!a.done(now))||(d.dock_label_ms>0.&&t-d.dock_label_ms<400.)||(motion::duration(Kind::DockBounce)>0.&&d.dock_bounce.iter().any(|b|now-b.1<BOUNCE_MAX_S))
+  d.dock_vis_anim.as_ref().is_some_and(|a|!a.done(now))||d.dock_mag.as_ref().is_some_and(|a|!a.done(now))||(d.dock_label_ms>0.&&t-d.dock_label_ms<400.)||(motion::duration(Kind::DockBounce)>0.&&d.dock_bounce.iter().any(|b|now-b.1<BOUNCE_MAX_S))||self.ext.iter().flatten().any(|h|h.tile.bounce.is_some_and(|(_,end)|now<end)||h.tile.progress.is_some_and(|p|p.fraction().is_none()))
  }
  /// Option+Cmd+D: toggles Automatically Hide and Show; with it on, the dock slides away at the next tick.
  pub fn dock_toggle_autohide(&mut self)->bool{
@@ -230,4 +271,11 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
  }
  #[test]fn minimized_entries_decode_to_window_indices(){assert_eq!(dock_min_index(DOCK_MIN_BASE),Some(0));assert_eq!(dock_min_index(DOCK_MIN_BASE-3),Some(3));assert_eq!(dock_min_index(DOCK_TRASH),None);assert_eq!(dock_min_index(4),None);}
  #[test]fn fade_scales_all_channels(){assert_eq!(fade(0xff80_4020,0.5)&0xff00_0000,0x8000_0000);assert_eq!(fade(0xffff_ffff,0.),0);assert_eq!(fade(0x1234_5678,1.),0x1234_5678);}
+ #[test]fn attention_bounce_hops_then_stops(){
+  assert_eq!(bounce_lift(0.,0.,3.,0.5,48),0,"no lift at the start of a hop");
+  assert_eq!(bounce_lift(0.25,0.,3.,0.5,48),24,"the peak of a hop lifts half the icon");
+  assert_eq!(bounce_lift(3.,0.,3.,0.5,48),0,"stops at the end of the window");
+  assert_eq!(bounce_lift(1.,2.,3.,0.5,48),0,"not before the window opens");
+  assert_eq!(bounce_lift(1.,0.,3.,0.,48),0,"no bounce under Reduce Motion");
+ }
 }
