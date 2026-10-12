@@ -4,6 +4,8 @@ pub mod geojson;
 pub mod sha256;
 pub mod sha512;
 pub mod sha3;
+pub mod md5;
+pub mod sha1;
 pub mod hkdf;
 pub mod fsutil;
 pub mod log;
