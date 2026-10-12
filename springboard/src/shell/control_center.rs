@@ -149,6 +149,8 @@ enum Touch {
     Outside(Drag),
     /// a finger on the expanded module: a big slider being dragged, or a tap target
     Panel(Option<Tile>),
+    /// a tap on the Now Playing plate's progress bar: released there, it seeks the shown session
+    Scrub,
 }
 
 /// How long a finger rests on a module before it expands, like bifrost.
@@ -915,6 +917,19 @@ impl Shell {
     }
 }
 
+/// The Now Playing plate's progress bar: a thin strip near the bottom edge, inset from the sides.
+fn media_bar((x, y, w, h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    (x + ui.pt(14.0), y + h - ui.pt(16.0), w - ui.pt(28.0), ui.pt(3.0))
+}
+
+/// Where a touch at `x` lands along the bar, as a share of its length from 0 to 1.
+fn scrub_fraction((bx, _, bw, _): (f32, f32, f32, f32), x: f32) -> f32 {
+    if bw <= 0.0 {
+        return 0.0;
+    }
+    ((x - bx) / bw).clamp(0.0, 1.0)
+}
+
 /// The transport control a media tile button stands for.
 fn media_target(tile: Tile) -> Option<Media> {
     match tile {
@@ -1159,6 +1174,19 @@ mod tests {
         assert_eq!((rx, ry), (cluster(&sh.ui, sh.w).0, sh.ui.pt(68.0 + 152.0)));
         assert_eq!((lx - rx, ly), (sh.ui.pt(76.0), ry), "mirroring sits beside rotation lock");
         assert_eq!(hit(&sh.ui, sh.w, 10.0, 10.0), None);
+    }
+
+    #[test]
+    fn the_progress_bar_sits_inside_the_plate_and_a_touch_gives_its_share() {
+        let sh = shell();
+        let plate = (100.0, 50.0, 300.0, 141.5);
+        let (bx, by, bw, bh) = media_bar(plate, &sh.ui);
+        assert!(bx > plate.0 && bx + bw < plate.0 + plate.2, "the bar is inset from both sides");
+        assert!(by > plate.1 && by + bh < plate.1 + plate.3, "the bar is near the bottom edge");
+        assert_eq!(scrub_fraction((0.0, 0.0, 200.0, 4.0), 50.0), 0.25);
+        assert_eq!(scrub_fraction((0.0, 0.0, 200.0, 4.0), -10.0), 0.0);
+        assert_eq!(scrub_fraction((0.0, 0.0, 200.0, 4.0), 900.0), 1.0);
+        assert_eq!(scrub_fraction((0.0, 0.0, 0.0, 4.0), 10.0), 0.0, "an empty bar gives no share");
     }
 
     #[test]
@@ -1461,6 +1489,14 @@ impl Shell {
         s.blit(&artist, tx, (y + ui.pt(38.0)) as i32, 255, alpha);
         let playing = session.snapshot().state == PlaybackState::Playing;
         draw_cc_controls(s, ui, (x, y, w, h), playing, scale(WHITE, alpha), pressed);
+        // progress: the elapsed share of a finite item, advanced while it plays
+        if let Some(shown) = now_playing::progress().filter(|p| p.duration_ms.is_some_and(|d| d > 0)) {
+            let total = shown.duration_ms.unwrap_or(1) as f32;
+            let (bx, by, bw, bh) = media_bar(rect, ui);
+            let share = (shown.position_ms as f32 / total).clamp(0.0, 1.0);
+            s.fill_rrect(bx, by, bw, bh, bh / 2.0, scale(rgba(255, 255, 255, 60), alpha));
+            s.fill_rrect(bx, by, bw * share, bh, bh / 2.0, scale(WHITE, alpha));
+        }
     }
 
     fn desk_wifi(&self) -> Option<(bool, Option<String>)> {
@@ -1546,7 +1582,13 @@ impl Shell {
         match ev {
             Event::Down(x, y) => match at(x, y) {
                 Some((Tile::MediaPlay, r)) => {
-                    self.cc.touch = Some(Touch::Tile(desk_media_button(r, x)));
+                    let (bx, by, bw, bh) = media_bar(r, &self.ui);
+                    let zone = (bx - self.ui.pt(6.0), by - self.ui.pt(6.0), bw + self.ui.pt(12.0), bh + self.ui.pt(12.0));
+                    self.cc.touch = if now_playing::seek_length_ms().is_some() && inside(zone, x, y) {
+                        Some(Touch::Scrub)
+                    } else {
+                        Some(Touch::Tile(desk_media_button(r, x)))
+                    };
                     vec![]
                 }
                 Some((tile @ (Tile::Brightness | Tile::Volume), r)) => {
@@ -1570,6 +1612,13 @@ impl Shell {
                 _ => vec![],
             },
             Event::Up(x, y) => match self.cc.touch.take() {
+                Some(Touch::Scrub) => {
+                    let bar = tiles.iter().find(|(k, _)| *k == Tile::MediaPlay).map(|&(_, r)| media_bar(r, &self.ui));
+                    if let (Some(bar), Some(total)) = (bar, now_playing::seek_length_ms()) {
+                        now_playing::seek(now_playing::scrub_target_ms(total, scrub_fraction(bar, x)));
+                    }
+                    vec![]
+                }
                 Some(Touch::Tile(tile @ (Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext)))
                     if at(x, y).is_some_and(|(k, r)| k == Tile::MediaPlay && desk_media_button(r, x) == tile) =>
                 {

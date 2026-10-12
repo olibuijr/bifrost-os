@@ -20,6 +20,7 @@ use bifrost_core::json::Json;
 use bifrost_ui::media_content::{optional_text, MediaContent, MediaDuration, MediaType};
 use bifrost_ui::media_session::{CommandState, MediaSession, PlaybackState, RemoteCommand};
 use std::sync::Mutex;
+use std::time::Instant;
 
 /// The command names an app declares and receives, one per `RemoteCommand`.
 const NAMES: [(&str, RemoteCommand); 9] = [
@@ -111,11 +112,37 @@ fn body_of(sent: &Sent) -> Json {
     }
 }
 
-/// The shell's Now Playing state: the shown session, its owner, and what is waiting for the owner.
+/// What the Now Playing tile draws: the playback state, the position now (advanced while playing) and the length
+/// when the item is finite.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Progress {
+    pub playing: bool,
+    pub position_ms: u64,
+    pub duration_ms: Option<u64>,
+}
+
+/// The position now: the published position moved on by the time since it was published while playing, and never
+/// past the length. A paused or stopped session holds its position.
+pub fn extrapolate(base_ms: u64, playing: bool, elapsed_ms: u64, duration_ms: Option<u64>) -> u64 {
+    let now = if playing { base_ms.saturating_add(elapsed_ms) } else { base_ms };
+    match duration_ms {
+        Some(total) => now.min(total),
+        None => now,
+    }
+}
+
+/// The position a scrub to `fraction` of the bar lands on, in milliseconds (the fraction is clamped to 0 to 1).
+pub fn scrub_target_ms(duration_ms: u64, fraction: f32) -> f64 {
+    duration_ms as f64 * f64::from(fraction.clamp(0.0, 1.0))
+}
+
+/// The shell's Now Playing state: the shown session, its owner, when its position was last set, and what is waiting
+/// for the owner.
 #[derive(Default)]
 pub(crate) struct Store {
     owner: Option<String>,
     session: Option<MediaSession>,
+    published: Option<Instant>,
     pending: Vec<(String, Sent)>,
 }
 
@@ -123,12 +150,14 @@ impl Store {
     fn publish(&mut self, app_id: &str, session: MediaSession) {
         self.owner = Some(app_id.to_string());
         self.session = Some(session);
+        self.published = Some(Instant::now());
     }
 
     fn clear(&mut self, app_id: &str) {
         if self.owner.as_deref() == Some(app_id) {
             self.owner = None;
             self.session = None;
+            self.published = None;
         }
     }
 
@@ -136,17 +165,39 @@ impl Store {
         self.session.clone()
     }
 
-    /// Queues `sent` for the owner when the session declares it enabled. False when nothing was queued.
+    /// The shown position now, for the tile's progress bar. None without a session.
+    fn progress(&self, now: Instant) -> Option<Progress> {
+        let session = self.session.as_ref()?;
+        let snap = session.snapshot();
+        let playing = snap.state == PlaybackState::Playing;
+        let elapsed = self.published.map_or(0, |t| now.saturating_duration_since(t).as_millis() as u64);
+        let duration_ms = match session.content().map(|c| c.duration) {
+            Some(MediaDuration::Finite(seconds)) => Some((seconds * 1000.0) as u64),
+            _ => None,
+        };
+        Some(Progress { playing, position_ms: extrapolate(snap.position_ms, playing, elapsed, duration_ms), duration_ms })
+    }
+
+    /// Queues `sent` for the owner when the session declares it enabled. False when nothing was queued. A seek also
+    /// moves the shown position at once, so the bar does not wait for the owner to publish again.
     fn send(&mut self, sent: Sent) -> bool {
-        let (Some(owner), Some(session)) = (self.owner.clone(), self.session.as_ref()) else {
+        let Some(owner) = self.owner.clone() else {
             return false;
         };
         let command = match &sent {
             Sent::Command(c) => *c,
             Sent::Seek(_) => RemoteCommand::SeekTo,
         };
+        let Some(session) = self.session.as_mut() else {
+            return false;
+        };
         if session.dispatch(command).is_err() {
             return false;
+        }
+        if let Sent::Seek(ms) = sent {
+            let state = session.snapshot().state;
+            session.set_playback(state, ms.max(0.0) as u64);
+            self.published = Some(Instant::now());
         }
         self.pending.push((owner, sent));
         true
@@ -158,6 +209,7 @@ impl Store {
             if !running(&owner) {
                 self.owner = None;
                 self.session = None;
+                self.published = None;
             }
         }
     }
@@ -170,7 +222,7 @@ impl Store {
     }
 }
 
-static STORE: Mutex<Store> = Mutex::new(Store { owner: None, session: None, pending: Vec::new() });
+static STORE: Mutex<Store> = Mutex::new(Store { owner: None, session: None, published: None, pending: Vec::new() });
 
 fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
     let mut g = STORE.lock().ok()?;
@@ -189,9 +241,24 @@ pub(crate) fn send(command: RemoteCommand) -> bool {
 }
 
 /// Asks the owner to seek to `position_ms`. False when there is no session or it did not enable seeking.
-#[allow(dead_code)] // for the lock-screen scrubber, which is not yet routed to the service
 pub(crate) fn seek(position_ms: f64) -> bool {
     with(|s| s.send(Sent::Seek(position_ms))).unwrap_or(false)
+}
+
+/// The position and length the tile draws, or None without a session.
+pub(crate) fn progress() -> Option<Progress> {
+    with(|s| s.progress(Instant::now())).flatten()
+}
+
+/// The length in milliseconds when the shown session is finite and its owner enabled seeking; None otherwise.
+pub(crate) fn seek_length_ms() -> Option<u64> {
+    with(|s| {
+        s.session.as_ref().filter(|x| x.dispatch(RemoteCommand::SeekTo).is_ok()).and_then(|x| match x.content().map(|c| c.duration) {
+            Some(MediaDuration::Finite(seconds)) => Some((seconds * 1000.0) as u64),
+            _ => None,
+        })
+    })
+    .flatten()
 }
 
 pub struct NowPlaying;
@@ -312,6 +379,34 @@ mod tests {
         store.publish("app.one", parse_session("app.one", &song()).unwrap());
         store.clear("app.one");
         assert!(store.current().is_none());
+    }
+
+    #[test]
+    fn the_position_runs_on_while_playing_holds_when_paused_and_stops_at_the_end() {
+        assert_eq!(extrapolate(5_000, true, 2_000, Some(200_000)), 7_000);
+        assert_eq!(extrapolate(5_000, false, 2_000, Some(200_000)), 5_000, "a paused session holds its position");
+        assert_eq!(extrapolate(199_000, true, 9_000, Some(200_000)), 200_000, "capped at the length");
+        assert_eq!(extrapolate(1_000, true, 4_000, None), 5_000, "a live or open item has no cap");
+    }
+
+    #[test]
+    fn a_seek_moves_the_shown_position_and_is_sent_to_the_owner() {
+        let mut store = Store::default();
+        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        assert!(store.send(Sent::Seek(90_000.0)));
+        assert_eq!(store.current().unwrap().snapshot().position_ms, 90_000);
+        let p = store.progress(Instant::now()).expect("a session has progress");
+        assert_eq!(p.duration_ms, Some(200_000));
+        assert!(p.playing);
+        assert!((90_000..=200_000).contains(&p.position_ms), "at least the seek target, never past the length");
+        assert_eq!(store.drain()[0].body.get("position_ms").and_then(Json::number), Some(90_000.0));
+    }
+
+    #[test]
+    fn a_scrub_lands_on_its_share_of_the_length() {
+        assert_eq!(scrub_target_ms(200_000, 0.25), 50_000.0);
+        assert_eq!(scrub_target_ms(200_000, 1.5), 200_000.0, "clamped to the end");
+        assert_eq!(scrub_target_ms(200_000, -0.5), 0.0, "clamped to the start");
     }
 
     #[test]
