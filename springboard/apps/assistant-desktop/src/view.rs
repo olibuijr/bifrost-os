@@ -4,7 +4,7 @@
 
 use crate::api::{self, Event, Running};
 use crate::connect::{self, Link};
-use crate::model::{self, Block, Conversation, Message, Span};
+use crate::model::{self, Block, Conversation, Message, Span, ToolRun};
 use crate::safety;
 use crate::session;
 use bifrost_app::controls::guardrail::Guardrail;
@@ -103,6 +103,29 @@ struct Cached {
 }
 
 /// User text is shown as typed: lines, no Markdown.
+/// The text of the availability banner (no model reachable). Offline uses `connect::OFFLINE_HINT`.
+const UNREACHABLE_BANNER: &str = "No model is reachable right now. Your message is kept; try again when the connection is back.";
+
+/// Cache signature of a message: its text and the tool records, so a change to either lays it out again.
+fn signature(m: &Message) -> usize {
+    m.text.len() + m.tools.iter().map(|t| t.name.len() + t.arguments.len() + t.result.len()).sum::<usize>()
+}
+
+/// The tool calls of a reply as one code block above its text: each call, then the result it was given. Line breaks in
+/// the arguments or the result are flattened so each call takes two lines.
+fn tool_blocks(tools: &[ToolRun]) -> Vec<Block> {
+    if tools.is_empty() {
+        return Vec::new();
+    }
+    let flat = |s: &str| s.replace(['\n', '\r'], " ");
+    let mut lines = Vec::new();
+    for t in tools {
+        lines.push(format!("{}({})", t.name, flat(t.arguments.trim())));
+        lines.push(format!("→ {}", flat(&t.result)));
+    }
+    vec![Block::Code(lines)]
+}
+
 fn plain(text: &str) -> Vec<Block> {
     vec![Block::Para(text.lines().map(|l| vec![Span { text: l.to_string(), bold: false, code: false }]).collect())]
 }
@@ -445,12 +468,12 @@ impl Assistant {
         }
         let Some(i) = self.cur else { return };
         let mut conv = self.convs.remove(i);
-        conv.messages.push(Message { user: true, text });
+        conv.messages.push(Message { user: true, text, tools: Vec::new() });
         conv.retitle();
         conv.updated = unix_ms();
         // The request is a session of this conversation under the skill's profile, fitted to the context budget.
         let request = session::request(&session::session(&conv.messages, session::profile(skill, system)));
-        conv.messages.push(Message { user: false, text: String::new() });
+        conv.messages.push(Message { user: false, text: String::new(), tools: Vec::new() });
         self.stream_conv = conv.id.clone();
         self.convs.insert(0, conv);
         self.cur = Some(0);
@@ -482,7 +505,7 @@ impl Assistant {
             if let Some(last) = c.messages.last_mut().filter(|m| !m.user) {
                 last.text = shown;
             }
-            if c.messages.last().is_some_and(|m| !m.user && m.text.trim().is_empty()) {
+            if c.messages.last().is_some_and(|m| !m.user && m.text.trim().is_empty() && m.tools.is_empty()) {
                 c.messages.pop();
             }
         }
@@ -517,6 +540,13 @@ impl Assistant {
                     let id = self.stream_conv.clone();
                     if let Some(m) = self.convs.iter_mut().find(|c| c.id == id).and_then(|c| c.messages.last_mut()) {
                         m.text = shown;
+                    }
+                }
+                Event::Tool { name, arguments, result } => {
+                    // A tool call shows in the reply it belongs to, above the reply's text.
+                    let id = self.stream_conv.clone();
+                    if let Some(m) = self.convs.iter_mut().find(|c| c.id == id).and_then(|c| c.messages.last_mut()) {
+                        m.tools.push(ToolRun { name, arguments, result });
                     }
                 }
                 Event::Done => self.finish(None),
@@ -934,6 +964,31 @@ impl Assistant {
     // drawing ---------------------------------------------------------------------------------------------------
 
     /// Lays out every message of the open conversation again when its text or the width changed.
+    /// The availability banner text while no model can be reached: offline, or the last request could not reach the
+    /// service. An empty chat keeps its own hint instead, so the banner shows only inside a conversation.
+    fn banner(&self) -> Option<&'static str> {
+        let conv = self.current()?;
+        if conv.messages.is_empty() {
+            return None;
+        }
+        if self.link.offline() {
+            return Some(connect::OFFLINE_HINT);
+        }
+        self.error.as_deref().is_some_and(api::is_unreachable).then_some(UNREACHABLE_BANNER)
+    }
+
+    /// The banner as a card at the top of the transcript column, drawn over the scrolled content.
+    fn draw_banner(&mut self, s: &mut Surface, ui: &Ui, g: &Geo, text: &str) {
+        let (pad_x, pad_y) = (ui.pt(BUBBLE_PAD_X_PT), ui.pt(BUBBLE_PAD_Y_PT));
+        let lh = ui.pt(MAC_BODY_PT * 1.4);
+        let lines = ui.wrap(text, MAC_BODY_PT, Weight::Regular, g.cont_w - 2.0 * pad_x);
+        let h = lines.len() as f32 * lh + 2.0 * pad_y;
+        s.fill_rrect(g.cont_x, g.top, g.cont_w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
+        for (i, l) in lines.iter().enumerate() {
+            put(s, &mut self.labels, ui, l, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), g.cont_x + pad_x, g.top + pad_y + i as f32 * lh);
+        }
+    }
+
     fn ensure_laid(&mut self, ui: &Ui, cont_w: f32) {
         let Some(i) = self.cur else { return };
         let Some(conv) = self.convs.get(i) else { return };
@@ -945,10 +1000,17 @@ impl Assistant {
         let user_w = (cont_w * 0.75).floor();
         for (m, slot) in conv.messages.iter().zip(self.laid.iter_mut()) {
             let width = if m.user { user_w - 2.0 * ui.pt(BUBBLE_PAD_X_PT) } else { cont_w };
-            let stale = slot.as_ref().map_or(true, |c| c.width != width as i32 || c.len != m.text.len());
+            let sig = signature(m);
+            let stale = slot.as_ref().map_or(true, |c| c.width != width as i32 || c.len != sig);
             if stale {
-                let blocks = if m.user { plain(&m.text) } else { model::parse(&m.text) };
-                *slot = Some(Cached { width: width as i32, len: m.text.len(), laid: lay_out(ui, &blocks, width) });
+                let blocks = if m.user {
+                    plain(&m.text)
+                } else {
+                    let mut all = tool_blocks(&m.tools);
+                    all.extend(model::parse(&m.text));
+                    all
+                };
+                *slot = Some(Cached { width: width as i32, len: sig, laid: lay_out(ui, &blocks, width) });
             }
         }
     }
@@ -958,6 +1020,9 @@ impl Assistant {
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         self.ensure_laid(ui, g.cont_w);
         self.draw_transcript(s, ui, &g);
+        if let Some(text) = self.banner() {
+            self.draw_banner(s, ui, &g, text);
+        }
         // composer area over the transcript's tail
         let det_x = g.side as usize;
         s.fill_rect(det_x, g.bottom as usize, s.w.saturating_sub(det_x), s.h.saturating_sub(g.bottom as usize), CONTENT_BG.now());
@@ -986,7 +1051,7 @@ impl Assistant {
             return;
         }
         let users: Vec<bool> = conv.messages.iter().map(|m| m.user).collect();
-        let waiting: Vec<bool> = conv.messages.iter().map(|m| m.text.is_empty()).collect();
+        let waiting: Vec<bool> = conv.messages.iter().map(|m| m.text.is_empty() && m.tools.is_empty()).collect();
         let (pad_x, pad_y, gap) = (ui.pt(BUBBLE_PAD_X_PT), ui.pt(BUBBLE_PAD_Y_PT), ui.pt(GAP_PT));
         let err_lines = self.error.as_ref().map(|e| ui.wrap(e, MAC_BODY_PT, Weight::Regular, g.cont_w - 2.0 * pad_x));
         let lh = ui.pt(MAC_BODY_PT * 1.4);
