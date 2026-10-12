@@ -89,6 +89,10 @@ pub enum PageId {
     DefaultApps,
     /// General > Login Items (desktop): the apps that start with the session (`SMAppService`)
     LoginItems,
+    /// General > Game Controllers (desktop): the connected controllers and their button remapping
+    GameControllers,
+    /// Game Controllers > one controller: its battery, a live test and the button remap
+    GameController(u32),
     /// Desktop & Dock > Hot Corners (desktop)
     HotCorners,
     /// Keyboard Shortcuts (desktop): the shortcuts the shell answers to
@@ -282,6 +286,8 @@ pub enum Action {
     LoginItemRemove(String),
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
+    /// Game Controllers: change one button's output, or restore a controller's defaults
+    GameController(super::game_controllers_page::Edit),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -641,6 +647,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
                         Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
                         Item::new("Login Items").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
+                        Item::new("Game Controllers").link(PageId::GameControllers),
                     ]),
                     Group::new(vec![Item::new("Legal & Regulatory").glyph(Glyph::Info).link(PageId::Legal)]),
                     Group::new(vec![Item::new("Backup").glyph(Glyph::Backup).link(PageId::Backup)]),
@@ -932,6 +939,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .header("HOLD DURATION")
                 .footer("A press must last this long before it counts as a touch and hold.")],
         ),
+        // built by `game_controllers_page::spec`, which reads the live controllers
+        PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
         PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`

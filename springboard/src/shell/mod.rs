@@ -65,6 +65,7 @@ pub mod spotindex;
 pub mod sharing;
 pub mod workspace;
 pub mod services;
+pub mod game_controllers_page;
 pub mod dnd;
 pub mod photos;
 pub mod music;
