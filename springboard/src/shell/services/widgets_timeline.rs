@@ -25,6 +25,8 @@ use bifrost_ui::live_activity::{Content, Dismissal, Error, Registry, State};
 use bifrost_ui::relevance::{self, ClueError, DateKind, Item, Relevance, TimeClue};
 use bifrost_ui::timeline::{Entry, ReloadPolicy, Timeline};
 use bifrost_ui::widget_search::WidgetSearch;
+use bifrost_ui::widget_config::{ConfigError, Configuration, Parameter, Value};
+use bifrost_ui::widget_link::Link;
 use bifrost_core::json::Json;
 use std::sync::Mutex;
 
@@ -53,6 +55,8 @@ pub struct Row {
     pub text: String,
     /// the widget is set to Large in the Edit Widgets gallery: its row is taller
     pub large: bool,
+    /// the (app, kind) of a widget row; None for a live activity
+    pub widget: Option<(String, String)>,
 }
 
 /// One widget in the Edit Widgets gallery: every widget an app has reloaded, placed in the column or not.
@@ -66,6 +70,8 @@ pub struct Listing {
     pub description: Option<String>,
     pub placed: bool,
     pub large: bool,
+    /// the widget has user-configurable options (`configure`); Edit Widgets offers Options for it
+    pub configurable: bool,
 }
 
 /// A widget's relevance hint: how the stack ranks its entry (`relevance::rank`).
@@ -103,6 +109,10 @@ struct Widget {
     placed: bool,
     /// set to Large in the gallery; kept across reloads
     large: bool,
+    /// the link a tap on the widget opens; set by each reload (`link`)
+    link: Option<Link>,
+    /// the options the app defined and the person's values; kept across reloads
+    config: Option<Configuration>,
 }
 
 /// An app's search view for one widget kind.
@@ -151,6 +161,21 @@ pub fn rows(now: i64) -> Vec<Row> {
 /// The Edit Widgets gallery at `now` (unix seconds): every widget an app has reloaded.
 pub fn gallery(now: i64) -> Vec<Listing> {
     with(|s| s.listing(now))
+}
+
+/// The link a tap on `app`'s widget `kind` opens, if the app set one.
+pub fn link(app: &str, kind: &str) -> Option<Link> {
+    with(|s| s.link(app, kind).cloned())
+}
+
+/// The options of `app`'s widget `kind` with the values in effect, if the app defined any.
+pub fn configuration(app: &str, kind: &str) -> Option<Configuration> {
+    with(|s| s.configuration(app, kind).cloned())
+}
+
+/// Moves one option of `app`'s widget `kind` by `dir` (see [`Store::step_option`]). False when it is not there.
+pub fn step_option(app: &str, kind: &str, key: &str, dir: i64) -> bool {
+    with(|s| s.step_option(app, kind, key, dir))
 }
 
 /// Adds `app`'s widget `kind` to the column, or takes it off. False when the app has not reloaded that kind.
@@ -208,9 +233,9 @@ impl Store {
         }
         let n = entries.len();
         // a reload keeps the person's choices in the gallery; a new widget starts placed, at Small
-        let (placed, large) = self.widgets.iter().find(|w| w.app == app && w.kind == kind).map_or((true, false), |w| (w.placed, w.large));
+        let (placed, large, config) = self.widgets.iter().find(|w| w.app == app && w.kind == kind).map_or((true, false, None), |w| (w.placed, w.large, w.config.clone()));
         self.widgets.retain(|w| !(w.app == app && w.kind == kind));
-        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint, placed, large });
+        self.widgets.push(Widget { app: app.into(), kind: kind.into(), timeline: Timeline::new(entries, policy), requested: false, hint, placed, large, link: None, config });
         Ok(n)
     }
 
@@ -224,6 +249,54 @@ impl Store {
         self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).map(|w| w.large = large).is_some()
     }
 
+    /// Sets the link a tap on the widget opens (None for no link). False when the app has not reloaded that kind.
+    pub fn set_link(&mut self, app: &str, kind: &str, link: Option<Link>) -> bool {
+        self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).map(|w| w.link = link).is_some()
+    }
+
+    /// The link a tap on the widget opens, if the app set one.
+    pub fn link(&self, app: &str, kind: &str) -> Option<&Link> {
+        self.widgets.iter().find(|w| w.app == app && w.kind == kind).and_then(|w| w.link.as_ref())
+    }
+
+    /// Defines the widget's options (`params`). Defining the same options again keeps the person's values; new options
+    /// start at their defaults. Returns the option count. The widget must have been reloaded.
+    pub fn configure(&mut self, app: &str, kind: &str, params: Vec<Parameter>) -> Result<usize, String> {
+        check_kind(kind)?;
+        let config = Configuration::new(params).map_err(config_error)?;
+        let n = config.params().len();
+        let w = self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).ok_or_else(|| format!("no widget {kind}"))?;
+        if w.config.as_ref().map_or(true, |c| c.params() != config.params()) {
+            w.config = Some(config);
+        }
+        Ok(n)
+    }
+
+    /// The widget's options with the values in effect, if the app defined any.
+    pub fn configuration(&self, app: &str, kind: &str) -> Option<&Configuration> {
+        self.widgets.iter().find(|w| w.app == app && w.kind == kind).and_then(|w| w.config.as_ref())
+    }
+
+    /// Sets one option of the widget. The value must match the option's kind and range.
+    pub fn set_option(&mut self, app: &str, kind: &str, key: &str, value: Value) -> Result<(), String> {
+        let c = self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).and_then(|w| w.config.as_mut()).ok_or_else(|| format!("{kind} has no options"))?;
+        c.set(key, value).map_err(config_error)
+    }
+
+    /// Moves one option by `dir`: a choice to the next (or previous) name, wrapping; a number by one, kept in its
+    /// range; a flag flips. False when the widget or option is not there.
+    pub fn step_option(&mut self, app: &str, kind: &str, key: &str, dir: i64) -> bool {
+        let Some(c) = self.widgets.iter_mut().find(|w| w.app == app && w.kind == kind).and_then(|w| w.config.as_mut()) else { return false };
+        let Some(param) = c.params().iter().find(|p| p.key() == key).cloned() else { return false };
+        let next = match (param, c.value(key)) {
+            (Parameter::Choice { options, .. }, Some(Value::Choice(i))) => Value::Choice((i as i64 + dir).rem_euclid(options.len() as i64) as usize),
+            (Parameter::Flag { .. }, Some(Value::Flag(b))) => Value::Flag(!b),
+            (Parameter::Number { min, max, .. }, Some(Value::Number(n))) => Value::Number((n + dir).clamp(min, max)),
+            _ => return false,
+        };
+        c.set(key, next).is_ok()
+    }
+
     /// The Edit Widgets gallery at `now`: every widget, in the order the apps reloaded them.
     pub fn listing(&self, now: i64) -> Vec<Listing> {
         self.widgets
@@ -235,6 +308,7 @@ impl Store {
                 description: self.search_view(&w.app, &w.kind).and_then(|v| v.description()).map(str::to_string),
                 placed: w.placed,
                 large: w.large,
+                configurable: w.config.as_ref().is_some_and(|c| !c.params().is_empty()),
             })
             .collect()
     }
@@ -293,22 +367,24 @@ impl Store {
         let now_f = now as f64;
         // each widget's entry on screen, paired with its rank item; widgets without a hint rank last, in their order
         // a widget taken off in the gallery is not in the column
-        let shown: Vec<(&Entry<Text>, Option<Hint>, bool)> =
-            self.widgets.iter().filter(|w| w.placed).filter_map(|w| w.timeline.entry_at(now_f).map(|e| (e, w.hint, w.large))).collect();
+        let shown: Vec<(&Widget, &Entry<Text>)> = self.widgets.iter().filter(|w| w.placed).filter_map(|w| w.timeline.entry_at(now_f).map(|e| (w, e))).collect();
         let items: Vec<Item> = shown
             .iter()
-            .map(|(e, hint, _)| match hint {
+            .map(|(w, e)| match w.hint {
                 Some(h) => h.item(e.date, now_f),
                 None => Item { date: e.date, relevance: None },
             })
             .collect();
         let mut rows: Vec<Row> = relevance::rank(&items, now_f)
             .into_iter()
-            .map(|i| Row { title: shown[i].0.value.title.clone(), text: shown[i].0.value.text.clone(), large: shown[i].2 })
+            .map(|i| {
+                let (w, e) = shown[i];
+                Row { title: e.value.title.clone(), text: e.value.text.clone(), large: w.large, widget: Some((w.app.clone(), w.kind.clone())) }
+            })
             .collect();
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
-                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false });
+                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false, widget: None });
             }
         }
         rows
@@ -339,8 +415,48 @@ impl Store {
                     entries.push(Entry { date, value: Text::of(e) });
                 }
                 let hint = hint_of(p)?;
+                let link = match p.str_field("link") {
+                    Some(u) => Some(Link::parse(&u).map_err(|e| format!("a widget link is bifrost-app://app/path, not {u:?} ({e:?})"))?),
+                    None => None,
+                };
                 let n = self.reload_ranked(app, &kind, entries, policy, hint)?;
+                self.set_link(app, &kind, link);
                 Ok(Json::Num(n as f64))
+            }
+            "configure" => {
+                let kind = p.str_field("kind").ok_or("configure needs a kind")?;
+                let mut params = Vec::new();
+                for j in p.get("parameters").and_then(|j| j.as_array()).unwrap_or_default() {
+                    params.push(parameter_of(j)?);
+                }
+                Ok(Json::Num(self.configure(app, &kind, params)? as f64))
+            }
+            "set_option" => {
+                let kind = p.str_field("kind").ok_or("set_option needs a kind")?;
+                let key = p.str_field("key").ok_or("set_option needs a key")?;
+                let param = self
+                    .configuration(app, &kind)
+                    .and_then(|c| c.params().iter().find(|q| q.key() == key).cloned())
+                    .ok_or_else(|| format!("no option {key}"))?;
+                let value = value_of(&param, p.get("value").ok_or("set_option needs a value")?)?;
+                self.set_option(app, &kind, &key, value)?;
+                Ok(Json::Bool(true))
+            }
+            "options" => {
+                let kind = p.str_field("kind").ok_or("options needs a kind")?;
+                let Some(c) = self.configuration(app, &kind) else { return Ok(Json::Arr(Vec::new())) };
+                let mut out = Vec::new();
+                for param in c.params() {
+                    let key = param.key();
+                    let value = match c.value(key) {
+                        Some(Value::Choice(_)) => Json::Str(c.choice_label(key).unwrap_or_default().to_string()),
+                        Some(Value::Flag(b)) => Json::Bool(b),
+                        Some(Value::Number(n)) => Json::Num(n as f64),
+                        None => Json::Null,
+                    };
+                    out.push(Json::Obj(vec![("key".into(), Json::Str(key.into())), ("value".into(), value)]));
+                }
+                Ok(Json::Arr(out))
             }
             "search" => {
                 let kind = p.str_field("kind").ok_or("search needs a kind")?;
@@ -427,6 +543,60 @@ impl Store {
             }
             _ => Err(format!("widgets_timeline has no method {method}")),
         }
+    }
+}
+
+fn config_error(e: ConfigError) -> String {
+    match e {
+        ConfigError::EmptyKey => "an option needs a key".into(),
+        ConfigError::DuplicateKey(k) => format!("option {k} is listed twice"),
+        ConfigError::NoOptions(k) => format!("choice {k} lists no names"),
+        ConfigError::BadDefault(k) => format!("the default of {k} is out of range"),
+        ConfigError::BadRange(k) => format!("option {k} has min above max"),
+        ConfigError::UnknownKey(k) => format!("no option {k}"),
+        ConfigError::WrongType(k) => format!("the value of {k} has the wrong kind"),
+        ConfigError::OutOfRange(k) => format!("the value of {k} is out of range"),
+    }
+}
+
+/// One option of a `configure` call: `{type:"choice", key, options:[names], default?}`, `{type:"flag", key, default?}`
+/// or `{type:"number", key, min, max, default?}` (the default is the minimum when left out).
+fn parameter_of(j: &Json) -> Result<Parameter, String> {
+    let key = j.str_field("key").ok_or("a parameter needs a key")?;
+    let num = |name: &str| j.get(name).and_then(Json::number);
+    match j.str_field("type").as_deref() {
+        Some("choice") => {
+            let options: Vec<String> = j.get("options").and_then(|o| o.as_array()).unwrap_or_default().iter().filter_map(|o| o.as_str().map(str::to_string)).collect();
+            Ok(Parameter::Choice { key, options, default: num("default").unwrap_or(0.0).max(0.0) as usize })
+        }
+        Some("flag") => Ok(Parameter::Flag { key, default: matches!(j.get("default"), Some(Json::Bool(true))) }),
+        Some("number") => {
+            let min = num("min").unwrap_or(0.0) as i64;
+            let max = num("max").unwrap_or(min as f64) as i64;
+            let default = num("default").map_or(min, |d| d as i64);
+            Ok(Parameter::Number { key, min, max, default })
+        }
+        Some(other) => Err(format!("no option type {other}")),
+        None => Err("a parameter needs a type".into()),
+    }
+}
+
+/// The value a `set_option` call sends for `param`: a choice index, a flag, or a whole number.
+fn value_of(param: &Parameter, j: &Json) -> Result<Value, String> {
+    let whole = |what: &str| Json::number(j).filter(|n| n.is_finite() && n.fract() == 0.0).ok_or(format!("{what} takes a whole number"));
+    match param {
+        Parameter::Choice { .. } => {
+            let n = whole("a choice")?;
+            if n < 0.0 {
+                return Err("a choice index is 0 or more".into());
+            }
+            Ok(Value::Choice(n as usize))
+        }
+        Parameter::Flag { .. } => match j {
+            Json::Bool(b) => Ok(Value::Flag(*b)),
+            _ => Err("a flag takes true or false".into()),
+        },
+        Parameter::Number { .. } => Ok(Value::Number(whole("a number")? as i64)),
     }
 }
 
@@ -532,7 +702,7 @@ mod tests {
         assert_eq!(s.current("is.a", "next", 150).map(|e| e.value.text), Some("first".into()));
         assert_eq!(s.current("is.a", "next", 250).map(|e| e.value.text), Some("second".into()));
         assert_eq!(s.current("is.b", "next", 250), None, "another app cannot read the timeline");
-        assert_eq!(s.rows(150), vec![Row { title: "Next".into(), text: "first".into(), large: false }]);
+        assert_eq!(s.rows(150), vec![Row { title: "Next".into(), text: "first".into(), large: false, widget: Some(("is.a".into(), "next".into())) }]);
     }
 
     #[test]
@@ -599,7 +769,7 @@ mod tests {
         let p = obj(&[("id", Json::Num(id as f64)), ("title", Json::Str("Ride".into())), ("text", Json::Str("5 km".into()))]);
         assert!(s.call("is.b", "update_activity", &p, 110).is_err(), "another app cannot update it");
         assert_eq!(s.call("is.a", "update_activity", &p, 110), Ok(Json::Bool(true)));
-        assert_eq!(s.rows(110), vec![Row { title: "Ride".into(), text: "5 km".into(), large: false }]);
+        assert_eq!(s.rows(110), vec![Row { title: "Ride".into(), text: "5 km".into(), large: false, widget: None }]);
         let listed = s.call("is.a", "activities", &Json::Null, 110).unwrap();
         assert_eq!(listed.as_array().map(|a| a.len()), Some(1));
         let end = obj(&[("id", Json::Num(id as f64)), ("dismissal", Json::Str("immediate".into()))]);
@@ -745,7 +915,7 @@ mod tests {
         let mut s = Store::default();
         ranked(&mut s, "is.a", "one", 100.0, "a", None);
         assert!(s.set_large("is.a", "one", true));
-        assert_eq!(s.rows(150), vec![Row { title: "W".into(), text: "a".into(), large: true }]);
+        assert_eq!(s.rows(150), vec![Row { title: "W".into(), text: "a".into(), large: true, widget: Some(("is.a".into(), "one".into())) }]);
         assert_eq!(s.listing(150)[0].title, "W", "the title of the entry on screen");
         assert_eq!(s.listing(150)[0].description, None);
         s.set_search("is.a", "one", "Notes", "", vec![]).unwrap();
@@ -759,5 +929,60 @@ mod tests {
         let g = s.listing(150);
         assert_eq!(g[0].title, "later", "an empty timeline has no entry on screen");
         assert_eq!(g[0].kind, "later");
+    }
+
+    #[test]
+    fn a_widget_link_is_read_on_reload_and_a_link_outside_the_scheme_is_refused() {
+        let mut s = Store::default();
+        let p = obj(&[
+            ("kind", Json::Str("next".into())),
+            ("entries", Json::Arr(vec![obj(&[("date", Json::Num(100.0)), ("title", Json::Str("Next".into()))])])),
+            ("link", Json::Str("bifrost-app://is.a/trips/today".into())),
+        ]);
+        assert_eq!(s.call("is.a", "reload", &p, 90), Ok(Json::Num(1.0)));
+        assert_eq!(s.link("is.a", "next").map(|l| l.to_url()), Some("bifrost-app://is.a/trips/today".to_string()));
+        let bad = obj(&[("kind", Json::Str("next".into())), ("entries", Json::Arr(vec![])), ("link", Json::Str("https://example.com".into()))]);
+        assert!(s.call("is.a", "reload", &bad, 90).is_err(), "only bifrost-app:// links are widget links");
+        assert!(s.link("is.a", "next").is_some(), "a refused reload changes nothing");
+        // a reload without a link clears it: the widget has no tap target until the app sends one again
+        s.reload("is.a", "next", vec![], ReloadPolicy::Never).unwrap();
+        assert_eq!(s.link("is.a", "next"), None);
+    }
+
+    #[test]
+    fn a_widget_offers_options_once_it_defines_them_and_the_values_survive_a_reload() {
+        let mut s = Store::default();
+        s.reload("is.a", "next", vec![entry(100.0, "Next", "")], ReloadPolicy::Never).unwrap();
+        assert_eq!(s.configure("is.b", "next", vec![]), Err("no widget next".to_string()), "an app configures only its own widget");
+        let city = obj(&[("type", Json::Str("choice".into())), ("key", Json::Str("city".into())), ("options", Json::Arr(vec![Json::Str("Reykjavik".into()), Json::Str("Akureyri".into())]))]);
+        let metric = obj(&[("type", Json::Str("flag".into())), ("key", Json::Str("metric".into())), ("default", Json::Bool(true))]);
+        let days = obj(&[("type", Json::Str("number".into())), ("key", Json::Str("days".into())), ("min", Json::Num(1.0)), ("max", Json::Num(5.0))]);
+        let p = obj(&[("kind", Json::Str("next".into())), ("parameters", Json::Arr(vec![city, metric, days]))]);
+        assert_eq!(s.call("is.a", "configure", &p, 90), Ok(Json::Num(3.0)));
+        assert!(s.listing(150)[0].configurable, "the gallery offers Options for it");
+        let options = Json::Arr(vec![
+            obj(&[("key", Json::Str("city".into())), ("value", Json::Str("Reykjavik".into()))]),
+            obj(&[("key", Json::Str("metric".into())), ("value", Json::Bool(true))]),
+            obj(&[("key", Json::Str("days".into())), ("value", Json::Num(1.0))]),
+        ]);
+        assert_eq!(s.call("is.a", "options", &obj(&[("kind", Json::Str("next".into()))]), 150), Ok(options));
+        // one step each: the city wraps to Akureyri, the flag flips, the number goes up by one
+        assert!(s.step_option("is.a", "next", "city", 1));
+        assert!(s.step_option("is.a", "next", "metric", 1));
+        assert!(s.step_option("is.a", "next", "days", 1));
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.choice_label("city").map(str::to_string)), Some("Akureyri".to_string()));
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("metric")), Some(Value::Flag(false)));
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("days")), Some(Value::Number(2)));
+        // a number is kept in its range, and a value out of range is refused
+        assert!(s.step_option("is.a", "next", "days", 10));
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("days")), Some(Value::Number(5)));
+        assert!(s.set_option("is.a", "next", "days", Value::Number(9)).is_err());
+        assert_eq!(s.call("is.a", "set_option", &obj(&[("kind", Json::Str("next".into())), ("key", Json::Str("days".into())), ("value", Json::Num(4.0))]), 150), Ok(Json::Bool(true)));
+        // a reload keeps the person's values
+        s.reload("is.a", "next", vec![entry(100.0, "Next", "")], ReloadPolicy::Never).unwrap();
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("days")), Some(Value::Number(4)));
+        // defining the same options again keeps the values; a changed list starts over
+        assert_eq!(s.configure("is.a", "next", vec![Parameter::Flag { key: "metric".into(), default: true }]), Ok(1));
+        assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("days")), None, "a new list has only its own options");
     }
 }
