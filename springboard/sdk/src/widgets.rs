@@ -140,38 +140,16 @@ impl Material {
             _ => 10.0,
         }
     }
-    /// The kind the shell's presenter draws behind the window.
+    /// The kind the shell's presenter draws behind the window (the shared model kind, which is also the wire kind).
     pub fn kind(self) -> crate::proto::MaterialKind {
-        use crate::proto::MaterialKind as K;
-        match self {
-            Material::Sidebar => K::Sidebar,
-            Material::Titlebar => K::Titlebar,
-            Material::Popover => K::Popover,
-            Material::Hud => K::HudWindow,
-            Material::Menu => K::Menu,
-            Material::Sheet => K::Sheet,
-            Material::HeaderView => K::HeaderView,
-            Material::WindowBackground => K::WindowBackground,
-            Material::ContentBackground => K::ContentBackground,
-            Material::UnderWindowBackground => K::UnderWindowBackground,
-            Material::UnderPageBackground => K::UnderPageBackground,
-            Material::FullScreenUi => K::FullScreenUi,
-            Material::ToolTip => K::ToolTip,
-            Material::Selection => K::Selection,
-        }
+        self.model_kind()
     }
 }
 
-/// `NativeVisualEffectView.BlendingMode`: what the material blurs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum Blending {
-    /// The desktop and the windows behind this window (the shell's GPU presenter blurs them). Falls back to
-    /// the material's opaque colour where the shell offers no vibrancy (CPU path, older shells).
-    #[default]
-    BehindWindow,
-    /// The app's own content already drawn under the rectangle.
-    WithinWindow,
-}
+/// `NativeVisualEffectView.BlendingMode`: what the material blurs. `BehindWindow` is the desktop and the windows
+/// behind this window (the shell's GPU presenter blurs them; the opaque colour where the shell offers no vibrancy);
+/// `WithinWindow` is the app's own content already drawn under the rectangle. The shared model type.
+pub use bifrost_ui::visual_effect::BlendingMode as Blending;
 
 /// `NativeVisualEffectView.State`: an inactive window's behind-window materials are opaque unless the state says
 /// otherwise.
@@ -202,19 +180,30 @@ pub fn set_vibrancy(on: bool, all_materials: bool) {
 /// so the shell's blur shows through them; anti-aliased corner pixels mix the tint with what was drawn there.
 /// Returns false (and draws nothing) when vibrancy is off; the caller then paints its opaque colour.
 fn window_material(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, material: Material, state: State) -> bool {
+    let req = bifrost_ui::visual_effect::MaterialRequest::new(material.model_kind(), bounds, radius).state(state);
+    window_material_request(s, ui, &req, radius, material.tint())
+}
+
+/// `window_material` for a full shared request: declares kind, state, blending, emphasis and per-corner radii to the
+/// shell. `draw_radius` (points) is what the canvas writes the tint with (the canvas has one radius).
+fn window_material_request(s: &mut dyn Canvas, ui: &Ui, req: &bifrost_ui::visual_effect::MaterialRequest, draw_radius: f32, tint: u32) -> bool {
     if !vibrancy() || crate::kit::appearance::reduce_transparency() {
         return false;
     }
-    let tint = material.tint();
-    let (x, y, w, h, r) = (ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(bounds.w), ui.pt(bounds.h), ui.pt(radius));
+    let bounds = req.rect;
+    let (x, y, w, h, r) = (ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(bounds.w), ui.pt(bounds.h), ui.pt(draw_radius));
     // The translucent tint is written, replacing what is drawn there with its alpha (the window's own pixels are
     // transparent under a behind-window material), so the window server's blur shows through it on every path.
     s.write_rrect(RectF::new(x, y, w, h), r, tint);
-    let (kind, state) = if ALL_MATERIALS.with(|v| v.get()) { (material.kind(), state) } else { (material.kind().legacy(), State::default()) };
-    FRAME_MATERIALS.with(|m| {
-        let mut m = m.borrow_mut();
-        if m.len() < crate::proto::MAX_MATERIALS {
-            m.push(crate::proto::Material { kind, rect: bounds, radius, state });
+    let mut m = crate::proto::Material::from_request(req);
+    if !ALL_MATERIALS.with(|v| v.get()) {
+        // a shell without `appearance::MATERIALS` decodes only the legacy kinds and the default state, and uniform radii
+        m = crate::proto::Material::new(m.kind.legacy(), bounds, draw_radius);
+    }
+    FRAME_MATERIALS.with(|f| {
+        let mut f = f.borrow_mut();
+        if f.len() < crate::proto::MAX_MATERIALS {
+            f.push(m);
         }
     });
     true
@@ -374,23 +363,19 @@ pub fn visual_effect(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, mat
 /// corner and an alpha mask as its bounding rounded rectangle until the canvas and wire carry them (see
 /// docs/bifrost-ui.md, "Window vibrancy"); emphasis changes the `.selection` tint.
 pub fn visual_effect_request(s: &mut dyn Canvas, ui: &Ui, req: &bifrost_ui::visual_effect::MaterialRequest, window_active: bool) {
-    use bifrost_ui::visual_effect::MaterialState as MS;
     let mat = Material::from_model(req.kind);
     let c = req.corners();
     let radius = c.tl.max(c.tr).max(c.br).max(c.bl);
-    let state = match req.state {
-        MS::FollowsWindowActiveState => State::FollowsWindowActiveState,
-        MS::Active => State::Active,
-        MS::Inactive => State::Inactive,
-    };
-    if mat == Material::Selection && req.for_window_server() && vibrancy() && !crate::kit::appearance::reduce_transparency() {
-        let tint = mat.tint_for(req.emphasized, req.looks_active(window_active));
+    if req.for_window_server() {
+        let tint = if mat == Material::Selection { mat.tint_for(req.emphasized, req.looks_active(window_active)) } else { mat.tint() };
+        if window_material_request(s, ui, req, radius, tint) {
+            return;
+        }
         let b = req.rect;
-        s.write_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(radius), tint);
+        s.fill_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(radius), mat.solid());
         return;
     }
-    let blending = if req.for_window_server() { Blending::BehindWindow } else { Blending::WithinWindow };
-    visual_effect(s, ui, req.rect, radius, mat, blending, state);
+    material(s, ui, req.rect, radius, mat);
 }
 
 /// A root screen's large title (the native toolkit/HIG: large title, bold) on the leading edge of the readable column.
@@ -1282,7 +1267,7 @@ mod tests {
         let b = Rect { x: 4.0, y: 4.0, w: 30.0, h: 30.0 };
         visual_effect(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, b, 8.0, Material::Popover, Blending::BehindWindow, State::Active);
         let got = take_frame_materials();
-        assert_eq!(got, vec![crate::proto::Material { kind: crate::proto::MaterialKind::Popover, rect: b, radius: 8.0, state: State::Active }]);
+        assert_eq!(got, vec![{ let mut m = crate::proto::Material::new(crate::proto::MaterialKind::Popover, b, 8.0); m.state = State::Active; m }]);
         assert_eq!(px[20 * w + 20], Material::Popover.tint(), "the inside is replaced by the translucent tint");
         assert_eq!(px[4 * w + 4], pack(9, 9, 9, 255), "outside the rounded corner the content stays");
         assert_eq!(px[0], pack(9, 9, 9, 255));

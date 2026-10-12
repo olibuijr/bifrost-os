@@ -23,6 +23,8 @@ pub mod timezone;
 pub mod vibrator;
 #[cfg(feature = "desktop-wayland")]
 pub mod wayland;
+#[cfg(feature = "desktop-wayland")]
+pub mod material_client;
 
 #[cfg(feature="desktop-wayland")]
 pub mod desktop_input;

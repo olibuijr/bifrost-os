@@ -35,6 +35,8 @@ pub enum MaterialKind {
     UnderPageBackground,
     GlassRegular,
     GlassClear,
+    /// `.selection` (the accent plate of a selected row).
+    Selection,
     /// A plain `ext-background-effect-v1` blur region: no kind was sent.
     Plain,
 }
@@ -59,8 +61,40 @@ impl MaterialKind {
             12 => UnderPageBackground,
             13 => GlassRegular,
             14 => GlassClear,
+            15 => Selection,
             _ => return None,
         })
+    }
+
+    /// The window-server kind of a shared model kind (`bifrost_ui::visual_effect`). Exhaustive on purpose: a kind added
+    /// to the model does not compile here until it has a window-server kind.
+    pub fn from_model(k: bifrost_ui::visual_effect::MaterialKind) -> MaterialKind {
+        use bifrost_ui::visual_effect::MaterialKind as K;
+        match k {
+            K::Sidebar => MaterialKind::Sidebar,
+            K::Titlebar => MaterialKind::Titlebar,
+            K::HeaderView => MaterialKind::HeaderView,
+            K::WindowBackground => MaterialKind::WindowBackground,
+            K::ContentBackground => MaterialKind::ContentBackground,
+            K::UnderWindowBackground => MaterialKind::UnderWindowBackground,
+            K::UnderPageBackground => MaterialKind::UnderPageBackground,
+            K::Menu => MaterialKind::Menu,
+            K::Popover => MaterialKind::Popover,
+            K::Sheet => MaterialKind::Sheet,
+            K::HudWindow => MaterialKind::HudWindow,
+            K::FullScreenUi => MaterialKind::FullScreenUi,
+            K::ToolTip => MaterialKind::ToolTip,
+            K::Selection => MaterialKind::Selection,
+        }
+    }
+
+    /// The window-server kind of a whole shared request: the glass recipe when it asks for Liquid Glass, else its kind.
+    pub fn from_request(r: &bifrost_ui::visual_effect::MaterialRequest) -> MaterialKind {
+        match r.glass {
+            Some(bifrost_ui::visual_effect::GlassKind::Regular) => MaterialKind::GlassRegular,
+            Some(bifrost_ui::visual_effect::GlassKind::Clear) => MaterialKind::GlassClear,
+            None => MaterialKind::from_model(r.kind),
+        }
     }
 }
 
@@ -183,6 +217,7 @@ pub fn recipe(kind: MaterialKind) -> Recipe {
         HudWindow | ToolTip | FullScreenUi => r(30.0, 1.6, c(12, 12, 14, 170), c(12, 12, 14, 170), HUD_PLATE, 0.02, true),
         UnderWindowBackground | UnderPageBackground => r(28.0, 1.8, c(24, 24, 27, 170), c(236, 236, 236, 175), SIDEBAR_PLATE, 0.02, false),
         GlassRegular => r(18.0, 1.8, c(255, 255, 255, 38), c(255, 255, 255, 70), TITLEBAR_PLATE, 0.0, false),
+        Selection => r(12.0, 1.6, c(10, 95, 214, 170), c(10, 132, 255, 150), TITLEBAR_PLATE, 0.0, false),
         GlassClear => r(10.0, 1.4, c(255, 255, 255, 18), c(255, 255, 255, 36), TITLEBAR_PLATE, 0.0, false),
         // the plain ext-background-effect blur keeps its old look (a white veil at 25 %) and never falls back to a plate
         Plain => r(20.0, 1.8, c(255, 255, 255, 64), c(255, 255, 255, 64), WINDOW_PLATE, 0.0, true),
@@ -279,12 +314,46 @@ mod tests {
 
     #[test]
     fn every_wire_kind_maps_and_the_next_does_not() {
-        for v in 0..=14 {
+        for v in 0..=15 {
             assert!(MaterialKind::from_wire(v).is_some(), "kind {v}");
         }
-        assert!(MaterialKind::from_wire(15).is_none());
+        assert!(MaterialKind::from_wire(16).is_none());
         assert!(MaterialState::from_wire(3).is_none());
         assert!(Blending::from_wire(2).is_none());
+    }
+
+    /// The table that keeps the shared model and the window server in step: every model kind maps to a distinct
+    /// window-server kind whose protocol value is the model's `window_server_wire`, and the protocol values the model
+    /// does not use are exactly the two glass recipes.
+    #[test]
+    fn model_kinds_map_one_to_one_onto_the_protocol_kinds() {
+        use bifrost_ui::visual_effect::{GlassKind, MaterialKind as K, MaterialRequest, WINDOW_SERVER_GLASS_CLEAR, WINDOW_SERVER_GLASS_REGULAR};
+        let mut seen = std::collections::HashSet::new();
+        for k in K::ALL {
+            let wm = MaterialKind::from_model(k);
+            assert_eq!(MaterialKind::from_wire(k.window_server_wire()), Some(wm), "{k:?}");
+            assert!(seen.insert(wm), "{k:?} maps to a kind another model kind already has");
+        }
+        assert_eq!(seen.len(), K::ALL.len());
+        // the wire values 0..=15 are the model kinds plus the two glass recipes
+        let used: std::collections::HashSet<u32> = K::ALL.iter().map(|k| k.window_server_wire()).collect();
+        let free: Vec<u32> = (0..=15).filter(|v| !used.contains(v)).collect();
+        assert_eq!(free, vec![WINDOW_SERVER_GLASS_REGULAR, WINDOW_SERVER_GLASS_CLEAR]);
+        assert_eq!(MaterialKind::from_wire(WINDOW_SERVER_GLASS_REGULAR), Some(MaterialKind::GlassRegular));
+        assert_eq!(MaterialKind::from_wire(WINDOW_SERVER_GLASS_CLEAR), Some(MaterialKind::GlassClear));
+        let req = MaterialRequest::new(K::Popover, bifrost_ui::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }, 0.0);
+        assert_eq!(MaterialKind::from_request(&req.clone().glass(GlassKind::Clear)), MaterialKind::GlassClear);
+        assert_eq!(MaterialKind::from_request(&req), MaterialKind::Popover);
+    }
+
+    #[test]
+    fn state_and_blending_wire_values_match_the_model() {
+        use bifrost_ui::visual_effect::{BlendingMode as B, MaterialState as S};
+        for (m, w) in [(S::FollowsWindowActiveState, MaterialState::FollowsWindow), (S::Active, MaterialState::Active), (S::Inactive, MaterialState::Inactive)] {
+            assert_eq!(MaterialState::from_wire(m.window_server_wire()), Some(w));
+        }
+        assert_eq!(Blending::from_wire(B::BehindWindow.window_server_wire()), Some(Blending::BehindWindow));
+        assert_eq!(Blending::from_wire(B::WithinWindow.window_server_wire()), Some(Blending::WithinWindow));
     }
 
     #[test]
@@ -297,7 +366,7 @@ mod tests {
 
     #[test]
     fn every_recipe_is_sane() {
-        for v in 0..=14 {
+        for v in 0..=15 {
             let rc = recipe(MaterialKind::from_wire(v).unwrap());
             assert!(rc.blur > 0.0 && rc.blur <= 64.0);
             assert!(rc.saturation >= 1.0 && rc.saturation <= 2.5);

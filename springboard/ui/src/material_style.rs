@@ -2,11 +2,24 @@
 //! `glassEffect(_:in:)`, `GlassEffectContainer`, `glassEffectID`, `glassEffectUnion`,
 //! `backgroundExtensionEffect`, `.glass` and `.glassProminent` button styles).
 //!
-//! Views are imperative in this SDK, so each modifier is a builder that yields [`MaterialRequest`]s: one per
+//! Mapping onto the shared model (`StyleRequest::to_material_request`): a SwiftUI `Material` becomes a
+//! `visual_effect::MaterialKind` plus `strength` (its `level`): ultraThin -> UnderWindowBackground, thin ->
+//! ContentBackground, regular -> Popover, thick -> Sheet, ultraThick -> HudWindow, bar -> HeaderView. Glass becomes
+//! kind Popover with `glass` set (the window server draws GlassRegular/GlassClear). The mask is a rounded rectangle
+//! of the four radii.
+//!
+//! Views are imperative in this SDK, so each modifier is a builder that yields [`StyleRequest`]s (convertible to the shared `visual_effect::MaterialRequest` with `to_material_request`): one per
 //! shape (rect, corner radii or capsule) for the window server. [`Material`] is the minimal enum compatible with
 //! the shared material request; `Material::level` is the blur strength the compositor maps onto its material
 //! families (ultraThin 0 .. ultraThick 4, bar is the chrome material). Everything here is pure data and unit tested.
+<<<<<<< HEAD
 use crate::anim::Animation;
+||||||| 8401acbe
+use crate::anim::{Animation, Curve};
+=======
+use crate::anim::{Animation, Curve};
+use crate::visual_effect::{Corners, GlassKind, Mask, MaterialKind, MaterialRequest};
+>>>>>>> mat/reconcile
 use crate::Rect;
 use std::collections::HashMap;
 
@@ -96,21 +109,50 @@ pub enum Fill {
 
 /// One material request: the shape the window server fills. `group` is set for glass that merged in a container.
 #[derive(Clone, Debug, PartialEq)]
-pub struct MaterialRequest {
+pub struct StyleRequest {
     pub rect: Rect,
     pub radii: [f32; 4],
     pub fill: Fill,
     pub group: Option<u32>,
 }
 
+impl Material {
+    /// The shared `MaterialKind` this level maps onto (see the module docs).
+    pub fn model_kind(self) -> MaterialKind {
+        match self {
+            Material::UltraThin => MaterialKind::UnderWindowBackground,
+            Material::Thin => MaterialKind::ContentBackground,
+            Material::Regular => MaterialKind::Popover,
+            Material::Thick => MaterialKind::Sheet,
+            Material::UltraThick => MaterialKind::HudWindow,
+            Material::Bar => MaterialKind::HeaderView,
+        }
+    }
+}
+
+impl StyleRequest {
+    /// The shared window-server request: behind-window, follows-active, rounded-rect mask from `radii`.
+    pub fn to_material_request(&self) -> MaterialRequest {
+        let [tl, tr, br, bl] = self.radii;
+        let req = MaterialRequest::new(MaterialKind::Popover, self.rect, 0.0).mask(Mask::RoundedRect(Corners { tl, tr, br, bl }));
+        match self.fill {
+            Fill::Blur(m) => MaterialRequest { kind: m.model_kind(), ..req }.strength(m.level()),
+            Fill::Glass(g) => req.glass(match g.variant {
+                GlassVariant::Regular => GlassKind::Regular,
+                GlassVariant::Clear => GlassKind::Clear,
+            }),
+        }
+    }
+}
+
 /// `.background(material, in: shape)`.
-pub fn background(material: Material, shape: MatShape, rect: Rect) -> MaterialRequest {
-    MaterialRequest { rect, radii: shape.radii(rect), fill: Fill::Blur(material), group: None }
+pub fn background(material: Material, shape: MatShape, rect: Rect) -> StyleRequest {
+    StyleRequest { rect, radii: shape.radii(rect), fill: Fill::Blur(material), group: None }
 }
 
 /// `.glassEffect(glass, in: shape)`.
-pub fn glass_effect(glass: Glass, shape: MatShape, rect: Rect) -> MaterialRequest {
-    MaterialRequest { rect, radii: shape.radii(rect), fill: Fill::Glass(glass), group: None }
+pub fn glass_effect(glass: Glass, shape: MatShape, rect: Rect) -> StyleRequest {
+    StyleRequest { rect, radii: shape.radii(rect), fill: Fill::Glass(glass), group: None }
 }
 
 /// One glass view inside a container.
@@ -196,7 +238,7 @@ impl GlassContainer {
 
     /// One request per shape; shapes in a multi-member group carry the group number (the first member's `id`)
     /// so the window server blends their edges into one surface.
-    pub fn requests(&self) -> Vec<MaterialRequest> {
+    pub fn requests(&self) -> Vec<StyleRequest> {
         let mut out = Vec::new();
         for g in self.groups() {
             let gid = (g.len() > 1).then(|| self.items[g[0]].id);
@@ -337,7 +379,7 @@ pub enum GlassButtonStyle {
 
 impl GlassButtonStyle {
     /// The request for a button at `rect`: capsule, interactive; prominent is tinted with the accent.
-    pub fn request(self, rect: Rect, accent: [u8; 4]) -> MaterialRequest {
+    pub fn request(self, rect: Rect, accent: [u8; 4]) -> StyleRequest {
         let g = match self {
             GlassButtonStyle::Glass => Glass::REGULAR.interactive(),
             GlassButtonStyle::GlassProminent => Glass::REGULAR.tint(accent).interactive(),
@@ -433,6 +475,19 @@ mod tests {
         let q = GlassButtonStyle::GlassProminent.request(r(0.0, 0.0, 80.0, 30.0), [0, 122, 255, 255]);
         assert_eq!(q.radii, [15.0; 4]);
         assert!(matches!(q.fill, Fill::Glass(Glass { tint: Some(_), interactive: true, .. })));
+    }
+
+    #[test]
+    fn style_requests_become_the_shared_request() {
+        let q = background(Material::Thick, MatShape::Rounded(8.0), r(0.0, 0.0, 100.0, 40.0)).to_material_request();
+        assert_eq!((q.kind, q.strength, q.glass), (MaterialKind::Sheet, Some(3), None));
+        assert_eq!(q.corners().tl, 8.0);
+        let g = glass_effect(Glass::CLEAR, MatShape::Capsule, r(0.0, 0.0, 100.0, 40.0)).to_material_request();
+        assert_eq!(g.glass, Some(GlassKind::Clear));
+        assert_eq!(g.corners().br, 20.0);
+        // every level maps to a distinct kind
+        let kinds: std::collections::HashSet<_> = [Material::UltraThin, Material::Thin, Material::Regular, Material::Thick, Material::UltraThick, Material::Bar].map(Material::model_kind).into();
+        assert_eq!(kinds.len(), 6);
     }
 
     #[test]

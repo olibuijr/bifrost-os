@@ -14,6 +14,22 @@ pub struct Rect {
     pub kind: Kind,
     /// `NativeVisualEffectView.State`: `None` follows the window's active state, `Some(active)` fixes it.
     pub active: Option<bool>,
+    /// The full request when the declarer has one (the shared `visual_effect::MaterialRequest`), for the window
+    /// server; `None` for shell-side regions, which derive theirs from `kind`.
+    pub detail: Option<Detail>,
+}
+
+/// What `Rect` loses of a shared material request: the window server's `bifrost_material_v1` values (plain data;
+/// this crate does not depend on the UI model) and the four corner radii in the same units as `Rect::r`.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Detail {
+    /// `bifrost_material_v1.kind` (`MaterialKind::window_server_wire`)
+    pub kind: u32,
+    /// within-window blending (`bifrost_material_v1.blending` 1)
+    pub within_window: bool,
+    pub emphasized: bool,
+    /// top-left, top-right, bottom-right, bottom-left
+    pub radii: [f32; 4],
 }
 
 /// What a glass shape is, for the presenter (`NativeVisualEffectView.Material` families it tells apart).

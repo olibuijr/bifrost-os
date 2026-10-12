@@ -653,27 +653,44 @@ impl Shell {
         for w in desk.wins.iter().filter(|w| !w.minimized) {
             let Some(id) = apps().iter().position(|a| a.id == w.app).map(|i| i as u32 + 1) else { continue };
             let top = title_of(w.app, &m) as f32;
-            let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>)> = Vec::new();
+            let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>, Option<bifrost_render::glass::Detail>)> = Vec::new();
             if vibrant {
                 match w.app {
                     AppId::External(slot) => {
                         if let Some(h) = self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()) {
                             for mat in h.materials.iter().take(bifrost_proto::MAX_MATERIALS) {
                                 let b = mat.rect;
-                                rects.push((b.x * m.pt, top + b.y * m.pt, b.w * m.pt, b.h * m.pt, mat.radius * m.pt, glass_kind(mat.kind), glass_active(mat.state)));
+                                let req = mat.request();
+                                let c = req.corners();
+                                let detail = bifrost_render::glass::Detail {
+                                    kind: mat.kind.window_server_wire(),
+                                    within_window: !req.for_window_server(),
+                                    emphasized: mat.emphasized,
+                                    radii: [c.tl * m.pt, c.tr * m.pt, c.br * m.pt, c.bl * m.pt],
+                                };
+                                let r = c.tl.max(c.tr).max(c.br).max(c.bl);
+                                rects.push((b.x * m.pt, top + b.y * m.pt, b.w * m.pt, b.h * m.pt, r * m.pt, glass_kind(mat.kind), glass_active(mat.state), Some(detail)));
                             }
                         }
                     }
                     AppId::Settings => {
                         if let Some(side) = self.settings.as_ref().map(|st| st.sidebar_px()).filter(|&p| p > 0) {
-                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None));
+                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
                         }
                     }
                     _ => {}
                 }
             }
-            let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active)| {
-                expand_material((x, y, rw, rh, r, kind, active), (w.r.w as f32, w.r.h as f32), w.maximized, corner)
+            let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active, detail)| {
+                let mut g = expand_material((x, y, rw, rh, r, kind, active), (w.r.w as f32, w.r.h as f32), w.maximized, corner);
+                // an expanded region takes the window radius on every corner; an untouched one keeps its own radii
+                g.detail = detail.map(|mut d| {
+                    if (g.x, g.y, g.w, g.h) != (x, y, rw, rh) {
+                        d.radii = [g.r; 4];
+                    }
+                    d
+                });
+                g
             }).collect();
             out.push((id, glass));
         }
@@ -1702,7 +1719,7 @@ impl Shell {
         let (bw, bh) = ((bar.w as usize).min(s.w.saturating_sub(bx)), (bar.h as usize).min(s.h.saturating_sub(by)));
         if bw > 0 && bh > 0 && bifrost_render::glass::gpu() {
             let rad = bar.w.min(bar.h) as f32 * DOCK_RADIUS_K;
-            bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::MaterialRequest::for_surface(bifrost_ui::material_request::ShellSurface::Dock, (bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32), rad)));
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::ShellSurface::Dock.request((bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32), rad)));
             soft_shadow(s, ui, bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad);
             s.fill_rrect(bar.x as f32 - 1.0, bar.y as f32 - 1.0, bar.w as f32 + 2.0, bar.h as f32 + 2.0, rad + 1.0, rgba(255, 255, 255, 36));
             s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad, bifrost_render::glass::tint(super::ui::DOCK_TINT.now()));
@@ -2364,14 +2381,14 @@ impl Shell {
 #[cfg(feature = "desktop-wayland")]
 fn expand_material((x, y, rw, rh, r, kind, active): (f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>), (ww, wh): (f32, f32), maximized: bool, corner: f32) -> bifrost_render::glass::Rect {
     if maximized {
-        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active };
+        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None };
     }
     let e = 0.5;
     let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
     let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
     let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
     let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
-    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active }
+    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None }
 }
 
 #[cfg(all(test, feature = "desktop-wayland"))]

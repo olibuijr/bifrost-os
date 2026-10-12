@@ -51,6 +51,7 @@
       <entry name="under_page_background" value="12"/>
       <entry name="glass_regular" value="13"/>
       <entry name="glass_clear" value="14"/>
+      <entry name="selection" value="15"/>
     </enum>
 
     <enum name="state">

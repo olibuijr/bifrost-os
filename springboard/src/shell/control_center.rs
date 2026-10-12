@@ -8,7 +8,8 @@ use super::music::nowplaying::Target as Media;
 use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
 use crate::shell::switcher::draw_scaled;
-use bifrost_ui::material_request::{MaterialKind, MaterialRequest, MaterialState, ShellSurface};
+use bifrost_ui::material_request::ShellSurface;
+use bifrost_ui::visual_effect::{MaterialKind, MaterialRequest, MaterialState};
 use bifrost_ui::media_session::PlaybackState;
 use bifrost_ui::symbol_effect::{Effect as SymbolFx, Options as SymbolOptions, SymbolEffect};
 use super::AppId;
@@ -1493,8 +1494,15 @@ pub(super) fn shell_glass_rect(req: &MaterialRequest) -> bifrost_render::glass::
         MaterialState::Active => Some(true),
         MaterialState::Inactive => Some(false),
     };
-    let (x, y, w, h) = req.rect;
-    bifrost_render::glass::Rect { x, y, w, h, r: req.radius, kind, active }
+    let c = req.corners();
+    let detail = bifrost_render::glass::Detail {
+        kind: req.kind.window_server_wire(),
+        within_window: !req.for_window_server(),
+        emphasized: req.emphasized,
+        radii: [c.tl, c.tr, c.br, c.bl],
+    };
+    let r = c.tl.max(c.tr).max(c.br).max(c.bl);
+    bifrost_render::glass::Rect { x: req.rect.x, y: req.rect.y, w: req.rect.w, h: req.rect.h, r, kind, active, detail: Some(detail) }
 }
 
 /// Declare a shell surface's material: the presenter's blur under it on the GPU path (nothing under
@@ -1514,7 +1522,7 @@ pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
 
 /// A glass plate for a shell surface (see `request_shell_material`), filled with `alpha`.
 pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
-    let fill = request_shell_material(MaterialRequest::for_surface(surface, (x, y, w, h), r));
+    let fill = request_shell_material(surface.request((x, y, w, h), r));
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
 }
 
@@ -1532,7 +1540,7 @@ mod shell_material_tests {
             (ShellSurface::Spotlight, Kind::Chrome),
             (ShellSurface::MenuBarMenu, Kind::Chrome),
         ] {
-            let r = shell_glass_rect(&MaterialRequest::for_surface(surface, (0.0, 0.0, 10.0, 10.0), 4.0));
+            let r = shell_glass_rect(&surface.request((0.0, 0.0, 10.0, 10.0), 4.0));
             assert_eq!(r.kind, kind, "{surface:?}");
         }
     }
