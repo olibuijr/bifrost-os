@@ -23,9 +23,12 @@ pub struct Hit {
     /// the item's `domainIdentifier`
     pub domain: String,
     pub title: String,
+    /// the `uttype` identifier of the item's file ("com.adobe.pdf"), from its content URL; `None` when unknown
+    pub kind: Option<String>,
 }
 
-/// Searches this app's indexed items for `query` (every word must match), at most `limit` results.
+/// Searches this app's indexed items for `query`: every word must match. A file type word filters by type ("pdf"),
+/// and a time phrase filters by when the item was indexed ("last week", "yesterday", "past 3 days"). At most `limit`.
 pub fn search(ctx: &Ctx, query: &str, limit: usize) -> u32 {
     service::call(ctx, SERVICE, "search", &Json::Obj(vec![("query".into(), Json::Str(query.into())), ("limit".into(), Json::Num(limit as f64))]))
 }
@@ -50,6 +53,7 @@ pub fn parse_hits(reply: &Json) -> Vec<Hit> {
                 id: h.get("id")?.as_str()?.to_string(),
                 domain: h.get("domain").and_then(Json::as_str).unwrap_or_default().to_string(),
                 title: h.get("title").and_then(Json::as_str).unwrap_or_default().to_string(),
+                kind: h.get("kind").and_then(Json::as_str).map(str::to_string),
             })
         })
         .collect()
@@ -101,7 +105,9 @@ mod tests {
     #[test]
     fn hits_and_languages_decode_from_replies() {
         let reply = bifrost_core::json::parse(r#"[{"id":"n1","domain":"notes","title":"Milk"},{"title":"no id"},{"id":"n2"}]"#).unwrap();
-        assert_eq!(parse_hits(&reply), vec![Hit { id: "n1".into(), domain: "notes".into(), title: "Milk".into() }, Hit { id: "n2".into(), domain: String::new(), title: String::new() }]);
+        assert_eq!(parse_hits(&reply), vec![Hit { id: "n1".into(), domain: "notes".into(), title: "Milk".into(), kind: None }, Hit { id: "n2".into(), domain: String::new(), title: String::new(), kind: None }]);
+        let typed = bifrost_core::json::parse(r#"[{"id":"r1","domain":"files","title":"Q1 report","kind":"com.adobe.pdf"}]"#).unwrap();
+        assert_eq!(parse_hits(&typed)[0].kind.as_deref(), Some("com.adobe.pdf"));
         assert!(parse_hits(&Json::Null).is_empty());
         assert_eq!(parse_language(&Json::Str("is".into())), Some("is".to_string()));
         assert_eq!(parse_language(&Json::Null), None);
