@@ -821,6 +821,7 @@ pub mod route;
 pub mod mapview;
 pub mod mapshape;
 pub mod reverse_lookup;
+pub mod map_item;
 pub mod switch_scan;
 pub mod ax_audit;
 pub mod state_report;
