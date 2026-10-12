@@ -46,16 +46,22 @@ if [[ ${BIFROST_SESSION_MODE:-desktop} != installer ]] && command -v dbus-daemon
     runuser -u "$account" -- dbus-daemon --session --nofork --nopidfile --address="unix:path=$runtime/bus" 1>&2 &
     bus_pid=$!
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+    # the launchers' environment update (labwc autostart, session-env) needs the socket: wait for it, at most 2 s
+    for ((i=0;i<100;i++)); do
+        [[ -S "$runtime/bus" ]] && break
+        kill -0 "$bus_pid" 2>/dev/null || break
+        sleep .02
+    done
 fi
 mark compositor-start
 # The window server: labwc, or BifrOSt's own (docs/window-server.md) when /etc/bifrost/compositor says bifrost-wm.
-compositor=$(tr -dc 'a-z-' < /etc/bifrost/compositor 2>/dev/null || true)
+source /usr/lib/bifrost/session-policy
+compositor=$(session_switch /etc/bifrost/compositor 'a-z-')
 # A bifrost-wm that exited three times within 60 s makes the session fall back to labwc until the next boot.
 [[ "$compositor" == bifrost-wm && -x /usr/bin/bifrost-wm && ! -e /run/bifrost/compositor-fallback ]] || compositor=labwc
 # The new stack's switches (docs/graphics-architecture.md): renderer and chrome, read as plain words.
-renderer=$(tr -dc 'a-z' < /etc/bifrost/renderer 2>/dev/null || true)
-chrome=$(tr -dc '0-9' < /etc/bifrost/chrome 2>/dev/null || true)
-source /usr/lib/bifrost/session-policy
+renderer=$(session_switch /etc/bifrost/renderer 'a-z')
+chrome=$(session_switch /etc/bifrost/chrome '0-9')
 wm_flags=()
 while IFS= read -r word; do [[ -n "$word" ]] && wm_flags+=("$word"); done < <(session_compositor_flags "$compositor" "$renderer" "$chrome")
 # the first desktop of this boot fades in from the loader's frame; a session restart does not
@@ -145,6 +151,7 @@ else
     wait -n "$shell_pid" "$compositor_pid"
     status=$?
 fi
+shell_exit_note "$status" >&2
 # Software Update deliberately exits 3 to restart. Preserve that as failure
 # because the existing service uses Restart=on-failure.
 if [[ "$status" == 3 && -f /var/lib/bifrost-recovery/state ]] && grep -qx system-prepared /var/lib/bifrost-recovery/state; then

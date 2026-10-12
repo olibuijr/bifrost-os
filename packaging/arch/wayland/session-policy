@@ -30,3 +30,27 @@ wm_exit_action() {
     printf '%s\n' "${kept[@]}" > "$file"
     if (( ${#kept[@]} >= 3 )); then printf '%s\n' fallback; else printf '%s\n' restart; fi
 }
+
+# session_switch <file> <keep>
+# Prints the contents of <file> reduced to the characters in the tr set <keep> (the plain-word switches under
+# /etc/bifrost). A missing or unreadable file prints nothing and says nothing: the redirection error of a bare
+# `tr < file 2>/dev/null` is printed before the 2>/dev/null applies, which put "No such file" lines in the journal.
+session_switch() {
+    local file=$1 keep=$2
+    [[ -r "$file" ]] || return 0
+    tr -dc "$keep" < "$file" 2>/dev/null || true
+}
+
+# shell_exit_note <status>
+# One journal line naming why the shell ended, for the statuses the shell and the launcher agree on (takeover.rs,
+# heartbeat.rs); nothing for a clean exit. The shell's own words go to DIR/log and crash.log, which the journal does
+# not carry, so without this a restart loop looks like a shell that exits for no reason.
+shell_exit_note() {
+    case "$1" in
+        0) ;;
+        3) printf '%s\n' 'shell exited 3: restart requested' ;;
+        5) printf '%s\n' 'shell exited 5: the UI loop stalled (see /var/lib/springboard/crash.log)' ;;
+        70) printf '%s\n' 'shell exited 70: the crash-loop latch is set (see /var/lib/springboard/log; delete boot_attempts to retry)' ;;
+        *) printf '%s\n' "shell exited $1" ;;
+    esac
+}
