@@ -1054,3 +1054,4 @@ pub mod passkey_display;
 pub mod shader_library;
 pub mod pdf_overlay;
 pub mod pdf_access;
+pub mod media_trim;
