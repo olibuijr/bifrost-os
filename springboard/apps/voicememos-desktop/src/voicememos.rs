@@ -18,6 +18,12 @@ use bifrost_app::controls::recording::Trim;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
+use crate::services::{self, Ask, Want};
+use bifrost_app::audio_devices;
+use bifrost_app::privacy_permissions;
+use bifrost_app::controls::capture_access::Status;
+use bifrost_app::now_playing::{self, CommandState, MediaContent, MediaDuration, MediaSession, MediaType, PlaybackState, RemoteCommand};
+use bifrost_core::json::Json;
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::Wall;
 use springboard::shell::keyboard::Out;
@@ -103,6 +109,22 @@ struct TrimEdit {
     drag: Option<bool>,
 }
 
+/// The media session: the commands this app supports. Next and previous are left unsupported.
+fn new_session() -> Option<MediaSession> {
+    let mut session = MediaSession::new("is.olibuijr.voicememos.desktop").ok()?;
+    for command in [RemoteCommand::Play, RemoteCommand::Pause, RemoteCommand::Stop, RemoteCommand::TogglePlayPause, RemoteCommand::SkipForward, RemoteCommand::SkipBackward, RemoteCommand::SeekTo] {
+        session.set_command(command, CommandState::Enabled);
+    }
+    Some(session)
+}
+
+/// The Now Playing content for a recording: its title and its length (a recording with no length is continuous).
+fn content_for(memo: &Memo) -> Option<MediaContent> {
+    let title = if memo.title.trim().is_empty() { "Voice Memo" } else { memo.title.as_str() };
+    let duration = MediaDuration::finite_seconds(memo.duration_ms as f64 / 1000.0).unwrap_or(MediaDuration::Continuous);
+    MediaContent::new(&memo.path.to_string_lossy(), title, MediaType::Audio, duration).ok()
+}
+
 pub struct VoiceMemos {
     w: i32,
     h: i32,
@@ -141,6 +163,19 @@ pub struct VoiceMemos {
     dirty: bool,
     cache: TextCache,
     cache_style: (u32, u32, bool),
+    /// microphone permission as the privacy service last answered it (None until an answer)
+    mic: Option<Status>,
+    /// the default input device, from the audio-devices service
+    input_id: Option<String>,
+    input_name: Option<String>,
+    /// the input device when the current recording started
+    record_input: Option<String>,
+    /// a line about the input that replaces the microphone caption (an input change during a recording)
+    notice: String,
+    /// service calls the model wants made; the app drains them with `take_wants`
+    wants: Vec<Want>,
+    /// the media session for the playing recording
+    session: Option<MediaSession>,
 }
 
 impl VoiceMemos {
@@ -180,7 +215,82 @@ impl VoiceMemos {
             dirty: true,
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
+            mic: None,
+            input_id: None,
+            input_name: None,
+            record_input: None,
+            notice: String::new(),
+            wants: vec![Want::MicStatus, Want::ListDevices],
+            session: new_session(),
         }
+    }
+
+    /// The service calls queued since the last call. The app sends them with its `services::Bus`.
+    pub fn take_wants(&mut self) -> Vec<Want> {
+        std::mem::take(&mut self.wants)
+    }
+
+    /// A service reply to a question this model asked. A missing service leaves the state unknown.
+    pub fn reply(&mut self, ask: Ask, result: &Result<Json, String>) {
+        match ask {
+            Ask::Mic => {
+                self.mic = result.as_ref().ok().and_then(privacy_permissions::decode_status);
+                // the permission was turned off while recording: stop, so nothing is taken without it
+                if self.recording && matches!(self.mic, Some(Status::Denied | Status::Restricted)) {
+                    self.finish_recording();
+                    self.error = "Recording stopped: microphone access was turned off".into();
+                }
+            }
+            Ask::Devices => match result.as_ref().ok().map(audio_devices::decode_list) {
+                Some(Ok(listing)) => self.set_input(&listing),
+                _ => {
+                    self.input_id = None;
+                    self.input_name = None;
+                }
+            },
+        }
+        self.dirty = true;
+    }
+
+    /// The output route or the device list changed: ask again for the defaults.
+    pub fn devices_changed(&mut self) {
+        self.wants.push(Want::ListDevices);
+    }
+
+    fn set_input(&mut self, listing: &audio_devices::Listing) {
+        let id = listing.default_for(audio_devices::Role::Input).map(str::to_string);
+        let name = id.as_deref().and_then(|id| listing.devices.iter().find(|d| d.id == id)).map(|d| d.name.clone());
+        if self.recording && id.is_some() && id != self.record_input {
+            self.notice = format!("Input changed to {}", name.clone().unwrap_or_else(|| "another device".into()));
+        }
+        self.input_id = id;
+        self.input_name = name;
+    }
+
+    /// A transport command from the shell (the media tile, a keyboard media key). Only the commands declared on the
+    /// session reach here; next and previous are not declared.
+    pub fn command(&mut self, command: now_playing::Command) {
+        use now_playing::Command as C;
+        match command {
+            C::Play => {
+                if self.playing.is_none() {
+                    self.play();
+                }
+            }
+            C::Pause | C::Stop => self.stop_playback(),
+            C::Toggle => {
+                if self.playing.is_some() {
+                    self.stop_playback();
+                } else {
+                    self.play();
+                }
+            }
+            C::SkipForward => self.skip(15_000.0),
+            C::SkipBackward => self.skip(-15_000.0),
+            C::Seek(ms) => self.seek_to(ms),
+            C::Next | C::Previous => {}
+        }
+        self.dirty = true;
     }
 
     pub fn set_wall(&mut self, wall: Wall) {
@@ -198,7 +308,7 @@ impl VoiceMemos {
     /// The app left the foreground: finish a recording (so nothing is lost and the microphone
     /// closes) and stop playback.
     pub fn suspend(&mut self) {
-        self.stop_playback();
+        self.end_playback();
         if self.recording {
             self.finish_recording();
         }
@@ -213,8 +323,15 @@ impl VoiceMemos {
     }
 
     fn start_recording(&mut self) {
-        self.stop_playback();
+        self.end_playback();
         self.error.clear();
+        self.notice.clear();
+        // the microphone permission is checked on the last answer; this press asks again for the next one
+        self.wants.push(Want::MicStatus);
+        if let Err(message) = services::record_gate(self.mic) {
+            self.error = message.into();
+            return;
+        }
         self.live.clear();
         let unix = self.wall.now(self.now);
         let stamp = library::stamp(&library::civil(unix, self.wall.offset));
@@ -222,6 +339,7 @@ impl VoiceMemos {
         if self.audio.record_start(&path.to_string_lossy()) {
             self.recording = true;
             self.recording_path = Some(path);
+            self.record_input = self.input_id.clone();
             self.rec_seen = false;
             self.rec_elapsed_ms = 0;
             self.started_at = self.now;
@@ -244,7 +362,7 @@ impl VoiceMemos {
             self.error = "Cannot play: the audio service is not running".into();
             return;
         }
-        self.playing = Some(memo.path);
+        self.playing = Some(memo.path.clone());
         self.play_seen = false;
         self.started_at = self.now;
         self.position_ms = 0.0;
@@ -252,14 +370,40 @@ impl VoiceMemos {
             self.audio.seek_ms(start);
             self.position_ms = start;
         }
+        if let Some(session) = self.session.as_mut() {
+            session.set_content(content_for(&memo));
+        }
+        self.publish_playback();
     }
 
-    /// Silences the service when it is playing this app's memo.
+    /// Silences the service when it is playing this app's memo. The media tile stays, paused.
     fn stop_playback(&mut self) {
         if self.playing.take().is_some() {
             self.audio.stop();
+            self.publish_playback();
         }
         self.position_ms = 0.0;
+    }
+
+    /// Playback is over, or its memo went away: stop it and take the session off the media tile.
+    fn end_playback(&mut self) {
+        self.stop_playback();
+        if let Some(session) = self.session.as_mut() {
+            if session.content().is_some() {
+                session.set_content(None);
+                self.wants.push(Want::Withdraw);
+            }
+        }
+    }
+
+    /// Publishes the playback state and the playhead of the session (only on a real change: play, stop, seek, skip).
+    fn publish_playback(&mut self) {
+        let Some(session) = self.session.as_mut() else { return };
+        let state = if self.playing.is_some() { PlaybackState::Playing } else { PlaybackState::Paused };
+        session.set_playback(state, self.position_ms.max(0.0) as u64);
+        if let Some(body) = now_playing::publish_body(session) {
+            self.wants.push(Want::Publish(body));
+        }
     }
 
     /// Follows the service: recordings that finished, the meter, and the playing memo.
@@ -317,16 +461,16 @@ impl VoiceMemos {
             let (playing, position, error) = (snap.playing, snap.position_ms, snap.error.clone());
             if ours && snap.error.is_some() {
                 self.error = format!("Cannot play: {}", error.unwrap_or_default());
-                self.stop_playback();
+                self.end_playback();
             } else if ours && playing {
                 self.play_seen = true;
                 self.position_ms = position;
             } else if self.play_seen {
                 // finished, paused elsewhere, or another app took the speaker
-                self.stop_playback();
+                self.end_playback();
             } else if t - self.started_at >= START_TIMEOUT_MS {
                 self.error = "Cannot play: the audio service did not respond".into();
-                self.stop_playback();
+                self.end_playback();
             }
             self.dirty = true;
         }
@@ -336,7 +480,7 @@ impl VoiceMemos {
         let Some(i) = self.selected else { return };
         let mut field = TextField::new(ui, "Title", MAC_TITLE3_PT, false, store::MAX_TITLE);
         field.set_text(ui, &self.memos[i].title);
-        self.stop_playback();
+        self.end_playback();
         self.editor = Some(Editor { memo: i, field });
     }
 
@@ -362,7 +506,7 @@ impl VoiceMemos {
         let Some(memo) = self.memos.get(i) else { return };
         match Trim::full(memo.duration_ms as f64 / 1000.0) {
             Some(range) => {
-                self.stop_playback();
+                self.end_playback();
                 self.error.clear();
                 self.trim = Some(TrimEdit { memo: i, range, drag: None });
             }
@@ -425,7 +569,7 @@ impl VoiceMemos {
 
     fn delete_selected(&mut self) {
         let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
-        self.stop_playback();
+        self.end_playback();
         match std::fs::remove_file(&memo.path) {
             Ok(()) => {
                 self.selected = None;
@@ -682,11 +826,17 @@ impl VoiceMemos {
     }
 
     fn skip(&mut self, delta_ms: f64) {
+        self.seek_to(self.position_ms + delta_ms);
+    }
+
+    /// Moves the playhead to `ms` within the selected recording, seeking the speaker when it plays, and publishes it.
+    fn seek_to(&mut self, ms: f64) {
         let Some(dur) = self.selected.and_then(|i| self.memos.get(i)).map(|m| m.duration_ms as f64) else { return };
-        self.position_ms = (self.position_ms + delta_ms).clamp(0.0, dur);
+        self.position_ms = ms.clamp(0.0, dur);
         if self.playing.is_some() {
             self.audio.seek_ms(self.position_ms);
         }
+        self.publish_playback();
     }
 
     fn activate(&mut self, ui: &Ui, target: Target) {
@@ -703,7 +853,7 @@ impl VoiceMemos {
             }
             Target::Row(i) => {
                 if self.selected != Some(i) {
-                    self.stop_playback();
+                    self.end_playback();
                 }
                 self.selected = Some(i);
                 self.position_ms = if self.playing.is_some() { self.position_ms } else { 0.0 };
@@ -977,10 +1127,17 @@ impl VoiceMemos {
         } else {
             self.centred(s, ui, "No Recording Selected", MAC_TITLE3_PT, LABEL_2.now(), (px, wave.1, pw, wave.3));
         }
+        // one line above the record button: the error in red, else the microphone caption (state and input)
+        let slot = self.record_rect(ui);
         if !self.error.is_empty() {
             let msg = ui.fit(&self.error, MAC_BODY_PT, pw - 2.0 * m);
-            let r = self.record_rect(ui);
-            self.centred(s, ui, &msg, MAC_CALLOUT_PT, RED, (px, r.1 - ui.pt(44.0), pw, ui.pt(28.0)));
+            self.centred(s, ui, &msg, MAC_CALLOUT_PT, RED, (px, slot.1 - ui.pt(44.0), pw, ui.pt(28.0)));
+        } else {
+            let caption = services::caption(self.mic, self.input_name.as_deref(), &self.notice);
+            if !caption.is_empty() {
+                let msg = ui.fit(&caption, MAC_CALLOUT_PT, pw - 2.0 * m);
+                self.centred(s, ui, &msg, MAC_CALLOUT_PT, LABEL_2.now(), (px, slot.1 - ui.pt(44.0), pw, ui.pt(28.0)));
+            }
         }
         // red record button: a grey ring, red disc (rounded square while recording)
         let r = self.record_rect(ui);
@@ -1117,6 +1274,110 @@ mod tests {
         let kept = &app.memos[app.selected.unwrap()];
         assert_eq!(kept.duration_ms, 250);
         assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    fn parse(text: &str) -> Json {
+        bifrost_core::json::parse(text).unwrap()
+    }
+
+    fn one_recording(app: &mut VoiceMemos, samples: usize) {
+        let wav = springboard::media::capture::wav_bytes(8000, 1, &vec![0; samples]);
+        store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+    }
+
+    #[test]
+    fn a_new_app_asks_for_the_microphone_and_the_devices_and_opens_no_device() {
+        let (mut app, _) = app("ask");
+        assert!(matches!(app.take_wants().as_slice(), [Want::MicStatus, Want::ListDevices]));
+        assert!(app.next_wake(0.0).is_none());
+    }
+
+    #[test]
+    fn a_denied_microphone_refuses_to_record_and_the_app_asks_again() {
+        let (mut app, _) = app("denied");
+        app.take_wants();
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"denied"}"#)));
+        app.start_recording();
+        assert!(!app.recording, "no recording without the permission");
+        assert!(app.error.contains("Microphone access is off"), "{}", app.error);
+        assert!(matches!(app.take_wants().as_slice(), [Want::MicStatus]));
+    }
+
+    #[test]
+    fn a_missing_privacy_service_leaves_the_microphone_unknown_and_recording_allowed() {
+        let (mut app, _) = app("noservice");
+        app.reply(Ask::Mic, &Err("no service privacy".into()));
+        assert!(app.mic.is_none());
+        assert!(services::record_gate(app.mic).is_ok());
+    }
+
+    #[test]
+    fn the_input_device_is_named_and_a_change_during_a_recording_is_noted() {
+        let (mut app, _) = app("input");
+        let listing = |input: &str| {
+            parse(&format!(
+                r#"{{"devices":[{{"id":"a","name":"Desk mic","input":true,"output":false,"sound_effects":false}},{{"id":"b","name":"USB mic","input":true,"output":false,"sound_effects":false}}],"defaults":{{"input":"{input}"}}}}"#
+            ))
+        };
+        app.reply(Ask::Devices, &Ok(listing("a")));
+        assert_eq!(app.input_name.as_deref(), Some("Desk mic"));
+        app.recording = true;
+        app.record_input = Some("a".into());
+        app.reply(Ask::Devices, &Ok(listing("b")));
+        assert_eq!(app.notice, "Input changed to USB mic");
+        assert_eq!(app.input_name.as_deref(), Some("USB mic"));
+        assert!(services::caption(app.mic, app.input_name.as_deref(), &app.notice).starts_with("Input changed"));
+    }
+
+    #[test]
+    fn a_route_or_device_change_asks_for_the_device_list_again() {
+        let (mut app, _) = app("route");
+        app.take_wants();
+        app.devices_changed();
+        assert!(matches!(app.take_wants().as_slice(), [Want::ListDevices]));
+    }
+
+    #[test]
+    fn a_playing_recording_is_published_and_withdrawn_when_playback_ends() {
+        let (mut app, _) = app("now");
+        one_recording(&mut app, 8000);
+        app.take_wants();
+        // the state play() sets, without a speaker
+        let memo = app.memos[0].clone();
+        app.playing = Some(memo.path.clone());
+        if let Some(session) = app.session.as_mut() {
+            session.set_content(content_for(&memo));
+        }
+        app.publish_playback();
+        let body = app
+            .take_wants()
+            .into_iter()
+            .find_map(|w| match w {
+                Want::Publish(body) => Some(body),
+                _ => None,
+            })
+            .expect("a publish");
+        assert_eq!(body.str_field("state").as_deref(), Some("playing"));
+        assert_eq!(body.str_field("title").as_deref(), Some(memo.title.as_str()));
+        app.playing = None;
+        app.end_playback();
+        assert!(app.take_wants().iter().any(|w| matches!(w, Want::Withdraw)));
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn a_shell_seek_or_skip_moves_the_playhead_within_the_recording() {
+        let (mut app, _) = app("seek");
+        one_recording(&mut app, 4000); // 500 ms
+        app.command(now_playing::Command::Seek(900.0));
+        assert_eq!(app.position_ms, 500.0, "clamped to the length");
+        app.command(now_playing::Command::SkipBackward);
+        assert_eq!(app.position_ms, 0.0, "clamped at the start");
+        app.command(now_playing::Command::Next);
+        assert_eq!(app.position_ms, 0.0, "next is not declared, so it does nothing");
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 }

@@ -7,6 +7,12 @@
   original is left as it was. Cancel discards the change. Playback stops while you trim.
 - Recordings that are too short to trim say so instead of opening an empty trim.
 - The detail subtitle shows the recording's format: sample rate and channels, for example "8 kHz mono".
+- Microphone permission: Record checks the microphone permission first. When it is turned off or restricted, the app says so
+  and does not record. A line under the record button shows the microphone state and the input device.
+- A recording that is taken while the permission is switched off stops with a message.
+- Input device: the app shows the default input's name and says when the input changes during a recording.
+- Now Playing: playing a recording shows it on the media tile, with its title and length. Play, pause, skip 15 seconds
+  and seek work from the tile and the keyboard media keys, and the tile is removed when playback ends.
 
 ## 1.2.3 — 2026-10-11
 
