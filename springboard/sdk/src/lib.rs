@@ -117,6 +117,7 @@ pub mod coding;
 pub mod peer_session;
 pub mod peer_mesh;
 pub mod restoration;
+pub mod image_source;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;

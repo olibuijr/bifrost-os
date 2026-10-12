@@ -6,6 +6,7 @@ pub mod gvar;
 pub mod emoji;
 pub mod symbols;
 pub mod imgdec;
+pub mod image_tiles;
 pub mod ui;
 pub mod cache;
 pub mod purgeable;

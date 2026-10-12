@@ -101,11 +101,17 @@ pub fn cover(img: &Image, w: usize, h: usize) -> Image {
 
 /// The size `img` takes when scaled to fit inside `w` x `h` (never enlarged).
 pub fn fit_size(img: &Image, w: usize, h: usize) -> (usize, usize) {
-    if img.w == 0 || img.h == 0 {
+    fit_dims(img.w, img.h, w, h)
+}
+
+/// The fitted size of an `iw` x `ih` picture inside `w` x `h` (never enlarged), from the
+/// dimensions alone, so a header-only size needs no pixels. `(0, 0)` for an empty picture.
+pub fn fit_dims(iw: usize, ih: usize, w: usize, h: usize) -> (usize, usize) {
+    if iw == 0 || ih == 0 {
         return (0, 0);
     }
-    let k = (w as f32 / img.w as f32).min(h as f32 / img.h as f32).min(1.0);
-    (((img.w as f32 * k).round() as usize).max(1), ((img.h as f32 * k).round() as usize).max(1))
+    let k = (w as f32 / iw as f32).min(h as f32 / ih as f32).min(1.0);
+    (((iw as f32 * k).round() as usize).max(1), ((ih as f32 * k).round() as usize).max(1))
 }
 
 /// Scales down to fit inside `w` x `h` keeping the aspect; smaller images
