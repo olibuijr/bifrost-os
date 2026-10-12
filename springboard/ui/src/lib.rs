@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod photo_changes;
+pub mod photo_media;
+pub mod photo_request;
