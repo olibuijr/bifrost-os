@@ -6,6 +6,7 @@ pub mod connect;
 pub mod exchange;
 pub mod ics;
 pub mod layout;
+pub mod notes;
 pub mod recur;
 pub mod search;
 pub use springboard::shell::calendar::{store, Date};
@@ -114,6 +115,8 @@ enum Target {
     Title,
     Location,
     Notes,
+    /// Offers the address written in the notes as the location.
+    FillAddress,
     Repeat,
     Alert,
     Toggle(Slot),
@@ -342,6 +345,9 @@ impl Calendar {
             }
         }
         items.extend([None, Some(Target::Repeat), Some(Target::Alert), None, Some(Target::Notes)]);
+        if self.notes_address().is_some() {
+            items.push(Some(Target::FillAddress));
+        }
         if draft.existing {
             items.extend([None, Some(Target::Duplicate)]);
             if self.file_export {
@@ -362,6 +368,11 @@ impl Calendar {
         }
         out
     }
+    /// The first street address in the notes field (live text, before Save), if any.
+    fn notes_address(&self) -> Option<String> {
+        notes::address(self.fields[2].text())
+    }
+
     /// End of an event as a date and minute of day.
     fn end_of(e: &CalendarEvent) -> (Date, u16) {
         let total = e.minute as i64 + e.duration as i64;
@@ -743,6 +754,11 @@ impl Calendar {
             Target::Title => self.focus(Some(0)),
             Target::Location => self.focus(Some(1)),
             Target::Notes => self.focus(Some(2)),
+            Target::FillAddress => {
+                if let Some(address) = self.notes_address() {
+                    self.fields[1].set_text(ui, &address);
+                }
+            }
             Target::DateStep(_)
             | Target::MonthStep(_)
             | Target::TimeStep(_)
@@ -1133,6 +1149,10 @@ impl Calendar {
                 Target::TimeStep(_) => {
                     let m = if open == Some(Slot::End) { end_min } else { event.minute };
                     self.step_row(s, ui, &time_label(m), mid);
+                }
+                Target::FillAddress => {
+                    let text = self.notes_address().map_or_else(String::new, |a| format!("Use {a} as Location"));
+                    self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
