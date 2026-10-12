@@ -31,9 +31,9 @@
     {
       "feature": "Single-frame screenshots (SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput)",
       "apple": "SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput",
-      "bifrost": "springboard/src/shell/screenshot.rs (chord, capture animation); springboard/src/shell/camera/mod.rs:818 (save_capture, JPEG encode); springboard/mcp/src/wl.rs:245 (capture_screen, wlr-screencopy region capture)",
-      "status": "os",
-      "note": "The chord saves to Photos and the shell's tests cover it (springboard/src/shell/tests.rs, screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos). No app SDK call takes a capture. Output is PNG only and the configuration has no size, quality or scale options."
+      "bifrost": "springboard/ui/src/capture_shot.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The chord saves to Photos and the shell's tests cover it (springboard/src/shell/tests.rs, screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos). No app SDK call takes a capture. Output is PNG only and the configuration has no size, quality or scale options."
     },
     {
       "feature": "Capture a single window even when covered (window image capture source)",
@@ -45,16 +45,16 @@
     {
       "feature": "System content-sharing picker (SCContentSharingPicker, SCContentSharingPickerConfiguration, SCContentSharingPickerMode, SCContentSharingPickerObserver)",
       "apple": "SCContentSharingPicker and related types",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The picker is Apple's recommended selection UI. BifrOSt has no equivalent and no portal frontend for screen sharing."
+      "bifrost": "springboard/ui/src/capture_picker.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The picker is Apple's recommended selection UI. BifrOSt has no equivalent and no portal frontend for screen sharing."
     },
     {
       "feature": "Permission for screen recording and persistent capture (Persistent Content Capture, privacy string)",
       "apple": "Persistent Content Capture symbol, screen recording permission prompt",
-      "bifrost": "docs/bifrost-ui.md:313 (xdg-desktop-portal screenshot frontend, listed as a gap)",
-      "status": "gap",
-      "note": "No permission model covers screen capture for apps."
+      "bifrost": "springboard/ui/src/capture_access.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission model covers screen capture for apps."
     },
     {
       "feature": "Clip buffering and recording editor (SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput)",

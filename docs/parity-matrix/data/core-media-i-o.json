@@ -7,14 +7,62 @@
   "summary": "Core Media I/O is the API for publishing custom camera devices as system extensions (providers, devices, streams, clients, properties) and for the legacy DAL plug-in model. BifrOSt has a Linux V4L2 capture path inside the system layer that the Camera app uses, but no SDK API for apps to read cameras, and nothing that publishes a camera device to other apps.",
   "rea_evidence": "ev_01a95278540dbb6131b1f28ed54334c81be8e4621a321f6566ff39c332adf6a1",
   "features": [
-    {"feature": "Providers (extension provider and its source and properties)", "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O", "bifrost": "none", "status": "gap", "note": "No mechanism lets an app or service publish a virtual camera to other apps. No SDK module and no loopback device wiring found (no v4l2loopback reference in the tree)."},
-    {"feature": "Devices (device, device source, device properties)", "apple": "CMIOExtensionDevice, CMIOExtensionDeviceSource, CMIOExtensionDeviceProperties", "bifrost": "springboard/src/media/v4l2.rs (probe, CameraInfo)", "status": "os", "note": "probe() enumerates /dev/video* nodes and keeps only single-planar capture devices with streaming (usable()). Discovery only; there is no device-side publishing."},
-    {"feature": "Streams (stream, stream source, stream properties)", "apple": "CMIOExtensionStream, CMIOExtensionStreamSource, CMIOExtensionStreamProperties", "bifrost": "springboard/src/media/v4l2.rs (Device::open, latest, to_pixels)", "status": "os", "note": "mmap streaming with VIDIOC_* ioctls; converts YUYV, NV12, NV21 and MJPEG to RGBA. Consumed only by the Camera app inside the shell, not exposed as a stream API."},
-    {"feature": "Clients and per-client access", "apple": "CMIOExtensionClient; system-enforced camera access through system extensions", "bifrost": "springboard/src/shell/camera/mod.rs (start, stop)", "status": "partial", "note": "The Camera app opens the device only while it is on screen and releases it on stop, and shows Camera not available when no node works. There is no client identity or permission check for other apps. The app sandbox in springboard/src/bare/app_policy.rs grants /dev/snd and /dev/dri but no /dev/video node."},
-    {"feature": "Camera capture UI (system counterpart)", "apple": "Apple's Camera app and AVFoundation consumers of these devices (no Core Media I/O symbol)", "bifrost": "springboard/src/shell/camera/mod.rs, springboard/src/shell/camera/jpeg.rs, springboard/src/shell/camera/qr.rs", "status": "partial", "note": "Viewfinder, self-timer, grid, front/back switch, JPEG capture and QR scan. Single built-in app, no SDK for other apps."},
-    {"feature": "Properties (property, state, attributes, info and mach service keys)", "apple": "CMIOExtensionProperty, CMIOExtensionPropertyState, CMIOExtensionPropertyAttributes, CMIOExtensionInfoDictionaryKey, CMIOExtensionMachServiceNameKey", "bifrost": "springboard/src/media/v4l2.rs (CAP_* flags, usable)", "status": "gap", "note": "V4L2 capability flags are read internally. No property model or extension info dictionary exists for app developers."},
-    {"feature": "USB video class override (DriverKit)", "apple": "Overriding the default USB video class extension (DriverKit driver matching)", "bifrost": "none", "status": "n/a", "note": "Driver matching for UVC devices is the Linux kernel's uvcvideo driver. BifrOSt does not override it, and the DriverKit model has no Linux counterpart."},
-    {"feature": "Legacy DAL plug-ins", "apple": "Device Abstraction Layer (DAL) Plug-Ins: structures, functions, enumerations, data types, errors. Apple recommends replacing them with Core Media I/O extensions.", "bifrost": "none", "status": "n/a", "note": "DAL is an Apple-only legacy plug-in model. No counterpart on Linux."}
+    {
+      "feature": "Providers (extension provider and its source and properties)",
+      "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No mechanism lets an app or service publish a virtual camera to other apps. No SDK module and no loopback device wiring found (no v4l2loopback reference in the tree)."
+    },
+    {
+      "feature": "Devices (device, device source, device properties)",
+      "apple": "CMIOExtensionDevice, CMIOExtensionDeviceSource, CMIOExtensionDeviceProperties",
+      "bifrost": "springboard/ui/src/video_device.rs (VideoDevice",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. probe() enumerates /dev/video* nodes and keeps only single-planar capture devices with streaming (usable()). Discovery only; there is no device-side publishing."
+    },
+    {
+      "feature": "Streams (stream, stream source, stream properties)",
+      "apple": "CMIOExtensionStream, CMIOExtensionStreamSource, CMIOExtensionStreamProperties",
+      "bifrost": "springboard/ui/src/video_device.rs (StreamFormat",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. mmap streaming with VIDIOC_* ioctls; converts YUYV, NV12, NV21 and MJPEG to RGBA. Consumed only by the Camera app inside the shell, not exposed as a stream API."
+    },
+    {
+      "feature": "Clients and per-client access",
+      "apple": "CMIOExtensionClient; system-enforced camera access through system extensions",
+      "bifrost": "springboard/src/shell/camera/mod.rs (start, stop)",
+      "status": "partial",
+      "note": "The Camera app opens the device only while it is on screen and releases it on stop, and shows Camera not available when no node works. There is no client identity or permission check for other apps. The app sandbox in springboard/src/bare/app_policy.rs grants /dev/snd and /dev/dri but no /dev/video node."
+    },
+    {
+      "feature": "Camera capture UI (system counterpart)",
+      "apple": "Apple's Camera app and AVFoundation consumers of these devices (no Core Media I/O symbol)",
+      "bifrost": "springboard/src/shell/camera/mod.rs, springboard/src/shell/camera/jpeg.rs, springboard/src/shell/camera/qr.rs",
+      "status": "partial",
+      "note": "Viewfinder, self-timer, grid, front/back switch, JPEG capture and QR scan. Single built-in app, no SDK for other apps."
+    },
+    {
+      "feature": "Properties (property, state, attributes, info and mach service keys)",
+      "apple": "CMIOExtensionProperty, CMIOExtensionPropertyState, CMIOExtensionPropertyAttributes, CMIOExtensionInfoDictionaryKey, CMIOExtensionMachServiceNameKey",
+      "bifrost": "springboard/ui/src/video_property.rs (PropertyStore",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. V4L2 capability flags are read internally. No property model or extension info dictionary exists for app developers."
+    },
+    {
+      "feature": "USB video class override (DriverKit)",
+      "apple": "Overriding the default USB video class extension (DriverKit driver matching)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Driver matching for UVC devices is the Linux kernel's uvcvideo driver. BifrOSt does not override it, and the DriverKit model has no Linux counterpart."
+    },
+    {
+      "feature": "Legacy DAL plug-ins",
+      "apple": "Device Abstraction Layer (DAL) Plug-Ins: structures, functions, enumerations, data types, errors. Apple recommends replacing them with Core Media I/O extensions.",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "DAL is an Apple-only legacy plug-in model. No counterpart on Linux."
+    }
   ],
   "gaps": [
     "No SDK API for apps to enumerate cameras or open a capture stream; the V4L2 path in springboard/src/media/v4l2.rs is reachable only from the shell's Camera app.",

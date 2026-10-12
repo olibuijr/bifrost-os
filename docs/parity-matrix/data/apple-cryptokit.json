@@ -94,9 +94,9 @@
     {
       "feature": "Legacy insecure algorithms (Insecure: MD5, SHA-1)",
       "apple": "Insecure",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "the shell has no MD5 or SHA-1; only the noVNC web client has MD5"
+      "bifrost": "springboard/core/src/md5.rs, springboard/core/src/sha1.rs, springboard/sdk/src/digest.rs (insecure)",
+      "status": "partial",
+      "note": "Wave 5 (w5-apple-cryptokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell has no MD5 or SHA-1; only the noVNC web client has MD5"
     },
     {
       "feature": "Export compliance declaration",

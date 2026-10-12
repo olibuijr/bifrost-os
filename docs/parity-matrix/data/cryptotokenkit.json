@@ -17,9 +17,9 @@
     {
       "feature": "Using cryptographic assets stored on a smart card",
       "apple": "Article: Using Cryptographic Assets Stored on a Smart Card",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."
+      "bifrost": "springboard/ui/src/token_objects.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cryptotokenkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."
     },
     {
       "feature": "Smart card token driver and token",
@@ -38,23 +38,23 @@
     {
       "feature": "Authenticating users with a cryptographic token",
       "apple": "Article: Authenticating Users with a Cryptographic Token",
-      "bifrost": "springboard/src/shell/login.rs (password login only, as far as the repo search shows)",
-      "status": "gap",
-      "note": "No token-based login factor. Login itself exists; no hardware token is involved."
+      "bifrost": "springboard/ui/src/token_registration.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token-based login factor. Login itself exists; no hardware token is involved."
     },
     {
       "feature": "Smart card authentication configuration",
       "apple": "Article: Configuring Smart Card Authentication; TKSmartCardTokenRegistrationManager",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No token registration or managed-device policy for token auth."
+      "bifrost": "springboard/ui/src/token_registration.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token registration or managed-device policy for token auth."
     },
     {
       "feature": "Persistent tokens (HSM)",
       "apple": "Persistent token support, macOS 10.15.4 and later (overview)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No always-available token or HSM access."
+      "bifrost": "springboard/ui/src/token_registration.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No always-available token or HSM access."
     },
     {
       "feature": "NFC smart card slot session",

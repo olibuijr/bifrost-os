@@ -38,9 +38,9 @@
     {
       "feature": "Reference clocks and timebases",
       "apple": "CMClock, CMAudioClock, CMTimebase (rate, anchor time, timers, time-jump notifications) (https://developer.apple.com/documentation/coremedia/cmclock)",
-      "bifrost": "springboard/src/media/player.rs:47 and :53 (Clock: media_ms, Instant anchor, running flag; now() and set()); springboard/audiod/src/main.rs:47 (snapshot position_ms)",
-      "status": "os",
-      "note": "The audio thread owns the playback clock and the audio service publishes position. No timebase with rate and effective rate, no timers on a timeline, no host-time conversion, no genlock or device-drift queries."
+      "bifrost": "springboard/ui/src/media_timebase.rs (Timebase",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-media, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio thread owns the playback clock and the audio service publishes position. No timebase with rate and effective rate, no timers on a timeline, no host-time conversion, no genlock or device-drift queries."
     },
     {
       "feature": "Buffer queues",

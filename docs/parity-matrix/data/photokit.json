@@ -24,9 +24,9 @@
     {
       "feature": "Smart albums (screenshots, recents, recently deleted)",
       "apple": "PHAssetCollection smart album subtypes, PHFetchOptions predicates",
-      "bifrost": "springboard/src/shell/photos/albums.rs (RECENT_DAYS, TRASH_DAYS, screenshots, recents); springboard/src/shell/photos/library.rs (TRASH = .trash)",
-      "status": "os",
-      "note": "Built-in albums only; purge after 30 days. Not exposed through an API."
+      "bifrost": "springboard/ui/src/photo_smart_albums.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Built-in albums only; purge after 30 days. Not exposed through an API."
     },
     {
       "feature": "Favorites",
@@ -38,9 +38,9 @@
     {
       "feature": "Image and thumbnail loading and caching",
       "apple": "PHImageManager, PHCachingImageManager, PHImageRequestOptions, PHVideoRequestOptions",
-      "bifrost": "springboard/src/shell/photos/thumbs.rs (square covers, disk cache of RIMG files, memory cache); springboard/apps/notes-desktop/src/notes/picker.rs (background thumbnail decode)",
-      "status": "os",
-      "note": "The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled."
+      "bifrost": "springboard/ui/src/photo_caching.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled."
     },
     {
       "feature": "Asset metadata (EXIF and extended attributes)",

@@ -31,9 +31,9 @@
     {
       "feature": "Mesh buffer allocation and mapping",
       "apple": "MDLMeshBuffer, MDLMeshBufferAllocator, MDLMeshBufferData, MDLMeshBufferMap, MDLMeshBufferZone",
-      "bifrost": "none in the SDK; GL buffer objects are internal to springboard/src/gpu/egl.rs",
-      "status": "gap",
-      "note": "no app-facing buffer allocator"
+      "bifrost": "springboard/ui/src/mesh.rs (BufferStore",
+      "status": "partial",
+      "note": "Wave 5 (theme-20, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing buffer allocator"
     },
     {
       "feature": "Materials and shading models",
@@ -45,9 +45,9 @@
     {
       "feature": "Textures as 3D material inputs",
       "apple": "MDLTexture, MDLURLTexture, MDLTextureSampler, MDLTextureFilter, procedural textures (checkerboard, noise, sky cube, normal map)",
-      "bifrost": "springboard/render/src/imgdec.rs (image decode for 2D pictures) only",
-      "status": "gap",
-      "note": "images decode, but there are no samplers, mip filters or procedural generators"
+      "bifrost": "springboard/ui/src/procedural_texture.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images decode, but there are no samplers, mip filters or procedural generators"
     },
     {
       "feature": "Lights",
@@ -66,9 +66,9 @@
     {
       "feature": "File format import and export",
       "apple": "MDLComponent, MDLObjectContainerComponent, MDLTransformComponent; formats OBJ, PLY, STL, USD, Alembic",
-      "bifrost": "springboard/ui/src/uttype.rs (UTType registry, no 3D types); docs/bifrost-ui.md 'Uniform type identifiers' section",
-      "status": "gap",
-      "note": "grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"
+      "bifrost": "springboard/ui/src/mesh_file.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"
     },
     {
       "feature": "Skeletal animation and animated values",
@@ -80,9 +80,9 @@
     {
       "feature": "Mesh processing and baking",
       "apple": "subdivision surfaces, ambient occlusion baking, light probe placement (MDLProbePlacement), normal map generation",
-      "bifrost": "none; springboard/render/src/font.rs quad flattening is curve flattening, not mesh subdivision",
-      "status": "gap",
-      "note": "no offline or runtime mesh processing"
+      "bifrost": "springboard/ui/src/mesh_process.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no offline or runtime mesh processing"
     },
     {
       "feature": "Volumetric representation",

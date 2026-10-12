@@ -66,9 +66,9 @@
     {
       "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",
       "apple": "DNSServiceNATPortMappingCreate, DNSServiceNATPortMappingReply",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Searched for NAT-PMP, PCP, UPnP and IGD in springboard/src, springboard/netd and springboard/sdk/src: no hits."
+      "bifrost": "springboard/core/src/natpmp.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Searched for NAT-PMP, PCP, UPnP and IGD in springboard/src, springboard/netd and springboard/sdk/src: no hits."
     },
     {
       "feature": "Enumerate recommended domains (DNSServiceEnumerateDomains)",

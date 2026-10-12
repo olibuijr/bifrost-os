@@ -66,9 +66,9 @@
     {
       "feature": "Legacy login item authorization check",
       "apple": "SMAppService.statusForLegacyPlist(at:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "BifrOSt has no earlier login-item plist format to check"
+      "bifrost": "springboard/sdk/src/service_management.rs (status_for_legacy_plist)",
+      "status": "partial",
+      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt has no earlier login-item plist format to check"
     },
     {
       "feature": "Service Management error constants",
@@ -94,9 +94,9 @@
     {
       "feature": "Login item enablement (deprecated)",
       "apple": "SMLoginItemSetEnabled(_:_:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "deprecated by Apple in favour of SMAppService; the SDK exposes only the replacement shape"
+      "bifrost": "springboard/sdk/src/service_management.rs (set_login_item_enabled)",
+      "status": "partial",
+      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. deprecated by Apple in favour of SMAppService; the SDK exposes only the replacement shape"
     }
   ],
   "gaps": [

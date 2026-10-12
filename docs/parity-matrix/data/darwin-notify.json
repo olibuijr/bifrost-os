@@ -31,9 +31,9 @@
     {
       "feature": "Signal-based delivery (notify_register_signal)",
       "apple": "notify_register_signal(_:_:_:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No POSIX signal delivery for notifications."
+      "bifrost": "springboard/core/src/notify_center.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No POSIX signal delivery for notifications."
     },
     {
       "feature": "File descriptor delivery (notify_register_file_descriptor)",

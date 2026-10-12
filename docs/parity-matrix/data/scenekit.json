@@ -59,9 +59,9 @@
     {
       "feature": "Physics simulation",
       "apple": "SCNPhysicsWorld, SCNPhysicsBody, SCNPhysicsVehicle, joints, SCNPhysicsContactDelegate",
-      "bifrost": "springboard/ui/src/lib.rs (scroll physics only)",
-      "status": "gap",
-      "note": "the only physics in the repo is list scroll momentum; no rigid-body or contact simulation"
+      "bifrost": "springboard/ui/src/physics3d.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-scenekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the only physics in the repo is list scroll momentum; no rigid-body or contact simulation"
     },
     {
       "feature": "Particle systems",
@@ -87,9 +87,9 @@
     {
       "feature": "Scene asset import",
       "apple": "SCNSceneSource",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no 3D file importer (DAE, USDZ, glTF); the image decoder springboard/render/src/imgdec.rs handles 2D only"
+      "bifrost": "springboard/ui/src/scene_source.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-scenekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D file importer (DAE, USDZ, glTF); the image decoder springboard/render/src/imgdec.rs handles 2D only"
     },
     {
       "feature": "3D data types",

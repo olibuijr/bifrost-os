@@ -31,9 +31,9 @@
     {
       "feature": "Strategists (turn-based AI)",
       "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI."
+      "bifrost": "springboard/ui/src/strategist.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI."
     },
     {
       "feature": "Decision trees and rule systems",

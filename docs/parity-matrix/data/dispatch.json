@@ -94,9 +94,9 @@
     {
       "feature": "Other dispatch sources (timer, read, write, signal, process, file system)",
       "apple": "DispatchSource (activate, suspend, resume, cancel, setEventHandler, DispatchSourceProtocol)",
-      "bifrost": "springboard/sdk/src/fswatch.rs (FSEvents-style stream, poll-based, not a DispatchSource)",
-      "status": "gap",
-      "note": "no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"
+      "bifrost": "springboard/sdk/src/timer_source.rs (timer source model only)",
+      "status": "partial",
+      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"
     },
     {
       "feature": "Dispatch I/O channels",

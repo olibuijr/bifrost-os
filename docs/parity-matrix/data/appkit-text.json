@@ -52,9 +52,9 @@
     {
       "feature": "TextKit: storage, layout manager, containers",
       "apple": "NSTextStorage, NSLayoutManager, NSTextContainer, NSTextLayoutManager",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no glyph-level layout API for apps; layout is per widget"
+      "bifrost": "springboard/ui/src/textlayout.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no glyph-level layout API for apps; layout is per widget"
     },
     {
       "feature": "TextKit: custom layout, text attachments, text lists, find bar",
@@ -80,9 +80,9 @@
     {
       "feature": "Fonts: user font choice",
       "apple": "System font settings",
-      "bifrost": "springboard/render/src/fontprefs.rs",
-      "status": "os",
-      "note": "Settings > Fonts replaces UI fonts from BifrOSt's font library"
+      "bifrost": "springboard/sdk/src/font_descriptor.rs (UserFonts)",
+      "status": "partial",
+      "note": "Wave 5 (w5-appkit-text, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Settings > Fonts replaces UI fonts from BifrOSt's font library"
     },
     {
       "feature": "Writing Tools",

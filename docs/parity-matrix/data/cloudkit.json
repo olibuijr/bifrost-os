@@ -45,9 +45,9 @@
     {
       "feature": "Shared records",
       "apple": "CKShare, share operations",
-      "bifrost": "springboard/sdk/src/share.rs (local share sheet, not record sharing)",
-      "status": "gap",
-      "note": "no multi-user record sharing"
+      "bifrost": "springboard/ui/src/record_share.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-user record sharing"
     },
     {
       "feature": "User discovery and identity",
@@ -59,9 +59,9 @@
     {
       "feature": "Web auth tokens",
       "apple": "CKFetchWebAuthTokenOperation",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no app token API"
+      "bifrost": "springboard/ui/src/web_service_token.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app token API"
     },
     {
       "feature": "Privacy: encryption and data export/delete",

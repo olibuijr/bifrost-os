@@ -38,9 +38,9 @@
     {
       "feature": "Pixel format, stride and plane layout",
       "apple": "kIOSurfacePixelFormat, kIOSurfaceBytesPerRow, kIOSurfacePlaneInfo, IOSurfaceGetBytesPerRow",
-      "bifrost": "springboard/src/gpu/wl.rs:38 (BufferInfo: fd, stride, offset, modifier, fourcc); springboard/src/gpu/target.rs:18 (image_attribs_fourcc)",
-      "status": "os",
-      "note": "fourcc and modifier are carried for EGL import; no app-visible description"
+      "bifrost": "springboard/ui/src/surface_layout.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iosurface, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fourcc and modifier are carried for EGL import; no app-visible description"
     },
     {
       "feature": "Multi-plane video buffers",
@@ -52,9 +52,9 @@
     {
       "feature": "CPU lock and unlock of buffer memory",
       "apple": "IOSurfaceLock, IOSurfaceUnlock, IOSurfaceGetBaseAddress",
-      "bifrost": "springboard/src/media/mod.rs:117 (DmaBuf: ptr, len, sync_cpu_read)",
-      "status": "os",
-      "note": "cache sync is bracketed for reads only; no write lock API"
+      "bifrost": "springboard/ui/src/surface_lock.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iosurface, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. cache sync is bracketed for reads only; no write lock API"
     },
     {
       "feature": "CPU cache mode",
@@ -87,9 +87,9 @@
     {
       "feature": "Colour space and ICC profile on buffers",
       "apple": "kIOSurfaceColorSpace, kIOSurfaceICCProfile",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no buffer-level colour tagging found in searched code"
+      "bifrost": "springboard/ui/src/surface_colour.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iosurface, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no buffer-level colour tagging found in searched code"
     },
     {
       "feature": "Ownership and memory ledger",

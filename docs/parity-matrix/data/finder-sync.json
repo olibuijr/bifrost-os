@@ -45,9 +45,9 @@
     {
       "feature": "Extension controller and enablement",
       "apple": "FIFinderSyncController.default(), isExtensionEnabled, showExtensionManagementInterface()",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No extension host for file-manager plugins, and no enable or disable UI for one."
+      "bifrost": "springboard/ui/src/file_sync.rs (ExtensionEnablement)",
+      "status": "partial",
+      "note": "Wave 5 (theme-19, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension host for file-manager plugins, and no enable or disable UI for one."
     },
     {
       "feature": "Per-item tags and last-used data shared with the Finder",

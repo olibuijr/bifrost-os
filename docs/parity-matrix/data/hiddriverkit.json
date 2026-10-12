@@ -24,9 +24,9 @@
     {
       "feature": "Device discovery and matching by capability",
       "apple": "Match Criteria, kIOHIDEventServicePropertiesRequiredForMatching, IOHIDEventService",
-      "bifrost": "springboard/src/bare/input.rs:497 (InputSet, found by capability and kept current on hotplug), :308 (device roles)",
-      "status": "os",
-      "note": "Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"
+      "bifrost": "springboard/ui/src/device_match.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"
     },
     {
       "feature": "Keyboard events",
@@ -59,9 +59,9 @@
     {
       "feature": "Switches (lid, jack insert)",
       "apple": "IOHIDEventService sensor and switch elements",
-      "bifrost": "springboard/src/bare/input.rs:16 (Switch event), :172 (Device::switches, EVIOCGSW)",
-      "status": "os",
-      "note": "Shell reads switches; apps get no switch events"
+      "bifrost": "springboard/ui/src/input_switches.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell reads switches; apps get no switch events"
     },
     {
       "feature": "Virtual HID devices (synthetic input)",

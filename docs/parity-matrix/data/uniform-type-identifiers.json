@@ -46,9 +46,9 @@
     {
       "feature": "Generic tag classes",
       "apple": "UTTagClass and tags(), UTType.tags for other classes",
-      "bifrost": "springboard/ui/src/uttype.rs (extensions and mime only)",
-      "status": "gap",
-      "note": "no API for tag classes other than filenameExtension and mimeType"
+      "bifrost": "springboard/ui/src/uttype.rs (TagClass",
+      "status": "partial",
+      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for tag classes other than filenameExtension and mimeType"
     },
     {
       "feature": "App-declared exported and imported types",

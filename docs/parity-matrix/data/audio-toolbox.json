@@ -52,9 +52,9 @@
     {
       "feature": "Audio codec and format conversion (Audio Converter, Audio Format Services)",
       "apple": "AudioConverter, AudioFormat",
-      "bifrost": "springboard/src/media/aac.rs (AAC-LC decode, downmix to 48 kHz stereo S16), springboard/src/media/convert.rs (pixel conversion only)",
-      "status": "os",
-      "note": "AAC-LC decoding and sample conversion run in the system layer. Decoders are pure Rust (symphonia). No general converter API, and no encoder."
+      "bifrost": "springboard/ui/src/pcm_convert.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. AAC-LC decoding and sample conversion run in the system layer. Decoders are pure Rust (symphonia). No general converter API, and no encoder."
     },
     {
       "feature": "Audio session and output route (headphones, speaker)",
@@ -80,9 +80,9 @@
     {
       "feature": "Voice I/O (Audio Unit Voice I/O, echo cancellation)",
       "apple": "Audio Unit Voice I/O",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Capture has no echo cancellation or voice processing stage."
+      "bifrost": "springboard/ui/src/echo_cancel.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Capture has no echo cancellation or voice processing stage."
     },
     {
       "feature": "Spatial audio (spatial mixer, head tracking, AUHeadTrackingBinauralRenderer)",

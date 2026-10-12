@@ -31,9 +31,9 @@
     {
       "feature": "Passkeys and FIDO2 (public-key credentials)",
       "apple": "ASAuthorizationPlatformPublicKeyCredential requests, ASPublicKeyCredentialClientData, passkey use in web browsers",
-      "bifrost": "none; springboard/apps/browser/README.md lists WebAuthn as a known breakage",
-      "status": "gap",
-      "note": "no platform authenticator, no key generation, no credential registration; the browser cannot run WebAuthn"
+      "bifrost": "springboard/sdk/src/passkey_client_data.rs (ClientData)",
+      "status": "partial",
+      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no platform authenticator, no key generation, no credential registration; the browser cannot run WebAuthn"
     },
     {
       "feature": "Web authentication sessions",

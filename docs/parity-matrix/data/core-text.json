@@ -80,9 +80,9 @@
     {
       "feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)",
       "apple": "CTTypesetter, CTFramesetter, CTFrame, CTLine, CTRun",
-      "bifrost": "springboard/sdk/src/attributed.rs (RichTextView::draw), springboard/ui/src/text.rs (text buffer)",
-      "status": "gap",
-      "note": "No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."
+      "bifrost": "springboard/ui/src/textlayout.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."
     },
     {
       "feature": "Writing direction and bidirectional text",

@@ -94,16 +94,16 @@
     {
       "feature": "Neural network graphs and CNN layers",
       "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "A search for inference, onnx and tensor across springboard returned nothing. No ML runtime exists."
+      "bifrost": "springboard/ui/src/cnn_layers.rs (conv2d",
+      "status": "partial",
+      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A search for inference, onnx and tensor across springboard returned nothing. No ML runtime exists."
     },
     {
       "feature": "Recurrent neural network layers",
       "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No recurrent layers."
+      "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights",
+      "status": "partial",
+      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No recurrent layers."
     },
     {
       "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",

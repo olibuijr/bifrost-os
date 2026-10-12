@@ -38,9 +38,9 @@
     {
       "feature": "Credential renewal (renewCredentials)",
       "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
+      "bifrost": "springboard/sdk/src/accounts.rs (AccountStore::renew_credentials)",
+      "status": "partial",
+      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
     },
     {
       "feature": "Sign-in and account creation prompts",

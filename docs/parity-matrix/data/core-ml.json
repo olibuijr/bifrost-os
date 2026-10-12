@@ -66,9 +66,9 @@
     {
       "feature": "Custom layers and custom models",
       "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no model graph runtime to extend"
+      "bifrost": "springboard/ui/src/cnn_layers.rs (CustomLayer",
+      "status": "partial",
+      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no model graph runtime to extend"
     },
     {
       "feature": "Domain frameworks built on Core ML",

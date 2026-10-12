@@ -24,9 +24,9 @@
     {
       "feature": "Bluetooth MIDI peripheral picker and advertising",
       "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController",
-      "bifrost": "springboard/src/bare/bluetooth.rs (device list, audio profiles)",
-      "status": "gap",
-      "note": "The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."
+      "bifrost": "springboard/ui/src/midi_ble_picker.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-04, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."
     },
     {
       "feature": "Network audio device browser",

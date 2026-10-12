@@ -38,9 +38,9 @@
     {
       "feature": "Host name resolution",
       "apple": "CFHost, CFHostCreateWithName, CFHostStartInfoResolution, CFHostGetAddressing (https://developer.apple.com/documentation/cfnetwork/hosts)",
-      "bifrost": "springboard/src/deildu/http.rs (uses a UDP resolver, type Resolver from the dns module, internal only)",
-      "status": "gap",
-      "note": "The resolver exists inside the shell's HTTP client. Apps have no name lookup API."
+      "bifrost": "springboard/sdk/src/host_addressing.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The resolver exists inside the shell's HTTP client. Apps have no name lookup API."
     },
     {
       "feature": "Global proxy configuration",
@@ -52,9 +52,9 @@
     {
       "feature": "Network services (Bonjour)",
       "apple": "CFNetService, CFNetServiceBrowser, CFNetServiceRegisterWithOptions, CFNetServiceResolveWithTimeout (https://developer.apple.com/documentation/cfnetwork/network-services)",
-      "bifrost": "none found in springboard/sdk/src",
-      "status": "gap",
-      "note": "No service discovery or registration API for apps. The shell has no mDNS browser exposed in the SDK."
+      "bifrost": "springboard/sdk/src/dns_service.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service discovery or registration API for apps. The shell has no mDNS browser exposed in the SDK."
     },
     {
       "feature": "Network configuration, link state and DHCP",
@@ -80,9 +80,9 @@
     {
       "feature": "Network diagnostics",
       "apple": "CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticDiagnoseProblemInteractively (https://developer.apple.com/documentation/cfnetwork/network-diagnostics)",
-      "bifrost": "none found; springboard/src/shell/pages.rs (Network page)",
-      "status": "gap",
-      "note": "No diagnostic window or API. The Wi-Fi page shows link state only."
+      "bifrost": "springboard/sdk/src/net_diagnostic.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No diagnostic window or API. The Wi-Fi page shows link state only."
     },
     {
       "feature": "FTP transfers",

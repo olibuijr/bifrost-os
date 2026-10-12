@@ -17,16 +17,16 @@
     {
       "feature": "Effect creation, download and playback",
       "apple": "FFDeviceCreateEffect, FFEffectDownload, FFEffectStart, FFEffectStop, FFEffectUnload, FFEffectSetParameters, FFEffectGetParameters, FFEFFECT, FFPERIODIC, FFCONSTANTFORCE, FFRAMPFORCE, FFCONDITION, FFCUSTOMFORCE, FFENVELOPE",
-      "bifrost": "springboard/src/bare/input.rs:26-30 (EV constants: EV_SYN, EV_KEY, EV_ABS, EV_SW, EV_REL only)",
-      "status": "gap",
-      "note": "no EVIOCSFF upload, no FF effect structures, no EV_FF play events"
+      "bifrost": "springboard/core/src/force_effect.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no EVIOCSFF upload, no FF effect structures, no EV_FF play events"
     },
     {
       "feature": "Device properties and force-feedback state",
       "apple": "FFDeviceGetForceFeedbackProperty, FFDeviceSetForceFeedbackProperty, FFDeviceGetForceFeedbackState, FFDeviceSendForceFeedbackCommand, FFState, FFProperty",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no gain, autocenter or actuator-enable control"
+      "bifrost": "springboard/core/src/force_effect.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no gain, autocenter or actuator-enable control"
     },
     {
       "feature": "Hardware escape commands",

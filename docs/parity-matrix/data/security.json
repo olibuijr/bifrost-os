@@ -73,9 +73,9 @@
     {
       "feature": "Code signing services",
       "apple": "SecStaticCodeCreateWithPath, SecCodeCheckValidity, code signature inspection",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No code signing or signature verification found in the repo. Apps are installed without a signature check (store apps run from /var/lib/springboard/apps/<id>)."
+      "bifrost": "springboard/core/src/code_seal.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code signing or signature verification found in the repo. Apps are installed without a signature check (store apps run from /var/lib/springboard/apps/<id>)."
     },
     {
       "feature": "Notarization and Hardened Runtime",

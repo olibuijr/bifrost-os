@@ -94,16 +94,16 @@
     {
       "feature": "Background push and notification service extension",
       "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Depends on remote push, which is missing. No app extension point runs between delivery and display."
+      "bifrost": "springboard/ui/src/notifservice.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
     },
     {
       "feature": "Communication notifications",
       "apple": "Implementing communication notifications, UNNotificationContentProviding, UNNotificationAttributedMessageContext",
-      "bifrost": "springboard/sdk/src/intents.rs (App Intents, not communication notifications)",
-      "status": "gap",
-      "note": "No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
+      "bifrost": "springboard/sdk/src/messaging.rs (Notice",
+      "status": "partial",
+      "note": "Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
     },
     {
       "feature": "Web push notifications",

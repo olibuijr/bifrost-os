@@ -31,9 +31,9 @@
     {
       "feature": "Key (musical key over time)",
       "apple": "KeyResult, AnalysisType.key",
-      "bifrost": "springboard/apps/daw/src/compose.rs (best-fit chord from notes in the project, around line 508)",
-      "status": "gap",
-      "note": "compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio"
+      "bifrost": "springboard/ui/src/music.rs (analyze_key, springboard/sdk/src/music_understanding.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio"
     },
     {
       "feature": "Loudness (integrated, momentary, short-term, peak)",
@@ -52,9 +52,9 @@
     {
       "feature": "Structure (sections, segments, phrases)",
       "apple": "StructureResult, AnalysisType.structure",
-      "bifrost": "springboard/apps/daw/src/model.rs (Section, a user-authored scene, not detected)",
-      "status": "gap",
-      "note": "the name Section is a project scene, not detected song structure"
+      "bifrost": "springboard/ui/src/music.rs (segment_frames, springboard/sdk/src/music_understanding.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the name Section is a project scene, not detected song structure"
     },
     {
       "feature": "Instrument activity",

@@ -10,16 +10,16 @@
     {
       "feature": "Central manager state and power",
       "apple": "CBCentralManager, CBManager, CBCentralManagerState (deprecated), CBManagerState",
-      "bifrost": "springboard/src/bare/bluetooth.rs:222 (State: Unavailable, Off, On), springboard/src/bare/bluetooth.rs:267 (Cmd::Enable)",
-      "status": "os",
-      "note": "State exists in the shell and drives the Settings toggle; no SDK type reports it to an app. Authorization state has no counterpart."
+      "bifrost": "springboard/sdk/src/central.rs (ManagerState",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State exists in the shell and drives the Settings toggle; no SDK type reports it to an app. Authorization state has no counterpart."
     },
     {
       "feature": "Scanning for peripherals",
       "apple": "CBCentralManager.scanForPeripherals(withServices:options:), stopScan(), isScanning",
-      "bifrost": "springboard/src/bare/bluetooth.rs:66 (discovery over BR/EDR and both LE address types), springboard/src/bare/bluetooth.rs:71 (scan auto-stops), springboard/src/bare/bluetooth.rs:460 (Cmd::Scan)",
-      "status": "os",
-      "note": "Scan runs for the shell's Settings list only. No service-UUID filter and no per-app scan API."
+      "bifrost": "springboard/sdk/src/central.rs (ScanOptions",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scan runs for the shell's Settings list only. No service-UUID filter and no per-app scan API."
     },
     {
       "feature": "Discovered peripheral and advertisement data",
@@ -31,9 +31,9 @@
     {
       "feature": "Connecting and disconnecting peripherals",
       "apple": "CBCentralManager.connect(_:options:), cancelPeripheralConnection(_:)",
-      "bifrost": "springboard/src/bare/bluetooth.rs:473 (Cmd::Connect), springboard/src/bare/bluetooth.rs:482 (Cmd::Disconnect), springboard/src/bare/bluetooth.rs:1131 (connect path in tests)",
-      "status": "os",
-      "note": "Connect is a mgmt command for the system link. It is not a per-app GATT connection."
+      "bifrost": "springboard/sdk/src/central.rs (Link",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect is a mgmt command for the system link. It is not a per-app GATT connection."
     },
     {
       "feature": "Pairing, bonding and forgetting devices",

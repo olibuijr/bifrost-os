@@ -10,9 +10,9 @@
     {
       "feature": "Scene and scene lifecycle",
       "apple": "SKScene, SKView, SKRenderer, SpriteView",
-      "bifrost": "springboard/sdk/src/view/mod.rs (retained view tree)",
-      "status": "gap",
-      "note": "no scene object with an update loop, no game-scene presenter; apps get a retained UI view tree and a Surface"
+      "bifrost": "springboard/ui/src/scene_loop.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene object with an update loop, no game-scene presenter; apps get a retained UI view tree and a Surface"
     },
     {
       "feature": "Node tree and camera",
@@ -108,9 +108,9 @@
     {
       "feature": "Environmental nodes (audio, light)",
       "apple": "SKAudioNode, SKLightNode",
-      "bifrost": "none in the SDK",
-      "status": "gap",
-      "note": "audio playback exists as a daemon (springboard/audiod) but has no scene-positioned node API; no 2D light nodes"
+      "bifrost": "springboard/ui/src/scene2d.rs (positional_mix",
+      "status": "partial",
+      "note": "Wave 5 (w5-spritekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audio playback exists as a daemon (springboard/audiod) but has no scene-positioned node API; no 2D light nodes"
     },
     {
       "feature": "Renderer hand-off and custom Metal pipeline",

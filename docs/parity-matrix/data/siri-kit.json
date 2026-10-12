@@ -80,9 +80,9 @@
     {
       "feature": "Messaging intents (send, search messages, contacts)",
       "apple": "Messaging, Improving interactions between Siri and your messaging app",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No messaging intent domain. A messaging app would need a conversation and contact entity model first."
+      "bifrost": "springboard/sdk/src/messaging.rs (SendRequest",
+      "status": "partial",
+      "note": "Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No messaging intent domain. A messaging app would need a conversation and contact entity model first."
     },
     {
       "feature": "Lists and Notes intents",

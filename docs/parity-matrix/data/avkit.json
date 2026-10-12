@@ -80,9 +80,9 @@
     {
       "feature": "Capture events from hardware buttons",
       "apple": "AVCaptureEventInteraction, AVCaptureEvent, AVCaptureEventSound",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No hardware capture button handler; the shutter is on-screen only."
+      "bifrost": "springboard/ui/src/capture_event.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hardware capture button handler; the shutter is on-screen only."
     },
     {
       "feature": "Camera facing direction",
@@ -94,9 +94,9 @@
     {
       "feature": "Audio input picker",
       "apple": "AVInputPickerInteraction",
-      "bifrost": "springboard/src/media/capture.rs, springboard/audiod/src/main.rs (Recorder, record_state)",
-      "status": "os",
-      "note": "The audio service records (Recorder, level, elapsed) but no input-device picker UI or SDK API is offered to apps."
+      "bifrost": "springboard/ui/src/input_picker.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service records (Recorder, level, elapsed) but no input-device picker UI or SDK API is offered to apps."
     },
     {
       "feature": "Camera access while multitasking",

@@ -45,9 +45,9 @@
     {
       "feature": "Pixel format and colour conversion",
       "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)",
-      "bifrost": "springboard/src/media/convert.rs:45-46 (BT601 and BT709 fixed-point matrices), springboard/src/media/convert.rs:49 (matrix_for)",
-      "status": "os",
-      "note": "NV12 and RGBA to premultiplied RGBA for the video thread. No CMYK, no grayscale conversion, and no public conversion API."
+      "bifrost": "springboard/render/src/pixel_layout.rs, springboard/sdk/src/lib.rs (kit::pixel_layout)",
+      "status": "partial",
+      "note": "Wave 5 (w5-accelerate, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. NV12 and RGBA to premultiplied RGBA for the video thread. No CMYK, no grayscale conversion, and no public conversion API."
     },
     {
       "feature": "Tone and brightness adjustment, histogram",
@@ -80,9 +80,9 @@
     {
       "feature": "Neural networks",
       "apple": "BNNS (neural network training and inference)",
-      "bifrost": "none in SDK",
-      "status": "gap",
-      "note": "No neural network inference or training API for apps. Searches for neural network and tensor code found nothing."
+      "bifrost": "springboard/ui/src/cnn_layers.rs (inference only",
+      "status": "partial",
+      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No neural network inference or training API for apps. Searches for neural network and tensor code found nothing."
     },
     {
       "feature": "Audio DSP (biquad filters, spectrogram)",

@@ -24,16 +24,16 @@
     {
       "feature": "URL Loading: cookies, credentials, authentication challenges",
       "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
-      "bifrost": "springboard/src/deildu/http.rs (cookie jar in the shell transport only)",
-      "status": "gap",
-      "note": "cookie jar is internal to the shell HTTP client, not exposed through URLSession"
+      "bifrost": "springboard/sdk/src/http_auth.rs (AuthChallenge",
+      "status": "partial",
+      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. cookie jar is internal to the shell HTTP client, not exposed through URLSession"
     },
     {
       "feature": "URL Loading: WebSocket and streaming tasks",
       "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
-      "bifrost": "springboard/sdk/src/url.rs (bytes streaming only)",
-      "status": "gap",
-      "note": "no WebSocket client in the SDK"
+      "bifrost": "springboard/sdk/src/websocket.rs, springboard/core/src/websocket.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no WebSocket client in the SDK"
     },
     {
       "feature": "URL Loading: custom protocols and proxies, URL components",
@@ -45,9 +45,9 @@
     {
       "feature": "Bonjour: advertise and browse services",
       "apple": "NetService, NetServiceBrowser",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no mDNS/DNS-SD code in springboard or the SDK"
+      "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK"
     },
     {
       "feature": "XPC: interprocess communication",

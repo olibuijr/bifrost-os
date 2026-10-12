@@ -17,16 +17,16 @@
     {
       "feature": "Device inquiry (scan)",
       "apple": "IOBluetoothDeviceInquiry, IOBluetoothDeviceInquiryDelegate",
-      "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Scan, OP_START_DISCOVERY, OP_STOP_DISCOVERY)",
-      "status": "os",
-      "note": "Discovery runs through the mgmt socket. No delegate or callback API for apps."
+      "bifrost": "springboard/sdk/src/bluetooth_inquiry.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs through the mgmt socket. No delegate or callback API for apps."
     },
     {
       "feature": "Remote device model (name, class, paired, connected)",
       "apple": "IOBluetoothDevice, IOBluetoothDeviceRef, IOBluetoothObject",
-      "bifrost": "springboard/src/bare/bluetooth.rs:193 (struct Device), :222 (State), :231 (Status)",
-      "status": "os",
-      "note": "A device list exists in the shell's Status. No app API."
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A device list exists in the shell's Status. No app API."
     },
     {
       "feature": "Pairing (Just Works, user confirm, timeout)",
@@ -87,9 +87,9 @@
     {
       "feature": "HID device handling (ignore, counts)",
       "apple": "IOBluetoothIgnoreHIDDevice, IOBluetoothRemoveIgnoredHIDDevice, IOBluetoothNumberOf*HIDDevices",
-      "bifrost": "springboard/src/media/route.rs:273 (test: keyboard is not an audio sink); HID input is left to the kernel",
-      "status": "gap",
-      "note": "No API to count or ignore HID devices. Keyboards and mice are not visible to apps through Bluetooth calls."
+      "bifrost": "springboard/sdk/src/bluetooth_hid.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to count or ignore HID devices. Keyboards and mice are not visible to apps through Bluetooth calls."
     },
     {
       "feature": "User notifications on device events",

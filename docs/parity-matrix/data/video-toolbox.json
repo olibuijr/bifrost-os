@@ -73,16 +73,16 @@
     {
       "feature": "RAW processing",
       "apple": "VTRAWProcessingSession",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no camera-native or Bayer path in springboard/src/media; v4l2.rs converts only YUV formats it lists"
+      "bifrost": "springboard/render/src/bayer.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no camera-native or Bayer path in springboard/src/media; v4l2.rs converts only YUV formats it lists"
     },
     {
       "feature": "HDR per-frame metadata",
       "apple": "VTHDRPerFrameMetadataGenerationSession, VTCompressionPropertyKey_LogTransferFunction",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "decoder path is 8-bit NV12 only; no 10-bit or HDR transfer handling found"
+      "bifrost": "springboard/render/src/hdr_metadata.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. decoder path is 8-bit NV12 only; no 10-bit or HDR transfer handling found"
     },
     {
       "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",

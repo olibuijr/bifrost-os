@@ -24,9 +24,9 @@
     {
       "feature": "Outgoing calls",
       "apple": "CXCallController, CXTransaction, CXStartCallAction",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no start-call request path"
+      "bifrost": "springboard/ui/src/call.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no start-call request path"
     },
     {
       "feature": "Call actions",

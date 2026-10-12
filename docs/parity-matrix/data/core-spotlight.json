@@ -38,23 +38,23 @@
     {
       "feature": "Index client delegate",
       "apple": "CSSearchableIndexDelegate",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no callback surface for index events or data-protection hooks; the SDK App trait has no index delegate method"
+      "bifrost": "springboard/ui/src/index_client.rs (IndexClientDelegate",
+      "status": "partial",
+      "note": "Wave 5 (theme-11, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no callback surface for index events or data-protection hooks; the SDK App trait has no index delegate method"
     },
     {
       "feature": "Index descriptions",
       "apple": "CSSearchableIndexDescription",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no way to describe an index or its protection class"
+      "bifrost": "springboard/ui/src/index_client.rs (IndexDescription)",
+      "status": "partial",
+      "note": "Wave 5 (theme-11, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to describe an index or its protection class"
     },
     {
       "feature": "Index extensions and on-demand regeneration",
       "apple": "CSIndexExtensionRequestHandler, CSImportExtension, Regenerating your app's indexes on demand",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "apps can only push items from a running process; the system never asks an app to rebuild its index. Apple also notes that file import extensions do not work on macOS, so an import extension would need a different counterpart"
+      "bifrost": "springboard/ui/src/index_client.rs (IndexExtension",
+      "status": "partial",
+      "note": "Wave 5 (theme-11, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps can only push items from a running process; the system never asks an app to rebuild its index. Apple also notes that file import extensions do not work on macOS, so an import extension would need a different counterpart"
     },
     {
       "feature": "App-side search queries",

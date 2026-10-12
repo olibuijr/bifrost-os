@@ -6,218 +6,213 @@
  "themes": [
   {
    "id": "theme-01",
-   "title": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)",
-   "size": 32,
+   "title": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
+   "size": 29,
    "frameworks": [
-    {
-     "slug": "quartz",
-     "name": "Quartz"
-    },
     {
      "slug": "core-image",
      "name": "Core Image"
     },
     {
-     "slug": "application-services",
-     "name": "Application Services"
+     "slug": "scenekit",
+     "name": "SceneKit"
     },
     {
      "slug": "model-i-o",
      "name": "Model I/O"
     },
     {
-     "slug": "iosurface",
-     "name": "IOSurface"
+     "slug": "metal-performance-shaders",
+     "name": "Metal Performance Shaders"
     },
     {
-     "slug": "spatial",
-     "name": "Spatial"
+     "slug": "application-services",
+     "name": "Application Services"
+    },
+    {
+     "slug": "metal",
+     "name": "Metal"
+    },
+    {
+     "slug": "metrickit",
+     "name": "MetricKit"
+    },
+    {
+     "slug": "glkit",
+     "name": "GLKit"
+    },
+    {
+     "slug": "spritekit",
+     "name": "SpriteKit"
     },
     {
      "slug": "core-graphics",
      "name": "Core Graphics"
     },
     {
-     "slug": "quicklook-ui",
-     "name": "QuickLook UI"
-    },
-    {
-     "slug": "media-accessibility",
-     "name": "Media Accessibility"
-    },
-    {
-     "slug": "visionkit",
-     "name": "VisionKit"
-    },
-    {
-     "slug": "mapkit",
-     "name": "MapKit"
-    },
-    {
-     "slug": "video-toolbox",
-     "name": "Video Toolbox"
+     "slug": "spatial",
+     "name": "Spatial"
     },
     {
      "slug": "colorsync",
      "name": "ColorSync"
     },
     {
-     "slug": "quick-look-thumbnailing",
-     "name": "Quick Look Thumbnailing"
+     "slug": "core-animation",
+     "name": "Core Animation"
     },
     {
      "slug": "symbols",
      "name": "Symbols"
     },
     {
-     "slug": "media-player",
-     "name": "Media Player"
+     "slug": "mapkit",
+     "name": "MapKit"
     },
     {
-     "slug": "photokit",
-     "name": "PhotoKit"
+     "slug": "javascriptcore",
+     "name": "JavaScriptCore"
+    },
+    {
+     "slug": "core-motion",
+     "name": "Core Motion"
+    },
+    {
+     "slug": "visionkit",
+     "name": "VisionKit"
+    },
+    {
+     "slug": "video-toolbox",
+     "name": "Video Toolbox"
+    },
+    {
+     "slug": "gss",
+     "name": "GSS"
+    },
+    {
+     "slug": "diskimagekit",
+     "name": "DiskImageKit"
     }
    ],
    "rows": [
-    {
-     "slug": "quartz",
-     "framework": "Quartz",
-     "feature": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)",
-     "apple": "CIFilter, IKFilterBrowserPanel, IKFilterBrowserView, IKFilterUIView, IKFilterCustomUIProvider",
-     "cohesion": 0.908
-    },
     {
      "slug": "core-image",
      "framework": "Core Image",
      "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
      "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
-     "cohesion": 0.904
-    },
-    {
-     "slug": "application-services",
-     "framework": "Application Services",
-     "feature": "ColorSync Manager (profiles, transforms, CMM)",
-     "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
-     "cohesion": 0.902
+     "cohesion": 0.914
     },
     {
      "slug": "core-image",
      "framework": "Core Image",
      "feature": "Image and context objects (CIImage, CIContext)",
      "apple": "CIImage, CIContext",
-     "cohesion": 0.896
+     "cohesion": 0.903
     },
     {
-     "slug": "core-image",
-     "framework": "Core Image",
-     "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",
-     "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
+     "slug": "scenekit",
+     "framework": "SceneKit",
+     "feature": "Custom shaders and render passes",
+     "apple": "SCNProgram, SCNShadable, SCNTechnique, SCNNodeRendererDelegate",
+     "cohesion": 0.902
+    },
+    {
+     "slug": "model-i-o",
+     "framework": "Model I/O",
+     "feature": "Sharing buffers with the GPU framework",
+     "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)",
+     "cohesion": 0.901
+    },
+    {
+     "slug": "metal-performance-shaders",
+     "framework": "Metal Performance Shaders",
+     "feature": "Kernel base classes and keyed archiving",
+     "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
+     "cohesion": 0.895
+    },
+    {
+     "slug": "application-services",
+     "framework": "Application Services",
+     "feature": "ColorSync Manager (profiles, transforms, CMM)",
+     "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
+     "cohesion": 0.895
+    },
+    {
+     "slug": "metal",
+     "framework": "Metal",
+     "feature": "Shader functions and libraries",
+     "apple": "MTLLibrary, MTLFunction, Metal Shading Language",
+     "cohesion": 0.892
+    },
+    {
+     "slug": "metrickit",
+     "framework": "MetricKit",
+     "feature": "GPU and Metal frame metrics (GPUTimeMetric, MetalFrameRateMetric)",
+     "apple": "GPUTimeMetric, MetalFrameRateMetric, PixelLuminanceMetric, AveragePixelLuminance",
      "cohesion": 0.891
     },
     {
-     "slug": "model-i-o",
-     "framework": "Model I/O",
-     "feature": "Textures as 3D material inputs",
-     "apple": "MDLTexture, MDLURLTexture, MDLTextureSampler, MDLTextureFilter, procedural textures (checkerboard, noise, sky cube, normal map)",
-     "cohesion": 0.887
+     "slug": "glkit",
+     "framework": "GLKit",
+     "feature": "Shader-based effects",
+     "apple": "GLKNamedEffect, GLKBaseEffect (lighting, transform), GLKReflectionMapEffect, GLKSkyboxEffect",
+     "cohesion": 0.89
     },
     {
-     "slug": "iosurface",
-     "framework": "IOSurface",
-     "feature": "Colour space and ICC profile on buffers",
-     "apple": "kIOSurfaceColorSpace, kIOSurfaceICCProfile",
-     "cohesion": 0.885
+     "slug": "scenekit",
+     "framework": "SceneKit",
+     "feature": "Views for 3D content",
+     "apple": "SCNView, SCNRenderer, SCNLayer, SCNSceneRenderer, SCNHitTestResult",
+     "cohesion": 0.89
     },
     {
-     "slug": "spatial",
-     "framework": "Spatial",
-     "feature": "Coordinate spaces",
-     "apple": "CoordinateSpace3D, CoordinateSpaceValue3D, WorldReferenceCoordinateSpace, ProjectiveTransformable3D",
-     "cohesion": 0.883
-    },
-    {
-     "slug": "core-graphics",
-     "framework": "Core Graphics",
-     "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",
-     "apple": "CGEvent, CGEventTapCreate, CGEventPost, mouse and keyboard event sources",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "quicklook-ui",
-     "framework": "QuickLook UI",
-     "feature": "Embedded preview view (QLPreviewView)",
-     "apple": "QLPreviewView: init(frame:style:), previewItem, refreshPreviewItem(), displayState, autostarts, close",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "media-accessibility",
-     "framework": "Media Accessibility",
-     "feature": "Flashing lights detection and dimming",
-     "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor",
-     "cohesion": 0.876
-    },
-    {
-     "slug": "visionkit",
-     "framework": "VisionKit",
-     "feature": "Visual Look Up",
-     "apple": "ImageAnalysisInteraction (visual Look Up button)",
-     "cohesion": 0.875
-    },
-    {
-     "slug": "model-i-o",
-     "framework": "Model I/O",
-     "feature": "Mesh processing and baking",
-     "apple": "subdivision surfaces, ambient occlusion baking, light probe placement (MDLProbePlacement), normal map generation",
-     "cohesion": 0.873
-    },
-    {
-     "slug": "mapkit",
-     "framework": "MapKit",
-     "feature": "Map snapshots (static images)",
-     "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
-     "cohesion": 0.872
-    },
-    {
-     "slug": "model-i-o",
-     "framework": "Model I/O",
-     "feature": "File format import and export",
-     "apple": "MDLComponent, MDLObjectContainerComponent, MDLTransformComponent; formats OBJ, PLY, STL, USD, Alembic",
-     "cohesion": 0.872
+     "slug": "spritekit",
+     "framework": "SpriteKit",
+     "feature": "Renderer hand-off and custom Metal pipeline",
+     "apple": "SKRenderer, SKView",
+     "cohesion": 0.89
     },
     {
      "slug": "core-graphics",
      "framework": "Core Graphics",
      "feature": "Layers and offscreen reusable content (CGLayer)",
      "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-     "cohesion": 0.871
+     "cohesion": 0.884
     },
     {
-     "slug": "video-toolbox",
-     "framework": "Video Toolbox",
-     "feature": "RAW processing",
-     "apple": "VTRAWProcessingSession",
-     "cohesion": 0.87
+     "slug": "core-image",
+     "framework": "Core Image",
+     "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",
+     "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
+     "cohesion": 0.88
+    },
+    {
+     "slug": "spatial",
+     "framework": "Spatial",
+     "feature": "Coordinate spaces",
+     "apple": "CoordinateSpace3D, CoordinateSpaceValue3D, WorldReferenceCoordinateSpace, ProjectiveTransformable3D",
+     "cohesion": 0.88
     },
     {
      "slug": "colorsync",
      "framework": "ColorSync",
-     "feature": "Color profiles (ICC load, create, inspect, embed)",
-     "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
-     "cohesion": 0.869
+     "feature": "HDR, extended range and tone mapping",
+     "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)",
+     "cohesion": 0.873
     },
     {
-     "slug": "visionkit",
-     "framework": "VisionKit",
-     "feature": "Subject lifting and background removal",
-     "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
-     "cohesion": 0.867
+     "slug": "core-animation",
+     "framework": "Core Animation",
+     "feature": "Layer tree (CALayer, CALayerDelegate, layout managers)",
+     "apple": "CALayer, CALayerDelegate, CALayoutManager, CAConstraintLayoutManager, CAConstraint",
+     "cohesion": 0.872
     },
     {
-     "slug": "visionkit",
-     "framework": "VisionKit",
-     "feature": "Stabilised camera region of interest",
-     "apple": "CameraRegionView",
-     "cohesion": 0.867
+     "slug": "symbols",
+     "framework": "Symbols",
+     "feature": "Symbol weights, scales and rendering modes",
+     "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)",
+     "cohesion": 0.868
     },
     {
      "slug": "colorsync",
@@ -227,55 +222,80 @@
      "cohesion": 0.866
     },
     {
-     "slug": "quick-look-thumbnailing",
-     "framework": "Quick Look Thumbnailing",
-     "feature": "System-wide thumbnails in Files, Spotlight and other apps",
-     "apple": "Finder and Spotlight display thumbnails from QLThumbnailGenerator and extensions",
-     "cohesion": 0.865
-    },
-    {
-     "slug": "symbols",
-     "framework": "Symbols",
-     "feature": "Symbol weights, scales and rendering modes",
-     "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)",
-     "cohesion": 0.864
+     "slug": "mapkit",
+     "framework": "MapKit",
+     "feature": "Map snapshots (static images)",
+     "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
+     "cohesion": 0.862
     },
     {
      "slug": "colorsync",
      "framework": "ColorSync",
-     "feature": "HDR, extended range and tone mapping",
-     "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)",
-     "cohesion": 0.863
+     "feature": "Color profiles (ICC load, create, inspect, embed)",
+     "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
+     "cohesion": 0.861
     },
     {
-     "slug": "core-graphics",
-     "framework": "Core Graphics",
-     "feature": "Window services (Quartz Window Services, CGWindowList)",
-     "apple": "CGWindowListCopyWindowInfo, window levels, CGWindowLevelForKey",
-     "cohesion": 0.862
+     "slug": "javascriptcore",
+     "framework": "JavaScriptCore",
+     "feature": "C API (engine interface, data types, constants)",
+     "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions",
+     "cohesion": 0.859
+    },
+    {
+     "slug": "core-motion",
+     "framework": "Core Motion",
+     "feature": "Raw accelerometer events",
+     "apple": "CMAccelerometerData, CMAccelerometer updates via CMMotionManager",
+     "cohesion": 0.853
+    },
+    {
+     "slug": "visionkit",
+     "framework": "VisionKit",
+     "feature": "Subject lifting and background removal",
+     "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
+     "cohesion": 0.852
+    },
+    {
+     "slug": "core-motion",
+     "framework": "Core Motion",
+     "feature": "Raw gyroscope events",
+     "apple": "CMGyroData",
+     "cohesion": 0.852
+    },
+    {
+     "slug": "metal",
+     "framework": "Metal",
+     "feature": "Machine learning passes",
+     "apple": "MTLTensor, MPSGraph inference in a command encoder",
+     "cohesion": 0.851
     }
    ]
   },
   {
    "id": "theme-02",
-   "title": "Local push connectivity",
+   "title": "Apple Events (inter-process messages with replies)",
    "size": 28,
    "frameworks": [
     {
-     "slug": "network-extension",
-     "name": "Network Extension"
+     "slug": "core-services",
+     "name": "Core Services"
     },
     {
-     "slug": "cfnetwork",
-     "name": "CFNetwork"
+     "slug": "swiftui-app-data",
+     "name": "SwiftUI (App structure, Data and storage)"
     },
     {
-     "slug": "avrouting",
-     "name": "AVRouting"
+     "slug": "app-intents",
+     "name": "App Intents"
     },
     {
-     "slug": "foundation-networking-lowlevel",
-     "name": "Foundation (Networking, Low-Level Utilities)"
+     "slug": "safari-services",
+     "name": "Safari Services"
+    },
+    {
+     "slug": "authentication-services",
+     "name": "Authentication Services"
     },
     {
      "slug": "user-notifications",
@@ -286,394 +306,400 @@
      "name": "Swift"
     },
     {
-     "slug": "network",
-     "name": "Network"
+     "slug": "service-management",
+     "name": "Service Management"
     },
     {
-     "slug": "core-media-i-o",
-     "name": "Core Media I/O"
+     "slug": "core-data",
+     "name": "Core Data"
     },
     {
-     "slug": "core-bluetooth",
-     "name": "Core Bluetooth"
+     "slug": "storekit",
+     "name": "StoreKit"
     },
     {
-     "slug": "core-location",
-     "name": "Core Location"
-    },
-    {
-     "slug": "user-notifications-ui",
-     "name": "User Notifications UI"
-    },
-    {
-     "slug": "callkit",
-     "name": "CallKit"
-    },
-    {
-     "slug": "darwin-notify",
-     "name": "Darwin Notify"
-    },
-    {
-     "slug": "background-assets",
-     "name": "Background Assets"
-    },
-    {
-     "slug": "endpoint-security",
-     "name": "Endpoint Security"
-    },
-    {
-     "slug": "widgetkit",
-     "name": "WidgetKit"
-    },
-    {
-     "slug": "dnssd",
-     "name": "dnssd"
-    },
-    {
-     "slug": "itunes-library",
-     "name": "iTunes Library"
-    },
-    {
-     "slug": "address-book",
-     "name": "Address Book"
-    },
-    {
-     "slug": "combine",
-     "name": "Combine"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "network-extension",
-     "framework": "Network Extension",
-     "feature": "Local push connectivity",
-     "apple": "Local push connectivity collection group",
-     "cohesion": 0.914
+     "slug": "siri-kit",
+     "name": "SiriKit"
     },
     {
      "slug": "network-extension",
-     "framework": "Network Extension",
-     "feature": "Hotspot helper",
-     "apple": "Hotspot helper collection group",
-     "cohesion": 0.902
+     "name": "Network Extension"
     },
     {
-     "slug": "cfnetwork",
-     "framework": "CFNetwork",
-     "feature": "Network services (Bonjour)",
-     "apple": "CFNetService, CFNetServiceBrowser, CFNetServiceRegisterWithOptions, CFNetServiceResolveWithTimeout (https://developer.apple.com/documentation/cfnetwork/network-services)",
-     "cohesion": 0.901
-    },
-    {
-     "slug": "avrouting",
-     "framework": "AVRouting",
-     "feature": "Device discovery extension",
-     "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
-     "cohesion": 0.901
-    },
-    {
-     "slug": "foundation-networking-lowlevel",
-     "framework": "Foundation (Networking, Low-Level Utilities)",
-     "feature": "Bonjour: advertise and browse services",
-     "apple": "NetService, NetServiceBrowser",
-     "cohesion": 0.893
-    },
-    {
-     "slug": "user-notifications",
-     "framework": "User Notifications",
-     "feature": "Remote notifications and APNs registration",
-     "apple": "APS Environment entitlement, registerForRemoteNotifications, device token, Setting up a remote notification server",
-     "cohesion": 0.892
-    },
-    {
-     "slug": "swift",
-     "framework": "Swift",
-     "feature": "Distributed actors",
-     "apple": "Distributed",
-     "cohesion": 0.891
-    },
-    {
-     "slug": "network",
-     "framework": "Network",
-     "feature": "Privacy attribution and local network identity",
-     "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "network-extension",
-     "framework": "Network Extension",
-     "feature": "App extensions host (NEAppExtensionConfiguration)",
-     "apple": "NEAppExtensionConfiguration",
-     "cohesion": 0.888
-    },
-    {
-     "slug": "user-notifications",
-     "framework": "User Notifications",
-     "feature": "Background push and notification service extension",
-     "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
-     "cohesion": 0.887
-    },
-    {
-     "slug": "user-notifications",
-     "framework": "User Notifications",
-     "feature": "Web push notifications",
-     "apple": "Sending web push notifications in web apps and browsers",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "core-media-i-o",
-     "framework": "Core Media I/O",
-     "feature": "Providers (extension provider and its source and properties)",
-     "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O",
-     "cohesion": 0.885
-    },
-    {
-     "slug": "core-bluetooth",
-     "framework": "Core Bluetooth",
-     "feature": "Background execution and Live Activity privileges",
-     "apple": "Core Bluetooth background modes (not supported in iPad apps on macOS); Live Activity scanning privileges",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "core-location",
-     "framework": "Core Location",
-     "feature": "Authorization and usage descriptions",
-     "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
-     "cohesion": 0.882
-    },
-    {
-     "slug": "user-notifications-ui",
-     "framework": "User Notifications UI",
-     "feature": "Notification content app extension (custom notification view)",
-     "apple": "UNNotificationContentExtension, didReceive(_:), Customizing the Appearance of Notifications",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "callkit",
-     "framework": "CallKit",
-     "feature": "Incoming call UI",
-     "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
-     "cohesion": 0.875
-    },
-    {
-     "slug": "network-extension",
-     "framework": "Network Extension",
-     "feature": "DNS proxy provider",
-     "apple": "DNS proxy provider collection group",
-     "cohesion": 0.865
-    },
-    {
-     "slug": "darwin-notify",
-     "framework": "Darwin Notify",
-     "feature": "Signal-based delivery (notify_register_signal)",
-     "apple": "notify_register_signal(_:_:_:)",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "avrouting",
-     "framework": "AVRouting",
-     "feature": "Route addresses on the local network",
-     "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "cfnetwork",
-     "framework": "CFNetwork",
-     "feature": "Network diagnostics",
-     "apple": "CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticDiagnoseProblemInteractively (https://developer.apple.com/documentation/cfnetwork/network-diagnostics)",
-     "cohesion": 0.862
-    },
-    {
-     "slug": "cfnetwork",
-     "framework": "CFNetwork",
-     "feature": "Host name resolution",
-     "apple": "CFHost, CFHostCreateWithName, CFHostStartInfoResolution, CFHostGetAddressing (https://developer.apple.com/documentation/cfnetwork/hosts)",
-     "cohesion": 0.862
-    },
-    {
-     "slug": "background-assets",
-     "framework": "Background Assets",
-     "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
-     "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks",
-     "cohesion": 0.858
-    },
-    {
-     "slug": "endpoint-security",
-     "framework": "Endpoint Security",
-     "feature": "Socket, pseudoterminal, clock and kernel events",
-     "apple": "Socket Event Types, Pseudoterminal Event Types, Clock Event Types, Kernel Event Types",
-     "cohesion": 0.854
-    },
-    {
-     "slug": "widgetkit",
-     "framework": "WidgetKit",
-     "feature": "Location and network access in widgets",
-     "apple": "Accessing location information in widgets, Making network requests in a widget extension",
-     "cohesion": 0.847
-    },
-    {
-     "slug": "dnssd",
-     "framework": "dnssd",
-     "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",
-     "apple": "DNSServiceNATPortMappingCreate, DNSServiceNATPortMappingReply",
-     "cohesion": 0.846
-    }
-   ]
-  },
-  {
-   "id": "theme-03",
-   "title": "TextKit: storage, layout manager, containers",
-   "size": 23,
-   "frameworks": [
-    {
-     "slug": "appkit-text",
-     "name": "AppKit (Text)"
-    },
-    {
-     "slug": "core-text",
-     "name": "Core Text"
-    },
-    {
-     "slug": "pencilkit",
-     "name": "PencilKit"
-    },
-    {
-     "slug": "quartz",
-     "name": "Quartz"
-    },
-    {
-     "slug": "mapkit",
-     "name": "MapKit"
-    },
-    {
-     "slug": "natural-language",
-     "name": "Natural Language"
-    },
-    {
-     "slug": "pdfkit",
-     "name": "PDFKit"
-    },
-    {
-     "slug": "tipkit",
-     "name": "TipKit"
-    },
-    {
-     "slug": "swiftui-views-layout",
-     "name": "SwiftUI (Views, View layout)"
-    },
-    {
-     "slug": "paperkit",
-     "name": "PaperKit"
+     "slug": "relevancekit",
+     "name": "RelevanceKit"
     },
     {
      "slug": "webkit",
      "name": "WebKit"
     },
     {
-     "slug": "app-intents-testing",
-     "name": "App Intents Testing"
+     "slug": "bundle-resources",
+     "name": "Bundle Resources"
     },
     {
-     "slug": "quick-look",
-     "name": "Quick Look"
+     "slug": "replaykit",
+     "name": "ReplayKit"
     },
     {
-     "slug": "translation",
-     "name": "Translation"
+     "slug": "itunes-library",
+     "name": "iTunes Library"
     },
     {
-     "slug": "speech",
-     "name": "Speech"
+     "slug": "endpoint-security",
+     "name": "Endpoint Security"
     },
     {
-     "slug": "swift-charts",
-     "name": "Swift Charts"
+     "slug": "javascriptcore",
+     "name": "JavaScriptCore"
+    },
+    {
+     "slug": "callkit",
+     "name": "CallKit"
     }
    ],
    "rows": [
     {
-     "slug": "appkit-text",
-     "framework": "AppKit (Text)",
-     "feature": "TextKit: storage, layout manager, containers",
-     "apple": "NSTextStorage, NSLayoutManager, NSTextContainer, NSTextLayoutManager",
-     "cohesion": 0.901
+     "slug": "core-services",
+     "framework": "Core Services",
+     "feature": "Apple Events (inter-process messages with replies)",
+     "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
+     "cohesion": 0.908
     },
     {
-     "slug": "appkit-text",
-     "framework": "AppKit (Text)",
-     "feature": "Text Display: multi-line text view widget",
-     "apple": "NSTextView, NSScrollView text container",
+     "slug": "swiftui-app-data",
+     "framework": "SwiftUI (App structure, Data and storage)",
+     "feature": "App extensions",
+     "apple": "WidgetBundle, Widget, widget configuration",
+     "cohesion": 0.906
+    },
+    {
+     "slug": "app-intents",
+     "framework": "App Intents",
+     "feature": "Schema domains and visual presentation",
+     "apple": "App schema domains, visual intelligence, Action button, side button",
+     "cohesion": 0.896
+    },
+    {
+     "slug": "app-intents",
+     "framework": "App Intents",
+     "feature": "Widgets, controls and Live Activities",
+     "apple": "Widgets, Live Activities, and Controls (intent-driven)",
+     "cohesion": 0.891
+    },
+    {
+     "slug": "safari-services",
+     "framework": "Safari Services",
+     "feature": "Authentication sessions (shared Safari login)",
+     "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError",
+     "cohesion": 0.889
+    },
+    {
+     "slug": "authentication-services",
+     "framework": "Authentication Services",
+     "feature": "Single sign-on in a web browser app",
+     "apple": "ASWebAuthenticationSession browser handoff and support capabilities",
      "cohesion": 0.888
     },
     {
-     "slug": "core-text",
-     "framework": "Core Text",
-     "feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)",
-     "apple": "CTTypesetter, CTFramesetter, CTFrame, CTLine, CTRun",
-     "cohesion": 0.887
+     "slug": "user-notifications",
+     "framework": "User Notifications",
+     "feature": "Remote notifications and APNs registration",
+     "apple": "APS Environment entitlement, registerForRemoteNotifications, device token, Setting up a remote notification server",
+     "cohesion": 0.886
     },
     {
-     "slug": "pencilkit",
-     "framework": "PencilKit",
-     "feature": "Scribble on non-text views",
-     "apple": "Scribble interactions",
+     "slug": "swift",
+     "framework": "Swift",
+     "feature": "Distributed actors",
+     "apple": "Distributed",
      "cohesion": 0.885
     },
     {
-     "slug": "quartz",
-     "framework": "Quartz",
-     "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
-     "apple": "PDFAnnotation, PDFAction, PDFDestination, PDFAppearanceCharacteristics, PDFBorder; widget how-to articles",
-     "cohesion": 0.883
+     "slug": "service-management",
+     "framework": "Service Management",
+     "feature": "Embedded helper executables",
+     "apple": "helper executables inside the app's main bundle, registered through SMAppService",
+     "cohesion": 0.885
     },
     {
-     "slug": "mapkit",
-     "framework": "MapKit",
-     "feature": "Map view (MKMapView, Map)",
-     "apple": "MKMapView, Map (SwiftUI)",
-     "cohesion": 0.883
+     "slug": "core-data",
+     "framework": "Core Data",
+     "feature": "Persistent store and stack setup",
+     "apple": "NSPersistentContainer, NSPersistentStoreDescription, NSPersistentStoreCoordinator (Core Data stack, https://developer.apple.com/documentation/coredata/setting-up-a-core-data-stack)",
+     "cohesion": 0.882
     },
+    {
+     "slug": "storekit",
+     "framework": "StoreKit",
+     "feature": "App Store interactions",
+     "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
+     "cohesion": 0.881
+    },
+    {
+     "slug": "authentication-services",
+     "framework": "Authentication Services",
+     "feature": "Authorization requests (controller, results)",
+     "apple": "ASAuthorizationController, ASAuthorizationResult, AuthorizationController (SwiftUI)",
+     "cohesion": 0.881
+    },
+    {
+     "slug": "siri-kit",
+     "framework": "SiriKit",
+     "feature": "Shortcuts app integration",
+     "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
+     "cohesion": 0.88
+    },
+    {
+     "slug": "network-extension",
+     "framework": "Network Extension",
+     "feature": "App extensions host (NEAppExtensionConfiguration)",
+     "apple": "NEAppExtensionConfiguration",
+     "cohesion": 0.871
+    },
+    {
+     "slug": "core-data",
+     "framework": "Core Data",
+     "feature": "Managed objects and contexts",
+     "apple": "NSManagedObject, NSManagedObjectContext (https://developer.apple.com/documentation/coredata/nsmanagedobjectcontext)",
+     "cohesion": 0.869
+    },
+    {
+     "slug": "storekit",
+     "framework": "StoreKit",
+     "feature": "Promoted purchases",
+     "apple": "PurchaseIntent, Product.PromotionInfo",
+     "cohesion": 0.869
+    },
+    {
+     "slug": "relevancekit",
+     "framework": "RelevanceKit",
+     "feature": "Time clues",
+     "apple": "RelevantContext.date(_:), date(_:kind:), date(interval:kind:), date(range:kind:), date(from:to:), DateKind",
+     "cohesion": 0.869
+    },
+    {
+     "slug": "core-services",
+     "framework": "Core Services",
+     "feature": "Event history and event IDs",
+     "apple": "FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime, FSEventStreamGetLatestEventId, FSEventStreamFlushSync",
+     "cohesion": 0.869
+    },
+    {
+     "slug": "webkit",
+     "framework": "WebKit",
+     "feature": "WebDriver and automated testing",
+     "apple": "WebDriver commands for Safari 11.1 and earlier and 12 and later; testing with WebDriver in Safari",
+     "cohesion": 0.867
+    },
+    {
+     "slug": "bundle-resources",
+     "framework": "Bundle Resources",
+     "feature": "Universal links service (applinks)",
+     "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
+     "cohesion": 0.866
+    },
+    {
+     "slug": "swift",
+     "framework": "Swift",
+     "feature": "Actors and isolation",
+     "apple": "Actor, @MainActor, Sendable",
+     "cohesion": 0.861
+    },
+    {
+     "slug": "replaykit",
+     "framework": "ReplayKit",
+     "feature": "Live broadcast controller and handlers",
+     "apple": "RPBroadcastController, RPBroadcastHandler, RPBroadcastSampleHandler, RPBroadcastMP4ClipHandler, RPBroadcastConfiguration",
+     "cohesion": 0.86
+    },
+    {
+     "slug": "safari-services",
+     "framework": "Safari Services",
+     "feature": "Safari web extensions and Safari app extensions",
+     "apple": "SFSafariExtension, SFSafariExtensionHandler, SFSafariExtensionManager, SFSafariPage, SFSafariTab, SFSafariWindow, SFExtensionMessageKey, Web Inspector extensions",
+     "cohesion": 0.857
+    },
+    {
+     "slug": "itunes-library",
+     "framework": "iTunes Library",
+     "feature": "Library entry point and loading (ITLibrary, reloadData, unloadData, apiVersion)",
+     "apple": "ITLibrary, init(apiVersion:options:), reloadData(), unloadData()",
+     "cohesion": 0.856
+    },
+    {
+     "slug": "endpoint-security",
+     "framework": "Endpoint Security",
+     "feature": "Socket, pseudoterminal, clock and kernel events",
+     "apple": "Socket Event Types, Pseudoterminal Event Types, Clock Event Types, Kernel Event Types",
+     "cohesion": 0.853
+    }
+   ]
+  },
+  {
+   "id": "theme-03",
+   "title": "Contextual embedding (NLContextualEmbedding)",
+   "size": 26,
+   "frameworks": [
+    {
+     "slug": "natural-language",
+     "name": "Natural Language"
+    },
+    {
+     "slug": "quicklook-ui",
+     "name": "QuickLook UI"
+    },
+    {
+     "slug": "core-foundation",
+     "name": "Core Foundation"
+    },
+    {
+     "slug": "core-media-i-o",
+     "name": "Core Media I/O"
+    },
+    {
+     "slug": "media-player",
+     "name": "Media Player"
+    },
+    {
+     "slug": "core-spotlight",
+     "name": "Core Spotlight"
+    },
+    {
+     "slug": "core-location",
+     "name": "Core Location"
+    },
+    {
+     "slug": "media-library",
+     "name": "Media Library"
+    },
+    {
+     "slug": "webkit",
+     "name": "WebKit"
+    },
+    {
+     "slug": "quick-look-thumbnailing",
+     "name": "Quick Look Thumbnailing"
+    },
+    {
+     "slug": "network",
+     "name": "Network"
+    },
+    {
+     "slug": "core-data",
+     "name": "Core Data"
+    },
+    {
+     "slug": "visionkit",
+     "name": "VisionKit"
+    },
+    {
+     "slug": "cfnetwork",
+     "name": "CFNetwork"
+    },
+    {
+     "slug": "authentication-services",
+     "name": "Authentication Services"
+    },
+    {
+     "slug": "avkit",
+     "name": "AVKit"
+    },
+    {
+     "slug": "quartz",
+     "name": "Quartz"
+    },
+    {
+     "slug": "apple-archive",
+     "name": "Apple Archive"
+    },
+    {
+     "slug": "background-assets",
+     "name": "Background Assets"
+    },
+    {
+     "slug": "foundation-fundamentals",
+     "name": "Foundation (Fundamentals)"
+    },
+    {
+     "slug": "swift-charts",
+     "name": "Swift Charts"
+    },
+    {
+     "slug": "core-text",
+     "name": "Core Text"
+    }
+   ],
+   "rows": [
     {
      "slug": "natural-language",
      "framework": "Natural Language",
      "feature": "Contextual embedding (NLContextualEmbedding)",
      "apple": "NLContextualEmbedding, NLContextualEmbeddingKey",
+     "cohesion": 0.902
+    },
+    {
+     "slug": "quicklook-ui",
+     "framework": "QuickLook UI",
+     "feature": "Embedded preview view (QLPreviewView)",
+     "apple": "QLPreviewView: init(frame:style:), previewItem, refreshPreviewItem(), displayState, autostarts, close",
+     "cohesion": 0.888
+    },
+    {
+     "slug": "core-foundation",
+     "framework": "Core Foundation",
+     "feature": "Plug-ins and bundles (CFPlugIn, CFBundle)",
+     "apple": "CFPlugIn, CFPlugInInstance, CFBundle",
+     "cohesion": 0.884
+    },
+    {
+     "slug": "core-media-i-o",
+     "framework": "Core Media I/O",
+     "feature": "Providers (extension provider and its source and properties)",
+     "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O",
+     "cohesion": 0.883
+    },
+    {
+     "slug": "media-player",
+     "framework": "Media Player",
+     "feature": "External player items",
+     "apple": "MPContentItem, MPPlayableContentManager",
+     "cohesion": 0.882
+    },
+    {
+     "slug": "media-player",
+     "framework": "Media Player",
+     "feature": "Media picker",
+     "apple": "MPMediaPickerController",
      "cohesion": 0.881
     },
     {
-     "slug": "pdfkit",
-     "framework": "PDFKit",
-     "feature": "PDFView (display and navigation)",
-     "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
-     "cohesion": 0.879
+     "slug": "core-spotlight",
+     "framework": "Core Spotlight",
+     "feature": "Foundation models search tool",
+     "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult",
+     "cohesion": 0.88
     },
     {
-     "slug": "pdfkit",
-     "framework": "PDFKit",
-     "feature": "Page overlay and markup mode",
-     "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider",
-     "cohesion": 0.877
+     "slug": "core-location",
+     "framework": "Core Location",
+     "feature": "Authorization and usage descriptions",
+     "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
+     "cohesion": 0.876
     },
     {
-     "slug": "tipkit",
-     "framework": "TipKit",
-     "feature": "Inline tip view and style",
-     "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
-     "cohesion": 0.877
+     "slug": "media-library",
+     "framework": "Media Library",
+     "feature": "Library entry point (MLMediaLibrary)",
+     "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey",
+     "cohesion": 0.875
     },
     {
-     "slug": "swiftui-views-layout",
-     "framework": "SwiftUI (Views, View layout)",
-     "feature": "View configuration (environment, modifiers, state)",
-     "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
-     "cohesion": 0.872
-    },
-    {
-     "slug": "paperkit",
-     "framework": "PaperKit",
-     "feature": "Adornments over markup",
-     "apple": "MarkupAdornment",
-     "cohesion": 0.871
+     "slug": "quicklook-ui",
+     "framework": "QuickLook UI",
+     "feature": "Data-based preview extensions (QLPreviewProvider)",
+     "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment)",
+     "cohesion": 0.875
     },
     {
      "slug": "webkit",
@@ -683,169 +709,770 @@
      "cohesion": 0.87
     },
     {
-     "slug": "app-intents-testing",
-     "framework": "App Intents Testing",
-     "feature": "Entity annotation and onscreen context",
-     "apple": "ViewAnnotation (entity, isSelected)",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "quick-look",
-     "framework": "Quick Look",
-     "feature": "PDF multi-page preview context",
-     "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "pdfkit",
-     "framework": "PDFKit",
-     "feature": "Widgets and form fields",
-     "apple": "PDFAnnotation widget properties (widgetFieldType, widgetStringValue, text, button and choice widgets), form filling",
+     "slug": "quick-look-thumbnailing",
+     "framework": "Quick Look Thumbnailing",
+     "feature": "System-wide thumbnails in Files, Spotlight and other apps",
+     "apple": "Finder and Spotlight display thumbnails from QLThumbnailGenerator and extensions",
      "cohesion": 0.866
     },
     {
-     "slug": "swiftui-views-layout",
-     "framework": "SwiftUI (Views, View layout)",
-     "feature": "Custom layout (Layout protocol)",
-     "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
+     "slug": "network",
+     "framework": "Network",
+     "feature": "Privacy attribution and local network identity",
+     "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS",
      "cohesion": 0.864
     },
     {
-     "slug": "pencilkit",
-     "framework": "PencilKit",
-     "feature": "Handwriting recognition (PKStrokeRecognizer)",
-     "apple": "PKStrokeRecognizer, handwriting to text",
-     "cohesion": 0.862
+     "slug": "core-data",
+     "framework": "Core Data",
+     "feature": "Data modeling (object graph and relationships)",
+     "apple": "Core Data model editor, NSManagedObjectModel, NSEntityDescription, NSRelationshipDescription (https://developer.apple.com/documentation/coredata/modeling-data)",
+     "cohesion": 0.864
     },
     {
-     "slug": "core-text",
-     "framework": "Core Text",
-     "feature": "Ruby annotations",
-     "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName",
-     "cohesion": 0.86
+     "slug": "visionkit",
+     "framework": "VisionKit",
+     "feature": "Visual Look Up",
+     "apple": "ImageAnalysisInteraction (visual Look Up button)",
+     "cohesion": 0.863
     },
     {
-     "slug": "translation",
-     "framework": "Translation",
-     "feature": "System translation popover",
-     "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)",
+     "slug": "cfnetwork",
+     "framework": "CFNetwork",
+     "feature": "FTP transfers",
+     "apple": "CFReadStreamCreateWithFTPURL, CFWriteStreamCreateWithFTPURL, CFFTPCreateParsedResourceListing (https://developer.apple.com/documentation/cfnetwork/ftp)",
+     "cohesion": 0.863
+    },
+    {
+     "slug": "authentication-services",
+     "framework": "Authentication Services",
+     "feature": "AutoFill credential provider",
+     "apple": "ASCredentialProviderViewController, AutoFill Credential Provider entitlement, ASCredentialDataManager, ASCredentialUpdater",
+     "cohesion": 0.859
+    },
+    {
+     "slug": "avkit",
+     "framework": "AVKit",
+     "feature": "Media trimming and export",
+     "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
      "cohesion": 0.857
     },
     {
-     "slug": "speech",
-     "framework": "Speech",
-     "feature": "System dictation entry point",
-     "apple": "Keyboard dictation (the framework says it matches keyboard dictation)",
+     "slug": "avkit",
+     "framework": "AVKit",
+     "feature": "Display management (HDR, refresh mode switching)",
+     "apple": "AVDisplayManager, AVDisplayDynamicRange",
+     "cohesion": 0.855
+    },
+    {
+     "slug": "quartz",
+     "framework": "Quartz",
+     "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",
+     "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository",
+     "cohesion": 0.855
+    },
+    {
+     "slug": "webkit",
+     "framework": "WebKit",
+     "feature": "DOM node snapshot",
+     "apple": "WKDOMNodeSnapshot",
+     "cohesion": 0.855
+    },
+    {
+     "slug": "apple-archive",
+     "framework": "Apple Archive",
+     "feature": "Encrypted archives",
+     "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
+     "cohesion": 0.855
+    },
+    {
+     "slug": "background-assets",
+     "framework": "Background Assets",
+     "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
+     "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks",
      "cohesion": 0.849
+    },
+    {
+     "slug": "foundation-fundamentals",
+     "framework": "Foundation (Fundamentals)",
+     "feature": "NSPredicateValidating",
+     "apple": "protocol listed on the landing page",
+     "cohesion": 0.847
     },
     {
      "slug": "swift-charts",
      "framework": "Swift Charts",
      "feature": "3D charts and surface plots",
      "apple": "Chart3D, Chart3DContent, Chart3DContentBuilder, SurfacePlot, Chart3DSurfaceStyle (macOS 26.0)",
-     "cohesion": 0.849
-    },
-    {
-     "slug": "natural-language",
-     "framework": "Natural Language",
-     "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",
-     "apple": "NLModel, Create ML text classifier and word tagger",
-     "cohesion": 0.837
+     "cohesion": 0.84
     }
    ]
   },
   {
    "id": "theme-04",
-   "title": "Bluetooth MIDI peripheral picker and advertising",
-   "size": 23,
+   "title": "Live audio classification sample",
+   "size": 19,
    "frameworks": [
-    {
-     "slug": "coreaudiokit",
-     "name": "CoreAudioKit"
-    },
-    {
-     "slug": "music-understanding",
-     "name": "Music Understanding"
-    },
-    {
-     "slug": "core-midi",
-     "name": "Core MIDI"
-    },
     {
      "slug": "sound-analysis",
      "name": "Sound Analysis"
-    },
-    {
-     "slug": "avfaudio",
-     "name": "AVFAudio"
-    },
-    {
-     "slug": "media-toolbox",
-     "name": "Media Toolbox"
-    },
-    {
-     "slug": "audio-toolbox",
-     "name": "Audio Toolbox"
-    },
-    {
-     "slug": "core-bluetooth",
-     "name": "Core Bluetooth"
-    },
-    {
-     "slug": "itunes-library",
-     "name": "iTunes Library"
-    },
-    {
-     "slug": "iobluetooth-ui",
-     "name": "IOBluetooth UI"
     },
     {
      "slug": "speech",
      "name": "Speech"
     },
     {
-     "slug": "core-audio",
-     "name": "Core Audio"
+     "slug": "core-ml",
+     "name": "Core ML"
     },
     {
-     "slug": "core-media-i-o",
-     "name": "Core Media I/O"
+     "slug": "scenekit",
+     "name": "SceneKit"
     },
     {
-     "slug": "audio-unit",
-     "name": "Audio Unit"
-    },
-    {
-     "slug": "external-accessory",
-     "name": "External Accessory"
-    },
-    {
-     "slug": "avkit",
-     "name": "AVKit"
+     "slug": "siri-kit",
+     "name": "SiriKit"
     },
     {
      "slug": "media-intelligence",
      "name": "Media Intelligence"
     },
     {
-     "slug": "datadetection",
-     "name": "DataDetection"
+     "slug": "music-understanding",
+     "name": "Music Understanding"
+    },
+    {
+     "slug": "avfaudio",
+     "name": "AVFAudio"
+    },
+    {
+     "slug": "avfoundation-playback-editing",
+     "name": "AVFoundation (Playback, Editing, Common)"
+    },
+    {
+     "slug": "itunes-library",
+     "name": "iTunes Library"
+    },
+    {
+     "slug": "audio-unit",
+     "name": "Audio Unit"
+    },
+    {
+     "slug": "core-audio",
+     "name": "Core Audio"
+    },
+    {
+     "slug": "video-toolbox",
+     "name": "Video Toolbox"
+    },
+    {
+     "slug": "callkit",
+     "name": "CallKit"
+    },
+    {
+     "slug": "pencilkit",
+     "name": "PencilKit"
     }
    ],
    "rows": [
     {
-     "slug": "coreaudiokit",
-     "framework": "CoreAudioKit",
-     "feature": "Bluetooth MIDI peripheral picker and advertising",
-     "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController",
+     "slug": "sound-analysis",
+     "framework": "Sound Analysis",
+     "feature": "Live audio classification sample",
+     "apple": "Classifying Live Audio Input with a Built-in Sound Classifier (sample code)",
      "cohesion": 0.914
+    },
+    {
+     "slug": "speech",
+     "framework": "Speech",
+     "feature": "Speech recognition on live or recorded audio (framework overview)",
+     "apple": "Speech (collection); SpeechAnalyzer, SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule",
+     "cohesion": 0.907
+    },
+    {
+     "slug": "speech",
+     "framework": "Speech",
+     "feature": "Legacy Objective-C recognizer API",
+     "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)",
+     "cohesion": 0.894
+    },
+    {
+     "slug": "core-ml",
+     "framework": "Core ML",
+     "feature": "Domain frameworks built on Core ML",
+     "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
+     "cohesion": 0.894
+    },
+    {
+     "slug": "scenekit",
+     "framework": "SceneKit",
+     "feature": "Positional audio",
+     "apple": "SCNAudioSource, SCNAudioPlayer",
+     "cohesion": 0.887
+    },
+    {
+     "slug": "siri-kit",
+     "framework": "SiriKit",
+     "feature": "Siri voice input and spoken responses",
+     "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
+     "cohesion": 0.886
+    },
+    {
+     "slug": "media-intelligence",
+     "framework": "Media Intelligence",
+     "feature": "On-device ML analysis runtime (shared by all requests)",
+     "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)",
+     "cohesion": 0.883
     },
     {
      "slug": "music-understanding",
      "framework": "Music Understanding",
      "feature": "Instrument activity",
      "apple": "InstrumentActivityResult, AnalysisType.instrumentActivity",
-     "cohesion": 0.901
+     "cohesion": 0.881
+    },
+    {
+     "slug": "avfaudio",
+     "framework": "AVFAudio",
+     "feature": "MIDI playback (AVMIDIPlayer)",
+     "apple": "AVMIDIPlayer with a sound bank",
+     "cohesion": 0.88
+    },
+    {
+     "slug": "avfoundation-playback-editing",
+     "framework": "AVFoundation (Playback, Editing, Common)",
+     "feature": "QuickTime movies",
+     "apple": "AVMovie, AVMutableMovie",
+     "cohesion": 0.88
+    },
+    {
+     "slug": "itunes-library",
+     "framework": "iTunes Library",
+     "feature": "Video media info (ITLibMediaItemVideoInfo)",
+     "apple": "ITLibMediaItemVideoInfo",
+     "cohesion": 0.878
+    },
+    {
+     "slug": "audio-unit",
+     "framework": "Audio Unit",
+     "feature": "Implementing AU v3 plug-in extensions",
+     "apple": "AUAudioUnit subclassing for app extensions (landing page: Version 3 extensions)",
+     "cohesion": 0.87
+    },
+    {
+     "slug": "core-audio",
+     "framework": "Core Audio",
+     "feature": "Audio server driver plug-ins (virtual devices)",
+     "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
+     "cohesion": 0.87
+    },
+    {
+     "slug": "video-toolbox",
+     "framework": "Video Toolbox",
+     "feature": "Compression session (encoding)",
+     "apple": "VTCompressionSessionCreate, VTCompressionSessionEncodeFrame, output callback, PrepareToEncodeFrames, CompleteFrames",
+     "cohesion": 0.868
+    },
+    {
+     "slug": "callkit",
+     "framework": "CallKit",
+     "feature": "Incoming call UI",
+     "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
+     "cohesion": 0.865
+    },
+    {
+     "slug": "speech",
+     "framework": "Speech",
+     "feature": "System dictation entry point",
+     "apple": "Keyboard dictation (the framework says it matches keyboard dictation)",
+     "cohesion": 0.862
+    },
+    {
+     "slug": "video-toolbox",
+     "framework": "Video Toolbox",
+     "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",
+     "apple": "VTFrameProcessor, VTSuperResolutionScalerConfiguration, VTFrameRateConversionConfiguration, VTMotionBlurConfiguration, VTOpticalFlowConfiguration, VTTemporalNoiseFilterConfiguration",
+     "cohesion": 0.853
+    },
+    {
+     "slug": "pencilkit",
+     "framework": "PencilKit",
+     "feature": "Handwriting recognition (PKStrokeRecognizer)",
+     "apple": "PKStrokeRecognizer, handwriting to text",
+     "cohesion": 0.852
+    },
+    {
+     "slug": "media-intelligence",
+     "framework": "Media Intelligence",
+     "feature": "Errors (MediaIntelligenceError)",
+     "apple": "MediaIntelligenceError",
+     "cohesion": 0.85
+    }
+   ]
+  },
+  {
+   "id": "theme-05",
+   "title": "Clusters (typed On/Off, Level Control, Switch and others)",
+   "size": 18,
+   "frameworks": [
+    {
+     "slug": "matter",
+     "name": "Matter"
+    },
+    {
+     "slug": "matter-support",
+     "name": "MatterSupport"
+    },
+    {
+     "slug": "network-extension",
+     "name": "Network Extension"
+    },
+    {
+     "slug": "media-accessibility",
+     "name": "Media Accessibility"
+    },
+    {
+     "slug": "permissionkit",
+     "name": "PermissionKit"
+    },
+    {
+     "slug": "core-location",
+     "name": "Core Location"
+    },
+    {
+     "slug": "scenekit",
+     "name": "SceneKit"
+    },
+    {
+     "slug": "external-accessory",
+     "name": "External Accessory"
+    },
+    {
+     "slug": "force-feedback",
+     "name": "Force Feedback"
+    },
+    {
+     "slug": "lightweightcoderequirements",
+     "name": "LightweightCodeRequirements"
+    },
+    {
+     "slug": "paperkit",
+     "name": "PaperKit"
+    },
+    {
+     "slug": "gameplaykit",
+     "name": "GameplayKit"
+    },
+    {
+     "slug": "observation",
+     "name": "Observation"
+    },
+    {
+     "slug": "translation",
+     "name": "Translation"
+    },
+    {
+     "slug": "system-configuration",
+     "name": "System Configuration"
+    },
+    {
+     "slug": "address-book",
+     "name": "Address Book"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "matter",
+     "framework": "Matter",
+     "feature": "Clusters (typed On/Off, Level Control, Switch and others)",
+     "apple": "MTRBaseClusterLevelControl, MTRBaseClusterApplicationLauncher and about 200 more cluster classes",
+     "cohesion": 0.907
+    },
+    {
+     "slug": "matter-support",
+     "framework": "MatterSupport",
+     "feature": "Matter standard itself",
+     "apple": "Matter (see the separate Matter framework)",
+     "cohesion": 0.9
+    },
+    {
+     "slug": "matter",
+     "framework": "Matter",
+     "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",
+     "apple": "MTRDevice, MTRReadParams, MTRWriteParams, MTRSubscribeParams, MTRAttributePath, MTRCommandPath",
+     "cohesion": 0.891
+    },
+    {
+     "slug": "network-extension",
+     "framework": "Network Extension",
+     "feature": "Hotspot helper",
+     "apple": "Hotspot helper collection group",
+     "cohesion": 0.884
+    },
+    {
+     "slug": "media-accessibility",
+     "framework": "Media Accessibility",
+     "feature": "Flashing lights detection and dimming",
+     "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor",
+     "cohesion": 0.882
+    },
+    {
+     "slug": "permissionkit",
+     "framework": "PermissionKit",
+     "feature": "Permission button UI (PermissionButton)",
+     "apple": "PermissionButton",
+     "cohesion": 0.878
+    },
+    {
+     "slug": "core-location",
+     "framework": "Core Location",
+     "feature": "Errors and diagnostics",
+     "apple": "CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain",
+     "cohesion": 0.874
+    },
+    {
+     "slug": "matter",
+     "framework": "Matter",
+     "feature": "Controller initialization (fabric, certificates, storage)",
+     "apple": "MTRDeviceController, MTRDeviceControllerFactory, MTRFabricInfo, MTRStorage, MTRKeypair",
+     "cohesion": 0.873
+    },
+    {
+     "slug": "scenekit",
+     "framework": "SceneKit",
+     "feature": "Particle systems",
+     "apple": "SCNParticleSystem, SCNParticlePropertyController",
+     "cohesion": 0.87
+    },
+    {
+     "slug": "external-accessory",
+     "framework": "External Accessory",
+     "feature": "USB and serial accessories",
+     "apple": "Not part of this framework (MFi uses Lightning and 30-pin, which BifrOSt does not expose); USB is covered by AccessoryAccess and serial is not an Apple accessory API",
+     "cohesion": 0.869
+    },
+    {
+     "slug": "force-feedback",
+     "framework": "Force Feedback",
+     "feature": "Cooperative level and coordinate system",
+     "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag",
+     "cohesion": 0.863
+    },
+    {
+     "slug": "lightweightcoderequirements",
+     "framework": "LightweightCodeRequirements",
+     "feature": "Requirement-building operators and errors",
+     "apple": "allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder",
+     "cohesion": 0.857
+    },
+    {
+     "slug": "paperkit",
+     "framework": "PaperKit",
+     "feature": "Adornments over markup",
+     "apple": "MarkupAdornment",
+     "cohesion": 0.857
+    },
+    {
+     "slug": "gameplaykit",
+     "framework": "GameplayKit",
+     "feature": "Constants, structures and enumerations",
+     "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
+     "cohesion": 0.852
+    },
+    {
+     "slug": "observation",
+     "framework": "Observation",
+     "feature": "Observable conformance (@Observable macro)",
+     "apple": "Observable() macro, Observable protocol",
+     "cohesion": 0.848
+    },
+    {
+     "slug": "translation",
+     "framework": "Translation",
+     "feature": "System translation popover",
+     "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)",
+     "cohesion": 0.842
+    },
+    {
+     "slug": "system-configuration",
+     "framework": "System Configuration",
+     "feature": "Ethernet bond and VLAN interfaces",
+     "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions",
+     "cohesion": 0.841
+    },
+    {
+     "slug": "address-book",
+     "framework": "Address Book",
+     "feature": "Groups",
+     "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups",
+     "cohesion": 0.835
+    }
+   ]
+  },
+  {
+   "id": "theme-06",
+   "title": "Hand text and files to a mail compose window",
+   "size": 16,
+   "frameworks": [
+    {
+     "slug": "mailkit",
+     "name": "MailKit"
+    },
+    {
+     "slug": "social",
+     "name": "Social"
+    },
+    {
+     "slug": "user-notifications",
+     "name": "User Notifications"
+    },
+    {
+     "slug": "swiftdata",
+     "name": "SwiftData"
+    },
+    {
+     "slug": "accounts",
+     "name": "Accounts"
+    },
+    {
+     "slug": "replaykit",
+     "name": "ReplayKit"
+    },
+    {
+     "slug": "file-provider",
+     "name": "File Provider"
+    },
+    {
+     "slug": "local-authentication",
+     "name": "Local Authentication"
+    },
+    {
+     "slug": "user-notifications-ui",
+     "name": "User Notifications UI"
+    },
+    {
+     "slug": "address-book",
+     "name": "Address Book"
+    },
+    {
+     "slug": "open-directory",
+     "name": "Open Directory"
+    },
+    {
+     "slug": "avkit",
+     "name": "AVKit"
+    },
+    {
+     "slug": "disk-arbitration",
+     "name": "Disk Arbitration"
+    },
+    {
+     "slug": "itunes-library",
+     "name": "iTunes Library"
+    },
+    {
+     "slug": "force-feedback",
+     "name": "Force Feedback"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "mailkit",
+     "framework": "MailKit",
+     "feature": "Hand text and files to a mail compose window",
+     "apple": "Mail as a system share service (outside MailKit)",
+     "cohesion": 0.899
+    },
+    {
+     "slug": "social",
+     "framework": "Social",
+     "feature": "Social account credentials",
+     "apple": "SLRequest.account (signed-in account used to authenticate)",
+     "cohesion": 0.899
+    },
+    {
+     "slug": "user-notifications",
+     "framework": "User Notifications",
+     "feature": "Web push notifications",
+     "apple": "Sending web push notifications in web apps and browsers",
+     "cohesion": 0.894
+    },
+    {
+     "slug": "swiftdata",
+     "framework": "SwiftData",
+     "feature": "Sync of model data across a person's devices (iCloud)",
+     "apple": "Syncing model data across a person's devices",
+     "cohesion": 0.887
+    },
+    {
+     "slug": "accounts",
+     "framework": "Accounts",
+     "feature": "BifrOSt account sign-in (cloud)",
+     "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in",
+     "cohesion": 0.887
+    },
+    {
+     "slug": "replaykit",
+     "framework": "ReplayKit",
+     "feature": "Broadcast picker UI",
+     "apple": "RPBroadcastActivityViewController, RPSystemBroadcastPickerView, RPBroadcastActivityController, RPBroadcastActivityControllerDelegate",
+     "cohesion": 0.885
+    },
+    {
+     "slug": "file-provider",
+     "framework": "File Provider",
+     "feature": "Replicated File Provider extension (sync local copies with remote storage)",
+     "apple": "Replicated File Provider extension",
+     "cohesion": 0.883
+    },
+    {
+     "slug": "social",
+     "framework": "Social",
+     "feature": "Compose post sheet",
+     "apple": "SLComposeViewController, SLComposeServiceViewController",
+     "cohesion": 0.882
+    },
+    {
+     "slug": "local-authentication",
+     "framework": "Local Authentication",
+     "feature": "Authentication prompt UI (LocalAuthenticationView)",
+     "apple": "LocalAuthenticationView (SwiftUI)",
+     "cohesion": 0.879
+    },
+    {
+     "slug": "user-notifications-ui",
+     "framework": "User Notifications UI",
+     "feature": "Notification content app extension (custom notification view)",
+     "apple": "UNNotificationContentExtension, didReceive(_:), Customizing the Appearance of Notifications",
+     "cohesion": 0.878
+    },
+    {
+     "slug": "address-book",
+     "framework": "Address Book",
+     "feature": "People picker and person view",
+     "apple": "ABPeoplePickerView, ABPersonView",
+     "cohesion": 0.876
+    },
+    {
+     "slug": "open-directory",
+     "framework": "Open Directory",
+     "feature": "Contacts search in LDAP or Open Directory",
+     "apple": "ODQuery against an LDAP node for contact attributes (framework summary)",
+     "cohesion": 0.876
+    },
+    {
+     "slug": "avkit",
+     "framework": "AVKit",
+     "feature": "Route selection (AirPlay and nearby receivers)",
+     "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
+     "cohesion": 0.87
+    },
+    {
+     "slug": "disk-arbitration",
+     "framework": "Disk Arbitration",
+     "feature": "Volumes in the Files sidebar",
+     "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)",
+     "cohesion": 0.866
+    },
+    {
+     "slug": "itunes-library",
+     "framework": "iTunes Library",
+     "feature": "Change notification (DidChangeLibraryMessage)",
+     "apple": "DidChangeLibraryMessage",
+     "cohesion": 0.86
+    },
+    {
+     "slug": "force-feedback",
+     "framework": "Force Feedback",
+     "feature": "App-facing haptic request",
+     "apple": "No direct Force Feedback counterpart; closest is a generic haptic call",
+     "cohesion": 0.84
+    }
+   ]
+  },
+  {
+   "id": "theme-07",
+   "title": "Channel Sounding (distance measurement)",
+   "size": 9,
+   "frameworks": [
+    {
+     "slug": "core-bluetooth",
+     "name": "Core Bluetooth"
+    },
+    {
+     "slug": "avrouting",
+     "name": "AVRouting"
+    },
+    {
+     "slug": "iobluetooth-ui",
+     "name": "IOBluetooth UI"
+    },
+    {
+     "slug": "now-playing",
+     "name": "Now Playing"
+    },
+    {
+     "slug": "coreaudiokit",
+     "name": "CoreAudioKit"
+    },
+    {
+     "slug": "core-midi",
+     "name": "Core MIDI"
+    },
+    {
+     "slug": "force-feedback",
+     "name": "Force Feedback"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "core-bluetooth",
+     "framework": "Core Bluetooth",
+     "feature": "Channel Sounding (distance measurement)",
+     "apple": "CBChannelSoundingSessionConfiguration, CBChannelSoundingProcedureResults, CBUUIDCharacteristicObservationScheduleString",
+     "cohesion": 0.917
+    },
+    {
+     "slug": "avrouting",
+     "framework": "AVRouting",
+     "feature": "Device discovery extension",
+     "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
+     "cohesion": 0.909
+    },
+    {
+     "slug": "iobluetooth-ui",
+     "framework": "IOBluetooth UI",
+     "feature": "Service browser (IOBluetoothServiceBrowserController)",
+     "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
+     "cohesion": 0.909
+    },
+    {
+     "slug": "core-bluetooth",
+     "framework": "Core Bluetooth",
+     "feature": "Background execution and Live Activity privileges",
+     "apple": "Core Bluetooth background modes (not supported in iPad apps on macOS); Live Activity scanning privileges",
+     "cohesion": 0.903
+    },
+    {
+     "slug": "now-playing",
+     "framework": "Now Playing",
+     "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
+     "apple": "RemoteMediaSessionRepresentable, RemoteMediaSession, RemoteMediaSessionExtension, RemoteMediaSessionExtensionConfiguration, RemoteMediaSessionAttributes, RemoteMediaSessionError, MediaDevice",
+     "cohesion": 0.903
+    },
+    {
+     "slug": "coreaudiokit",
+     "framework": "CoreAudioKit",
+     "feature": "Network audio device browser",
+     "apple": "CANetworkBrowserWindowController",
+     "cohesion": 0.902
+    },
+    {
+     "slug": "core-midi",
+     "framework": "Core MIDI",
+     "feature": "MIDI Networking (network sessions and hosts)",
+     "apple": "MIDINetworkSession, MIDINetworkHost, MIDINetworkConnection (https://developer.apple.com/documentation/coremidi/midi-networking)",
+     "cohesion": 0.897
     },
     {
      "slug": "core-midi",
@@ -855,624 +1482,194 @@
      "cohesion": 0.896
     },
     {
-     "slug": "sound-analysis",
-     "framework": "Sound Analysis",
-     "feature": "Live audio classification sample",
-     "apple": "Classifying Live Audio Input with a Built-in Sound Classifier (sample code)",
-     "cohesion": 0.896
-    },
-    {
-     "slug": "avfaudio",
-     "framework": "AVFAudio",
-     "feature": "MIDI playback (AVMIDIPlayer)",
-     "apple": "AVMIDIPlayer with a sound bank",
-     "cohesion": 0.894
-    },
-    {
-     "slug": "media-toolbox",
-     "framework": "Media Toolbox",
-     "feature": "Audio processing taps",
-     "apple": "MTAudioProcessingTapCreate, MTAudioProcessingTapCreateWithPreferredFormat, MTAudioProcessingTapGetSourceAudio, MTAudioProcessingTapGetStorage, MTAudioProcessingTapFlags",
-     "cohesion": 0.893
-    },
-    {
-     "slug": "audio-toolbox",
-     "framework": "Audio Toolbox",
-     "feature": "Voice I/O (Audio Unit Voice I/O, echo cancellation)",
-     "apple": "Audio Unit Voice I/O",
-     "cohesion": 0.893
-    },
-    {
-     "slug": "core-midi",
-     "framework": "Core MIDI",
-     "feature": "MIDI System Setup (driver and external device management)",
-     "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)",
-     "cohesion": 0.893
-    },
-    {
-     "slug": "core-bluetooth",
-     "framework": "Core Bluetooth",
-     "feature": "Channel Sounding (distance measurement)",
-     "apple": "CBChannelSoundingSessionConfiguration, CBChannelSoundingProcedureResults, CBUUIDCharacteristicObservationScheduleString",
-     "cohesion": 0.888
-    },
-    {
-     "slug": "itunes-library",
-     "framework": "iTunes Library",
-     "feature": "Video media info (ITLibMediaItemVideoInfo)",
-     "apple": "ITLibMediaItemVideoInfo",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "core-midi",
-     "framework": "Core MIDI",
-     "feature": "MIDI Networking (network sessions and hosts)",
-     "apple": "MIDINetworkSession, MIDINetworkHost, MIDINetworkConnection (https://developer.apple.com/documentation/coremidi/midi-networking)",
-     "cohesion": 0.883
-    },
-    {
-     "slug": "iobluetooth-ui",
-     "framework": "IOBluetooth UI",
-     "feature": "Service browser (IOBluetoothServiceBrowserController)",
-     "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "speech",
-     "framework": "Speech",
-     "feature": "Speech recognition on live or recorded audio (framework overview)",
-     "apple": "Speech (collection); SpeechAnalyzer, SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule",
-     "cohesion": 0.88
-    },
-    {
-     "slug": "core-audio",
-     "framework": "Core Audio",
-     "feature": "Audio server driver plug-ins (virtual devices)",
-     "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
-     "cohesion": 0.879
-    },
-    {
-     "slug": "itunes-library",
-     "framework": "iTunes Library",
-     "feature": "Library entry point and loading (ITLibrary, reloadData, unloadData, apiVersion)",
-     "apple": "ITLibrary, init(apiVersion:options:), reloadData(), unloadData()",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "music-understanding",
-     "framework": "Music Understanding",
-     "feature": "Structure (sections, segments, phrases)",
-     "apple": "StructureResult, AnalysisType.structure",
-     "cohesion": 0.87
-    },
-    {
-     "slug": "core-media-i-o",
-     "framework": "Core Media I/O",
-     "feature": "Properties (property, state, attributes, info and mach service keys)",
-     "apple": "CMIOExtensionProperty, CMIOExtensionPropertyState, CMIOExtensionPropertyAttributes, CMIOExtensionInfoDictionaryKey, CMIOExtensionMachServiceNameKey",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "music-understanding",
-     "framework": "Music Understanding",
-     "feature": "Key (musical key over time)",
-     "apple": "KeyResult, AnalysisType.key",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "audio-unit",
-     "framework": "Audio Unit",
-     "feature": "Implementing AU v3 plug-in extensions",
-     "apple": "AUAudioUnit subclassing for app extensions (landing page: Version 3 extensions)",
-     "cohesion": 0.867
-    },
-    {
-     "slug": "external-accessory",
-     "framework": "External Accessory",
-     "feature": "USB and serial accessories",
-     "apple": "Not part of this framework (MFi uses Lightning and 30-pin, which BifrOSt does not expose); USB is covered by AccessoryAccess and serial is not an Apple accessory API",
-     "cohesion": 0.867
-    },
-    {
-     "slug": "avkit",
-     "framework": "AVKit",
-     "feature": "Media trimming and export",
-     "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
-     "cohesion": 0.862
-    },
-    {
-     "slug": "media-intelligence",
-     "framework": "Media Intelligence",
-     "feature": "Errors (MediaIntelligenceError)",
-     "apple": "MediaIntelligenceError",
-     "cohesion": 0.85
-    },
-    {
-     "slug": "datadetection",
-     "framework": "DataDetection",
-     "feature": "Flight numbers",
-     "apple": "DDMatchFlightNumber",
-     "cohesion": 0.824
-    }
-   ]
-  },
-  {
-   "id": "theme-05",
-   "title": "Media reading and writing",
-   "size": 22,
-   "frameworks": [
-    {
-     "slug": "avfoundation-playback-editing",
-     "name": "AVFoundation (Playback, Editing, Common)"
-    },
-    {
-     "slug": "force-feedback",
-     "name": "Force Feedback"
-    },
-    {
-     "slug": "avkit",
-     "name": "AVKit"
-    },
-    {
-     "slug": "replaykit",
-     "name": "ReplayKit"
-    },
-    {
-     "slug": "media-toolbox",
-     "name": "Media Toolbox"
-    },
-    {
-     "slug": "matter",
-     "name": "Matter"
-    },
-    {
-     "slug": "video-toolbox",
-     "name": "Video Toolbox"
-    },
-    {
-     "slug": "core-services",
-     "name": "Core Services"
-    },
-    {
-     "slug": "now-playing",
-     "name": "Now Playing"
-    },
-    {
-     "slug": "core-motion",
-     "name": "Core Motion"
-    },
-    {
-     "slug": "media-player",
-     "name": "Media Player"
-    },
-    {
-     "slug": "iobluetooth",
-     "name": "IOBluetooth"
-    },
-    {
-     "slug": "dispatch",
-     "name": "Dispatch"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "avfoundation-playback-editing",
-     "framework": "AVFoundation (Playback, Editing, Common)",
-     "feature": "Media reading and writing",
-     "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
-     "cohesion": 0.915
-    },
-    {
-     "slug": "avfoundation-playback-editing",
-     "framework": "AVFoundation (Playback, Editing, Common)",
-     "feature": "Sample buffer playback",
-     "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
-     "cohesion": 0.9
-    },
-    {
-     "slug": "force-feedback",
-     "framework": "Force Feedback",
-     "feature": "Effect creation, download and playback",
-     "apple": "FFDeviceCreateEffect, FFEffectDownload, FFEffectStart, FFEffectStop, FFEffectUnload, FFEffectSetParameters, FFEffectGetParameters, FFEFFECT, FFPERIODIC, FFCONSTANTFORCE, FFRAMPFORCE, FFCONDITION, FFCUSTOMFORCE, FFENVELOPE",
-     "cohesion": 0.898
-    },
-    {
-     "slug": "avkit",
-     "framework": "AVKit",
-     "feature": "Capture events from hardware buttons",
-     "apple": "AVCaptureEventInteraction, AVCaptureEvent, AVCaptureEventSound",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "avfoundation-playback-editing",
-     "framework": "AVFoundation (Playback, Editing, Common)",
-     "feature": "QuickTime movies",
-     "apple": "AVMovie, AVMutableMovie",
-     "cohesion": 0.882
-    },
-    {
-     "slug": "replaykit",
-     "framework": "ReplayKit",
-     "feature": "Live broadcast controller and handlers",
-     "apple": "RPBroadcastController, RPBroadcastHandler, RPBroadcastSampleHandler, RPBroadcastMP4ClipHandler, RPBroadcastConfiguration",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "media-toolbox",
-     "framework": "Media Toolbox",
-     "feature": "Professional video format reader registration",
-     "apple": "MTRegisterProfessionalVideoWorkflowFormatReaders",
-     "cohesion": 0.879
-    },
-    {
      "slug": "force-feedback",
      "framework": "Force Feedback",
      "feature": "Hardware escape commands",
      "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag",
-     "cohesion": 0.877
-    },
-    {
-     "slug": "matter",
-     "framework": "Matter",
-     "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",
-     "apple": "MTRDevice, MTRReadParams, MTRWriteParams, MTRSubscribeParams, MTRAttributePath, MTRCommandPath",
-     "cohesion": 0.874
-    },
-    {
-     "slug": "video-toolbox",
-     "framework": "Video Toolbox",
-     "feature": "Compression session (encoding)",
-     "apple": "VTCompressionSessionCreate, VTCompressionSessionEncodeFrame, output callback, PrepareToEncodeFrames, CompleteFrames",
-     "cohesion": 0.873
-    },
-    {
-     "slug": "core-services",
-     "framework": "Core Services",
-     "feature": "Event history and event IDs",
-     "apple": "FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime, FSEventStreamGetLatestEventId, FSEventStreamFlushSync",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "now-playing",
-     "framework": "Now Playing",
-     "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
-     "apple": "RemoteMediaSessionRepresentable, RemoteMediaSession, RemoteMediaSessionExtension, RemoteMediaSessionExtensionConfiguration, RemoteMediaSessionAttributes, RemoteMediaSessionError, MediaDevice",
-     "cohesion": 0.87
-    },
-    {
-     "slug": "core-motion",
-     "framework": "Core Motion",
-     "feature": "Raw gyroscope events",
-     "apple": "CMGyroData",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "force-feedback",
-     "framework": "Force Feedback",
-     "feature": "Cooperative level and coordinate system",
-     "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag",
-     "cohesion": 0.868
-    },
-    {
-     "slug": "media-player",
-     "framework": "Media Player",
-     "feature": "External player items",
-     "apple": "MPContentItem, MPPlayableContentManager",
-     "cohesion": 0.868
-    },
-    {
-     "slug": "core-motion",
-     "framework": "Core Motion",
-     "feature": "Raw accelerometer events",
-     "apple": "CMAccelerometerData, CMAccelerometer updates via CMMotionManager",
-     "cohesion": 0.867
-    },
-    {
-     "slug": "video-toolbox",
-     "framework": "Video Toolbox",
-     "feature": "Multi-pass encoding (frame silo, multipass storage)",
-     "apple": "VTFrameSiloCreate, VTMultiPassStorageCreate, VTCompressionSessionBeginPass / EndPass",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "force-feedback",
-     "framework": "Force Feedback",
-     "feature": "App-facing haptic request",
-     "apple": "No direct Force Feedback counterpart; closest is a generic haptic call",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "avkit",
-     "framework": "AVKit",
-     "feature": "Display management (HDR, refresh mode switching)",
-     "apple": "AVDisplayManager, AVDisplayDynamicRange",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "force-feedback",
-     "framework": "Force Feedback",
-     "feature": "Device properties and force-feedback state",
-     "apple": "FFDeviceGetForceFeedbackProperty, FFDeviceSetForceFeedbackProperty, FFDeviceGetForceFeedbackState, FFDeviceSendForceFeedbackCommand, FFState, FFProperty",
-     "cohesion": 0.861
-    },
-    {
-     "slug": "iobluetooth",
-     "framework": "IOBluetooth",
-     "feature": "HID device handling (ignore, counts)",
-     "apple": "IOBluetoothIgnoreHIDDevice, IOBluetoothRemoveIgnoredHIDDevice, IOBluetoothNumberOf*HIDDevices",
-     "cohesion": 0.848
-    },
-    {
-     "slug": "dispatch",
-     "framework": "Dispatch",
-     "feature": "Dispatch I/O channels",
-     "apple": "DispatchIO, dispatch_io_t, barrier, setLimit",
-     "cohesion": 0.83
+     "cohesion": 0.855
     }
    ]
   },
   {
-   "id": "theme-06",
-   "title": "Single sign-on in a web browser app",
-   "size": 19,
+   "id": "theme-08",
+   "title": "Synchronization (OSAllocatedUnfairLock)",
+   "size": 7,
    "frameworks": [
     {
-     "slug": "authentication-services",
-     "name": "Authentication Services"
-    },
-    {
-     "slug": "safari-services",
-     "name": "Safari Services"
-    },
-    {
-     "slug": "accounts",
-     "name": "Accounts"
-    },
-    {
-     "slug": "service-management",
-     "name": "Service Management"
-    },
-    {
-     "slug": "swiftdata",
-     "name": "SwiftData"
-    },
-    {
-     "slug": "storekit",
-     "name": "StoreKit"
-    },
-    {
-     "slug": "local-authentication",
-     "name": "Local Authentication"
-    },
-    {
-     "slug": "endpoint-security",
-     "name": "Endpoint Security"
-    },
-    {
-     "slug": "file-provider",
-     "name": "File Provider"
-    },
-    {
-     "slug": "security-foundation",
-     "name": "Security Foundation"
-    },
-    {
-     "slug": "foundation-networking-lowlevel",
-     "name": "Foundation (Networking, Low-Level Utilities)"
-    },
-    {
-     "slug": "open-directory",
-     "name": "Open Directory"
-    },
-    {
-     "slug": "bundle-resources",
-     "name": "Bundle Resources"
+     "slug": "os",
+     "name": "os"
     },
     {
      "slug": "disk-arbitration",
      "name": "Disk Arbitration"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "authentication-services",
-     "framework": "Authentication Services",
-     "feature": "Single sign-on in a web browser app",
-     "apple": "ASWebAuthenticationSession browser handoff and support capabilities",
-     "cohesion": 0.917
-    },
-    {
-     "slug": "authentication-services",
-     "framework": "Authentication Services",
-     "feature": "Authorization requests (controller, results)",
-     "apple": "ASAuthorizationController, ASAuthorizationResult, AuthorizationController (SwiftUI)",
-     "cohesion": 0.912
-    },
-    {
-     "slug": "safari-services",
-     "framework": "Safari Services",
-     "feature": "Authentication sessions (shared Safari login)",
-     "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError",
-     "cohesion": 0.906
-    },
-    {
-     "slug": "accounts",
-     "framework": "Accounts",
-     "feature": "BifrOSt account sign-in (cloud)",
-     "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in",
-     "cohesion": 0.897
-    },
-    {
-     "slug": "authentication-services",
-     "framework": "Authentication Services",
-     "feature": "AutoFill credential provider",
-     "apple": "ASCredentialProviderViewController, AutoFill Credential Provider entitlement, ASCredentialDataManager, ASCredentialUpdater",
-     "cohesion": 0.893
-    },
-    {
-     "slug": "authentication-services",
-     "framework": "Authentication Services",
-     "feature": "Passkeys and FIDO2 (public-key credentials)",
-     "apple": "ASAuthorizationPlatformPublicKeyCredential requests, ASPublicKeyCredentialClientData, passkey use in web browsers",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "service-management",
-     "framework": "Service Management",
-     "feature": "Embedded helper executables",
-     "apple": "helper executables inside the app's main bundle, registered through SMAppService",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "swiftdata",
-     "framework": "SwiftData",
-     "feature": "Sync of model data across a person's devices (iCloud)",
-     "apple": "Syncing model data across a person's devices",
-     "cohesion": 0.885
-    },
-    {
-     "slug": "storekit",
-     "framework": "StoreKit",
-     "feature": "App Store interactions",
-     "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
-     "cohesion": 0.885
-    },
-    {
-     "slug": "local-authentication",
-     "framework": "Local Authentication",
-     "feature": "Authentication prompt UI (LocalAuthenticationView)",
-     "apple": "LocalAuthenticationView (SwiftUI)",
-     "cohesion": 0.882
-    },
-    {
-     "slug": "endpoint-security",
-     "framework": "Endpoint Security",
-     "feature": "Login, logout, su, sudo, SSH and screen-sharing events",
-     "apple": "ES_EVENT_TYPE_NOTIFY_LOGIN_LOGIN, ES_EVENT_TYPE_NOTIFY_SUDO, ES_EVENT_TYPE_NOTIFY_OPENSSH_LOGIN, ES_EVENT_TYPE_NOTIFY_SCREENSHARING_ATTACH and related notify types",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "file-provider",
-     "framework": "File Provider",
-     "feature": "Replicated File Provider extension (sync local copies with remote storage)",
-     "apple": "Replicated File Provider extension",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "authentication-services",
-     "framework": "Authentication Services",
-     "feature": "Credential import and export",
-     "apple": "ASCredentialExportManager, ASCredentialImportManager, ASImportable* types (CXF)",
-     "cohesion": 0.874
-    },
-    {
-     "slug": "security-foundation",
-     "framework": "Security Foundation",
-     "feature": "SFAuthorization object and rights (obtain(withRights:flags:environment:authorizedRights:), obtain(withRight:flags:), authorizationRef())",
-     "apple": "SFAuthorization, authorization(), init(flags:rights:environment:), obtain(withRights:...), obtain(withRight:flags:), authorizationRef()",
-     "cohesion": 0.873
-    },
-    {
-     "slug": "foundation-networking-lowlevel",
-     "framework": "Foundation (Networking, Low-Level Utilities)",
-     "feature": "URL Loading: cookies, credentials, authentication challenges",
-     "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "open-directory",
-     "framework": "Open Directory",
-     "feature": "Contacts search in LDAP or Open Directory",
-     "apple": "ODQuery against an LDAP node for contact attributes (framework summary)",
-     "cohesion": 0.868
-    },
-    {
-     "slug": "accounts",
-     "framework": "Accounts",
-     "feature": "Credential renewal (renewCredentials)",
-     "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "bundle-resources",
-     "framework": "Bundle Resources",
-     "feature": "Universal links service (applinks)",
-     "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
-     "cohesion": 0.863
-    },
-    {
-     "slug": "disk-arbitration",
-     "framework": "Disk Arbitration",
-     "feature": "Volumes in the Files sidebar",
-     "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)",
-     "cohesion": 0.857
-    }
-   ]
-  },
-  {
-   "id": "theme-07",
-   "title": "C API (engine interface, data types, constants)",
-   "size": 19,
-   "frameworks": [
-    {
-     "slug": "javascriptcore",
-     "name": "JavaScriptCore"
-    },
-    {
-     "slug": "core-data",
-     "name": "Core Data"
-    },
-    {
-     "slug": "foundation-files-persistence",
-     "name": "Foundation (Files and Data Persistence)"
-    },
-    {
-     "slug": "foundation-networking-lowlevel",
-     "name": "Foundation (Networking, Low-Level Utilities)"
-    },
-    {
-     "slug": "foundation-fundamentals",
-     "name": "Foundation (Fundamentals)"
-    },
-    {
-     "slug": "core-ml",
-     "name": "Core ML"
-    },
-    {
-     "slug": "gss",
-     "name": "GSS"
     },
     {
      "slug": "dispatch",
      "name": "Dispatch"
-    },
-    {
-     "slug": "foundation-models",
-     "name": "Foundation Models"
     },
     {
      "slug": "dnssd",
      "name": "dnssd"
     },
     {
-     "slug": "lightweightcoderequirements",
-     "name": "LightweightCodeRequirements"
+     "slug": "synchronization",
+     "name": "Synchronization"
     },
     {
-     "slug": "uniform-type-identifiers",
-     "name": "Uniform Type Identifiers"
+     "slug": "combine",
+     "name": "Combine"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "os",
+     "framework": "os",
+     "feature": "Synchronization (OSAllocatedUnfairLock)",
+     "apple": "OSAllocatedUnfairLock, OSAllocatedUnfairLockFlags",
+     "cohesion": 0.914
     },
     {
-     "slug": "observation",
-     "name": "Observation"
+     "slug": "disk-arbitration",
+     "framework": "Disk Arbitration",
+     "feature": "Session and run loop or dispatch queue scheduling (DASession)",
+     "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue",
+     "cohesion": 0.908
     },
     {
-     "slug": "gameplaykit",
-     "name": "GameplayKit"
+     "slug": "dispatch",
+     "framework": "Dispatch",
+     "feature": "Target queues and concurrentPerform",
+     "apple": "setTarget(queue:), DispatchQueue.concurrentPerform",
+     "cohesion": 0.904
     },
     {
-     "slug": "webkit",
-     "name": "WebKit"
+     "slug": "dnssd",
+     "framework": "dnssd",
+     "feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)",
+     "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection",
+     "cohesion": 0.902
+    },
+    {
+     "slug": "dispatch",
+     "framework": "Dispatch",
+     "feature": "Dispatch I/O channels",
+     "apple": "DispatchIO, dispatch_io_t, barrier, setLimit",
+     "cohesion": 0.878
+    },
+    {
+     "slug": "synchronization",
+     "framework": "Synchronization",
+     "feature": "WordPair",
+     "apple": "WordPair, a pair of two word-sized UInts stored atomically (https://developer.apple.com/documentation/synchronization/wordpair)",
+     "cohesion": 0.876
+    },
+    {
+     "slug": "combine",
+     "framework": "Combine",
+     "feature": "Async publishers",
+     "apple": "AsyncPublisher, AsyncThrowingPublisher",
+     "cohesion": 0.867
+    }
+   ]
+  },
+  {
+   "id": "theme-09",
+   "title": "View configuration (environment, modifiers, state)",
+   "size": 7,
+   "frameworks": [
+    {
+     "slug": "swiftui-views-layout",
+     "name": "SwiftUI (Views, View layout)"
+    },
+    {
+     "slug": "appkit-text",
+     "name": "AppKit (Text)"
+    },
+    {
+     "slug": "tipkit",
+     "name": "TipKit"
+    },
+    {
+     "slug": "pencilkit",
+     "name": "PencilKit"
+    },
+    {
+     "slug": "notification-center",
+     "name": "Notification Center"
+    },
+    {
+     "slug": "contacts",
+     "name": "Contacts"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "swiftui-views-layout",
+     "framework": "SwiftUI (Views, View layout)",
+     "feature": "View configuration (environment, modifiers, state)",
+     "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
+     "cohesion": 0.908
+    },
+    {
+     "slug": "swiftui-views-layout",
+     "framework": "SwiftUI (Views, View layout)",
+     "feature": "Custom layout (Layout protocol)",
+     "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
+     "cohesion": 0.898
+    },
+    {
+     "slug": "appkit-text",
+     "framework": "AppKit (Text)",
+     "feature": "Text Display: multi-line text view widget",
+     "apple": "NSTextView, NSScrollView text container",
+     "cohesion": 0.896
+    },
+    {
+     "slug": "tipkit",
+     "framework": "TipKit",
+     "feature": "Inline tip view and style",
+     "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
+     "cohesion": 0.895
+    },
+    {
+     "slug": "pencilkit",
+     "framework": "PencilKit",
+     "feature": "Scribble on non-text views",
+     "apple": "Scribble interactions",
+     "cohesion": 0.885
+    },
+    {
+     "slug": "notification-center",
+     "framework": "Notification Center",
+     "feature": "Search view (NCWidgetSearchViewController)",
+     "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate",
+     "cohesion": 0.881
+    },
+    {
+     "slug": "contacts",
+     "framework": "Contacts",
+     "feature": "Predefined display preferences",
+     "apple": "CNContactsUserDefaults",
+     "cohesion": 0.868
+    }
+   ]
+  },
+  {
+   "id": "theme-10",
+   "title": "On-device system language model (SystemLanguageModel)",
+   "size": 6,
+   "frameworks": [
+    {
+     "slug": "foundation-models",
+     "name": "Foundation Models"
+    },
+    {
+     "slug": "natural-language",
+     "name": "Natural Language"
+    },
+    {
+     "slug": "core-ml",
+     "name": "Core ML"
     },
     {
      "slug": "core-ai",
@@ -1485,1423 +1682,200 @@
    ],
    "rows": [
     {
-     "slug": "javascriptcore",
-     "framework": "JavaScriptCore",
-     "feature": "C API (engine interface, data types, constants)",
-     "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions",
-     "cohesion": 0.9
+     "slug": "foundation-models",
+     "framework": "Foundation Models",
+     "feature": "On-device system language model (SystemLanguageModel)",
+     "apple": "SystemLanguageModel, LanguageModelError",
+     "cohesion": 0.912
     },
     {
-     "slug": "core-data",
-     "framework": "Core Data",
-     "feature": "Data modeling (object graph and relationships)",
-     "apple": "Core Data model editor, NSManagedObjectModel, NSEntityDescription, NSRelationshipDescription (https://developer.apple.com/documentation/coredata/modeling-data)",
-     "cohesion": 0.888
-    },
-    {
-     "slug": "foundation-files-persistence",
-     "framework": "Foundation (Files and Data Persistence)",
-     "feature": "Archives and Serialization: keyed archiving",
-     "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
-     "cohesion": 0.887
-    },
-    {
-     "slug": "foundation-networking-lowlevel",
-     "framework": "Foundation (Networking, Low-Level Utilities)",
-     "feature": "URL Loading: WebSocket and streaming tasks",
-     "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "core-data",
-     "framework": "Core Data",
-     "feature": "Managed objects and contexts",
-     "apple": "NSManagedObject, NSManagedObjectContext (https://developer.apple.com/documentation/coredata/nsmanagedobjectcontext)",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "foundation-fundamentals",
-     "framework": "Foundation (Fundamentals)",
-     "feature": "NSPredicateValidating",
-     "apple": "protocol listed on the landing page",
-     "cohesion": 0.874
-    },
-    {
-     "slug": "core-ml",
-     "framework": "Core ML",
-     "feature": "Domain frameworks built on Core ML",
-     "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
-     "cohesion": 0.873
-    },
-    {
-     "slug": "javascriptcore",
-     "framework": "JavaScriptCore",
-     "feature": "Native object export to JavaScript",
-     "apple": "JSExport protocol",
-     "cohesion": 0.867
-    },
-    {
-     "slug": "gss",
-     "framework": "GSS",
-     "feature": "Memory and context (object lifetime, allocation)",
-     "apple": "gss_release_buffer, gss_release_oid_set, GSS object release functions (Allocating and Releasing Objects)",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "dispatch",
-     "framework": "Dispatch",
-     "feature": "Other dispatch sources (timer, read, write, signal, process, file system)",
-     "apple": "DispatchSource (activate, suspend, resume, cancel, setEventHandler, DispatchSourceProtocol)",
-     "cohesion": 0.866
+     "slug": "natural-language",
+     "framework": "Natural Language",
+     "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",
+     "apple": "NLModel, Create ML text classifier and word tagger",
+     "cohesion": 0.906
     },
     {
      "slug": "foundation-models",
      "framework": "Foundation Models",
      "feature": "Safety guardrails for generated output",
      "apple": "Improving the safety of generative model output (guidance, guardrail errors)",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "dnssd",
-     "framework": "dnssd",
-     "feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)",
-     "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "lightweightcoderequirements",
-     "framework": "LightweightCodeRequirements",
-     "feature": "Requirement-building operators and errors",
-     "apple": "allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder",
-     "cohesion": 0.861
-    },
-    {
-     "slug": "uniform-type-identifiers",
-     "framework": "Uniform Type Identifiers",
-     "feature": "Generic tag classes",
-     "apple": "UTTagClass and tags(), UTType.tags for other classes",
-     "cohesion": 0.859
-    },
-    {
-     "slug": "observation",
-     "framework": "Observation",
-     "feature": "Observable conformance (@Observable macro)",
-     "apple": "Observable() macro, Observable protocol",
-     "cohesion": 0.854
-    },
-    {
-     "slug": "gameplaykit",
-     "framework": "GameplayKit",
-     "feature": "Constants, structures and enumerations",
-     "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
-     "cohesion": 0.852
-    },
-    {
-     "slug": "webkit",
-     "framework": "WebKit",
-     "feature": "DOM node snapshot",
-     "apple": "WKDOMNodeSnapshot",
-     "cohesion": 0.85
-    },
-    {
-     "slug": "core-ai",
-     "framework": "Core AI",
-     "feature": "Ahead-of-time model compilation",
-     "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
-     "cohesion": 0.845
-    },
-    {
-     "slug": "evaluations",
-     "framework": "Evaluations",
-     "feature": "Model-judge evaluators",
-     "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension",
-     "cohesion": 0.841
-    }
-   ]
-  },
-  {
-   "id": "theme-08",
-   "title": "Using cryptographic assets stored on a smart card",
-   "size": 18,
-   "frameworks": [
-    {
-     "slug": "cryptotokenkit",
-     "name": "CryptoTokenKit"
-    },
-    {
-     "slug": "apple-cryptokit",
-     "name": "Apple CryptoKit"
-    },
-    {
-     "slug": "gss",
-     "name": "GSS"
-    },
-    {
-     "slug": "security-interface",
-     "name": "Security Interface"
-    },
-    {
-     "slug": "core-ml",
-     "name": "Core ML"
-    },
-    {
-     "slug": "storekit",
-     "name": "StoreKit"
-    },
-    {
-     "slug": "cloudkit",
-     "name": "CloudKit"
-    },
-    {
-     "slug": "apple-archive",
-     "name": "Apple Archive"
-    },
-    {
-     "slug": "matter",
-     "name": "Matter"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "cryptotokenkit",
-     "framework": "CryptoTokenKit",
-     "feature": "Using cryptographic assets stored on a smart card",
-     "apple": "Article: Using Cryptographic Assets Stored on a Smart Card",
-     "cohesion": 0.924
-    },
-    {
-     "slug": "cryptotokenkit",
-     "framework": "CryptoTokenKit",
-     "feature": "Persistent tokens (HSM)",
-     "apple": "Persistent token support, macOS 10.15.4 and later (overview)",
-     "cohesion": 0.918
-    },
-    {
-     "slug": "apple-cryptokit",
-     "framework": "Apple CryptoKit",
-     "feature": "AES ciphers (AES.GCM)",
-     "apple": "AES",
-     "cohesion": 0.912
-    },
-    {
-     "slug": "apple-cryptokit",
-     "framework": "Apple CryptoKit",
-     "feature": "Hybrid public key encryption (HPKE)",
-     "apple": "HPKE and HPKE key protocols",
-     "cohesion": 0.911
-    },
-    {
-     "slug": "cryptotokenkit",
-     "framework": "CryptoTokenKit",
-     "feature": "Smart card token driver and token",
-     "apple": "TKSmartCardTokenDriver, TKSmartCardToken, TKSmartCardTokenSession",
-     "cohesion": 0.91
-    },
-    {
-     "slug": "apple-cryptokit",
-     "framework": "Apple CryptoKit",
-     "feature": "Post-quantum KEM and signatures (ML-KEM, X-Wing, ML-DSA)",
-     "apple": "MLKEM768, MLKEM1024, XWingMLKEM768X25519, KEM, KEMPrivateKey, KEMPublicKey, MLDSA65, MLDSA87",
-     "cohesion": 0.908
-    },
-    {
-     "slug": "apple-cryptokit",
-     "framework": "Apple CryptoKit",
-     "feature": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)",
-     "apple": "Curve25519, P256, P384, P521",
-     "cohesion": 0.906
-    },
-    {
-     "slug": "cryptotokenkit",
-     "framework": "CryptoTokenKit",
-     "feature": "Smart card authentication configuration",
-     "apple": "Article: Configuring Smart Card Authentication; TKSmartCardTokenRegistrationManager",
-     "cohesion": 0.902
-    },
-    {
-     "slug": "cryptotokenkit",
-     "framework": "CryptoTokenKit",
-     "feature": "Authenticating users with a cryptographic token",
-     "apple": "Article: Authenticating Users with a Cryptographic Token",
-     "cohesion": 0.898
-    },
-    {
-     "slug": "apple-cryptokit",
-     "framework": "Apple CryptoKit",
-     "feature": "Legacy insecure algorithms (Insecure: MD5, SHA-1)",
-     "apple": "Insecure",
-     "cohesion": 0.894
-    },
-    {
-     "slug": "gss",
-     "framework": "GSS",
-     "feature": "Message protection (gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic)",
-     "apple": "gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic, gss_seal, gss_unseal, gss_sign (Message Protection)",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "security-interface",
-     "framework": "Security Interface",
-     "feature": "Certificate panel",
-     "apple": "SFCertificatePanel",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "security-interface",
-     "framework": "Security Interface",
-     "feature": "Choose identity panel and table cell",
-     "apple": "SFChooseIdentityPanel, SFChooseIdentityTableCellView",
-     "cohesion": 0.884
+     "cohesion": 0.903
     },
     {
      "slug": "core-ml",
      "framework": "Core ML",
      "feature": "Model encryption",
      "apple": "Generating a Model Encryption Key, Encrypting a Model in Your App",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "storekit",
-     "framework": "StoreKit",
-     "feature": "Signed transaction verification (JWS)",
-     "apple": "VerificationResult, VerificationResult.VerificationError",
-     "cohesion": 0.88
-    },
-    {
-     "slug": "cloudkit",
-     "framework": "CloudKit",
-     "feature": "Web auth tokens",
-     "apple": "CKFetchWebAuthTokenOperation",
-     "cohesion": 0.877
-    },
-    {
-     "slug": "apple-archive",
-     "framework": "Apple Archive",
-     "feature": "Encrypted archives",
-     "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "matter",
-     "framework": "Matter",
-     "feature": "Controller initialization (fabric, certificates, storage)",
-     "apple": "MTRDeviceController, MTRDeviceControllerFactory, MTRFabricInfo, MTRStorage, MTRKeypair",
-     "cohesion": 0.86
-    }
-   ]
-  },
-  {
-   "id": "theme-09",
-   "title": "Object push transfer UI (IOBluetoothObjectPushUIController)",
-   "size": 16,
-   "frameworks": [
-    {
-     "slug": "iobluetooth-ui",
-     "name": "IOBluetooth UI"
-    },
-    {
-     "slug": "multipeer-connectivity",
-     "name": "Multipeer Connectivity"
-    },
-    {
-     "slug": "network",
-     "name": "Network"
-    },
-    {
-     "slug": "mailkit",
-     "name": "MailKit"
-    },
-    {
-     "slug": "cloudkit",
-     "name": "CloudKit"
-    },
-    {
-     "slug": "coreaudiokit",
-     "name": "CoreAudioKit"
-    },
-    {
-     "slug": "replaykit",
-     "name": "ReplayKit"
-    },
-    {
-     "slug": "avkit",
-     "name": "AVKit"
-    },
-    {
-     "slug": "social",
-     "name": "Social"
-    },
-    {
-     "slug": "cfnetwork",
-     "name": "CFNetwork"
-    },
-    {
-     "slug": "file-provider",
-     "name": "File Provider"
-    },
-    {
-     "slug": "iousbhost",
-     "name": "IOUSBHost"
-    },
-    {
-     "slug": "apple-archive",
-     "name": "Apple Archive"
-    },
-    {
-     "slug": "media-toolbox",
-     "name": "Media Toolbox"
-    },
-    {
-     "slug": "system-configuration",
-     "name": "System Configuration"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "iobluetooth-ui",
-     "framework": "IOBluetooth UI",
-     "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",
-     "apple": "IOBluetoothObjectPushUIController: init(objectPushWith:withFiles:delegate:), init(objectPushWithBluetoothDevice:...), runModal, runPanel, beginSheetModal(for:...), stop, isTransferInProgress, getDevice, setIconImage, setTitle",
-     "cohesion": 0.914
-    },
-    {
-     "slug": "multipeer-connectivity",
-     "framework": "Multipeer Connectivity",
-     "feature": "Encryption preference (MCEncryptionPreference)",
-     "apple": "MCEncryptionPreference, MCSession encryption",
-     "cohesion": 0.899
-    },
-    {
-     "slug": "network",
-     "framework": "Network",
-     "feature": "Service discovery on the local network",
-     "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
-     "cohesion": 0.898
-    },
-    {
-     "slug": "mailkit",
-     "framework": "MailKit",
-     "feature": "Hand text and files to a mail compose window",
-     "apple": "Mail as a system share service (outside MailKit)",
      "cohesion": 0.896
     },
     {
-     "slug": "cloudkit",
-     "framework": "CloudKit",
-     "feature": "Shared records",
-     "apple": "CKShare, share operations",
-     "cohesion": 0.895
+     "slug": "core-ai",
+     "framework": "Core AI",
+     "feature": "Ahead-of-time model compilation",
+     "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
+     "cohesion": 0.893
     },
     {
-     "slug": "coreaudiokit",
-     "framework": "CoreAudioKit",
-     "feature": "Network audio device browser",
-     "apple": "CANetworkBrowserWindowController",
-     "cohesion": 0.894
-    },
-    {
-     "slug": "replaykit",
-     "framework": "ReplayKit",
-     "feature": "Broadcast picker UI",
-     "apple": "RPBroadcastActivityViewController, RPSystemBroadcastPickerView, RPBroadcastActivityController, RPBroadcastActivityControllerDelegate",
-     "cohesion": 0.89
-    },
-    {
-     "slug": "avkit",
-     "framework": "AVKit",
-     "feature": "Route selection (AirPlay and nearby receivers)",
-     "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
-     "cohesion": 0.887
-    },
-    {
-     "slug": "social",
-     "framework": "Social",
-     "feature": "Compose post sheet",
-     "apple": "SLComposeViewController, SLComposeServiceViewController",
-     "cohesion": 0.882
-    },
-    {
-     "slug": "cfnetwork",
-     "framework": "CFNetwork",
-     "feature": "FTP transfers",
-     "apple": "CFReadStreamCreateWithFTPURL, CFWriteStreamCreateWithFTPURL, CFFTPCreateParsedResourceListing (https://developer.apple.com/documentation/cfnetwork/ftp)",
-     "cohesion": 0.872
-    },
-    {
-     "slug": "file-provider",
-     "framework": "File Provider",
-     "feature": "Nonreplicated File Provider extension (managed local files with placeholders)",
-     "apple": "Nonreplicated File Provider extension",
-     "cohesion": 0.868
-    },
-    {
-     "slug": "iousbhost",
-     "framework": "IOUSBHost",
-     "feature": "Scanners and printers over USB",
-     "apple": "IOUSBHost (scanner and printer devices)",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "iobluetooth-ui",
-     "framework": "IOBluetooth UI",
-     "feature": "Passkey and confirmation display (IOBluetoothPasskeyDisplay)",
-     "apple": "IOBluetoothPasskeyDisplay: sharedDisplayView, setPasskey(_:for:usingSSP:), advance/retreat/resetPasskeyIndicator, passkey, isIncomingRequest, returnImage",
-     "cohesion": 0.863
-    },
-    {
-     "slug": "apple-archive",
-     "framework": "Apple Archive",
-     "feature": "Archive streams (data blobs and byte buffers)",
-     "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol",
-     "cohesion": 0.859
-    },
-    {
-     "slug": "media-toolbox",
-     "framework": "Media Toolbox",
-     "feature": "Localized media type and subtype names",
-     "apple": "MTCopyLocalizedNameForMediaType, MTCopyLocalizedNameForMediaSubType",
-     "cohesion": 0.848
-    },
-    {
-     "slug": "system-configuration",
-     "framework": "System Configuration",
-     "feature": "Ethernet bond and VLAN interfaces",
-     "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions",
-     "cohesion": 0.837
-    }
-   ]
-  },
-  {
-   "id": "theme-10",
-   "title": "Preferences session for system configuration",
-   "size": 16,
-   "frameworks": [
-    {
-     "slug": "system-configuration",
-     "name": "System Configuration"
-    },
-    {
-     "slug": "core-data",
-     "name": "Core Data"
-    },
-    {
-     "slug": "disk-arbitration",
-     "name": "Disk Arbitration"
-    },
-    {
-     "slug": "os",
-     "name": "os"
-    },
-    {
-     "slug": "matter",
-     "name": "Matter"
-    },
-    {
-     "slug": "permissionkit",
-     "name": "PermissionKit"
-    },
-    {
-     "slug": "callkit",
-     "name": "CallKit"
-    },
-    {
-     "slug": "swiftdata",
-     "name": "SwiftData"
-    },
-    {
-     "slug": "synchronization",
-     "name": "Synchronization"
-    },
-    {
-     "slug": "app-intents",
-     "name": "App Intents"
-    },
-    {
-     "slug": "iobluetooth-ui",
-     "name": "IOBluetooth UI"
-    },
-    {
-     "slug": "metrickit",
-     "name": "MetricKit"
-    },
-    {
-     "slug": "foundation-models",
-     "name": "Foundation Models"
-    },
-    {
-     "slug": "contacts",
-     "name": "Contacts"
-    },
-    {
-     "slug": "security-foundation",
-     "name": "Security Foundation"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "system-configuration",
-     "framework": "System Configuration",
-     "feature": "Preferences session for system configuration",
-     "apple": "SCPreferencesCreate, SCPreferencesGetValue, SCPreferencesSetValue, SCPreferencesCommitChanges, SCPreferencesApplyChanges, SCPreferencesSetCallback",
-     "cohesion": 0.901
-    },
-    {
-     "slug": "core-data",
-     "framework": "Core Data",
-     "feature": "Persistent store and stack setup",
-     "apple": "NSPersistentContainer, NSPersistentStoreDescription, NSPersistentStoreCoordinator (Core Data stack, https://developer.apple.com/documentation/coredata/setting-up-a-core-data-stack)",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "disk-arbitration",
-     "framework": "Disk Arbitration",
-     "feature": "Session and run loop or dispatch queue scheduling (DASession)",
-     "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue",
-     "cohesion": 0.888
-    },
-    {
-     "slug": "os",
-     "framework": "os",
-     "feature": "Synchronization (OSAllocatedUnfairLock)",
-     "apple": "OSAllocatedUnfairLock, OSAllocatedUnfairLockFlags",
-     "cohesion": 0.886
-    },
-    {
-     "slug": "matter",
-     "framework": "Matter",
-     "feature": "Clusters (typed On/Off, Level Control, Switch and others)",
-     "apple": "MTRBaseClusterLevelControl, MTRBaseClusterApplicationLauncher and about 200 more cluster classes",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "permissionkit",
-     "framework": "PermissionKit",
-     "feature": "Permission button UI (PermissionButton)",
-     "apple": "PermissionButton",
-     "cohesion": 0.881
-    },
-    {
-     "slug": "callkit",
-     "framework": "CallKit",
-     "feature": "Default calling app",
-     "apple": "Preparing your app to be the default calling app",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "swiftdata",
-     "framework": "SwiftData",
-     "feature": "Data store abstraction (DataStore, DefaultStore, custom stores, batching)",
-     "apple": "DataStore, DataStoreBatching, DefaultStore",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "synchronization",
-     "framework": "Synchronization",
-     "feature": "WordPair",
-     "apple": "WordPair, a pair of two word-sized UInts stored atomically (https://developer.apple.com/documentation/synchronization/wordpair)",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "app-intents",
-     "framework": "App Intents",
-     "feature": "Focus filters",
-     "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
-     "cohesion": 0.871
-    },
-    {
-     "slug": "iobluetooth-ui",
-     "framework": "IOBluetooth UI",
-     "feature": "Device selector panel (IOBluetoothDeviceSelectorController)",
-     "apple": "IOBluetoothDeviceSelectorController: runModal, beginSheetModal(for:...), getResults, getHeader, getCancel, setPrompt, setSearchAttributes, deviceSelector() type method",
-     "cohesion": 0.869
-    },
-    {
-     "slug": "app-intents",
-     "framework": "App Intents",
-     "feature": "App enums",
-     "apple": "AppEnum, EnumURLRepresentation, defaultResolverSpecification",
-     "cohesion": 0.864
-    },
-    {
-     "slug": "metrickit",
-     "framework": "MetricKit",
-     "feature": "Disk write and storage metrics (LogicalDiskWritesMetric, TotalFileSizeMetric, DiskWriteExceptionDiagnostic)",
-     "apple": "LogicalDiskWritesMetric, DiskWriteExceptionDiagnostic, TotalDiskSpaceCapacityMetric, TotalFileCountMetric, TotalFileSizeMetric",
-     "cohesion": 0.863
-    },
-    {
-     "slug": "foundation-models",
-     "framework": "Foundation Models",
-     "feature": "On-device system language model (SystemLanguageModel)",
-     "apple": "SystemLanguageModel, LanguageModelError",
-     "cohesion": 0.863
-    },
-    {
-     "slug": "contacts",
-     "framework": "Contacts",
-     "feature": "Predefined display preferences",
-     "apple": "CNContactsUserDefaults",
-     "cohesion": 0.852
-    },
-    {
-     "slug": "security-foundation",
-     "framework": "Security Foundation",
-     "feature": "Authorization environment and flags (init(flags:rights:environment:), authorization(with:rights:environment:))",
-     "apple": "SFAuthorization initializers and option flags",
-     "cohesion": 0.844
+     "slug": "evaluations",
+     "framework": "Evaluations",
+     "feature": "Model-judge evaluators",
+     "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension",
+     "cohesion": 0.891
     }
    ]
   },
   {
    "id": "theme-11",
-   "title": "Index client delegate",
-   "size": 16,
+   "title": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)",
+   "size": 5,
    "frameworks": [
     {
-     "slug": "core-spotlight",
-     "name": "Core Spotlight"
+     "slug": "apple-cryptokit",
+     "name": "Apple CryptoKit"
     },
     {
-     "slug": "file-provider",
-     "name": "File Provider"
-    },
-    {
-     "slug": "matter-support",
-     "name": "MatterSupport"
-    },
-    {
-     "slug": "core-location",
-     "name": "Core Location"
-    },
-    {
-     "slug": "notification-center",
-     "name": "Notification Center"
-    },
-    {
-     "slug": "core-foundation",
-     "name": "Core Foundation"
-    },
-    {
-     "slug": "media-library",
-     "name": "Media Library"
-    },
-    {
-     "slug": "core-animation",
-     "name": "Core Animation"
-    },
-    {
-     "slug": "swiftdata",
-     "name": "SwiftData"
-    },
-    {
-     "slug": "address-book",
-     "name": "Address Book"
-    },
-    {
-     "slug": "app-intents-testing",
-     "name": "App Intents Testing"
-    },
-    {
-     "slug": "dispatch",
-     "name": "Dispatch"
-    },
-    {
-     "slug": "endpoint-security",
-     "name": "Endpoint Security"
+     "slug": "cryptotokenkit",
+     "name": "CryptoTokenKit"
     }
    ],
    "rows": [
     {
-     "slug": "core-spotlight",
-     "framework": "Core Spotlight",
-     "feature": "Index client delegate",
-     "apple": "CSSearchableIndexDelegate",
-     "cohesion": 0.921
+     "slug": "apple-cryptokit",
+     "framework": "Apple CryptoKit",
+     "feature": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)",
+     "apple": "Curve25519, P256, P384, P521",
+     "cohesion": 0.947
     },
     {
-     "slug": "core-spotlight",
-     "framework": "Core Spotlight",
-     "feature": "Foundation models search tool",
-     "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult",
-     "cohesion": 0.905
+     "slug": "apple-cryptokit",
+     "framework": "Apple CryptoKit",
+     "feature": "Post-quantum KEM and signatures (ML-KEM, X-Wing, ML-DSA)",
+     "apple": "MLKEM768, MLKEM1024, XWingMLKEM768X25519, KEM, KEMPrivateKey, KEMPublicKey, MLDSA65, MLDSA87",
+     "cohesion": 0.947
     },
     {
-     "slug": "core-spotlight",
-     "framework": "Core Spotlight",
-     "feature": "Index extensions and on-demand regeneration",
-     "apple": "CSIndexExtensionRequestHandler, CSImportExtension, Regenerating your app's indexes on demand",
-     "cohesion": 0.896
+     "slug": "apple-cryptokit",
+     "framework": "Apple CryptoKit",
+     "feature": "Hybrid public key encryption (HPKE)",
+     "apple": "HPKE and HPKE key protocols",
+     "cohesion": 0.945
     },
     {
-     "slug": "file-provider",
-     "framework": "File Provider",
-     "feature": "Cloud search (NSFileProviderSearching)",
-     "apple": "NSFileProviderSearching",
-     "cohesion": 0.891
+     "slug": "apple-cryptokit",
+     "framework": "Apple CryptoKit",
+     "feature": "AES ciphers (AES.GCM)",
+     "apple": "AES",
+     "cohesion": 0.927
     },
     {
-     "slug": "matter-support",
-     "framework": "MatterSupport",
-     "feature": "Matter standard itself",
-     "apple": "Matter (see the separate Matter framework)",
-     "cohesion": 0.89
-    },
-    {
-     "slug": "core-location",
-     "framework": "Core Location",
-     "feature": "Errors and diagnostics",
-     "apple": "CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain",
-     "cohesion": 0.887
-    },
-    {
-     "slug": "notification-center",
-     "framework": "Notification Center",
-     "feature": "Search view (NCWidgetSearchViewController)",
-     "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "core-spotlight",
-     "framework": "Core Spotlight",
-     "feature": "Index descriptions",
-     "apple": "CSSearchableIndexDescription",
-     "cohesion": 0.882
-    },
-    {
-     "slug": "core-foundation",
-     "framework": "Core Foundation",
-     "feature": "Plug-ins and bundles (CFPlugIn, CFBundle)",
-     "apple": "CFPlugIn, CFPlugInInstance, CFBundle",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "media-library",
-     "framework": "Media Library",
-     "feature": "Library entry point (MLMediaLibrary)",
-     "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "core-animation",
-     "framework": "Core Animation",
-     "feature": "Layer tree (CALayer, CALayerDelegate, layout managers)",
-     "apple": "CALayer, CALayerDelegate, CALayoutManager, CAConstraintLayoutManager, CAConstraint",
-     "cohesion": 0.868
-    },
-    {
-     "slug": "swiftdata",
-     "framework": "SwiftData",
-     "feature": "Model classes and schema (@Model, Attribute, Unique, Index, Transient)",
-     "apple": "Model(), Attribute(_:originalName:hashModifier:), Unique, Index, Transient",
-     "cohesion": 0.866
-    },
-    {
-     "slug": "address-book",
-     "framework": "Address Book",
-     "feature": "People picker and person view",
-     "apple": "ABPeoplePickerView, ABPersonView",
-     "cohesion": 0.86
-    },
-    {
-     "slug": "app-intents-testing",
-     "framework": "App Intents Testing",
-     "feature": "Value query results (ResolvedValueQueryResult)",
-     "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition",
-     "cohesion": 0.851
-    },
-    {
-     "slug": "dispatch",
-     "framework": "Dispatch",
-     "feature": "Target queues and concurrentPerform",
-     "apple": "setTarget(queue:), DispatchQueue.concurrentPerform",
-     "cohesion": 0.851
-    },
-    {
-     "slug": "endpoint-security",
-     "framework": "Endpoint Security",
-     "feature": "Client creation and teardown",
-     "apple": "es_new_client, es_delete_client, es_new_client_result_t (Creating a Client, Destroying a Client)",
-     "cohesion": 0.845
+     "slug": "cryptotokenkit",
+     "framework": "CryptoTokenKit",
+     "feature": "Smart card token driver and token",
+     "apple": "TKSmartCardTokenDriver, TKSmartCardToken, TKSmartCardTokenSession",
+     "cohesion": 0.897
     }
    ]
   },
   {
    "id": "theme-12",
-   "title": "Machine learning passes",
-   "size": 13,
+   "title": "Photo editing extensions",
+   "size": 4,
    "frameworks": [
     {
-     "slug": "metal",
-     "name": "Metal"
-    },
-    {
-     "slug": "metal-performance-shaders",
-     "name": "Metal Performance Shaders"
-    },
-    {
-     "slug": "model-i-o",
-     "name": "Model I/O"
-    },
-    {
-     "slug": "metrickit",
-     "name": "MetricKit"
-    },
-    {
-     "slug": "media-intelligence",
-     "name": "Media Intelligence"
-    },
-    {
-     "slug": "accelerate",
-     "name": "Accelerate"
-    },
-    {
-     "slug": "core-ml",
-     "name": "Core ML"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "metal",
-     "framework": "Metal",
-     "feature": "Machine learning passes",
-     "apple": "MTLTensor, MPSGraph inference in a command encoder",
-     "cohesion": 0.92
-    },
-    {
-     "slug": "metal-performance-shaders",
-     "framework": "Metal Performance Shaders",
-     "feature": "Neural network graphs and CNN layers",
-     "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
-     "cohesion": 0.917
-    },
-    {
-     "slug": "metal-performance-shaders",
-     "framework": "Metal Performance Shaders",
-     "feature": "Kernel base classes and keyed archiving",
-     "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-     "cohesion": 0.916
-    },
-    {
-     "slug": "metal",
-     "framework": "Metal",
-     "feature": "Shader functions and libraries",
-     "apple": "MTLLibrary, MTLFunction, Metal Shading Language",
-     "cohesion": 0.915
-    },
-    {
-     "slug": "metal-performance-shaders",
-     "framework": "Metal Performance Shaders",
-     "feature": "Recurrent neural network layers",
-     "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
-     "cohesion": 0.91
-    },
-    {
-     "slug": "metal",
-     "framework": "Metal",
-     "feature": "Indirect command encoding and ray tracing",
-     "apple": "MTLIndirectCommandBuffer, MTLAccelerationStructure",
-     "cohesion": 0.907
-    },
-    {
-     "slug": "model-i-o",
-     "framework": "Model I/O",
-     "feature": "Sharing buffers with the GPU framework",
-     "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)",
-     "cohesion": 0.903
-    },
-    {
-     "slug": "metrickit",
-     "framework": "MetricKit",
-     "feature": "GPU and Metal frame metrics (GPUTimeMetric, MetalFrameRateMetric)",
-     "apple": "GPUTimeMetric, MetalFrameRateMetric, PixelLuminanceMetric, AveragePixelLuminance",
-     "cohesion": 0.9
-    },
-    {
-     "slug": "metal",
-     "framework": "Metal",
-     "feature": "GPU profiling, counters and frame capture",
-     "apple": "MTLCaptureManager, GPU counter sample buffers",
-     "cohesion": 0.899
-    },
-    {
-     "slug": "metal",
-     "framework": "Metal",
-     "feature": "HDR presentation",
-     "apple": "Metal HDR content and extended dynamic range layers",
-     "cohesion": 0.887
-    },
-    {
-     "slug": "media-intelligence",
-     "framework": "Media Intelligence",
-     "feature": "On-device ML analysis runtime (shared by all requests)",
-     "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)",
-     "cohesion": 0.878
-    },
-    {
-     "slug": "accelerate",
-     "framework": "Accelerate",
-     "feature": "Neural networks",
-     "apple": "BNNS (neural network training and inference)",
-     "cohesion": 0.863
-    },
-    {
-     "slug": "core-ml",
-     "framework": "Core ML",
-     "feature": "Custom layers and custom models",
-     "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers",
-     "cohesion": 0.852
-    }
-   ]
-  },
-  {
-   "id": "theme-13",
-   "title": "App extensions",
-   "size": 11,
-   "frameworks": [
-    {
-     "slug": "swiftui-app-data",
-     "name": "SwiftUI (App structure, Data and storage)"
-    },
-    {
-     "slug": "siri-kit",
-     "name": "SiriKit"
-    },
-    {
-     "slug": "app-intents",
-     "name": "App Intents"
-    },
-    {
-     "slug": "user-notifications",
-     "name": "User Notifications"
-    },
-    {
-     "slug": "core-services",
-     "name": "Core Services"
-    },
-    {
-     "slug": "storekit",
-     "name": "StoreKit"
-    },
-    {
-     "slug": "speech",
-     "name": "Speech"
-    },
-    {
-     "slug": "swift",
-     "name": "Swift"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "swiftui-app-data",
-     "framework": "SwiftUI (App structure, Data and storage)",
-     "feature": "App extensions",
-     "apple": "WidgetBundle, Widget, widget configuration",
-     "cohesion": 0.919
-    },
-    {
-     "slug": "siri-kit",
-     "framework": "SiriKit",
-     "feature": "Shortcuts app integration",
-     "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
-     "cohesion": 0.918
-    },
-    {
-     "slug": "app-intents",
-     "framework": "App Intents",
-     "feature": "Schema domains and visual presentation",
-     "apple": "App schema domains, visual intelligence, Action button, side button",
-     "cohesion": 0.912
-    },
-    {
-     "slug": "app-intents",
-     "framework": "App Intents",
-     "feature": "Widgets, controls and Live Activities",
-     "apple": "Widgets, Live Activities, and Controls (intent-driven)",
-     "cohesion": 0.909
-    },
-    {
-     "slug": "siri-kit",
-     "framework": "SiriKit",
-     "feature": "Messaging intents (send, search messages, contacts)",
-     "apple": "Messaging, Improving interactions between Siri and your messaging app",
-     "cohesion": 0.909
-    },
-    {
-     "slug": "user-notifications",
-     "framework": "User Notifications",
-     "feature": "Communication notifications",
-     "apple": "Implementing communication notifications, UNNotificationContentProviding, UNNotificationAttributedMessageContext",
-     "cohesion": 0.909
-    },
-    {
-     "slug": "siri-kit",
-     "framework": "SiriKit",
-     "feature": "Siri voice input and spoken responses",
-     "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
-     "cohesion": 0.906
-    },
-    {
-     "slug": "core-services",
-     "framework": "Core Services",
-     "feature": "Apple Events (inter-process messages with replies)",
-     "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
-     "cohesion": 0.906
-    },
-    {
-     "slug": "storekit",
-     "framework": "StoreKit",
-     "feature": "Promoted purchases",
-     "apple": "PurchaseIntent, Product.PromotionInfo",
-     "cohesion": 0.873
-    },
-    {
-     "slug": "speech",
-     "framework": "Speech",
-     "feature": "Legacy Objective-C recognizer API",
-     "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)",
-     "cohesion": 0.87
-    },
-    {
-     "slug": "swift",
-     "framework": "Swift",
-     "feature": "Actors and isolation",
-     "apple": "Actor, @MainActor, Sendable",
-     "cohesion": 0.862
-    }
-   ]
-  },
-  {
-   "id": "theme-14",
-   "title": "Scene and scene lifecycle",
-   "size": 11,
-   "frameworks": [
-    {
-     "slug": "spritekit",
-     "name": "SpriteKit"
-    },
-    {
-     "slug": "scenekit",
-     "name": "SceneKit"
-    },
-    {
-     "slug": "glkit",
-     "name": "GLKit"
-    },
-    {
-     "slug": "gameplaykit",
-     "name": "GameplayKit"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "spritekit",
-     "framework": "SpriteKit",
-     "feature": "Scene and scene lifecycle",
-     "apple": "SKScene, SKView, SKRenderer, SpriteView",
-     "cohesion": 0.935
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Custom shaders and render passes",
-     "apple": "SCNProgram, SCNShadable, SCNTechnique, SCNNodeRendererDelegate",
-     "cohesion": 0.931
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Views for 3D content",
-     "apple": "SCNView, SCNRenderer, SCNLayer, SCNSceneRenderer, SCNHitTestResult",
-     "cohesion": 0.929
-    },
-    {
-     "slug": "spritekit",
-     "framework": "SpriteKit",
-     "feature": "Renderer hand-off and custom Metal pipeline",
-     "apple": "SKRenderer, SKView",
-     "cohesion": 0.921
-    },
-    {
-     "slug": "spritekit",
-     "framework": "SpriteKit",
-     "feature": "Environmental nodes (audio, light)",
-     "apple": "SKAudioNode, SKLightNode",
-     "cohesion": 0.915
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Particle systems",
-     "apple": "SCNParticleSystem, SCNParticlePropertyController",
-     "cohesion": 0.913
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Physics simulation",
-     "apple": "SCNPhysicsWorld, SCNPhysicsBody, SCNPhysicsVehicle, joints, SCNPhysicsContactDelegate",
-     "cohesion": 0.911
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Scene asset import",
-     "apple": "SCNSceneSource",
-     "cohesion": 0.898
-    },
-    {
-     "slug": "glkit",
-     "framework": "GLKit",
-     "feature": "Shader-based effects",
-     "apple": "GLKNamedEffect, GLKBaseEffect (lighting, transform), GLKReflectionMapEffect, GLKSkyboxEffect",
-     "cohesion": 0.896
-    },
-    {
-     "slug": "scenekit",
-     "framework": "SceneKit",
-     "feature": "Positional audio",
-     "apple": "SCNAudioSource, SCNAudioPlayer",
-     "cohesion": 0.891
-    },
-    {
-     "slug": "gameplaykit",
-     "framework": "GameplayKit",
-     "feature": "Strategists (turn-based AI)",
-     "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
-     "cohesion": 0.845
-    }
-   ]
-  },
-  {
-   "id": "theme-15",
-   "title": "Virtual conferences",
-   "size": 7,
-   "frameworks": [
-    {
-     "slug": "eventkit",
-     "name": "EventKit"
-    },
-    {
-     "slug": "storekit",
-     "name": "StoreKit"
-    },
-    {
-     "slug": "screencapturekit",
-     "name": "ScreenCaptureKit"
-    },
-    {
-     "slug": "relevancekit",
-     "name": "RelevanceKit"
-    },
-    {
-     "slug": "callkit",
-     "name": "CallKit"
+     "slug": "photokit",
+     "name": "PhotoKit"
     },
     {
      "slug": "extensionfoundation",
      "name": "ExtensionFoundation"
+    },
+    {
+     "slug": "fskit",
+     "name": "FSKit"
     }
    ],
    "rows": [
     {
-     "slug": "eventkit",
-     "framework": "EventKit",
-     "feature": "Virtual conferences",
-     "apple": "EKVirtualConferenceProvider",
-     "cohesion": 0.925
+     "slug": "photokit",
+     "framework": "PhotoKit",
+     "feature": "Photo editing extensions",
+     "apple": "PHContentEditingController, Creating Photo Editing Extensions",
+     "cohesion": 0.943
     },
     {
-     "slug": "eventkit",
-     "framework": "EventKit",
-     "feature": "Participants",
-     "apple": "EKParticipant",
-     "cohesion": 0.913
-    },
-    {
-     "slug": "storekit",
-     "framework": "StoreKit",
-     "feature": "StoreKit testing",
-     "apple": "StoreKit Test, sandbox testing, Xcode testing for IAP",
-     "cohesion": 0.894
-    },
-    {
-     "slug": "screencapturekit",
-     "framework": "ScreenCaptureKit",
-     "feature": "System content-sharing picker (SCContentSharingPicker, SCContentSharingPickerConfiguration, SCContentSharingPickerMode, SCContentSharingPickerObserver)",
-     "apple": "SCContentSharingPicker and related types",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "relevancekit",
-     "framework": "RelevanceKit",
-     "feature": "Time clues",
-     "apple": "RelevantContext.date(_:), date(_:kind:), date(interval:kind:), date(range:kind:), date(from:to:), DateKind",
-     "cohesion": 0.884
-    },
-    {
-     "slug": "callkit",
-     "framework": "CallKit",
-     "feature": "Outgoing calls",
-     "apple": "CXCallController, CXTransaction, CXStartCallAction",
-     "cohesion": 0.881
+     "slug": "photokit",
+     "framework": "PhotoKit",
+     "feature": "Photos project extensions (macOS)",
+     "apple": "PHProject, PHProjectExtensionController, PHProjectChangeRequest, PHProjectSection",
+     "cohesion": 0.94
     },
     {
      "slug": "extensionfoundation",
      "framework": "ExtensionFoundation",
      "feature": "Adding support for app extensions to your app",
      "apple": "Extension model: define extension points, talk to extensions at runtime",
-     "cohesion": 0.876
-    }
-   ]
-  },
-  {
-   "id": "theme-16",
-   "title": "Context services (gss_init_sec_context, gss_accept_sec_context, context flags)",
-   "size": 6,
-   "frameworks": [
-    {
-     "slug": "gss",
-     "name": "GSS"
-    },
-    {
-     "slug": "service-management",
-     "name": "Service Management"
-    },
-    {
-     "slug": "endpoint-security",
-     "name": "Endpoint Security"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "gss",
-     "framework": "GSS",
-     "feature": "Context services (gss_init_sec_context, gss_accept_sec_context, context flags)",
-     "apple": "gss_init_sec_context, gss_accept_sec_context, GSS_C_MUTUAL_FLAG, GSS_C_DELEG_FLAG (Context Services)",
-     "cohesion": 0.913
-    },
-    {
-     "slug": "gss",
-     "framework": "GSS",
-     "feature": "Security mechanisms (gss_indicate_mechs, mechanism attributes)",
-     "apple": "gss_indicate_mechs, gss_indicate_mechs_by_attrs, gss_inquire_mech_for_saslname (Security Mechanisms)",
-     "cohesion": 0.912
-    },
-    {
-     "slug": "gss",
-     "framework": "GSS",
-     "feature": "Kerberos implementation (gss_krb5_*, lucid context, acceptor identity)",
-     "apple": "gss_krb5_export_lucid_sec_context, gss_krb5_ccache_name, gss_krb5_set_allowable_enctypes, gsskrb5_register_acceptor_identity (Kerberos Implementation)",
-     "cohesion": 0.904
-    },
-    {
-     "slug": "service-management",
-     "framework": "Service Management",
-     "feature": "Legacy login item authorization check",
-     "apple": "SMAppService.statusForLegacyPlist(at:)",
-     "cohesion": 0.895
-    },
-    {
-     "slug": "service-management",
-     "framework": "Service Management",
-     "feature": "Login item enablement (deprecated)",
-     "apple": "SMLoginItemSetEnabled(_:_:)",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "endpoint-security",
-     "framework": "Endpoint Security",
-     "feature": "Memory mapping and protection events",
-     "apple": "es_event_mmap_t, es_event_mprotect_t (Memory Mapping Event Types)",
-     "cohesion": 0.859
-    }
-   ]
-  },
-  {
-   "id": "theme-17",
-   "title": "Console user and session information",
-   "size": 5,
-   "frameworks": [
-    {
-     "slug": "system-configuration",
-     "name": "System Configuration"
-    },
-    {
-     "slug": "security",
-     "name": "Security"
-    },
-    {
-     "slug": "screencapturekit",
-     "name": "ScreenCaptureKit"
-    },
-    {
-     "slug": "fskit",
-     "name": "FSKit"
-    },
-    {
-     "slug": "security-foundation",
-     "name": "Security Foundation"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "system-configuration",
-     "framework": "System Configuration",
-     "feature": "Console user and session information",
-     "apple": "SCDynamicStoreCopyConsoleUser",
-     "cohesion": 0.915
-    },
-    {
-     "slug": "security",
-     "framework": "Security",
-     "feature": "Code signing services",
-     "apple": "SecStaticCodeCreateWithPath, SecCodeCheckValidity, code signature inspection",
-     "cohesion": 0.895
-    },
-    {
-     "slug": "screencapturekit",
-     "framework": "ScreenCaptureKit",
-     "feature": "Permission for screen recording and persistent capture (Persistent Content Capture, privacy string)",
-     "apple": "Persistent Content Capture symbol, screen recording permission prompt",
-     "cohesion": 0.893
+     "cohesion": 0.914
     },
     {
      "slug": "fskit",
      "framework": "FSKit",
      "feature": "Unary file system extension (user-space module)",
      "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase",
-     "cohesion": 0.889
-    },
-    {
-     "slug": "security-foundation",
-     "framework": "Security Foundation",
-     "feature": "Credential invalidation (invalidateCredentials())",
-     "apple": "SFAuthorization.invalidateCredentials()",
-     "cohesion": 0.879
+     "cohesion": 0.908
     }
    ]
   },
   {
-   "id": "theme-18",
-   "title": "Keychain helpers for Wi-Fi passwords and EAP identities",
-   "size": 5,
+   "id": "theme-13",
+   "title": "Map view (MKMapView, Map)",
+   "size": 3,
    "frameworks": [
     {
-     "slug": "core-wlan",
-     "name": "Core WLAN"
-    },
-    {
-     "slug": "metrickit",
-     "name": "MetricKit"
-    },
-    {
-     "slug": "social",
-     "name": "Social"
+     "slug": "mapkit",
+     "name": "MapKit"
     },
     {
      "slug": "core-location",
      "name": "Core Location"
+    },
+    {
+     "slug": "widgetkit",
+     "name": "WidgetKit"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "mapkit",
+     "framework": "MapKit",
+     "feature": "Map view (MKMapView, Map)",
+     "apple": "MKMapView, Map (SwiftUI)",
+     "cohesion": 0.931
+    },
+    {
+     "slug": "core-location",
+     "framework": "Core Location",
+     "feature": "Location manager and live updates",
+     "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)",
+     "cohesion": 0.928
+    },
+    {
+     "slug": "widgetkit",
+     "framework": "WidgetKit",
+     "feature": "Location and network access in widgets",
+     "apple": "Accessing location information in widgets, Making network requests in a widget extension",
+     "cohesion": 0.925
+    }
+   ]
+  },
+  {
+   "id": "theme-14",
+   "title": "PDF multi-page preview context",
+   "size": 3,
+   "frameworks": [
+    {
+     "slug": "quick-look",
+     "name": "Quick Look"
     },
     {
      "slug": "pdfkit",
@@ -2910,161 +1884,83 @@
    ],
    "rows": [
     {
-     "slug": "core-wlan",
-     "framework": "Core WLAN",
-     "feature": "Keychain helpers for Wi-Fi passwords and EAP identities",
-     "apple": "CWKeychainSetWiFiPassword, CWKeychainFindWiFiPassword, CWKeychainSetWiFiEAPUsernameAndPassword, CWKeychainCopyEAPIdentityList and related functions",
-     "cohesion": 0.925
+     "slug": "quick-look",
+     "framework": "Quick Look",
+     "feature": "PDF multi-page preview context",
+     "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
+     "cohesion": 0.941
     },
     {
-     "slug": "metrickit",
-     "framework": "MetricKit",
-     "feature": "Network data metrics (Wi-Fi and cellular upload and download)",
-     "apple": "TotalWiFiUploadMetric, TotalWiFiDownloadMetric, TotalCellularUploadMetric, TotalCellularDownloadMetric",
-     "cohesion": 0.906
-    },
-    {
-     "slug": "social",
-     "framework": "Social",
-     "feature": "Social account credentials",
-     "apple": "SLRequest.account (signed-in account used to authenticate)",
-     "cohesion": 0.9
-    },
-    {
-     "slug": "core-location",
-     "framework": "Core Location",
-     "feature": "Location manager and live updates",
-     "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)",
-     "cohesion": 0.897
+     "slug": "pdfkit",
+     "framework": "PDFKit",
+     "feature": "Page overlay and markup mode",
+     "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider",
+     "cohesion": 0.933
     },
     {
      "slug": "pdfkit",
      "framework": "PDFKit",
      "feature": "Write operations (save, write options, permissions)",
      "apple": "PDFDocument write operations, PDFDocumentWriteOption, accessPermissions, password unlock (takePasswordFrom)",
-     "cohesion": 0.875
+     "cohesion": 0.917
     }
    ]
   },
   {
-   "id": "theme-19",
-   "title": "Safari web extensions and Safari app extensions",
-   "size": 4,
-   "frameworks": [
-    {
-     "slug": "safari-services",
-     "name": "Safari Services"
-    },
-    {
-     "slug": "external-accessory",
-     "name": "External Accessory"
-    },
-    {
-     "slug": "webkit",
-     "name": "WebKit"
-    },
-    {
-     "slug": "finder-sync",
-     "name": "Finder Sync"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "safari-services",
-     "framework": "Safari Services",
-     "feature": "Safari web extensions and Safari app extensions",
-     "apple": "SFSafariExtension, SFSafariExtensionHandler, SFSafariExtensionManager, SFSafariPage, SFSafariTab, SFSafariWindow, SFExtensionMessageKey, Web Inspector extensions",
-     "cohesion": 0.927
-    },
-    {
-     "slug": "external-accessory",
-     "framework": "External Accessory",
-     "feature": "Wi-Fi accessory configuration (unconfigured accessories)",
-     "apple": "EAWiFiUnconfiguredAccessoryBrowser, EAWiFiUnconfiguredAccessory, Wireless Accessory Configuration Entitlement https://developer.apple.com/documentation/externalaccessory/eawifiunconfiguredaccessorybrowser",
-     "cohesion": 0.905
-    },
-    {
-     "slug": "webkit",
-     "framework": "WebKit",
-     "feature": "WebDriver and automated testing",
-     "apple": "WebDriver commands for Safari 11.1 and earlier and 12 and later; testing with WebDriver in Safari",
-     "cohesion": 0.9
-    },
-    {
-     "slug": "finder-sync",
-     "framework": "Finder Sync",
-     "feature": "Extension controller and enablement",
-     "apple": "FIFinderSyncController.default(), isExtensionEnabled, showExtensionManagementInterface()",
-     "cohesion": 0.897
-    }
-   ]
-  },
-  {
-   "id": "theme-20",
-   "title": "HDR per-frame metadata",
-   "size": 3,
-   "frameworks": [
-    {
-     "slug": "video-toolbox",
-     "name": "Video Toolbox"
-    },
-    {
-     "slug": "image-i-o",
-     "name": "Image I/O"
-    },
-    {
-     "slug": "model-i-o",
-     "name": "Model I/O"
-    }
-   ],
-   "rows": [
-    {
-     "slug": "video-toolbox",
-     "framework": "Video Toolbox",
-     "feature": "HDR per-frame metadata",
-     "apple": "VTHDRPerFrameMetadataGenerationSession, VTCompressionPropertyKey_LogTransferFunction",
-     "cohesion": 0.916
-    },
-    {
-     "slug": "image-i-o",
-     "framework": "Image I/O",
-     "feature": "Tiled image providers",
-     "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight",
-     "cohesion": 0.915
-    },
-    {
-     "slug": "model-i-o",
-     "framework": "Model I/O",
-     "feature": "Mesh buffer allocation and mapping",
-     "apple": "MDLMeshBuffer, MDLMeshBufferAllocator, MDLMeshBufferData, MDLMeshBufferMap, MDLMeshBufferZone",
-     "cohesion": 0.91
-    }
-   ]
-  },
-  {
-   "id": "theme-21",
-   "title": "Error types",
+   "id": "theme-15",
+   "title": "Entity annotation and onscreen context",
    "size": 2,
    "frameworks": [
     {
-     "slug": "diskimagekit",
-     "name": "DiskImageKit"
+     "slug": "app-intents-testing",
+     "name": "App Intents Testing"
     }
    ],
    "rows": [
     {
-     "slug": "diskimagekit",
-     "framework": "DiskImageKit",
-     "feature": "Error types",
-     "apple": "IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError",
-     "cohesion": 0.959
+     "slug": "app-intents-testing",
+     "framework": "App Intents Testing",
+     "feature": "Entity annotation and onscreen context",
+     "apple": "ViewAnnotation (entity, isSelected)",
+     "cohesion": 0.943
     },
     {
-     "slug": "diskimagekit",
-     "framework": "DiskImageKit",
-     "feature": "Inspect image properties",
-     "apple": "DiskImage properties (framework overview page)",
-     "cohesion": 0.959
+     "slug": "app-intents-testing",
+     "framework": "App Intents Testing",
+     "feature": "Value query results (ResolvedValueQueryResult)",
+     "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition",
+     "cohesion": 0.943
+    }
+   ]
+  },
+  {
+   "id": "theme-16",
+   "title": "Flight numbers",
+   "size": 2,
+   "frameworks": [
+    {
+     "slug": "datadetection",
+     "name": "DataDetection"
+    },
+    {
+     "slug": "avrouting",
+     "name": "AVRouting"
+    }
+   ],
+   "rows": [
+    {
+     "slug": "datadetection",
+     "framework": "DataDetection",
+     "feature": "Flight numbers",
+     "apple": "DDMatchFlightNumber",
+     "cohesion": 0.941
+    },
+    {
+     "slug": "avrouting",
+     "framework": "AVRouting",
+     "feature": "Route addresses on the local network",
+     "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP",
+     "cohesion": 0.941
     }
    ]
   }

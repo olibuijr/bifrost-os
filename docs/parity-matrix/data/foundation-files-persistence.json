@@ -45,9 +45,9 @@
     {
       "feature": "Archives and Serialization: keyed archiving",
       "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
-      "bifrost": "springboard/sdk/src/coding.rs",
-      "status": "gap",
-      "note": "Codable-style traits exist; no keyed archive format."
+      "bifrost": "springboard/sdk/src/keyed_archive.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codable-style traits exist; no keyed archive format."
     },
     {
       "feature": "Settings",

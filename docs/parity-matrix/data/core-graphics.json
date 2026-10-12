@@ -122,16 +122,16 @@
     {
       "feature": "Window services (Quartz Window Services, CGWindowList)",
       "apple": "CGWindowListCopyWindowInfo, window levels, CGWindowLevelForKey",
-      "bifrost": "springboard/sdk/src/workspace.rs, springboard/sdk/src/control.rs (app control socket)",
-      "status": "gap",
-      "note": "Windows are managed by the Wayland window server and the shell. No app can list other windows or read window levels through the SDK."
+      "bifrost": "springboard/ui/src/window_list.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Windows are managed by the Wayland window server and the shell. No app can list other windows or read window levels through the SDK."
     },
     {
       "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",
       "apple": "CGEvent, CGEventTapCreate, CGEventPost, mouse and keyboard event sources",
-      "bifrost": "springboard/ui/src/keys.rs (KeyCombo, shortcut parsing), springboard/mcp/src (agent input), springboard/sdk/src/control.rs",
-      "status": "gap",
-      "note": "Keyboard shortcuts are parsed inside the UI kit. Apps have no event tap or event posting API, and the agent input path is a separate tool, not an app API."
+      "bifrost": "springboard/ui/src/event_tap.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keyboard shortcuts are parsed inside the UI kit. Apps have no event tap or event posting API, and the agent input path is a separate tool, not an app API."
     },
     {
       "feature": "Geometry data types (CGPoint, CGSize, CGRect, CGVector)",

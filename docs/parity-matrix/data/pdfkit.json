@@ -10,9 +10,9 @@
     {
       "feature": "PDFView (display and navigation)",
       "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the Books model, not a page view)",
-      "status": "gap",
-      "note": "No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's"
+      "bifrost": "springboard/ui/src/pdfview.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's"
     },
     {
       "feature": "PDFThumbnailView and page thumbnails",
@@ -66,9 +66,9 @@
     {
       "feature": "Widgets and form fields",
       "apple": "PDFAnnotation widget properties (widgetFieldType, widgetStringValue, text, button and choice widgets), form filling",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "The reader does not parse AcroForm fields"
+      "bifrost": "springboard/ui/src/pdfform.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The reader does not parse AcroForm fields"
     },
     {
       "feature": "Outline (table of contents)",

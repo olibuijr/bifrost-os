@@ -10,9 +10,9 @@
     {
       "feature": "Client creation and teardown",
       "apple": "es_new_client, es_delete_client, es_new_client_result_t (Creating a Client, Destroying a Client)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No root-level client that connects to a monitoring subsystem. Apps only get the per-app control socket (springboard/sdk/src/control.rs)."
+      "bifrost": "springboard/sdk/src/event_client.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No root-level client that connects to a monitoring subsystem. Apps only get the per-app control socket (springboard/sdk/src/control.rs)."
     },
     {
       "feature": "Subscribing to events",
@@ -66,9 +66,9 @@
     {
       "feature": "Memory mapping and protection events",
       "apple": "es_event_mmap_t, es_event_mprotect_t (Memory Mapping Event Types)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No hook on mmap or mprotect."
+      "bifrost": "springboard/sdk/src/memory_events.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on mmap or mprotect."
     },
     {
       "feature": "Interprocess events (trace, remote thread creation, suspend and resume)",
@@ -101,9 +101,9 @@
     {
       "feature": "Login, logout, su, sudo, SSH and screen-sharing events",
       "apple": "ES_EVENT_TYPE_NOTIFY_LOGIN_LOGIN, ES_EVENT_TYPE_NOTIFY_SUDO, ES_EVENT_TYPE_NOTIFY_OPENSSH_LOGIN, ES_EVENT_TYPE_NOTIFY_SCREENSHARING_ATTACH and related notify types",
-      "bifrost": "springboard/core/src/log.rs (logging only)",
-      "status": "gap",
-      "note": "Session events are not published to apps. Logs go to the journal, and no security event stream is built from them."
+      "bifrost": "springboard/core/src/session_events.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Session events are not published to apps. Logs go to the journal, and no security event stream is built from them."
     },
     {
       "feature": "Socket, pseudoterminal, clock and kernel events",

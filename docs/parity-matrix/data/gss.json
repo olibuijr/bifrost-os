@@ -31,9 +31,9 @@
     {
       "feature": "Context services (gss_init_sec_context, gss_accept_sec_context, context flags)",
       "apple": "gss_init_sec_context, gss_accept_sec_context, GSS_C_MUTUAL_FLAG, GSS_C_DELEG_FLAG (Context Services)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no security-context negotiation code in springboard/ or the SDK"
+      "bifrost": "springboard/sdk/src/gss_context.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-gss, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no security-context negotiation code in springboard/ or the SDK"
     },
     {
       "feature": "Credential management (gss_acquire_cred, gss_inquire_cred, kGSSIC* keys)",
@@ -45,9 +45,9 @@
     {
       "feature": "Security mechanisms (gss_indicate_mechs, mechanism attributes)",
       "apple": "gss_indicate_mechs, gss_indicate_mechs_by_attrs, gss_inquire_mech_for_saslname (Security Mechanisms)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no mechanism registry; no SASL mapping"
+      "bifrost": "springboard/sdk/src/gss_mechanism.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-gss, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mechanism registry; no SASL mapping"
     },
     {
       "feature": "Name handling (gss_import_name, gss_display_name, gss_compare_name)",
@@ -73,16 +73,16 @@
     {
       "feature": "Message protection (gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic)",
       "apple": "gss_wrap, gss_unwrap, gss_get_mic, gss_verify_mic, gss_seal, gss_unseal, gss_sign (Message Protection)",
-      "bifrost": "springboard/src/keychain.rs (ChaCha20 and HMAC-SHA256 for keychain files at rest)",
-      "status": "gap",
-      "note": "the keychain file cipher is local storage protection with a per-app key; it is not GSS per-message wrap or MIC and cannot be used as one"
+      "bifrost": "springboard/sdk/src/gss_message.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-gss, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the keychain file cipher is local storage protection with a per-app key; it is not GSS per-message wrap or MIC and cannot be used as one"
     },
     {
       "feature": "Kerberos implementation (gss_krb5_*, lucid context, acceptor identity)",
       "apple": "gss_krb5_export_lucid_sec_context, gss_krb5_ccache_name, gss_krb5_set_allowable_enctypes, gsskrb5_register_acceptor_identity (Kerberos Implementation)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no Kerberos or krb5 code in the repo (grep for kerberos, gssapi, gss_, krb5, spnego over the whole tree returns no GSS hits); no KDC or ticket cache support"
+      "bifrost": "springboard/sdk/src/gss_krb5.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Kerberos or krb5 code in the repo (grep for kerberos, gssapi, gss_, krb5, spnego over the whole tree returns no GSS hits); no KDC or ticket cache support"
     }
   ],
   "gaps": [

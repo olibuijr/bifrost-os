@@ -45,9 +45,9 @@
     {
       "feature": "Idle detection that starts the saver",
       "apple": "The system starts the saver after user inactivity (screen saver engine)",
-      "bifrost": "springboard/wm/src/input.rs:19-21 (any input calls ext-idle-notify notify_activity); springboard/src/shell/mod.rs:2458 (screen goes off after idle_off_ms)",
-      "status": "os",
-      "note": "the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation"
+      "bifrost": "springboard/core/src/idle_monitor.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation"
     },
     {
       "feature": "Auto-lock after idle",
@@ -66,9 +66,9 @@
     {
       "feature": "Sleep inhibitors held by apps",
       "apple": "Power management assertions (outside the framework)",
-      "bifrost": "springboard/src/bare/sleep.rs:66 (parse_sleep_blockers, reads systemd-inhibit idle and sleep blocks)",
-      "status": "os",
-      "note": "the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
+      "bifrost": "springboard/core/src/sleep_assertions.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
     }
   ],
   "gaps": [

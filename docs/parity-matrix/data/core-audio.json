@@ -66,16 +66,16 @@
     {
       "feature": "Volume and mute controls",
       "apple": "AudioHardwareControl (volume, mute, gain), AudioObjectPropertyVolume",
-      "bifrost": "springboard/src/media/volume.rs (Volume steps), springboard/src/media/mixer.rs, springboard/proto/src/svc.rs (SetVolume)",
-      "status": "os",
-      "note": "Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
+      "bifrost": "springboard/ui/src/volume_control.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
     },
     {
       "feature": "Output routing (speaker or headphones)",
       "apple": "AudioObjectProperty default output device selection",
-      "bifrost": "springboard/src/media/route.rs",
-      "status": "os",
-      "note": "Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
+      "bifrost": "springboard/ui/src/default_device.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
     },
     {
       "feature": "Microphone capture",

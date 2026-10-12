@@ -17,9 +17,9 @@
     {
       "feature": "Certificate panel",
       "apple": "SFCertificatePanel",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."
+      "bifrost": "springboard/ui/src/certificate_panel.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."
     },
     {
       "feature": "Certificate trust editor",
@@ -38,9 +38,9 @@
     {
       "feature": "Choose identity panel and table cell",
       "apple": "SFChooseIdentityPanel, SFChooseIdentityTableCellView",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No identity picker. The keychain API does not store identities, keys or certificates."
+      "bifrost": "springboard/ui/src/identity_chooser.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No identity picker. The keychain API does not store identities, keys or certificates."
     },
     {
       "feature": "Keychain save panel",

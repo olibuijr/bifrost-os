@@ -80,16 +80,16 @@
     {
       "feature": "Network data metrics (Wi-Fi and cellular upload and download)",
       "apple": "TotalWiFiUploadMetric, TotalWiFiDownloadMetric, TotalCellularUploadMetric, TotalCellularDownloadMetric",
-      "bifrost": "springboard/netd (Wi-Fi and DHCP daemon)",
-      "status": "gap",
-      "note": "The network daemon does not attribute byte counts to apps and no per-app totals exist."
+      "bifrost": "springboard/sdk/src/net_totals.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The network daemon does not attribute byte counts to apps and no per-app totals exist."
     },
     {
       "feature": "Disk write and storage metrics (LogicalDiskWritesMetric, TotalFileSizeMetric, DiskWriteExceptionDiagnostic)",
       "apple": "LogicalDiskWritesMetric, DiskWriteExceptionDiagnostic, TotalDiskSpaceCapacityMetric, TotalFileCountMetric, TotalFileSizeMetric",
-      "bifrost": "springboard/src/bare/app_manager.rs (cgroups), springboard/core/src/fsutil.rs",
-      "status": "gap",
-      "note": "No per-app write totals or file-size attribution, and no disk-write exception path."
+      "bifrost": "springboard/core/src/app_disk_writes.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-metrickit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-app write totals or file-size attribution, and no disk-write exception path."
     },
     {
       "feature": "GPU and Metal frame metrics (GPUTimeMetric, MetalFrameRateMetric)",

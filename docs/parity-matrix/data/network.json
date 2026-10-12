@@ -17,23 +17,23 @@
     {
       "feature": "Connections (NWConnection) to a remote endpoint",
       "apple": "NWConnection, NWEndpoint, NWParameters",
-      "bifrost": "springboard/src/deildu/http.rs (Tls::connect, TcpStream); springboard/src/net/share.rs (TCP transfer)",
-      "status": "os",
-      "note": "Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"
+      "bifrost": "springboard/core/src/net_connection.rs, springboard/sdk/src/network_connection.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"
     },
     {
       "feature": "Listeners for incoming connections",
       "apple": "NWListener",
-      "bifrost": "springboard/src/net/share.rs (nearby share TCP listener); springboard/src/bare/control.rs (TcpListener)",
-      "status": "os",
-      "note": "Used by the shell for nearby share and control. Apps cannot listen on a port"
+      "bifrost": "springboard/core/src/net_connection.rs (Listener), springboard/sdk/src/network_connection.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Used by the shell for nearby share and control. Apps cannot listen on a port"
     },
     {
       "feature": "Service discovery on the local network",
       "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
-      "bifrost": "springboard/src/net/share.rs (UDP multicast beacon 224.0.0.251:5354)",
-      "status": "gap",
-      "note": "The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps"
+      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps"
     },
     {
       "feature": "Multicast groups",
@@ -52,9 +52,9 @@
     {
       "feature": "TCP, UDP and IP protocol options",
       "apple": "NWProtocolTCP, NWProtocolUDP, NWProtocolIP",
-      "bifrost": "springboard/src/deildu/http.rs (set_nodelay, read and write timeouts)",
-      "status": "os",
-      "note": "Socket options are set in the shell. Apps have no protocol stack configuration"
+      "bifrost": "springboard/core/src/net_connection.rs (Parameters, springboard/sdk/src/network_connection.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Socket options are set in the shell. Apps have no protocol stack configuration"
     },
     {
       "feature": "TLS and security options",

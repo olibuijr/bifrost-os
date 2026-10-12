@@ -7,11 +7,41 @@
   "summary": "Media Toolbox covers the audio processing tap API (MTAudioProcessingTap*), registration of professional video format readers, and localized media type names. BifrOSt has no public Media Toolbox equivalent: decoding, demuxing and playback run inside the shell's media module and are not exposed to apps, and there is no audio tap hook in audiod.",
   "rea_evidence": "ev_219054dc890874ba032143b0cbb610af3e29837791f84ca3a24b84ae33059eda",
   "features": [
-    {"feature": "Audio processing taps", "apple": "MTAudioProcessingTapCreate, MTAudioProcessingTapCreateWithPreferredFormat, MTAudioProcessingTapGetSourceAudio, MTAudioProcessingTapGetStorage, MTAudioProcessingTapFlags", "bifrost": "springboard/audiod (no tap or effect hook found); springboard/src/media/mixer.rs (ALSA mixer controls only)", "status": "gap", "note": "No API lets an app inspect or process audio from a playing mix. The ALSA mixer in mixer.rs sets volume controls and is not a tap."},
-    {"feature": "Professional video format reader registration", "apple": "MTRegisterProfessionalVideoWorkflowFormatReaders", "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/symfile.rs", "status": "gap", "note": "Demuxers are fixed in code (mp4, webm, symphonia-based readers). No runtime registration point exists."},
-    {"feature": "Video decoder seam", "apple": "No public Media Toolbox counterpart (decoding is internal to the framework)", "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder), springboard/src/media/hwdec/mod.rs, hwdec/ffmpeg.rs, hwdec/vaapi.rs", "status": "os", "note": "Hardware decode through libavcodec and VA-API with a software fallback. Used by the player and the wowstream video code, not exposed as an SDK API."},
-    {"feature": "Playback engine", "apple": "No direct Media Toolbox counterpart (playback goes through AVFoundation and Core Media)", "bifrost": "springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)", "status": "os", "note": "The shell plays audio and video. The SDK Player is a drawing control, not a playback engine, so apps cannot drive a player through an SDK call."},
-    {"feature": "Localized media type and subtype names", "apple": "MTCopyLocalizedNameForMediaType, MTCopyLocalizedNameForMediaSubType", "bifrost": "springboard/src/media/codec.rs (Kind enum, format detection only)", "status": "gap", "note": "Codec kinds exist as an enum, but no localized display names are produced."}
+    {
+      "feature": "Audio processing taps",
+      "apple": "MTAudioProcessingTapCreate, MTAudioProcessingTapCreateWithPreferredFormat, MTAudioProcessingTapGetSourceAudio, MTAudioProcessingTapGetStorage, MTAudioProcessingTapFlags",
+      "bifrost": "springboard/ui/src/audio_processing_tap.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app inspect or process audio from a playing mix. The ALSA mixer in mixer.rs sets volume controls and is not a tap."
+    },
+    {
+      "feature": "Professional video format reader registration",
+      "apple": "MTRegisterProfessionalVideoWorkflowFormatReaders",
+      "bifrost": "springboard/ui/src/format_readers.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Demuxers are fixed in code (mp4, webm, symphonia-based readers). No runtime registration point exists."
+    },
+    {
+      "feature": "Video decoder seam",
+      "apple": "No public Media Toolbox counterpart (decoding is internal to the framework)",
+      "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder), springboard/src/media/hwdec/mod.rs, hwdec/ffmpeg.rs, hwdec/vaapi.rs",
+      "status": "os",
+      "note": "Hardware decode through libavcodec and VA-API with a software fallback. Used by the player and the wowstream video code, not exposed as an SDK API."
+    },
+    {
+      "feature": "Playback engine",
+      "apple": "No direct Media Toolbox counterpart (playback goes through AVFoundation and Core Media)",
+      "bifrost": "springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)",
+      "status": "os",
+      "note": "The shell plays audio and video. The SDK Player is a drawing control, not a playback engine, so apps cannot drive a player through an SDK call."
+    },
+    {
+      "feature": "Localized media type and subtype names",
+      "apple": "MTCopyLocalizedNameForMediaType, MTCopyLocalizedNameForMediaSubType",
+      "bifrost": "springboard/ui/src/media_type_names.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codec kinds exist as an enum, but no localized display names are produced."
+    }
   ],
   "gaps": [
     "Audio processing tap: no API to read or process audio from the playing mix (MTAudioProcessingTap family), and no tap point in springboard/audiod.",

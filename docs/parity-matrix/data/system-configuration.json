@@ -31,9 +31,9 @@
     {
       "feature": "Wi-Fi status, scan, join and saved networks",
       "apple": "SCNetworkConfiguration (SCNetworkService for Wi-Fi), CoreWLAN-style status through SCNetworkInterface",
-      "bifrost": "springboard/src/net/wifi.rs (Status struct, saved networks, notes), springboard/src/net/wifi_config.rs, springboard/src/net/wpa.rs, springboard/netd/src/main.rs",
-      "status": "os",
-      "note": "netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."
+      "bifrost": "springboard/sdk/src/wifi_status.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-system-configuration, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."
     },
     {
       "feature": "Wired link and address",
@@ -59,9 +59,9 @@
     {
       "feature": "Preferences session for system configuration",
       "apple": "SCPreferencesCreate, SCPreferencesGetValue, SCPreferencesSetValue, SCPreferencesCommitChanges, SCPreferencesApplyChanges, SCPreferencesSetCallback",
-      "bifrost": "springboard/sdk/src/defaults.rs (app defaults only)",
-      "status": "gap",
-      "note": "app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."
+      "bifrost": "springboard/core/src/pref_session.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-10, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."
     },
     {
       "feature": "Computer name and local host name",
@@ -94,9 +94,9 @@
     {
       "feature": "Console user and session information",
       "apple": "SCDynamicStoreCopyConsoleUser",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "The login shell exists but no session-user accessor is exposed to apps."
+      "bifrost": "springboard/core/src/console_user.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-17, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The login shell exists but no session-user accessor is exposed to apps."
     },
     {
       "feature": "Error reporting for calls",

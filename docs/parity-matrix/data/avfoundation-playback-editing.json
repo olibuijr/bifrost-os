@@ -24,9 +24,9 @@
     {
       "feature": "Media reading and writing",
       "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
-      "bifrost": "springboard/src/media/demux/mod.rs",
-      "status": "gap",
-      "note": "Reading samples is internal to the player; no writer, no export, no frame-grab API"
+      "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
     },
     {
       "feature": "Media types and utilities",
@@ -94,9 +94,9 @@
     {
       "feature": "Sample buffer playback",
       "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
-      "bifrost": "springboard/src/media/demux/mse.rs",
-      "status": "gap",
-      "note": "Only an internal MSE feed for the browser; no app renderer or synchronizer"
+      "bifrost": "springboard/ui/src/render_synchronizer.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
     },
     {
       "feature": "Composite assets",

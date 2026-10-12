@@ -66,9 +66,9 @@
     {
       "feature": "Error types",
       "apple": "IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Depends on the create, open and stack APIs above."
+      "bifrost": "springboard/ui/src/disk_image.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-21, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the create, open and stack APIs above."
     }
   ],
   "gaps": [

@@ -38,9 +38,9 @@
     {
       "feature": "Archive streams (data blobs and byte buffers)",
       "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Streaming is internal to read_tar and index_tar; no public stream type for apps"
+      "bifrost": "springboard/sdk/src/archive.rs (ByteStream",
+      "status": "partial",
+      "note": "Wave 5 (w5-apple-archive, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Streaming is internal to read_tar and index_tar; no public stream type for apps"
     },
     {
       "feature": "Reading and indexing tar packages for install",
@@ -52,9 +52,9 @@
     {
       "feature": "DEFLATE decoding",
       "apple": "Multithreaded lossless compression (decoding side)",
-      "bifrost": "springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/books/engine/zip.rs",
-      "status": "os",
-      "note": "Decoder lives in the Books engine; not verified which book formats use it; no compression side"
+      "bifrost": "springboard/sdk/src/archive.rs (decompress",
+      "status": "partial",
+      "note": "Wave 5 (w5-apple-archive, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoder lives in the Books engine; not verified which book formats use it; no compression side"
     },
     {
       "feature": "Encrypted archives",

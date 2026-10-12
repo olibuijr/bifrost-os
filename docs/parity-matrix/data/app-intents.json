@@ -59,9 +59,9 @@
     {
       "feature": "App enums",
       "apple": "AppEnum, EnumURLRepresentation, defaultResolverSpecification",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "ParamType has no enum case; predefined value sets cannot be declared"
+      "bifrost": "springboard/sdk/src/intents.rs (ParamType::Enum)",
+      "status": "partial",
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ParamType has no enum case; predefined value sets cannot be declared"
     },
     {
       "feature": "App Shortcuts (AppShortcutsProvider)",
@@ -108,9 +108,9 @@
     {
       "feature": "Focus filters",
       "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
-      "bifrost": "springboard/src/shell/focus.rs (Do Not Disturb only)",
-      "status": "gap",
-      "note": "Focus is a notification switch; apps cannot declare filter intents"
+      "bifrost": "springboard/ui/src/focus_filter.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents"
     },
     {
       "feature": "Widgets, controls and Live Activities",

@@ -17,16 +17,16 @@
     {
       "feature": "MIDI System Setup (driver and external device management)",
       "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No system-wide MIDI device registry. Hotplug for audio devices is in springboard/src/media/ and springboard/src/bare/input.rs, not for MIDI."
+      "bifrost": "springboard/core/src/midi_endpoints.rs (remove_entity",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-midi, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-wide MIDI device registry. Hotplug for audio devices is in springboard/src/media/ and springboard/src/bare/input.rs, not for MIDI."
     },
     {
       "feature": "MIDI Bluetooth (BLE MIDI peripherals)",
       "apple": "MIDIBluetoothDriverActivateAllConnections, MIDIBluetoothDriverDisconnect (https://developer.apple.com/documentation/coremidi/midi-bluetooth)",
-      "bifrost": "springboard/src/bare/bluetooth.rs (Bluetooth management socket, class_is_audio at :186)",
-      "status": "os",
-      "note": "The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. There is no MIDI GATT service support and no app-facing SDK API for it."
+      "bifrost": "springboard/ui/src/midi_ble.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-04, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. There is no MIDI GATT service support and no app-facing SDK API for it."
     },
     {
       "feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)",

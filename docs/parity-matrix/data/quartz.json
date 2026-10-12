@@ -31,9 +31,9 @@
     {
       "feature": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)",
       "apple": "CIFilter, IKFilterBrowserPanel, IKFilterBrowserView, IKFilterUIView, IKFilterCustomUIProvider",
-      "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum)",
-      "status": "gap",
-      "note": "Five fixed per-pixel colour filters (Original, Vivid, Mono, Noir, Warm). No filter graph, no parameterised CIFilter-style objects, no filter browser and no kernel or GPU image processing API."
+      "bifrost": "springboard/render/src/effect_chain.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-quartz, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Five fixed per-pixel colour filters (Original, Vivid, Mono, Noir, Warm). No filter graph, no parameterised CIFilter-style objects, no filter browser and no kernel or GPU image processing API."
     },
     {
       "feature": "Camera device browser and picture taker (IKDeviceBrowserView, IKCameraDeviceView, IKPictureTaker)",
@@ -94,9 +94,9 @@
     {
       "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
       "apple": "PDFAnnotation, PDFAction, PDFDestination, PDFAppearanceCharacteristics, PDFBorder; widget how-to articles",
-      "bifrost": "none in springboard/src/shell/books/engine/pdf/ (no Annots or AcroForm handling)",
-      "status": "gap",
-      "note": "The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."
+      "bifrost": "springboard/ui/src/acroform.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-quartz, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."
     },
     {
       "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",

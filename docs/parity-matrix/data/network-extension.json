@@ -80,16 +80,16 @@
     {
       "feature": "DNS proxy provider",
       "apple": "DNS proxy provider collection group",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No on-device DNS proxy extension point."
+      "bifrost": "springboard/core/src/dns_proxy.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device DNS proxy extension point."
     },
     {
       "feature": "Local push connectivity",
       "apple": "Local push connectivity collection group",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "The notification path in springboard/src/shell/usernotif.rs is local to the shell and has no network-independent push channel."
+      "bifrost": "springboard/core/src/local_push.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The notification path in springboard/src/shell/usernotif.rs is local to the shell and has no network-independent push channel."
     },
     {
       "feature": "App extensions host (NEAppExtensionConfiguration)",

@@ -24,9 +24,9 @@
     {
       "feature": "Nonreplicated File Provider extension (managed local files with placeholders)",
       "apple": "Nonreplicated File Provider extension",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No placeholder or dataless file concept, and no on-demand hydration. Files app reads and writes ordinary files only (springboard/src/files/fs.rs)."
+      "bifrost": "springboard/ui/src/file_provider.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No placeholder or dataless file concept, and no on-demand hydration. Files app reads and writes ordinary files only (springboard/src/files/fs.rs)."
     },
     {
       "feature": "Extension management (NSFileProviderManager: domains, signalEnumerator, reimport)",
@@ -45,9 +45,9 @@
     {
       "feature": "Cloud search (NSFileProviderSearching)",
       "apple": "NSFileProviderSearching",
-      "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/src/shell/quicksearch.rs (local Spotlight-style index)",
-      "status": "gap",
-      "note": "Quick search indexes local content only. Apps cannot register a provider search source."
+      "bifrost": "springboard/sdk/src/file_provider.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Quick search indexes local content only. Apps cannot register a provider search source."
     },
     {
       "feature": "Domains (NSFileProviderDomain, external volume eligibility)",

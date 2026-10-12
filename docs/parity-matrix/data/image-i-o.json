@@ -10,9 +10,9 @@
     {
       "feature": "Image source: decode from data or file",
       "apple": "CGImageSource",
-      "bifrost": "springboard/render/src/imgdec.rs:12 (decode), springboard/src/shell/browser/images.rs",
-      "status": "os",
-      "note": "Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type."
+      "bifrost": "springboard/sdk/src/image_source.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type."
     },
     {
       "feature": "Image destination: encode and write",
@@ -31,16 +31,16 @@
     {
       "feature": "Downsampled and thumbnail decode",
       "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)",
-      "bifrost": "springboard/src/shell/browser/images.rs:1-8 (area-averaging row downsample), springboard/render/src/imgdec.rs:66 (box_down), :91 (cover), :113 (contain)",
-      "status": "os",
-      "note": "Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file."
+      "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs (fit_dims)",
+      "status": "partial",
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file."
     },
     {
       "feature": "Decode size limits",
       "apple": "No direct equivalent (Image I/O reads the header first)",
-      "bifrost": "springboard/render/src/imgdec.rs:7 (MAX_SIDE 8192), springboard/src/shell/browser/images.rs (MAX_PIXELS checked from the header before decode)",
-      "status": "os",
-      "note": "Oversized pictures are refused before decoding."
+      "bifrost": "springboard/sdk/src/image_source.rs (TooLarge before decode)",
+      "status": "partial",
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Oversized pictures are refused before decoding."
     },
     {
       "feature": "EXIF metadata read (camera, date, exposure, size)",
@@ -122,9 +122,9 @@
     {
       "feature": "Tiled image providers",
       "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No streaming tile provider."
+      "bifrost": "springboard/render/src/image_tiles.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No streaming tile provider."
     }
   ],
   "gaps": [

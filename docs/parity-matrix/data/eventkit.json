@@ -10,9 +10,9 @@
     {
       "feature": "Event store and access",
       "apple": "EKEventStore, access requests",
-      "bifrost": "springboard/src/shell/calendar/store.rs",
-      "status": "os",
-      "note": "shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"
+      "bifrost": "springboard/ui/src/calendar_access.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-eventkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"
     },
     {
       "feature": "Events",
@@ -38,9 +38,9 @@
     {
       "feature": "Participants",
       "apple": "EKParticipant",
-      "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
-      "status": "gap",
-      "note": "no attendee or invitation model found"
+      "bifrost": "springboard/ui/src/conference.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no attendee or invitation model found"
     },
     {
       "feature": "Recurrence rules",
@@ -94,9 +94,9 @@
     {
       "feature": "Virtual conferences",
       "apple": "EKVirtualConferenceProvider",
-      "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
-      "status": "gap",
-      "note": "no extension point"
+      "bifrost": "springboard/ui/src/conference.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension point"
     },
     {
       "feature": "Errors",

@@ -10,9 +10,9 @@
     {
       "feature": "Model classes and schema (@Model, Attribute, Unique, Index, Transient)",
       "apple": "Model(), Attribute(_:originalName:hashModifier:), Unique, Index, Transient",
-      "bifrost": "none; closest is springboard/sdk/src/coding.rs (Encodable/Decodable, JSON and plist) used by springboard/sdk/src/restoration.rs",
-      "status": "gap",
-      "note": "no declarative model macro, no schema, no uniqueness or index constraints; apps write their own struct and file format"
+      "bifrost": "springboard/ui/src/model_schema.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative model macro, no schema, no uniqueness or index constraints; apps write their own struct and file format"
     },
     {
       "feature": "Model container and model context (fetch, insert, delete, save)",
@@ -66,9 +66,9 @@
     {
       "feature": "Data store abstraction (DataStore, DefaultStore, custom stores, batching)",
       "apple": "DataStore, DataStoreBatching, DefaultStore",
-      "bifrost": "none; springboard/sdk/src/file_coordination.rs (flock-coordinated reads and writes of files)",
-      "status": "gap",
-      "note": "no pluggable store interface; coordination covers files between processes, not records"
+      "bifrost": "springboard/ui/src/data_store.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pluggable store interface; coordination covers files between processes, not records"
     },
     {
       "feature": "Change history and history observers (remote change tracking)",

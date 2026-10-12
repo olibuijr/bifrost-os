@@ -7,13 +7,55 @@
   "summary": "BifrOSt pairs, connects and forgets Bluetooth devices from the Settings Bluetooth page, using a Just Works pairing flow with no passkey or confirmation UI. None of Apple's reusable Bluetooth controllers (pairing panel, device selector, service browser, object push, passkey display) exist as an app-facing SDK API.",
   "rea_evidence": "ev_d6b887143eeccce4bacc4a630a1c8eef5b2d29145c91c5b40815e6577b0000f5",
   "features": [
-    {"feature": "Pairing panel (IOBluetoothPairingController)", "apple": "IOBluetoothPairingController: runModal, getResults, setTitle, setPrompt, setDescriptionText, setOptions, setSearchAttributes, addAllowedUUID(Array), clearAllowedUUIDs", "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Pair, OP_PAIR_DEVICE, IO_NO_INPUT_NO_OUTPUT); springboard/src/shell/pages.rs:406 (nearby device row starts pairing)", "status": "partial", "note": "Pairing works only as a Settings list action. No modal panel, no title or prompt customisation, no UUID filter, and no SDK API. Pairing always uses NoInputNoOutput (Just Works), so the user's tap is the only consent."},
-    {"feature": "Device selector panel (IOBluetoothDeviceSelectorController)", "apple": "IOBluetoothDeviceSelectorController: runModal, beginSheetModal(for:...), getResults, getHeader, getCancel, setPrompt, setSearchAttributes, deviceSelector() type method", "bifrost": "springboard/src/shell/pages.rs:378 (bluetooth_spec: MY DEVICES and OTHER DEVICES groups); springboard/ui/src/sheet.rs (generic alert sheet, not Bluetooth-aware)", "status": "gap", "note": "The device list exists only inside the Settings page. No reusable chooser control and no sheet that returns a selected device to the caller."},
-    {"feature": "Service browser (IOBluetoothServiceBrowserController)", "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef", "bifrost": "none found; springboard/src/bare/bluetooth.rs parses EIR for audio profile UUIDs only (struct Eir, audio_uuid)", "status": "gap", "note": "No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse."},
-    {"feature": "Object push transfer UI (IOBluetoothObjectPushUIController)", "apple": "IOBluetoothObjectPushUIController: init(objectPushWith:withFiles:delegate:), init(objectPushWithBluetoothDevice:...), runModal, runPanel, beginSheetModal(for:...), stop, isTransferInProgress, getDevice, setIconImage, setTitle", "bifrost": "springboard/src/net/share.rs (nearby file sharing over LAN UDP beacon and TCP, not Bluetooth OBEX); springboard/src/shell/desktop_network.rs (no Bluetooth transfer)", "status": "gap", "note": "No Bluetooth OBEX object push. The nearby sharing path works over the local network only, so it has no Bluetooth transfer counterpart."},
-    {"feature": "Passkey and confirmation display (IOBluetoothPasskeyDisplay)", "apple": "IOBluetoothPasskeyDisplay: sharedDisplayView, setPasskey(_:for:usingSSP:), advance/retreat/resetPasskeyIndicator, passkey, isIncomingRequest, returnImage", "bifrost": "springboard/src/bare/bluetooth.rs:57 (EV_USER_CONFIRM_REQUEST), :68-69 (IO_NO_INPUT_NO_OUTPUT), tests near :1274-1291", "status": "gap", "note": "The kernel's user-confirm request is auto-answered: confirm if the address matches the pairing we started, otherwise negative reply. The passkey is never shown to the user, so the user cannot compare or type one."},
-    {"feature": "Accessibility ignored cells (IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell)", "apple": "IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell (cells hidden from accessibility)", "bifrost": "springboard/ui/src/ax.rs (AxText, role_name, Priority); springboard/src/shell/atspi/ (accessibility bridge)", "status": "partial", "note": "The accessibility bridge exists for the shell, but nothing marks Bluetooth-specific cells as ignored because no Bluetooth picker UI exists in the SDK."},
-    {"feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)", "apple": "IOBluetoothUI Enumerations, Constants, Functions; struct BluetoothKeyboardReturnType; IOBluetoothUIUserLib.h", "bifrost": "springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth)", "status": "partial", "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart."}
+    {
+      "feature": "Pairing panel (IOBluetoothPairingController)",
+      "apple": "IOBluetoothPairingController: runModal, getResults, setTitle, setPrompt, setDescriptionText, setOptions, setSearchAttributes, addAllowedUUID(Array), clearAllowedUUIDs",
+      "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Pair, OP_PAIR_DEVICE, IO_NO_INPUT_NO_OUTPUT); springboard/src/shell/pages.rs:406 (nearby device row starts pairing)",
+      "status": "partial",
+      "note": "Pairing works only as a Settings list action. No modal panel, no title or prompt customisation, no UUID filter, and no SDK API. Pairing always uses NoInputNoOutput (Just Works), so the user's tap is the only consent."
+    },
+    {
+      "feature": "Device selector panel (IOBluetoothDeviceSelectorController)",
+      "apple": "IOBluetoothDeviceSelectorController: runModal, beginSheetModal(for:...), getResults, getHeader, getCancel, setPrompt, setSearchAttributes, deviceSelector() type method",
+      "bifrost": "springboard/ui/src/bt_chooser.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iobluetooth-ui, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The device list exists only inside the Settings page. No reusable chooser control and no sheet that returns a selected device to the caller."
+    },
+    {
+      "feature": "Service browser (IOBluetoothServiceBrowserController)",
+      "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
+      "bifrost": "none found; springboard/src/bare/bluetooth.rs parses EIR for audio profile UUIDs only (struct Eir, audio_uuid)",
+      "status": "gap",
+      "note": "No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse."
+    },
+    {
+      "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",
+      "apple": "IOBluetoothObjectPushUIController: init(objectPushWith:withFiles:delegate:), init(objectPushWithBluetoothDevice:...), runModal, runPanel, beginSheetModal(for:...), stop, isTransferInProgress, getDevice, setIconImage, setTitle",
+      "bifrost": "springboard/ui/src/object_push.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Bluetooth OBEX object push. The nearby sharing path works over the local network only, so it has no Bluetooth transfer counterpart."
+    },
+    {
+      "feature": "Passkey and confirmation display (IOBluetoothPasskeyDisplay)",
+      "apple": "IOBluetoothPasskeyDisplay: sharedDisplayView, setPasskey(_:for:usingSSP:), advance/retreat/resetPasskeyIndicator, passkey, isIncomingRequest, returnImage",
+      "bifrost": "springboard/ui/src/passkey_display.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel's user-confirm request is auto-answered: confirm if the address matches the pairing we started, otherwise negative reply. The passkey is never shown to the user, so the user cannot compare or type one."
+    },
+    {
+      "feature": "Accessibility ignored cells (IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell)",
+      "apple": "IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell (cells hidden from accessibility)",
+      "bifrost": "springboard/ui/src/ax.rs (AxText, role_name, Priority); springboard/src/shell/atspi/ (accessibility bridge)",
+      "status": "partial",
+      "note": "The accessibility bridge exists for the shell, but nothing marks Bluetooth-specific cells as ignored because no Bluetooth picker UI exists in the SDK."
+    },
+    {
+      "feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)",
+      "apple": "IOBluetoothUI Enumerations, Constants, Functions; struct BluetoothKeyboardReturnType; IOBluetoothUIUserLib.h",
+      "bifrost": "springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth)",
+      "status": "partial",
+      "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart."
+    }
   ],
   "gaps": [
     "No app-facing SDK API for Bluetooth pairing, device choice or status: the pairing and device list live only in the Settings Bluetooth page (springboard/src/shell/pages.rs).",

@@ -10,16 +10,16 @@
     {
       "feature": "Device discovery (HIDDeviceManager, DeviceMatchingCriteria)",
       "apple": "HIDDeviceManager, HIDDeviceManager.DeviceMatchingCriteria",
-      "bifrost": "springboard/src/bare/input.rs (Device::by_name, InputSet with inotify watch on /dev/input at ~line 499)",
-      "status": "os",
-      "note": "Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."
+      "bifrost": "springboard/ui/src/hid_match.rs, springboard/sdk/src/hid_devices.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."
     },
     {
       "feature": "Device classification by capability",
       "apple": "HIDDeviceTransport, HIDDeviceLocalizationCode, usage pages (HIDUsage)",
-      "bifrost": "springboard/src/bare/input.rs (Caps::roles at ~line 331, Roles struct above it)",
-      "status": "os",
-      "note": "Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."
+      "bifrost": "springboard/ui/src/hid_match.rs (Usage::role",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."
     },
     {
       "feature": "Report descriptor elements and collections",

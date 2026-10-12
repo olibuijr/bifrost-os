@@ -73,9 +73,9 @@
     {
       "feature": "Indirect command encoding and ray tracing",
       "apple": "MTLIndirectCommandBuffer, MTLAccelerationStructure",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "not present in the compositor or the SDK"
+      "bifrost": "springboard/ui/src/indirect_command.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not present in the compositor or the SDK"
     },
     {
       "feature": "Machine learning passes",
@@ -101,16 +101,16 @@
     {
       "feature": "HDR presentation",
       "apple": "Metal HDR content and extended dynamic range layers",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "presenter is 8-bit SDR"
+      "bifrost": "springboard/render/src/hdr_transfer.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. presenter is 8-bit SDR"
     },
     {
       "feature": "GPU profiling, counters and frame capture",
       "apple": "MTLCaptureManager, GPU counter sample buffers",
-      "bifrost": "tools/bench.py (host benches, CPU only)",
-      "status": "gap",
-      "note": "no GPU timing or capture for apps"
+      "bifrost": "springboard/ui/src/counter_sample.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GPU timing or capture for apps"
     },
     {
       "feature": "Simulator and alternative render paths",

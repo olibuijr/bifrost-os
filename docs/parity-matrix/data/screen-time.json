@@ -17,9 +17,9 @@
     {
       "feature": "Configuration observer and configuration (STScreenTimeConfigurationObserver, STScreenTimeConfiguration)",
       "apple": "STScreenTimeConfigurationObserver(updateQueue:), startObserving(), stopObserving(), configuration; STScreenTimeConfiguration.enforcesChildRestrictions",
-      "bifrost": "springboard/src/shell/screentime/config.rs (Config::load from screentime.ini), springboard/src/shell/passcode.rs",
-      "status": "os",
-      "note": "The shell reads its own configuration. Apps get no observer and no child-restrictions query."
+      "bifrost": "springboard/sdk/src/screen_time.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-screen-time, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell reads its own configuration. Apps get no observer and no child-restrictions query."
     },
     {
       "feature": "Web-history deletion (STWebHistory)",

@@ -66,9 +66,9 @@
     {
       "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",
       "apple": "CWEventDelegate: ssidDidChange, bssidDidChange, linkDidChange, powerDidChange, scanCacheUpdated, modeDidChange, countryCodeDidChange, linkQualityDidChange",
-      "bifrost": "Evt::Status in springboard/proto/src/svc.rs:530 (sent on subscribe and on each change, polled every 250 ms); springboard/src/net/wifi_event.rs (join failures only)",
-      "status": "os",
-      "note": "one status snapshot instead of typed per-event callbacks; no delegate interface for apps"
+      "bifrost": "springboard/sdk/src/wlan_events.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-wlan, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. one status snapshot instead of typed per-event callbacks; no delegate interface for apps"
     },
     {
       "feature": "Link quality and RSSI",
@@ -80,9 +80,9 @@
     {
       "feature": "Keychain helpers for Wi-Fi passwords and EAP identities",
       "apple": "CWKeychainSetWiFiPassword, CWKeychainFindWiFiPassword, CWKeychainSetWiFiEAPUsernameAndPassword, CWKeychainCopyEAPIdentityList and related functions",
-      "bifrost": "springboard/sdk/src/keychain.rs (generic keychain, not Wi-Fi specific); passwords sit in springboard.conf via wifi_config.rs",
-      "status": "gap",
-      "note": "no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"
+      "bifrost": "springboard/sdk/src/wifi_secrets.rs",
+      "status": "partial",
+      "note": "Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"
     },
     {
       "feature": "Network merge and identity utilities (CWMergeNetworks, CWKeychainCopyEAPIdentityList)",

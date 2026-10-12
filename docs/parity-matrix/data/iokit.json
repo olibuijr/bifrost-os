@@ -10,23 +10,23 @@
     {
       "feature": "Device matching and service discovery",
       "apple": "IOServiceGetMatchingServices, IOServiceMatching, IOBSDNameMatching, IOIteratorNext (IOKitLib.h)",
-      "bifrost": "springboard/src/bare/kms.rs (open_first_available, drm_drivers); springboard/src/bare/input.rs:497 (every input device found by capability)",
-      "status": "os",
-      "note": "Enumeration happens inside the shell and daemons with sysfs and /dev scans; no SDK call returns a list of devices by class."
+      "bifrost": "springboard/core/src/device_registry.rs, springboard/sdk/src/device_registry.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-iokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Enumeration happens inside the shell and daemons with sysfs and /dev scans; no SDK call returns a list of devices by class."
     },
     {
       "feature": "Device registry tree and properties",
       "apple": "IORegistryEntryGetProperty, IORegistryEntryCopyPath, IORegistryEntryCopyFromPath (IOKit Functions)",
-      "bifrost": "springboard/src/shell/gpu_page.rs:76 (read_from: vendor, device, driver from /sys/class/drm); springboard/src/shell/battery.rs:254 (health, sysfs power_supply)",
-      "status": "os",
-      "note": "Properties come from sysfs text files. No general registry walk and no typed property API for apps."
+      "bifrost": "springboard/core/src/device_registry.rs (scan_in",
+      "status": "partial",
+      "note": "Wave 5 (w5-iokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Properties come from sysfs text files. No general registry walk and no typed property API for apps."
     },
     {
       "feature": "Device add and remove notifications",
       "apple": "IONotificationPortCreate, IOServiceAddMatchingNotification, IONotificationPortSetDispatchQueue",
-      "bifrost": "springboard/src/bare/input.rs:587 (rescans /dev/input when due); springboard/src/bare/sleep.rs:115 (mains plug changes by polling)",
-      "status": "os",
-      "note": "Changes are found by polling. The shell reacts; no app receives a device-arrival event."
+      "bifrost": "springboard/core/src/device_registry.rs (changes), springboard/sdk/src/device_registry.rs (DeviceWatch)",
+      "status": "partial",
+      "note": "Wave 5 (w5-iokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Changes are found by polling. The shell reacts; no app receives a device-arrival event."
     },
     {
       "feature": "User-client method calls to drivers",

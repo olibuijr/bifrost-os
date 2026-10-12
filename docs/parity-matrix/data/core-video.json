@@ -10,9 +10,9 @@
     {
       "feature": "Pixel buffers (CPU-side image buffers)",
       "apple": "CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferLockBaseAddress, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow",
-      "bifrost": "springboard/src/gpu/desktop.rs (GBM buffer exported as dma-buf, line 74 onward); springboard/render/src/gfx.rs (row-strided pixel view)",
-      "status": "os",
-      "note": "buffers exist in the system layer only; no SDK type wraps a locked base address with a pixel format"
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-video, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. buffers exist in the system layer only; no SDK type wraps a locked base address with a pixel format"
     },
     {
       "feature": "Pixel buffer pool",
@@ -38,9 +38,9 @@
     {
       "feature": "Display timing and vsync (CVDisplayLink, CVTime, CVTimeStamp)",
       "apple": "CVDisplayLinkCreateWithActiveCGDisplays, CVDisplayLinkSetOutputHandler, CVDisplayLinkStart, CVDisplayLinkGetActualOutputVideoRefreshPeriod, CVTimeStamp",
-      "bifrost": "springboard/src/bare/kms.rs (next_vsync, line 1014; DRM flip-complete timestamps); springboard/sdk/src/lib.rs (App::next_wake, line 206)",
-      "status": "os",
-      "note": "vsync prediction is internal to the KMS path; the SDK ticks through next_wake, with no per-display callback and no refresh-period query. docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink"
+      "bifrost": "springboard/sdk/src/display_link.rs",
+      "status": "partial",
+      "note": "Wave 5 (w5-core-video, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. vsync prediction is internal to the KMS path; the SDK ticks through next_wake, with no per-display callback and no refresh-period query. docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink"
     },
     {
       "feature": "GPU presenter and frame submission",
