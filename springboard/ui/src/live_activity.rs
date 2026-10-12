@@ -131,12 +131,13 @@ impl<T: Clone> Registry<T> {
     /// The state of an activity at `now`, or `None` for an unknown id.
     pub fn state(&self, id: u32, now: u64) -> Option<State> {
         let a = self.activities.iter().find(|a| a.id == id)?;
+        // before its end time an ended activity reports the state it had then
         Some(match a.ended {
             Some((_, removed)) if now >= removed => State::Dismissed,
-            Some(_) => State::Ended,
-            None if now < a.start => State::Pending,
-            None if a.content.stale_date.map_or(false, |s| now >= s) => State::Stale,
-            None => State::Active,
+            Some((ended_at, _)) if now >= ended_at => State::Ended,
+            _ if now < a.start => State::Pending,
+            _ if a.content.stale_date.map_or(false, |s| now >= s) => State::Stale,
+            _ => State::Active,
         })
     }
 

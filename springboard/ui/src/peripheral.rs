@@ -793,8 +793,8 @@ mod tests {
         ))
         .unwrap();
         m.connect(CentralId(1), false).unwrap();
-        // "BifrOSt": B0 i1 f2 r3 O4 S5 t6. Offset 2 gives "rOSt".
-        assert_eq!(m.on_read(CentralId(1), svc, name, 2), Ok(Dispatch::Answered(b"rOSt".to_vec())));
+        // "BifrOSt": B0 i1 f2 r3 O4 S5 t6. Offset 2 gives "frOSt".
+        assert_eq!(m.on_read(CentralId(1), svc, name, 2), Ok(Dispatch::Answered(b"frOSt".to_vec())));
         // Offset 7 is the end of the value: an empty answer. Offset 8 is past it.
         assert_eq!(m.on_read(CentralId(1), svc, name, 7), Ok(Dispatch::Answered(Vec::new())));
         assert_eq!(m.on_read(CentralId(1), svc, name, 8), Err(AttError::InvalidOffset));

@@ -36,6 +36,8 @@ pub fn parse(html: &str) -> Vec<Node> {
     let mut stack = vec![Frame { title: String::new(), children: Vec::new() }];
     let mut heading: Option<String> = None;
     let mut collecting: Option<(Target, String)> = None;
+    // the file's outermost list has no heading: its entries belong to the root, not to an untitled folder
+    let mut root_list_seen = false;
     let mut rest = html;
     while let Some(start) = rest.find('<') {
         if let Some((_, text)) = collecting.as_mut() {
@@ -66,6 +68,10 @@ pub fn parse(html: &str) -> Vec<Node> {
                 }
             }
             (false, "dl") => {
+                if heading.is_none() && stack.len() == 1 && !root_list_seen {
+                    root_list_seen = true;
+                    continue;
+                }
                 let title = heading.take().unwrap_or_default();
                 stack.push(Frame { title, children: Vec::new() });
             }
@@ -274,8 +280,9 @@ mod tests {
 
     #[test]
     fn comments_are_skipped_and_unclosed_folders_are_closed_at_the_end() {
-        let html = "<!-- <DL> --> <DL><DT><A HREF='https://q.test/'>Q</A>";
-        assert_eq!(parse(html), vec![folder("", vec![link("Q", "https://q.test/")])]);
+        // the folder F is never closed; it still holds Q, and the commented-out list is ignored
+        let html = "<!-- <DL> --> <DL><DT><H3>F</H3><DL><DT><A HREF='https://q.test/'>Q</A>";
+        assert_eq!(parse(html), vec![folder("F", vec![link("Q", "https://q.test/")])]);
     }
 
     #[test]

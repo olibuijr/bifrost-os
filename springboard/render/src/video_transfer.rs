@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn neutral_chroma_gives_grey_at_luma_126() {
         // (298 * 110 + 128) >> 8 = 128 for every channel when Cb and Cr are 128
-        let y = [126u8];
+        let y = [126u8, 0]; // one row of the 2-byte stride
         let uv = [128u8, 128];
         let src = Nv12 { y: &y, uv: &uv, stride: 2, w: 1, h: 1 };
         let out = transfer_nv12(src, 1, 1, BT601).unwrap();

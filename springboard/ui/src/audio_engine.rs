@@ -377,6 +377,9 @@ mod tests {
         e.prepare();
         e.start().unwrap();
         assert_eq!(e.render(1).unwrap(), vec![0.0, 0.0]);
+        // the graph changes only while the engine is stopped
+        assert_eq!(e.connect(_lonely, OUTPUT, STEREO), Err(EngineError::Running));
+        e.stop();
         let p = e.attach_player(STEREO, vec![0.2, 0.2]).unwrap();
         let g = e.attach_gain(1.0).unwrap();
         e.connect(g, OUTPUT, STEREO).unwrap();

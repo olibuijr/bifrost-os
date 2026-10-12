@@ -326,7 +326,7 @@ mod tests {
         let c = Rect3::new(Point3::new(2.0, -1.0, 0.0), Size3::new(1.0, 1.0, 1.0));
         let hull = a.union(c);
         assert_point(hull.origin, 0.0, -1.0, 0.0);
-        assert_point(hull.max_corner(), 3.0, 1.0, 2.0);
+        assert_point(hull.max_corner(), 3.0, 2.0, 2.0); // y reaches 2 from a
     }
 
     #[test]
