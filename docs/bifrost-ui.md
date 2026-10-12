@@ -1768,3 +1768,20 @@ Apps read them through `kit::appearance`, the mirror of NSWorkspace:
 `appearance::display_options()` returns all three as a `DisplayOptions`. Increase Contrast adds a material outline
 (`ui::MATERIAL_BORDER_CONTRAST`, `ui::material_border()`) and stronger separators (`SEPARATOR_CONTRAST`, `separator_now()`).
 Gap: the shell's materials do not yet all draw `material_border()`; adoption is per surface. Not built or run on Midget.
+
+## View effects and Canvas (SwiftUI drawing and Core Animation shadow parity)
+
+Code: `springboard/render/src/effects.rs` (planes, layers, shadow, mask, group opacity, blend) and
+`springboard/sdk/src/graphics_context.rs` (`Canvas`, `GraphicsContext`, `Path`). CPU, premultiplied RGBA8.
+
+| Apple | BifrOSt |
+|---|---|
+| `shadow(color:radius:x:y:)`, `shadowRadius`, `shadowOffset`, `shadowOpacity` | `effects::Shadow` + `shadow_layer(shape, Shadow)`; Gaussian, sigma = radius / 2, offset rounded to whole pixels; colour alpha is the opacity |
+| shadow spread / `shadowPath` | `Shadow.spread` (round dilate/erode); any shape plane is the path |
+| `cornerCurve = .continuous` | `CornerCurve::Continuous` in `rrect_cover` / `rrect_plane` (superellipse n=5, reach 1.28 r); `Circular` for the plain curve |
+| `mask(alignment:_:)`, `clipShape` | `Layer::mask(&Plane)` multiplies alpha by anti-aliased coverage; `GraphicsContext::clip(path)` |
+| `compositingGroup()`, `opacity` | `Layer::draw_group(src, opacity, mode, dx, dy)` flattens the group first; `GraphicsContext::draw_layer` |
+| `blendMode` | `blend::Mode` (separable modes) via `composite` |
+| `Canvas`, `GraphicsContext` fill, stroke, draw image, draw text, transforms, clip, opacity, blend, layers, shadow | `Canvas::draw`, `GraphicsContext::{fill, stroke, draw_image, draw_text, translate, scale, rotate, clip, set_opacity, set_blend_mode, add_shadow, draw_layer, save, restore}` |
+
+Gaps, decided: no hue/saturation/brightness/colour-matrix filters on views, no variable `blur` modifier in this module (glass blur lives in `render/src/glass.rs`); strokes have round joins and caps only, no dashes or miter limit; `draw_image` and `draw_text` take axis-aligned transforms only; no gradients/shading in `GraphicsContext` yet (use `render::gradient`); no resolved symbols or child views; view-tree integration (`.shadow()` style modifiers on widgets) is not wired because `sdk/src/widgets.rs` is owned by another wave. Not built or run in this round; tests are unrun golden-pixel tests (`effects.rs`, `graphics_context.rs`).
