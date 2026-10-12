@@ -1,5 +1,6 @@
 //! Platform-independent BifrOSt infrastructure.
 pub mod json;
+pub mod geojson;
 pub mod sha256;
 pub mod fsutil;
 pub mod log;
