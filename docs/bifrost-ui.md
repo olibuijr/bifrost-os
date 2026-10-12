@@ -1758,6 +1758,31 @@ Gaps, stated rather than skipped: the output keeps the input size (the reference
 layer, so a retained `View` cannot be blurred as a group yet (the app renders the view to an `Image` first); the filters are CPU
 only (no GPU path); the masked blur reads alpha rather than luminance. Not run on Midget (no builds in this wave).
 
+## Core Image filters for app images (composite, colour matrix, gradient)
+
+Code: `bifrost_render::effect_chain` (named colour filters and `Chain`), `bifrost_render::composite_filters` (blend
+filters, `ColorMatrix`, `gamma`, `linear_gradient`), SDK: `bifrost_app::image_filter`. The shell and apps share the
+render code; the SDK re-exports it, so there is one API.
+
+| Apple | BifrOSt |
+|---|---|
+| `CIFilter(name:)` with input keys, `CIFilter` chaining | `image_filter::Filter::named` + `FilterChain::push` / `apply(&Image)`; inputs by key with `set_clamped` and `input_range` |
+| `CIMultiplyBlendMode` and the blend filters, `CISourceOverCompositing` | `image_filter::blend(fg, bg, Blend::Multiply)`; `Blend::named` takes `sourceOver`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `colorDodge`, `colorBurn`, `hardLight`, `softLight`, `difference`, `exclusion` |
+| `CIColorMatrix` (rVector to aVector, rBias to aBias) | `image_filter::color_matrix(&Image, &ColorMatrix)`; straight RGBA in, clamped to 0..1 |
+| `CIGammaAdjust` (`inputPower`, default 1) | `image_filter::gamma(&Image, power)`; powers at or below zero act as 1 |
+| `CILinearGradient` (point0, point1, color0, color1) | `image_filter::linear_gradient(w, h, p0, p1, color0, color1)`; end colours held outside the segment |
+| `CIExposureAdjust`, `CIHueAdjust`, `CIColorControls`, `CISepiaTone`, `CIVignette`, `CIColorInvert`, `CIColorPosterize` | the named filters `exposure`, `hueRotate`, `saturation`, `contrast`, `sepia`, `vignette`, `invert`, `posterize` |
+| `filterNames(inCategory:)` | `image_filter::filter_names()`, `filters_in(Category)`, `search(query)`, `blend_names()` |
+
+Decisions: composite filters take premultiplied pixels (as `blend::composite` does); colour filters take straight RGBA
+(as `colorfx` does, and as Core Image's colour kernels unpremultiply first). Output keeps the input size. Blend math is
+the W3C separable set in `render/src/blend.rs`; the `Normal` blend is `sourceOver`.
+Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext` or render
+destination; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
+`CIRadialGradient`, checkerboard or stripes generators; the filters are CPU only, with no GPU path. Not built or run on
+Midget in this round (unit tests written, not run). The parity matrix row for "Composite operations and blend modes" and
+"Colour adjustment" can move to partial; parity needs a Midget test.
+
 ### Accessibility display options (Reduce Transparency, Increase Contrast)
 
 Settings > Accessibility > Display holds the toggles (`a11y_reduce_transparency`, `a11y_contrast`, `a11y_button_shapes` in
