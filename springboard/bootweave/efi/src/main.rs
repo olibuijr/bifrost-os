@@ -14,8 +14,6 @@ use uefi::proto::device_path::DevicePath;
 use uefi::proto::loaded_image::LoadedImage;
 use uefi::{cstr16, CStr16};
 
-const LOGO: &[u8] = include_bytes!("../logo.bgrx");
-const LOGO_PX: usize = 160;
 // EFI/BIFROST/boot.cfg is the installed-system contract; EFI/BOOT/cmdline.txt
 // is the removable-media (USB) copy.
 const CMDLINE_FILES: &[&CStr16] = &[
@@ -130,34 +128,20 @@ fn paint() {
     };
     native_mode(&mut gop);
     let (w, hgt) = gop.current_mode_info().resolution();
-    let _ = gop.blt(BltOp::VideoFill {
-        color: BltPixel::new(0, 0, 0),
+    // The boot frame (bootweave-frame) at the native mode: the same pixels the kernel and the window server draw,
+    // then one full-screen blit. Pixels are 0xffRRGGBB (PixelOrder::Bgrx), unpacked for the GOP.
+    let frame = bootweave_frame::Frame::boot(w as u32, hgt as u32);
+    let mut px = alloc::vec![0u32; w * hgt];
+    bootweave_frame::render(&frame, &mut px, w, bootweave_frame::PixelOrder::Bgrx);
+    let buf: Vec<BltPixel> = px
+        .iter()
+        .map(|&p| BltPixel::new((p >> 16) as u8, (p >> 8) as u8, p as u8))
+        .collect();
+    let _ = gop.blt(BltOp::BufferToVideo {
+        buffer: &buf,
+        src: uefi::proto::console::gop::BltRegion::Full,
         dest: (0, 0),
         dims: (w, hgt),
-    });
-    // Layout as fractions of the screen height so the monitor's
-    // scaling of the firmware mode cannot change it: mark 160 px and bar 240x4 px at 1440p,
-    // mark top 110 px above the middle, bar 110 px below it.
-    let l = (LOGO_PX * hgt / 1440).max(16);
-    let px: Vec<BltPixel> = (0..l * l)
-        .map(|i| {
-            let (sx, sy) = ((i % l) * LOGO_PX / l, (i / l) * LOGO_PX / l);
-            let c = &LOGO[(sy * LOGO_PX + sx) * 4..][..4];
-            BltPixel::new(c[2], c[1], c[0])
-        })
-        .collect();
-    let (x, y) = ((w - l) / 2, (hgt / 2).saturating_sub(110 * hgt / 1440));
-    let _ = gop.blt(BltOp::BufferToVideo {
-        buffer: &px,
-        src: uefi::proto::console::gop::BltRegion::Full,
-        dest: (x, y),
-        dims: (l, l),
-    });
-    let (bw, bh) = (240 * hgt / 1440, (4 * hgt / 1440).max(2));
-    let _ = gop.blt(BltOp::VideoFill {
-        color: BltPixel::new(60, 60, 62),
-        dest: ((w - bw) / 2, hgt / 2 + 110 * hgt / 1440),
-        dims: (bw, bh),
     });
 }
 

@@ -102,7 +102,7 @@ fn run() -> std::io::Result<()> {
     use springboard::bootsplash;
     bootsplash::mark("installer-display");
     let mut splash = vec![0u32; w * h];
-    bootsplash::paint(&mut splash, w, h);
+    bootweave_frame::render(&bootweave_frame::Frame::boot(w as u32, h as u32), &mut splash, w, bootweave_frame::PixelOrder::Bgrx);
     {
         let mut dmg = Damage::new(w, h);
         dmg.all();
@@ -164,7 +164,7 @@ fn run() -> std::io::Result<()> {
         let now = sys::now_ms();
         inputs.rescan_if_due(now);
         let mut wait: f64 = if app.animating() { 100.0 } else { 1000.0 };
-        let fading = fade_from.is_none_or(|f| now - f < bootsplash::FADE_MS + 50.0);
+        let fading = fade_from.is_none_or(|f| now - f < bootweave_frame::FADE_MS as f64 + 50.0);
         if fading { wait = wait.min(8.0); }
         if let Some(at) = inputs.next_scan() {
             wait = wait.min((at - now).max(0.0));
@@ -248,8 +248,9 @@ fn run() -> std::io::Result<()> {
             compose(app.background(), &overlay, &mut frame);
             let from = *fade_from.get_or_insert_with(|| { bootsplash::mark("installer-first-ui"); t });
             if fading {
-                bootsplash::fade(&mut frame, &splash, (t - from) / bootsplash::FADE_MS);
-                if t - from >= bootsplash::FADE_MS { bootsplash::mark("installer-faded"); }
+                let fade_k = (t - from) / bootweave_frame::FADE_MS as f64;
+                bootweave_frame::fade(&mut frame, &splash, fade_k as f32);
+                if t - from >= bootweave_frame::FADE_MS as f64 { bootsplash::mark("installer-faded"); }
             }
             let mut dmg = Damage::new(w, h);
             dmg.all();

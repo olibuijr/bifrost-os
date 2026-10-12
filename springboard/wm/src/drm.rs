@@ -68,7 +68,7 @@ struct Boot {
 impl Boot {
     fn new(w: i32, h: i32) -> Self {
         let mut px = vec![0u32; (w * h) as usize];
-        crate::boot::paint(&mut px, w as usize, h as usize);
+        bootweave_frame::render(&bootweave_frame::Frame::boot(w as u32, h as u32), &mut px, w as usize, bootweave_frame::PixelOrder::Bgrx);
         let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
         Boot { splash: MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None), ready_at: None }
     }
