@@ -22,15 +22,20 @@ package_bifrost_files() {
     install -Dm755 "$PC_PORTAL" "$pkgdir/usr/bin/bifrost-portal"
   fi
   # MCP server for agents (docs/bifrost-mcp.md): run over ssh as a stdio server.
-  if [[ -n ${PC_MCP:-} && -x ${PC_MCP} ]]; then
-    install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
-  fi
+  # the units below are enabled on every install: a package without their binaries leaves them failing at exec
+  # (0.6.0/0.6.1 shipped no bifrostd, so nothing behind bifrost-after-desktop.target ever started), so refuse to build one
+  PC_AUDIOD=${PC_AUDIOD:-$(dirname "$binary")/bifrost-audiod}
+  for need in PC_MCP PC_BIFROSTD PC_AUDIOD; do
+    if [[ -z ${!need:-} || ! -x ${!need} ]]; then
+      echo "package-files.sh: $need is not an executable (${!need:-unset}); build it first (tools/pc-publish.py does)" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+  done
+  install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
   # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
   # under, and the trigger that starts the target on the first desktop frame
-  if [[ -n ${PC_BIFROSTD:-} && -x ${PC_BIFROSTD} ]]; then
-    install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
-  fi
+  install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
   install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
   install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
@@ -51,10 +56,7 @@ package_bifrost_files() {
   fi
   install -Dm644 "$here/sysusers-bifrost.conf" "$pkgdir/usr/lib/sysusers.d/bifrost.conf"
   # audio server (docs/audio-architecture.md): own `audio` user, /run/bifrost/audio, CAP_SYS_NICE unit
-  audiod=${PC_AUDIOD:-$(dirname "$binary")/bifrost-audiod}
-  if [[ -x $audiod ]]; then
-    install -Dm755 "$audiod" "$pkgdir/usr/bin/bifrost-audiod"
-  fi
+  install -Dm755 "$PC_AUDIOD" "$pkgdir/usr/bin/bifrost-audiod"
   # latency benches (tools/audio-bench.py midget runs this over ssh)
   audiobench=${PC_AUDIO_BENCH:-$(dirname "$binary")/bifrost-audio-bench}
   if [[ -x $audiobench ]]; then

@@ -146,7 +146,13 @@ def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
     """Run the benches for 'host' or 'midget'. Returns (results, breaches)."""
     midget = mode == "midget"
     if midget:
-        ssh = ["ssh", "midget"]
+        # midget.py's ssh: the lab key and whichever Midget address answers (a fresh install has only the lab NIC, so the
+        # `midget` alias for the VLAN address finds nothing)
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("midget", os.path.join(os.path.dirname(os.path.abspath(__file__)), "midget.py"))
+        lab = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lab)
+        ssh = list(lab.SSH)
         if aloop:
             subprocess.run(ssh + ["modprobe snd-aloop"], check=False)
         card = pick_card(parse_cards(subprocess.run(ssh + ["aplay -l"], capture_output=True, text=True).stdout))

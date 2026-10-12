@@ -51,6 +51,7 @@ build() {
   cargo build --release --locked --features desktop-wayland --bin shell --bin bootweave --bin bifrost-portal --bin bifrost-privd ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-mcp ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrostd ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  cargo build --release --locked -p bifrost-audiod -p bifrost-audio-bench -p bifrost-alsa-plugin ${SPRINGBOARD_CARGO_FLAGS:---offline}
   cargo build --release --locked -p bifrost-app --bin bifrost-log ${SPRINGBOARD_CARGO_FLAGS:---offline}
   # the new stack (docs/graphics-architecture.md): the window server and the chrome clients; shaders are compiled in
   cargo build --release --locked -p bifrost-wm --bin bifrost-wm ${SPRINGBOARD_CARGO_FLAGS:---offline}
@@ -63,7 +64,7 @@ check() {
 
 package() {
   source "$_repo/packaging/arch/package-files.sh"
-  package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
+  PC_MCP="$srcdir/target/release/bifrost-mcp" PC_BIFROSTD="$srcdir/target/release/bifrostd" PC_AUDIOD="$srcdir/target/release/bifrost-audiod" PC_AUDIO_BENCH="$srcdir/target/release/bifrost-audio-bench" PC_ALSA_PLUGIN="$srcdir/target/release/libasound_module_pcm_bifrost.so" package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
   install -Dm755 "$srcdir/target/release/bootweave" "$pkgdir/usr/bin/bifrost-bootweave"
   install -Dm755 "$srcdir/target/release/bifrost-portal" "$pkgdir/usr/bin/bifrost-portal"
   install -Dm755 "$srcdir/target/release/bifrost-privd" "$pkgdir/usr/bin/bifrost-privd"
