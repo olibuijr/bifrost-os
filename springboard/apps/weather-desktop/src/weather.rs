@@ -101,7 +101,9 @@ const MAP_H: f32 = 200.0;
 const MAP_AREA_TOP: f32 = 36.0;
 const MAP_AREA_H: f32 = 124.0;
 const MAP_NOTE_TOP: f32 = 176.0;
-const CONTENT_H: f32 = MAP_TOP + MAP_H + 32.0;
+const FOOTER_TOP: f32 = MAP_TOP + MAP_H + 16.0;
+const FOOTER_LINE: f32 = 18.0;
+const CONTENT_H: f32 = FOOTER_TOP + 2.0 * FOOTER_LINE + 16.0;
 /// Location access for Weather. The shell gives apps no location service yet, so the status stays "not asked".
 const LOCATION: AuthorizationStatus = AuthorizationStatus::NotDetermined;
 /// Grouped cards and fields: the system card radius (`prefs_layout`).
@@ -1297,6 +1299,12 @@ impl Weather {
             }
             let note = ui.fit(&insights::map_note(view.map_type), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(MAP_TOP + MAP_NOTE_TOP));
+        }
+        // data footer: alert availability for the place and the data attribution, under the last card
+        for (i, line) in insights::footer_lines().iter().enumerate() {
+            let text = ui.fit(line, MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+            let mid = p(FOOTER_TOP + FOOTER_LINE / 2.0 + i as f32 * FOOTER_LINE);
+            self.put(&mut c, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), mid);
         }
     }
 
