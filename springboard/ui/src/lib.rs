@@ -755,3 +755,8 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+
+// Media analysis: keyframe, highlight and face grouping models (parity wave 3)
+pub mod keyframe_pick;
+pub mod highlight_rank;
+pub mod face_group;
