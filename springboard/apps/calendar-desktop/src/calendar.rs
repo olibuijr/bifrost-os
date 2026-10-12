@@ -2,6 +2,7 @@
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
 mod chrome;
+pub mod connect;
 pub mod exchange;
 pub mod ics;
 pub mod layout;
@@ -269,6 +270,18 @@ impl Calendar {
 
     pub fn needs_frame(&self) -> bool {
         self.dirty
+    }
+    /// The clock the calendar reads (its local zone offset applies to floating events).
+    pub fn wall(&self) -> Wall {
+        self.wall
+    }
+    /// The store-change generation: each save, delete or import moves it.
+    pub fn store_generation(&self) -> u64 {
+        self.changes.generation()
+    }
+    /// The .ics extras kept beside the store (repeat rules, exceptions), for the shell services.
+    pub fn rich_events(&self) -> ics::IcsCalendar {
+        exchange::load_rich(&exchange::rich_path(&self.path))
     }
     pub fn events(&self) -> &[CalendarEvent] {
         &self.events

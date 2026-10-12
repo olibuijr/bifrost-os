@@ -2,6 +2,9 @@
 
 ## 1.8.4
 
+- Alerts go to the desktop's notification schedule: each alarm of an event is one request with a calendar trigger on its weekday and time. Editing an event replaces its request; deleting it removes the request. Without the schedule service (an older shell), the app posts its alerts itself, as before.
+- Up Next widget: the Notification Centre widget lists today's timed events that have not started, and moves to the next one as each starts. It refreshes when the store changes and at midnight.
+- Dock: the app's Dock tile shows today's day of the month as its badge, through the dock service.
 - Calendar's change counter is now the shared store-change model (the EventKit change notification): every save or import posts one change, and the alert state rescans once per change, however many saves came in between.
 - Alerts, repeats and the calendar store were already wired in the app; this round adds the store-change model and its tests (`tests/store_changes.rs`). Calendar notification triggers and time-zone database pickers are still gaps and are listed in `docs/parity/wire-app-calendar.md`.
 
