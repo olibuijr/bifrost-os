@@ -267,3 +267,4 @@ pub trait App {
         Err(control::RpcError::new(control::METHOD_NOT_FOUND, format!("no method {method}")))
     }
 }
+pub mod definitions;
