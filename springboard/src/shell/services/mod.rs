@@ -20,6 +20,7 @@ pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
 pub mod dock_tile;
+pub mod now_playing;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -60,6 +61,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(bluetooth_service::BluetoothService::default()),
         Box::new(login_items_approval::LoginItemsApproval),
         Box::new(network_path::NetworkPath::new()),
+        Box::new(now_playing::NowPlaying),
     ]
 }
 
