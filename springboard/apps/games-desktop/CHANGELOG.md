@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+
+- 2048 tiles now move. When a slide merges two tiles, the merged tile swells a little and settles back; the new tile grows in from half size. Each tile's motion is a short sequence of animation steps from the shared animation model, so the timing is the same one the rest of the desktop uses.
+- Tiles that only slide to the edge still jump to their new cell. Sliding them smoothly, fading tiles and zooming the board are not in this release.
+- Reduced effects (Low Power Mode, or a hot device) turn the tile motion off, so the board updates at once.
+- The Games details dump reports how many tiles are moving, so a test can check the motion.
+
 ## 1.4.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.

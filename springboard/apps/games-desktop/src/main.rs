@@ -6,6 +6,7 @@ mod games;
 mod phase;
 mod solitaire;
 mod system;
+mod tile_motion;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;
