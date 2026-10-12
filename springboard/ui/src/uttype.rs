@@ -164,6 +164,67 @@ pub fn mime(id: &str) -> &'static str {
     }
 }
 
+/// `UTTagClass`: the kinds of tag a type can carry. The table records filename extensions and MIME types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TagClass {
+    FilenameExtension,
+    MimeType,
+}
+
+/// `UTType.tags[class]`: the tags a type declares itself, not the ones it inherits. A type with no declared tag of
+/// that class gives an empty list (use `mime` for the inherited MIME type).
+pub fn tags(id: &str, class: TagClass) -> Vec<&'static str> {
+    match class {
+        TagClass::FilenameExtension => extensions(id).to_vec(),
+        TagClass::MimeType => entry(id).map(|e| e.mime).filter(|m| !m.is_empty()).into_iter().collect(),
+    }
+}
+
+/// The type that declares `tag` for `class`: an extension (case-insensitive, no dot) or a MIME type (parameters
+/// ignored). `None` when no type declares it.
+pub fn type_for_tag(class: TagClass, tag: &str) -> Option<&'static str> {
+    match class {
+        TagClass::FilenameExtension if tag.contains('.') || tag.is_empty() => None,
+        TagClass::FilenameExtension => type_for_extension(tag),
+        TagClass::MimeType => type_for_mime(tag),
+    }
+}
+
+#[cfg(test)]
+mod tag_class_tests {
+    use super::*;
+
+    #[test]
+    fn a_type_lists_its_own_extensions_and_mime_type() {
+        assert_eq!(tags("public.jpeg", TagClass::FilenameExtension), vec!["jpg", "jpeg"]);
+        assert_eq!(tags("public.png", TagClass::MimeType), vec!["image/png"]);
+        assert_eq!(tags("public.image", TagClass::MimeType), vec!["image/*"]);
+        assert!(tags("public.image", TagClass::FilenameExtension).is_empty());
+    }
+
+    #[test]
+    fn inherited_mime_types_are_not_declared_tags() {
+        // The abstract audiovisual type declares no MIME type; `mime` falls back to the parent's.
+        assert!(tags("public.audiovisual-content", TagClass::MimeType).is_empty());
+        assert_eq!(mime("public.audiovisual-content"), "application/octet-stream");
+    }
+
+    #[test]
+    fn a_tag_maps_back_to_its_type() {
+        assert_eq!(type_for_tag(TagClass::FilenameExtension, "JPG"), Some("public.jpeg"));
+        assert_eq!(type_for_tag(TagClass::MimeType, "IMAGE/PNG; charset=x"), Some("public.png"));
+        assert_eq!(type_for_tag(TagClass::MimeType, "image/*"), Some("public.image"));
+    }
+
+    #[test]
+    fn a_dotted_or_unknown_tag_names_no_type() {
+        assert_eq!(type_for_tag(TagClass::FilenameExtension, "a.jpg"), None);
+        assert_eq!(type_for_tag(TagClass::FilenameExtension, ""), None);
+        assert_eq!(type_for_tag(TagClass::FilenameExtension, "zzz"), None);
+        assert_eq!(type_for_tag(TagClass::MimeType, "x/unknown"), None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
