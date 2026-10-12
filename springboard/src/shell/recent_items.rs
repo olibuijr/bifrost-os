@@ -8,6 +8,7 @@ use bifrost_ui::shared_list::SharedList;
 /// Recents kept in the list.
 pub const CAPACITY: usize = 10;
 /// Recents listed in the system menu.
+#[cfg(feature = "desktop-wayland")]
 pub const SHOWN: usize = 10;
 
 pub fn new() -> SharedList {
@@ -26,6 +27,7 @@ pub fn note(list: &mut SharedList, app: AppId) {
 }
 
 /// The app behind the `n`-th entry, newest first. None past the end or when the app is no longer in the catalogue.
+#[cfg(any(feature = "desktop-wayland", test))]
 pub fn app_at(list: &SharedList, n: usize) -> Option<AppId> {
     let items = list.entries();
     let item = items.get(n)?;
@@ -39,16 +41,19 @@ impl super::Shell {
     }
 
     /// The titles listed in the system menu, newest first, at most `SHOWN`.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn recent_titles(&self) -> Vec<String> {
         self.recent_list.entries().into_iter().take(SHOWN).map(|i| i.title.clone()).collect()
     }
 
     /// The app behind the `n`-th listed entry.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn recent_app_at(&self, n: usize) -> Option<AppId> {
         app_at(&self.recent_list, n)
     }
 
     /// Clear Menu: empties the recent apps.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn recent_clear(&mut self) {
         self.recent_list.clear_recents();
     }
