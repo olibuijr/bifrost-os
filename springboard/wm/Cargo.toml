@@ -33,6 +33,10 @@ bifrost-layers = { path = "../layers", features = ["server"] }
 bootweave-frame = { path = "../bootweave/frame" }
 # ext-background-effect-v1 lives in the staging set
 wayland-protocols = { version = "0.32", features = ["server", "staging"] }
+# bifrost_material_v1 (protocol/bifrost-material-v1.xml), generated in src/bifrost_material.rs
+wayland-scanner = "0.31"
+wayland-backend = "0.3"
+wayland-server = "0.31"
 
 [dev-dependencies]
 wayland-client = "0.31"

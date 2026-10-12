@@ -114,12 +114,15 @@ struct Entry {
 #[derive(PartialEq)]
 struct Signature {
     output: (i32, i32),
+    /// The recipe's saturation, as bits (a recipe change rebuilds the backdrop).
+    saturation: u32,
     below: Vec<(Id, CommitCounter, Rectangle<i32, Physical>)>,
 }
 
-fn signature<E: Element>(output: Size<i32, Physical>, below: &[E]) -> Signature {
+fn signature<E: Element>(output: Size<i32, Physical>, below: &[E], saturation: f32) -> Signature {
     Signature {
         output: (output.w, output.h),
+        saturation: saturation.to_bits(),
         below: below.iter().map(|e| (e.id().clone(), e.current_commit(), e.geometry(1.0f64.into()))).collect(),
     }
 }
@@ -150,13 +153,14 @@ impl Glass {
         output: Size<i32, Physical>,
         below: &[E],
         regions: &[Rectangle<i32, Logical>],
+        saturation: f32,
     ) -> Result<Vec<TextureRenderElement<GlesTexture>>, GlesError> {
         if regions.is_empty() {
             self.entries.remove(&key);
             return Ok(Vec::new());
         }
         let (bw, bh) = ((output.w / DIV).max(2), (output.h / DIV).max(2));
-        let sig = signature(output, below);
+        let sig = signature(output, below, saturation);
         if let Some(entry) = self.entries.get(&key) {
             if entry.sig == sig {
                 return Ok(Self::elements(entry, regions, entry.src_size, output));
@@ -188,7 +192,7 @@ impl Glass {
                 let full = [Rectangle::from_size(size)];
                 let half = [0.5 / w as f32, 0.5 / h as f32];
                 let src_rect: Rectangle<f64, Buffer> = Rectangle::from_size((src_size.0 as f64, src_size.1 as f64).into());
-                let sat = if i == last { SATURATION } else { 1.0 };
+                let sat = if i == last { saturation } else { 1.0 };
                 let uniforms = [Uniform::new("halfpixel", half), Uniform::new("saturation", sat)];
                 let (program, uniforms) = if going_down { (&self.down, &uniforms[..1]) } else { (&self.up, &uniforms[..]) };
                 frame.render_texture_from_to(&src, src_rect, full[0], &full, &[], Transform::Normal, 1.0, Some(program), uniforms)?;

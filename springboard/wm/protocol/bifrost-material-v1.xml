@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="bifrost_material_v1">
+  <copyright>
+    Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/window-server.md, "Materials").
+  </copyright>
+
+  <interface name="bifrost_material_manager_v1" version="1">
+    <description summary="window server materials per region">
+      Extends ext-background-effect-v1 with a material kind per region. A region without a kind keeps the plain
+      blur of ext-background-effect-v1. The window server owns the recipe (blur, saturation, tint, active state).
+    </description>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_material">
+      <description summary="make a material object for a surface">
+        A surface has at most one material object; asking again is a protocol error.
+      </description>
+      <arg name="id" type="new_id" interface="bifrost_material_surface_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+
+    <enum name="error">
+      <entry name="material_exists" value="0"/>
+    </enum>
+  </interface>
+
+  <interface name="bifrost_material_surface_v1" version="1">
+    <description summary="materials of one surface">
+      All requests are double-buffered and applied on the surface's next wl_surface.commit. Regions are in surface
+      coordinates. When a surface has any material region, its ext-background-effect-v1 blur region is ignored.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="remove all materials from the next commit on"/>
+    </request>
+
+    <enum name="kind">
+      <entry name="titlebar" value="0"/>
+      <entry name="menu" value="1"/>
+      <entry name="popover" value="2"/>
+      <entry name="sidebar" value="3"/>
+      <entry name="header_view" value="4"/>
+      <entry name="sheet" value="5"/>
+      <entry name="window_background" value="6"/>
+      <entry name="hud_window" value="7"/>
+      <entry name="full_screen_ui" value="8"/>
+      <entry name="tool_tip" value="9"/>
+      <entry name="content_background" value="10"/>
+      <entry name="under_window_background" value="11"/>
+      <entry name="under_page_background" value="12"/>
+      <entry name="glass_regular" value="13"/>
+      <entry name="glass_clear" value="14"/>
+    </enum>
+
+    <enum name="state">
+      <entry name="follows_window" value="0" summary="active when the window is, else the inactive fallback"/>
+      <entry name="active" value="1"/>
+      <entry name="inactive" value="2"/>
+    </enum>
+
+    <enum name="blending">
+      <entry name="behind_window" value="0" summary="everything composited below the window, wallpaper included"/>
+      <entry name="within_window" value="1" summary="only the surface's own content below the region"/>
+    </enum>
+
+    <enum name="error">
+      <entry name="invalid_kind" value="0"/>
+      <entry name="invalid_state" value="1"/>
+      <entry name="invalid_blending" value="2"/>
+    </enum>
+
+    <request name="clear">
+      <description summary="drop all material regions (pending)"/>
+    </request>
+
+    <request name="add_region">
+      <description summary="add a material region (pending)">
+        The region is resolved like ext-background-effect-v1 (added minus subtracted rectangles). Corner radii are in
+        surface-local logical pixels and round the outline of the region's bounding box.
+      </description>
+      <arg name="region" type="object" interface="wl_region"/>
+      <arg name="kind" type="uint"/>
+      <arg name="state" type="uint"/>
+      <arg name="blending" type="uint"/>
+      <arg name="emphasized" type="uint" summary="0 or 1: the selected or emphasised variant of the material"/>
+      <arg name="radius_top_left" type="uint"/>
+      <arg name="radius_top_right" type="uint"/>
+      <arg name="radius_bottom_right" type="uint"/>
+      <arg name="radius_bottom_left" type="uint"/>
+    </request>
+  </interface>
+</protocol>
