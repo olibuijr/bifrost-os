@@ -167,15 +167,17 @@ pub(crate) fn trash_now(sources: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx
         }
         let current = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let _ = tx.send(Event::Progress(Progress { items_done: n, items_total: sources.len(), current, ..Default::default() }));
-        match trash::discard(path, bin, trash::now_secs()) {
-            Ok(stored) => {
+        // the item's folder is held for writing, so another coordinating app never sees it half moved
+        match crate::coordinate::writing(path, || trash::discard(path, bin, trash::now_secs())) {
+            Ok(Ok(stored)) => {
                 if let (Some(name), Some(parent)) = (stored.file_name(), path.parent()) {
                     record_origin(bin, &name.to_string_lossy(), parent);
                 }
                 report.moved.push((path.clone(), stored.clone()));
                 report.done.push(path.clone());
             }
-            Err(e) => report.failed.push((path.clone(), batch::friendly(&e))),
+            Ok(Err(e)) => report.failed.push((path.clone(), batch::friendly(&e))),
+            Err(e) => report.failed.push((path.clone(), crate::coordinate::message(&e))),
         }
     }
     prune_origins(bin);
