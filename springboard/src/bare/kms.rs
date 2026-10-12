@@ -487,21 +487,34 @@ fn pci_display_without_driver() -> bool {
 
 /// Optional fixed mode for hardware-like emulators: do not let a frontend window's
 /// dynamically preferred size alter the panel being tested.
-fn select_mode(modes: &[ModeInfo], requested: Option<&str>) -> io::Result<ModeInfo> {
+fn select_mode(modes: &[ModeInfo], requested: Option<&str>, max_refresh: bool) -> io::Result<ModeInfo> {
     if let Some(requested) = requested {
         let (w, h, hz) = virtual_size(Some(requested)).ok_or_else(|| io::Error::other("invalid SPRINGBOARD_MODE (expected WxH@Hz)"))?;
         return modes.iter().find(|m| m.hdisplay as usize == w && m.vdisplay as usize == h && m.vrefresh == hz)
             .copied().ok_or_else(|| io::Error::other(format!("display mode {requested} unavailable")));
     }
-    // the panel's native size (the preferred mode), at the highest refresh rate it offers at that size
+    // The preferred mode is the one the firmware starts in and the compositor picks: keeping it means no modeset
+    // (every mode change makes the monitor retrain its link, a black gap). The fastest refresh at the native size is
+    // opt-in (`refresh=max` in /etc/bifrost/display.conf).
     let native = modes.iter().find(|m| m.kind & 8 != 0).or(modes.first()).ok_or_else(|| io::Error::other("no display modes"))?;
+    if !max_refresh {
+        return Ok(*native);
+    }
     let best = modes.iter().filter(|m| m.hdisplay == native.hdisplay && m.vdisplay == native.vdisplay).max_by_key(|m| (m.vrefresh, m.kind & 8 != 0));
     Ok(*best.unwrap_or(native))
 }
 
+/// `refresh=max` in /etc/bifrost/display.conf (the same switch the session reads): the fastest refresh at native size.
+fn refresh_max_requested() -> bool {
+    std::fs::read_to_string("/etc/bifrost/display.conf").is_ok_and(|c| c.split_whitespace().any(|t| t == "refresh=max"))
+}
+
 /// The inherited mode stays only when it is the selected size at the selected refresh or faster.
+/// Identical timings count as the same mode whatever the rounded `vrefresh` says (59.951 Hz reads as 60).
 fn keeps_inherited(inherited: &ModeInfo, selected: &ModeInfo) -> bool {
-    inherited.hdisplay == selected.hdisplay && inherited.vdisplay == selected.vdisplay && inherited.vrefresh >= selected.vrefresh
+    let same_timings = inherited.clock != 0 && (inherited.clock, inherited.htotal, inherited.vtotal, inherited.hdisplay, inherited.vdisplay)
+        == (selected.clock, selected.htotal, selected.vtotal, selected.hdisplay, selected.vdisplay);
+    same_timings || inherited.hdisplay == selected.hdisplay && inherited.vdisplay == selected.vdisplay && inherited.vrefresh >= selected.vrefresh
 }
 
 pub struct Display {
@@ -618,7 +631,7 @@ impl Display {
             c.prop_values_ptr = vals.as_mut_ptr() as u64;
             unsafe { ioctl_ptr(fd, iowr::<GetConnector>(b'd', 0xa7), &mut c) }?;
             let requested = std::env::var("SPRINGBOARD_MODE").ok();
-            let mode = select_mode(&modes, requested.as_deref())?;
+            let mode = select_mode(&modes, requested.as_deref(), refresh_max_requested())?;
             let enc_id = if c.encoder_id != 0 { c.encoder_id } else { encs2.first().copied().unwrap_or(0) };
             let mut e = GetEncoder { encoder_id: enc_id, ..Default::default() };
             unsafe { ioctl_ptr(fd, iowr::<GetEncoder>(b'd', 0xa6), &mut e) }?;
@@ -628,7 +641,7 @@ impl Display {
                 unsafe { ioctl_ptr(fd, iowr::<GetProperty>(b'd', 0xaa), &mut p) }.is_ok() && p.is_named("DPMS")
             });
             // Keep the mode the loader set and the driver inherited (fastboot) when it is already the best one.
-            // The loader sets the preferred 60 Hz mode, so a panel that also offers 165 Hz needs one modeset.
+            // The loader sets the preferred mode and so does the selection (unless refresh=max): no modeset.
             let mut active = Crtc { crtc_id: crtc, ..Default::default() };
             let inherited = requested.is_none()
                 && unsafe { ioctl_ptr(fd, iowr::<Crtc>(b'd', 0xa1), &mut active) }.is_ok()
@@ -1142,19 +1155,21 @@ mod tests {
             ModeInfo { hdisplay: 2536, vdisplay: 1363, vrefresh: 60, kind: 8, ..Default::default() },
             ModeInfo { hdisplay: 1200, vdisplay: 1920, vrefresh: 60, ..Default::default() },
         ];
-        assert_eq!(select_mode(&modes, None).unwrap().hdisplay, 2536);
+        assert_eq!(select_mode(&modes, None, false).unwrap().hdisplay, 2536);
         let hz = [
             ModeInfo { hdisplay: 1920, vdisplay: 1080, vrefresh: 60, kind: 8, ..Default::default() },
             ModeInfo { hdisplay: 1920, vdisplay: 1080, vrefresh: 144, ..Default::default() },
             ModeInfo { hdisplay: 1280, vdisplay: 720, vrefresh: 240, ..Default::default() },
         ];
-        let best = select_mode(&hz, None).unwrap();
-        assert_eq!((best.hdisplay, best.vrefresh), (1920, 144), "max refresh at the native size, never a lower resolution");
+        let pref = select_mode(&hz, None, false).unwrap();
+        assert_eq!((pref.hdisplay, pref.vrefresh), (1920, 60), "no request: the preferred mode, so the firmware's mode is kept");
+        let best = select_mode(&hz, None, true).unwrap();
+        assert_eq!((best.hdisplay, best.vrefresh), (1920, 144), "refresh=max: max refresh at the native size, never a lower resolution");
         let fixed = select_mode(&modes, Some("1200x1920@60")).unwrap();
         assert_eq!((fixed.hdisplay, fixed.vdisplay, fixed.vrefresh), (1200, 1920, 60));
         assert!(select_mode(&modes, Some("1200x1920@75")).is_err());
         assert!(select_mode(&modes, Some("bad")).is_err());
-        assert!(select_mode(&[], None).is_err());
+        assert!(select_mode(&[], None, false).is_err());
     }
 
     #[test]
@@ -1164,6 +1179,8 @@ mod tests {
         assert!(!keeps_inherited(&loader, &fast), "the 60 Hz boot mode must be replaced by 165 Hz");
         assert!(keeps_inherited(&fast, &fast));
         assert!(keeps_inherited(&fast, &loader), "already faster than the selection: no modeset");
+        let a = ModeInfo { clock: 241_500, htotal: 2720, vtotal: 1481, vrefresh: 60, ..loader };
+        assert!(keeps_inherited(&a, &ModeInfo { vrefresh: 59, ..a }), "same timings are the same mode");
         let other_size = ModeInfo { hdisplay: 1920, vdisplay: 1080, vrefresh: 165, ..Default::default() };
         assert!(!keeps_inherited(&loader, &other_size), "a different size is always a modeset");
     }

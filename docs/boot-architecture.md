@@ -163,6 +163,14 @@ Then one 450 ms fade, and the `desktop-faded` mark. No partial desktop is ever s
 - A held key in the loader (Shift) shows the boot options in the boot frame's style; a held key combination (Ctrl+V)
   shows the verbose boot for support.
 
+### One mode, no console
+
+Owner report: boot blinked and was not smooth. Midget's journal (2560x1440 DP monitor, preferred mode 59.951 Hz, also 165 Hz) showed two modesets and a console take-over:
+
+- 4.35 s `fbcon: Taking over console` right after `Deferring console take-over`. Deferred take-over only ends when something writes to the console. The writer is not visible in the code (the cmdline is already `quiet loglevel=3`, getty@tty1 is masked, no script writes to tty1; `springboard.service` only attaches tty1 as stdin with `TTYReset`/`TTYVHangup`, which run after this point). So the cmdline now adds `fbcon=map:9`: fbcon maps to a framebuffer that does not exist and never binds to the display, whoever writes. The cost is that tty1 shows nothing on a recovery boot; use ssh or serial, or drop the token from the boot line. Unverified on hardware.
+- 5.5 s Bootweave chose the fastest refresh (165 Hz) and modeset away from the firmware's 60 Hz mode. `select_mode` now picks the preferred mode (the firmware's), so `keeps_inherited` keeps it and no modeset happens. `refresh=max` in `/etc/bifrost/display.conf` restores the fastest refresh (the session script reads the same switch). Inherited and selected modes count as equal when their timings match, since `vrefresh` rounds 59.951 to 60.
+- 6.9 s labwc/wlroots takes the connector's preferred mode. Bootweave now ends on that same mode, so the compositor's first commit is not a modeset. wlroots has no setting to keep the current mode; it always applies the preferred one unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
+
 ### Symmetric shutdown
 
 Shutdown and restart fade the desktop back to the boot frame, stop services under a 2 s budget, and leave the frame
