@@ -2,6 +2,7 @@
 
 pub mod background_effect;
 pub mod boot;
+pub mod decorations;
 #[cfg(feature = "drm")]
 pub mod drm;
 pub mod glass;
