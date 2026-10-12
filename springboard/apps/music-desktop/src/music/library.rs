@@ -2,15 +2,35 @@
 //! and the Songs / Albums / Artists views built from them, sorted the way
 //! bifrost sorts (case-insensitive, leading articles ignored).
 
+use bifrost_app::controls::media_changes::Stamp;
+use bifrost_app::controls::media_sources::{LoadOptions, MediaSource, SourceType};
+use bifrost_app::defaults::UserDefaults;
+use bifrost_core::smf::Smf;
 use springboard::media::audiofile::{self, Tags};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 
 /// A cover bigger than this is not kept in memory.
 const MAX_COVER: usize = 2 << 20;
+/// A MIDI file bigger than this is skipped (its events are read whole).
+const MAX_MIDI: u64 = 16 << 20;
 pub const UNKNOWN_ARTIST: &str = "Unknown Artist";
 pub const UNKNOWN_ALBUM: &str = "Unknown Album";
+/// The artist a MIDI file is listed under: it has no tags, and it plays no sound yet.
+pub const MIDI_ARTIST: &str = "MIDI file";
+
+/// The defaults keys the library load options are read from (`library_load_options`). A folder source is a folder
+/// directly inside a music root; the include and exclude lists hold one folder path per line.
+pub const PREF_LOAD_FOLDERS: &str = "music.library.loadFolders";
+pub const PREF_INCLUDE: &str = "music.library.include";
+pub const PREF_EXCLUDE: &str = "music.library.exclude";
+
+/// Whether a file is a Standard MIDI File by its extension.
+pub fn is_midi(path: &Path) -> bool {
+    matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("mid") | Some("midi"))
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Song {
@@ -27,6 +47,13 @@ pub struct Song {
     pub has_cover: bool,
     /// when the file was last modified, Unix seconds ("date added")
     pub added: u64,
+}
+
+impl Song {
+    /// A MIDI file: listed and timed, but the audio service has no decoder for it, so it is never queued.
+    pub fn is_midi(&self) -> bool {
+        is_midi(&self.path)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -82,37 +109,121 @@ pub fn sort_key(name: &str) -> String {
 
 /// Every playable file under `roots`, recursively, in path order.
 pub fn find_files(roots: &[PathBuf]) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
+    find_files_except(roots, &[])
+}
+
+/// Like `find_files`, but the folders in `skip` (and what is inside them) are left out.
+pub fn find_files_except(roots: &[PathBuf], skip: &[PathBuf]) -> Vec<PathBuf> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>, depth: usize, skip: &[PathBuf]) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
         let mut entries: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
         entries.sort();
         for p in entries {
             if p.is_dir() {
-                if depth < 8 && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
-                    walk(&p, out, depth + 1);
+                if depth < 8 && !skip.contains(&p) && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                    walk(&p, out, depth + 1, skip);
                 }
-            } else if audiofile::format_of(&p).is_some() {
+            } else if audiofile::format_of(&p).is_some() || is_midi(&p) {
                 out.push(p);
             }
         }
     }
     let mut out = Vec::new();
     for r in roots {
-        walk(r, &mut out, 0);
+        walk(r, &mut out, 0, skip);
     }
     out
 }
 
+/// The folders directly inside `root`, visible ones only, in path order.
+fn child_folders(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else { return Vec::new() };
+    let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir() && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))).collect();
+    dirs.sort();
+    dirs
+}
+
+/// The folders to walk and the folders to leave out, for each music root under the load options. The root is a file
+/// source of its own, and each folder directly inside it is a folder source. A kept root is walked with the dropped
+/// folders skipped. A dropped root is not walked, but each kept folder inside it is.
+pub fn plan(roots: &[PathBuf], opts: &LoadOptions) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut walk = Vec::new();
+    let mut skip = Vec::new();
+    for root in roots {
+        let folders = child_folders(root);
+        let mut sources: Vec<MediaSource> = MediaSource::new(&root.to_string_lossy(), SourceType::Audio, false).into_iter().collect();
+        for f in &folders {
+            sources.extend(MediaSource::new(&f.to_string_lossy(), SourceType::Audio, true));
+        }
+        let kept: Vec<PathBuf> = opts.filter(&sources).into_iter().map(|s| PathBuf::from(s.identifier)).collect();
+        if kept.iter().any(|k| k == root) {
+            walk.push(root.clone());
+            skip.extend(folders.iter().filter(|f| !kept.contains(*f)).cloned());
+        } else {
+            walk.extend(folders.iter().filter(|f| kept.contains(*f)).cloned());
+        }
+    }
+    (walk, skip)
+}
+
+/// The library load options from the app's defaults. An absent folders key loads folders; an absent include key
+/// applies no include filter; the exclude list is empty when the key is absent.
+pub fn library_load_options(d: &UserDefaults) -> LoadOptions {
+    let folders = d.contains(PREF_LOAD_FOLDERS).then(|| d.bool(PREF_LOAD_FOLDERS));
+    let include = d.contains(PREF_INCLUDE).then(|| path_lines(&d.string(PREF_INCLUDE).unwrap_or_default()));
+    let exclude = path_lines(&d.string(PREF_EXCLUDE).unwrap_or_default());
+    LoadOptions::from_keys(folders, include, Some(exclude))
+}
+
+/// One path per line; blank lines are dropped and each path is trimmed.
+fn path_lines(text: &str) -> Vec<String> {
+    text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect()
+}
+
+/// The change stamps of `files`: the identifier is the path, and the revision moves when the file's modification time
+/// or size changes.
+pub fn stamps_of(files: &[PathBuf]) -> Vec<Stamp> {
+    files.iter().map(|p| Stamp { id: p.to_string_lossy().into_owned(), revision: revision_of(p) }).collect()
+}
+
+fn revision_of(path: &Path) -> u64 {
+    match std::fs::metadata(path) {
+        Ok(m) => {
+            let modified_ns = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos() as u64);
+            modified_ns.wrapping_add(m.len())
+        }
+        Err(_) => 0,
+    }
+}
+
+/// Modification time in Unix seconds ("date added"), 0 when unknown.
+fn added_of(path: &Path) -> u64 {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs())
+}
+
+/// A MIDI file: its length is the sequence's length from the Standard MIDI File reader. It has no tags and no
+/// cover. A file that is too big or does not parse is skipped.
+fn scan_midi(path: &Path) -> Option<Scanned> {
+    if std::fs::metadata(path).ok()?.len() > MAX_MIDI {
+        return None;
+    }
+    let smf = Smf::parse(&std::fs::read(path).ok()?).ok()?;
+    let tags = Tags { artist: Some(MIDI_ARTIST.into()), ..Tags::default() };
+    Some(Scanned { path: path.to_path_buf(), tags, duration_ms: Some(smf.duration() * 1000.0), has_cover: false, added: added_of(path) })
+}
+
 /// Reads one file's tags and length; a file that will not open is skipped.
 pub fn scan_file(path: &Path) -> Option<Scanned> {
+    if is_midi(path) {
+        return scan_midi(path);
+    }
     let mut tags = audiofile::read_tags(path).unwrap_or_default();
     if tags.cover.as_ref().is_some_and(|c| c.len() > MAX_COVER) {
         tags.cover = None;
     }
     let duration_ms = audiofile::open(path).ok().and_then(|d| d.duration_ms());
-    let added = std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
     let has_cover = tags.cover.is_some();
-    Some(Scanned { path: path.to_path_buf(), tags, duration_ms, has_cover, added })
+    Some(Scanned { path: path.to_path_buf(), tags, duration_ms, has_cover, added: added_of(path) })
 }
 
 /// Scans every file, keeping one cover per album: later songs of an album
@@ -319,5 +430,102 @@ mod tests {
         assert_eq!(lib.albums.len(), 2, "same album name, different album artists");
         assert_eq!(lib.artists.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["Fixture Artist", "Various"]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A format 0 file: 480 ticks per quarter, one note on at tick 0, its note off and the end of the track at tick
+    /// 960. At the default tempo (120 beats per minute) 960 ticks are two quarters, so the length is 1.0 s.
+    fn midi_bytes() -> Vec<u8> {
+        let mut b = b"MThd".to_vec();
+        b.extend([0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xE0]);
+        b.extend(b"MTrk");
+        b.extend([0, 0, 0, 13]);
+        b.extend([0x00, 0x90, 0x3C, 0x40, 0x87, 0x40, 0x80, 0x3C, 0x00, 0x00, 0xFF, 0x2F, 0x00]);
+        b
+    }
+
+    #[test]
+    fn midi_files_are_recognised_by_extension() {
+        assert!(is_midi(Path::new("/m/Song.MID")));
+        assert!(is_midi(Path::new("b.midi")));
+        assert!(!is_midi(Path::new("c.mp3")));
+        assert!(!is_midi(Path::new("noext")));
+    }
+
+    #[test]
+    fn a_midi_file_is_listed_with_its_sequence_length_and_one_that_does_not_parse_is_skipped() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-music-midi");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::write(dir.join("riff.mid"), midi_bytes()).unwrap();
+        std::fs::write(dir.join("a/Bad.midi"), b"not midi").unwrap();
+        std::fs::write(dir.join("a/two.mid"), midi_bytes()).unwrap();
+        let files = find_files(&[dir.clone()]);
+        assert_eq!(files, [dir.join("a/Bad.midi"), dir.join("a/two.mid"), dir.join("riff.mid")]);
+        let scanned: Vec<Scanned> = files.iter().filter_map(|p| scan_file(p)).collect();
+        assert_eq!(scanned.len(), 2, "the file that does not parse is skipped");
+        assert_eq!(scanned[0].tags.artist.as_deref(), Some(MIDI_ARTIST));
+        assert!((scanned[0].duration_ms.unwrap() - 1000.0).abs() < 1e-6);
+        let lib = Library::build(scanned);
+        assert_eq!(lib.songs[0].title, "riff", "the title comes from the file name");
+        assert!(lib.songs[0].is_midi());
+        assert_eq!(lib.songs[0].artist, MIDI_ARTIST);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_load_options_choose_the_folders_a_library_walks() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-music-plan");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::create_dir_all(dir.join("b")).unwrap();
+        std::fs::write(dir.join("top.mid"), midi_bytes()).unwrap();
+        std::fs::write(dir.join("a/one.mid"), midi_bytes()).unwrap();
+        std::fs::write(dir.join("b/two.mid"), midi_bytes()).unwrap();
+        let roots = [dir.clone()];
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        let load = |opts: &LoadOptions| {
+            let (walk, skip) = plan(&roots, opts);
+            find_files_except(&walk, &skip)
+        };
+        // everything: the root is walked, folders in path order
+        assert_eq!(load(&LoadOptions::all()), [a.join("one.mid"), b.join("two.mid"), dir.join("top.mid")]);
+        // folder a excluded: the root is walked with a skipped
+        let no_a = LoadOptions::from_keys(None, None, Some(vec![a.to_string_lossy().into_owned()]));
+        assert_eq!(load(&no_a), [b.join("two.mid"), dir.join("top.mid")]);
+        // folders off: only the root's own files
+        assert_eq!(load(&LoadOptions::from_keys(Some(false), None, None)), [dir.join("top.mid")]);
+        // only b included: the root is dropped, and b is walked on its own
+        let only_b = LoadOptions::from_keys(None, Some(vec![b.to_string_lossy().into_owned()]), None);
+        assert_eq!(load(&only_b), [b.join("two.mid")]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stamps_name_each_file_and_move_when_it_changes() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-music-stamps");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("x.mid"), midi_bytes()).unwrap();
+        let files = vec![dir.join("x.mid")];
+        let first = stamps_of(&files);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].id, dir.join("x.mid").to_string_lossy().into_owned());
+        assert_eq!(stamps_of(&files), first, "an unchanged file keeps its revision");
+        std::fs::write(dir.join("x.mid"), b"a longer body than the first one").unwrap();
+        assert_ne!(stamps_of(&files)[0].revision, first[0].revision);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_library_load_keys_are_read_from_the_defaults() {
+        let mut d = UserDefaults::memory();
+        assert_eq!(library_load_options(&d), LoadOptions::all());
+        d.set_string(PREF_EXCLUDE, "/m/a\n  /m/b \n\n");
+        d.set_bool(PREF_LOAD_FOLDERS, false);
+        d.set_string(PREF_INCLUDE, "/m/a");
+        assert_eq!(
+            library_load_options(&d),
+            LoadOptions { load_folders: false, include: Some(vec!["/m/a".into()]), exclude: vec!["/m/a".into(), "/m/b".into()] }
+        );
     }
 }
