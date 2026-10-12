@@ -1,0 +1,49 @@
+{
+ "category": "apps",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Journal.app",
+   "category": "apps",
+   "name": "Journal",
+   "path": "/System/Applications/Journal.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Keychain Access.app",
+   "category": "apps",
+   "name": "Keychain Access",
+   "path": "/System/Library/CoreServices/Applications/Keychain Access.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

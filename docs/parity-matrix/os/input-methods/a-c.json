@@ -1,0 +1,91 @@
+{
+ "category": "input-methods",
+ "shard": "a-c",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/AinuIM.app",
+   "category": "input-methods",
+   "name": "AinuIM",
+   "path": "/System/Library/Input Methods/AinuIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/Assistive Control.app",
+   "category": "input-methods",
+   "name": "Assistive Control",
+   "path": "/System/Library/Input Methods/Assistive Control.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/CharacterPalette.app",
+   "category": "input-methods",
+   "name": "CharacterPalette",
+   "path": "/System/Library/Input Methods/CharacterPalette.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle",
+   "category": "input-methods",
+   "name": "AppleKeyboardLayouts",
+   "path": "/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle",
+   "kind": "keyboard layout",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/kb_layouts.rs",
+   "status": "partial",
+   "note": "heuristic: keyboard layouts module",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

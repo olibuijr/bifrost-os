@@ -1,0 +1,196 @@
+{
+ "category": "apps",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Shortcuts.app",
+   "category": "apps",
+   "name": "Shortcuts",
+   "path": "/System/Applications/Shortcuts.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/shortcuts-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Siri AI.app",
+   "category": "apps",
+   "name": "Siri AI",
+   "path": "/System/Applications/Siri AI.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Stickies.app",
+   "category": "apps",
+   "name": "Stickies",
+   "path": "/System/Applications/Stickies.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Stocks.app",
+   "category": "apps",
+   "name": "Stocks",
+   "path": "/System/Applications/Stocks.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/System Settings.app",
+   "category": "apps",
+   "name": "System Settings",
+   "path": "/System/Applications/System Settings.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings.rs",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Screen Sharing.app",
+   "category": "apps",
+   "name": "Screen Sharing",
+   "path": "/System/Applications/Utilities/Screen Sharing.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Screenshot.app",
+   "category": "apps",
+   "name": "Screenshot",
+   "path": "/System/Applications/Utilities/Screenshot.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Script Editor.app",
+   "category": "apps",
+   "name": "Script Editor",
+   "path": "/System/Applications/Utilities/Script Editor.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/System Information.app",
+   "category": "apps",
+   "name": "System Information",
+   "path": "/System/Applications/Utilities/System Information.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

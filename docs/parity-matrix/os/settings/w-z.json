@@ -1,0 +1,322 @@
+{
+ "category": "settings",
+ "shard": "w-z",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WalletSettingsExtension.appex",
+   "category": "settings",
+   "name": "WalletSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WalletSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Wallpaper.appex",
+   "category": "settings",
+   "name": "Wallpaper",
+   "path": "/System/Library/ExtensionKit/Extensions/Wallpaper.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "heuristic: pane name appears in the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex",
+   "category": "settings",
+   "name": "WallpaperAerialsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperDynamicExtension.appex",
+   "category": "settings",
+   "name": "WallpaperDynamicExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperDynamicExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperGradientExtension.appex",
+   "category": "settings",
+   "name": "WallpaperGradientExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperGradientExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex",
+   "category": "settings",
+   "name": "WallpaperImageExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperLegacyExtension.appex",
+   "category": "settings",
+   "name": "WallpaperLegacyExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperLegacyExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex",
+   "category": "settings",
+   "name": "WallpaperMacintoshExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMontereyExtension.appex",
+   "category": "settings",
+   "name": "WallpaperMontereyExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperMontereyExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex",
+   "category": "settings",
+   "name": "WallpaperSequoiaExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSettingsIntents.appex",
+   "category": "settings",
+   "name": "WallpaperSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSonomaExtension.appex",
+   "category": "settings",
+   "name": "WallpaperSonomaExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperSonomaExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperVenturaExtension.appex",
+   "category": "settings",
+   "name": "WallpaperVenturaExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WallpaperVenturaExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WiFiMacSettingsIntents.appex",
+   "category": "settings",
+   "name": "WiFiMacSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/WiFiMacSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Wallet.prefPane",
+   "category": "settings",
+   "name": "Wallet",
+   "path": "/System/Library/PreferencePanes/Wallet.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

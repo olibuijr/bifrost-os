@@ -1,0 +1,49 @@
+{
+ "category": "apps",
+ "shard": "w-z",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Weather.app",
+   "category": "apps",
+   "name": "Weather",
+   "path": "/System/Applications/Weather.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/weather-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Wireless Diagnostics.app",
+   "category": "apps",
+   "name": "Wireless Diagnostics",
+   "path": "/System/Library/CoreServices/Applications/Wireless Diagnostics.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

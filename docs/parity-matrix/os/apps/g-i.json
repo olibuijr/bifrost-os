@@ -1,0 +1,154 @@
+{
+ "category": "apps",
+ "shard": "g-i",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Games.app",
+   "category": "apps",
+   "name": "Games",
+   "path": "/System/Applications/Games.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/games-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Home.app",
+   "category": "apps",
+   "name": "Home",
+   "path": "/System/Applications/Home.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Image Capture.app",
+   "category": "apps",
+   "name": "Image Capture",
+   "path": "/System/Applications/Image Capture.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Image Playground.app",
+   "category": "apps",
+   "name": "Image Playground",
+   "path": "/System/Applications/Image Playground.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Grapher.app",
+   "category": "apps",
+   "name": "Grapher",
+   "path": "/System/Applications/Utilities/Grapher.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/iPhone Mirroring.app",
+   "category": "apps",
+   "name": "iPhone Mirroring",
+   "path": "/System/Applications/iPhone Mirroring.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/iOS App Installer.app",
+   "category": "apps",
+   "name": "iOS App Installer",
+   "path": "/System/Library/CoreServices/Applications/iOS App Installer.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

@@ -1,0 +1,280 @@
+{
+ "category": "system-ui",
+ "shard": "w-z",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/WallpaperAgent.app",
+   "category": "system-ui",
+   "name": "WallpaperAgent",
+   "path": "/System/Library/CoreServices/WallpaperAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WatchFaceAlert.app",
+   "category": "system-ui",
+   "name": "WatchFaceAlert",
+   "path": "/System/Library/CoreServices/WatchFaceAlert.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WiFiAgent.app",
+   "category": "system-ui",
+   "name": "WiFiAgent",
+   "path": "/System/Library/CoreServices/WiFiAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WidgetKit Simulator.app",
+   "category": "system-ui",
+   "name": "WidgetKit Simulator",
+   "path": "/System/Library/CoreServices/WidgetKit Simulator.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WidgetRenderer_Activities.app",
+   "category": "system-ui",
+   "name": "WidgetRenderer_Activities",
+   "path": "/System/Library/CoreServices/WidgetRenderer_Activities.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WindowManager.app",
+   "category": "system-ui",
+   "name": "WindowManager",
+   "path": "/System/Library/CoreServices/WindowManager.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/WorkoutAlert-Mac.app",
+   "category": "system-ui",
+   "name": "WorkoutAlert-Mac",
+   "path": "/System/Library/CoreServices/WorkoutAlert-Mac.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WebThumbnailExtension.appex",
+   "category": "system-ui",
+   "name": "WebThumbnailExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WebThumbnailExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Wi-Fi.appex",
+   "category": "system-ui",
+   "name": "Wi-Fi",
+   "path": "/System/Library/ExtensionKit/Extensions/Wi-Fi.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Word of the Day.appex",
+   "category": "system-ui",
+   "name": "Word of the Day",
+   "path": "/System/Library/ExtensionKit/Extensions/Word of the Day.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WorldClockIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "WorldClockIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WorldClockIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/WritingToolsAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "WritingToolsAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/WritingToolsAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ZeoliteEvalExtension.appex",
+   "category": "system-ui",
+   "name": "ZeoliteEvalExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ZeoliteEvalExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: user-facing service or shell component",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

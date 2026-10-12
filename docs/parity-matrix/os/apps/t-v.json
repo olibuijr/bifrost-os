@@ -1,0 +1,154 @@
+{
+ "category": "apps",
+ "shard": "t-v",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/TV.app",
+   "category": "apps",
+   "name": "TV",
+   "path": "/System/Applications/TV.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/TextEdit.app",
+   "category": "apps",
+   "name": "TextEdit",
+   "path": "/System/Applications/TextEdit.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Time Machine.app",
+   "category": "apps",
+   "name": "Time Machine",
+   "path": "/System/Applications/Time Machine.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Tips.app",
+   "category": "apps",
+   "name": "Tips",
+   "path": "/System/Applications/Tips.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Terminal.app",
+   "category": "apps",
+   "name": "Terminal",
+   "path": "/System/Applications/Utilities/Terminal.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
+   "category": "apps",
+   "name": "VoiceOver Utility",
+   "path": "/System/Applications/Utilities/VoiceOver Utility.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/VoiceMemos.app",
+   "category": "apps",
+   "name": "VoiceMemos",
+   "path": "/System/Applications/VoiceMemos.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/voicememos-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

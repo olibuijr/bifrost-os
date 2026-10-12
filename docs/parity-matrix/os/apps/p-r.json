@@ -1,0 +1,196 @@
+{
+ "category": "apps",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Passwords.app",
+   "category": "apps",
+   "name": "Passwords",
+   "path": "/System/Applications/Passwords.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Phone.app",
+   "category": "apps",
+   "name": "Phone",
+   "path": "/System/Applications/Phone.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Photo Booth.app",
+   "category": "apps",
+   "name": "Photo Booth",
+   "path": "/System/Applications/Photo Booth.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Photos.app",
+   "category": "apps",
+   "name": "Photos",
+   "path": "/System/Applications/Photos.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Podcasts.app",
+   "category": "apps",
+   "name": "Podcasts",
+   "path": "/System/Applications/Podcasts.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/podcasts-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Preview.app",
+   "category": "apps",
+   "name": "Preview",
+   "path": "/System/Applications/Preview.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/QuickTime Player.app",
+   "category": "apps",
+   "name": "QuickTime Player",
+   "path": "/System/Applications/QuickTime Player.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Reminders.app",
+   "category": "apps",
+   "name": "Reminders",
+   "path": "/System/Applications/Reminders.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/reminders-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Print Center.app",
+   "category": "apps",
+   "name": "Print Center",
+   "path": "/System/Applications/Utilities/Print Center.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

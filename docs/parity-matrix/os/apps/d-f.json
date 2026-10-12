@@ -1,0 +1,280 @@
+{
+ "category": "apps",
+ "shard": "d-f",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Dictionary.app",
+   "category": "apps",
+   "name": "Dictionary",
+   "path": "/System/Applications/Dictionary.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/FaceTime.app",
+   "category": "apps",
+   "name": "FaceTime",
+   "path": "/System/Applications/FaceTime.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/FindMy.app",
+   "category": "apps",
+   "name": "FindMy",
+   "path": "/System/Applications/FindMy.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Font Book.app",
+   "category": "apps",
+   "name": "Font Book",
+   "path": "/System/Applications/Font Book.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Freeform.app",
+   "category": "apps",
+   "name": "Freeform",
+   "path": "/System/Applications/Freeform.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/freeform-desktop",
+   "status": "partial",
+   "note": "heuristic: app with a matching name",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Digital Color Meter.app",
+   "category": "apps",
+   "name": "Digital Color Meter",
+   "path": "/System/Applications/Utilities/Digital Color Meter.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Disk Utility.app",
+   "category": "apps",
+   "name": "Disk Utility",
+   "path": "/System/Applications/Utilities/Disk Utility.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/DVD Player.app",
+   "category": "apps",
+   "name": "DVD Player",
+   "path": "/System/Library/CoreServices/Applications/DVD Player.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Desk View.app",
+   "category": "apps",
+   "name": "Desk View",
+   "path": "/System/Library/CoreServices/Applications/Desk View.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Directory Utility.app",
+   "category": "apps",
+   "name": "Directory Utility",
+   "path": "/System/Library/CoreServices/Applications/Directory Utility.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Expansion Slot Utility.app",
+   "category": "apps",
+   "name": "Expansion Slot Utility",
+   "path": "/System/Library/CoreServices/Applications/Expansion Slot Utility.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Feedback Assistant.app",
+   "category": "apps",
+   "name": "Feedback Assistant",
+   "path": "/System/Library/CoreServices/Applications/Feedback Assistant.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Applications/Folder Actions Setup.app",
+   "category": "apps",
+   "name": "Folder Actions Setup",
+   "path": "/System/Library/CoreServices/Applications/Folder Actions Setup.app",
+   "kind": "core service app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

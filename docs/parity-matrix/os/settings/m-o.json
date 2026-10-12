@@ -1,0 +1,238 @@
+{
+ "category": "settings",
+ "shard": "m-o",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MediaExtensionsSettingsController.appex",
+   "category": "settings",
+   "name": "MediaExtensionsSettingsController",
+   "path": "/System/Library/ExtensionKit/Extensions/MediaExtensionsSettingsController.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MouseExtension.appex",
+   "category": "settings",
+   "name": "MouseExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MouseExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MouseIntentsExtension.appex",
+   "category": "settings",
+   "name": "MouseIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MouseIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NeptuneOneWallpaper.appex",
+   "category": "settings",
+   "name": "NeptuneOneWallpaper",
+   "path": "/System/Library/ExtensionKit/Extensions/NeptuneOneWallpaper.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Network.appex",
+   "category": "settings",
+   "name": "Network",
+   "path": "/System/Library/ExtensionKit/Extensions/Network.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "heuristic: pane name appears in the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NetworkSettingsIntents.appex",
+   "category": "settings",
+   "name": "NetworkSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/NetworkSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettings.appex",
+   "category": "settings",
+   "name": "NotificationsSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/NotificationsSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettingsIntents.appex",
+   "category": "settings",
+   "name": "NotificationsSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/NotificationsSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "gap",
+   "note": "heuristic: candidate home is the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Mouse.prefPane",
+   "category": "settings",
+   "name": "Mouse",
+   "path": "/System/Library/PreferencePanes/Mouse.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "heuristic: pane name appears in the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Network.prefPane",
+   "category": "settings",
+   "name": "Network",
+   "path": "/System/Library/PreferencePanes/Network.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "heuristic: pane name appears in the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Notifications.prefPane",
+   "category": "settings",
+   "name": "Notifications",
+   "path": "/System/Library/PreferencePanes/Notifications.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "heuristic: pane name appears in the settings specs",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

@@ -1,0 +1,28 @@
+{
+ "category": "cli",
+ "shard": "0-9",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/bin/[",
+   "category": "cli",
+   "name": "[",
+   "path": "/bin/[",
+   "kind": "tool",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 166800
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: POSIX tool, Linux base",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

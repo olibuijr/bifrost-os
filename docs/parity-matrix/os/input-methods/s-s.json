@@ -1,0 +1,28 @@
+{
+ "category": "input-methods",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/SCIM.app",
+   "category": "input-methods",
+   "name": "SCIM",
+   "path": "/System/Library/Input Methods/SCIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}
