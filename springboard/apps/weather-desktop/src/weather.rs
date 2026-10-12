@@ -181,6 +181,11 @@ pub struct Weather {
     tried: HashMap<String, f64>,
     pending: HashSet<String>,
     error: Option<WeatherError>,
+    /// whether the network path lets the app reach the forecast service (true until the shell says otherwise)
+    online: bool,
+    /// set when the saved summary changed (a forecast for the selected place, a new selection or units); the app
+    /// reads it with `take_summary_changed` and reloads the widget timeline
+    summary_changed: bool,
     results: Vec<Location>,
     searching: bool,
     note: Option<String>,
@@ -234,6 +239,8 @@ impl Weather {
             tried: HashMap::new(),
             pending: HashSet::new(),
             error: None,
+            online: true,
+            summary_changed: false,
             results: vec![],
             searching: false,
             note: None,
@@ -527,9 +534,34 @@ impl Weather {
         &self.places[self.selected.min(self.places.len() - 1)]
     }
 
-    fn save_summary(&self) {
+    fn save_summary(&mut self) {
         if let Some(s) = self.summary() {
             self.store.save_summary(&s);
+            self.summary_changed = true;
+        }
+    }
+
+    /// True once after the saved summary changed (see `summary_changed`).
+    pub fn take_summary_changed(&mut self) -> bool {
+        std::mem::take(&mut self.summary_changed)
+    }
+
+    /// The network path changed. Going offline stops new fetches and shows the error screen when no forecast is
+    /// cached for the selected place. Coming back online retries every place at once, not after the retry delay.
+    pub fn set_online(&mut self, online: bool) {
+        if self.online == online {
+            return;
+        }
+        self.online = online;
+        self.dirty = true;
+        if online {
+            self.tried.clear();
+            self.maintain_at = f64::NEG_INFINITY;
+        } else {
+            self.maintain_at = f64::INFINITY;
+            if !self.forecasts.contains_key(&self.place().key()) {
+                self.error = Some(WeatherError::Unknown);
+            }
         }
     }
 
@@ -603,6 +635,14 @@ impl Weather {
     /// (`next_wake` reports it, so nothing polls every tick).
     fn maintain(&mut self, t: f64) {
         if t < self.maintain_at {
+            return;
+        }
+        if !self.online {
+            // no path: nothing to ask for until `set_online(true)` (which resets `maintain_at`)
+            if !self.forecasts.contains_key(&self.place().key()) {
+                self.error = Some(WeatherError::Unknown);
+            }
+            self.maintain_at = f64::INFINITY;
             return;
         }
         let mut next = f64::INFINITY;
@@ -1384,6 +1424,31 @@ mod tests {
         assert!(text.contains("weather_watch=1\n"), "{text}");
         assert!(text.contains("weather_loaded=0\n"), "{text}");
         assert!(app.summary().is_none(), "no cached forecast yet");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn going_offline_with_nothing_cached_shows_the_error_and_coming_back_clears_the_wait() {
+        let dir = temp("offline");
+        let ui = test_ui();
+        let mut app = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
+        assert!(app.online, "the app starts online until the shell says otherwise");
+        app.set_online(false);
+        assert!(!app.online);
+        assert!(app.describe().contains("weather_error=The weather could not be loaded.\n"), "{}", app.describe());
+        app.set_online(true);
+        assert!(app.online);
+        app.set_online(true);
+        assert!(app.online, "a repeated state changes nothing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_fresh_app_has_no_summary_change_to_report() {
+        let dir = temp("summary-flag");
+        let ui = test_ui();
+        let mut app = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
+        assert!(!app.take_summary_changed(), "nothing saved yet");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
