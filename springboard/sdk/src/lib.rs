@@ -70,6 +70,7 @@ pub mod quicksearch;
 pub mod visual_search;
 pub mod peek;
 pub mod permission_kit;
+pub mod now_playing;
 pub mod webview;
 pub mod webview_dev;
 pub mod script_value;
