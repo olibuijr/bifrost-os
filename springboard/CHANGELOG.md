@@ -1,5 +1,26 @@
 # BifrOSt changelog
 
+## 0.5.43 — 2026-10-12
+
+Parity wiring, wave 5.
+
+- File > Print opens a print sheet: CUPS printers or Save as PDF, paper size, orientation, scale, copies and a page
+  preview.
+- Settings > Accessibility > Screen Reader: Ctrl+Alt+Right and Left move a focus ring through the Settings page and
+  announce each row.
+- Ctrl+Space switches the input source; with two or more keyboards enabled the menu bar shows an input menu. Shell
+  text fields underline text that is still being composed.
+- Notification Center widgets have options in Edit Widgets, and tapping a widget opens its app at the widget's link.
+- Settings > Network > VPN lists VPN configurations; Settings > Bluetooth has a Scan for Devices row.
+- App Store: price and age rating on the product page, and a Purchased list under Updates.
+- Default Apps has an Email group, and links open in the app that declares their scheme.
+- Control Center's Now Playing shows playback progress; tap the bar to seek.
+- Photos: Favourites, Recents and Screenshots are smart albums, and albums can be sorted by date.
+- Apps: Contacts 1.6 (vCard import and export, last name first), Music 1.5 (Clear Up Next), Weather 1.4 (data
+  attribution), Books 1.5 (Pages tab, notes on highlights), Freeform 1.5 (shape inspector, Export as PNG), Assistant
+  1.3 (conversations sent as model sessions), Notes 1.13 (Replace, smart folders), Calculator 1.6 (statistics on the
+  paper tape), News 1.5 (conditional feed loads, Share Article, text size), Clock 1.4 (Copy Laps, dark grey window).
+
 ## 0.5.42 — 2026-10-12
 
 - Control Center and Notification Center open above app windows (they were drawn behind them), and Edit Widgets sits
