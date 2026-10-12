@@ -179,6 +179,8 @@ pub mod gamepad_service;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
+pub mod async_publisher;
+pub mod object_graph;
 pub mod ndarray;
 pub mod inference;
 pub mod music_understanding;
