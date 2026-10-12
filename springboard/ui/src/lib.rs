@@ -581,6 +581,7 @@ pub mod access_control;
 pub mod permission_question;
 pub mod trust;
 pub mod focus;
+pub mod focus_filter;
 pub mod pane;
 pub mod panner;
 pub mod param_view;
