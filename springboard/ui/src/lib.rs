@@ -862,3 +862,8 @@ pub mod url_filter;
 pub mod call_directory;
 pub mod drawing;
 pub mod annotation;
+pub mod ecs;
+pub mod noise;
+pub mod quadtree;
+pub mod rules;
+pub mod decision;
