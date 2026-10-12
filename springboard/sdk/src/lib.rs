@@ -107,6 +107,8 @@ pub mod multipart;
 pub mod social;
 pub mod url_components;
 pub mod network_path;
+pub mod network_connection;
+pub mod network_browser;
 pub mod http_cookies;
 pub mod http_auth;
 pub mod stream;

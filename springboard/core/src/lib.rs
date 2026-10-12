@@ -74,6 +74,8 @@ pub mod imgmeta;
 pub mod file_mode;
 pub mod errno;
 pub mod net_path;
+pub mod net_connection;
+pub mod dns_browse;
 pub mod websocket;
 pub mod block_pool;
 pub mod host_name;
