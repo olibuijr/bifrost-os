@@ -7,6 +7,10 @@
 - Desktop size: the intro line shows the size of the desktop being shared.
 - Copy address: tap the address (yours, or the selected computer's) to copy it, then paste it into another app.
 
+## 0.2.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 0.1.9 — 2026-10-11
 
 - Full-size window (`window = "full-size"`, min system 0.4.84): the large title sits below the traffic-light band.
