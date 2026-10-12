@@ -4,6 +4,7 @@
 
 mod console;
 mod cursor;
+mod diagnostics;
 mod draw;
 mod identity;
 mod model;
