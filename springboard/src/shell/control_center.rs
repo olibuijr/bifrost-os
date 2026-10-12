@@ -1828,3 +1828,159 @@ impl Shell {
         }
     }
 }
+
+/// The modules the Control Centre can show, in the default order they have on the cluster. Media transport
+/// buttons are not listed: they belong to the media tile.
+pub const DEFAULT_MODULES: [Tile; 12] = [
+    Tile::Airplane,
+    Tile::Nearby,
+    Tile::Wifi,
+    Tile::Bluetooth,
+    Tile::RotationLock,
+    Tile::Mirror,
+    Tile::Focus,
+    Tile::Silent,
+    Tile::Timer,
+    Tile::Camera,
+    Tile::Brightness,
+    Tile::Volume,
+];
+
+/// The stable word a module is stored under in prefs. `None` for tiles that are not user modules.
+pub fn module_key(tile: Tile) -> Option<&'static str> {
+    Some(match tile {
+        Tile::Airplane => "airplane",
+        Tile::Nearby => "nearby",
+        Tile::Wifi => "wifi",
+        Tile::Bluetooth => "bluetooth",
+        Tile::RotationLock => "rotation-lock",
+        Tile::Mirror => "mirror",
+        Tile::Focus => "focus",
+        Tile::Silent => "silent",
+        Tile::Timer => "timer",
+        Tile::Camera => "camera",
+        Tile::Brightness => "brightness",
+        Tile::Volume => "volume",
+        Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext => return None,
+    })
+}
+
+/// One row of the customised module list: which module, and whether the cluster shows it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModuleSlot {
+    pub tile: Tile,
+    pub shown: bool,
+}
+
+/// The default list: every module, in the default order, all shown.
+pub fn default_slots() -> Vec<ModuleSlot> {
+    DEFAULT_MODULES.iter().map(|&tile| ModuleSlot { tile, shown: true }).collect()
+}
+
+/// Reads the prefs string: comma-separated keys in display order, a leading `-` hides a module.
+/// Unknown keys and repeats are dropped, and any module the string leaves out is appended, shown, in
+/// its default position among the rest. An empty string gives the default list.
+pub fn parse_slots(text: &str) -> Vec<ModuleSlot> {
+    let mut out: Vec<ModuleSlot> = Vec::new();
+    for raw in text.split(',') {
+        let raw = raw.trim();
+        let (shown, key) = match raw.strip_prefix('-') {
+            Some(rest) => (false, rest),
+            None => (true, raw),
+        };
+        let Some(tile) = DEFAULT_MODULES.iter().copied().find(|&t| module_key(t) == Some(key)) else { continue };
+        if out.iter().any(|s| s.tile == tile) {
+            continue;
+        }
+        out.push(ModuleSlot { tile, shown });
+    }
+    for &tile in &DEFAULT_MODULES {
+        if !out.iter().any(|s| s.tile == tile) {
+            out.push(ModuleSlot { tile, shown: true });
+        }
+    }
+    out
+}
+
+/// Writes the list back in the form `parse_slots` reads.
+pub fn format_slots(slots: &[ModuleSlot]) -> String {
+    slots
+        .iter()
+        .filter_map(|s| module_key(s.tile).map(|k| if s.shown { k.to_string() } else { format!("-{k}") }))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The tiles the cluster draws, in order.
+pub fn shown_tiles(slots: &[ModuleSlot]) -> Vec<Tile> {
+    slots.iter().filter(|s| s.shown).map(|s| s.tile).collect()
+}
+
+/// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
+pub fn move_slot(slots: &mut Vec<ModuleSlot>, from: usize, to: usize) {
+    if from >= slots.len() || to >= slots.len() {
+        return;
+    }
+    let s = slots.remove(from);
+    slots.insert(to, s);
+}
+
+#[cfg(test)]
+mod module_list_tests {
+    use super::*;
+
+    #[test]
+    fn empty_text_is_the_default_list_with_everything_shown() {
+        let slots = parse_slots("");
+        assert_eq!(slots, default_slots());
+        assert_eq!(shown_tiles(&slots), DEFAULT_MODULES.to_vec());
+    }
+
+    #[test]
+    fn stored_order_and_hidden_modules_are_read_back() {
+        let slots = parse_slots("focus,-wifi,airplane");
+        assert_eq!(slots[0], ModuleSlot { tile: Tile::Focus, shown: true });
+        assert_eq!(slots[1], ModuleSlot { tile: Tile::Wifi, shown: false });
+        assert_eq!(slots[2], ModuleSlot { tile: Tile::Airplane, shown: true });
+        // modules left out follow in default order, shown
+        assert_eq!(slots[3].tile, Tile::Nearby);
+        assert_eq!(slots.len(), DEFAULT_MODULES.len());
+        assert!(!shown_tiles(&slots).contains(&Tile::Wifi));
+    }
+
+    #[test]
+    fn unknown_keys_and_repeats_are_dropped() {
+        let slots = parse_slots("bogus,wifi,wifi,-wifi, camera ");
+        assert_eq!(slots.iter().filter(|s| s.tile == Tile::Wifi).count(), 1);
+        assert_eq!(slots[0], ModuleSlot { tile: Tile::Wifi, shown: true });
+        assert_eq!(slots[1], ModuleSlot { tile: Tile::Camera, shown: true });
+        assert_eq!(slots.len(), DEFAULT_MODULES.len());
+    }
+
+    #[test]
+    fn format_and_parse_round_trip() {
+        let mut slots = default_slots();
+        move_slot(&mut slots, 6, 0);
+        slots[2].shown = false;
+        let text = format_slots(&slots);
+        assert_eq!(parse_slots(&text), slots);
+    }
+
+    #[test]
+    fn media_tiles_have_no_key_and_are_not_listed() {
+        assert_eq!(module_key(Tile::MediaPlay), None);
+        assert!(!DEFAULT_MODULES.iter().any(|t| matches!(t, Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext)));
+        assert!(!format_slots(&default_slots()).contains("media"));
+    }
+
+    #[test]
+    fn move_slot_ignores_out_of_range_indices() {
+        let mut slots = default_slots();
+        let before = slots.clone();
+        move_slot(&mut slots, 0, 99);
+        move_slot(&mut slots, 99, 0);
+        assert_eq!(slots, before);
+        move_slot(&mut slots, 0, 2);
+        assert_eq!(slots[2].tile, Tile::Airplane);
+    }
+}
