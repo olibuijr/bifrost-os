@@ -44,6 +44,7 @@ pub mod dnssd;
 pub mod oid;
 pub mod codereq;
 pub mod codesign_events;
+pub mod code_seal;
 pub mod backup_exclusion;
 pub mod biometry;
 pub mod auth_context;
