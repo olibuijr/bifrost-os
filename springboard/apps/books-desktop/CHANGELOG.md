@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2
+
+- The procedural app icon is built only for its tests; the shipped icon is `icon.png`. The state report (`describe`) is built only for its tests too: serving it over the control socket needs a JSON dependency this app does not have yet.
+
 ## 1.6.1
 
 - Removed the unused constructor, the default folder helper, the unused forget and needs_frame helpers; the host passes its library folders.

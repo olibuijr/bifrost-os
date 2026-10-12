@@ -10,6 +10,7 @@ mod tictactoe;
 mod tile_motion;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::control::{RpcError, METHOD_NOT_FOUND};
 use bifrost_app::controls::Node;
 use bifrost_app::{App, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
@@ -109,6 +110,18 @@ impl App for GamesApp {
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.app.as_ref().and_then(|c| c.next_wake(t))
+    }
+
+    /// `games.state`: the key=value lines of `Games::describe`, for remote inspection through the control socket.
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["games.state"]
+    }
+
+    fn rpc(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, _params: &Json) -> Result<Json, RpcError> {
+        if method == "games.state" {
+            return Ok(Json::Str(self.app.as_ref().map_or_else(String::new, |c| c.describe())));
+        }
+        Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}")))
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
