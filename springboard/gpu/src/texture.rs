@@ -409,8 +409,8 @@ impl Staging {
         let req = unsafe { dev.get_buffer_memory_requirements(st.buffer) };
         let props = &device.inner.memory_properties;
         let coherent = vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+        // Coherent memory only: `upload`/`download` do not flush or invalidate (GFX-6), as `Buffer` refuses too.
         let index = memory_type_index(props, req.memory_type_bits, coherent)
-            .or_else(|| memory_type_index(props, req.memory_type_bits, vk::MemoryPropertyFlags::HOST_VISIBLE))
             .ok_or_else(|| Error::Unsupported("no host-visible memory for staging".into()))?;
         let alloc = vk::MemoryAllocateInfo::default().allocation_size(req.size).memory_type_index(index);
         // SAFETY: the allocation info is fully initialised.
@@ -587,7 +587,9 @@ fn transfer(inner: &Inner, region: Region, buffer: vk::Buffer, upload: bool) -> 
                 dev.cmd_copy_image_to_buffer(cb, image, work_layout, buffer, &[copy]);
             }
         }
-        let back = [barrier(image, work_layout, final_layout, (stage, access), all, (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED))];
+        // An imported image goes back to the foreign family, so the next use acquires it exactly once (GFX-21).
+        let back_queues = if inner.foreign { (inner.device.inner.queue_family, vk::QUEUE_FAMILY_FOREIGN_EXT) } else { (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED) };
+        let back = [barrier(image, work_layout, final_layout, (stage, access), all, back_queues)];
         // SAFETY: as above.
         unsafe { dev.cmd_pipeline_barrier2(cb, &barrier_info(&back)) };
         Ok(())
