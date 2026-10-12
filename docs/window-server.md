@@ -98,3 +98,43 @@ found on Midget on 2026-10-11:
 4. Switching windows: the dimming of inactive windows should fade in and out, in both directions.
 5. The dock icon context menu is oversized; follow the HIG menu metrics.
 6. The burn-in above.
+
+
+## Live blur per compositor path (2026-10-12)
+
+Every built-in shell window (Settings and the rest) is already its own xdg toplevel (`src/bare/wayland.rs`, app id
+`is.olibuijr.bifrost.N`), not a region of one shell surface. What differs is who composes the blur.
+
+| Path | Who blurs | What the blur sees |
+|---|---|---|
+| labwc (default until acceptance) | the shell's presenter paints the blur into the window's own buffer (`Backdrop::GlassOnly`, `Presenter::under`) | wallpaper plus the shell's own windows only. labwc toplevels (Files) are separate buffers the shell cannot sample, so they are never in the backdrop: Settings over Files shows the wallpaper, not Files. A limit of this path. |
+| bifrost-wm | the window server (`wm/src/scene.rs`, `glass.rs`): each surface with an `ext-background-effect-v1` blur region gets a backdrop rendered from every element below it (all clients), re-rendered when the signature of those elements changes (window moved, client committed) | the real composed scene, including Files |
+
+Shell side (this round): the shell binds `ext_background_effect_manager_v1` when the compositor offers it and reports
+the blur capability. For each window with materials it then sends the material rects (shadow margin added) as the
+blur region and leaves the window translucent: no presenter blur, no inactive opaque plate.
+`BIFROST_WM_MATERIALS=0` keeps the presenter path. The SDK apps (`bifrost_app`) must use the same call; no client
+sends a region yet except the shell, so Files-class apps show no blur under bifrost-wm until step 3 below.
+
+### labwc: black Files and black Settings material (diagnosis, not reproduced)
+
+No Midget in this round. From the code: foreign toplevels are never added to the presenter stack (`set_window_stack`
+takes only the shell's windows) and the shell never paints a foreign window, so no shell path paints Files black.
+Remaining candidates: (a) the shell believes it is key while labwc activated Files (`State::focused` is the shell's
+own front window, never the compositor's activation), and the inactive path of `Presenter::draw` paints
+`Kind::inactive()` plates, near-black in Dark (`MATERIAL_SIDEBAR_SOLID` 20,20,22); (b) Files' own alpha dma-buf
+composed black by labwc. Check on Midget with a screenshot while Files is open, Dark and Light, with and without
+`BIFROST_WM_MATERIALS`.
+
+### Migration plan: one window model for built-in and external apps
+
+1. (done) Shell windows request blur through ext-background-effect when the server offers it.
+2. Move the region computation into `springboard/ui` (a `material` module), re-exported by `bifrost_app::controls`,
+   so the shell and SDK apps share one call (the shell cannot import `bifrost_app`).
+3. SDK: `bifrost_app` windows send the blur region from the kit's `source_list` / `toolbar` material rects and keep
+   their buffer translucent there. Files then blurs like Settings.
+4. Server: draw the inactive-material plate in the window server (it knows activation) and send xdg `activated` to
+   shell windows, so foreign focus no longer leaves the shell believing it is key.
+5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
+   `Presenter::set_window_stack` / `under`.
+6. Remove the presenter blur path and labwc after Midget acceptance.

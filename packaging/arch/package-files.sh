@@ -32,6 +32,26 @@ package_bifrost_files() {
     fi
   done
   install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
+  # the window server (docs/window-server.md) and its chrome clients. /etc/bifrost/compositor = bifrost-wm selects them;
+  # the session falls back to labwc when bifrost-wm is absent, so a package without PC_WM is allowed (explicit, below).
+  # A package WITH bifrost-wm must carry the chrome it launches, or the session would start a bare window server.
+  if [[ -n ${PC_WM:-} ]]; then
+    for need in PC_WM PC_MENUBAR PC_DOCK PC_PANELS; do
+      if [[ -z ${!need:-} || ! -x ${!need} ]]; then
+        echo "package-files.sh: PC_WM is set but $need is not an executable (${!need:-unset})" >&2
+        return 1 2>/dev/null || exit 1
+      fi
+    done
+    install -Dm755 "$PC_WM" "$pkgdir/usr/bin/bifrost-wm"
+    install -Dm755 "$PC_MENUBAR" "$pkgdir/usr/bin/bifrost-menubar"
+    install -Dm755 "$PC_DOCK" "$pkgdir/usr/bin/bifrost-dock"
+    install -Dm755 "$PC_PANELS" "$pkgdir/usr/bin/bifrost-panels"
+  else
+    echo "package-files.sh: no PC_WM: shipping without bifrost-wm, sessions run labwc" >&2
+  fi
+  if [[ -n ${PC_LOG:-} && -x ${PC_LOG} ]]; then
+    install -Dm755 "$PC_LOG" "$pkgdir/usr/bin/bifrost-log"
+  fi
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
   # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
   # under, and the trigger that starts the target on the first desktop frame

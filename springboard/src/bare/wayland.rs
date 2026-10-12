@@ -13,6 +13,7 @@ use wayland_protocols_wlr::output_power_management::v1::client::{zwlr_output_pow
 use wayland_protocols::xdg::activation::v1::client::{xdg_activation_v1 as activation,xdg_activation_token_v1 as activation_token};
 use wayland_protocols::ext::session_lock::v1::client::{ext_session_lock_manager_v1 as lock_manager,ext_session_lock_v1 as lock,ext_session_lock_surface_v1 as lock_surface};
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_manager_v1 as foreign_manager, zwlr_foreign_toplevel_handle_v1 as foreign_handle};
+use wayland_protocols::ext::background_effect::v1::client::{ext_background_effect_manager_v1 as bg_manager, ext_background_effect_surface_v1 as bg_surface};
 #[derive(Clone, PartialEq, Eq)]
 pub struct ForeignWindow { pub id:u32, pub title:String, pub app_id:String, pub active:bool,pub maximized:bool }
 struct Foreign { handle:foreign_handle::ZwlrForeignToplevelHandleV1, info:ForeignWindow }
@@ -31,7 +32,9 @@ pub struct WindowFrame { pub id:u32, pub title:String, pub x:i32, pub y:i32, pub
 pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool) }
 struct Window { surface:wl_surface::WlSurface, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
-    pending:Damage, margin:i32, gpu_size:(usize,usize) }
+    pending:Damage, margin:i32, gpu_size:(usize,usize),
+    /// window-server materials (ext-background-effect): the effect object and the blur rects last sent (surface px)
+    bg:Option<bg_surface::ExtBackgroundEffectSurfaceV1>, bg_rects:Vec<[i32;4]> }
 /// Golden Gate window shadow reach, pt: the key window's shadow falls ~80 pt below and ~40 pt to the sides and
 /// top (the reference's bottom shadow runs past 74 pt). The top/side reach is also the content's offset in the
 /// drawable, so pointer coordinates subtract `Window::margin`.
@@ -65,6 +68,7 @@ fn transient<T>(r: Result<T, wayland_client::backend::WaylandError>) -> io::Resu
 struct Slot { buffer: wl_buffer::WlBuffer, map: memmap2::MmapMut, busy: bool, damage: Damage }
 #[derive(Default)]
 struct State {
+    bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
@@ -240,7 +244,7 @@ impl Display {
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.clone()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
                 top.set_min_size(320,220); surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
-                self.state.windows.insert(frame.id,Window { surface,xdg,top,slots:vec![],buffer_size:(0,0),configured:false,frame,pending,margin:0,gpu_size:(0,0) });
+                self.state.windows.insert(frame.id,Window { surface,xdg,top,slots:vec![],buffer_size:(0,0),configured:false,frame,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new() });
             }
         }
         if let (Some(id),Some(activation),Some(seat))=(activate,self.state.activation.as_ref(),self.state.seat.as_ref()) {
@@ -309,7 +313,25 @@ impl Display {
                 let Some(slot)=self.state.gpu_slots.get(&key).and_then(|v|v.iter().position(|s|!s.busy)) else {continue;};
                 let pixels=w.frame.pixels.as_deref().unwrap();
                 // vibrancy: the window's material rects in screen space, the blurred wallpaper behind them
+                // under the window server (bifrost-wm) the materials are requested, not painted: the window stays
+                // translucent and the compositor blurs the real scene below it (docs/window-server.md, "Live blur")
+                let wm_blur=self.state.bg_blur && self.state.bg_manager.is_some();
+                if wm_blur {
+                    let rects=blur_rects(self.state.materials.get(&id).map(|m|m.as_slice()).unwrap_or(&[]),margin);
+                    if rects!=w.bg_rects {
+                        if let (Some(mgr),Some(comp))=(self.state.bg_manager.as_ref(),self.state.compositor.as_ref()) {
+                            let obj=w.bg.get_or_insert_with(||mgr.get_background_effect(&w.surface,&qh,()));
+                            if rects.is_empty() {obj.set_blur_region(None);} else {
+                                let region=comp.create_region(&qh,());
+                                for r in &rects {region.add(r[0],r[1],r[2],r[3]);}
+                                obj.set_blur_region(Some(&region)); region.destroy();
+                            }
+                            w.bg_rects=rects;
+                        }
+                    }
+                }
                 let (back,glass)=match self.state.materials.get(&id) {
+                    Some(_) if wm_blur => (Backdrop::None,Vec::new()),
                     Some(m) => (Backdrop::GlassOnly{x:w.frame.x-margin,y:w.frame.y-margin,active:focused},
                         m.iter().map(|r|Glass{x:r.x+w.frame.x as f32,y:r.y+w.frame.y as f32,..*r}).collect()),
                     None => (Backdrop::None,Vec::new()),
@@ -628,6 +650,7 @@ fn mark_first_frame() {
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {
         if let wl_registry::Event::Global { name,interface,version } = e { match interface.as_str() {
+            "ext_background_effect_manager_v1" if wm_materials_enabled() => s.bg_manager=Some(reg.bind(name,1,q,())),
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
             "zwlr_output_power_manager_v1" => s.power_manager=Some(reg.bind(name,1,q,())),
@@ -1108,5 +1131,37 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
             foreign_handle::Event::Done => s.foreign_dirty=true,
             _ => {}
         }}
+    }
+}
+
+/// Switch for the window-server material path (default on; `BIFROST_WM_MATERIALS=0` keeps the shell's own blur).
+fn wm_materials_enabled() -> bool { std::env::var("BIFROST_WM_MATERIALS").ok().as_deref() != Some("0") }
+
+/// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
+/// window-local and the surface starts `margin` px before the content (the shadow margin). The window's screen
+/// position is the compositor's, so it does not enter the region.
+fn blur_rects(materials:&[Glass], margin:i32) -> Vec<[i32;4]> {
+    materials.iter().filter(|g|g.w>0.0&&g.h>0.0)
+        .map(|g|[g.x.floor() as i32+margin,g.y.floor() as i32+margin,(g.w.ceil() as i32).max(1),(g.h.ceil() as i32).max(1)]).collect()
+}
+
+impl Dispatch<bg_manager::ExtBackgroundEffectManagerV1,()> for State {
+    fn event(s:&mut Self,_:&bg_manager::ExtBackgroundEffectManagerV1,e:bg_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
+        if let bg_manager::Event::Capabilities{flags}=e { s.bg_blur=matches!(flags,WEnum::Value(f) if f.contains(bg_manager::Capability::Blur)); }
+    }
+}
+impl Dispatch<bg_surface::ExtBackgroundEffectSurfaceV1,()> for State {
+    fn event(_:&mut Self,_:&bg_surface::ExtBackgroundEffectSurfaceV1,_:bg_surface::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+    use bifrost_render::glass::Kind;
+    #[test]
+    fn blur_rects_are_offset_by_the_shadow_margin() {
+        let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None };
+        assert_eq!(blur_rects(&[g], 40), vec![[40, 70, 201, 400]]);
+        assert!(blur_rects(&[], 40).is_empty());
     }
 }
