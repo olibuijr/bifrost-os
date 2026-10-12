@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 — 2026-10-12
+
+- Security Events: a new row under Reports lists the endpoint security events BifrOSt can subscribe to: socket bind and
+  connect, socket suspend and resume, pseudoterminal grant and close, set time, and kernel extension load and unload.
+  Each row says its category, whether it waits for a verdict before the action proceeds, and whether the subscription
+  wants it. Search filters the list: `category:Socket` keeps one category, and `not` finds the events the subscription
+  lacks. The detail pane explains the event.
+- No event feed yet: nothing reports live security events, so the list is the subscription's contents, not a log of
+  what happened. The footer says so.
+- Code requirements: the detail pane of a live message or a signpost shows its process's executable, its SHA-256 (the
+  first 16 digits), whether it has a valid code signature, and whether it meets the unsigned and platform
+  requirements. BifrOSt does not sign code yet, so programs are unsigned and fail the platform requirement. A program
+  over 64 MB is not hashed.
+
 ## 1.1.0 — 2026-10-12
 
 - Log positions: every message has a position in the log's order (shown as Position in the detail pane). Log, Show

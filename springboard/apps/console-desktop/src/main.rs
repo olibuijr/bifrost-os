@@ -5,7 +5,9 @@
 mod console;
 mod cursor;
 mod draw;
+mod identity;
 mod model;
+mod security;
 mod services;
 mod signposts;
 mod source;
