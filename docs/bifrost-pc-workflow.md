@@ -473,6 +473,23 @@ Update badge). Daily timer install: `mkdir -p ~/.config/systemd/user && cp tools
 
 ## Reinstall Midget autonomously
 
+**Default wipe: `qa-install` (owner rule, 2026-10-12).** Midget is wiped like a QA tester would: through the installer's real
+screens, with on-screen taps and typing, not the silent preset.
+
+```
+python3 tools/midget.py qa-install [--disk /dev/nvme0n1] [--shots DIR] [--timeout S]
+```
+
+It removes a stale `/boot/EFI/BIFROST/unattended.toml`, sets BootNext to PXE and reboots into the live lab ISO. The installer
+publishes the visible screen to `/run/bifrost-installer/state` (`size=`, `screen=`, `stage=`, `percent=`, one `button=<id> x y w h`
+per button and `field=<id> x y w h <focused>` per text field, panel pixels, written by rename). qa-install reads it per screen,
+saves a screenshot, and taps through Welcome, Language, Account (full name, username and the password from `login_password()` typed
+into the tapped fields, never printed), Disk (`--disk`, else the one internal NVMe), Confirm, Progress (logs stage and percent) and
+Restart, using a temporary uinput absolute pointer and keyboard over ssh. Then it follows the first boot as `reinstall` does
+(`phase=accepted`, the account's session, MCP). The report with each step, time and screenshot is
+`out/lab/logs/<stamp>-qa-install/report.md`; a screen that does not appear in its bound fails with the last screenshot.
+`reinstall` (below) stays for unattended runs.
+
 From titan, with a current lab installer pushed (`tools/lab-push.sh`, so the netbooted ISO's `bifrost-lab-sync` fetches the
 unattended-capable installer) and the lab ISO in iVentoy:
 
