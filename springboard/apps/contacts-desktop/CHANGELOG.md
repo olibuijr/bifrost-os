@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0
+
+- Import and export of contacts as vCard files. Import reads every `.vcf` file in the Contacts `Import` folder, in
+  vCard 3.0 or 4.0; a card that matches a contact already in the list is skipped. Export writes `contacts-3.0.vcf` or
+  `contacts-4.0.vcf` to the `Export` folder. Groups (vCard 4.0 `KIND:group` cards) are not imported.
+- The postal address is kept on import and export.
+- Contact groups: New Group makes a group and shows it in a Groups section of the sidebar. With a group shown, Add to
+  Group or Remove from Group on an open contact changes its membership. Groups are saved in `groups.txt` beside the
+  contacts file.
+- Recently Changed lists the contacts added or edited since the app started. Possible Duplicates lists contacts with the
+  same email, the same phone number (last seven digits), or the same name with no conflicting phone or email.
+- The list sorts by family name, then given name, with a section per family-name initial. Accents sort with their base
+  letter, and the Icelandic letters keep their places (ð after d, þ after z).
+
 ## 1.2.3
 
 - The lists sidebar (All Contacts, Favorites) opens by default in windows at least 600 pt wide, so the root screen
