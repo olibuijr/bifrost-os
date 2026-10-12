@@ -103,6 +103,28 @@ PUNCT = {".": (52, False), ",": (51, False), "-": (12, False), "_": (12, True), 
          "#": (4, True), "$": (5, True), "%": (6, True), "*": (9, True), " ": (57, False)}
 
 
+def tap_button(button_id):
+    """Tap an installer button the way a user would: its rectangle comes from /run/bifrost-installer/state
+    (`size=W H`, `button=<id> X Y W H`, panel pixels), mapped to the VM's 1280x720 pointer. True when tapped."""
+    state = ssh("cat /run/bifrost-installer/state 2>/dev/null", 10)
+    size, rect = None, None
+    for line in state.splitlines():
+        key, _, rest = line.partition("=")
+        parts = rest.split()
+        if key == "size" and len(parts) >= 2:
+            size = (float(parts[0]), float(parts[1]))
+        elif key == "button" and len(parts) >= 5 and parts[0] == button_id:
+            rect = tuple(float(p) for p in parts[1:5])
+    if not rect:
+        return False
+    pw, ph = size or (1280.0, 720.0)
+    x = (rect[0] + rect[2] / 2) * 1280 / pw
+    y = (rect[1] + rect[3] / 2) * 720 / ph
+    sh(QMP + ["tap", str(int(x)), str(int(y))], timeout=20)
+    time.sleep(1.0)
+    return True
+
+
 def type_text(text):
     """Type ASCII text through the installer's input FIFO: lowercase, digits, uppercase (Shift) and common punctuation."""
     for ch in text:
@@ -205,10 +227,13 @@ def main():
     shot_installer("05-disk")
     keys(DOWN)
     shot_installer("06-disk-selected")
-    keys(ENTER)
+    keys(ENTER)  # the disk page's Erase and Install opens the "Erase this disk?" confirmation
     shot_installer("07-confirm")
     t_start = time.time()
-    keys(ENTER)  # Erase and Install
+    # confirm like a user: tap the dialog's Erase and Install button where the installer says it is
+    if not wait_for(lambda: tap_button("erase"), 15, 1):
+        notes.append("no erase button in /run/bifrost-installer/state; pressed Enter instead")
+        keys(ENTER)
     mark("ui_walkthrough", t)
 
     # 5. the install: sample the screen, stop at the unmount
@@ -658,10 +683,12 @@ def midget(a):
     shot_installer("05-disk")
     keys(DOWN)
     shot_installer("06-disk-selected")
-    keys(ENTER)
+    keys(ENTER)  # opens the "Erase this disk?" confirmation
     shot_installer("07-confirm")
     t_start = time.time()
-    keys(ENTER)
+    if not wait_for(lambda: tap_button("erase"), 15, 1):
+        notes.append("no erase button in /run/bifrost-installer/state; pressed Enter instead")
+        keys(ENTER)
     mark("ui_walkthrough", t)
 
     seen = {}
