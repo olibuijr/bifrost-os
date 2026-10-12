@@ -636,6 +636,7 @@ pub mod tensor;
 pub mod graph;
 pub mod nn;
 pub mod save_sync;
+pub mod ubiquitous_store;
 pub mod gamepad;
 pub mod affine;
 pub mod pdfpage;
