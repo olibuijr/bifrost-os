@@ -57,18 +57,87 @@ pub enum Kind {
 pub struct Style {
     /// saturation of the backdrop (1.0 unchanged)
     pub saturation: f32,
+    /// added to every channel after the luminance mapping
+    pub brightness: f32,
+    /// 0 skips the luminance mapping, 1 replaces the luma with the curve
+    pub lum_amount: f32,
+    /// the four control values of the luminance curve (cubic Bezier over the input luma)
+    pub lum_values: [f32; 4],
     /// strength of the specular rim (0 none)
     pub rim: f32,
     /// the material follows its window's active state: opaque while the window is inactive
     pub follows_active: bool,
 }
 
+/// The measured filter of one material in one appearance (macOS 27 material recipes,
+/// `docs/reference/materials-macos27.md`); the window server holds the same numbers in `wm/src/material_kind.rs`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Look {
+    pub saturation: f32,
+    pub brightness: f32,
+    pub lum_amount: f32,
+    pub lum_values: [f32; 4],
+}
+
+impl Look {
+    /// The dark and light looks mixed by the scheme position (0 dark .. 1 light), so the cross-fade follows it.
+    pub fn mix(dark: Look, light: Look, t: f32) -> Look {
+        let m = |a: f32, b: f32| a + (b - a) * t;
+        Look {
+            saturation: m(dark.saturation, light.saturation),
+            brightness: m(dark.brightness, light.brightness),
+            lum_amount: m(dark.lum_amount, light.lum_amount),
+            lum_values: [
+                m(dark.lum_values[0], light.lum_values[0]),
+                m(dark.lum_values[1], light.lum_values[1]),
+                m(dark.lum_values[2], light.lum_values[2]),
+                m(dark.lum_values[3], light.lum_values[3]),
+            ],
+        }
+    }
+
+    /// The filter on one backdrop pixel (straight RGB, 0..=1): saturation, luminance mapping, brightness; every stage
+    /// clamped. The shaders (`gpu/wl.rs`, the window server's `compose.frag`) do the same arithmetic.
+    pub fn apply(&self, rgb: [f32; 3]) -> [f32; 3] {
+        let luma = |c: [f32; 3]| c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+        let clamp = |c: [f32; 3]| [c[0].clamp(0.0, 1.0), c[1].clamp(0.0, 1.0), c[2].clamp(0.0, 1.0)];
+        let l = luma(rgb);
+        let mut c = clamp([l + (rgb[0] - l) * self.saturation, l + (rgb[1] - l) * self.saturation, l + (rgb[2] - l) * self.saturation]);
+        if self.lum_amount != 0.0 {
+            let m = luma(c).clamp(0.0, 1.0);
+            let u = 1.0 - m;
+            let v = self.lum_values;
+            let curve = u * u * u * v[0] + 3.0 * u * u * m * v[1] + 3.0 * u * m * m * v[2] + m * m * m * v[3];
+            let d = self.lum_amount * (curve - luma(c));
+            c = clamp([c[0] + d, c[1] + d, c[2] + d]);
+        }
+        clamp([c[0] + self.brightness, c[1] + self.brightness, c[2] + self.brightness])
+    }
+}
+
+const fn look(saturation: f32, brightness: f32, lum_amount: f32, lum_values: [f32; 4]) -> Look {
+    Look { saturation, brightness, lum_amount, lum_values }
+}
+
 impl Kind {
-    pub fn style(self) -> Style {
-        let saturation = saturation();
+    /// The measured (dark, light) looks of the kind: chrome and the shell's own glass take the title-bar recipe, menus
+    /// the regular content recipe, sidebars the thin one, window backgrounds the thick one.
+    pub fn looks(self) -> (Look, Look) {
         match self {
-            Kind::Chrome | Kind::Menu => Style { saturation, rim: 1.0, follows_active: self == Kind::Menu },
-            Kind::Sidebar | Kind::Titlebar | Kind::Content => Style { saturation, rim: 0.0, follows_active: true },
+            Kind::Chrome | Kind::Titlebar => (look(2.0, -0.1, 0.75, [0.23, 0.52, 0.27, 0.255]), look(1.1, 0.1, 0.75, [0.8, 0.9, 1.1, 0.825])),
+            Kind::Menu => (look(1.5, 0.0, 0.75, [0.16, 0.26, 0.1, 0.1]), look(1.5, 0.1, 0.75, [0.9, 0.83, 0.925, 0.815])),
+            Kind::Sidebar => (look(1.35, 0.0, 0.6, [0.2, 0.21, 0.1, 0.15]), look(1.35, 0.12, 0.6, [0.725, 0.825, 0.76, 0.73])),
+            Kind::Content => (look(1.5, 0.0, 0.88, [0.14, 0.16, 0.1, 0.03]), look(1.5, 0.045, 0.88, [0.99, 0.95, 0.98, 0.905])),
+        }
+    }
+
+    pub fn style(self) -> Style {
+        let (dark, light) = self.looks();
+        let l = Look::mix(dark, light, crate::appearance::scheme());
+        let (saturation, brightness, lum_amount, lum_values) = (l.saturation, l.brightness, l.lum_amount, l.lum_values);
+        match self {
+            Kind::Chrome | Kind::Menu => Style { saturation, brightness, lum_amount, lum_values, rim: 1.0, follows_active: self == Kind::Menu },
+            Kind::Sidebar | Kind::Titlebar | Kind::Content => Style { saturation, brightness, lum_amount, lum_values, rim: 0.0, follows_active: true },
         }
     }
 
@@ -89,12 +158,11 @@ impl Kind {
     }
 }
 
-/// The backdrop's saturation under a material, by scheme. The system materials lift saturation by about
-/// 1.8 (the platform's published image-effects sample uses `saturationDeltaFactor` 1.8 for its light and
-/// dark blurs; a cross-platform toolkit fits 2.0 in light and 1.7 in dark to the simulator): light 1.8, dark 1.7,
-/// following the scheme's cross-fade.
+/// The backdrop's saturation under the shell's own chrome glass, by scheme: the measured chrome recipe (dark 2.0, light
+/// 1.1), following the scheme's cross-fade. Each material kind has its own value in `Kind::looks`.
 pub fn saturation() -> f32 {
-    1.7 + 0.1 * crate::appearance::scheme()
+    let (d, l) = Kind::Chrome.looks();
+    Look::mix(d, l, crate::appearance::scheme()).saturation
 }
 
 static ON: AtomicBool = AtomicBool::new(false);
@@ -217,8 +285,41 @@ mod merge_tests {
         }
         assert!(Kind::Chrome.style().rim > 0.0 && !Kind::Chrome.style().follows_active);
         assert!(Kind::Menu.style().rim > 0.0 && Kind::Menu.style().follows_active);
-        assert!(Kind::Sidebar.style().saturation >= 1.7);
+        assert!(Kind::Sidebar.style().saturation >= 1.35);
         assert_eq!(Kind::Sidebar.inactive() >> 24, 255, "the inactive material is opaque");
+    }
+
+    #[test]
+    fn the_looks_are_the_measured_recipes() {
+        let (d, l) = Kind::Titlebar.looks();
+        assert_eq!((d.saturation, l.saturation), (2.0, 1.1));
+        assert_eq!((d.brightness, l.brightness), (-0.1, 0.1));
+        assert_eq!(Kind::Chrome.looks(), Kind::Titlebar.looks());
+        assert_eq!(Kind::Sidebar.looks().0.lum_values, [0.2, 0.21, 0.1, 0.15]);
+        assert_eq!(Kind::Content.looks().1.lum_amount, 0.88);
+    }
+
+    #[test]
+    fn the_look_filter_matches_hand_computed_pixels() {
+        let (dark, light) = Kind::Titlebar.looks();
+        // black under dark chrome: l = 0, curve(0) = 0.23, shift 0.75 * 0.23 = 0.1725, brightness -0.1 -> 0.0725
+        let p = dark.apply([0.0; 3]);
+        assert!(p.iter().all(|v| (v - 0.0725).abs() < 1e-4), "{p:?}");
+        // mid grey under dark chrome: curve(0.5) = 0.356875, shift -0.10734375, brightness -0.1 -> 0.29265625
+        let p = dark.apply([0.5; 3]);
+        assert!(p.iter().all(|v| (v - 0.292_656).abs() < 1e-4), "{p:?}");
+        // white under light chrome: curve(1) = 0.825, shift 0.75 * -0.175, brightness +0.1 -> 0.96875
+        let p = light.apply([1.0; 3]);
+        assert!(p.iter().all(|v| (v - 0.968_75).abs() < 1e-4), "{p:?}");
+    }
+
+    #[test]
+    fn the_scheme_mix_is_linear_between_dark_and_light() {
+        let (d, l) = Kind::Menu.looks();
+        assert_eq!(Look::mix(d, l, 0.0), d);
+        let end = Look::mix(d, l, 1.0);
+        assert!((end.brightness - l.brightness).abs() < 1e-6 && (end.lum_values[1] - l.lum_values[1]).abs() < 1e-6);
+        assert!((Look::mix(d, l, 0.5).brightness - 0.05).abs() < 1e-6);
     }
 
     #[test]
