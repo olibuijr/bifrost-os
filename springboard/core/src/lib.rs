@@ -73,3 +73,5 @@ pub mod host_name;
 pub mod network_sets;
 pub mod power_supply;
 pub mod serial_ports;
+pub mod imgprobe;
+pub mod gifframes;
