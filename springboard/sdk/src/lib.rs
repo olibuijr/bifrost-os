@@ -39,6 +39,7 @@ pub mod glyphs;
 pub mod defaults;
 pub mod screen_saver_defaults;
 pub mod locale;
+pub mod bundle_resources;
 pub mod keychain;
 pub mod gss_status;
 pub mod gss_oid;
