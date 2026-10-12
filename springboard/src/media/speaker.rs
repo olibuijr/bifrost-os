@@ -281,6 +281,9 @@ struct Session {
     meter: Meter,
     reported: Instant,
     paused: bool,
+    /// No new connection before this; set after a failed open (1 s, doubling to 30 s), cleared by a good one.
+    retry_after: Option<Instant>,
+    backoff: Duration,
 }
 
 impl Session {
@@ -289,7 +292,21 @@ impl Session {
         if self.desk.is_some() {
             return Ok(());
         }
-        let s = Stream::open(self.role, self.rate)?;
+        if let Some(at) = self.retry_after {
+            if Instant::now() < at {
+                return Err(io::Error::new(io::ErrorKind::NotConnected, "the audio server is not reachable; retrying later"));
+            }
+        }
+        let s = match Stream::open(self.role, self.rate) {
+            Ok(s) => s,
+            Err(e) => {
+                self.retry_after = Some(Instant::now() + self.backoff);
+                self.backoff = (self.backoff * 2).min(Duration::from_secs(30));
+                return Err(e);
+            }
+        };
+        self.retry_after = None;
+        self.backoff = Duration::from_secs(1);
         s.ring.set_paused(self.paused);
         self.desk = Some(s);
         eprintln!("audio.speaker: opened the {:?} device of the audio server", self.role);
@@ -328,7 +345,7 @@ impl SpeakerOut {
     }
 
     pub fn with_role(role: Role, rate: u32, _channels: u32) -> Self {
-        let session = Arc::new(Mutex::new(Session { role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false }));
+        let session = Arc::new(Mutex::new(Session { role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false, retry_after: None, backoff: Duration::from_secs(1) }));
         let weak: Weak<Mutex<Session>> = Arc::downgrade(&session);
         std::thread::Builder::new()
             .name("speaker-idle".into())
