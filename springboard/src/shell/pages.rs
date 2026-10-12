@@ -21,6 +21,8 @@ pub enum PageId {
     Root,
     Network,
     Ethernet,
+    /// Settings > Network > VPN: the saved VPN configurations
+    Vpn,
     Wifi,
     WifiDetail,
     KnownNetworks,
@@ -486,6 +488,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         ),
         PageId::Network => desktop_network_page(info),
         PageId::Ethernet => desktop_ethernet_page(info),
+        PageId::Vpn => desktop_vpn_page(info),
         PageId::Wifi if info.desktop_network.as_ref().is_some_and(|n|!n.wifi_available) => page("Wi-Fi",false,vec![Group::new(vec![Item::new("No Wi-Fi adapter").tint(Tint::Dim)]).footer("Connect a supported Wi-Fi adapter to browse and join wireless networks. Ethernet is managed separately in Network settings.")]),
         PageId::Wifi => {
             let current = info.current_ssid.as_deref().filter(|_| m.wifi_on);
@@ -1598,7 +1601,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -1611,4 +1614,9 @@ fn desktop_ethernet_page(info:&Info)->Spec {
         ("Ethernet Address",if i.mac.is_empty(){"—".into()}else{i.mac.clone()}),("IPv6 Address",if i.ipv6.is_empty(){"—".into()}else{i.ipv6.join(", ")}),
     ]).header(&i.name).footer("Connection details update automatically. Unplugging this cable disconnects remote access over Ethernet.")).collect()};
     Spec{id:PageId::Ethernet,title:"Ethernet".into(),large:false,groups}
+}
+fn desktop_vpn_page(_info:&Info)->Spec {
+    let profiles=super::desktop_network::vpn_profiles();
+    let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service. Adding one needs the tunnel client, which is not built yet, so this list stays empty.")]}
 }

@@ -1,6 +1,7 @@
 //! Desktop networking and power state. All D-Bus/CLI work runs off the UI thread.
 use super::{Network, SavedNetwork, WifiAction};
 use crate::net::wifi_config::{Eap, Security};
+use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
 use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex, OnceLock},
@@ -364,10 +365,40 @@ fn apply(request: Request) -> Result<(), String> {
     result.map(|_| ())
 }
 
+/// The VPN configurations the Settings VPN page lists. Profiles are not stored yet (no tunnel client keeps them), so
+/// the list is empty and the page says so. `VpnProfile` is the shape a saved profile will take.
+pub fn vpn_profiles() -> Vec<VpnProfile> {
+    Vec::new()
+}
+
+/// One line for a VPN profile in the list: the protocol, then the server and port.
+pub fn vpn_summary(profile: &VpnProfile) -> String {
+    let protocol = match profile.protocol {
+        VpnProtocol::Ikev2 => "IKEv2",
+        VpnProtocol::IpsecIkev1 => "IPsec",
+        VpnProtocol::Tunnel => "Tunnel",
+    };
+    format!("{protocol}, {}:{}", profile.server, profile.port)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::security_of;
+    use super::{security_of, vpn_profiles, vpn_summary};
     use crate::net::wifi_config::{Eap, Security};
+    use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
+
+    #[test]
+    fn vpn_summary_names_protocol_server_and_default_port() {
+        let office = VpnProfile::new("Office", " VPN.Example.com ", VpnProtocol::Ikev2);
+        assert_eq!(vpn_summary(&office), "IKEv2, vpn.example.com:500", "the server is trimmed and lower-cased, port 500 by default");
+        let tunnel = VpnProfile::new("Tun", "h.example", VpnProtocol::Tunnel);
+        assert_eq!(vpn_summary(&tunnel), "Tunnel, h.example:443");
+    }
+
+    #[test]
+    fn no_vpn_profiles_are_stored_yet() {
+        assert!(vpn_profiles().is_empty(), "the VPN page shows its empty row until profiles are stored");
+    }
 
     #[test]
     fn key_management_maps_to_the_security_the_pages_name() {
