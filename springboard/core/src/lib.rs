@@ -75,6 +75,7 @@ pub mod local_push;
 pub mod app_metrics;
 pub mod mediaext;
 pub mod midi_endpoints;
+pub mod smf;
 pub mod ble_midi;
 pub mod disk_image;
 pub mod guest_audio;
