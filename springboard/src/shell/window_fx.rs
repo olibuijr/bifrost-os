@@ -91,16 +91,6 @@ impl WindowFx {
     }
 }
 
-/// Dimming of an inactive window's shadow: the presenter's `Shadow { focused }` already halves it;
-/// this is the extra content-independent factor used while the key window changes (0..1).
-pub fn inactive_shadow_factor(focused: bool) -> f32 {
-    if focused {
-        1.0
-    } else {
-        0.6
-    }
-}
-
 /// What a window may animate (`animation_behavior` on a window; the default is `Default`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum AnimationBehavior {

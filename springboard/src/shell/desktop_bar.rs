@@ -270,7 +270,10 @@ impl Shell {
     /// The parts of a desktop frame that are not transparent when the GPU presenter draws the
     /// wallpaper: the menu bar, an open menu, the dock with room for its hover label. None on the CPU path.
     pub(super) fn desk_regions_now(&self)->Option<Vec<(i32,i32,i32,i32)>> {
-        if !bifrost_render::glass::gpu()||self.is_locked(){return None;}
+        if self.is_locked(){return None;}
+        // the CPU path redraws the whole frame; the region is the whole screen so the draw compares it with the
+        // previous frame and only the pixels that changed are presented
+        if !bifrost_render::glass::gpu(){return Some(vec![(0,0,self.w,self.h)]);}
         let mut v=vec![(0,0,self.w,self.desktop_bar_height() as i32)];
         // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
@@ -288,7 +291,8 @@ impl Shell {
         let height=self.desktop_bar_height();if s.y0>=height{return;}
         // the backdrop depends only on the size and the wallpaper: blur it once, not every frame
         if bifrost_render::glass::gpu() {
-            // Golden Gate: the bar is transparent over the wallpaper the presenter draws*self.bar_backdrop.borrow_mut()=None;
+            // Golden Gate: the bar is transparent over the wallpaper the presenter draws
+            *self.bar_backdrop.borrow_mut()=None;
             s.fill_rect(0,0,self.w as usize,height,0);
             self.draw_desktop_bar_items(s,height);return;
         }
@@ -310,7 +314,13 @@ impl Shell {
     /// A menu bar label in the bar's ink, with its soft shadow (or halo) drawn first for legibility.
     fn bar_label(&self,s:&mut Surface,text:&str,pt:f32,weight:Weight,place:impl FnOnce(&Image)->(i32,i32)) {
         let ink=self.bar_ink();
-        self.label(text,pt,weight,WHITE,|im|{let (x,y)=place(im);let mut shadow=im.clone();shadow.blur(self.ui.pt(1.).max(1.) as usize);s.blit_colored(&shadow,x,y+self.ui.pt(0.5).max(1.) as i32,ink.shadow,ink.shadow_alpha);s.blit_colored(im,x,y,ink.text,ink.text_alpha);});
+        self.label(text,pt,weight,WHITE,|im|{
+            let (x,y)=place(im);let radius=self.ui.pt(1.).max(1.) as usize;
+            let mut shadows=self.bar_shadows.borrow_mut();
+            if shadows.len()>64{shadows.clear();}
+            let shadow=shadows.entry((text.to_string(),pt.to_bits(),std::mem::discriminant(&weight),radius)).or_insert_with(||{let mut sh=im.clone();sh.blur(radius);sh});
+            s.blit_colored(shadow,x,y+self.ui.pt(0.5).max(1.) as i32,ink.shadow,ink.shadow_alpha);s.blit_colored(im,x,y,ink.text,ink.text_alpha);
+        });
     }
     pub(super) fn clock_text(&self)->String {format!("{}  {}",super::status::date_text(self.info.wday,self.info.mday,self.info.mon),super::status::clock_in(self.info.hour,self.info.min,self.clock_24h))}
     /// The date and time at the right end of the bar; a tap toggles Notification Center.

@@ -3,10 +3,26 @@
 //! and sends labwc SIGHUP (reconfigure). A no-op when labwc is not running (host or dev).
 use std::os::unix::fs::{chown, PermissionsExt};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 const SRC: &str = "/usr/share/bifrost/wayland/themes";
 static APPLIED: AtomicU8 = AtomicU8::new(0); // 0 none, 1 light, 2 dark, 3 gave up (logged once)
+
+/// Milliseconds (since the first call, plus one) of the last `/proc` scan for labwc; 0 = never scanned.
+static LAST_SCAN_MS: AtomicU64 = AtomicU64::new(0);
+const RESCAN_MS: u64 = 5_000;
+
+/// True when a `/proc` scan for labwc may run now: at most one per `RESCAN_MS`.
+fn scan_due() -> bool {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let now = START.get_or_init(std::time::Instant::now).elapsed().as_millis() as u64 + 1;
+    let last = LAST_SCAN_MS.load(Ordering::Relaxed);
+    if last != 0 && now.saturating_sub(last) < RESCAN_MS {
+        return false;
+    }
+    LAST_SCAN_MS.store(now, Ordering::Relaxed);
+    true
+}
 
 pub fn follow_scheme() {
     let want = if bifrost_render::appearance::target_is_light() { 1 } else { 2 };
@@ -30,6 +46,9 @@ pub fn follow_scheme() {
 fn labwc_pid() -> Option<u32> {
     if let Some(p) = std::env::var("LABWC_PID").ok().and_then(|v| v.parse().ok()) {
         return Some(p);
+    }
+    if !scan_due() {
+        return None;
     }
     std::fs::read_dir("/proc").ok()?.flatten().find_map(|e| {
         let pid: u32 = e.file_name().to_str()?.parse().ok()?;
