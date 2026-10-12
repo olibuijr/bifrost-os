@@ -1686,3 +1686,17 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 - `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
 - Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
   layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).
+
+## Image blur filters (Core Image blur category, SwiftUI `.blur`)
+
+`bifrost_render::blur_filters` (SDK: `bifrost_app::image_blur`) holds the blur filters with the reference parameters:
+`gaussian_blur` (`inputRadius` is the standard deviation, kernel truncated at 3 sigma), `box_blur` (`2 * round(r) + 1`),
+`motion_blur` (radius, angle counter-clockwise from +x), `zoom_blur` (centre, amount = shift in px at the farthest corner),
+`disc_blur`, `bokeh_blur` (radius, ring amount, ring size, softness; defaults 20, 0, 0.1, 1) and `masked_variable_blur`
+(radius times the mask's alpha, five interpolated gaussian levels). `Edge::Clamp` is `clampedToExtent`, `Edge::Transparent`
+fades the border. `BlurFilter::apply(&Image, Edge)` is the app entry point for an `ImageSource::decode()` result;
+`ViewBlur::new(radius_pt).opaque(bool).apply(&rendered, scale)` is `.blur(radius:opaque:)`. Gaussian and box are separable
+f32 row passes (vectorisable); disc, bokeh, motion and zoom gather taps. Bench: `glass_cost_blur_filters` (picked up by `tools/bench.py`).
+Gaps, stated rather than skipped: the output keeps the input size (the reference grows the extent); the Canvas has no offscreen
+layer, so a retained `View` cannot be blurred as a group yet (the app renders the view to an `Image` first); the filters are CPU
+only (no GPU path); the masked blur reads alpha rather than luminance. Not run on Midget (no builds in this wave).
