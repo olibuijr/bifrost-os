@@ -824,3 +824,4 @@ pub mod sound_distance;
 pub mod emitter;
 pub mod physics;
 pub mod tilemap;
+pub mod midi_thru;
