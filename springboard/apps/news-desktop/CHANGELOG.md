@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- Reading List: a new Reading List row in the source list. The toolbar button saves the open article to it (or removes it again); the list is kept in the app's data folder and survives a restart. Pages without a web address cannot be saved and show the button dimmed.
+- Each article shows its language (for example Icelandic or English), word count and reading time under the source and date. The language is only shown when the text has recognisable letters.
+- The link to the original page is now a card with the article's title and the feed's name, in place of the bare address.
+
 ## 1.2.2 — 2026-10-11
 
 - Compliance: feeds and pictures load on the shared dispatch pool (`bifrost_app::dispatch`) instead of a worker pool with a poll loop; the loop sleeps until the next feed is due and a finished job wakes it through the main queue.

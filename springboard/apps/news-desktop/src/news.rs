@@ -7,6 +7,7 @@
 
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
+use bifrost_app::controls::reading_list::ReadingList;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -14,6 +15,7 @@ use bifrost_app::widgets;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::feed::{self, Item};
+use crate::wire;
 use bifrost_app::kit::ui::{home_zone, CARD_BG, DETAIL_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
 use springboard::deildu::scroll::Scroller;
@@ -35,6 +37,13 @@ const SIDEBAR_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 const SIDEBAR_ROW: u32 = 100;
 pub const BAR_BACK: u32 = 1;
 pub const BAR_REFRESH: u32 = 2;
+/// Saves the open article to the Reading List, or removes it.
+pub const BAR_READ: u32 = 3;
+/// Tab 0 is Today, tab 1 the Reading List, and tab n + 2 is feed n.
+const READING_TAB: usize = 1;
+const FEED_TAB: usize = 2;
+/// The rich link card under an article: height at 1x.
+const LINK_CARD_H: f32 = 64.0;
 const ROW: f32 = 112.0;
 /// the picture beside a headline, and its corner radius
 const THUMB_W: f32 = 120.0;
@@ -63,6 +72,8 @@ enum Target {
     /// a source-list row: 0 is Today (all feeds), n is feed n - 1
     Feed(usize),
     Row(usize),
+    /// the toolbar's Reading List button
+    Read,
 }
 
 enum Done {
@@ -103,6 +114,10 @@ pub struct News {
     row_bg: u32,
     /// the toolbar as last drawn, for hits and the published controls
     bar: Option<ToolbarLayout>,
+    /// the saved pages, kept in the app's data directory
+    reading: ReadingList,
+    /// the open article's facts line (language, words, reading time)
+    facts: String,
 }
 
 /// `c` at the nearest end of the Light/Dark fade: pictures are rounded onto it once per scheme.
@@ -137,6 +152,7 @@ impl News {
             .enumerate()
             .map(|(i, (name, _))| std::fs::read(dir.join(slug(i))).ok().map(|b| feed::parse(&String::from_utf8_lossy(&b), name)).unwrap_or_default())
             .collect();
+        let reading = wire::load_reading_list(&dir);
         let mut n = News {
             w,
             h,
@@ -162,6 +178,8 @@ impl News {
             rows: HashMap::new(),
             row_bg: 0,
             bar: None,
+            reading,
+            facts: String::new(),
         };
         n.rebuild();
         n
@@ -194,11 +212,13 @@ impl News {
     /// Rebuilds the visible list: the chosen feed, or all feeds interleaved.
     fn rebuild(&mut self) {
         self.rows.clear();
-        self.list = if self.tab == 0 {
-            let longest = self.items.iter().map(Vec::len).max().unwrap_or(0);
-            (0..longest).flat_map(|i| self.items.iter().filter_map(move |f| f.get(i).cloned())).collect()
-        } else {
-            self.items.get(self.tab - 1).cloned().unwrap_or_default()
+        self.list = match self.tab {
+            0 => {
+                let longest = self.items.iter().map(Vec::len).max().unwrap_or(0);
+                (0..longest).flat_map(|i| self.items.iter().filter_map(move |f| f.get(i).cloned())).collect()
+            }
+            READING_TAB => wire::rows(&self.reading),
+            tab => self.items.get(tab - FEED_TAB).cloned().unwrap_or_default(),
         };
     }
 
@@ -356,8 +376,12 @@ impl News {
 
     /// The source list: Today (every feed), then the feeds under Sources; the open one is selected.
     fn sidebar(&self) -> SourceList {
-        let mut items = vec![SidebarItem::row(SIDEBAR_ROW, "Today").with_symbol("doc"), SidebarItem::header("Sources")];
-        items.extend(self.feeds.iter().enumerate().map(|(i, (name, _))| SidebarItem::row(SIDEBAR_ROW + 1 + i as u32, name).with_symbol("globe")));
+        let mut items = vec![
+            SidebarItem::row(SIDEBAR_ROW, "Today").with_symbol("doc"),
+            SidebarItem::row(SIDEBAR_ROW + READING_TAB as u32, "Reading List").with_symbol("bookmark"),
+            SidebarItem::header("Sources"),
+        ];
+        items.extend(self.feeds.iter().enumerate().map(|(i, (name, _))| SidebarItem::row(SIDEBAR_ROW + (FEED_TAB + i) as u32, name).with_symbol("globe")));
         let mut list = SourceList::new(items, 32.0, 30.0);
         list.set_selected(Some(SIDEBAR_ROW + self.tab as u32));
         list
@@ -374,6 +398,10 @@ impl News {
             items.push(ToolbarItem::icon(BAR_BACK, "Back", "chevron.left"));
         }
         items.push(ToolbarItem::flexible_space());
+        if let Some((item, ..)) = &self.open {
+            let label = if self.reading.contains(&item.link) { "Remove from Reading List" } else { "Add to Reading List" };
+            items.push(ToolbarItem::button(BAR_READ, label).enabled(ReadingList::supports(&item.link)));
+        }
         items.push(ToolbarItem::button(BAR_REFRESH, if self.pending.is_empty() { "Refresh" } else { "Refreshing\u{2026}" }).enabled(self.pending.is_empty()));
         Toolbar::new(items)
     }
@@ -396,10 +424,10 @@ impl News {
         // the source list's rows: Today, then each feed (the ids match `sidebar` and `activate_control`)
         let list = self.sidebar();
         let bounds = self.sidebar_bounds(ui);
-        let names = std::iter::once("Today".to_string()).chain(self.feeds.iter().map(|(name, _)| name.clone()));
+        let names = ["Today", "Reading List"].into_iter().map(str::to_string).chain(self.feeds.iter().map(|(name, _)| name.clone()));
         for (tab, name) in names.enumerate() {
-            // the list is Today, a header, then the feeds
-            let index = if tab == 0 { 0 } else { tab + 1 };
+            // the list is Today, the Reading List, a header, then the feeds
+            let index = if tab < FEED_TAB { tab } else { tab + 1 };
             nodes.push(Node { id: (SIDEBAR_ROW + tab as u32) as u64, role: Role::Row, label: name, value: String::new(), bounds: list.item_rect(index, bounds, SIDEBAR_SCROLL), enabled: true });
         }
         nodes
@@ -410,7 +438,8 @@ impl News {
         let target = match id as u32 {
             BAR_BACK if self.open.is_some() => Target::Back,
             BAR_REFRESH => Target::Refresh,
-            n if n >= SIDEBAR_ROW && (n - SIDEBAR_ROW) as usize <= self.feeds.len() => Target::Feed((n - SIDEBAR_ROW) as usize),
+            BAR_READ if self.open.is_some() => Target::Read,
+            n if n >= SIDEBAR_ROW && (n - SIDEBAR_ROW) as usize <= READING_TAB + self.feeds.len() => Target::Feed((n - SIDEBAR_ROW) as usize),
             _ => return false,
         };
         self.activate(ui, target);
@@ -454,6 +483,7 @@ impl News {
             return match self.bar.as_ref()?.hit(px, py)? {
                 BAR_BACK => Some(Target::Back),
                 BAR_REFRESH if self.pending.is_empty() => Some(Target::Refresh),
+                BAR_READ => Some(Target::Read),
                 _ => None,
             };
         }
@@ -473,6 +503,15 @@ impl News {
                 self.open = None;
             }
             Target::Refresh => self.tried.clear(),
+            Target::Read => {
+                if let Some(item) = self.open.as_ref().map(|(item, ..)| item.clone()) {
+                    wire::toggle(&mut self.reading, &item);
+                    wire::save_reading_list(&self.dir, &self.reading);
+                    if self.tab == READING_TAB {
+                        self.rebuild();
+                    }
+                }
+            }
             Target::Feed(i) => {
                 self.open = None;
                 self.tab = i;
@@ -480,6 +519,7 @@ impl News {
             }
             Target::Row(i) => {
                 if let Some(item) = self.list.get(i).cloned() {
+                    self.facts = wire::facts(&item.body);
                     let width = self.card_w(ui);
                     let title = ui.wrap(&item.title, MAC_TITLE1_PT, Weight::Bold, width);
                     let text = if item.body.is_empty() { "No preview in this feed.".to_string() } else { item.body.clone() };
@@ -570,6 +610,7 @@ impl News {
         let pressed = match self.pressed {
             Some(Target::Back) => Some(BAR_BACK),
             Some(Target::Refresh) => Some(BAR_REFRESH),
+            Some(Target::Read) => Some(BAR_READ),
             _ => None,
         };
         self.bar = Some(widgets::toolbar(s, ui, self.bar_bounds(ui), &self.toolbar(), pressed));
@@ -590,6 +631,7 @@ impl News {
                 let msg = match (&self.error, self.pending.is_empty()) {
                     (_, false) => "Loading headlines\u{2026}".to_string(),
                     (Some(e), true) => e.clone(),
+                    _ if self.tab == READING_TAB => "Nothing saved yet".to_string(),
                     _ => "No headlines".to_string(),
                 };
                 let msg = ui.fit(&msg, MAC_SUBHEAD_PT, w);
@@ -636,7 +678,11 @@ impl News {
         self.list = list;
         s.fill_rect(0, 0, self.w as usize, top, DETAIL_BG.now());
         self.draw_chrome(s, ui);
-        let title = if self.tab == 0 { "Today".to_string() } else { self.feeds[self.tab - 1].0.clone() };
+        let title = match self.tab {
+            0 => "Today".to_string(),
+            READING_TAB => "Reading List".to_string(),
+            tab => self.feeds[tab - FEED_TAB].0.clone(),
+        };
         let title = ui.fit(&title, MAC_LARGE_TITLE_PT, w);
         // compliance-allow: LAY-07 the title is on the list column's leading edge; widgets::large_title centres on the readable column
         self.put(s, ui, &title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), false, x, ui.pt(nav_bottom_pt() + TITLE_H / 2.0));
@@ -666,8 +712,14 @@ impl News {
                 self.put(&mut c, ui, line, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), false, x, y + ui.pt(SPACE_XL));
                 y += ui.pt(36.0);
             }
-            let meta = format!("{}  {}", item.source, item.date);
-            self.put(&mut c, ui, meta.trim(), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(SPACE_M));
+            let source = format!("{}  {}", item.source, item.date);
+            let meta = match (source.trim(), self.facts.as_str()) {
+                ("", facts) => facts.to_string(),
+                (source, "") => source.to_string(),
+                (source, facts) => format!("{source}  \u{b7}  {facts}"),
+            };
+            let meta = ui.fit(&meta, MAC_FOOTNOTE_PT, self.card_w(ui));
+            self.put(&mut c, ui, &meta, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(SPACE_M));
             y += ui.pt(SPACE_HUGE);
             for line in &body {
                 if y + ui.pt(LINE) >= top as f32 && y <= bottom as f32 {
@@ -675,9 +727,15 @@ impl News {
                 }
                 y += ui.pt(LINE);
             }
-            if !item.link.is_empty() {
-                let link = ui.fit(&item.link, MAC_FOOTNOTE_PT, self.card_w(ui));
-                self.put(&mut c, ui, &link, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x, y + ui.pt(28.0));
+            // the link card: the article's own page, titled from the feed
+            if let Some(card) = wire::link_card(&item) {
+                let (cw, top_y) = (self.card_w(ui), y + ui.pt(SPACE_M));
+                c.fill_rrect(x, top_y, cw, ui.pt(LINK_CARD_H), ui.pt(RADIUS), CARD_BG.now());
+                let text_w = cw - ui.pt(SPACE_L) * 2.0;
+                let card_title = ui.fit(&card.title, MAC_BODY_PT, text_w);
+                let site = ui.fit(&card.subtitle, MAC_FOOTNOTE_PT, text_w);
+                self.put(&mut c, ui, &card_title, MAC_BODY_PT, Weight::Bold, LABEL.now(), false, x + ui.pt(SPACE_L), top_y + ui.pt(LINK_CARD_H * 0.36));
+                self.put(&mut c, ui, &site, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, x + ui.pt(SPACE_L), top_y + ui.pt(LINK_CARD_H * 0.72));
             }
         }
         self.open = Some((item, title, body));
