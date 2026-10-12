@@ -851,6 +851,8 @@ pub mod highlight_rank;
 pub mod face_group;
 pub mod emitter;
 pub mod physics;
+pub mod warp;
+pub mod node_constraint;
 pub mod tilemap;
 pub mod midi_thru;
 pub mod midi_events;
