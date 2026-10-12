@@ -20,6 +20,8 @@ use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::controls::textfind;
+use bifrost_app::controls::{pdfannot, pdfselect};
+use bifrost_app::controls::pdfview::DisplayMode;
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
@@ -67,6 +69,8 @@ const LIBRARY_SEARCH_PT: f32 = 220.0;
 const ROW_BASE: u32 = 100;
 const MARGIN_PT: f32 = 24.0;
 const PAGE_MARGIN_PT: f32 = 44.0;
+/// The gap between the two pages of a spread (View > Two Pages).
+const PAGE_GUTTER_PT: f32 = 40.0;
 fn page_top_pt() -> f32 { UNIFIED_BAR_PT + 14.0 }
 const FOOTER_PT: f32 = 72.0;
 const BOTTOM_BAR_PT: f32 = 92.0;
@@ -137,6 +141,17 @@ pub(super) fn keep_whole_words(blocks: &[engine::Block], query: &str, hits: Vec<
             textfind::find_all(text, q, opts).iter().any(|r| text[..r.start].chars().count() == h.offset)
         })
         .collect()
+}
+
+/// The text of one reflowed page, as pdfselect reads it: its lines in order, joined with line breaks. Pictures are
+/// left out, so a character index in this text is the same one `draw_page` counts down the lines.
+pub(super) fn page_text(page: &layout::Page) -> String {
+    page.lines.iter().filter(|l| !matches!(l.kind, layout::Kind::Image { .. })).map(|l| l.text.as_str()).collect::<Vec<&str>>().join("\n")
+}
+
+/// The page texts of a whole layout, in page order, as the document model of pdfselect.
+fn document_text(layout: &Layout) -> Vec<String> {
+    layout.pages.iter().map(page_text).collect()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -215,6 +230,8 @@ pub(super) struct Reader {
     pub note: TextField,
     /// the highlight whose note the note field edits
     pub note_target: Option<Span>,
+    /// the text picked by Select Page, as character ranges over the layout's pages (see `page_text`)
+    pub selection: Option<pdfselect::Selection>,
 }
 
 struct Loading {
@@ -286,6 +303,8 @@ pub struct Books {
     pub(super) whole_words: bool,
     /// a one-line result of Look Up or Translate, shown on the page until the next tap
     pub(super) notice: Option<String>,
+    /// View menu: one page, or two pages side by side (the pdfview display modes). Kept for the session.
+    pub(super) display: DisplayMode,
 }
 
 impl Books {
@@ -331,6 +350,7 @@ impl Books {
             },
             whole_words: false,
             notice: None,
+            display: DisplayMode::SinglePage,
         };
         b.rescan();
         b
@@ -446,6 +466,7 @@ impl Books {
             narration: None,
             note: TextField::new(ui, "Add a note", MAC_BODY_PT, false, 500),
             note_target: None,
+            selection: None,
         };
         r.search.focused = false;
         r.note.focused = false;
@@ -460,8 +481,11 @@ impl Books {
 
     fn metrics(&self, ui: &Ui) -> Metrics {
         let size = SIZES[self.store.settings.size.min(SIZES.len() - 1)];
+        // a two-page spread gives each page half the text width, less the gutter between the pages
+        let column = self.w as f32 - 2.0 * ui.pt(PAGE_MARGIN_PT);
+        let width = if self.two_pages() { (column - ui.pt(PAGE_GUTTER_PT)) / 2.0 } else { column };
         Metrics {
-            width: self.w as f32 - 2.0 * ui.pt(PAGE_MARGIN_PT),
+            width,
             height: self.h as f32 - ui.pt(page_top_pt()) - ui.pt(FOOTER_PT),
             body: ui.pt(size) * ui.text_scale,
         }
@@ -492,6 +516,8 @@ impl Books {
         r.page = r.layout.page_of(keep);
         r.images.clear();
         r.highlight = r.highlight.filter(|_| r.panel.is_none());
+        // the selection's character ranges belong to the old pages
+        r.selection = None;
         self.labels.clear();
         self.dirty = true;
     }
@@ -531,6 +557,7 @@ impl Books {
         if p != r.page {
             r.page = p;
             r.highlight = None;
+            r.selection = None;
         }
         self.remember(t);
         self.dirty = true;
@@ -543,13 +570,118 @@ impl Books {
     }
 
     fn turn(&mut self, delta: i32, t: f64) {
+        // a spread turns by its own page count, so the next turn lands on the next spread's left page
+        let delta = delta * self.display.pages_per_row() as i32;
         let Some(r) = &self.reader else { return };
         let old = r.page;
         let p = (r.page as i32 + delta).clamp(0, r.layout.pages.len() as i32 - 1);
         self.goto_page(p as usize, t);
-        if p as usize != old {
+        // a spread changes at once; only a single page slides
+        if p as usize != old && !self.two_pages() {
             self.slide = Some((old, delta.signum(), t));
         }
+    }
+
+    /// View menu: whether the reader shows two pages side by side.
+    pub fn two_pages(&self) -> bool {
+        self.display == DisplayMode::TwoUp
+    }
+
+    /// View menu: one page or two pages side by side. The text is paginated again for the column width, and the reader
+    /// keeps the place it was on.
+    pub fn set_two_pages(&mut self, ui: &Ui, on: bool) {
+        let mode = if on { DisplayMode::TwoUp } else { DisplayMode::SinglePage };
+        if self.display == mode {
+            return;
+        }
+        self.display = mode;
+        self.slide = None;
+        let keep = self.reader.as_ref().map(|r| r.layout.pos_of(r.page));
+        if let Some(keep) = keep {
+            self.repaginate(ui, keep);
+        }
+        self.dirty = true;
+    }
+
+    /// Select Page: selects the text on the screen (both pages of a spread). False when the page has no text.
+    pub fn select_page(&mut self) -> bool {
+        let spread = self.display.pages_per_row() - 1;
+        let texts = match &self.reader {
+            Some(r) => document_text(&r.layout),
+            None => return false,
+        };
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        let doc = pdfselect::DocumentText::new(&refs);
+        if doc.page_count() == 0 {
+            return false;
+        }
+        let Some(r) = &mut self.reader else { return false };
+        let last = (r.page + spread).min(doc.page_count() - 1);
+        let mut selection = pdfselect::Selection::new();
+        for page in r.page..=last {
+            let len = doc.number_of_characters(page).unwrap_or(0);
+            if let Some(part) = pdfselect::Selection::between(&doc, (page, 0), (page, len)) {
+                selection.add(&part);
+            }
+        }
+        let found = !selection.is_empty();
+        r.selection = found.then_some(selection);
+        self.dirty = true;
+        found
+    }
+
+    /// Whether a selection is on the page (Find menu: Copy Selection).
+    pub fn has_selection(&self) -> bool {
+        self.reader.as_ref().is_some_and(|r| r.selection.is_some())
+    }
+
+    /// The selected text, for the general board. None when nothing is selected.
+    pub fn selection_text(&self) -> Option<String> {
+        let r = self.reader.as_ref()?;
+        let selection = r.selection.as_ref()?;
+        let texts = document_text(&r.layout);
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        let doc = pdfselect::DocumentText::new(&refs);
+        let text = selection.string(&doc);
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// For a PDF book, the saved highlights of page `page_no` as highlight annotations (`pdfannot`): one per highlighted
+    /// run of a line, with its bounds in points from the text column's left edge and the line's top, and the highlight's
+    /// note as its contents. None for other formats, which keep drawing their highlights as text spans.
+    pub(super) fn pdf_highlights(&self, ui: &Ui, page_no: usize) -> Option<pdfannot::PageAnnotations> {
+        let r = self.reader.as_ref()?;
+        if !r.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+            return None;
+        }
+        let page = r.layout.pages.get(page_no)?;
+        let spans: Vec<Span> = self.store.entry(&r.path).map_or_else(Vec::new, |e| e.highlights.clone());
+        let body_pt = Self::pt_of(ui, self.metrics(ui).body);
+        let mut marks = pdfannot::PageAnnotations::new();
+        for line in &page.lines {
+            let (pt, weight) = match line.kind {
+                layout::Kind::Heading(level) => (body_pt * layout::heading_scale(level), springboard::shell::ui::Weight::Bold),
+                layout::Kind::Image { .. } => continue,
+                layout::Kind::Body => (body_pt, springboard::shell::ui::Weight::Regular),
+            };
+            let text = r.book.blocks.get(line.block).and_then(|b| b.text()).unwrap_or("");
+            let lh = ui.pt(pt) * ui.text_scale * layout::LINE_HEIGHT;
+            for span in spans.iter().filter(|sp| sp.block == line.block) {
+                let (a, b) = layout::line_cols(text, line.offset, &line.text, span.offset, span.offset + span.len);
+                if a >= b {
+                    continue;
+                }
+                let prefix: String = line.text.chars().take(a).collect();
+                let word: String = line.text.chars().skip(a).take(b - a).collect();
+                let bounds = Rect { x: ui.measure(&prefix, pt, weight), y: line.y, w: ui.measure(&word, pt, weight), h: lh };
+                if let Ok(mut mark) = pdfannot::Annotation::new(pdfannot::Subtype::Highlight, bounds) {
+                    mark.set_highlighted(true);
+                    mark.set_contents(&self.store.note_of(&r.path, *span).unwrap_or_default());
+                    marks.add(mark);
+                }
+            }
+        }
+        Some(marks)
     }
 
     /// Bookmarks that sit on the page `page`.

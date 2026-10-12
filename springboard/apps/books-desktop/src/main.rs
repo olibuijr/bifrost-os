@@ -19,6 +19,10 @@ const MENU_TRANSLATE: u32 = 8;
 const MENU_READ_ALOUD: u32 = 9;
 const MENU_STOP_READING: u32 = 10;
 const MENU_ADD_NOTE: u32 = 11;
+const MENU_SINGLE_PAGE: u32 = 12;
+const MENU_TWO_PAGES: u32 = 13;
+const MENU_SELECT_PAGE: u32 = 14;
+const MENU_COPY_SELECTION: u32 = 15;
 
 /// How the shelf reaches the search index: a book is sent when it is new or changed (see `books::search_index`).
 struct BooksApp {
@@ -49,6 +53,8 @@ impl App for BooksApp {
         let hits = self.books.as_ref().is_some_and(|b| b.has_hits());
         let highlight = self.books.as_ref().and_then(|b| b.match_span());
         let whole = self.books.as_ref().is_some_and(|b| b.whole_words());
+        let two = self.books.as_ref().is_some_and(|b| b.two_pages());
+        let selected = self.books.as_ref().is_some_and(|b| b.has_selection());
         // Read Aloud toggles: start, then pause and resume; Stop Reading ends it
         let speaking = self.books.as_ref().and_then(|b| b.speaking());
         let read_title = match speaking {
@@ -70,6 +76,9 @@ impl App for BooksApp {
                     AppMenuItem::new(MENU_HIGHLIGHT, "Highlight Match").key("cmd+shift+y").enabled(highlight.is_some()).checked(highlight.is_some_and(|(_, saved)| saved)),
                     // the shell owns Edit; copying the match as a quote sits with the match's other actions
                     AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some()),
+                    // Select Page takes the text on the screen; Copy Selection puts that text on the board
+                    AppMenuItem::new(MENU_SELECT_PAGE, "Select Page").enabled(open),
+                    AppMenuItem::new(MENU_COPY_SELECTION, "Copy Selection").enabled(selected),
                     // a note sits on the match's highlight; the Notes panel opens with the note field ready
                     AppMenuItem::new(MENU_ADD_NOTE, "Add Note").enabled(highlight.is_some()),
                     AppMenuItem::separator(),
@@ -83,6 +92,14 @@ impl App for BooksApp {
                     AppMenuItem::new(MENU_WHOLE_WORDS, "Match Whole Words").enabled(open).checked(whole),
                 ],
             },
+            // the View menu merges into the shell's View menu; Continuous scrolling is not wired yet
+            AppMenu {
+                title: "View".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_SINGLE_PAGE, "Single Page").enabled(open).checked(!two),
+                    AppMenuItem::new(MENU_TWO_PAGES, "Two Pages").enabled(open).checked(two),
+                ],
+            },
         ]
     }
 
@@ -94,12 +111,24 @@ impl App for BooksApp {
             }
             return false;
         }
-        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS | MENU_LOOK_UP | MENU_TRANSLATE | MENU_READ_ALOUD | MENU_STOP_READING | MENU_ADD_NOTE) {
+        if id == MENU_COPY_SELECTION {
+            // the selected text goes to the shared clipboard as plain text, like a quotation
+            if let Some(text) = self.books.as_ref().and_then(|b| b.selection_text()) {
+                books::quote::copy(ctx, &text);
+            }
+            return false;
+        }
+        if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS | MENU_LOOK_UP | MENU_TRANSLATE | MENU_READ_ALOUD | MENU_STOP_READING | MENU_ADD_NOTE | MENU_SINGLE_PAGE | MENU_TWO_PAGES | MENU_SELECT_PAGE) {
             let Some(books) = &mut self.books else { return false };
             let t = bifrost_app::proto::sys::now_ms();
             match id {
                 MENU_FIND_NEXT => books.find_step(1, t),
                 MENU_FIND_PREVIOUS => books.find_step(-1, t),
+                MENU_SINGLE_PAGE => books.set_two_pages(&ctx.ui, false),
+                MENU_TWO_PAGES => books.set_two_pages(&ctx.ui, true),
+                MENU_SELECT_PAGE => {
+                    books.select_page();
+                }
                 MENU_HIGHLIGHT => {
                     books.toggle_match_highlight();
                 }
