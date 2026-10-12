@@ -187,6 +187,7 @@ pub mod cache {
     pub use bifrost_render::purgeable::{purge_all, Cache};
 }
 pub mod process_info;
+pub mod power_service;
 pub mod process_events;
 pub mod event_client;
 pub mod file_metadata;

@@ -12,6 +12,7 @@ pub mod pasteboard_types;
 pub mod keychain_groups;
 pub mod search_ranking;
 pub mod privacy_permissions;
+pub mod power_service;
 pub mod system;
 pub mod widgets_timeline;
 
@@ -44,6 +45,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(search_ranking::SearchRanking::default()),
         Box::new(privacy_permissions::PrivacyPermissions),
         Box::new(widgets_timeline::WidgetsTimeline),
+        Box::new(power_service::PowerService::default()),
     ]
 }
 
