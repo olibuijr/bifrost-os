@@ -11,9 +11,9 @@
 
 use super::aac::{Resampler, OUT_RATE};
 use super::speaker::SpeakerOut;
-use super::alsa::AudioOut;
+use super::audio_out::AudioOut;
 #[cfg(test)]
-use super::alsa::NullOut;
+use super::audio_out::NullOut;
 use super::audiofile::{self, AudioDecoder};
 use super::queue::{Queue, Repeat};
 use super::stream::{self, LiveHandle, LiveStatus, Tuning};
@@ -599,7 +599,7 @@ impl Engine {
         if std::mem::take(&mut self.fade_in) {
             fade_in(&mut self.pcm, FADE_FRAMES);
         }
-        match super::alsa::write_with_retry(&mut *self.out, &self.pcm, &super::alsa::WRITE_RETRY_BACKOFF) {
+        match super::audio_out::write_with_retry(&mut *self.out, &self.pcm, &super::audio_out::WRITE_RETRY_BACKOFF) {
             Ok(()) => self.written += self.pcm.len() as u64 / 2,
             Err(e) => {
                 // the device is gone: stop here instead of racing through the queue

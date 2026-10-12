@@ -24,12 +24,13 @@ names use the neutral names in the right-hand columns (`bifrost pc names`).
 - **Our code today:**
   - `springboard/audiod` (`is.olibuijr.audio`) is a media *player* service (queue, tracks, record). It is not a
     device server.
-  - Playback goes through `media/alsalib.rs`, which loads the system libasound at run time with `dlopen`, on the
-    `default` PCM.
-  - Capture uses the kernel's ALSA ioctls directly (`media/alsa.rs`), with the uapi struct layouts pinned by tests.
-  - The mixer, jack routing and volume are in `media/mixer.rs`, `route.rs` and `volume.rs`.
-  - The kit models in `springboard/ui/src/audio_*.rs` (`audio_hardware`, `hardware_clock`, `process_tap`,
-    `audio_engine`, `plugin_host`, `audio_session`, ...) are shapes with tests, not a running engine.
+  - Shell and media playback go through `media/speaker.rs`, a client of `bifrost-audio-hal` (`SpeakerOut`
+    implements `AudioOut` from `media/audio_out.rs`); capture is `media/capture.rs` over the same HAL. There is no
+    libasound and no direct ALSA ioctl in `media/`.
+  - Card controls and the uapi struct layouts live in `audio/alsa` (`bifrost_audio_alsa::ctl`); jack routing and
+    volume are `media/route.rs` and `media/volume.rs`.
+  - Unused kit models were deleted (AC-9); the remaining ones in `springboard/ui/src/audio_*.rs` are shapes with
+    tests, not a running engine.
 - **Parity matrix:** Core Audio 46 %, Audio Toolbox 50 %, Audio Unit 44 %, AVFAudio 50 %, Core MIDI 38 %,
   CoreAudioKit 42 %. None of these frameworks has a single row at `parity`.
 
@@ -310,7 +311,7 @@ The daemon keeps working with the policy process gone, using the last defaults.
 - **PulseAudio native protocol server.** Protocol version 35 and later; enough for Firefox, SDL, mpv and GStreamer
   `pulsesink`.
 - **JACK.** A libjack ABI replacement, for the pro Linux apps (Ardour, Carla). The graph model maps one to one.
-- **Our own `media/alsalib.rs`** goes away. The shell and the media player become HAL clients.
+- **`media/alsalib.rs`** is gone: the shell and the media player are HAL clients.
 
 ### Observability and tools
 

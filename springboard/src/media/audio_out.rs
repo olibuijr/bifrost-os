@@ -1,6 +1,6 @@
 //! The `AudioOut` trait the players write to, and the silent `NullOut` fallback. Playback goes
-//! through the audio server (`super::speaker`) or libasound (`super::alsalib`); the mixer side
-//! (controls) is `super::mixer`. Capture is not here: the audio server owns the input hardware,
+//! through the audio server (`super::speaker`, over `bifrost-audio-hal`). Card controls live in
+//! `bifrost_audio_alsa::ctl`. Capture is not here: the audio server owns the input hardware,
 //! and `super::capture` reads it through `bifrost-audio-hal`.
 
 use std::io;

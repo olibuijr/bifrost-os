@@ -281,6 +281,7 @@ dependencies = [
  "bifrost-core",
  "bifrost-gpu",
  "bifrost-layers",
+ "bifrost-midi",
  "bifrost-proto",
  "bifrost-render",
  "bifrost-ui",

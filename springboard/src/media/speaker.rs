@@ -8,7 +8,7 @@
 //! resamples linearly when the device rate differs from the source rate, and writes the
 //! buffers of the cycle.
 
-use super::alsa::AudioOut;
+use super::audio_out::AudioOut;
 use bifrost_audio_hal::{Device, IoContext, IoProcConfig, IoProcId, Role, System};
 use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue, TimeStamp};
 use std::io;

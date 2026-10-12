@@ -59,7 +59,7 @@
     {
       "feature": "Audio session and output route (headphones, speaker)",
       "apple": "Audio session support (route, category, interruption handling)",
-      "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/src/media/mixer.rs",
+      "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs",
       "status": "os",
       "note": "Route switching on the headphone jack, per-route volume and the headphone cap run in the system layer. Apps have no session category or interruption API. The service gives audio focus to the latest player."
     },

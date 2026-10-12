@@ -42,13 +42,11 @@ pub mod symfile;
 pub mod volume;
 
 #[cfg(target_os = "linux")]
-pub mod alsa;
+pub mod audio_out;
 #[cfg(target_os = "linux")]
 pub mod capture;
 #[cfg(target_os = "linux")]
 pub mod v4l2;
-#[cfg(target_os = "linux")]
-pub mod mixer;
 #[cfg(target_os = "linux")]
 pub mod speaker;
 pub mod audioplayer;

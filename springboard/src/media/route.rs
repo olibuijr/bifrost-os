@@ -1,7 +1,7 @@
 //! Audio routing: which output the sound goes to (speaker or headphones), the headset jack
 //! state, each route's remembered volume and the headphone safety cap. The sound server does
-//! the real routing on a desktop; `apply` only flips the card's own headphone and speaker
-//! output switches, found by name at run time, when a card exposes them.
+//! the real routing on a desktop; `plan` names the card's own headphone and speaker output
+//! switches, found by name at run time, for a caller that talks to the card's mixer (`bifrost_audio_alsa::ctl`).
 
 use super::volume::Volume;
 
@@ -112,20 +112,6 @@ pub fn plan(route: Route, controls: &[Candidate]) -> Vec<(String, String)> {
         }
     }
     out
-}
-
-/// Switches the card to `route`: scans the controls, writes the plan.
-/// Returns how many controls were set. Audible: only on a jack event or
-/// an explicit play, never at start-up for the speaker.
-#[cfg(target_os = "linux")]
-pub fn apply(route: Route, mixer: &super::mixer::Mixer) -> std::io::Result<usize> {
-    use super::mixer::Kind;
-    let found: Vec<Candidate> = mixer.list()?.into_iter().filter(|c| matches!(c.kind, Kind::Bool | Kind::Enum)).map(|c| Candidate { name: c.name, items: if c.kind == Kind::Enum { c.items } else { vec![] } }).collect();
-    let steps = plan(route, &found);
-    for (name, value) in &steps {
-        mixer.set_text(name, &[value])?;
-    }
-    Ok(steps.len())
 }
 
 // --- the jack ---

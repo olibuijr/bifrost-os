@@ -10,9 +10,9 @@
     {
       "feature": "Audio session (AVAudioSession)",
       "apple": "AVAudioSession: setCategory, setMode, setActive, activate/deactivate",
-      "bifrost": "springboard/ui/src/audio_session.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing session category or mode; the service decides ownership, apps cannot declare intent"
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. no app-facing session category or mode; the service decides ownership, apps cannot declare intent"
     },
     {
       "feature": "Audio application and recording permission",
@@ -24,9 +24,9 @@
     {
       "feature": "Audio interruptions",
       "apple": "AVAudioSession interruption notifications",
-      "bifrost": "springboard/ui/src/audio_session.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interruption event in svc::audio Evt (only State, Record, RecordDone)"
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. no interruption event in svc::audio Evt (only State, Record, RecordDone)"
     },
     {
       "feature": "Route changes",
@@ -80,7 +80,7 @@
     {
       "feature": "Mixing and volume control",
       "apple": "AVAudioMixing, volume and pan on players and mixer nodes",
-      "bifrost": "springboard/src/media/mixer.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_rect, volume_at, set_volume, draw_volume)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_rect, volume_at, set_volume, draw_volume)",
       "status": "partial",
       "note": "one system volume and mute for the playback service; no per-source mixing Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
