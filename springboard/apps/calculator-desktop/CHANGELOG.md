@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0 — 2026-10-12
+
+- Drawing through Canvas (graphics wave G2, `app-canvas-pilot`): the calculator draws its display, keys, history
+  sidebar, Convert panel, Edit menu and toolbar with the drawing vocabulary of `bifrost_render::canvas::Canvas`
+  (`draws_canvas` is true, `draw_canvas` does the drawing). The same routine runs on the shared-memory CPU surface and
+  on the GPU direct path, so the calculator's pixels do not depend on which one the window server uses.
+- The toolbar and its band are drawn by the calculator itself on `Canvas` (the SDK helpers take a surface), with the
+  same layout, glyphs and accessibility records. The translucent titlebar material of the toolbar band is not drawn
+  yet: the band is opaque until the SDK toolbar takes a canvas.
+
 ## 1.6.0 — 2026-10-12
 
 - Statistics on the paper tape: Copy Tape now ends with a Statistics block after the calculations. It gives the
