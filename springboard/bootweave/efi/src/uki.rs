@@ -18,19 +18,18 @@ pub fn options(line: &str) -> alloc::string::String {
         .join(" ")
 }
 
-/// The file the loader starts for `line`: the `uki=` image, else `vmlinuz-linux` next to the `initrd=` file (the
-/// older install layout). `None` when the path cannot be a firmware path (a NUL, or a character outside UCS-2), so
+/// The file the loader starts for `line`: the `uki=` image, else the kernel next to the `initrd=` file (the
+/// older install layout): `initramfs-linux-rt.img` starts `vmlinuz-linux-rt`; `initramfs-linux.img` (and any other
+/// name) starts the stock `vmlinuz-linux`. `None` when the path cannot be a firmware path (a NUL, or a character outside UCS-2), so
 /// the caller takes the rollback path instead of panicking in the firmware.
 pub fn kernel_file(line: &str) -> Option<alloc::string::String> {
     let file = match target(line) {
         Some(file) => alloc::string::String::from(file),
         None => {
-            let dir = line
-                .split_whitespace()
-                .find_map(|t| t.strip_prefix("initrd="))
-                .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
-                .unwrap_or("\\arch\\boot\\x86_64");
-            alloc::format!("{dir}\\vmlinuz-linux")
+            let initrd = line.split_whitespace().find_map(|t| t.strip_prefix("initrd="));
+            let dir = initrd.and_then(|p| p.rfind('\\').map(|i| &p[..i])).unwrap_or("\\arch\\boot\\x86_64");
+            let rt = initrd.is_some_and(|p| p.ends_with("initramfs-linux-rt.img"));
+            alloc::format!("{dir}\\vmlinuz-linux{}", if rt { "-rt" } else { "" })
         }
     };
     file.chars().all(|c| c != '\0' && (c as u32) <= 0xFFFF).then_some(file)
@@ -44,6 +43,8 @@ mod tests {
     fn kernel_file_names_the_image_or_the_kernel_next_to_the_initrd() {
         assert_eq!(kernel_file("uki=\\EFI\\BIFROST\\bifrost.efi quiet").as_deref(), Some("\\EFI\\BIFROST\\bifrost.efi"));
         assert_eq!(kernel_file("initrd=\\boot\\initramfs.img quiet").as_deref(), Some("\\boot\\vmlinuz-linux"));
+        assert_eq!(kernel_file("initrd=\\initramfs-linux-rt.img quiet").as_deref(), Some("\\vmlinuz-linux-rt"));
+        assert_eq!(kernel_file("initrd=\\initramfs-linux.img quiet").as_deref(), Some("\\vmlinuz-linux"));
         assert_eq!(kernel_file("quiet").as_deref(), Some("\\arch\\boot\\x86_64\\vmlinuz-linux"));
     }
 

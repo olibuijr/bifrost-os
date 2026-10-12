@@ -26,6 +26,7 @@ _make_bootmode_uefi.bifrost() {
     local extra="quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs"
     # debug builds put their own command line (journal diagnostics with graphical splash) in <profile>/bifrost-cmdline
     [[ -s "${profile}/bifrost-cmdline" ]] && extra="$(cat "${profile}/bifrost-cmdline")"
+    # the live ISO keeps the stock linux kernel; only installed systems use linux-rt (plan.rs BASE_PACKAGES)
     local line="initrd=\\${install_dir}\\boot\\${arch}\\initramfs-linux.img archisobasedir=${install_dir} archisosearchuuid=${iso_uuid} ${extra}"
     rm -rf -- "${isofs_dir}/EFI" "${isofs_dir}/loader" "${isofs_dir}/shell"*.efi
     install -d -m 0755 -- "${isofs_dir}/EFI/BOOT" "${isofs_dir}/EFI/BIFROST" "${isofs_dir}/loader/entries"

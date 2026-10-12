@@ -21,6 +21,9 @@ gpu = re.search(r"pub fn gpu_packages\(.*?\n}\n", plan, re.S).group(0)
 names = re.findall(r'"([a-z0-9][a-z0-9+._-]*)"', base) + open("packaging/arch/runtime-packages.txt").read().split()
 names += [n for n in re.findall(r'"([a-z0-9][a-z0-9+._-]*)"', gpu) if not n.startswith(("[", "intel corp", "advanced", "nvidia"))]
 names += ["nvidia-open", "nvidia-utils", "libva-nvidia-driver", "mkinitcpio", "grub"]
+# linux-rt comes from BASE_PACKAGES (the installed default kernel); the stock linux stays for the installer's fallback
+# and the live ISO kernel
+names += ["linux", "linux-rt"]
 seen = []
 for n in names:
     if n not in seen and " " not in n:
