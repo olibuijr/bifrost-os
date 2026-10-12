@@ -7,6 +7,7 @@ pub mod exchange;
 pub mod ics;
 pub mod layout;
 pub mod notes;
+pub mod quick;
 pub mod recur;
 pub mod search;
 pub use springboard::shell::calendar::{store, Date};
@@ -117,6 +118,8 @@ enum Target {
     Notes,
     /// Offers the address written in the notes as the location.
     FillAddress,
+    /// Copies the phone number written in the notes to the pasteboard.
+    CopyPhone,
     Repeat,
     Alert,
     Toggle(Slot),
@@ -173,6 +176,8 @@ pub struct Calendar {
     error: Option<String>,
     /// Confirmation after an export, shown in place of an error.
     notice: Option<String>,
+    /// A phone number the editor asked to copy; the app takes it (`take_copied`) and writes the pasteboard.
+    copied: Option<String>,
     /// Desktop only: the editor offers Export Event, saved under ~/Documents.
     file_export: bool,
     /// Month view: a leading column with ISO week numbers (the toggle is desktop-only, with `file_export`).
@@ -242,6 +247,7 @@ impl Calendar {
             alerts: alerts::AlertState::default(),
             error,
             notice: None,
+            copied: None,
             file_export: false,
             week_numbers,
             undo: None,
@@ -347,6 +353,9 @@ impl Calendar {
         items.extend([None, Some(Target::Repeat), Some(Target::Alert), None, Some(Target::Notes)]);
         if self.notes_address().is_some() {
             items.push(Some(Target::FillAddress));
+        }
+        if self.notes_phone().is_some() {
+            items.push(Some(Target::CopyPhone));
         }
         if draft.existing {
             items.extend([None, Some(Target::Duplicate)]);
@@ -502,16 +511,64 @@ impl Calendar {
                 alert: 0,
             }
         };
+        self.open_draft(ui, event, id.is_some());
+    }
+
+    /// Shows the editor on `event`: an existing one, or a new one whose Title field takes the focus.
+    fn open_draft(&mut self, ui: &Ui, event: CalendarEvent, existing: bool) {
         self.fields[0].set_text(ui, &event.title);
         self.fields[1].set_text(ui, &event.location);
         self.fields[2].set_text(ui, &event.notes);
-        self.focus(id.is_none().then_some(0));
+        self.focus((!existing).then_some(0));
         self.editor = Some(Draft {
             event,
-            existing: id.is_some(),
+            existing,
             open: None,
         });
         self.error = None;
+    }
+
+    /// File > New Event from Text: opens the editor on the event `text` describes (`quick::parse`). Empty text opens a
+    /// plain New Event. The event is not saved until Save, like any other.
+    pub fn new_event_from_text(&mut self, ui: &Ui, text: &str, t: f64) -> bool {
+        if text.trim().is_empty() {
+            self.open(ui, None);
+            return true;
+        }
+        let q = quick::parse(text, today(self.wall, t));
+        let event = CalendarEvent {
+            id: store::next_id(&self.events),
+            date: q.date.unwrap_or(self.selected),
+            minute: q.minute.unwrap_or(9 * 60),
+            duration: 60,
+            all_day: false,
+            title: q.title,
+            location: q.location.unwrap_or_default(),
+            notes: String::new(),
+            repeat: 0,
+            alert: 0,
+        };
+        self.open_draft(ui, event, false);
+        self.dirty = true;
+        true
+    }
+
+    /// The first phone number in the notes field (live text, before Save), if any.
+    fn notes_phone(&self) -> Option<String> {
+        notes::phone(self.fields[2].text())
+    }
+
+    /// Asks the app to copy the first phone number in the notes; the notice confirms it.
+    fn copy_phone(&mut self) {
+        if let Some(phone) = self.notes_phone() {
+            self.notice = Some(format!("Copied {phone}"));
+            self.copied = Some(phone);
+        }
+    }
+
+    /// The phone number the editor last asked to copy, once (the app writes it to the pasteboard).
+    pub fn take_copied(&mut self) -> Option<String> {
+        self.copied.take()
     }
 
     fn close(&mut self) {
@@ -759,6 +816,7 @@ impl Calendar {
                     self.fields[1].set_text(ui, &address);
                 }
             }
+            Target::CopyPhone => self.copy_phone(),
             Target::DateStep(_)
             | Target::MonthStep(_)
             | Target::TimeStep(_)
@@ -1154,6 +1212,10 @@ impl Calendar {
                     let text = self.notes_address().map_or_else(String::new, |a| format!("Use {a} as Location"));
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
+                Target::CopyPhone => {
+                    let text = self.notes_phone().map_or_else(String::new, |p| format!("Copy {p}"));
+                    self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
+                }
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
@@ -1223,10 +1285,12 @@ pub enum Command {
     ShowYear,
     WeekNumbers,
     CalendarList,
+    /// File > New Event from Text (the app reads the pasteboard, see `Calendar::new_event_from_text`).
+    NewEventFromText,
 }
 
 impl Command {
-    pub const ALL: [Command; 15] = [
+    pub const ALL: [Command; 16] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1242,6 +1306,7 @@ impl Command {
         Command::ShowYear,
         Command::WeekNumbers,
         Command::CalendarList,
+        Command::NewEventFromText,
     ];
 
     pub fn id(self) -> u32 {
@@ -1269,6 +1334,7 @@ impl Command {
             Command::ShowYear => "Year",
             Command::WeekNumbers => "Week Numbers",
             Command::CalendarList => "Calendar List",
+            Command::NewEventFromText => "New Event from Text",
         }
     }
 
@@ -1344,6 +1410,8 @@ impl Calendar {
             Command::ShowYear => Target::View(View::Year),
             Command::WeekNumbers => Target::WeekNumbers,
             Command::CalendarList => Target::Sidebar,
+            // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
+            Command::NewEventFromText => Target::Add,
         };
         self.activate(ui, target, t);
         true

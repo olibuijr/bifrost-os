@@ -579,3 +579,53 @@ fn an_address_in_the_notes_is_offered_as_the_location() {
     c.activate(&ui, Target::FillAddress, 1.0);
     assert_eq!(c.fields[1].text(), "Laugavegur 12");
 }
+
+#[test]
+fn a_phone_number_in_the_notes_is_offered_as_a_copy_action() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Dinner")];
+    c.open(&ui, Some(1));
+    assert!(!c.rows().iter().any(|r| r.0 == Target::CopyPhone), "no phone number in the notes yet");
+    c.fields[2].set_text(&ui, "Call +354 555 1234 before lunch");
+    assert!(c.rows().iter().any(|r| r.0 == Target::CopyPhone), "the offer appears under Notes");
+    c.activate(&ui, Target::CopyPhone, 1.0);
+    assert_eq!(c.take_copied().as_deref(), Some("+354 555 1234"));
+    assert_eq!(c.take_copied(), None, "the copy is handed over once");
+    assert_eq!(c.notice.as_deref(), Some("Copied +354 555 1234"));
+    assert!(c.editor.is_some(), "the draft stays open");
+}
+
+#[test]
+fn new_event_from_text_opens_a_prefilled_editor() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.new_event_from_text(&ui, "Lunch with Ana next Tuesday at 12:30 at Laugavegur 5", 1.0));
+    let draft = c.editor.as_ref().expect("the editor opens");
+    assert!(!draft.existing, "a new event, not saved yet");
+    assert_eq!(draft.event.title, "Lunch with Ana");
+    assert_eq!(draft.event.location, "Laugavegur 5");
+    assert_eq!(draft.event.minute, 12 * 60 + 30);
+    assert_eq!(draft.event.duration, 60);
+    // the next Tuesday after today: a weekday 2 (Tuesday), one to seven days on
+    let gap = draft.event.date.days() - today(c.wall(), 1.0).days();
+    assert!((1..=7).contains(&gap), "next Tuesday is within a week");
+    assert_eq!(draft.event.date.weekday(), 2);
+    assert_eq!(c.fields[0].text(), "Lunch with Ana");
+    assert_eq!(c.fields[1].text(), "Laugavegur 5");
+    assert!(c.events.is_empty(), "nothing is saved until Save");
+}
+
+#[test]
+fn new_event_from_an_empty_pasteboard_is_a_plain_new_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.new_event_from_text(&ui, "   ", 1.0));
+    let draft = c.editor.as_ref().expect("the editor opens");
+    assert!(!draft.existing);
+    assert_eq!(draft.event.minute, 9 * 60, "the editor's default start");
+    assert!(draft.event.title.is_empty());
+}
