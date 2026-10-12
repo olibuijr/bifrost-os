@@ -6,11 +6,15 @@ mod freeform;
 mod icon;
 mod ink;
 mod services;
+mod style;
 
 use bifrost_app::kit::{Damage, Event, Surface};
-use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::path::PathBuf;
+
+/// The File menu's Export as PNG item.
+const MENU_EXPORT: u32 = 1;
 
 struct FreeformApp {
     app: Option<freeform::Freeform>,
@@ -86,6 +90,21 @@ impl App for FreeformApp {
 
     fn controls(&self, _ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
         self.app.as_ref().map(|c| c.controls()).unwrap_or_default()
+    }
+
+    /// The app's File menu (the shell bar merges it into its own File menu). Export is off until the board has a stroke.
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let has = self.app.as_ref().is_some_and(|c| c.has_strokes());
+        vec![AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has)] }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id != MENU_EXPORT {
+            return false;
+        }
+        let Some(c) = &mut self.app else { return false };
+        c.export_as_png(&ctx.ui);
+        true
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
