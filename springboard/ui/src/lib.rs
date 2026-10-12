@@ -647,6 +647,7 @@ pub mod workflow;
 pub mod scripting;
 pub mod subscription;
 pub mod auth_view;
+pub mod one_time_code;
 pub mod entitlement;
 pub mod purchase;
 pub mod offer;
