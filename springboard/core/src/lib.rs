@@ -14,6 +14,8 @@ pub mod host;
 pub mod pin;
 pub mod random;
 pub mod meter;
+pub mod ff_device;
+pub mod ff_effect;
 pub mod gamepad;
 pub mod usb_descriptors;
 pub mod usb_transfer;
