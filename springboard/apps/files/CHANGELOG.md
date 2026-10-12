@@ -1,3 +1,7 @@
+## 1.17.2 — 2026-10-12
+
+- Moving an item to the Trash takes the item's folder under the shared file coordination lock, so another app that coordinates its reads and writes never sees the item half moved. If the folder stays busy for five seconds the item is left in place and the report says "The item is in use by another app."
+
 ## 1.17.1 — 2026-10-12
 
 - Tests: under the test pin the first folder is read at once, so a busy machine never snapshots "Loading…".

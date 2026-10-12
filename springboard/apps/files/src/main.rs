@@ -41,6 +41,7 @@ use std::{
 use bifrost_app::kit::ui::{SPACE_L, SPACE_XL, SPACE_XS};
 
 mod control;
+mod coordinate;
 mod go;
 mod info;
 mod keys;
