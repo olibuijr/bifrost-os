@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.3
 
 - Build cleanup: the test-only reader and shelf accessors (`page`, `fullscreen`, `shelf_titles`, `settings`) are compiled only for tests, so the normal build has no dead-code warnings.

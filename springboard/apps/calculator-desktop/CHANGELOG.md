@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.8.0 — 2026-10-12
 
 - Warnings cleared: the test-only helpers (the hit-test rectangles used by the tests, `describe`, the converter's
