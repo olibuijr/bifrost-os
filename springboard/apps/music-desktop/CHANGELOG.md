@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.0 — 2026-10-12
 
 - The Songs list shows each song's tempo in beats per minute, in a column left of its length. Music reads the start of
