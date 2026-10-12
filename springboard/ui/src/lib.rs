@@ -945,6 +945,8 @@ pub mod webpage_usage;
 pub mod call_directory;
 pub mod annotation;
 pub mod ecs;
+pub mod scene_loop;
+pub mod strategist;
 pub mod rules;
 pub mod decision;
 pub mod capture_access;
