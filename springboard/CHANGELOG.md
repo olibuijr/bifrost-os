@@ -1,5 +1,28 @@
 # BifrOSt changelog
 
+## 0.6.0 — 2026-10-12
+
+New graphics, audio and boot stacks, a full code audit and lab autonomy.
+
+- Graphics: the window server's Vulkan scanout draws the real scene (Wayland and X11 windows) with real damage; the
+  GLES path composes only when something changed; blur no longer forces a page flip every vblank; background windows
+  keep their stacking and focus. GPU uploads are batched into the frame instead of a synchronous upload per glyph.
+- Audio: the BifrOSt audio server (bifrost-audiod) with the HAL client, ALSA driver (mmap, 2-period ring, converter
+  latency both ways), aggregates, MIDI server, PulseAudio, JACK and ALSA plug-in compatibility, and the
+  lowest-latency path (16 and 32 frame quanta, CPU latency hold, sound IRQ thread priority, threaded IRQs).
+  bifrost-audio-bench measures MIDI latency through a virtual Bench Instrument, audio round trip, xrun sweeps and
+  MIDI throughput, live against the running server.
+- Boot: Bootweave draws one boot frame from the loader to the desktop with a progress bar that learns from earlier
+  boots, unified kernel images, a text-free kernel, Unlock is login, failure and rollback screens, the desktop
+  revealed once, and a symmetric shutdown fade.
+- Audit: 153 findings from a full read-only audit fixed or recorded. Fixes include an audio cycle that burned its
+  whole budget waiting on a signal nothing sent, a hostile audio client reading out of bounds, a short app buffer
+  that could crash the desktop, blocking app sockets that could freeze it, and the CPU desktop path's 40-90 ms frames.
+- The workspace builds with no warnings; 12,165 tests pass.
+- Lab: panics, oopses and lockups reboot the machine; Wake-on-LAN stays on; kernel messages stream to the build host.
+  Real-time kernel benchmarks (worst wake-up 38 us versus 337 us, no underruns at 32 frames) decided linux-rt as the
+  next default kernel.
+
 ## 0.5.44 — 2026-10-12
 
 Parity wiring, wave 6 (30 agents).
