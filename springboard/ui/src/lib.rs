@@ -876,6 +876,8 @@ pub mod geo;
 pub mod record_store;
 pub mod record_sync;
 pub mod record_asset;
+pub mod record_share;
+pub mod web_service_token;
 pub mod mic_consent;
 pub mod weather_model;
 pub mod language;
