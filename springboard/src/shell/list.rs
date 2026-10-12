@@ -312,6 +312,8 @@ fn header_for(id: PageId) -> Option<(Icon, &'static str)> {
         PageId::Focus => (Icon::Focus, "Silence notifications while you work."),
         PageId::ScreenTime => (Icon::ScreenTime, "See how you use your computer and set limits."),
         PageId::ControlCentre => (Icon::ControlCentre, "Choose which controls appear in Control Centre."),
+        PageId::Sharing => (Icon::Wifi, "Choose how this computer shares with nearby devices and whether your other devices can pick up its work."),
+        PageId::LockScreen => (Icon::Passcode, "Choose when the screen locks after a while and what it asks for before it opens again."),
         _ => return None,
     })
 }
