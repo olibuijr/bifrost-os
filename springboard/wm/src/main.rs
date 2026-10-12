@@ -44,7 +44,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         bifrost_wm::nested::init(&mut event_loop, &mut state)?;
         let name = state.socket_name.to_string_lossy().into_owned();
         eprintln!("bifrost-wm: nested on {name}");
-        spawn(&command, &name);
+        let (cmd, sock) = (command.clone(), name.clone());
+        #[cfg(feature = "xwayland")]
+        bifrost_wm::xwayland::start(&event_loop.handle(), &mut state, Box::new(move || spawn(&cmd, &sock)));
+        #[cfg(not(feature = "xwayland"))]
+        spawn(&cmd, &sock);
         event_loop.run(None, &mut state, |_| {})?;
         Ok(())
     }

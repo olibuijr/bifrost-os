@@ -5,6 +5,7 @@ use std::{ffi::OsString, sync::Arc, time::Instant};
 
 use smithay::{
     desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
+    wayland::seat::WaylandFocus,
     input::{Seat, SeatState},
     output::Output,
     reexports::{
@@ -63,6 +64,9 @@ pub struct WmState {
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
     pub seat: Seat<WmState>,
+    /// XWayland, its X11 window manager and the xwayland-shell global (`xwayland.rs`).
+    #[cfg(feature = "xwayland")]
+    pub xwayland: crate::xwayland::XWaylandState,
 }
 
 impl WmState {
@@ -120,6 +124,8 @@ impl WmState {
             popups: PopupManager::default(),
             seat_state,
             seat,
+            #[cfg(feature = "xwayland")]
+            xwayland: crate::xwayland::XWaylandState::new(&dh),
             dh,
         }
     }
@@ -159,7 +165,7 @@ impl WmState {
     }
 
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
-        self.space.elements().find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface)).cloned()
+        self.space.elements().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)).cloned()
     }
 
     /// Moves every mapped window to the frame `wm` holds for it, in `wm` stacking order.
@@ -193,7 +199,7 @@ impl WmState {
                 t.send_pending_configure();
             }
         }
-        let surface = focused.and_then(|id| self.window(id)).and_then(|w| w.toplevel().map(|t| t.wl_surface().clone()));
+        let surface = focused.and_then(|id| self.window(id)).and_then(|w| w.wl_surface().map(|s| s.into_owned()));
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, surface, serial);
         }

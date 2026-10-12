@@ -50,7 +50,14 @@ impl CompositorHandler for WmState {
     fn compositor_state(&mut self) -> &mut CompositorState { &mut self.compositor_state }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        &client.get_data::<ClientState>().expect("client state").compositor_state
+        if let Some(state) = client.get_data::<ClientState>() {
+            return &state.compositor_state;
+        }
+        #[cfg(feature = "xwayland")]
+        if let Some(state) = crate::xwayland::client_compositor_state(client) {
+            return state;
+        }
+        panic!("client state")
     }
 
     fn commit(&mut self, surface: &WlSurface) {
