@@ -43,3 +43,4 @@ pub mod relay;
 pub mod dns_message;
 pub mod dns_record_set;
 pub mod app_metrics;
+pub mod mediaext;

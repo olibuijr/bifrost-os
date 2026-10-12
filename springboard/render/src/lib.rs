@@ -32,6 +32,7 @@ pub mod colormap;
 pub mod clip;
 pub mod pattern;
 pub mod function;
+pub mod raw_params;
 
 #[cfg(test)]
 mod tests {
