@@ -3,14 +3,14 @@
   "doc": "https://developer.apple.com/documentation/coreaudio",
   "macos_since": "10.0",
   "status": "partial",
-  "bifrost": "springboard/audiod (audio service), springboard/sdk/src/lib.rs (audio::Client re-export), springboard/src/svc.rs, springboard/src/media/speaker.rs, springboard/src/media/capture.rs, springboard/src/media/mixer.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs",
+  "bifrost": "springboard/audiod (audio service), springboard/sdk/src/lib.rs (audio::Client re-export), springboard/src/svc.rs, springboard/src/media/speaker.rs, springboard/src/media/capture.rs, springboard/audio/alsa/src/ctl.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs",
   "summary": "BifrOSt covers speaker playback, microphone capture and volume through an ALSA and libasound layer owned by one audio service, and apps reach it over a socket client for playback transport and recording. The HAL object model, virtual audio drivers, aggregate devices, hardware clocks and per-process audio taps have no counterpart; no SDK exposes device objects.",
   "rea_evidence": "ev_bd10e360fb1e915d03b738fad1e0a829b4d87a74e798502bbe22e6d509ce6332",
   "features": [
     {
       "feature": "Audio HAL object model (system, devices, streams, controls, clocks)",
       "apple": "AudioHardwareSystem, AudioHardwareDevice, AudioHardwareStream, AudioHardwareControl, AudioHardwareClock, AudioHardwareObject",
-      "bifrost": "springboard/src/media/mixer.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm)",
       "status": "os",
       "note": "Device and control enumeration exists in the system layer only. No app-facing device or stream object API in springboard/sdk/src/lib.rs."
     },
@@ -24,23 +24,23 @@
     {
       "feature": "Aggregate devices",
       "apple": "AudioHardwareAggregateDevice",
-      "bifrost": "springboard/ui/src/audio_hardware.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Routing and mixing are delegated to the sound server through libasound's default PCM (springboard/src/media/alsalib.rs). No aggregate device is created or exposed."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. Routing and mixing are delegated to the sound server through libasound's default PCM (springboard/src/media/alsalib.rs). No aggregate device is created or exposed."
     },
     {
       "feature": "Process taps (capture a process's output)",
       "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
-      "bifrost": "springboard/ui/src/process_tap.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-20, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-application or system output capture. Apple taps need an output-side hook that the audio service does not have."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. No per-application or system output capture. Apple taps need an output-side hook that the audio service does not have."
     },
     {
       "feature": "Process objects (client process list)",
       "apple": "AudioHardwareProcess",
-      "bifrost": "springboard/ui/src/audio_hardware.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The service knows its clients as sockets, but it does not report audio processes or their IO state to apps."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. The service knows its clients as sockets, but it does not report audio processes or their IO state to apps."
     },
     {
       "feature": "Speaker playback",
@@ -87,9 +87,9 @@
     {
       "feature": "Hardware clocks and sample-accurate sync",
       "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
-      "bifrost": "springboard/ui/src/hardware_clock.rs (HardwareClock",
-      "status": "partial",
-      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The output path has no clock objects or reference-device selection. Sync is handled by the sound server."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. The output path has no clock objects or reference-device selection. Sync is handled by the sound server."
     },
     {
       "feature": "Channel layouts and data types",
@@ -101,9 +101,9 @@
     {
       "feature": "Boxes and device containers",
       "apple": "AudioHardwareBox",
-      "bifrost": "springboard/ui/src/audio_hardware.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No enable or disable of audio containers. Hardware is handled by the kernel and the sound server."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. No enable or disable of audio containers. Hardware is handled by the kernel and the sound server."
     },
     {
       "feature": "Remote and streaming device transports",

@@ -16,6 +16,10 @@ use std::time::Duration;
 /// Capture and playback channels the HAL driver opens.
 pub const PHYS_CHANNELS: usize = 2;
 
+/// Frames of the cycle running now, for the port-buffer calls of the process thread (`jack_midi_event_*`), which
+/// must not take any lock.
+pub static CURRENT_FRAMES: AtomicU32 = AtomicU32::new(MAX_FRAMES as u32);
+
 pub fn log(category: &str, msg: &str) {
     eprintln!("[is.olibuijr.audio:{category}] jack: {msg}");
 }
@@ -83,6 +87,7 @@ impl Runtime {
         let mut off = 0;
         while off < frames {
             let n = (frames - off).min(MAX_FRAMES);
+            CURRENT_FRAMES.store(n as u32, Relaxed);
             e.cycle(n, input, output, off, usecs + off as u64 * 1_000_000 / rate);
             off += n;
         }

@@ -10,9 +10,9 @@
     {
       "feature": "Audio processing taps",
       "apple": "MTAudioProcessingTapCreate, MTAudioProcessingTapCreateWithPreferredFormat, MTAudioProcessingTapGetSourceAudio, MTAudioProcessingTapGetStorage, MTAudioProcessingTapFlags",
-      "bifrost": "springboard/ui/src/audio_processing_tap.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app inspect or process audio from a playing mix. The ALSA mixer in mixer.rs sets volume controls and is not a tap."
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. No API lets an app inspect or process audio from a playing mix. The ALSA mixer in audio/alsa/src/ctl.rs sets volume controls and is not a tap."
     },
     {
       "feature": "Professional video format reader registration",

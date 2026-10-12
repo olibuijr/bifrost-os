@@ -10,14 +10,14 @@
     {
       "feature": "MIDI Services (clients, ports, device and entity lookup)",
       "apple": "MIDIClientCreate, MIDIInputPortCreateWithProtocol, MIDIOutputPortCreate, MIDIGetNumberOfDevices, MIDIPortConnectSource, MIDIReceiveBlock (https://developer.apple.com/documentation/coremidi/midi-services)",
-      "bifrost": "springboard/core/src/midi_endpoints.rs",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs",
       "status": "partial",
       "note": "Wave 3 (w3-core-midi, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No client, port or endpoint code. Searches for snd_seq, /dev/snd/seq and rawmidi in the repo return nothing. Input devices in springboard/src/bare/input.rs are evdev keyboards, mice and touch only."
     },
     {
       "feature": "MIDI System Setup (driver and external device management)",
       "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)",
-      "bifrost": "springboard/core/src/midi_endpoints.rs (remove_entity",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs (remove_entity",
       "status": "partial",
       "note": "Wave 5 (w5-core-midi, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-wide MIDI device registry. Hotplug for audio devices is in springboard/src/media/ and springboard/src/bare/input.rs, not for MIDI."
     },

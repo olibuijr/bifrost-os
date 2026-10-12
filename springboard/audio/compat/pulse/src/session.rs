@@ -19,6 +19,8 @@ const SERVER_NAME: &str = "bifrost-audio-pulse";
 const SERVER_VERSION: &str = "16.1";
 /// The default playback buffer: 100 ms.
 const DEFAULT_BUFFER_DIV: u32 = 10;
+/// Upper bound for every client-chosen buffer length (the reference server's maxlength cap), in bytes.
+const MAX_BUFFER_BYTES: usize = 4 << 20;
 
 enum Fail {
     Malformed,
@@ -42,6 +44,8 @@ struct Playback {
     frame_bytes: usize,
     sink: String,
     sink_index: u32,
+    /// Device latency in microseconds, read once at creation (no server enumeration per latency query).
+    latency_us: u64,
     ring: Arc<Ring>,
     ctl: Arc<StreamCtl>,
     _handle: Box<dyn StreamHandle>,
@@ -83,6 +87,7 @@ struct Record {
     frame_bytes: usize,
     source: String,
     source_index: u32,
+    latency_us: u64,
     ring: Arc<Ring>,
     ctl: Arc<StreamCtl>,
     _handle: Box<dyn StreamHandle>,
@@ -115,11 +120,12 @@ fn now_timeval() -> (u32, u32) {
 /// Returns (maxlength, tlength, prebuf, minreq).
 pub fn playback_attrs(rate: u32, frame_bytes: usize, maxlength: u32, tlength: u32, prebuf: u32, minreq: u32) -> (usize, usize, usize, usize) {
     let fb = frame_bytes;
+    let cap = ((MAX_BUFFER_BYTES / fb).max(1)) * fb;
     let whole = |v: usize| (v / fb).max(1) * fb;
-    let t = whole(if tlength == INVALID { (rate / DEFAULT_BUFFER_DIV) as usize * fb } else { tlength as usize });
+    let t = whole(if tlength == INVALID { (rate / DEFAULT_BUFFER_DIV) as usize * fb } else { tlength as usize }).min(cap);
     let m = whole(if minreq == INVALID { t / 4 } else { minreq as usize }).min(t);
     let p = if prebuf == INVALID { t } else { (prebuf as usize / fb) * fb }.min(t);
-    let max = whole(if maxlength == INVALID { t * 4 } else { maxlength as usize }).max(t);
+    let max = whole(if maxlength == INVALID { t * 4 } else { maxlength as usize }).min(cap).max(t);
     (max, t, p, m)
 }
 
@@ -530,7 +536,7 @@ impl Session {
                 let ch = r.u32()?;
                 let (sec, usec) = r.timeval()?;
                 let p = self.playback.get(&ch).ok_or(Fail::Code(err::NOENTITY))?;
-                let latency = be.sinks().get(p.sink_index as usize).map(|d| d.latency_us).unwrap_or(0);
+                let latency = p.latency_us;
                 let read = p.written.saturating_sub((p.ring.available() * p.fmt.bytes()) as u64);
                 let (write, playing, v) = (p.written as i64, p.ctl.run.load(Ordering::Relaxed), self.version);
                 let (nsec, nusec) = now_timeval();
@@ -545,7 +551,7 @@ impl Session {
                 let ch = r.u32()?;
                 let (sec, usec) = r.timeval()?;
                 let s = self.record.get(&ch).ok_or(Fail::Code(err::NOENTITY))?;
-                let latency = be.sources().get(s.source_index as usize).map(|d| d.latency_us).unwrap_or(0);
+                let latency = s.latency_us;
                 let delivered = s.delivered as i64;
                 let (nsec, nusec) = now_timeval();
                 self.reply(tag, |w| {
@@ -601,15 +607,15 @@ impl Session {
             cmd::SET_PLAYBACK_STREAM_BUFFER_ATTR => {
                 let ch = r.u32()?;
                 let (maxlength, tlength, prebuf, minreq) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
-                let latency = be.sinks().first().map(|d| d.latency_us).unwrap_or(0);
                 let p = self.playback.get_mut(&ch).ok_or(Fail::Code(err::NOENTITY))?;
+                let latency = p.latency_us;
                 let cap = p.ring.capacity() * p.fmt.bytes();
                 let fb = p.frame_bytes;
                 let pick = |given: u32, cur: usize| if given == INVALID { cur } else { (given as usize / fb).max(1) * fb };
                 p.tlength = pick(tlength, p.tlength).min(cap - cap % fb);
                 p.minreq = pick(minreq, p.minreq).min(p.tlength);
                 p.prebuf = if prebuf == INVALID { p.prebuf } else { (prebuf as usize / fb) * fb }.min(p.tlength);
-                p.maxlength = pick(maxlength, p.maxlength).max(p.tlength);
+                p.maxlength = pick(maxlength, p.maxlength).min(MAX_BUFFER_BYTES - MAX_BUFFER_BYTES % fb).max(p.tlength);
                 p.ctl.rebuffer.store(p.prebuf > 0, Ordering::Relaxed);
                 let (m, t, pb, mr) = (p.maxlength as u32, p.tlength as u32, p.prebuf as u32, p.minreq as u32);
                 self.reply(tag, |w| {
@@ -619,14 +625,15 @@ impl Session {
             cmd::SET_RECORD_STREAM_BUFFER_ATTR => {
                 let ch = r.u32()?;
                 let (maxlength, fragsize) = (r.u32()?, r.u32()?);
-                let latency = be.sources().first().map(|d| d.latency_us).unwrap_or(0);
                 let s = self.record.get_mut(&ch).ok_or(Fail::Code(err::NOENTITY))?;
+                let latency = s.latency_us;
                 let fb = s.frame_bytes;
+                let cap = MAX_BUFFER_BYTES - MAX_BUFFER_BYTES % fb;
                 if fragsize != INVALID {
-                    s.fragsize = (fragsize as usize / fb).max(1) * fb;
+                    s.fragsize = ((fragsize as usize / fb).max(1) * fb).min(cap);
                 }
                 if maxlength != INVALID {
-                    s.maxlength = (maxlength as usize / fb).max(1) * fb;
+                    s.maxlength = ((maxlength as usize / fb).max(1) * fb).min(cap);
                 }
                 s.maxlength = s.maxlength.max(s.fragsize);
                 let (m, f) = (s.maxlength as u32, s.fragsize as u32);
@@ -733,6 +740,7 @@ impl Session {
             frame_bytes,
             sink: dev.name.clone(),
             sink_index,
+            latency_us: dev.latency_us,
             ring,
             ctl,
             _handle: handle,
@@ -799,9 +807,10 @@ impl Session {
         let (source_index, dev) = self.resolve(be, false, src_idx, src_name)?;
         let channels = chs as usize;
         let frame_bytes = channels * fmt.bytes();
+        let cap = (MAX_BUFFER_BYTES / frame_bytes).max(1) * frame_bytes;
         let whole = |b: usize| (b / frame_bytes).max(1) * frame_bytes;
-        let fragsize = whole(if fragsize == INVALID { (rate / 50) as usize * frame_bytes } else { fragsize as usize });
-        let maxlength = whole(if maxlength == INVALID { fragsize * 4 } else { maxlength as usize }).max(fragsize);
+        let fragsize = whole(if fragsize == INVALID { (rate / 50) as usize * frame_bytes } else { fragsize as usize }).min(cap);
+        let maxlength = whole(if maxlength == INVALID { fragsize * 4 } else { maxlength as usize }).min(cap).max(fragsize);
         let ring = Arc::new(Ring::new(dev.rate as usize / 2 * channels));
         let ctl = Arc::new(StreamCtl::new(rate));
         let params = StreamParams { channels, rate: dev.rate, cycle_frames: (fragsize / frame_bytes) as u32 * dev.rate / rate };
@@ -818,6 +827,7 @@ impl Session {
             frame_bytes,
             source: dev.name.clone(),
             source_index,
+            latency_us: dev.latency_us,
             ring,
             ctl,
             _handle: handle,
@@ -862,7 +872,9 @@ impl Session {
         p.had_data = true;
         p.underflow_sent = false;
         if wrote < whole {
-            self.notify(cmd::OVERFLOW, |_| {});
+            self.notify(cmd::OVERFLOW, |w| {
+                w.u32(channel);
+            });
         }
     }
 
@@ -906,9 +918,12 @@ impl Session {
             for (command, arg) in notices {
                 if command == cmd::UNDERFLOW {
                     let offset = self.playback.get(&ch).map(|p| p.written as i64).unwrap_or(0);
+                    let v = self.version;
                     self.notify(cmd::UNDERFLOW, |w| {
                         w.u32(ch);
-                        w.s64(offset);
+                        if v >= 23 {
+                            w.s64(offset);
+                        }
                     });
                 } else {
                     self.notify(cmd::REQUEST, |w| {
@@ -1113,6 +1128,23 @@ mod tests {
         assert_eq!(playback_attrs(48000, 4, INVALID, INVALID, INVALID, INVALID), (76800, 19200, 19200, 4800));
         // 400 bytes (100 frames), prebuf 0, minreq 40; a ragged value rounds down to whole frames
         assert_eq!(playback_attrs(48000, 4, INVALID, 402, 0, 41), (1600, 400, 0, 40));
+    }
+
+    #[test]
+    fn buffer_attrs_are_capped_at_four_mebibytes() {
+        let (max, t, _, m) = playback_attrs(48000, 4, u32::MAX - 1, u32::MAX - 1, INVALID, INVALID);
+        assert_eq!((max, t), (4 << 20, 4 << 20));
+        assert!(m <= t);
+        let (mut s, mut be) = setup();
+        let r = create_pb(&mut s, &mut be, u32::MAX - 1, INVALID, INVALID, false);
+        let mut rd = Reader::new(&r);
+        rd.u32().unwrap();
+        rd.u32().unwrap();
+        rd.u32().unwrap();
+        rd.u32().unwrap();
+        rd.u32().unwrap();
+        let (maxlength, tlength) = (rd.u32().unwrap(), rd.u32().unwrap());
+        assert!(maxlength <= 4 << 20 && tlength <= maxlength);
     }
 
     #[test]

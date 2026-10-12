@@ -27,12 +27,20 @@ pub const MICROPHONE: &str = "microphone";
 
 /// How often the capture devices are looked up again (a read of `/proc/asound/pcm`).
 const PROBE_EVERY_S: f64 = 2.0;
+/// While the audio server is not there, a new connection is tried this often only.
+const RECONNECT_EVERY_S: f64 = 10.0;
 
 pub struct AudioDevices {
     defaults: Defaults,
     microphone: bool,
     probed: f64,
     seen: Option<Seen>,
+    /// One connection kept between probes; dropped when the default input cannot be read.
+    system: Option<bifrost_audio_hal::System>,
+    /// Earliest time of the next connection attempt.
+    connect_after: f64,
+    /// Connection attempts so far (for the test of the probe cadence).
+    attempts: u32,
 }
 
 /// What the last tick saw, to tell the next tick what changed.
@@ -45,20 +53,35 @@ struct Seen {
 
 impl AudioDevices {
     pub fn new() -> Self {
-        AudioDevices { defaults: Defaults::new(), microphone: false, probed: f64::NEG_INFINITY, seen: None }
+        AudioDevices { defaults: Defaults::new(), microphone: false, probed: f64::NEG_INFINITY, seen: None, system: None, connect_after: f64::NEG_INFINITY, attempts: 0 }
     }
 
     /// The devices present now, with the chosen defaults kept. Looks the capture devices up again every
     /// `PROBE_EVERY_S` seconds only.
     fn state(&mut self, shell: &Shell, t: f64) -> Vec<Device> {
         if t - self.probed >= PROBE_EVERY_S {
-            self.microphone = !crate::media::capture::discover().is_empty();
+            self.microphone = self.probe_microphone(t);
             self.probed = t;
         }
         let bluetooth = shell.info.bt.audio_sink().map(str::to_string);
         let want = present(shell.cc.route, bluetooth.as_deref(), self.microphone);
         sync(&mut self.defaults, &want);
         want
+    }
+
+    /// Whether the audio server offers an input, on the kept connection (opened again at most every
+    /// `RECONNECT_EVERY_S` seconds while there is none).
+    fn probe_microphone(&mut self, t: f64) -> bool {
+        if self.system.is_none() && t >= self.connect_after {
+            self.connect_after = t + RECONNECT_EVERY_S;
+            self.system = bifrost_audio_hal::System::connect(crate::media::capture::CLIENT).ok();
+            self.attempts += 1;
+        }
+        let found = self.system.as_ref().and_then(crate::media::capture::discover_with);
+        if found.as_ref().map_or(true, |d| d.is_empty()) {
+            self.system = None;
+        }
+        found.is_some_and(|d| !d.is_empty())
     }
 
     fn seen(&mut self, shell: &Shell, t: f64) -> Seen {
@@ -252,6 +275,16 @@ fn opt_str(s: Option<&str>) -> Json {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn probing_for_a_microphone_does_not_reconnect_every_tick() {
+        let mut d = AudioDevices::new();
+        for k in 0..30 {
+            d.probe_microphone(k as f64 * PROBE_EVERY_S);
+        }
+        // 60 s of probes: at most one attempt per RECONNECT_EVERY_S while there is no input
+        assert!(d.attempts <= 6, "{}", d.attempts);
+    }
+
     use super::*;
 
     fn ids(list: &[Device]) -> Vec<&str> {

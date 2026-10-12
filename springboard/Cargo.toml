@@ -37,6 +37,7 @@ zbus = { version = "5", optional = true }
 bifrost-proto = { path = "proto" }
 bifrost-audio-hal = { path = "audio/hal" }
 bifrost-audio-types = { path = "audio/types" }
+bifrost-audio-toolbox = { path = "audio/toolbox" }
 # the chrome model the shell serves to the menu bar, Dock and panels clients (src/shell/chrome_host)
 bifrost-chrome = { path = "chrome" }
 termcore = { package = "iosterm", path = "../../iOSTerm" }

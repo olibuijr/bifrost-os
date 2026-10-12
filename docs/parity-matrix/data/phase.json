@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/phase",
   "macos_since": "12.0",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/lib.rs (audio client), springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs, springboard/src/media/mixer.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs, springboard/src/media/speaker.rs, springboard/apps/daw/src/devices/mod.rs",
+  "bifrost": "springboard/sdk/src/lib.rs (audio client), springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs, springboard/audio/alsa/src/ctl.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs, springboard/src/media/speaker.rs, springboard/apps/daw/src/devices/mod.rs",
   "summary": "PHASE is a spatial and game audio engine: 3D sources and listener, occlusion, reverb, distance models, sound event graphs and runtime parameters. BifrOSt has a playback and capture service with volume and output routing, but no positional audio, no scene model and no event graph API for apps. The SDK exposes only the playback client.",
   "rea_evidence": "ev_ae3ef8f049211241c669b63265081488bc102f10cbbfb71dd8b9618b536127bc",
   "features": [
@@ -59,9 +59,9 @@
     {
       "feature": "Mixers and layering",
       "apple": "PHASEMixer, PHASEMixerDefinition, PHASEChannelMixerDefinition, PHASEAmbientMixerDefinition, PHASEMixerParameters",
-      "bifrost": "springboard/src/media/mixer.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)",
       "status": "partial",
-      "note": "mixer.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"
+      "note": "audio/alsa/src/ctl.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"
     },
     {
       "feature": "Sound event nodes (switch, random, blend, container)",

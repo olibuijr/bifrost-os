@@ -31,9 +31,9 @@
     {
       "feature": "App and system audio capture",
       "apple": "RPSampleBufferType audio samples from startCapture(handler:completionHandler:)",
-      "bifrost": "springboard/ui/src/process_tap.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-20, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audiod plays and records the microphone only; no loopback of app output"
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+      "status": "gap",
+      "note": "The pure model had no caller and was removed. audiod plays and records the microphone only; no loopback of app output"
     },
     {
       "feature": "Camera preview during recording",

@@ -1,14 +1,12 @@
-//! The media volume: sixteen steps, linear in dB over 30 dB, and the software gain the player
-//! applies when the audio server is not there. The level lives on the object model: the volume
+//! The media volume: sixteen steps, linear in dB over 30 dB. The level lives on the object model: the volume
 //! and mute controls of the default output device (`VolumeTarget`, implemented for the HAL
 //! `Device`). Pure apart from `Volume::apply`, which a test drives through a fake target.
 //!
-//! The software gain is the only place the level is applied when there is no device control: a
-//! player must not scale by its own volume as well, or the two attenuations add up.
+//! There is no process-wide software gain: a gain written by the shell never reached the players in other
+//! processes. A player scales by its own volume (`Volume::new(v).linear()`, see `AudioPlayer`).
 
 use bifrost_audio_types::{props, AudioError, FourCC, PropertyAddress, PropertyValue, Scope};
 use bifrost_audio_types::address::MAIN_ELEMENT;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Volume steps between silence and full.
 pub const STEPS: u32 = 16;
@@ -89,17 +87,13 @@ impl Volume {
     }
 }
 
-/// The multiplier the player's audio thread applies, as f32 bits.
-static SOFTWARE_GAIN: AtomicU32 = AtomicU32::new(0x3f80_0000);
-
-/// The multiplier the player applies to every sample (1.0 = untouched).
+/// Kept for callers that still print it: the gain is per player now, so this is always unity.
 pub fn software_gain() -> f32 {
-    f32::from_bits(SOFTWARE_GAIN.load(Ordering::Relaxed))
+    1.0
 }
 
-pub fn set_software_gain(gain: f32) {
-    SOFTWARE_GAIN.store(gain.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
-}
+/// Kept so existing call sites compile: a no-op (see `software_gain`).
+pub fn set_software_gain(_gain: f32) {}
 
 /// Scales interleaved S16 samples by `gain`, saturating; a no-op at 1.0.
 pub fn scale(samples: &mut [i16], gain: f32) {
@@ -152,24 +146,13 @@ pub fn default_output() -> Option<bifrost_audio_hal::Device> {
 }
 
 impl Volume {
-    /// Applies the level: the output device's volume and mute controls carry it when the audio
-    /// server is there (returns the scalar set), else the software gain does (every player applies
-    /// it). A refused write falls back to the software gain and reports the error.
+    /// Applies the level to the output device's volume and mute controls (returns the scalar set).
+    /// Without a device (`None`, the audio server is not there) nothing is applied here and the result
+    /// is `Ok(None)`; players scale by their own volume. A refused write reports the error.
     pub fn apply(self, target: Option<&dyn VolumeTarget>) -> std::io::Result<Option<f32>> {
-        let Some(t) = target else {
-            set_software_gain(self.linear());
-            return Ok(None);
-        };
-        match t.set_scalar(self.level).and_then(|()| t.set_mute(self.muted())) {
-            Ok(()) => {
-                set_software_gain(1.0);
-                Ok(Some(self.level))
-            }
-            Err(e) => {
-                set_software_gain(self.linear());
-                Err(std::io::Error::other(format!("device volume: {e:?}")))
-            }
-        }
+        let Some(t) = target else { return Ok(None) };
+        t.set_scalar(self.level).and_then(|()| t.set_mute(self.muted())).map_err(|e| std::io::Error::other(format!("device volume: {e:?}")))?;
+        Ok(Some(self.level))
     }
 
     /// The level the device reports, for syncing the sliders with a change made elsewhere.
@@ -182,10 +165,6 @@ impl Volume {
 mod tests {
     use super::*;
     use std::cell::RefCell;
-    use std::sync::Mutex;
-
-    /// The software gain is process-wide: tests that set it take turns.
-    static GAIN: Mutex<()> = Mutex::new(());
 
     struct Fake {
         calls: RefCell<Vec<String>>,
@@ -208,27 +187,20 @@ mod tests {
     }
 
     #[test]
-    fn apply_sets_the_device_controls_and_leaves_the_software_gain_at_unity() {
-        let _g = GAIN.lock().unwrap();
+    fn apply_sets_the_device_controls() {
         let f = Fake { calls: RefCell::new(vec![]), fail: false, value: 0.25 };
         assert_eq!(Volume::at_step(8).apply(Some(&f)).unwrap(), Some(0.5));
         assert_eq!(*f.calls.borrow(), ["scalar 0.5", "mute false"]);
-        assert_eq!(software_gain(), 1.0);
         assert_eq!(Volume::from_device(&f), Some(Volume::new(0.25)));
         Volume::at_step(0).apply(Some(&f)).unwrap();
         assert_eq!(f.calls.borrow()[3], "mute true", "step 0 mutes");
     }
 
     #[test]
-    fn apply_falls_back_to_software_gain_without_a_device_or_when_it_refuses() {
-        let _g = GAIN.lock().unwrap();
+    fn apply_without_a_device_does_nothing_and_a_refusal_reports_the_error() {
         assert_eq!(Volume::at_step(8).apply(None).unwrap(), None);
-        assert!((software_gain() - 0.1778).abs() < 1e-3);
-        set_software_gain(1.0);
         let f = Fake { calls: RefCell::new(vec![]), fail: true, value: 0.0 };
         assert!(Volume::at_step(8).apply(Some(&f)).is_err());
-        assert!((software_gain() - 0.1778).abs() < 1e-3);
-        set_software_gain(1.0);
     }
 
     #[test]
@@ -276,8 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn software_gain_scales_samples_saturating() {
-        let _g = GAIN.lock().unwrap();
+    fn scale_scales_samples_saturating() {
         let mut s = [1000, -1000, i16::MAX, i16::MIN];
         scale(&mut s, 1.0);
         assert_eq!(s, [1000, -1000, i16::MAX, i16::MIN], "unity leaves samples alone");
@@ -288,10 +259,5 @@ mod tests {
         let mut s = [i16::MAX, i16::MIN];
         scale(&mut s, 0.999);
         assert!(s[0] > 32700 && s[1] < -32700);
-        set_software_gain(0.25);
-        assert_eq!(software_gain(), 0.25);
-        set_software_gain(3.0);
-        assert_eq!(software_gain(), 1.0, "clamped");
-        set_software_gain(1.0);
     }
 }

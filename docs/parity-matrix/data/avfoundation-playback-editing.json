@@ -66,7 +66,7 @@
     {
       "feature": "Audio output and routing",
       "apple": "AVPlayer audio, AVAudioSession-style routing",
-      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/src/media/mixer.rs",
+      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs",
       "status": "os",
       "note": "audiod and mixer own output and routing; no app-facing session API"
     },
@@ -101,7 +101,7 @@
     {
       "feature": "Composite assets",
       "apple": "AVMutableComposition, AVMutableCompositionTrack",
-      "bifrost": "springboard/ui/src/audio_mix.rs, springboard/ui/src/composition.rs",
+      "bifrost": "springboard/ui/src/composition.rs",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No composition model"
     },
@@ -122,7 +122,7 @@
     {
       "feature": "Audio mixing",
       "apple": "AVAudioMix, AVMutableAudioMixInputParameters",
-      "bifrost": "springboard/ui/src/audio_mix.rs, springboard/ui/src/composition.rs",
+      "bifrost": "springboard/ui/src/composition.rs",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
     }

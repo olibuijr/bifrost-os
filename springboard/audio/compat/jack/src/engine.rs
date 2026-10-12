@@ -128,7 +128,70 @@ pub struct Callbacks {
 /// A deferred notification: built under the engine lock, run after it is released (a callback may call back in).
 pub type Call = Box<dyn FnOnce() + Send>;
 
+/// The part of a port the client API reads from the process thread without the engine lock: immutable metadata plus
+/// name and peer lists kept under their own small mutexes (never held across a callback or a cycle).
+pub struct PortMeta {
+    pub client: u32,
+    pub flags: u32,
+    pub ptype: PortType,
+    full: Mutex<CString>,
+    /// Names replaced by a rename stay allocated so pointers already handed to clients remain valid.
+    retired: Mutex<Vec<CString>>,
+    peers: Mutex<Vec<Arc<PortMeta>>>,
+}
+
+impl PortMeta {
+    fn new(client: u32, flags: u32, ptype: PortType, full: CString) -> Arc<PortMeta> {
+        Arc::new(PortMeta { client, flags, ptype, full: Mutex::new(full), retired: Mutex::new(vec![]), peers: Mutex::new(vec![]) })
+    }
+
+    fn set_full(&self, new: CString) {
+        let old = std::mem::replace(&mut *self.full.lock().unwrap_or_else(|p| p.into_inner()), new);
+        self.retired.lock().unwrap_or_else(|p| p.into_inner()).push(old);
+    }
+
+    /// Pointer to the NUL-terminated full name; valid for the life of the process.
+    pub fn full_ptr(&self) -> *const c_char {
+        self.full.lock().unwrap_or_else(|p| p.into_inner()).as_ptr()
+    }
+
+    /// Pointer to the short name (the part after the first colon) of the current full name.
+    pub fn short_ptr(&self) -> *const c_char {
+        let g = self.full.lock().unwrap_or_else(|p| p.into_inner());
+        let b = g.as_bytes_with_nul();
+        let colon = b.iter().position(|&c| c == b':').map_or(0, |i| i + 1);
+        b[colon..].as_ptr() as *const c_char
+    }
+
+    pub fn full_name(&self) -> CString {
+        self.full.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    pub fn connection_count(&self) -> usize {
+        self.peers.lock().unwrap_or_else(|p| p.into_inner()).len()
+    }
+
+    pub fn connected_to(&self, name: &str) -> bool {
+        self.peers.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|q| q.full.lock().unwrap_or_else(|p| p.into_inner()).to_str() == Ok(name))
+    }
+
+    pub fn peer_names(&self) -> Vec<CString> {
+        self.peers.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|q| q.full_name()).collect()
+    }
+
+    fn link(a: &Arc<PortMeta>, b: &Arc<PortMeta>) {
+        a.peers.lock().unwrap_or_else(|p| p.into_inner()).push(b.clone());
+        b.peers.lock().unwrap_or_else(|p| p.into_inner()).push(a.clone());
+    }
+
+    fn unlink(a: &Arc<PortMeta>, b: &Arc<PortMeta>) {
+        a.peers.lock().unwrap_or_else(|p| p.into_inner()).retain(|q| !Arc::ptr_eq(q, b));
+        b.peers.lock().unwrap_or_else(|p| p.into_inner()).retain(|q| !Arc::ptr_eq(q, a));
+    }
+}
+
 pub struct Port {
+    pub meta: Arc<PortMeta>,
     pub id: u32,
     pub client: u32,
     pub short: String,
@@ -150,7 +213,8 @@ impl Port {
     fn new(id: u32, client: u32, cname: &str, short: &str, ptype: PortType, flags: u32) -> Port {
         let buf = Box::into_raw(vec![0f32; MAX_FRAMES].into_boxed_slice()) as *mut f32;
         let full = CString::new(format!("{cname}:{short}")).unwrap_or_default();
-        let mut p = Port { id, client, short: short.to_string(), full, ptype, flags, buf, conns: vec![], latency: [(0, 0); 2], aliases: vec![] };
+        let meta = PortMeta::new(client, flags, ptype, full.clone());
+        let mut p = Port { meta, id, client, short: short.to_string(), full, ptype, flags, buf, conns: vec![], latency: [(0, 0); 2], aliases: vec![] };
         if ptype == PortType::Midi {
             midi::clear(p.bytes_mut());
         }
@@ -472,6 +536,7 @@ impl Engine {
         let p = self.port_mut(port).unwrap();
         p.short = short.to_string();
         p.full = CString::new(new.clone()).unwrap_or_default();
+        p.meta.set_full(p.full.clone());
         let mut calls: Vec<Call> = vec![];
         for c in self.clients.iter().flatten() {
             if let (true, Some(Cb(f, a))) = (c.active, c.cb.port_rename) {
@@ -495,6 +560,8 @@ impl Engine {
         }
         self.port_mut(s).unwrap().conns.push(d);
         self.port_mut(d).unwrap().conns.push(s);
+        let (ms, md) = (self.port(s).unwrap().meta.clone(), self.port(d).unwrap().meta.clone());
+        PortMeta::link(&ms, &md);
         self.recompute_order();
         let mut calls = self.connect_calls(s, d, true);
         calls.extend(self.graph_order_calls());
@@ -510,6 +577,9 @@ impl Engine {
     }
 
     fn disconnect_ids(&mut self, a: u32, b: u32) -> Vec<Call> {
+        if let (Some(pa), Some(pb)) = (self.port(a), self.port(b)) {
+            PortMeta::unlink(&pa.meta.clone(), &pb.meta.clone());
+        }
         if let Some(p) = self.port_mut(a) {
             p.conns.retain(|&x| x != b);
         }

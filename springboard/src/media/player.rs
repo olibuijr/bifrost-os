@@ -8,9 +8,9 @@
 //! When the file runs out of bytes a thread parks in `Buffering` and
 //! retries every 50 ms until the streamer has written the range.
 
-use super::alsa::AudioOut;
+use super::audio_out::AudioOut;
 #[cfg(test)]
-use super::alsa::NullOut;
+use super::audio_out::NullOut;
 use super::mp4::{self, Demuxer, Kind};
 use super::source::{FileSource, Source};
 use super::{aac, convert, Codec, Error, Picture, Pixels, VideoDecoder};
@@ -645,8 +645,7 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 resampler.retune(decoder.rate(), decoder.channels());
                 pcm.clear();
                 resampler.convert(&samples, &mut pcm);
-                super::volume::scale(&mut pcm, super::volume::software_gain());
-                if let Err(e) = super::alsa::write_with_retry(&mut *out, &pcm, &super::alsa::WRITE_RETRY_BACKOFF) {
+                if let Err(e) = super::audio_out::write_with_retry(&mut *out, &pcm, &super::audio_out::WRITE_RETRY_BACKOFF) {
                     shared.lock().unwrap().error = Some(format!("audio output: {e}"));
                     notify(notify_fd);
                     return;

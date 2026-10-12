@@ -85,11 +85,17 @@ impl CaptureRing {
 /// when the server is not running or has no input. Opens no stream.
 pub fn discover() -> Vec<String> {
     let Ok(system) = System::connect(CLIENT) else { return Vec::new() };
-    let Ok(device) = system.default_device(Role::Input) else { return Vec::new() };
-    match device.get(PropertyAddress::global(props::NAME)) {
+    discover_with(&system).unwrap_or_default()
+}
+
+/// Like `discover` on a connection the caller keeps; None when the default input cannot be read (no input, or the
+/// server went away: the caller reconnects).
+pub fn discover_with(system: &System) -> Option<Vec<String>> {
+    let device = system.default_device(Role::Input).ok()?;
+    Some(match device.get(PropertyAddress::global(props::NAME)) {
         Ok(PropertyValue::String(n)) => vec![n],
         _ => vec![String::from("default input")],
-    }
+    })
 }
 
 /// The IO procedure's body: the first channel of the first input buffer becomes mono S16.
