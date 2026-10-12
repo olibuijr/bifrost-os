@@ -23,6 +23,9 @@ fn timestamp_ms() -> u128 {
 fn mark(event: &str) {
     if !event.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') { return; }
     springboard::bootsplash::mark(event);
+    // Journal copy for `tools/boot-bench.py`: a shutdown-start mark is read back from the previous boot's journal,
+    // because /run/bifrost/boot-marks is gone after the reboot.
+    eprintln!("boot-mark {event} {} {:.1}", timestamp_ms(), springboard::bootsplash::boottime_ms());
     let _ = fs::create_dir_all(STATE_DIR);
     let line = format!("{} {}\n", timestamp_ms(), event);
     let _ = fs::write(format!("{STATE_DIR}/last"), &line);
@@ -36,7 +39,7 @@ fn exit_status(status: ExitStatus) -> ! {
 }
 
 fn run() -> ! {
-    mark("supervisor-start");
+    mark("bootweave-start");
     mark("display-handoff-start");
     let mut child = match Command::new(SESSION).env("BIFROST_BOOTWEAVE", "1").spawn() {
         Ok(child) => child,
@@ -60,6 +63,9 @@ fn run() -> ! {
             if ready.exists() {
                 if !compositor_seen { mark("compositor-ready"); }
                 mark("desktop-first-frame");
+                // Provisional until the window server's three-part gate (docs/boot-architecture.md, "Reveal once"):
+                // today the shell's first ready frame is the desktop.
+                mark("desktop-ready");
                 return;
             }
             thread::sleep(Duration::from_millis(20));

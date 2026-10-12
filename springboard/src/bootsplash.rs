@@ -124,10 +124,29 @@ extern "C" {
     fn clock_gettime(clk: i32, ts: *mut libc_timespec) -> i32;
 }
 
+/// The milestones the boot code writes, in boot order (docs/boot-architecture.md, "Budgets"). `loader-start` and
+/// `kernel-start` are not written here: the loader cannot write `/run`, and kernel start is the clock's origin.
+pub const CONTRACT_MARKS: &[&str] = &[
+    "bootweave-start",
+    "display-handoff-start",
+    "compositor-ready",
+    "desktop-first-frame",
+    "desktop-ready",
+    "desktop-first-ui",
+    "desktop-faded",
+    "session-exit",
+    "shutdown-start",
+];
+
+/// Event names are lowercase words joined by dashes or underscores, so they are safe as file fields.
+pub fn valid_event(event: &str) -> bool {
+    !event.is_empty() && event.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
 /// Appends `ms event` to the boot milestone log; the first mark of an event wins (a restart does not overwrite it).
 pub fn mark(event: &str) {
     use std::io::Write;
-    if !event.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+    if !valid_event(event) {
         return;
     }
     let _ = std::fs::create_dir_all("/run/bifrost");
@@ -168,6 +187,23 @@ mod tests {
         assert!(hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS - 1.0, 0.0));
         assert_ne!(out[0], 0xff00_0000, "fading into the screen");
         assert!(!hand.compose(&ui, &mut out, 1000.0 + FILL_MS + FADE_MS, 0.0), "done: show the screen");
+    }
+    #[test]
+    fn contract_marks_are_unique_valid_event_names() {
+        for (i, a) in CONTRACT_MARKS.iter().enumerate() {
+            assert!(valid_event(a), "{a}");
+            assert!(!CONTRACT_MARKS[i + 1..].contains(a), "duplicate {a}");
+        }
+        assert_eq!(CONTRACT_MARKS.len(), 9);
+    }
+    #[test]
+    fn event_names_reject_paths_spaces_and_empty_names() {
+        assert!(valid_event("desktop-faded"));
+        assert!(valid_event("shutdown_start"));
+        assert!(!valid_event(""));
+        assert!(!valid_event("a b"));
+        assert!(!valid_event("../boot"));
+        assert!(!valid_event("line\nbreak"));
     }
     #[test]
     fn frame_matches_the_loader_layout_and_fades_out() {

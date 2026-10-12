@@ -47,8 +47,9 @@ systems read `EFI\BIFROST\boot.cfg`, USB media `EFI\BOOT\cmdline.txt`.
   `base udev autodetect microcode modconf kms keyboard block filesystems bifrost-mounts`, busybox init.
 - Early userspace: `springboard.service` (no default dependencies) runs `bifrost-bootweave`
   (`springboard/bootweave/supervisor.rs`), the supervisor of `/usr/lib/bifrost/session`. Boot marks go to
-  `/run/bifrost/boot-marks` (`springboard::bootsplash::mark`: `supervisor-start`, `display-handoff-start`,
-  `compositor-ready`, `desktop-first-frame`, `desktop-first-ui`, `desktop-faded`, ...).
+  `/run/bifrost/boot-marks` (`springboard::bootsplash::mark`: `bootweave-start`, `display-handoff-start`,
+  `compositor-ready`, `desktop-first-frame`, `desktop-ready`, `desktop-first-ui`, `desktop-faded`, `shutdown-start`
+  (the list is `springboard::bootsplash::CONTRACT_MARKS`); `tools/boot-bench.py` reads them).
 - Display: the first KMS frame redraws the loader's image (`bootsplash::paint`) and fades into the desktop over
   450 ms (`BIFROST_BOOT_FADE`). `bifrost-wm` keeps the loader's mode and fades on `shell-ready`.
 - Shutdown: `ExecStopPost` parks the console on VT 12 so no text shows.
