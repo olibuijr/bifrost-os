@@ -1,0 +1,21 @@
+[package]
+name = "bifrost-audio-bench"
+version = "0.1.0"
+edition = "2021"
+description = "Millisecond benchmarks for the audio and MIDI path: virtual MIDI instrument, latency, xrun and throughput (docs/audio/19-bench-instrument.md)"
+
+[lib]
+name = "bifrost_audio_bench"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bifrost-audio-bench"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-driver = { path = "../driver" }
+bifrost-audio-alsa = { path = "../alsa" }
+bifrost-audio-units = { path = "../units" }
+bifrost-midi = { path = "../midi" }
+bifrost-audiod = { path = "../server" }
