@@ -812,6 +812,7 @@ pub mod notifattach;
 pub mod notifmedia;
 pub mod notifservice;
 pub mod notifcomm;
+pub mod notifdelivery;
 pub mod progress;
 pub mod privacy;
 pub mod relations;
