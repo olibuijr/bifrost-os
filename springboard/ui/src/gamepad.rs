@@ -268,9 +268,79 @@ impl Gamepad {
     }
 }
 
+use std::collections::VecDeque;
+
+/// Most changes kept for polling. A reader that falls behind loses the oldest ones, not the newest.
+pub const QUEUE_LIMIT: usize = 256;
+
+/// The input stream an app reads from one controller: every change is handed to the callbacks as it is fed, and kept
+/// in a queue for polling. Repeats and unchanged values reach neither. [`ControllerInput::capture`] copies the current
+/// state, so an app can compare a snapshot with later state.
+pub struct ControllerInput {
+    pad: Gamepad,
+    queue: VecDeque<Change>,
+    listeners: Vec<Box<dyn FnMut(&Change)>>,
+}
+
+impl Default for ControllerInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ControllerInput {
+    pub fn new() -> Self {
+        Self::with_pad(Gamepad::new())
+    }
+
+    /// Starts from an existing state, such as one with axis ranges already set.
+    pub fn with_pad(pad: Gamepad) -> Self {
+        ControllerInput { pad, queue: VecDeque::new(), listeners: Vec::new() }
+    }
+
+    /// Feeds one raw record. Runs the callbacks and queues the change, and returns it.
+    pub fn feed(&mut self, ty: u16, code: u16, value: i32) -> Option<Change> {
+        let change = self.pad.feed(ty, code, value)?;
+        for listener in self.listeners.iter_mut() {
+            listener(&change);
+        }
+        if self.queue.len() == QUEUE_LIMIT {
+            self.queue.pop_front();
+        }
+        self.queue.push_back(change);
+        Some(change)
+    }
+
+    /// The oldest change not yet polled.
+    pub fn poll(&mut self) -> Option<Change> {
+        self.queue.pop_front()
+    }
+
+    /// How many changes wait to be polled.
+    pub fn pending(&self) -> usize {
+        self.queue.len()
+    }
+
+    /// Adds a callback that runs for every change, in the order the changes were fed.
+    pub fn on_change<F: FnMut(&Change) + 'static>(&mut self, callback: F) {
+        self.listeners.push(Box::new(callback));
+    }
+
+    /// A copy of the current state.
+    pub fn capture(&self) -> Gamepad {
+        self.pad.clone()
+    }
+
+    pub fn gamepad(&self) -> &Gamepad {
+        &self.pad
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() < 1e-4
@@ -352,5 +422,76 @@ mod tests {
         assert_eq!(pad.dpad(), (0, 1));
         // a hat value out of range is clamped, not stored raw
         assert_eq!(pad.feed(EV_ABS, ABS_HAT0Y, 5), None);
+    }
+
+    #[test]
+    fn callbacks_run_once_per_change_in_feed_order() {
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let mut input = ControllerInput::new();
+        let sink = Rc::clone(&seen);
+        input.on_change(move |c| sink.borrow_mut().push(*c));
+        input.feed(EV_KEY, BTN_SOUTH, 1);
+        // a repeat and a second press of a held button change nothing and reach no callback
+        input.feed(EV_KEY, BTN_SOUTH, 2);
+        input.feed(EV_KEY, BTN_SOUTH, 1);
+        input.feed(EV_KEY, BTN_SOUTH, 0);
+        let got = seen.borrow().clone();
+        assert_eq!(
+            got,
+            vec![
+                Change::Button { button: Button::South, pressed: true },
+                Change::Button { button: Button::South, pressed: false },
+            ]
+        );
+    }
+
+    #[test]
+    fn polling_returns_queued_changes_in_order_then_nothing() {
+        let mut input = ControllerInput::new();
+        assert_eq!(input.feed(EV_ABS, ABS_HAT0X, -1), Some(Change::Dpad { x: -1, y: 0 }));
+        assert_eq!(input.feed(EV_ABS, ABS_HAT0Y, 1), Some(Change::Dpad { x: -1, y: 1 }));
+        assert_eq!(input.pending(), 2);
+        assert_eq!(input.poll(), Some(Change::Dpad { x: -1, y: 0 }));
+        assert_eq!(input.poll(), Some(Change::Dpad { x: -1, y: 1 }));
+        assert_eq!(input.poll(), None);
+        assert_eq!(input.pending(), 0);
+    }
+
+    #[test]
+    fn values_inside_the_dead_zone_are_neither_queued_nor_called_back() {
+        let calls = Rc::new(RefCell::new(0u32));
+        let mut input = ControllerInput::new();
+        let count = Rc::clone(&calls);
+        input.on_change(move |_| *count.borrow_mut() += 1);
+        // raw 1000 and 1200 normalise to the rest value 0 of the stick, so the state does not move
+        assert_eq!(input.feed(EV_ABS, ABS_RX, 1000), None);
+        assert_eq!(input.feed(EV_ABS, ABS_RX, 1200), None);
+        assert_eq!(input.pending(), 0);
+        assert_eq!(*calls.borrow(), 0);
+        assert!(input.feed(EV_ABS, ABS_RX, 16000).is_some());
+        assert_eq!(*calls.borrow(), 1);
+    }
+
+    #[test]
+    fn capture_is_a_snapshot_that_later_changes_do_not_move() {
+        let mut input = ControllerInput::new();
+        input.feed(EV_KEY, BTN_SOUTH, 1);
+        let snapshot = input.capture();
+        input.feed(EV_KEY, BTN_SOUTH, 0);
+        assert!(snapshot.is_pressed(Button::South));
+        assert!(!input.gamepad().is_pressed(Button::South));
+    }
+
+    #[test]
+    fn a_full_queue_drops_the_oldest_changes() {
+        let mut input = ControllerInput::new();
+        // 300 presses and releases alternate, so every record is a change; change i is a press when i is even
+        for i in 0..300 {
+            let value = if i % 2 == 0 { 1 } else { 0 };
+            assert!(input.feed(EV_KEY, BTN_SOUTH, value).is_some());
+        }
+        assert_eq!(input.pending(), QUEUE_LIMIT);
+        // the 44 oldest (changes 0 to 43) were dropped, so the first one left is change 44, a press
+        assert_eq!(input.poll(), Some(Change::Button { button: Button::South, pressed: true }));
     }
 }
