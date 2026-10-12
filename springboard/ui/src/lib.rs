@@ -715,6 +715,8 @@ pub mod ml_model;
 pub mod ml_state;
 pub mod postal;
 pub mod recordsearch;
+pub mod file_sync;
+pub mod item_attrs;
 #[cfg(test)]
 mod bench;
 
