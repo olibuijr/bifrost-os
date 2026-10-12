@@ -5,6 +5,8 @@ pub mod boot;
 pub mod decorations;
 #[cfg(feature = "drm")]
 pub mod drm;
+#[cfg(feature = "drm")]
+pub mod drm_vulkan;
 pub mod glass;
 pub mod grabs;
 pub mod handlers;
