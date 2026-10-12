@@ -2,6 +2,7 @@
 //! sorting and grouping, search, completion with repeat, undoable deletion,
 //! reordering and alert times. Nothing here touches the UI or the disk.
 use crate::repeat::{next_occurrence, Repeat};
+use bifrost_app::controls::fetch::{fetch_indices, Field, FetchRequest, Op, Predicate, Record};
 use springboard::shell::clock::tz::civil_from_days;
 use std::collections::HashSet;
 
@@ -51,6 +52,19 @@ impl Reminder {
             priority: 0,
             repeat: None,
             early: None,
+        }
+    }
+}
+
+/// The fields a smart list's predicate reads (`fetch::Record`): completion, the flag, whether a day is set and the day.
+impl Record for Reminder {
+    fn field(&self, key: &str) -> Option<Field> {
+        match key {
+            "completed" => Some(Field::Bool(self.completed)),
+            "flagged" => Some(Field::Bool(self.flagged)),
+            "scheduled" => Some(Field::Bool(self.due.is_some())),
+            "due" => self.due.map(Field::Int),
+            _ => None,
         }
     }
 }
@@ -134,17 +148,24 @@ impl Smart {
             Self::Completed => "Completed",
         }
     }
-    pub fn matches(self, r: &Reminder, today: i64) -> bool {
+    /// The smart list as a fetch predicate over the reminders. A reminder without a day never matches a day test.
+    pub fn predicate(self, today: i64) -> Predicate {
+        let open = Predicate::compare("completed", Op::Eq, Field::Bool(false));
         match self {
-            Self::Today => !r.completed && r.due.is_some_and(|d| d <= today),
-            Self::Scheduled => !r.completed && r.due.is_some(),
-            Self::Flagged => !r.completed && r.flagged,
-            Self::All => !r.completed,
-            Self::Completed => r.completed,
+            Self::Today => open.and(Predicate::compare("due", Op::Le, Field::Int(today))),
+            Self::Scheduled => open.and(Predicate::compare("scheduled", Op::Eq, Field::Bool(true))),
+            Self::Flagged => open.and(Predicate::compare("flagged", Op::Eq, Field::Bool(true))),
+            Self::All => open,
+            Self::Completed => Predicate::compare("completed", Op::Eq, Field::Bool(true)),
         }
     }
+    pub fn matches(self, r: &Reminder, today: i64) -> bool {
+        self.predicate(today).matches(r)
+    }
+    /// The number of reminders the smart list shows, from a fetch request over `items`.
     pub fn count(self, items: &[Reminder], today: i64) -> usize {
-        items.iter().filter(|r| self.matches(r, today)).count()
+        let request = FetchRequest { predicate: self.predicate(today), ..FetchRequest::default() };
+        fetch_indices(items, &request).len()
     }
 }
 
@@ -579,6 +600,35 @@ mod tests {
         assert_eq!(due_count(&[overdue, today, later, undated, done], 20_000), 2);
         assert_eq!(due_count(&[], 20_000), 0);
     }
+    #[test]
+    fn smart_lists_are_fetch_predicates_over_the_reminders() {
+        // today is 20_000: overdue 19_999, today 20_000, later 20_001, flagged without a day, plain without a day,
+        // and a completed one that was due yesterday.
+        let mut overdue = Reminder::new(1, "overdue");
+        overdue.due = Some(19_999);
+        let mut today = Reminder::new(2, "today");
+        today.due = Some(20_000);
+        let mut later = Reminder::new(3, "later");
+        later.due = Some(20_001);
+        let mut flagged = Reminder::new(4, "flagged");
+        flagged.flagged = true;
+        let plain = Reminder::new(5, "plain");
+        let mut done = Reminder::new(6, "done");
+        done.due = Some(19_990);
+        done.completed = true;
+        let items = [overdue, today, later, flagged, plain, done];
+        assert_eq!(Smart::Today.count(&items, TODAY), 2, "open and due on or before today");
+        assert_eq!(Smart::Scheduled.count(&items, TODAY), 3, "open with a day, any day");
+        assert_eq!(Smart::Flagged.count(&items, TODAY), 1);
+        assert_eq!(Smart::All.count(&items, TODAY), 5, "every open reminder");
+        assert_eq!(Smart::Completed.count(&items, TODAY), 1);
+        assert!(!Smart::Today.matches(&items[3], TODAY), "no day never matches a day test");
+        assert!(Smart::Flagged.matches(&items[3], TODAY));
+        // The count follows the day: tomorrow the reminder due 20_001 is due today too; yesterday only the overdue one.
+        assert_eq!(Smart::Today.count(&items, TODAY + 1), 3);
+        assert_eq!(Smart::Today.count(&items, TODAY - 1), 1, "only the one due before yesterday");
+    }
+
     #[test]
     fn the_badge_label_is_empty_for_zero_and_caps_at_99() {
         assert_eq!(badge_label(0), "");

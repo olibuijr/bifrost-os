@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.0 — 2026-10-12
+
+- Edit > Undo and Edit > Redo (Cmd+Z and Cmd+Shift+Z) now work on every change to your reminders: completing or reopening one, saving a new or changed reminder, duplicating, moving by drag, and creating or renaming a list. Undo and Redo show the change's name in the Edit menu, such as "Undo Mark as Completed".
+- Undo steps back through the changes in order, and Redo steps forward again. Deleting, clearing completed and flagging still work as before, and they are part of the same history.
+- A new change after an undo drops the steps you undid. Edit > Undo is available on the list, not while a reminder's details are open.
+- The smart lists (Today, Scheduled, Flagged, All and Completed) are now defined as queries over the reminders, with the same results as before. Their counts and lists update as soon as a reminder changes.
+
 ## 1.11.0 — 2026-10-12
 
 - A new reminder's details now show a short tip under Due: set a due date and a time, and the alert still shows when Reminders is closed. Setting a date, or tapping the tip, dismisses it for good.

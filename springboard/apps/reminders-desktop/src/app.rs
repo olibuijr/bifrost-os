@@ -172,6 +172,20 @@ fn flag_toggle(id: u64) -> impl Fn(&mut Data) + 'static {
     }
 }
 
+/// Sets the data back to a saved state: the undo and redo of an edit that changed the data as a whole.
+fn snapshot(state: Data) -> impl Fn(&mut Data) + 'static {
+    move |d| *d = state.clone()
+}
+
+/// The undo name of a completion change, from the state after it.
+fn completion_name(items: &[Reminder], id: u64) -> &'static str {
+    if items.iter().any(|r| r.id == id && r.completed) {
+        "Mark as Completed"
+    } else {
+        "Mark as Incomplete"
+    }
+}
+
 struct Swipe {
     id: u64,
     /// current content offset in px (<= 0)
@@ -837,6 +851,51 @@ impl Reminders {
         self.dirty = true;
         !self.error
     }
+    /// `commit`, and the change goes on the undo history under `name` (Edit > Undo names it). A change that
+    /// registers replaces the Undo bar, which always offers the latest change.
+    fn commit_named(&mut self, next: Data, name: &str) -> bool {
+        let before = self.data.clone();
+        let changed = before != next;
+        let after = next.clone();
+        if !self.commit(next) {
+            return false;
+        }
+        if changed {
+            self.undo = None;
+            self.history.register(name, snapshot(before), snapshot(after));
+        }
+        true
+    }
+    /// Edit > Undo and Redo (Cmd+Z, Cmd+Shift+Z): steps the history back or forward. Only on the list, since an open
+    /// editor holds a draft of the data. False when there is no step that way.
+    pub fn step_history(&mut self, ui: &Ui, redo: bool) -> bool {
+        if self.screen != Screen::Items {
+            return false;
+        }
+        let mut next = self.data.clone();
+        let stepped = if redo { self.history.redo(&mut next) } else { self.history.undo(&mut next) };
+        if stepped.is_none() {
+            return false;
+        }
+        self.undo = None;
+        if self.commit(next) {
+            self.rebuild(ui);
+        }
+        true
+    }
+    /// The Edit menu's Undo and Redo: enabled on the list when the history has a step that way.
+    pub fn edit_commands(&self) -> bifrost_app::Commands {
+        if self.screen != Screen::Items {
+            return bifrost_app::Commands::default();
+        }
+        bifrost_app::Commands::default()
+            .with(bifrost_app::Command::Undo, self.history.can_undo())
+            .with(bifrost_app::Command::Redo, self.history.can_redo())
+    }
+    /// The Edit menu's titles: "Undo Mark as Completed" and so on, plain when there is nothing to name.
+    pub fn edit_titles(&self) -> (String, String) {
+        (self.history.undo_menu_item_title(), self.history.redo_menu_item_title())
+    }
     fn set_focus(&mut self, f: Option<Field>, _t: f64) {
         self.focus = f;
         self.title.focused = f == Some(Field::Title);
@@ -968,7 +1027,7 @@ impl Reminders {
         copy.id = new_id;
         copy.completed = false;
         next.items.insert(at + 1, copy);
-        if self.commit(next) {
+        if self.commit_named(next, "Duplicate Reminder") {
             self.close_form(ui, t);
         }
     }
@@ -1032,8 +1091,11 @@ impl Reminders {
     }
     fn toggle_item(&mut self, ui: &Ui, id: u64) {
         let mut next = self.data.clone();
-        if model::toggle_complete(&mut next.items, id, self.today).is_some() && self.commit(next) {
-            self.rebuild(ui);
+        if model::toggle_complete(&mut next.items, id, self.today).is_some() {
+            let name = completion_name(&next.items, id);
+            if self.commit_named(next, name) {
+                self.rebuild(ui);
+            }
         }
     }
     /// Swipe-right completion. A completed reminder stays completed; the circle is the way back.
@@ -1042,8 +1104,11 @@ impl Reminders {
             return;
         }
         let mut next = self.data.clone();
-        if model::toggle_complete(&mut next.items, id, self.today).is_some() && self.commit(next) {
-            self.rebuild(ui);
+        if model::toggle_complete(&mut next.items, id, self.today).is_some() {
+            let name = completion_name(&next.items, id);
+            if self.commit_named(next, name) {
+                self.rebuild(ui);
+            }
         }
     }
     fn toggle_flag(&mut self, id: u64) -> bool {
@@ -1052,16 +1117,10 @@ impl Reminders {
         r.flagged = !r.flagged;
         self.commit(next)
     }
+    /// The Undo bar's button: the same step as Edit > Undo.
     fn run_undo(&mut self, ui: &Ui) {
-        if self.undo.take().is_none() {
-            return;
-        }
-        let mut next = self.data.clone();
-        if self.history.undo(&mut next).is_none() {
-            return;
-        }
-        if self.commit(next) {
-            self.rebuild(ui);
+        if self.undo.is_some() {
+            self.step_history(ui, false);
         }
     }
     fn save_editor(&mut self, ui: &Ui, t: f64) {
@@ -1106,7 +1165,8 @@ impl Reminders {
                 next.items.push(d);
             }
         }
-        if self.commit(next) {
+        let name = if id.is_some() { "Edit Reminder" } else { "New Reminder" };
+        if self.commit_named(next, name) {
             self.close_form(ui, t);
         }
     }
@@ -1117,6 +1177,7 @@ impl Reminders {
             return;
         }
         let (id, color, icon) = (e.id, e.color, e.icon);
+        let label = if id.is_some() { "Edit List" } else { "New List" };
         let mut next = self.data.clone();
         match id {
             Some(id) => {
@@ -1131,7 +1192,7 @@ impl Reminders {
                 next.lists.push(ListDef { id: new_id, name, color, icon });
             }
         }
-        if self.commit(next) {
+        if self.commit_named(next, label) {
             self.close_form(ui, t);
         }
     }
@@ -1149,7 +1210,7 @@ impl Reminders {
             }
         }
         let mut next = self.data.clone();
-        if model::move_before(&mut next.items, drag.id, before) && self.commit(next) {
+        if model::move_before(&mut next.items, drag.id, before) && self.commit_named(next, "Move Reminder") {
             self.rebuild(ui);
         }
     }

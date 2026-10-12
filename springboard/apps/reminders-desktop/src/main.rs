@@ -13,7 +13,7 @@ mod system;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Input, KeyInput, TouchKind};
 use bifrost_app::{dock_tile, notification_schedule, widgets_timeline};
 use bifrost_core::json::Json;
 use std::path::Path;
@@ -159,6 +159,15 @@ impl App for RemindersApp {
         self.app.as_ref().map_or_else(Vec::new, |a| a.controls(&ctx.ui))
     }
 
+    /// Edit > Undo and Redo are the shell's items; they are enabled from the Reminders history.
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        self.app.as_ref().map_or_else(Commands::default, |a| a.edit_commands())
+    }
+
+    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
+        self.app.as_ref().map(|a| a.edit_titles()).unwrap_or_default()
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let Some(a) = &mut self.app else { return false };
         let handled = match ev {
@@ -206,6 +215,9 @@ impl App for RemindersApp {
                 }
                 true
             }
+            // Edit > Undo and Redo (the shell's Edit menu, Cmd+Z and Cmd+Shift+Z) step the Reminders history.
+            Input::Command(Command::Undo) => a.step_history(&ctx.ui, false),
+            Input::Command(Command::Redo) => a.step_history(&ctx.ui, true),
             Input::Open(_) => false,
             _ => false,
         };
