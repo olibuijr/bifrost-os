@@ -379,6 +379,57 @@ impl<'a> TipGroup<'a> {
     }
 }
 
+/// How an inline tip view is drawn. The default is `Mini`. Our names; the reference names are `TipViewStyle` with
+/// `miniTip` and the standard style.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TipViewStyle {
+    /// Title, message and every action.
+    Standard,
+    /// Title and message only. Actions are left to the surrounding view.
+    #[default]
+    Mini,
+}
+
+/// One block of a tip view, listed top to bottom.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TipSection {
+    Title(String),
+    Message(String),
+    Actions(Vec<Action>),
+}
+
+/// The content of an inline tip view (`TipView`) for one tip. The view draws the sections it returns and draws
+/// nothing when the tip may not show. Showing a tip is still the caller's job: call `Datastore::mark_shown` after
+/// the view is drawn. The arrow and the anchor belong to the popover code, not to this model.
+pub struct TipView<'a> {
+    tip: &'a dyn Tip,
+    style: TipViewStyle,
+}
+
+impl<'a> TipView<'a> {
+    pub fn new(tip: &'a dyn Tip, style: TipViewStyle) -> Self {
+        TipView { tip, style }
+    }
+
+    /// The sections to draw at `now`. Empty when the store says the tip may not show. An empty message is left out,
+    /// and the actions are left out in the `Mini` style.
+    pub fn sections(&self, store: &Datastore, now: Seconds) -> Vec<TipSection> {
+        if !store.is_eligible(self.tip, now) {
+            return Vec::new();
+        }
+        let mut out = vec![TipSection::Title(self.tip.title().to_string())];
+        let message = self.tip.message();
+        if !message.is_empty() {
+            out.push(TipSection::Message(message.to_string()));
+        }
+        let actions = self.tip.actions();
+        if self.style == TipViewStyle::Standard && !actions.is_empty() {
+            out.push(TipSection::Actions(actions));
+        }
+        out
+    }
+}
+
 fn push_line(out: &mut String, fields: &[&str]) {
     let escaped: Vec<String> = fields.iter().map(|f| escape(f)).collect();
     out.push_str(&escaped.join("\t"));
@@ -605,5 +656,97 @@ mod tests {
         let err = configure(&[ConfigOption::DatastorePath(dir.clone())]);
         assert!(matches!(err, Err(TipError::Datastore(_))));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod tip_view_tests {
+    use super::*;
+
+    struct Full {
+        message: &'static str,
+        actions: Vec<Action>,
+        rules: Vec<Rule>,
+    }
+
+    impl Tip for Full {
+        fn id(&self) -> &str {
+            "tip.full"
+        }
+        fn title(&self) -> &str {
+            "Demo"
+        }
+        fn message(&self) -> &str {
+            self.message
+        }
+        fn actions(&self) -> Vec<Action> {
+            self.actions.clone()
+        }
+        fn rules(&self) -> Vec<Rule> {
+            self.rules.clone()
+        }
+    }
+
+    fn tip(message: &'static str) -> Full {
+        Full { message, actions: vec![Action::new("show", "Show Me")], rules: Vec::new() }
+    }
+
+    #[test]
+    fn the_standard_style_draws_title_message_and_actions_in_order() {
+        let store = configure(&[]).unwrap();
+        let t = tip("Try it");
+        let view = TipView::new(&t, TipViewStyle::Standard);
+        assert_eq!(
+            view.sections(&store, 0),
+            vec![
+                TipSection::Title("Demo".to_string()),
+                TipSection::Message("Try it".to_string()),
+                TipSection::Actions(vec![Action::new("show", "Show Me")]),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_mini_style_is_the_default_and_leaves_out_the_actions() {
+        assert_eq!(TipViewStyle::default(), TipViewStyle::Mini);
+        let store = configure(&[]).unwrap();
+        let t = tip("Try it");
+        let sections = TipView::new(&t, TipViewStyle::default()).sections(&store, 0);
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[1], TipSection::Message("Try it".to_string()));
+    }
+
+    #[test]
+    fn an_empty_message_and_no_actions_leave_only_the_title() {
+        let store = configure(&[]).unwrap();
+        let t = Full { message: "", actions: Vec::new(), rules: Vec::new() };
+        let sections = TipView::new(&t, TipViewStyle::Standard).sections(&store, 0);
+        assert_eq!(sections, vec![TipSection::Title("Demo".to_string())]);
+    }
+
+    #[test]
+    fn the_view_is_empty_until_the_event_rule_holds() {
+        let mut store = configure(&[]).unwrap();
+        let t = Full {
+            message: "Try it",
+            actions: Vec::new(),
+            rules: vec![Rule::EventCount { event: "open".to_string(), at_least: 2 }],
+        };
+        let view = TipView::new(&t, TipViewStyle::Standard);
+        assert!(view.sections(&store, 0).is_empty());
+        store.donate("open").unwrap();
+        assert!(view.sections(&store, 0).is_empty());
+        store.donate("open").unwrap();
+        assert_eq!(view.sections(&store, 0).len(), 2);
+    }
+
+    #[test]
+    fn a_shown_tip_hides_until_the_daily_gap_has_passed() {
+        let mut store = configure(&[ConfigOption::DisplayFrequency(DisplayFrequency::Daily)]).unwrap();
+        let t = tip("Try it");
+        store.mark_shown("tip.full", 1_000).unwrap();
+        let view = TipView::new(&t, TipViewStyle::Mini);
+        assert!(view.sections(&store, 1_100).is_empty());
+        assert_eq!(view.sections(&store, 1_000 + 86_400).len(), 2);
     }
 }
