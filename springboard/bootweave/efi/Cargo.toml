@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bootweave-frame = { path = "../frame" }
 uefi = { version = "0.41", features = ["alloc", "panic_handler", "global_allocator"] }
 
 [profile.release]
