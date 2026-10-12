@@ -146,6 +146,13 @@
       "bifrost": "none",
       "status": "n/a",
       "note": "legacy cross-process layer hosting and a macOS-only Quartz Composer host; no sensible BifrOSt counterpart"
+    },
+    {
+      "feature": "Layer filters (filters, backgroundFilters, compositingFilter)",
+      "apple": "CALayer.filters, CALayer.backgroundFilters, CALayer.compositingFilter",
+      "bifrost": "springboard/layers/src/layer.rs (Material::Glass is a background blur; no general layer filters)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
     }
   ],
   "gaps": [

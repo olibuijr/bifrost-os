@@ -111,6 +111,20 @@
       "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs",
       "status": "partial",
       "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+    },
+    {
+      "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
+      "apple": "NSVisualEffectView.Material, NSVisualEffectView.BlendingMode, NSVisualEffectView.State",
+      "bifrost": "springboard/sdk/src/widgets.rs (visual_effect, Material, Blending, State)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Glass effect views (NSGlassEffectView, NSGlassEffectContainerView)",
+      "apple": "NSGlassEffectView, NSGlassEffectContainerView",
+      "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
     }
   ],
   "gaps": [

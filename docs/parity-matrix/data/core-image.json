@@ -4,7 +4,7 @@
   "macos_since": "10.11",
   "status": "partial",
   "bifrost": "springboard/render/src/gfx.rs (CPU Image, blur), springboard/render/src/imgdec.rs (PNG/JPEG decode), springboard/render/src/glass.rs (material blur and saturation), springboard/src/shell/photos/edit.rs (photo filters, app-private), springboard/src/gpu/shaders.rs (GPU presenter shaders, not app-facing)",
-  "summary": "Core Image's filter graph (CIContext, CIImage, CIFilter chains, CIKernel) has no app-facing counterpart. BifrOSt has a few fixed image operations inside the renderer and the Photos app (blur, brightness and contrast, four photo looks, rotate and crop, PNG and JPEG decode), but apps get no SDK API for them.",
+  "summary": "Core Image's filter graph (CIContext, CIImage, CIFilter chains, CIKernel) has no app-facing counterpart. BifrOSt has a few fixed image operations inside the renderer and the Photos app (blur, brightness and contrast, four photo looks, rotate and crop, PNG and JPEG decode), but apps get no SDK API for them. The new GPU stack (bifrost-gpu, bifrost-2d) can run filters as shaders, but no Core Image style filter catalogue exists yet; per-filter rows wait for the macOS 27 shader inventory.",
   "rea_evidence": "ev_b4d9b04a75a2641b4207d1e0bc824e085bdf4d1e6ec35ad1f1d6733fbb5e7f0d",
   "features": [
     {
@@ -97,6 +97,76 @@
       "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames)",
       "status": "gap",
       "note": "Frames reach the screen through the shell presenter. No app API for rendering filtered frames to a destination"
+    },
+    {
+      "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
+      "apple": "CITwirlDistortion, CIPinchDistortion, CIBumpDistortion, CIVortexDistortion, CIGlassDistortion, CIDisplacementDistortion, CICircleSplashDistortion, CITorusLensDistortion, CIHoleDistortion, CILightTunnel",
+      "bifrost": "springboard/render/src/kernel.rs (custom kernel model only; no built-in distortion filters)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Sharpen filters (sharpen luminance, unsharp mask)",
+      "apple": "CISharpenLuminance, CIUnsharpMask",
+      "bifrost": "springboard/render/src/filter.rs (convolution; no sharpen filter)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Stylize filters (bloom, gloom, crystallize, pixellate, pointillize, edges, comic, highlight and shadow, spot light, depth of field)",
+      "apple": "CIBloom, CIGloom, CICrystallize, CIPixellate, CIPointillize, CIEdges, CIEdgeWork, CIComicEffect, CIHighlightShadowAdjust, CISpotLight, CIDepthOfField, CILineOverlay",
+      "bifrost": "springboard/render/src/colorfx.rs (colour effects only)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
+      "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
+      "bifrost": "springboard/render/src/bayer.rs (ordered dithering, not halftone screens)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
+      "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
+      "bifrost": "springboard/render/src/pattern.rs (pattern fills, no tile filters)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
+      "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
+      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
+      "apple": "CIAreaAverage, CIAreaHistogram, CIAreaMaximum, CIAreaMinimum, CIAreaMinMax, CIRowAverage, CIColumnAverage, CIKMeans",
+      "bifrost": "springboard/render/src/plane_stats.rs (row and column reductions, statistics)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",
+      "apple": "CIConvolution3X3, CIConvolution5X5, CIConvolution7X7, CIConvolution9X9Horizontal, CIConvolution9X9Vertical, CIConvolutionRGB3X3",
+      "bifrost": "springboard/render/src/filter.rs (generic convolution)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
+      "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
+      "bifrost": "springboard/render/src/gfx.rs (uniform blur only)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
+      "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
+      "bifrost": "springboard/render/src/effect_chain.rs (a few named effects); springboard/gfx2d/src/shapes.rs (GPU shapes, no filter catalogue)",
+      "status": "gap",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
     }
   ],
   "gaps": [
@@ -106,6 +176,7 @@
     "No feature detection (faces, rectangles, text, barcodes) and no barcode or QR generation.",
     "No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).",
     "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
-    "Photo effects (sepia, vignette, chrome, fade, false colour, posterize) and colour lookup (colour cube, colour map, palettize) are absent."
+    "Photo effects (sepia, vignette, chrome, fade, false colour, posterize) and colour lookup (colour cube, colour map, palettize) are absent.",
+    "No built-in filter catalogue: distortion, sharpen, stylize, halftone, tile, depth and most transition filters are missing."
   ]
 }

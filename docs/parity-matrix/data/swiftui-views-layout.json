@@ -125,6 +125,27 @@
       "bifrost": "springboard/sdk/src/view/scroll.rs, springboard/ui/src/scroll.rs",
       "status": "partial",
       "note": "scrolling with model; no ScrollViewReader, scroll targets or scroll position binding"
+    },
+    {
+      "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
+      "apple": "Shader, ShaderLibrary, View.colorEffect(_:isEnabled:), View.distortionEffect(_:maxSampleOffset:isEnabled:), View.layerEffect(_:maxSampleOffset:isEnabled:), View.visualEffect(_:)",
+      "bifrost": "springboard/ui/src/shader_library.rs (shader function table model); springboard/gpu/src/shader.rs (Vulkan shaders, not app-facing)",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Liquid Glass effect (glassEffect, GlassEffectContainer, glassEffectID)",
+      "apple": "View.glassEffect(_:in:), Glass, GlassEffectContainer, View.glassEffectID(_:in:)",
+      "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs (live dual-Kawase blur in the window server); springboard/render/src/glass.rs",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+    },
+    {
+      "feature": "Materials (ultra thin to ultra thick, bar)",
+      "apple": "Material.ultraThin, .thin, .regular, .thick, .ultraThick, .bar; View.background(_:in:)",
+      "bifrost": "springboard/sdk/src/widgets.rs (visual_effect with Material); springboard/render/src/glass.rs",
+      "status": "partial",
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
     }
   ],
   "gaps": [
