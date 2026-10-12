@@ -19,6 +19,8 @@ use crate::media::route::Route;
 use bifrost_core::json::Json;
 use bifrost_ui::default_device::{Defaults, Device, DeviceError, Role};
 use bifrost_ui::volume_control::VolumeControl;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub const HEADPHONES: &str = "headphones";
 pub const BLUETOOTH: &str = "bluetooth";
@@ -35,17 +37,69 @@ const RECONNECT_MAX_MS: f64 = 30_000.0;
 
 pub struct AudioDevices {
     defaults: Defaults,
-    microphone: bool,
-    probed: f64,
+    /// Published by the probe worker; the UI thread only reads it and never waits on the audio server.
+    microphone: Arc<AtomicBool>,
     seen: Option<Seen>,
-    /// One connection kept between probes; dropped when the default input cannot be read.
-    system: Option<bifrost_audio_hal::System>,
-    /// Earliest time of the next connection attempt.
-    connect_after: f64,
-    /// The wait after the next failed attempt.
-    backoff: f64,
-    /// Connection attempts so far (for the test of the probe cadence).
-    attempts: u32,
+    /// Started on the first tick; owns the connection to the audio server.
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+
+/// The wait before the next connection attempt: 1 s, doubling after each failure up to 30 s, 1 s again after a good one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Backoff(f64);
+
+impl Backoff {
+    fn new() -> Self {
+        Backoff(RECONNECT_FIRST_MS)
+    }
+
+    /// The wait to use now, then doubles it.
+    fn fail(&mut self) -> f64 {
+        let wait = self.0;
+        self.0 = (self.0 * 2.0).min(RECONNECT_MAX_MS);
+        wait
+    }
+
+    fn reset(&mut self) {
+        self.0 = RECONNECT_FIRST_MS;
+    }
+}
+
+/// How long the worker waits for the audio server to accept and answer Hello (never the UI thread).
+const CONNECT_LIMIT: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// The probe worker: keeps one connection, asks for the default input every `PROBE_EVERY_MS`, reconnects after a
+/// backoff, and publishes the answer. It ends when the service is dropped (`flag` has no other owner).
+fn probe_loop(flag: std::sync::Weak<AtomicBool>) {
+    let mut system: Option<bifrost_audio_hal::System> = None;
+    let mut backoff = Backoff::new();
+    let mut retry_at = std::time::Instant::now();
+    loop {
+        let Some(flag) = flag.upgrade() else { return };
+        if system.is_none() && std::time::Instant::now() >= retry_at {
+            system = bifrost_audio_hal::System::connect_within(crate::media::capture::CLIENT, CONNECT_LIMIT).ok();
+            if system.is_some() {
+                backoff.reset();
+            } else {
+                retry_at = std::time::Instant::now() + std::time::Duration::from_millis(backoff.fail() as u64);
+            }
+        }
+        let has_input = match system.as_ref().map(|s| s.default_device(bifrost_audio_hal::Role::Input)) {
+            None => false,
+            Some(Ok(_)) => true,
+            // no input device: the server is there, keep the connection
+            Some(Err(bifrost_audio_types::AudioError::UnknownObject)) => false,
+            // the server went away or answers nonsense: reconnect after a backoff
+            Some(Err(_)) => {
+                system = None;
+                retry_at = std::time::Instant::now() + std::time::Duration::from_millis(backoff.fail() as u64);
+                false
+            }
+        };
+        flag.store(has_input, Ordering::Release);
+        drop(flag);
+        std::thread::sleep(std::time::Duration::from_millis(PROBE_EVERY_MS as u64));
+    }
 }
 
 /// What the last tick saw, to tell the next tick what changed.
@@ -58,49 +112,20 @@ struct Seen {
 
 impl AudioDevices {
     pub fn new() -> Self {
-        AudioDevices { defaults: Defaults::new(), microphone: false, probed: f64::NEG_INFINITY, seen: None, system: None, connect_after: f64::NEG_INFINITY, backoff: RECONNECT_FIRST_MS, attempts: 0 }
+        AudioDevices { defaults: Defaults::new(), microphone: Arc::new(AtomicBool::new(false)), seen: None, worker: None }
     }
 
-    /// The devices present now, with the chosen defaults kept. Looks the capture devices up again every
-    /// `PROBE_EVERY_S` seconds only.
-    fn state(&mut self, shell: &Shell, t: f64) -> Vec<Device> {
-        if t - self.probed >= PROBE_EVERY_MS {
-            self.microphone = self.probe_microphone(t);
-            self.probed = t;
+    /// The devices present now, with the chosen defaults kept. The microphone comes from the probe worker's last
+    /// answer; nothing here talks to the audio server.
+    fn state(&mut self, shell: &Shell, _t: f64) -> Vec<Device> {
+        if self.worker.is_none() {
+            let weak = Arc::downgrade(&self.microphone);
+            self.worker = std::thread::Builder::new().name("audio-probe".into()).spawn(move || probe_loop(weak)).ok();
         }
         let bluetooth = shell.info.bt.audio_sink().map(str::to_string);
-        let want = present(shell.cc.route, bluetooth.as_deref(), self.microphone);
+        let want = present(shell.cc.route, bluetooth.as_deref(), self.microphone.load(Ordering::Acquire));
         sync(&mut self.defaults, &want);
         want
-    }
-
-    /// Whether the audio server offers an input, on the kept connection. The connection stays open while the server
-    /// answers (an unknown input is not a reason to hang up); it is opened again only after a backoff of 1 s,
-    /// doubling to 30 s, while there is none.
-    fn probe_microphone(&mut self, t: f64) -> bool {
-        if self.system.is_none() && t >= self.connect_after {
-            self.attempts += 1;
-            self.system = bifrost_audio_hal::System::connect(crate::media::capture::CLIENT).ok();
-            if self.system.is_some() {
-                self.backoff = RECONNECT_FIRST_MS;
-            } else {
-                self.connect_after = t + self.backoff;
-                self.backoff = (self.backoff * 2.0).min(RECONNECT_MAX_MS);
-            }
-        }
-        let Some(system) = self.system.as_ref() else { return false };
-        match system.default_device(bifrost_audio_hal::Role::Input) {
-            Ok(_) => true,
-            // no input device: the server is there, keep the connection
-            Err(bifrost_audio_types::AudioError::UnknownObject) => false,
-            // the server went away or answers nonsense: reconnect after a backoff
-            Err(_) => {
-                self.system = None;
-                self.connect_after = t + self.backoff;
-                self.backoff = (self.backoff * 2.0).min(RECONNECT_MAX_MS);
-                false
-            }
-        }
     }
 
     fn seen(&mut self, shell: &Shell, t: f64) -> Seen {
@@ -295,13 +320,20 @@ fn opt_str(s: Option<&str>) -> Json {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn probing_for_a_microphone_does_not_reconnect_every_tick() {
-        let mut d = AudioDevices::new();
-        for k in 0..30 {
-            d.probe_microphone(k as f64 * PROBE_EVERY_S);
-        }
-        // 60 s of probes: at most one attempt per RECONNECT_EVERY_S while there is no input
-        assert!(d.attempts <= 6, "{}", d.attempts);
+    fn the_reconnect_wait_doubles_to_30_s_and_resets() {
+        let mut b = Backoff::new();
+        let waits: Vec<f64> = (0..8).map(|_| b.fail()).collect();
+        assert_eq!(waits, vec![1000.0, 2000.0, 4000.0, 8000.0, 16000.0, 30000.0, 30000.0, 30000.0]);
+        b.reset();
+        assert_eq!(b.fail(), 1000.0);
+    }
+
+    #[test]
+    fn a_new_service_has_no_connection_on_the_ui_thread() {
+        // the UI side only reads an atomic; the worker starts on the first tick
+        let d = AudioDevices::new();
+        assert!(!d.microphone.load(Ordering::Acquire));
+        assert!(d.worker.is_none());
     }
 
     use super::*;
