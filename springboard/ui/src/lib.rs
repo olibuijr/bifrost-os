@@ -866,3 +866,5 @@ pub mod annotation;
 pub mod ecs;
 pub mod rules;
 pub mod decision;
+pub mod capture_access;
+pub mod audio_settings;
