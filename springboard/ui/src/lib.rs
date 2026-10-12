@@ -755,3 +755,5 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod sound_envelope;
+pub mod sound_distance;
