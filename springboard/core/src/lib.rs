@@ -65,3 +65,4 @@ pub mod file_mode;
 pub mod errno;
 pub mod net_path;
 pub mod websocket;
+pub mod block_pool;
