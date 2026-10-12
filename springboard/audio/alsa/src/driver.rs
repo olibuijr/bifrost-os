@@ -11,7 +11,7 @@ use crate::convert::SampleFormat;
 use crate::ctl::{jack_pcm, Control, Ctl, ElemId, Kind, IFACE_MIXER};
 use crate::dll::Dll;
 use crate::pcm::{Direction, Pcm, PcmCaps, PcmRequest};
-use crate::ring::{plan_capture, plan_playback, CapturePlan, PlaybackPlan};
+use crate::ring::{after_resume, plan_capture, plan_playback, recovery_for, CapturePlan, PlaybackPlan, Recovery};
 use crate::sys::now_raw_ns;
 use crate::uapi::STATE_RUNNING;
 use bifrost_audio_driver::{
@@ -336,6 +336,10 @@ pub struct AlsaIo {
     prefill: u32,
     last_ts: u64,
     xruns: u64,
+    /// Between `start` and `stop`: only then does a state other than RUNNING mean trouble.
+    started: bool,
+    /// The kernel reported the device disconnected (unplugged).
+    gone: bool,
 }
 
 impl AlsaIo {
@@ -361,7 +365,7 @@ impl AlsaIo {
         let buffer = out.as_ref().or(inp.as_ref()).map_or(0, |p| p.buffer_frames);
         let prefill = (cfg.quantum * 2).min(buffer / 2).max(cfg.quantum.min(buffer));
         dlog!("opened {} {}Hz quantum {} prefill {} buffer {}", e.desc.uid, rate, cfg.quantum, prefill, buffer);
-        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0 })
+        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0, started: false, gone: false })
     }
 
     /// Cycles lost to under- and overruns since open.
@@ -390,6 +394,51 @@ impl AlsaIo {
         }
     }
 
+    /// Checks a started stream and recovers it: an `XRUN` or other stop restarts it (`prepare`, refill, `start`),
+    /// `SUSPENDED` tries `RESUME`, `DISCONNECTED` ends it. Returns true when this cycle can use the ring; false
+    /// when the cycle is lost (the caller reports an `Xrun`).
+    fn recover(&mut self) -> bool {
+        if !self.started {
+            return true;
+        }
+        if self.gone {
+            return false;
+        }
+        let Some(state) = self.primary().map(|p| p.status().state) else { return true };
+        let mut action = recovery_for(state);
+        if action == Recovery::Resume {
+            let mut err = None;
+            for p in [self.out.as_ref(), self.inp.as_ref()].into_iter().flatten() {
+                if let Err(e) = p.resume() {
+                    err = err.or(Some(e.raw_os_error().unwrap_or(libc::EIO)));
+                }
+            }
+            action = match after_resume(err) {
+                // Resumed: the stream runs again but this cycle's timing is gone.
+                Recovery::None => Recovery::Restart,
+                other => other,
+            };
+        }
+        match action {
+            Recovery::None => true,
+            Recovery::Resume => false,
+            Recovery::Gone => {
+                self.gone = true;
+                dlog!("device disconnected");
+                false
+            }
+            Recovery::Restart => {
+                dlog!("stream left RUNNING (state {state}), restarting");
+                match self.start() {
+                    Ok(_) => {}
+                    Err(DriverError::NotFound) | Err(DriverError::Busy) => self.gone = true,
+                    Err(e) => dlog!("restart failed: {e:?}"),
+                }
+                false
+            }
+        }
+    }
+
     fn primary(&mut self) -> Option<&mut Pcm> {
         self.out.as_mut().or(self.inp.as_mut())
     }
@@ -406,6 +455,7 @@ impl DeviceIo for AlsaIo {
             o.commit_appl(self.prefill as u64).map_err(map_io)?;
         }
         self.primary().ok_or(DriverError::NotFound)?.start().map_err(map_io)?;
+        self.started = true;
         let now = now_raw_ns();
         self.dll.reset(0, now);
         self.last_ts = 0;
@@ -427,6 +477,14 @@ impl DeviceIo for AlsaIo {
     }
 
     fn read_input(&mut self, frames: u32, dst: &mut BufferList) -> Result<(), Xrun> {
+        if self.inp.is_none() {
+            return Ok(());
+        }
+        if !self.recover() {
+            self.xruns += 1;
+            dst.clear();
+            return Err(Xrun { frames_lost: frames });
+        }
         let Some(p) = self.inp.as_mut() else { return Ok(()) };
         let hw = p.status().hw_raw;
         let plan = plan_capture(p.appl(), hw, p.buffer_frames, p.boundary, frames);
@@ -451,6 +509,13 @@ impl DeviceIo for AlsaIo {
     }
 
     fn write_mix(&mut self, frames: u32, src: &BufferList) -> Result<(), Xrun> {
+        if self.out.is_none() {
+            return Ok(());
+        }
+        if !self.recover() {
+            self.xruns += 1;
+            return Err(Xrun { frames_lost: frames });
+        }
         let Some(p) = self.out.as_mut() else { return Ok(()) };
         let hw = p.status().hw_raw;
         let layout = p.layout;
@@ -478,6 +543,7 @@ impl DeviceIo for AlsaIo {
     }
 
     fn stop(&mut self) {
+        self.started = false;
         if let Some(p) = self.primary() {
             let _ = p.drop_stream();
         }

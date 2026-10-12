@@ -233,7 +233,7 @@ impl Bf {
     }
 }
 
-unsafe extern "C" fn cb_start(io: *mut Ioplug) -> c_int {
+unsafe fn cb_start_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
     let (Some(id), Some(sh)) = (b.proc_id, b.shared.as_ref()) else { return -EINVAL };
     match b.device.start(id) {
@@ -248,7 +248,7 @@ unsafe extern "C" fn cb_start(io: *mut Ioplug) -> c_int {
     }
 }
 
-unsafe extern "C" fn cb_stop(io: *mut Ioplug) -> c_int {
+unsafe fn cb_stop_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
     if let Some(id) = b.proc_id {
         if let Err(e) = b.device.stop(id) {
@@ -261,7 +261,7 @@ unsafe extern "C" fn cb_stop(io: *mut Ioplug) -> c_int {
     0
 }
 
-unsafe extern "C" fn cb_pointer(io: *mut Ioplug) -> Sframes {
+unsafe fn cb_pointer_impl(io: *mut Ioplug) -> Sframes {
     let b = bf(io);
     match b.shared.as_ref() {
         Some(sh) => ring_pointer(b.dir, &sh.ring) as Sframes,
@@ -269,24 +269,24 @@ unsafe extern "C" fn cb_pointer(io: *mut Ioplug) -> Sframes {
     }
 }
 
-unsafe extern "C" fn cb_transfer(io: *mut Ioplug, areas: *const ChannelArea, offset: Uframes, size: Uframes) -> Sframes {
+unsafe fn cb_transfer_impl(io: *mut Ioplug, areas: *const ChannelArea, offset: Uframes, size: Uframes) -> Sframes {
     let b = bf(io);
     let Some(sh) = b.shared.as_ref() else { return -(EINVAL as Sframes) };
     let n = match b.dir {
-        Dir::Playback => write_from_areas(&sh.ring, b.fmt, areas, offset as u64, size as u32),
-        Dir::Capture => read_to_areas(&sh.ring, b.fmt, areas, offset as u64, size as u32),
+        Dir::Playback => write_from_areas(&sh.ring, b.fmt, areas, offset as u64, clamp_frames(size as u64)),
+        Dir::Capture => read_to_areas(&sh.ring, b.fmt, areas, offset as u64, clamp_frames(size as u64)),
     };
     n as Sframes
 }
 
-unsafe extern "C" fn cb_delay(io: *mut Ioplug, delayp: *mut Sframes) -> c_int {
+unsafe fn cb_delay_impl(io: *mut Ioplug, delayp: *mut Sframes) -> c_int {
     let b = bf(io);
     // The ring delay: queued playback frames, or captured frames not yet read.
     *delayp = b.shared.as_ref().map(|s| s.ring.fill() as Sframes).unwrap_or(0);
     0
 }
 
-unsafe extern "C" fn cb_hw_params(io: *mut Ioplug, _p: *mut SndPcmHwParams) -> c_int {
+unsafe fn cb_hw_params_impl(io: *mut Ioplug, _p: *mut SndPcmHwParams) -> c_int {
     let b = bf(io);
     match Fmt::from_alsa((*io).format as u32) {
         Some(f) => {
@@ -297,19 +297,20 @@ unsafe extern "C" fn cb_hw_params(io: *mut Ioplug, _p: *mut SndPcmHwParams) -> c
     }
 }
 
-unsafe extern "C" fn cb_hw_free(io: *mut Ioplug) -> c_int {
+unsafe fn cb_hw_free_impl(io: *mut Ioplug) -> c_int {
     bf(io).teardown();
     0
 }
 
-unsafe extern "C" fn cb_prepare(io: *mut Ioplug) -> c_int {
+unsafe fn cb_prepare_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
     b.teardown();
     let ioref = &*io;
-    let (frames, ch) = (ioref.buffer_size as u32, ioref.channels);
-    if frames == 0 || ch == 0 {
-        return -EINVAL;
-    }
+    let ch = ioref.channels;
+    let frames = match check_geometry(ioref.period_size as u64, ioref.buffer_size as u64, ch) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
     let sh = Arc::new(Shared { ring: PcmRing::new(frames, ch), wake: AtomicU32::new(0), quit: AtomicBool::new(false), evfd: b.evfd });
     // Clear a stale readiness count from the previous run.
     sh.drain_eventfd();
@@ -359,12 +360,12 @@ unsafe extern "C" fn cb_prepare(io: *mut Ioplug) -> c_int {
     0
 }
 
-unsafe extern "C" fn cb_drain(io: *mut Ioplug) -> c_int {
+unsafe fn cb_drain_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
     if b.dir == Dir::Playback {
         if let Some(sh) = b.shared.as_ref() {
             // Wait for the IO procedure to consume the queue, bounded by the buffer length plus slack.
-            let ms = (sh.ring.frames() as u64 * 1000 / b.dev_rate.max(1) as u64) + 200;
+            let ms = drain_budget_ms(sh.ring.frames(), b.dev_rate);
             let mut waited = 0;
             while sh.ring.fill() > 0 && waited < ms {
                 std::thread::sleep(std::time::Duration::from_millis(1));
@@ -375,15 +376,15 @@ unsafe extern "C" fn cb_drain(io: *mut Ioplug) -> c_int {
     0
 }
 
-unsafe extern "C" fn cb_pause(io: *mut Ioplug, enable: c_int) -> c_int {
+unsafe fn cb_pause_impl(io: *mut Ioplug, enable: c_int) -> c_int {
     if enable != 0 {
-        cb_stop(io)
+        cb_stop_impl(io)
     } else {
-        cb_start(io)
+        cb_start_impl(io)
     }
 }
 
-unsafe extern "C" fn cb_poll_revents(io: *mut Ioplug, pfd: *mut Pollfd, nfds: c_uint, revents: *mut u16) -> c_int {
+unsafe fn cb_poll_revents_impl(io: *mut Ioplug, pfd: *mut Pollfd, nfds: c_uint, revents: *mut u16) -> c_int {
     let b = bf(io);
     if nfds != 1 {
         return -EINVAL;
@@ -400,12 +401,85 @@ unsafe extern "C" fn cb_poll_revents(io: *mut Ioplug, pfd: *mut Pollfd, nfds: c_
     0
 }
 
-unsafe extern "C" fn cb_close(io: *mut Ioplug) -> c_int {
+unsafe fn cb_close_impl(io: *mut Ioplug) -> c_int {
     // SAFETY: private_data was produced by Box::into_raw at open and close runs once.
     let mut b = Box::from_raw((*io).private_data as *mut Bf);
     b.teardown();
     libc::close(b.evfd);
     0
+}
+
+/// Runs a callback body so a panic never unwinds into C: it becomes `-EIO`.
+fn guard_i(f: impl FnOnce() -> c_int) -> c_int {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(-EIO)
+}
+
+/// As `guard_i` for callbacks that return a frame count.
+fn guard_l(f: impl FnOnce() -> Sframes) -> Sframes {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(-(EIO as Sframes))
+}
+
+/// True when `io` and its private data are non-null, so `bf` is safe to call.
+unsafe fn live(io: *mut Ioplug) -> bool {
+    !io.is_null() && !(*io).private_data.is_null()
+}
+
+/// The largest ring (in frames) the plug-in accepts: 2^24 frames is over 5 minutes at 48 kHz.
+pub const MAX_RING_FRAMES: u64 = 1 << 24;
+
+/// Checks the geometry alsa-lib negotiated. Returns the ring size in frames.
+pub fn check_geometry(period: u64, buffer: u64, channels: u32) -> Result<u32, c_int> {
+    if channels == 0 || channels > 8 || buffer == 0 || buffer > MAX_RING_FRAMES || period > buffer {
+        return Err(-EINVAL);
+    }
+    Ok(buffer as u32)
+}
+
+/// How long `drain` may wait for a ring of `frames` at `rate`: the buffer length plus 200 ms slack.
+pub fn drain_budget_ms(frames: u32, rate: u32) -> u64 {
+    frames as u64 * 1000 / rate.max(1) as u64 + 200
+}
+
+/// Clamps a transfer size to what the ring can take in one call.
+pub fn clamp_frames(size: u64) -> u32 {
+    size.min(MAX_RING_FRAMES) as u32
+}
+
+unsafe extern "C" fn cb_start(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_start_impl(io) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_stop(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_stop_impl(io) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_pointer(io: *mut Ioplug) -> Sframes {
+    guard_l(|| if live(io) { cb_pointer_impl(io) } else { -(EINVAL as Sframes) })
+}
+unsafe extern "C" fn cb_transfer(io: *mut Ioplug, areas: *const ChannelArea, offset: Uframes, size: Uframes) -> Sframes {
+    guard_l(|| if live(io) && !areas.is_null() { cb_transfer_impl(io, areas, offset, size) } else { -(EINVAL as Sframes) })
+}
+unsafe extern "C" fn cb_delay(io: *mut Ioplug, delayp: *mut Sframes) -> c_int {
+    guard_i(|| if live(io) && !delayp.is_null() { cb_delay_impl(io, delayp) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_hw_params(io: *mut Ioplug, p: *mut SndPcmHwParams) -> c_int {
+    guard_i(|| if live(io) { cb_hw_params_impl(io, p) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_hw_free(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_hw_free_impl(io) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_prepare(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_prepare_impl(io) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_drain(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_drain_impl(io) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_pause(io: *mut Ioplug, enable: c_int) -> c_int {
+    guard_i(|| if live(io) { cb_pause_impl(io, enable) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_poll_revents(io: *mut Ioplug, pfd: *mut Pollfd, nfds: c_uint, revents: *mut u16) -> c_int {
+    guard_i(|| if live(io) && !pfd.is_null() && !revents.is_null() { cb_poll_revents_impl(io, pfd, nfds, revents) } else { -EINVAL })
+}
+unsafe extern "C" fn cb_close(io: *mut Ioplug) -> c_int {
+    guard_i(|| if live(io) { cb_close_impl(io) } else { 0 })
 }
 
 static CALLBACKS: IoplugCallback = IoplugCallback {
@@ -490,7 +564,14 @@ unsafe fn set_constraints(io: *mut Ioplug, rate: u32) -> c_int {
 /// # Safety
 /// Called by alsa-lib with valid pointers.
 #[no_mangle]
-pub unsafe extern "C" fn _snd_pcm_bifrost_open(pcmp: *mut *mut SndPcm, name: *const c_char, _root: *mut SndConfig, conf: *mut SndConfig, stream: c_int, mode: c_int) -> c_int {
+pub unsafe extern "C" fn _snd_pcm_bifrost_open(pcmp: *mut *mut SndPcm, name: *const c_char, root: *mut SndConfig, conf: *mut SndConfig, stream: c_int, mode: c_int) -> c_int {
+    if pcmp.is_null() {
+        return -EINVAL;
+    }
+    guard_i(|| open_impl(pcmp, name, root, conf, stream, mode))
+}
+
+unsafe fn open_impl(pcmp: *mut *mut SndPcm, name: *const c_char, _root: *mut SndConfig, conf: *mut SndConfig, stream: c_int, mode: c_int) -> c_int {
     let dir = if stream == SND_PCM_STREAM_PLAYBACK { Dir::Playback } else { Dir::Capture };
     let comm = std::fs::read_to_string("/proc/self/comm").unwrap_or_default();
     let client = client_name(config_client(conf).as_deref(), &comm);
@@ -684,6 +765,73 @@ mod tests {
         h.join().unwrap();
         // SAFETY: closing our own fd.
         unsafe { libc::close(evfd) };
+    }
+
+    #[test]
+    fn guards_turn_panics_into_eio() {
+        assert_eq!(guard_i(|| panic!("boom")), -5);
+        assert_eq!(guard_l(|| panic!("boom")), -5);
+        assert_eq!(guard_i(|| 7), 7);
+        assert_eq!(guard_l(|| 9), 9);
+    }
+
+    #[test]
+    fn null_pointers_are_rejected_before_any_dereference() {
+        // SAFETY: every call passes null, which the entry points must reject without touching memory.
+        unsafe {
+            let null = core::ptr::null_mut::<Ioplug>();
+            assert_eq!(cb_start(null), -EINVAL);
+            assert_eq!(cb_stop(null), -EINVAL);
+            assert_eq!(cb_pointer(null), -(EINVAL as Sframes));
+            assert_eq!(cb_transfer(null, core::ptr::null(), 0, 1), -(EINVAL as Sframes));
+            assert_eq!(cb_delay(null, core::ptr::null_mut()), -EINVAL);
+            assert_eq!(cb_hw_params(null, core::ptr::null_mut()), -EINVAL);
+            assert_eq!(cb_hw_free(null), -EINVAL);
+            assert_eq!(cb_prepare(null), -EINVAL);
+            assert_eq!(cb_drain(null), -EINVAL);
+            assert_eq!(cb_pause(null, 1), -EINVAL);
+            assert_eq!(cb_poll_revents(null, core::ptr::null_mut(), 1, core::ptr::null_mut()), -EINVAL);
+            assert_eq!(cb_close(null), 0);
+            assert_eq!(_snd_pcm_bifrost_open(core::ptr::null_mut(), core::ptr::null(), core::ptr::null_mut(), core::ptr::null_mut(), 0, 0), -EINVAL);
+            // An Ioplug with no private data is also not live.
+            let mut io: Ioplug = core::mem::zeroed();
+            assert_eq!(cb_start(&mut io), -EINVAL);
+            assert_eq!(cb_close(&mut io), 0);
+        }
+    }
+
+    #[test]
+    fn geometry_checks() {
+        assert_eq!(check_geometry(1024, 4096, 2), Ok(4096));
+        assert_eq!(check_geometry(0, 4096, 2), Ok(4096));
+        assert_eq!(check_geometry(4096, 4096, 8), Ok(4096));
+        assert_eq!(check_geometry(1024, 0, 2), Err(-EINVAL));
+        assert_eq!(check_geometry(1024, 4096, 0), Err(-EINVAL));
+        assert_eq!(check_geometry(1024, 4096, 9), Err(-EINVAL));
+        assert_eq!(check_geometry(8192, 4096, 2), Err(-EINVAL));
+        assert_eq!(check_geometry(1024, MAX_RING_FRAMES, 2), Ok(1 << 24));
+        assert_eq!(check_geometry(1024, MAX_RING_FRAMES + 1, 2), Err(-EINVAL));
+        // A 32-bit truncation that would give 0 is caught.
+        assert_eq!(check_geometry(1, 1 << 32, 2), Err(-EINVAL));
+    }
+
+    #[test]
+    fn drain_budget_and_clamp() {
+        // 48000 frames at 48 kHz is 1000 ms plus 200 ms.
+        assert_eq!(drain_budget_ms(48_000, 48_000), 1200);
+        // A zero rate does not divide by zero: 100 frames * 1000 / 1 + 200.
+        assert_eq!(drain_budget_ms(100, 0), 100_200);
+        assert_eq!(clamp_frames(100), 100);
+        assert_eq!(clamp_frames(u64::MAX), 1 << 24);
+    }
+
+    #[test]
+    fn area_ptr_handles_bit_offsets() {
+        let mut buf = [0u8; 16];
+        let a = ChannelArea { addr: buf.as_mut_ptr() as *mut c_void, first: 16, step: 32 };
+        // SAFETY: addresses stay inside the 16-byte buffer (2 + 4*3 = 14).
+        let off = unsafe { area_ptr(&a, 3).offset_from(buf.as_mut_ptr()) };
+        assert_eq!(off, 14);
     }
 
     #[test]

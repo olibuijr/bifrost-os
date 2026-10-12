@@ -58,6 +58,31 @@ pub struct PcmCaps {
     pub no_period_wakeup: bool,
 }
 
+/// `v` limited to `lo..=hi`; a hostile or inverted range (`lo > hi`) gives `lo` instead of panicking like
+/// `u32::clamp`.
+pub fn clamp_range(v: u32, lo: u32, hi: u32) -> u32 {
+    if lo > hi {
+        lo
+    } else {
+        v.clamp(lo, hi)
+    }
+}
+
+/// Sanity checks on the parameters the kernel fixed, so an odd driver cannot make us map nothing or divide by zero.
+pub fn validate_fixed(channels: u32, rate: u32, period: u32, buffer: u32) -> io::Result<()> {
+    let bad = |what: &str| Err(io::Error::new(io::ErrorKind::InvalidData, format!("the device fixed {what}")));
+    if channels == 0 || channels > 256 {
+        return bad("a channel count outside 1 to 256");
+    }
+    if rate == 0 {
+        return bad("a rate of 0");
+    }
+    if period == 0 || buffer == 0 || buffer < period || buffer > (1 << 24) {
+        return bad("an unusable period or buffer size");
+    }
+    Ok(())
+}
+
 fn usable(p: &HwParams) -> bool {
     (PARAM_SAMPLE_BITS..PARAM_SAMPLE_BITS + 12).all(|i| !p.is_empty(i))
 }
@@ -88,7 +113,7 @@ pub fn negotiate<R: FnMut(&mut HwParams) -> io::Result<()>>(mut refine: R, req: 
     p = attempt(&mut refine, &cur, |p| p.set_mask(PARAM_SUBFORMAT, &[0])).unwrap_or(cur);
     // channels: the request, else the device's maximum up to the cap, else stereo, else its minimum
     let (cmin, cmax) = p.range(PARAM_CHANNELS);
-    let want = req.channels.unwrap_or(cmax.min(req.max_channels)).clamp(cmin, cmax);
+    let want = clamp_range(req.channels.unwrap_or(cmax.min(req.max_channels)), cmin, cmax);
     let cur = p;
     p = [want, 2, cmin]
         .iter()
@@ -100,7 +125,7 @@ pub fn negotiate<R: FnMut(&mut HwParams) -> io::Result<()>>(mut refine: R, req: 
         Some(p) => p,
         None => {
             let (rmin, rmax) = cur.range(PARAM_RATE);
-            let near = req.rate.clamp(rmin, rmax);
+            let near = clamp_range(req.rate, rmin, rmax);
             attempt(&mut refine, &cur, |p| p.set_range(PARAM_RATE, near, near)).ok_or_else(|| unsupported("rate"))?
         }
     };
@@ -115,7 +140,7 @@ pub fn negotiate<R: FnMut(&mut HwParams) -> io::Result<()>>(mut refine: R, req: 
     let top = bmax - bmax % step;
     p = (0..8u32)
         .find_map(|i| {
-            let b = top.checked_sub(i * step).filter(|&b| b > 0)?;
+            let b = u32::try_from((top as u64).checked_sub(i as u64 * step as u64)?).ok().filter(|&b| b > 0)?;
             attempt(&mut refine, &cur, |p| p.set_range(PARAM_BUFFER_SIZE, b, b))
         })
         .unwrap_or(cur);
@@ -261,6 +286,7 @@ impl Pcm {
         self.buffer_frames = hw.range(PARAM_BUFFER_SIZE).0;
         self.info = hw.info;
         self.no_period_wakeup = hw.flags & HW_PARAMS_NO_PERIOD_WAKEUP != 0;
+        validate_fixed(self.channels, self.rate, self.period_frames, self.buffer_frames)?;
         self.layout = RingLayout { interleaved, channels: self.channels as usize, format, buffer_frames: self.buffer_frames as usize };
         self.set_sw_params()?;
         self.map()?;
@@ -358,6 +384,12 @@ impl Pcm {
         self.hw_last_raw = 0;
         self.hw_total = 0;
         Ok(())
+    }
+
+    /// `RESUME` after a system suspend: `Ok` when the stream is running again, `EAGAIN` while the hardware is
+    /// not ready, `ENOSYS` when the driver cannot resume (then `prepare` and `start` again).
+    pub fn resume(&self) -> io::Result<()> {
+        ioctl_none(self.fd, PCM_RESUME)
     }
 
     pub fn start(&self) -> io::Result<()> {
@@ -670,6 +702,50 @@ mod tests {
         assert_eq!(mask_single(&p, PARAM_FORMAT), Some(10));
         p.set_mask(PARAM_FORMAT, &[35]);
         assert_eq!(mask_single(&p, PARAM_FORMAT), Some(35));
+    }
+
+    #[test]
+    fn hostile_ranges_do_not_panic() {
+        assert_eq!(clamp_range(5, 8, 2), 8);
+        assert_eq!(clamp_range(5, 2, 8), 5);
+        assert_eq!(clamp_range(1, 2, 8), 2);
+        assert_eq!(clamp_range(9, 2, 8), 8);
+        // A kernel that answers inverted channel and rate ranges, a huge buffer maximum and odd quanta.
+        for quantum in [0, 1, 64, u32::MAX] {
+            let r = negotiate(
+                |p| {
+                    p.set_range(PARAM_CHANNELS, 8, 2);
+                    p.set_range(PARAM_RATE, 48_000, 44_100);
+                    p.set_range(PARAM_BUFFER_SIZE, 1, u32::MAX);
+                    p.info = INFO_MMAP;
+                    Ok(())
+                },
+                &req(48_000, quantum),
+            );
+            let _ = r;
+        }
+    }
+
+    #[test]
+    fn fixed_parameters_are_validated() {
+        assert!(validate_fixed(2, 48_000, 64, 2048).is_ok());
+        assert!(validate_fixed(0, 48_000, 64, 2048).is_err());
+        assert!(validate_fixed(257, 48_000, 64, 2048).is_err());
+        assert!(validate_fixed(2, 0, 64, 2048).is_err());
+        assert!(validate_fixed(2, 48_000, 0, 2048).is_err());
+        assert!(validate_fixed(2, 48_000, 64, 0).is_err());
+        assert!(validate_fixed(2, 48_000, 4096, 2048).is_err(), "a buffer smaller than a period");
+        assert!(validate_fixed(2, 48_000, 64, (1 << 24) + 1).is_err());
+        assert!(validate_fixed(2, 48_000, 64, 1 << 24).is_ok());
+    }
+
+    #[test]
+    fn the_buffer_search_survives_a_huge_quantum() {
+        // quantum * 7 overflows u32; the search must stop at zero instead of panicking.
+        let mut d = hda();
+        d.buffer_max = u32::MAX;
+        let r = run(&d, &req(48_000, 1 << 30));
+        let _ = r;
     }
 
     #[test]

@@ -154,6 +154,22 @@ mod tests {
     }
 
     #[test]
+    fn destination_queue_orders_by_timestamp_then_arrival() {
+        let mut hub = Hub::new();
+        let (_a, _, a_dst) = hub.create_app("a");
+        let (_b, b_src, _) = hub.create_app("b");
+        for (t, k) in [(50u64, 1u8), (10, 2), (50, 3), (u64::MAX, 4), (10, 5), (0, 6)] {
+            assert!(hub.send_to_destination(b_src, a_dst, t, note(k)));
+        }
+        let got = hub.take_destination(a_dst, 50);
+        let keys: Vec<(u64, u32)> = got.iter().map(|t| (t.host_ns, (t.packet.words[0] >> 8) & 0x7F)).collect();
+        assert_eq!(keys, vec![(0, 6), (10, 2), (10, 5), (50, 1), (50, 3)]);
+        // The event at u64::MAX stays until the horizon reaches it.
+        assert_eq!(hub.take_destination(a_dst, u64::MAX - 1).len(), 0);
+        assert_eq!(hub.take_destination(a_dst, u64::MAX).len(), 1);
+    }
+
+    #[test]
     fn future_events_stay_queued() {
         let mut hub = Hub::new();
         let (_a, a_src, _) = hub.create_app("a");

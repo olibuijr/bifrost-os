@@ -200,6 +200,7 @@ pub const PCM_PREPARE: u32 = io(b'A', 0x40);
 pub const PCM_RESET: u32 = io(b'A', 0x41);
 pub const PCM_START: u32 = io(b'A', 0x42);
 pub const PCM_DROP: u32 = io(b'A', 0x43);
+pub const PCM_RESUME: u32 = io(b'A', 0x47);
 pub const PCM_LINK: u32 = iow::<i32>(b'A', 0x60);
 pub const PCM_UNLINK: u32 = io(b'A', 0x61);
 
@@ -332,6 +333,7 @@ mod tests {
         assert_eq!(PCM_RESET, 0x4141);
         assert_eq!(PCM_START, 0x4142);
         assert_eq!(PCM_DROP, 0x4143);
+        assert_eq!(PCM_RESUME, 0x4147);
         assert_eq!(PCM_LINK, 0x4004_4160);
         assert_eq!(PCM_UNLINK, 0x4161);
     }
