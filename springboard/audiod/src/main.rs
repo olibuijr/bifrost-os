@@ -8,7 +8,7 @@ use springboard::media::audioplayer::{AudioPlayer, Snapshot as PlayerSnapshot, T
 use springboard::media::capture::{wav_bytes, Recorder};
 use springboard::media::queue::Repeat;
 use springboard::media::stream::Phase;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

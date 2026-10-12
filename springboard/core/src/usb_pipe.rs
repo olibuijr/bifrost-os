@@ -361,7 +361,7 @@ mod tests {
         let mut iso = Pipe::new(ep(0x82, ISO, 256)).unwrap();
         assert_eq!(iso.enqueue(64), Err(PipeError::WrongTransferType));
         assert_eq!(iso.enable_streams(), Err(PipeError::WrongTransferType));
-        let mut bulk = Pipe::new(ep(BULK_IN, BULK, 512)).unwrap();
+        let bulk = Pipe::new(ep(BULK_IN, BULK, 512)).unwrap();
         assert_eq!(bulk.isochronous_schedule(0, &[64]), Err(PipeError::WrongTransferType));
         let mut interrupt = Pipe::new(ep(0x83, INTERRUPT, 16)).unwrap();
         assert_eq!(interrupt.enqueue(8), Ok(1));

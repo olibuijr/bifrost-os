@@ -65,16 +65,6 @@ impl DisplayFrequency {
             DisplayFrequency::Monthly => 2_592_000,
         }
     }
-
-    fn name(self) -> &'static str {
-        match self {
-            DisplayFrequency::Immediate => "immediate",
-            DisplayFrequency::Hourly => "hourly",
-            DisplayFrequency::Daily => "daily",
-            DisplayFrequency::Weekly => "weekly",
-            DisplayFrequency::Monthly => "monthly",
-        }
-    }
 }
 
 /// A tip: content plus the rules that decide when it displays. Ids must be stable, since the datastore keys on them.

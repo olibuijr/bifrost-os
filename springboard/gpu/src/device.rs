@@ -43,6 +43,9 @@ pub struct DeviceInfo {
 
 /// The shared device state. Owned by `Device` through an `Arc`; resources keep the `Arc` alive.
 pub(crate) struct Inner {
+    // Never read, but it keeps the Vulkan loader loaded: the instance and its function pointers come from it.
+    // `Drop for Inner` destroys the instance before the fields drop, so this field goes last.
+    #[allow(dead_code)]
     pub(crate) entry: ash::Entry,
     pub(crate) instance: ash::Instance,
     pub(crate) physical: ash::vk::PhysicalDevice,
