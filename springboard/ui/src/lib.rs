@@ -885,6 +885,7 @@ pub mod weather_attribution;
 pub mod pressure_trend;
 pub mod weather_stats;
 pub mod hid_report;
+pub mod hid_match;
 pub mod linkmeta;
 pub mod captions;
 pub mod sample_attachments;
