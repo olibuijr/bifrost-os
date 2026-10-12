@@ -32,3 +32,5 @@ pub mod codereq;
 pub mod biometry;
 pub mod tunnel;
 pub mod proxy;
+pub mod backup_exclude;
+pub mod quarantine;
