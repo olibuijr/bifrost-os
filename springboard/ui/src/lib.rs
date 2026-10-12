@@ -619,6 +619,8 @@ pub mod scene_object;
 pub mod view_camera;
 pub mod animated_values;
 pub mod mesh;
+pub mod mesh_primitives;
+pub mod morph_skin;
 pub mod shading;
 pub mod composition;
 pub mod candidates;
