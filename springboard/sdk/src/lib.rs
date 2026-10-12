@@ -247,6 +247,16 @@ pub use bifrost_ui::mic_consent as microphone;
 /// Speech model assets: installed locales, downloads and reservations (`speech_models::AssetInventory`).
 pub use bifrost_ui::speech_assets as speech_models;
 
+/// Calls: the call controller, transactions and observation (`calling::CallCenter`, `calling::Handle`). The shell
+/// owns ringing and audio; an app drives calls through this model.
+pub use bifrost_ui::call as calling;
+
+/// The incoming-call card and its update (`calling_ui::CallUpdate`, `calling_ui::IncomingCard`).
+pub use bifrost_ui::call_ui as calling_ui;
+
+/// The default calling app and the apps registered for calling (`calling_apps::CallingApps`).
+pub use bifrost_ui::call_apps as calling_apps;
+
 /// An app. Only `id` and `draw` are required.
 pub trait App {
     /// The reverse-DNS id from the manifest.
