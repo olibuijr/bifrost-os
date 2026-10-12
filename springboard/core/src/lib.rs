@@ -21,6 +21,7 @@ pub mod sensor_log;
 pub mod magnetometer;
 pub mod altitude;
 pub mod pedometer;
+pub mod permission_request;
 pub mod motion_activity;
 pub mod rumble;
 pub mod migrate;
