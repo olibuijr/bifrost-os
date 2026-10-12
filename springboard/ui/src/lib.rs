@@ -1036,3 +1036,4 @@ pub mod counter_sample;
 
 pub mod object_push;
 pub mod passkey_display;
+pub mod media_trim;
