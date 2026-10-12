@@ -37,7 +37,8 @@ impl ManualClock {
 /// Frames a device at `rate` with `drift_ppm` has run in `dt_ns`, rounded down (exact integer arithmetic).
 pub fn frames_in(dt_ns: u64, rate: u32, drift_ppm: i32) -> u64 {
     let ppm = (1_000_000i64 + drift_ppm as i64) as u128;
-    (dt_ns as u128 * rate as u128 * ppm / 1_000_000_000_000u128) as u64
+    // ns -> s (1e9) and ppm -> unity (1e6): 1e15 in all.
+    (dt_ns as u128 * rate as u128 * ppm / 1_000_000_000_000_000u128) as u64
 }
 
 #[derive(Default)]

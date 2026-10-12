@@ -297,7 +297,8 @@ mod tests {
         let i = layout(true);
         assert_eq!(i.bytes_per_frame(), 4);
         assert_eq!(i.ring_bytes(), 16);
-        assert_eq!(i.channel_span(1, 2), (6, 4));
+        // frame 2 starts at byte 8; channel 1 is the second 2-byte sample of the frame: byte 10
+        assert_eq!(i.channel_span(1, 2), (10, 4));
         let n = layout(false);
         assert_eq!(n.channel_span(1, 2), (12, 2));
     }
