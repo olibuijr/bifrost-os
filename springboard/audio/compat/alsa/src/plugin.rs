@@ -422,13 +422,27 @@ unsafe fn cb_hw_free_impl(io: *mut Ioplug) -> c_int {
 
 unsafe fn cb_prepare_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
-    b.teardown();
     let ioref = &*io;
     let ch = ioref.channels;
     let frames = match check_geometry(ioref.period_size as u64, ioref.buffer_size as u64, ch) {
         Ok(f) => f,
         Err(e) => return e,
     };
+    // alsa-lib calls prepare after open, after every drop or drain and on every xrun recovery. With the same
+    // geometry the IO procedure and wake thread stay: the stream is stopped, the ring is emptied and readiness reset.
+    if let (Some(id), Some(sh)) = (b.proc_id, b.shared.clone()) {
+        if sh.ring.frames() == frames && sh.ring.channels() == ch {
+            b.running.store(false, Ordering::Release);
+            let _ = b.device.stop(id);
+            sh.ring.reset();
+            sh.drain_eventfd();
+            if b.dir == Dir::Playback {
+                sh.kick_eventfd();
+            }
+            return 0;
+        }
+    }
+    b.teardown();
     let sh = Arc::new(Shared { ring: PcmRing::new(frames, ch), wake: AtomicU32::new(0), quit: AtomicBool::new(false), evfd: b.evfd });
     // Clear a stale readiness count from the previous run. An empty playback ring is ready at once, and the IO
     // procedure does not run before start, so signal that now or a poller in the prepared state would wait forever.

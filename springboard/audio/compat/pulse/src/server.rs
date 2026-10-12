@@ -10,6 +10,8 @@ use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
+/// Reads of 64 KiB per connection per poll round.
+const MAX_READS_PER_STEP: usize = 16;
 /// The poll interval while any stream is active (flow control and capture delivery granularity).
 pub const TICK_MS: i32 = 5;
 /// A client that lets this much output pile up is disconnected.
@@ -146,13 +148,19 @@ impl Server {
 
     fn read_conn(c: &mut Conn, backend: &mut dyn Backend) {
         let mut buf = [0u8; 65536];
-        loop {
+        // At most MAX_READS_PER_STEP reads per poll round: poll is level-triggered, so the rest is read next round
+        // and a flooding client cannot starve the other clients' tick.
+        let mut reads = 0;
+        while reads < MAX_READS_PER_STEP {
             match c.stream.read(&mut buf) {
                 Ok(0) => {
                     c.dead = true;
                     return;
                 }
-                Ok(n) => c.frames.push(&buf[..n]),
+                Ok(n) => {
+                    reads += 1;
+                    c.frames.push(&buf[..n]);
+                }
                 Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(e) if e.kind() == ErrorKind::Interrupted => continue,
                 Err(_) => {
