@@ -460,6 +460,26 @@ impl Pcm {
         ioctl_none(self.fd, PCM_DROP)
     }
 
+    /// A closure that drops this stream (`SNDRV_PCM_IOCTL_DROP`) from any thread, on a duplicate of the fd. The
+    /// control thread uses it to end a stop that the IO thread has not finished: the stream stops at once.
+    pub fn abort_fn(&self) -> Option<Box<dyn Fn() + Send + Sync>> {
+        // SAFETY: duplicating a descriptor we own.
+        let fd = unsafe { libc::fcntl(self.fd, libc::F_DUPFD_CLOEXEC, 3) };
+        if fd < 0 {
+            return None;
+        }
+        struct Dup(RawFd);
+        impl Drop for Dup {
+            fn drop(&mut self) {
+                close_fd(self.0);
+            }
+        }
+        let d = Dup(fd);
+        Some(Box::new(move || {
+            let _ = ioctl_none(d.0, PCM_DROP);
+        }))
+    }
+
     /// Links `other` to this stream so that `start` starts both at the same hardware tick.
     pub fn link(&self, other: &Pcm) -> io::Result<()> {
         ioctl_int(self.fd, PCM_LINK, other.fd)

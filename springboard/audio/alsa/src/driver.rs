@@ -569,6 +569,14 @@ impl DeviceIo for AlsaIo {
         Ok(())
     }
 
+    fn abort_hook(&self) -> Option<Box<dyn Fn() + Send + Sync>> {
+        let hooks: Vec<_> = [self.out.as_ref(), self.inp.as_ref()].into_iter().flatten().filter_map(|p| p.abort_fn()).collect();
+        if hooks.is_empty() {
+            return None;
+        }
+        Some(Box::new(move || hooks.iter().for_each(|h| h())))
+    }
+
     fn stop(&mut self) {
         self.started = false;
         self.restarted = None;

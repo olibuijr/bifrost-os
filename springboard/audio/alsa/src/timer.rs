@@ -56,6 +56,22 @@ impl CycleTimer {
         self.arm_mono(raw_to_mono(deadline_raw_ns, raw, mono))
     }
 
+    /// Waits at most `timeout_ns` for the timer; true when it fired. Lets a caller check a stop flag between waits.
+    pub fn wait_timeout(&self, timeout_ns: u64) -> io::Result<bool> {
+        let mut p = libc::pollfd { fd: self.fd, events: libc::POLLIN, revents: 0 };
+        let ms = timeout_ns.div_ceil(1_000_000).min(i32::MAX as u64) as i32;
+        // SAFETY: one valid pollfd.
+        let r = unsafe { libc::poll(&mut p, 1, ms) };
+        if r < 0 {
+            let e = io::Error::last_os_error();
+            return if e.kind() == io::ErrorKind::Interrupted { Ok(false) } else { Err(e) };
+        }
+        if r == 0 {
+            return Ok(false);
+        }
+        self.wait().map(|_| true)
+    }
+
     /// Blocks until the timer fires and returns the number of expirations (1 unless a cycle was missed).
     pub fn wait(&self) -> io::Result<u64> {
         let mut n = 0u64;
@@ -109,6 +125,15 @@ mod tests {
         let waited = now_raw_ns() - start;
         assert!(waited >= 4_900_000, "{waited}");
         assert!(waited < 500_000_000, "{waited}");
+    }
+
+    #[test]
+    fn a_bounded_wait_returns_when_the_timer_is_far_away() {
+        let t = CycleTimer::new().unwrap();
+        t.arm_mono(now_mono_ns() + 10_000_000_000).unwrap();
+        let t0 = std::time::Instant::now();
+        assert!(!t.wait_timeout(5_000_000).unwrap());
+        assert!(t0.elapsed() < std::time::Duration::from_millis(500));
     }
 
     #[test]
