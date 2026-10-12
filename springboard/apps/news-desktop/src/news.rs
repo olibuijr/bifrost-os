@@ -118,6 +118,10 @@ pub struct News {
     reading: ReadingList,
     /// the open article's facts line (language, words, reading time)
     facts: String,
+    /// whether the shell reports a usable network path (true until it says otherwise); no feed is fetched while false
+    online: bool,
+    /// the headlines changed since the widget timeline was last sent
+    top_changed: bool,
 }
 
 /// `c` at the nearest end of the Light/Dark fade: pictures are rounded onto it once per scheme.
@@ -180,6 +184,8 @@ impl News {
             bar: None,
             reading,
             facts: String::new(),
+            online: true,
+            top_changed: true,
         };
         n.rebuild();
         n
@@ -200,13 +206,43 @@ impl News {
 
     pub fn describe(&self) -> String {
         format!(
-            "news_screen={}\nnews_tab={}\nnews_items={}\nnews_pending={}\nnews_error={}\n",
+            "news_screen={}\nnews_tab={}\nnews_items={}\nnews_pending={}\nnews_error={}\nnews_online={}\n",
             if self.open.is_some() { "article" } else { "list" },
             self.tab,
             self.list.len(),
             self.pending.len(),
-            self.error.as_deref().unwrap_or("")
+            self.error.as_deref().unwrap_or(""),
+            self.online
         )
+    }
+
+    /// The cached feeds, one list per feed, in feed order.
+    pub fn items(&self) -> &[Vec<Item>] {
+        &self.items
+    }
+
+    /// Whether the shell reports a usable network path.
+    pub fn online(&self) -> bool {
+        self.online
+    }
+
+    /// Records the shell's network path. Going online refetches every feed at once; going offline stops fetches
+    /// and picture loads, and the cached headlines and saved pages stay readable.
+    pub fn set_online(&mut self, online: bool) {
+        if self.online == online {
+            return;
+        }
+        self.online = online;
+        if online {
+            self.tried.clear();
+            self.rows.clear();
+        }
+        self.dirty = true;
+    }
+
+    /// True once after the headlines changed (a feed arrived or was reloaded); the caller then sends the timeline.
+    pub fn take_top_changed(&mut self) -> bool {
+        std::mem::take(&mut self.top_changed)
     }
 
     /// Rebuilds the visible list: the chosen feed, or all feeds interleaved.
@@ -264,6 +300,7 @@ impl News {
         if feed_changed {
             self.rebuild();
             self.dirty = true;
+            self.top_changed = true;
         }
         changed
     }
@@ -277,6 +314,10 @@ impl News {
         }
         if item.image.is_empty() && item.link.is_empty() {
             return Some(None);
+        }
+        if !self.online {
+            // no request while offline; the picture loads once the path is back (set_online clears the rows)
+            return None;
         }
         if !self.pic_pending.contains(&key) {
             if self.pic_pending.len() >= PIC_JOBS {
@@ -331,6 +372,9 @@ impl News {
     }
 
     fn maintain(&mut self, t: f64) {
+        if !self.online {
+            return;
+        }
         for idx in 0..self.feeds.len() {
             if self.pending.contains(&idx) {
                 continue;
@@ -584,6 +628,9 @@ impl News {
         if self.scroll.animating() {
             return Some(t);
         }
+        if !self.online {
+            return None;
+        }
         (0..self.feeds.len())
             .filter(|idx| !self.pending.contains(idx))
             .map(|idx| self.tried.get(&idx).map_or(t, |at| (at + self.feed_wait(idx)).max(t)))
@@ -630,6 +677,7 @@ impl News {
             if list.is_empty() {
                 let msg = match (&self.error, self.pending.is_empty()) {
                     (_, false) => "Loading headlines\u{2026}".to_string(),
+                    _ if !self.online && self.tab != READING_TAB => "You are offline".to_string(),
                     (Some(e), true) => e.clone(),
                     _ if self.tab == READING_TAB => "Nothing saved yet".to_string(),
                     _ => "No headlines".to_string(),

@@ -5,6 +5,8 @@
 - Reading List: a new Reading List row in the source list. The toolbar button saves the open article to it (or removes it again); the list is kept in the app's data folder and survives a restart. Pages without a web address cannot be saved and show the button dimmed.
 - Each article shows its language (for example Icelandic or English), word count and reading time under the source and date. The language is only shown when the text has recognisable letters.
 - The link to the original page is now a card with the article's title and the feed's name, in place of the bare address.
+- Offline reading: News asks the system whether the network is up and follows changes. Offline it stops fetching feeds and pictures, keeps showing the saved headlines and articles, and says "You are offline" when there is nothing saved to show. Coming back online refreshes the feeds at once.
+- Widget timeline: the top four headlines (Today's order) are given to the system's widget area, one after another every 30 minutes. The timeline is refreshed whenever the headlines change or the system asks for it.
 
 ## 1.2.2 — 2026-10-11
 
