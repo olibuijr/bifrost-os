@@ -7,6 +7,8 @@
 pub struct Exif {
     pub make: Option<String>,
     pub model: Option<String>,
+    /// the lens model (Exif LensModel), as stored
+    pub lens: Option<String>,
     /// "2026:10:04 12:30:00" as stored
     pub taken: Option<String>,
     /// 1..=8, the TIFF orientation tag
@@ -47,6 +49,9 @@ impl Exif {
         }
         if let Some(c) = self.camera() {
             out.push(("Camera", c));
+        }
+        if let Some(l) = &self.lens {
+            out.push(("Lens", l.clone()));
         }
         let mut shot = Vec::new();
         if let Some((n, d)) = self.exposure {
@@ -309,6 +314,7 @@ fn read_tiff(d: &[u8], out: &mut Exif) {
                 0x829D => out.f_number = t.real(e, 0).map(|v| v as f32),
                 0x8827 => out.iso = t.uint(e),
                 0x9003 => out.taken = t.text(e),
+                0xA434 => out.lens = t.text(e),
                 0x920A => out.focal_mm = t.real(e, 0).map(|v| v as f32),
                 0xA002 => out.width = t.uint(e),
                 0xA003 => out.height = t.uint(e),
@@ -518,6 +524,15 @@ pub(crate) mod tests {
         // a PNG has no EXIF: the file's time is shown
         let png = describe("s.png", 900, 1_791_073_395, 0, b"\x89PNG....");
         assert_eq!(png, vec![("Name".to_string(), "s.png".to_string()), ("Date".to_string(), "4 October 2026, 00:23".to_string()), ("File Size".to_string(), "900 B".to_string())]);
+    }
+
+    #[test]
+    fn the_lens_model_is_read_and_listed_after_the_camera() {
+        // LensModel (0xA434) lives in the Exif sub-IFD; the ASCII value is NUL terminated
+        let t = tiff(true, vec![ascii(0x0110, "Canon")], vec![ascii(0xA434, "EF24mm f/1.4G")], vec![]);
+        let e = parse(&jpeg(&t, 1, 1)).unwrap();
+        assert_eq!(e.lens.as_deref(), Some("EF24mm f/1.4G"));
+        assert_eq!(e.rows(), vec![("Camera", "Canon".to_string()), ("Lens", "EF24mm f/1.4G".to_string())]);
     }
 
     #[test]
