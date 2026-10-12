@@ -1,6 +1,25 @@
 # BifrOSt changelog
 
-## 0.5.34 — 2026-10-12
+## 0.5.35 — 2026-10-12
+
+Reference-SDK parity, waves 3 to 5. The deploy gate is reached: 82.0% of the 1935 applicable feature rows are built
+(Partial or Parity), and coverage is 46.6% (`bifrost pc parity status`). 0.5.34 was not published; this release
+carries it too.
+
+- 477 more std-only modules in `bifrost-ui`, `bifrost-core`, `bifrost-render` and the SDK (686 since the matrix
+  started) answer 665 gap reports across 142 frameworks, as pure models with host tests (5811 tests in those crates).
+  No framework is at Gap any more. The models are not wired into the shell or the apps yet, so their rows stay Partial.
+- Fixes found while integrating: a pending purchase refuses a second pending result instead of finishing with it;
+  bookmark import no longer wraps the file's root list in an untitled folder; an ended live activity reports the state
+  it had before its end time; service-management errors carry the official texts; DNS-SD instance names drop the root
+  dot; PDF page layout keeps f64 rectangles.
+- Testing: the test pin moves to `bifrost_core::pin`, and the shell's wall clock honours it, so Calendar's snapshot no
+  longer breaks at midnight; Files reads its first folder at once under the pin, so a busy machine never snapshots
+  "Loading…".
+- Tools: `bifrost pc parity` gains the built share (the 80% deploy gate) and `apply`; the embedding cache is written
+  atomically.
+
+## 0.5.34 — 2026-10-12 (not published; shipped in 0.5.35)
 
 Reference-SDK parity, waves 1 and 2 (the matrix: `docs/apple-parity-matrix.md`, `bifrost pc parity`):
 
