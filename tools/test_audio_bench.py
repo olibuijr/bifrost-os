@@ -60,6 +60,49 @@ class T(unittest.TestCase):
         self.assertIn("2.000 (-50.0%)", lines[1])  # q48 sorts before q64
         self.assertIn("(no previous)", lines[2])
 
+    def test_all_zero_result_is_a_problem(self):
+        self.assertIsNotNone(ab.result_problem(res("midi-latency", p50=0.0, p99=0.0, mx=0.0)))
+        self.assertIsNone(ab.result_problem(res("midi-latency")))
+        self.assertIsNone(ab.result_problem(res("xrun-sweep", p50=0.0, p99=0.0, mx=0.0)))
+
+    def test_failed_bench_is_a_failure_not_a_result(self):
+        calls = []
+
+        def fake(argv, bench, driver, quantum, timeout=120, live=False):
+            calls.append((bench, quantum))
+            if quantum == 32:
+                raise RuntimeError("exit 2: cannot reach bifrost-audiod")
+            if quantum == 64:
+                return res(bench, q=64, p50=0.0, p99=0.0, mx=0.0)
+            return res(bench, q=quantum)
+
+        orig, ab.run_one = ab.run_one, fake
+        try:
+            results, failures = ab.collect(["x"], "loopback", ["midi-latency"], [16, 32, 64], live=True)
+        finally:
+            ab.run_one = orig
+        self.assertEqual([r["quantum"] for r in results], [16])
+        self.assertEqual(len(failures), 2)
+        self.assertIn("cannot reach", failures[0])
+        self.assertIn("no measurements", failures[1])
+
+    def test_failed_run_exits_nonzero_and_appends_nothing(self):
+        import io, contextlib, tempfile, sys
+        appended = []
+        saved = (ab.run_mode, ab.append_history, ab.load_history, sys.argv)
+        ab.run_mode = lambda *a, **k: ([res("midi-latency")], [], ["audio-roundtrip q64: exit 2"])
+        ab.append_history = lambda results: appended.append(results)
+        ab.load_history = lambda *a, **k: []
+        sys.argv = ["audio-bench.py", "midget", "--append"]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as cm:
+                    ab.main()
+        finally:
+            ab.run_mode, ab.append_history, ab.load_history, sys.argv = saved
+        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(appended, [])
+
 
 if __name__ == "__main__":
     unittest.main()

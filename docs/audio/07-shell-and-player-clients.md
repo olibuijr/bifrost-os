@@ -50,3 +50,38 @@ Task: `tasks/audio/07-shell-and-player-clients.md`. Contract: `docs/audio-archit
 5. Volume keys: `bifrost pc midget key` volume up and down; log lines `springboard: volume N% -> device x`; the
    device volume property changes on bifrost-audiod.
 6. `ssh midget 'lsof /dev/snd/pcm* 2>/dev/null | awk "{print \$1}" | sort -u'` lists only `bifrost-audiod`.
+
+## Reconnect storm on Midget 0.6.2 (found by reading the code; not yet verified on the device)
+
+Symptom: the server journal showed `client N: is.olibuijr.mediaplayer (pid ..., policy false)` then `client N gone`,
+322 times a minute. Cause: `shell/services/audio_devices.rs` throttled its connection attempts with constants in
+seconds (`RECONNECT_EVERY_S = 10.0`, `PROBE_EVERY_S = 2.0`), but the shell clock `t` that `services_tick` passes is in
+milliseconds, so every tick (about 5 per second) probed again, and a probe that found no input device (`discover_with`
+returned an empty list) set `self.system = None`, hanging up the connection it had just made. The unit test used
+seconds, so it never saw it. Fixes:
+
+- the constants are milliseconds (`PROBE_EVERY_MS`), reconnects back off 1 s, doubling to 30 s (`RECONNECT_MAX_MS`);
+- the connection is kept while the server answers: no default input (`UnknownObject`) is not a reason to hang up, only
+  other errors drop it;
+- `SpeakerOut` (`media/speaker.rs`) backs off the same way (1 s to 30 s) after a failed `Stream::open`, so a player
+  that writes in a loop no longer reconnects on every write.
+
+The server closes a client only on EOF or a receive error (`control::serve`); nothing closes it after Hello.
+
+## Bench `--live` cannot connect (Io)
+
+`System::connect` mapped every failure to a bare `AudioError`, and `Io` from the handshake is the 5 s reply timeout
+(`Conn::request`): the socket connected (a missing socket is `NoServer`) but no Welcome was decoded in time. Static
+reading found no path or protocol mismatch (path `/run/bifrost/audio/control`, `PROTOCOL_VERSION` 2 on both sides,
+SEQPACKET on both sides, no peer-credential check on Hello, no memfd before Welcome), so the root cause on Midget is
+still unconfirmed. `System::connect_detailed` now returns a `ConnectError` naming the stage (socket, connect, hello),
+the path and the OS error or the handshake outcome, and `bifrost-audio-bench` prints it without the usage text and
+exits 1 (2 stays for a bad command line). Next step on Midget: run `bifrost-audio-bench audio-roundtrip --live` and read
+the new message; "no Welcome within 5 s" with a `client N: bifrost-audio-bench` line in the journal would point at the
+reply path (reader thread), without that line at the server's accept loop.
+
+## tools/audio-bench.py failures
+
+A bench that exits non-zero, prints usage text, prints no JSON, times out or reports all-zero statistics is now a
+failure: it is listed on stderr, the script exits 1, and `--append` writes nothing (not even the benches that passed)
+to `docs/perf-history.jsonl`.

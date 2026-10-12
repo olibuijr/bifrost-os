@@ -130,20 +130,41 @@ def run_one(argv, bench, driver, quantum, timeout=120, live=False):
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if p.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)}: exit {p.returncode}: {p.stderr.strip()[:300]}")
+    if "usage" in p.stderr.lower() and "bench" not in p.stdout:
+        raise RuntimeError(f"{' '.join(cmd)}: usage text instead of a result: {p.stderr.strip()[:300]}")
     return parse_result(p.stdout)
 
 
+def result_problem(r):
+    """Why a parsed result is not a measurement (None when it is): latency benches with all-zero statistics ran nothing."""
+    if r.get("bench") in ("midi-latency", "audio-roundtrip"):
+        if all(not r.get(k) for k in ("p50_ms", "p99_ms", "max_ms")):
+            return "no measurements (p50, p99 and max are all 0)"
+    return None
+
+
 def collect(argv, driver, benches, quanta, live=False):
-    out = []
+    """(results, failures): a bench that fails (exit code, usage text, no JSON, timeout, empty statistics) is a
+    failure string and never a result, so it cannot be compared, budget-checked or appended to the history."""
+    out, failures = [], []
     for b in benches:
         # the sweep chooses its own quanta; run it once
         for q in ([min(quanta)] if b == "xrun-sweep" else quanta):
-            out.append(run_one(argv, b, driver, q, live=live))
-    return out
+            try:
+                r = run_one(argv, b, driver, q, live=live)
+            except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError) as e:
+                failures.append(f"{b} q{q}: {e}")
+                continue
+            problem = result_problem(r)
+            if problem:
+                failures.append(f"{b} q{q}: {problem}")
+            else:
+                out.append(r)
+    return out, failures
 
 
 def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
-    """Run the benches for 'host' or 'midget'. Returns (results, breaches)."""
+    """Run the benches for 'host' or 'midget'. Returns (results, breaches, failures)."""
     midget = mode == "midget"
     if midget:
         # midget.py's ssh: the lab key and whichever Midget address answers (a fresh install has only the lab NIC, so the
@@ -161,8 +182,8 @@ def run_mode(mode, quanta=QUANTA, benches=BENCHES, aloop=False):
         argv, driver = ssh + [REMOTE_BIN], "alsa:" + card
     else:
         argv, driver = [find_local_bin()], "loopback"
-    results = collect(argv, driver, benches, quanta, live=midget)
-    return results, [x for r in results for x in budget_breaches(r, midget)]
+    results, failures = collect(argv, driver, benches, quanta, live=midget)
+    return results, [x for r in results for x in budget_breaches(r, midget)], failures
 
 
 def append_history(results):
@@ -190,14 +211,24 @@ def main():
         earlier = [h for h in hist if last[(h["bench"], h["quantum"], h.get("host"))] is not h]
         print(compare_table(latest, earlier))
         return
-    results, breaches = run_mode(mode, quanta, benches, "--aloop" in args)
-    print(compare_table(results, hist))
+    results, breaches, failures = run_mode(mode, quanta, benches, "--aloop" in args)
+    if results:
+        print(compare_table(results, hist))
+    # a failed bench never reaches the history, even when others succeeded
     if "--append" in args:
-        append_history(results)
+        if failures:
+            print("\nnot appending to the history: some benches failed", file=sys.stderr)
+        elif results:
+            append_history(results)
     if breaches:
         print("\nover budget:")
         for b in breaches:
             print("  " + b)
+    if failures:
+        print("\nfailed benches:", file=sys.stderr)
+        for f in failures:
+            print("  " + f, file=sys.stderr)
+        sys.exit(1)
     sys.exit(3 if breaches else 0)
 
 
