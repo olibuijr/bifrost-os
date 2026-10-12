@@ -8,6 +8,7 @@
 //!
 //! Gap (see docs/bifrost-ui.md "Printing"): the print sheet is not shell-drawn yet, so there is no `run_modal(window)`;
 //! apps pick the printer and options with their own kit controls and call `run`. No shell proto tags are used.
+//! Print dialog plug-in panels (`print_panel`) feed extra `lp` options through [`PrintOperation::with_options`].
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -154,16 +155,23 @@ pub struct PrintOperation {
     pub info: PrintInfo,
     pub destination: Destination,
     pub job_name: String,
+    /// Extra `lp` option pairs (`-o key=value`) from print dialog plug-ins; see [`crate::print_panel::PlugIns::lp_options`].
+    pub options: Vec<String>,
 }
 
 impl PrintOperation {
     pub fn new(document: impl Into<PathBuf>) -> Self {
         let document: PathBuf = document.into();
         let job_name = document.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into());
-        PrintOperation { document, info: PrintInfo::default(), destination: Destination::Printer(None), job_name }
+        PrintOperation { document, info: PrintInfo::default(), destination: Destination::Printer(None), job_name, options: Vec::new() }
     }
     pub fn with_info(mut self, info: PrintInfo) -> Self {
         self.info = info;
+        self
+    }
+    /// Sets the plug-in option pairs appended to the `lp` call.
+    pub fn with_options(mut self, options: Vec<String>) -> Self {
+        self.options = options;
         self
     }
     pub fn to(mut self, destination: Destination) -> Self {
@@ -178,6 +186,7 @@ impl PrintOperation {
         }
         a.extend(["-t".into(), self.job_name.clone()]);
         a.extend(self.info.lp_options());
+        a.extend(self.options.iter().cloned());
         a.push("--".into());
         a.push(self.document.to_string_lossy().into_owned());
         a
