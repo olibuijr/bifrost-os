@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- Recording menu: a new menu between the app menu and the standard menus with Trim, Notes, Rename and Export to Downloads.
+  The items are greyed out when no recording is selected or while one is being recorded or edited.
+- Export to Downloads copies the selected recording as a WAV file into the Downloads folder (numbered when the name is
+  taken). The recording itself is left as it was.
+- Notes: a Notes button in the toolbar opens a notes card for the selected recording, a multi-line text view with a
+  caret, selection by dragging, arrow keys and Enter for a new line. Done saves the notes beside the recording; Cancel
+  discards the changes. Notes follow the recording when it is renamed and are removed with it.
+- The arrow keys move the caret in the notes card.
+
 ## 1.3.0 — 2026-10-12
 
 - Trim a recording: the new Trim button in the toolbar opens a trim view over the waveform. Drag the start or end handle

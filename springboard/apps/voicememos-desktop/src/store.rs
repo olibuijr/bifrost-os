@@ -84,8 +84,44 @@ pub fn rename(memo: &Memo, title: &str) -> std::io::Result<PathBuf> {
     let to = free_path(dir, &stem, Some(&memo.path));
     if to != memo.path {
         std::fs::rename(&memo.path, &to)?;
+        // the notes follow the recording (a missing notes file is not an error)
+        let (from_notes, to_notes) = (notes_path(&memo.path), notes_path(&to));
+        if from_notes.exists() {
+            std::fs::rename(&from_notes, &to_notes)?;
+        }
     }
     Ok(to)
+}
+
+/// The notes sidecar of a recording: a hidden `.<stem>.notes.txt` next to it (the folder scan skips hidden files).
+pub fn notes_path(recording: &Path) -> PathBuf {
+    let stem = recording.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    recording.with_file_name(format!(".{stem}.notes.txt"))
+}
+
+/// The notes of a recording; empty when it has none or the file cannot be read.
+pub fn read_notes(recording: &Path) -> String {
+    std::fs::read_to_string(notes_path(recording)).unwrap_or_default()
+}
+
+/// Saves the notes of a recording. Empty notes remove the sidecar.
+pub fn write_notes(recording: &Path, text: &str) -> std::io::Result<()> {
+    let path = notes_path(recording);
+    if text.is_empty() {
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+    }
+    springboard::shell::fsutil::write_atomic(&path, text.as_bytes())
+}
+
+/// Copies a recording into `dir` as `<title>.wav` (numbered when taken). The original stays where it is.
+pub fn export_copy(memo: &Memo, dir: &Path) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let path = free_path(dir, &memo.title, None);
+    std::fs::copy(&memo.path, &path)?;
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -185,6 +221,42 @@ mod tests {
         assert_eq!(again, moved);
         std::fs::remove_file(&moved).unwrap();
         assert_eq!(scan(&dir).len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn notes_sidecar_is_hidden_follows_the_rename_and_empty_notes_remove_it() {
+        let dir = temp("notes");
+        let wav = wav_bytes(8000, 1, &vec![0; 800]);
+        let a = save(&dir, "20261012-090000", &wav, 1_000).unwrap();
+        assert_eq!(notes_path(&a).file_name().unwrap(), ".Voice Memo 20261012-090000.notes.txt");
+        assert_eq!(read_notes(&a), "", "no notes yet");
+        write_notes(&a, "Milk, eggs\nBread").unwrap();
+        assert_eq!(read_notes(&a), "Milk, eggs\nBread");
+        // hidden: the folder scan still lists one recording
+        assert_eq!(scan(&dir).len(), 1);
+        let moved = rename(&scan(&dir)[0], "Shopping").unwrap();
+        assert_eq!(read_notes(&moved), "Milk, eggs\nBread", "the notes follow the recording");
+        assert!(!notes_path(&a).exists());
+        write_notes(&moved, "").unwrap();
+        assert!(!notes_path(&moved).exists(), "empty notes remove the sidecar");
+        assert!(write_notes(&moved, "").is_ok(), "removing missing notes is not an error");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn export_copies_the_recording_and_keeps_the_original() {
+        let dir = temp("export");
+        let out = dir.join("Downloads");
+        let wav = wav_bytes(8000, 1, &vec![0; 800]);
+        let a = save(&dir, "20261012-090500", &wav, 1_000).unwrap();
+        let memo = scan(&dir).remove(0);
+        let first = export_copy(&memo, &out).unwrap();
+        assert_eq!(first.file_name().unwrap(), "Voice Memo 20261012-090500.wav");
+        assert_eq!(std::fs::read(&first).unwrap(), wav, "the copy holds the same bytes");
+        let second = export_copy(&memo, &out).unwrap();
+        assert_eq!(second.file_name().unwrap(), "Voice Memo 20261012-090500 2.wav", "a second export is numbered");
+        assert!(a.exists(), "the original stays");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
