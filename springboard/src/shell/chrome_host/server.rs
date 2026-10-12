@@ -56,13 +56,16 @@ pub struct ChromeServer {
     host: HostLink,
     snapshot: Snapshot,
     /// `MenuBarModel.generation` of the bar the clients have; bumped whenever a changed bar is published.
+    #[cfg(feature = "desktop-wayland")]
     bar_generation: u32,
     /// When (monotonic ms) the shell's bar was last compared with the clients' (`BAR_CHECK_MS` apart).
+    #[cfg(any(test, feature = "desktop-wayland"))]
     bar_checked_at: f64,
 }
 
 /// How often the shell's menu bar is rebuilt and compared with what the clients have. Building it walks every menu
 /// (rows, shortcut parsing), so it is not done on every frame and input event (IPC-9); a click forces a check.
+#[cfg(any(test, feature = "desktop-wayland"))]
 const BAR_CHECK_MS: f64 = 200.0;
 
 impl ChromeServer {
@@ -72,7 +75,14 @@ impl ChromeServer {
     }
 
     fn from_host(host: HostLink) -> ChromeServer {
-        ChromeServer { host, snapshot: Snapshot::default(), bar_generation: 0, bar_checked_at: f64::NEG_INFINITY }
+        ChromeServer {
+            host,
+            snapshot: Snapshot::default(),
+            #[cfg(feature = "desktop-wayland")]
+            bar_generation: 0,
+            #[cfg(any(test, feature = "desktop-wayland"))]
+            bar_checked_at: f64::NEG_INFINITY,
+        }
     }
 
     /// The socket's fd, for the shell's poll set.
@@ -103,8 +113,8 @@ impl ChromeServer {
         self.snapshot.record(&m);
     }
 
-    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     /// Whether the bar is due for a rebuild at `t` (ms); true at most once per `BAR_CHECK_MS`.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     fn bar_due(&mut self, t: f64) -> bool {
         if t - self.bar_checked_at < BAR_CHECK_MS {
             return false;
