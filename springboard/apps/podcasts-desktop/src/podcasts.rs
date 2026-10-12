@@ -7,6 +7,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
+use crate::refresh;
 use crate::media::{self, Bar, Shown};
 use crate::transport;
 use bifrost_app::Ctx;
@@ -112,6 +113,8 @@ pub struct Podcasts {
     store: Store,
     net: Arc<dyn Fetch>,
     inbox: Inbox,
+    /// the counts of the feed batch in flight, applied from the refresh event sequence
+    refresh: refresh::Status,
     shows: Vec<Show>,
     view: View,
     confirm_remove: bool,
@@ -171,6 +174,7 @@ impl Podcasts {
             store,
             net,
             inbox,
+            refresh: refresh::Status::new(),
             shows,
             view: View::Shows,
             confirm_remove: false,
@@ -312,6 +316,7 @@ impl Podcasts {
             return;
         }
         self.loading.push(url.to_string());
+        self.refresh.started();
         let (net, inbox, url, store) = (self.net.clone(), self.inbox.clone(), url.to_string(), self.store.clone());
         // fetched, kept and parsed on the pool: the UI thread only applies the result
         DispatchQueue::global(Qos::Utility).async_(move || {
@@ -357,6 +362,7 @@ impl Podcasts {
             match msg {
                 Msg::Feed(url, r) => {
                     self.loading.retain(|u| *u != url);
+                    self.refresh.finished(r.is_ok());
                     match r {
                         Ok((title, episodes)) => {
                             if let Some(show) = self.shows.iter_mut().find(|s| s.url == url) {
@@ -981,6 +987,9 @@ impl Podcasts {
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
         self.pump();
+        if self.refresh.pump() {
+            self.dirty = true;
+        }
         self.scroll.set_max((self.list_top(ui) + ui.pt(ROW * self.rows() as f32) - self.controls_top(ui)).max(0.0));
         self.dirty |= self.scroll.tick(t);
         if let Some(f) = &mut self.field {
@@ -1096,7 +1105,8 @@ impl Podcasts {
         }
         .filter(|_| self.rows() == 0);
         if let Some(msg) = empty {
-            let msg = if self.loading.is_empty() { msg } else { "Loading..." };
+            let status = self.refresh.text();
+            let msg = if self.loading.is_empty() { msg } else { status.as_deref().unwrap_or("Loading...") };
             self.centred(s, ui, msg, MAC_TITLE3_PT, LABEL_2.now(), (x0, self.list_top(ui), cw, (bottom - self.list_top(ui)).max(0.0)));
         }
         for i in 0..self.rows() {
