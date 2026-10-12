@@ -5,11 +5,15 @@
 //!
 //! Mirrors `provider domain` (identifier, displayName, pathRelativeToDocumentStorage, isReplicated, isHidden,
 //! userEnabled, isDisconnected), `domain manager` (add, remove, getDomains, disconnect, reconnect,
-//! signalEnumerator) and `provider error code`.
+//! signalEnumerator), `provider error code`, and cloud search: the string search request
+//! (`query`, `desiredNumberOfResults`), the search enumerator's batches and `invalidate()`, and the opt-in switch
+//! (`supportsStringSearchRequest`). Search runs over the items a provider has handed to
+//! [`SearchIndex`]; nothing is queried remotely.
 //!
 //! Gaps: no extension process and no IPC, no reimport or materialized-item enumerators, no waitForChanges completion,
-//! no known-folder replication, no testing modes, no download or upload progress, and no provider search. Errors are
-//! plain values: there is no user-info dictionary, and the error domain is this crate's own name.
+//! no known-folder replication, no testing modes, no download or upload progress, no remote query, and no
+//! search-result observer callbacks. Errors are plain values: there is no user-info dictionary, and the error domain
+//! is this crate's own name.
 
 use std::fmt;
 
@@ -293,6 +297,121 @@ impl DomainRegistry {
     }
 }
 
+/// `string search request`: the plain text the person typed and how many results the system wants.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StringSearchRequest {
+    /// `query`: trimmed of surrounding whitespace. Never empty.
+    pub query: String,
+    /// `desiredNumberOfResults`: a hint. Zero means no limit.
+    pub desired_number_of_results: usize,
+}
+
+impl StringSearchRequest {
+    /// `None` when the query is blank once trimmed.
+    pub fn new(query: &str) -> Option<Self> {
+        let query = query.trim();
+        (!query.is_empty()).then(|| Self { query: query.into(), desired_number_of_results: 0 })
+    }
+
+    pub fn with_desired_results(mut self, count: usize) -> Self {
+        self.desired_number_of_results = count;
+        self
+    }
+}
+
+/// One item a search found: the domain it belongs to, its identifier and its filename.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchHit {
+    pub domain: String,
+    pub identifier: ItemIdentifier,
+    pub filename: String,
+}
+
+/// `search enumerator`: hands out the hits of one search in batches. It is finished once every hit has
+/// been handed out, or once [`SearchEnumerator::invalidate`] cancels it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SearchEnumerator {
+    hits: Vec<SearchHit>,
+    next: usize,
+    invalidated: bool,
+}
+
+impl SearchEnumerator {
+    /// The next batch of at most `max` hits. Empty once the search is finished.
+    pub fn next_batch(&mut self, max: usize) -> Vec<SearchHit> {
+        if self.invalidated {
+            return Vec::new();
+        }
+        let end = self.next.saturating_add(max).min(self.hits.len());
+        let batch = self.hits[self.next..end].to_vec();
+        self.next = end;
+        batch
+    }
+
+    /// `invalidate()`: cancels the search. No further hits are handed out.
+    pub fn invalidate(&mut self) {
+        self.invalidated = true;
+    }
+
+    /// True when the search was cancelled or every hit has been handed out.
+    pub fn is_finished(&self) -> bool {
+        self.invalidated || self.next >= self.hits.len()
+    }
+}
+
+/// The items a provider's search can find, per domain. The provider fills it with [`SearchIndex::set_items`] and
+/// must opt in with [`SearchIndex::with_string_search`], the same switch as `supportsStringSearchRequest`.
+#[derive(Clone, Debug, Default)]
+pub struct SearchIndex {
+    supports_string_search: bool,
+    items: Vec<(String, ProvidedItem)>,
+}
+
+impl SearchIndex {
+    pub fn with_string_search(mut self, on: bool) -> Self {
+        self.supports_string_search = on;
+        self
+    }
+
+    /// Replaces the items of one domain. The items of other domains are kept.
+    pub fn set_items(&mut self, domain: &str, items: Vec<ProvidedItem>) {
+        self.items.retain(|(d, _)| d != domain);
+        self.items.extend(items.into_iter().map(|item| (domain.to_string(), item)));
+    }
+
+    /// `searchEnumerator(for:)`. `None` when the provider did not opt in to string search.
+    ///
+    /// Only domains that are registered, enabled, visible and connected are searched. The well-known containers are
+    /// not files, so they are never hits. A file matches when its filename contains the query, ignoring case. A
+    /// `desired_number_of_results` above zero caps the hits.
+    pub fn search_enumerator(&self, registry: &DomainRegistry, request: &StringSearchRequest) -> Option<SearchEnumerator> {
+        if !self.supports_string_search {
+            return None;
+        }
+        let needle = request.query.to_lowercase();
+        let searched = |domain: &str| registry.get(domain).is_some_and(|d| d.user_enabled && !d.disconnected && !d.hidden);
+        let containers = [ItemIdentifier::root_container(), ItemIdentifier::working_set(), ItemIdentifier::trash_container()];
+        let mut hits: Vec<SearchHit> = self
+            .items
+            .iter()
+            .filter(|(domain, item)| {
+                searched(domain.as_str())
+                    && !containers.contains(&item.identifier)
+                    && item.filename().to_lowercase().contains(&needle)
+            })
+            .map(|(domain, item)| SearchHit {
+                domain: domain.clone(),
+                identifier: item.identifier.clone(),
+                filename: item.filename().to_string(),
+            })
+            .collect();
+        if request.desired_number_of_results > 0 {
+            hits.truncate(request.desired_number_of_results);
+        }
+        Some(SearchEnumerator { hits, next: 0, invalidated: false })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,5 +511,124 @@ mod tests {
         let item = ItemIdentifier::new("doc-1").unwrap();
         assert_eq!(ProviderError::for_item(ErrorCode::FilenameCollision, item).to_string(), "filenameCollision: doc-1");
         assert_eq!(ProviderError::new(ErrorCode::NoSuchItem).to_string(), "noSuchItem");
+    }
+
+    fn named(id: &str, filename: &str) -> ProvidedItem {
+        ProvidedItem::new(ItemIdentifier::new(id).unwrap(), ItemIdentifier::root_container(), filename).unwrap()
+    }
+
+    /// One enabled domain "a" with four files; "invoice" matches items 1, 3 and 4 in that order.
+    fn searchable() -> (DomainRegistry, SearchIndex) {
+        let mut registry = DomainRegistry::default();
+        registry.add(domain("a")).unwrap();
+        let mut index = SearchIndex::default().with_string_search(true);
+        index.set_items(
+            "a",
+            vec![
+                named("1", "Invoice-2026.pdf"),
+                named("2", "notes.txt"),
+                named("3", "invoice draft.md"),
+                named("4", "Photos INVOICE.jpg"),
+            ],
+        );
+        (registry, index)
+    }
+
+    fn names(hits: &[SearchHit]) -> Vec<&str> {
+        hits.iter().map(|h| h.filename.as_str()).collect()
+    }
+
+    #[test]
+    fn blank_queries_are_refused_and_the_rest_is_trimmed() {
+        assert!(StringSearchRequest::new("   ").is_none());
+        assert_eq!(StringSearchRequest::new("  Hi ").unwrap().query, "Hi");
+    }
+
+    #[test]
+    fn string_search_is_off_until_the_provider_opts_in() {
+        let (registry, index) = searchable();
+        let request = StringSearchRequest::new("invoice").unwrap();
+        assert!(index.with_string_search(false).search_enumerator(&registry, &request).is_none());
+        assert!(searchable().1.search_enumerator(&registry, &request).is_some());
+    }
+
+    #[test]
+    fn matching_ignores_case_and_keeps_the_provider_order() {
+        let (registry, index) = searchable();
+        let request = StringSearchRequest::new("INVOICE").unwrap();
+        let mut search = index.search_enumerator(&registry, &request).unwrap();
+        assert_eq!(names(&search.next_batch(10)), ["Invoice-2026.pdf", "invoice draft.md", "Photos INVOICE.jpg"]);
+        assert!(search.is_finished());
+    }
+
+    #[test]
+    fn disabled_disconnected_hidden_and_unregistered_domains_are_not_searched() {
+        let mut registry = DomainRegistry::default();
+        for id in ["a", "b", "c", "d"] {
+            let mut d = domain(id);
+            d.hidden = id == "d";
+            registry.add(d).unwrap();
+        }
+        registry.set_user_enabled("b", false).unwrap();
+        registry.disconnect("c").unwrap();
+        let mut index = SearchIndex::default().with_string_search(true);
+        for id in ["a", "b", "c", "d", "zz"] {
+            index.set_items(id, vec![named("x", "report.txt")]);
+        }
+        let request = StringSearchRequest::new("report").unwrap();
+        let mut search = index.search_enumerator(&registry, &request).unwrap();
+        let hits = search.next_batch(10);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].domain, "a");
+    }
+
+    #[test]
+    fn well_known_containers_are_never_hits() {
+        let mut registry = DomainRegistry::default();
+        registry.add(domain("a")).unwrap();
+        let mut index = SearchIndex::default().with_string_search(true);
+        index.set_items("a", vec![named("root", "root-notes.txt"), named("9", "root-plan.txt")]);
+        let request = StringSearchRequest::new("root").unwrap();
+        let hits = index.search_enumerator(&registry, &request).unwrap().next_batch(10);
+        let ids: Vec<&str> = hits.iter().map(|h| h.identifier.as_str()).collect();
+        assert_eq!(ids, ["9"]);
+    }
+
+    #[test]
+    fn the_desired_count_caps_hits_and_batches_drain_them() {
+        let (registry, index) = searchable();
+        let request = StringSearchRequest::new("invoice").unwrap().with_desired_results(2);
+        let mut search = index.search_enumerator(&registry, &request).unwrap();
+        assert_eq!(names(&search.next_batch(1)), ["Invoice-2026.pdf"]);
+        assert!(!search.is_finished());
+        assert_eq!(names(&search.next_batch(5)), ["invoice draft.md"]);
+        assert!(search.is_finished());
+        assert!(search.next_batch(5).is_empty());
+    }
+
+    #[test]
+    fn invalidate_cancels_the_rest_of_the_search() {
+        let (registry, index) = searchable();
+        let request = StringSearchRequest::new("invoice").unwrap();
+        let mut search = index.search_enumerator(&registry, &request).unwrap();
+        assert_eq!(search.next_batch(1).len(), 1);
+        search.invalidate();
+        assert!(search.is_finished());
+        assert!(search.next_batch(10).is_empty());
+    }
+
+    #[test]
+    fn set_items_replaces_one_domain_and_keeps_the_others() {
+        let mut registry = DomainRegistry::default();
+        registry.add(domain("a")).unwrap();
+        registry.add(domain("b")).unwrap();
+        let mut index = SearchIndex::default().with_string_search(true);
+        index.set_items("a", vec![named("1", "report.txt")]);
+        index.set_items("b", vec![named("2", "report.txt")]);
+        index.set_items("a", Vec::new());
+        let request = StringSearchRequest::new("report").unwrap();
+        let hits = index.search_enumerator(&registry, &request).unwrap().next_batch(10);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].domain, "b");
     }
 }
