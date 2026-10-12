@@ -36,6 +36,7 @@ pub mod codesign_events;
 pub mod backup_exclusion;
 pub mod biometry;
 pub mod auth_context;
+pub mod auth_session;
 pub mod tunnel;
 pub mod proxy;
 pub mod rfcomm_frame;
