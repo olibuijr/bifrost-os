@@ -1,0 +1,17 @@
+[package]
+name = "bifrost-audiod"
+version = "0.1.0"
+edition = "2021"
+description = "The BifrOSt audio server (docs/audio-architecture.md)"
+
+[[bin]]
+name = "bifrost-audiod"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-shm = { path = "../shm" }
+bifrost-audio-driver = { path = "../driver" }
+bifrost-audio-alsa = { path = "../alsa" }
+bifrost-audio-toolbox = { path = "../toolbox" }
+libc = "0.2"

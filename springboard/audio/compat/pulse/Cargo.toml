@@ -1,0 +1,14 @@
+[package]
+name = "bifrost-audio-pulse"
+version = "0.1.0"
+edition = "2021"
+description = "PulseAudio native protocol server on the BifrOSt audio server (docs/audio-architecture.md)"
+
+[[bin]]
+name = "bifrost-audio-pulse"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-audio-types = { path = "../../types" }
+bifrost-audio-hal = { path = "../../hal" }
+libc = "0.2"

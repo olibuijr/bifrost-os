@@ -1,0 +1,8 @@
+[package]
+name = "bifrost-midi"
+version = "0.1.0"
+edition = "2021"
+description = "MIDI endpoints, UMP and MIDI 1.0, host-clock timestamps (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }

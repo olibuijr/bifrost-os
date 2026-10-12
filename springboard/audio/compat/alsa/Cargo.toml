@@ -1,0 +1,14 @@
+[package]
+name = "bifrost-alsa-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "ALSA ioplug PCM plug-in that routes ALSA apps to the BifrOSt audio server (docs/audio-architecture.md)"
+
+[lib]
+name = "asound_module_pcm_bifrost"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bifrost-audio-types = { path = "../../types" }
+bifrost-audio-hal = { path = "../../hal" }
+libc = "0.2"

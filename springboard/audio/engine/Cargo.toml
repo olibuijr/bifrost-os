@@ -1,0 +1,11 @@
+[package]
+name = "bifrost-audio-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Audio engine: player, mixer, effect, IO and tap nodes; manual and offline rendering (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-hal = { path = "../hal" }
+bifrost-audio-units = { path = "../units" }
+bifrost-audio-toolbox = { path = "../toolbox" }

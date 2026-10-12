@@ -1,0 +1,10 @@
+[package]
+name = "bifrost-audio-units"
+version = "0.1.0"
+edition = "2021"
+description = "Audio unit component model: render block, parameters, presets, hosting (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-toolbox = { path = "../toolbox" }
+bifrost-audio-shm = { path = "../shm" }

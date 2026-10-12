@@ -1,0 +1,13 @@
+[package]
+name = "bifrost-audio-policy"
+version = "0.1.0"
+edition = "2021"
+description = "Audio session policy: defaults, routing, permissions, indicator (docs/audio-architecture.md)"
+
+[[bin]]
+name = "bifrost-audio-policy"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-hal = { path = "../hal" }

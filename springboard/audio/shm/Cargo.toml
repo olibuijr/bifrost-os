@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-audio-shm"
+version = "0.1.0"
+edition = "2021"
+description = "Shared-memory ABI between bifrost-audiod and its clients (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+libc = "0.2"

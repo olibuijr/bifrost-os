@@ -1,0 +1,11 @@
+[package]
+name = "bifrost-audio-alsa"
+version = "0.1.0"
+edition = "2021"
+description = "Pure Rust ALSA driver: kernel uapi, mmap, DLL, timer scheduling, jacks (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-driver = { path = "../driver" }
+bifrost-audio-shm = { path = "../shm" }
+libc = "0.2"

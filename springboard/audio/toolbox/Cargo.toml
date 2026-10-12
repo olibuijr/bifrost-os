@@ -1,0 +1,8 @@
+[package]
+name = "bifrost-audio-toolbox"
+version = "0.1.0"
+edition = "2021"
+description = "Audio services: converter, resamplers, files, queue, system sounds (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }

@@ -1,0 +1,7 @@
+[package]
+name = "bifrost-audio-types"
+version = "0.1.0"
+edition = "2021"
+description = "Audio formats, timestamps, buffer lists, the object model and the control protocol (docs/audio-architecture.md)"
+
+[dependencies]

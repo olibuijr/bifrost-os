@@ -263,6 +263,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-alsa-plugin"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
 name = "bifrost-app"
 version = "0.1.0"
 dependencies = [
@@ -286,6 +295,99 @@ dependencies = [
  "bifrost-app",
  "bifrost-core",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-audio-alsa"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-driver",
+ "bifrost-audio-shm",
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
+name = "bifrost-audio-driver"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-types",
+]
+
+[[package]]
+name = "bifrost-audio-engine"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-toolbox",
+ "bifrost-audio-types",
+ "bifrost-audio-units",
+]
+
+[[package]]
+name = "bifrost-audio-hal"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-shm",
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
+name = "bifrost-audio-policy"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
+]
+
+[[package]]
+name = "bifrost-audio-pulse"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
+name = "bifrost-audio-shm"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
+name = "bifrost-audio-toolbox"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-types",
+]
+
+[[package]]
+name = "bifrost-audio-types"
+version = "0.1.0"
+
+[[package]]
+name = "bifrost-audio-units"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-shm",
+ "bifrost-audio-toolbox",
+ "bifrost-audio-types",
+]
+
+[[package]]
+name = "bifrost-audiod"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-alsa",
+ "bifrost-audio-driver",
+ "bifrost-audio-shm",
+ "bifrost-audio-toolbox",
+ "bifrost-audio-types",
+ "libc",
 ]
 
 [[package]]
@@ -416,6 +518,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-jack"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-hal",
+ "bifrost-audio-types",
+ "libc",
+]
+
+[[package]]
 name = "bifrost-keyboard"
 version = "1.1.0"
 dependencies = [
@@ -444,6 +555,22 @@ dependencies = [
  "wayland-protocols",
  "wayland-protocols-misc",
  "wayland-protocols-wlr",
+]
+
+[[package]]
+name = "bifrost-midi"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-types",
+]
+
+[[package]]
+name = "bifrost-midid"
+version = "0.1.0"
+dependencies = [
+ "bifrost-audio-types",
+ "bifrost-midi",
+ "libc",
 ]
 
 [[package]]

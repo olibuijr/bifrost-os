@@ -1,0 +1,14 @@
+[package]
+name = "bifrost-midid"
+version = "0.1.0"
+edition = "2021"
+description = "The BifrOSt MIDI server: ALSA rawmidi and seq, BLE MIDI, virtual ports (docs/audio-architecture.md)"
+
+[[bin]]
+name = "bifrost-midid"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-midi = { path = "../midi" }
+libc = "0.2"

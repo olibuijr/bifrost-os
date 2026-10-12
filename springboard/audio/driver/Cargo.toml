@@ -1,0 +1,8 @@
+[package]
+name = "bifrost-audio-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Device driver interface of bifrost-audiod, null and loopback drivers (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }

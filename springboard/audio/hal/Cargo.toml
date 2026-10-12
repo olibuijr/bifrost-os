@@ -1,0 +1,10 @@
+[package]
+name = "bifrost-audio-hal"
+version = "0.1.0"
+edition = "2021"
+description = "Client library of the BifrOSt audio server: object model, IO procedures, RT threads (docs/audio-architecture.md)"
+
+[dependencies]
+bifrost-audio-types = { path = "../types" }
+bifrost-audio-shm = { path = "../shm" }
+libc = "0.2"

@@ -140,7 +140,7 @@ to the daemon through the object model. None of them opens a PCM.
 | Kernel driver glue | `bifrost-audio-alsa` (`audio/alsa`) | Pure Rust ALSA through the kernel uapi: PCM hw and sw params, mmap of the data, status and control pages, the DLL, timerfd scheduling, ctl elements and jack events, and UCM-free HDA routing. Grows from `media/alsa.rs` and `media/mixer.rs` |
 | `coreaudiod` | `bifrost-audiod` (`audio/server`) | The object tree, IO cycle, mixing, clients, aggregates, taps, hog mode, latency accounting, profiler |
 | Core Audio HAL client | `bifrost-audio-hal` (`audio/hal`) | Client library: `AudioObject` get, set and listen; `Device::add_io_proc`; RT thread creation; the workgroup join; the client side of the ring and activation |
-| Audio Workgroups | `bifrost-audio-hal::workgroup` | Join the device's workgroup. On Linux: SCHED_FIFO (or SCHED_DEADLINE, runtime and period from the cycle), `sched_util_min` (uclamp) for the frequency hint, and CPU affinity hints |
+| Audio Workgroups | `bifrost-audio-hal::workgroup` | Join the device's workgroup. On Linux: SCHED_FIFO, `sched_util_min` (uclamp) for the frequency hint, and CPU affinity hints |
 | AudioToolbox | `bifrost-audio-toolbox` (`audio/toolbox`) | Converter (format, channel map, a high-quality resampler for files, the adaptive resampler for drift), files (moved from `media/audiofile.rs` and the codecs), queue, system sounds |
 | Audio Units | `bifrost-audio-units` (`audio/units`) | Component trait (render block, parameter tree, presets, MIDI in, latency and tail), in-process and out-of-process hosting through the same activation records. Absorbs `ui/src/plugin_host.rs` and `audio_render.rs` |
 | AVFAudio | `bifrost-audio-engine` (`audio/engine`), re-exported by the SDK | Node graph (player, mixer, effect, IO node, tap), offline and manual rendering. Absorbs `ui/src/audio_engine.rs` and `audio_mix.rs` |
@@ -256,7 +256,7 @@ ALSA driver specifics (pure Rust, no libasound):
   `mlockall(MCL_CURRENT|MCL_FUTURE)`. The IO paths never page fault, because the buffers are pre-faulted.
 - Client IO threads: the server grants priority through a `rtkit`-style call on the control socket, and sets
   SCHED_FIFO 80 on the client's TID with a pidfd check. Clients never need CAP_SYS_NICE. SCHED_DEADLINE (runtime =
-  measured p99 work, period = the cycle) is evaluated in phase 6.
+  measured p99 work, period = the cycle) is not used (Decisions, 2).
 - Frequency hint: set `sched_util_min` (uclamp) on the workgroup's threads while the device runs, so the CPU does not
   start the cycle at a low clock.
 - A watchdog (RLIMIT_RTTIME, plus the server's own check) demotes a thread that spins.
@@ -342,21 +342,25 @@ Each phase ends with the Midget acceptance in its task file, updated parity rows
 
 | Phase | Outcome | Tasks |
 |---|---|---|
-| 0 | Fix today's exclusivity: ship a `dmix`/`dsnoop` `asound.conf` for the HDA analog device as a stopgap, so the store apps and the shell share the device | `00-stopgap-dmix.md` |
 | 1 | Types and shared memory ABI; pure Rust ALSA driver with the DLL and timer scheduling; the server with a null and an ALSA device, mixing two clients | `01` to `05` |
 | 2 | HAL client library, IOProcs and RT threads; the shell, the media player and the SDK move off libasound; the ALSA plug-in for third-party apps | `06` to `08` |
 | 3 | Policy process: defaults, jack routing, permissions, indicator, per-app volume; Settings > Sound and Control Center on the object model | `09` |
 | 4 | Pro: hog mode, 64-frame quantum, full duplex, latency reporting, aggregates with drift compensation, the Audio Setup app | `10` to `12` |
 | 5 | Toolbox, Units, Engine in the SDK (AVAudioEngine parity); the DAW and Voice Memos on them; MIDI server | `13` to `15` |
-| 6 | Pulse protocol server, taps, JACK, SCHED_DEADLINE evaluation | `16` to `18` |
+| 6 | Pulse protocol server, taps, JACK | `16` to `18` |
 
-## Open decisions (owner)
+## Decisions (owner, 2026-10-12)
 
-1. Run the daemon as its own `audio` system user (recommended), or inside the root shell's service set.
-2. Keep libasound on the system for the ALSA plug-in (recommended until JACK and Pulse cover the apps), or remove it.
-3. Is SCHED_DEADLINE in scope for phase 6, or is SCHED_FIFO plus uclamp enough?
-4. Does the phase 0 stopgap ship now, before the server exists? It is one config file and fixes the exclusivity bug
-   today.
+1. The daemon runs as its own `audio` system user, with `CAP_SYS_NICE` and access to `/dev/snd`. The root shell is an
+   ordinary client.
+2. Real-time scheduling is SCHED_FIFO plus uclamp (`sched_util_min`) and CPU affinity hints, the model the JACK and
+   PipeWire servers use. SCHED_DEADLINE is out of scope (the owner asked for the single best end solution; its
+   throttling turns a wrong runtime estimate into dropouts). Task 18 is the JACK ABI only.
+3. libasound stays on the system only because third-party ALSA apps load it, which is how the ALSA compatibility
+   plug-in reaches them. No BifrOSt code links or loads it; `media/alsalib.rs` is deleted in task 07.
+4. No phase 0 stopgap: the exclusivity bug is fixed by the server and the ALSA plug-in (task 08).
+5. Agents: Sonnet for the system tasks, Haiku for the app task (12). The lead writes the shared skeleton first, then
+   reviews and fixes every branch before merging.
 
 ## Sources
 
