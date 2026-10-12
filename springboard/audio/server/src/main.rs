@@ -88,11 +88,6 @@ fn main() {
         }
     }
 
-    // SAFETY: mlockall takes flags only. Failure is logged, not fatal: the daemon still works, only without the
-    // no-page-fault guarantee.
-    if unsafe { libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) } != 0 {
-        log("io", &format!("mlockall failed: {}", std::io::Error::last_os_error()));
-    }
     let sigs = signal_fd();
     if let Err(e) = drop_privileges() {
         log("io", &e);
@@ -112,6 +107,8 @@ fn main() {
     };
     log("io", &format!("listening on {socket}"));
     let mut core = ServerCore::new(drivers, Box::new(NoObjects), CoreConfig::default());
+    // Lock memory after setup so everything setup allocated is resident too (MCL_CURRENT | MCL_FUTURE).
+    bifrost_audiod::rt::lock_memory();
     let stop = AtomicBool::new(false);
     serve(&mut core, &listener, &stop, sigs.as_ref().map(|f| f.as_raw_fd()));
     let _ = std::fs::remove_file(&socket);

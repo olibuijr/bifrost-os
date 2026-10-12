@@ -46,6 +46,26 @@ pub struct PcmRequest {
     pub max_channels: u32,
     /// Ask for `NO_PERIOD_WAKEUP`. The status page then only moves on `hwsync`.
     pub no_period_wakeup: bool,
+    /// Lowest latency: the buffer is the fewest whole periods the device accepts (`PERIOD_COUNTS`), not the
+    /// largest. The server's write-ahead (`prefill`) then fits in `buffer / 2`.
+    pub low_latency: bool,
+}
+
+/// Period counts tried for the smallest working ring: two periods, then three.
+pub const PERIOD_COUNTS: [u32; 2] = [2, 3];
+
+/// The ring sizes to try for `quantum`, smallest first; empty when not low-latency.
+pub fn low_latency_buffers(quantum: u32, low_latency: bool) -> Vec<u32> {
+    if !low_latency || quantum == 0 {
+        return Vec::new();
+    }
+    PERIOD_COUNTS.iter().map(|&n| quantum.saturating_mul(n)).collect()
+}
+
+/// Converter latency the playback side adds beyond the frames queued: the delay the kernel reports minus the
+/// frames queued ahead of the hardware (never negative).
+pub fn converter_delay(delay: i64, queued: i64) -> u32 {
+    (delay - queued).clamp(0, u32::MAX as i64) as u32
 }
 
 /// What a device offers, from `HW_REFINE` on a fresh parameter set.
@@ -107,8 +127,17 @@ pub fn negotiate<R: FnMut(&mut HwParams) -> io::Result<()>>(mut refine: R, req: 
     // period: the quantum when the device takes it
     let cur = p;
     p = attempt(&mut refine, &cur, |p| p.set_range(PARAM_PERIOD_SIZE, req.quantum, req.quantum)).unwrap_or(cur);
-    // buffer: the largest the (period-constrained) device offers
+    // buffer: the fewest periods (2, else 3) when the period is the quantum and low latency is asked for
     let cur = p;
+    if cur.range(PARAM_PERIOD_SIZE) == (req.quantum, req.quantum) {
+        if let Some(q) = low_latency_buffers(req.quantum, req.low_latency)
+            .into_iter()
+            .find_map(|b| attempt(&mut refine, &cur, |p| p.set_range(PARAM_BUFFER_SIZE, b, b)))
+        {
+            return finish(q, req);
+        }
+    }
+    // else the largest the (period-constrained) device offers
     let (_, bmax) = cur.range(PARAM_BUFFER_SIZE);
     let step = req.quantum.max(1);
     // whole multiples of the quantum, from the top down
@@ -119,8 +148,12 @@ pub fn negotiate<R: FnMut(&mut HwParams) -> io::Result<()>>(mut refine: R, req: 
             attempt(&mut refine, &cur, |p| p.set_range(PARAM_BUFFER_SIZE, b, b))
         })
         .unwrap_or(cur);
+    finish(p, req)
+}
+
+fn finish(mut p: HwParams, req: &PcmRequest) -> io::Result<HwParams> {
     if p.info & INFO_MMAP == 0 {
-        return Err(unsupported("device cannot mmap"));
+        return Err(io::Error::new(io::ErrorKind::Unsupported, "device cannot mmap"));
     }
     if req.no_period_wakeup && p.info & INFO_NO_PERIOD_WAKEUP != 0 {
         p.flags |= HW_PARAMS_NO_PERIOD_WAKEUP;
@@ -170,6 +203,8 @@ pub struct Pcm {
     pub boundary: u64,
     pub info: u32,
     pub no_period_wakeup: bool,
+    /// The hardware FIFO in bytes as `hw_params` reports it (0 when the driver does not say).
+    pub fifo_bytes: u64,
     data: *mut u8,
     data_len: usize,
     status: *const MmapStatus,
@@ -213,6 +248,7 @@ impl Pcm {
             boundary: 1,
             info: 0,
             no_period_wakeup: false,
+            fifo_bytes: 0,
             data: std::ptr::null_mut(),
             data_len: 0,
             status: std::ptr::null(),
@@ -260,6 +296,7 @@ impl Pcm {
         self.period_frames = hw.range(PARAM_PERIOD_SIZE).0;
         self.buffer_frames = hw.range(PARAM_BUFFER_SIZE).0;
         self.info = hw.info;
+        self.fifo_bytes = hw.fifo_size;
         self.no_period_wakeup = hw.flags & HW_PARAMS_NO_PERIOD_WAKEUP != 0;
         self.layout = RingLayout { interleaved, channels: self.channels as usize, format, buffer_frames: self.buffer_frames as usize };
         self.set_sw_params()?;
@@ -276,6 +313,10 @@ impl Pcm {
         sw.avail_min = self.period_frames.max(1) as u64;
         sw.start_threshold = 1 << 32;
         sw.stop_threshold = 1 << 32;
+        // no kernel silence fill: the driver silences the ring itself, so the first period is never delayed or
+        // overwritten behind its back
+        sw.silence_threshold = 0;
+        sw.silence_size = 0;
         // SAFETY: `sw` is the struct PCM_SW_PARAMS encodes.
         unsafe { ioctl(self.fd, PCM_SW_PARAMS, &mut sw) }?;
         // the kernel answers with the boundary; the stream stops only there, and starts only on START
@@ -376,6 +417,21 @@ impl Pcm {
 
     pub fn unlink(&self) -> io::Result<()> {
         ioctl_none(self.fd, PCM_UNLINK)
+    }
+
+    /// The hardware FIFO in frames.
+    pub fn fifo_frames(&self) -> u32 {
+        let bytes_per_frame = (self.layout.format.bytes() as u64 * self.channels as u64).max(1);
+        (self.fifo_bytes / bytes_per_frame) as u32
+    }
+
+    /// `PCM_DELAY`: frames between the application pointer and the sample at the converter (queued frames plus
+    /// the codec and link delay the driver knows). One ioctl, used at start only.
+    pub fn delay_frames(&self) -> io::Result<i64> {
+        let mut d: libc::c_long = 0;
+        // SAFETY: `d` is the `snd_pcm_sframes_t` PCM_DELAY writes.
+        unsafe { ioctl(self.fd, PCM_DELAY, &mut d) }?;
+        Ok(d as i64)
     }
 
     /// Asks the driver to read the hardware pointer now (needed with `no_period_wakeup`).
@@ -560,7 +616,7 @@ mod tests {
     }
 
     fn req(rate: u32, quantum: u32) -> PcmRequest {
-        PcmRequest { rate, quantum, channels: None, max_channels: 2, no_period_wakeup: false }
+        PcmRequest { rate, quantum, channels: None, max_channels: 2, no_period_wakeup: false, low_latency: false }
     }
 
     fn run(dev: &Device, r: &PcmRequest) -> io::Result<HwParams> {
@@ -660,6 +716,43 @@ mod tests {
             &req(48_000, 64),
         );
         assert_eq!(err.unwrap_err().kind(), io::ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn low_latency_takes_two_periods_then_three() {
+        let mut r = req(48_000, 64);
+        r.low_latency = true;
+        assert_eq!(run(&hda(), &r).unwrap().range(PARAM_BUFFER_SIZE), (128, 128));
+        let mut d = hda();
+        d.buffer_max = 2048;
+        // a device that refuses a two-period ring: model it with periods = 3 only through the buffer rule
+        let strict = |p: &mut HwParams| -> io::Result<()> {
+            d.refine(p)?;
+            let (a, b) = p.range(PARAM_BUFFER_SIZE);
+            if a == b && a == 128 {
+                p.intervals[PARAM_BUFFER_SIZE - 8].flags |= INTERVAL_EMPTY;
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
+            }
+            Ok(())
+        };
+        assert_eq!(negotiate(strict, &r).unwrap().range(PARAM_BUFFER_SIZE), (192, 192));
+    }
+
+    #[test]
+    fn low_latency_falls_back_to_the_largest_buffer_without_the_quantum_period() {
+        let mut r = req(48_000, 48);
+        r.low_latency = true;
+        assert!(run(&hda(), &r).unwrap().range(PARAM_BUFFER_SIZE).0 > 1024);
+    }
+
+    #[test]
+    fn buffer_candidates_and_converter_delay() {
+        assert_eq!(low_latency_buffers(32, true), vec![64, 96]);
+        assert!(low_latency_buffers(32, false).is_empty());
+        assert!(low_latency_buffers(0, true).is_empty());
+        assert_eq!(converter_delay(150, 128), 22);
+        assert_eq!(converter_delay(100, 128), 0);
+        assert_eq!(converter_delay(-5, 0), 0);
     }
 
     #[test]

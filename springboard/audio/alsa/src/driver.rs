@@ -10,7 +10,7 @@
 use crate::convert::SampleFormat;
 use crate::ctl::{jack_pcm, Control, Ctl, ElemId, Kind, IFACE_MIXER};
 use crate::dll::Dll;
-use crate::pcm::{Direction, Pcm, PcmCaps, PcmRequest};
+use crate::pcm::{converter_delay, Direction, Pcm, PcmCaps, PcmRequest};
 use crate::ring::{plan_capture, plan_playback, CapturePlan, PlaybackPlan};
 use crate::sys::now_raw_ns;
 use crate::uapi::STATE_RUNNING;
@@ -34,11 +34,13 @@ pub struct AlsaOptions {
     pub no_period_wakeup: bool,
     /// Most channels a device is opened with when the caller does not ask for a count.
     pub max_channels: u32,
+    /// The smallest ring (2 periods, else 3) instead of the largest. On by default: lowest latency.
+    pub low_latency: bool,
 }
 
 impl Default for AlsaOptions {
     fn default() -> Self {
-        AlsaOptions { no_period_wakeup: false, max_channels: 2 }
+        AlsaOptions { no_period_wakeup: false, max_channels: 2, low_latency: true }
     }
 }
 
@@ -85,6 +87,16 @@ pub fn transport_of(driver: &str, pcm_name: &str) -> &'static str {
 }
 
 /// Channel counts, rates and buffer range of a duplex device from its two directions' capabilities.
+/// The graph quantum range from the buffer size range: with a two-period ring (low latency) the smallest quantum
+/// is half the smallest buffer, so a device with a 64 frame minimum buffer runs a 32 frame quantum.
+pub fn quantum_range(buffer: (u32, u32), low_latency: bool) -> (u32, u32) {
+    if low_latency {
+        ((buffer.0 / 2).max(1), buffer.1)
+    } else {
+        buffer
+    }
+}
+
 pub fn merge_caps(play: Option<&PcmCaps>, cap: Option<&PcmCaps>) -> (u32, u32, Vec<(f64, f64)>, (u32, u32)) {
     let mut lo = u32::MAX;
     let mut hi = 0;
@@ -150,7 +162,7 @@ impl AlsaDriver {
                     input_channels: inch,
                     output_channels: outch,
                     rates,
-                    buffer_frames_range: buf,
+                    buffer_frames_range: quantum_range(buf, self.opts.low_latency),
                     clock_domain: card + 1,
                 };
                 let e = Entry { card, device, hdmi: transport == "hdmi", playback: pcm.playback, capture: pcm.capture, desc: desc.clone() };
@@ -336,11 +348,15 @@ pub struct AlsaIo {
     prefill: u32,
     last_ts: u64,
     xruns: u64,
+    /// Playback converter latency in frames: hardware FIFO plus the codec and link delay the kernel reports.
+    conv_out: u32,
+    /// Capture converter latency in frames (the FIFO).
+    conv_in: u32,
 }
 
 impl AlsaIo {
     fn open(e: &Entry, cfg: &IoConfig, opts: &AlsaOptions) -> Result<AlsaIo, DriverError> {
-        let req = PcmRequest { rate: cfg.rate.round() as u32, quantum: cfg.quantum, channels: None, max_channels: opts.max_channels, no_period_wakeup: opts.no_period_wakeup };
+        let req = PcmRequest { rate: cfg.rate.round() as u32, quantum: cfg.quantum, channels: None, max_channels: opts.max_channels, no_period_wakeup: opts.no_period_wakeup, low_latency: opts.low_latency };
         if (cfg.output && !e.playback) || (cfg.input && !e.capture) || !(cfg.input || cfg.output) {
             return Err(DriverError::Unsupported("the device lacks that direction".into()));
         }
@@ -361,7 +377,7 @@ impl AlsaIo {
         let buffer = out.as_ref().or(inp.as_ref()).map_or(0, |p| p.buffer_frames);
         let prefill = (cfg.quantum * 2).min(buffer / 2).max(cfg.quantum.min(buffer));
         dlog!("opened {} {}Hz quantum {} prefill {} buffer {}", e.desc.uid, rate, cfg.quantum, prefill, buffer);
-        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0 })
+        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0, conv_out: 0, conv_in: 0 })
     }
 
     /// Cycles lost to under- and overruns since open.
@@ -407,6 +423,13 @@ impl DeviceIo for AlsaIo {
         }
         self.primary().ok_or(DriverError::NotFound)?.start().map_err(map_io)?;
         let now = now_raw_ns();
+        // converter latency, read once per start (an ioctl, never in the cycle)
+        self.conv_in = self.inp.as_ref().map_or(0, |p| p.fifo_frames());
+        self.conv_out = self.out.as_ref().map_or(0, |o| {
+            let queued = self.prefill as i64;
+            o.fifo_frames() + o.delay_frames().map_or(0, |d| converter_delay(d, queued))
+        });
+        dlog!("converter latency: playback {} frames, capture {} frames", self.conv_out, self.conv_in);
         self.dll.reset(0, now);
         self.last_ts = 0;
         Ok(ZeroTimeStamp { sample_time: 0, host_ns: now })
@@ -484,9 +507,14 @@ impl DeviceIo for AlsaIo {
     }
 
     fn latency(&self) -> Latency {
-        // Frames queued ahead of the hardware (output) and one capture period (input). The codec and DMA delay
-        // the hardware reports through `delay` is not added: HDA exposes none the driver can trust.
-        Latency { input: if self.inp.is_some() { self.quantum } else { 0 }, output: if self.out.is_some() { self.prefill } else { 0 }, input_safety: 0, output_safety: 0 }
+        // Frames queued ahead of the hardware (output) and one capture period (input), plus the converter latency
+        // measured at start: the hardware FIFO and the delay `PCM_DELAY` reports beyond the queued frames.
+        Latency {
+            input: if self.inp.is_some() { self.quantum + self.conv_in } else { 0 },
+            output: if self.out.is_some() { self.prefill + self.conv_out } else { 0 },
+            input_safety: 0,
+            output_safety: 0,
+        }
     }
 
     fn physical_formats(&self) -> (Option<StreamFormat>, Option<StreamFormat>) {
@@ -514,6 +542,13 @@ mod tests {
 
     fn caps(ch: u32, rates: (u32, u32), buf: (u32, u32)) -> PcmCaps {
         PcmCaps { channels: (1, ch), rates, buffer_frames: buf, formats: vec![SampleFormat::S32], no_period_wakeup: true }
+    }
+
+    #[test]
+    fn a_two_period_ring_halves_the_smallest_quantum() {
+        assert_eq!(quantum_range((64, 2048), true), (32, 2048));
+        assert_eq!(quantum_range((64, 2048), false), (64, 2048));
+        assert_eq!(quantum_range((1, 8), true), (1, 8));
     }
 
     #[test]

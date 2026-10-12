@@ -20,6 +20,8 @@ NoNewPrivileges=yes
 # /dev/snd only; /run/bifrost/audio is created by tmpfiles (audio:audio 0755) and holds the control socket.
 DevicePolicy=closed
 DeviceAllow=char-alsa rw
+# PM QoS: the server holds /dev/cpu_dma_latency at 0 while a device runs (docs/audio/21-lowest-latency-path.md).
+DeviceAllow=/dev/cpu_dma_latency rw
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes

@@ -250,6 +250,8 @@ pub struct Shared {
     pub cycles: AtomicU64,
     pub xruns: AtomicU64,
     pub late_total: AtomicU64,
+    /// The quantum the sustained-xrun fallback raised to (0 = none); the control thread never goes below it.
+    pub fallback_floor: AtomicU32,
 }
 
 impl Shared {
@@ -262,6 +264,7 @@ impl Shared {
             cycles: AtomicU64::new(0),
             xruns: AtomicU64::new(0),
             late_total: AtomicU64::new(0),
+            fallback_floor: AtomicU32::new(0),
         })
     }
 
@@ -397,6 +400,18 @@ impl DeviceRunner {
 
     pub fn latency(&self) -> bifrost_audio_driver::Latency {
         self.io.latency()
+    }
+
+    /// The host time of the next cycle: the driver's DLL prediction once it has locked, else the nominal timeline.
+    pub fn next_cycle_ns(&self) -> u64 {
+        self.io.host_time_of(self.timeline_frames).unwrap_or_else(|| self.next_ns())
+    }
+
+    /// Tells every client of the device that the server overloaded (delivered as `Reply::Overload`).
+    pub fn notify_overload(&self) {
+        for s in self.snapshot.iter() {
+            s.overloads.fetch_add(1, Ordering::AcqRel);
+        }
     }
 
     fn next_ns(&self) -> u64 {
@@ -582,25 +597,24 @@ impl DeviceRunner {
 // ---------------------------------------------------------------------------------------------------------------
 // The IO thread
 
-fn sleep_until(tfd: i32, delta_ns: u64) {
-    if delta_ns == 0 {
-        return;
-    }
-    let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: 0, tv_nsec: 0 },
-        it_value: libc::timespec { tv_sec: (delta_ns / 1_000_000_000) as i64, tv_nsec: (delta_ns % 1_000_000_000) as i64 },
-    };
-    // SAFETY: `spec` is a valid itimerspec; `tfd` is a timerfd owned by the calling thread.
-    unsafe {
-        libc::timerfd_settime(tfd, 0, &spec, std::ptr::null_mut());
-        let mut n = 0u64;
-        let _ = libc::read(tfd, &mut n as *mut u64 as *mut libc::c_void, 8);
-    }
+/// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
+pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
+    spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default())
 }
 
-/// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
-pub fn spawn_io_thread(mut runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
+/// As `spawn_io_thread`, with the driver thread's CPU set (away from the sound IRQ) from `rt::device_started`.
+///
+/// Per cycle the thread sleeps on an absolute timer armed `margin` before the cycle start (the start comes from
+/// the driver's DLL when it has locked), then spins to the exact start. The margin is the measured p99 wake-up
+/// lateness (`rt::JitterTracker`). Sustained xruns double the quantum and post an overload notice
+/// (`rt::FallbackPolicy`).
+pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: crate::rt::Tuning) -> std::io::Result<std::thread::JoinHandle<()>> {
+    use crate::rt;
     std::thread::Builder::new().name(name.clone()).spawn(move || {
+        rt::set_timer_slack_1ns();
+        if let Err(e) = rt::set_thread_affinity(&tuning.cpus) {
+            log("io", &format!("{name}: affinity: {e}"));
+        }
         if let Err(e) = set_realtime(0, IO_PRIORITY, 1024) {
             log("io", &format!("{name}: no real-time priority ({e}); running at normal priority"));
         }
@@ -611,16 +625,27 @@ pub fn spawn_io_thread(mut runner: DeviceRunner, name: String) -> std::io::Resul
                 return;
             }
         };
-        // SAFETY: timerfd_create takes no pointers; the descriptor is closed below.
-        let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
+        let timer = bifrost_audio_alsa::CycleTimer::new().ok();
         // The driver's clock is CLOCK_MONOTONIC_RAW for the ALSA driver; the offset covers drivers whose clock
         // has another origin.
         let offset = now_raw_ns() as i64 - start as i64;
         let mut next = start;
+        let mut jitter = rt::JitterTracker::new();
+        let mut policy = rt::FallbackPolicy::new();
+        let mut margin = rt::DEFAULT_MARGIN_NS;
         log("io", &format!("{name}: started at quantum {}", runner.quantum()));
         while !runner.shared.stop.load(Ordering::Acquire) {
             let target = (next as i64 + offset).max(0) as u64;
-            sleep_until(tfd, target.saturating_sub(now_raw_ns()));
+            let arm = target.saturating_sub(margin);
+            let now = now_raw_ns();
+            if arm > now {
+                match timer.as_ref().map(|t| t.arm_raw(arm).and_then(|_| t.wait())) {
+                    Some(Ok(_)) => {}
+                    _ => std::thread::sleep(std::time::Duration::from_nanos(arm - now)),
+                }
+                jitter.record(now_raw_ns().saturating_sub(arm));
+            }
+            rt::spin_until(target);
             let rep = runner.cycle(now_raw_ns());
             if rep.device_xrun {
                 log("xrun", &format!("{name}: device xrun at cycle {}", runner.cycles()));
@@ -628,11 +653,17 @@ pub fn spawn_io_thread(mut runner: DeviceRunner, name: String) -> std::io::Resul
             if rep.late > 0 {
                 log("xrun", &format!("{name}: {} late client(s) at cycle {}", rep.late, runner.cycles()));
             }
-            next = rep.next_ns;
-        }
-        if tfd >= 0 {
-            // SAFETY: closing the descriptor created above, once.
-            unsafe { libc::close(tfd) };
+            let rate = runner.cfg.rate;
+            if let Some(q) = policy.record(rep.device_xrun || rep.late > 0, rep.frames, rt::window_cycles(rep.frames, rate)) {
+                runner.shared.fallback_floor.store(q, Ordering::Release);
+                runner.shared.quantum.store(q, Ordering::Release);
+                runner.notify_overload();
+                log("xrun", &format!("{name}: sustained xruns at quantum {}, now {q}", rep.frames));
+            }
+            if runner.cycles() % 64 == 0 {
+                margin = jitter.margin_ns(rep.frames as u64 * 1_000_000_000 / rate.max(1) as u64);
+            }
+            next = runner.next_cycle_ns();
         }
         runner.stop();
         log("io", &format!("{name}: stopped"));
