@@ -94,6 +94,35 @@ impl NotifStatus {
     }
 }
 
+/// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NotifSettings {
+    /// authorized (true) or denied (false). The manifest grant decides; there is no prompt.
+    pub authorized: bool,
+    /// banners, the lock screen and Notification Center rows (alert setting); off when the app is muted
+    pub alert: bool,
+    /// sound setting; follows the app's mute state
+    pub sound: bool,
+    /// badge setting; follows the app's mute state
+    pub badge: bool,
+    /// Do Not Disturb is on
+    pub focus: bool,
+}
+
+impl NotifSettings {
+    pub fn bits(self) -> u8 {
+        (self.authorized as u8) | ((self.alert as u8) << 1) | ((self.sound as u8) << 2) | ((self.badge as u8) << 3) | ((self.focus as u8) << 4)
+    }
+
+    /// Unknown bits make the packet invalid.
+    pub fn from_bits(v: u8) -> Option<Self> {
+        if v & !0x1f != 0 {
+            return None;
+        }
+        Some(NotifSettings { authorized: v & 1 != 0, alert: v & 2 != 0, sound: v & 4 != 0, badge: v & 8 != 0, focus: v & 16 != 0 })
+    }
+}
+
 /// One thing to share or drag (`NativePasteboardWriting`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Payload {
@@ -416,6 +445,7 @@ pub(crate) mod tag {
     pub const NOTIFICATION_ACTION: u32 = 50;
     pub const NOTIFICATION_STATUS: u32 = 51;
     pub const NOTIFICATION_LIST: u32 = 52;
+    pub const NOTIFICATION_SETTINGS: u32 = 56;
     pub const SHARE_DONE: u32 = 53;
     pub const DRAG_DEST: u32 = 54;
     pub const DRAG_ENDED: u32 = 55;
@@ -424,6 +454,7 @@ pub(crate) mod tag {
     pub const NOTIFY_REQUEST: u32 = 0x141;
     pub const NOTIFY_REMOVE: u32 = 0x142;
     pub const NOTIFY_QUERY: u32 = 0x143;
+    pub const NOTIFY_SETTINGS: u32 = 0x14a;
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -455,6 +486,11 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             u32_(b, *request);
             b.push(*delivered as u8);
             put_ids(b, ids);
+        }
+        ToApp::NotificationSettings { request, settings } => {
+            u32_(b, tag::NOTIFICATION_SETTINGS);
+            u32_(b, *request);
+            b.push(settings.bits());
         }
         ToApp::ShareDone { request, target } => {
             u32_(b, tag::SHARE_DONE);
@@ -494,6 +530,7 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
         },
         tag::NOTIFICATION_STATUS => ToApp::NotificationStatus { request: r.u32()?, status: NotifStatus::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_LIST => ToApp::NotificationList { request: r.u32()?, delivered: flag(r)?, ids: get_ids(r)? },
+        tag::NOTIFICATION_SETTINGS => ToApp::NotificationSettings { request: r.u32()?, settings: NotifSettings::from_bits(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::DIST_NOTIFY => {
             let (name, user_info) = get_dist(r)?;
             ToApp::DistNotify { name, user_info }
@@ -542,6 +579,10 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, tag::NOTIFY_QUERY);
             u32_(b, *request);
             b.push(*delivered as u8);
+        }
+        ToShell::NotifySettings { request } => {
+            u32_(b, tag::NOTIFY_SETTINGS);
+            u32_(b, *request);
         }
         ToShell::DistPost { name, user_info } => {
             u32_(b, tag::DIST_POST);
@@ -594,6 +635,7 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
         tag::NOTIFY_REQUEST => ToShell::NotifyRequest { request: r.u32()?, req: get_request(r)? },
         tag::NOTIFY_REMOVE => ToShell::NotifyRemove { delivered: flag(r)?, ids: get_ids(r)? },
         tag::NOTIFY_QUERY => ToShell::NotifyQuery { request: r.u32()?, delivered: flag(r)? },
+        tag::NOTIFY_SETTINGS => ToShell::NotifySettings { request: r.u32()? },
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
             ToShell::DistPost { name, user_info }
@@ -668,6 +710,28 @@ mod tests {
         app_rt(ToApp::NotificationAction { id: "n1".into(), action: "reply".into(), text: "ok".into(), thread: "t".into(), category: "MESSAGE".into() });
         app_rt(ToApp::NotificationStatus { request: 4, status: NotifStatus::Param });
         app_rt(ToApp::NotificationList { request: 9, delivered: false, ids: vec!["x".into()] });
+    }
+
+    #[test]
+    fn notification_settings_round_trip_every_flag() {
+        shell_rt(ToShell::NotifySettings { request: 12 });
+        for bits in 0..32u8 {
+            let settings = NotifSettings::from_bits(bits).unwrap();
+            assert_eq!(settings.bits(), bits);
+            app_rt(ToApp::NotificationSettings { request: bits as u32, settings });
+        }
+        let denied = NotifSettings { focus: true, ..Default::default() };
+        assert_eq!(denied.bits(), 16);
+    }
+
+    #[test]
+    fn notification_settings_reject_unknown_flag_bits() {
+        assert_eq!(NotifSettings::from_bits(0x20), None);
+        assert_eq!(NotifSettings::from_bits(0xff), None);
+        let mut bytes = ToApp::NotificationSettings { request: 1, settings: NotifSettings { authorized: true, ..Default::default() } }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 0x20;
+        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
     }
 
     #[test]

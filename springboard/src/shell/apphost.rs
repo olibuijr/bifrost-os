@@ -1178,7 +1178,7 @@ impl Shell {
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
-                    r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. }) => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. }) => rich_msgs.push((slot as u8, r)),
                     #[cfg(feature = "desktop-wayland")]
                     r @ (ToShell::DocOpen { .. } | ToShell::DocOpenEx { .. } | ToShell::DocSave { .. } | ToShell::DocCommit { .. } | ToShell::DocAbort { .. } | ToShell::DocReopen { .. } | ToShell::DocRelease { .. } | ToShell::DocSaveGrant { .. }) => docs.push((slot as u8, r)),
                     _ => {}
