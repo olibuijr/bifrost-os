@@ -575,6 +575,8 @@ pub mod regex;
 pub mod format;
 pub mod gesture;
 pub mod identity;
+pub mod directory_node;
+pub mod directory_query;
 pub mod access_control;
 pub mod focus;
 pub mod pane;
