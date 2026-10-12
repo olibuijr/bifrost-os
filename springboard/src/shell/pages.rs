@@ -51,6 +51,8 @@ pub enum PageId {
     Keyboard,
     /// Keyboard > Keyboards
     Keyboards,
+    /// Keyboard > Text Replacements: shortcuts that expand to a phrase
+    TextReplacements,
     Language,
     Reset,
     Display,
@@ -210,6 +212,8 @@ pub enum Command {
     Forget(String),
     /// unpairs a Bluetooth device (by address)
     ForgetBluetooth(String),
+    /// Keyboard > Text Replacements: removes the replacement for this shortcut
+    RemoveTextReplacement(String),
     /// empties one disposable cache (bifrost Storage)
     ClearCache(super::storage::Clear),
     /// turning Rooted Debugging off, after the warning
@@ -721,7 +725,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Keyboard",
             false,
             vec![
-                Group::new(vec![Item::new("Keyboards").value(super::kb_layouts::summary()).link(PageId::Keyboards)]),
+                Group::new(vec![
+                    Item::new("Keyboards").value(super::kb_layouts::summary()).link(PageId::Keyboards),
+                    Item::new("Text Replacements").value(super::services::text_services::replacements_summary()).link(PageId::TextReplacements),
+                ]),
                 Group::new(vec![
                     Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
                     Item::new("Enable Caps Lock").switch(o.enable_caps_lock, Action::Toggle(Toggle::EnableCapsLock)),
@@ -735,6 +742,22 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Keyboards",
             false,
             vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one.")]),
+        PageId::TextReplacements => {
+            let mut items: Vec<Item> = super::services::text_services::replacement_rows()
+                .iter()
+                .map(|(shortcut, phrase)| {
+                    Item::new(shortcut.as_str()).value(phrase.as_str()).action(Action::Run(Command::RemoveTextReplacement(shortcut.clone())))
+                })
+                .collect();
+            if items.is_empty() {
+                items.push(Item::new("No Text Replacements").tint(Tint::Dim));
+            }
+            page(
+                "Text Replacements",
+                false,
+                vec![Group::new(items).footer("Tap an entry to remove it. An app expands a shortcut when it asks the text service.")],
+            )
+        }
         PageId::Language => page("Language & Region", false, vec![rows(vec![("Language", "English".into()), ("Region", "Iceland".into()), ("Calendar", "Gregorian".into())])]),
         PageId::Reset => page(
             "Reset",
@@ -1478,6 +1501,17 @@ mod tests {
         assert!(!labels(false).contains("Keyboard Haptics"));
         assert!(labels(true).contains("Keyboard Haptics"));
         assert!(labels(false).contains("Keyboard Clicks"));
+    }
+
+    #[test]
+    fn keyboard_links_to_text_replacements_and_the_empty_list_says_so() {
+        let (info, opts) = (info(), Options::default());
+        let keyboard = spec(PageId::Keyboard, &model(&info, &opts));
+        let row = keyboard.groups[0].items.iter().find(|i| i.label == "Text Replacements").expect("the Keyboard page has the row");
+        assert_eq!(row.action, Action::Push(PageId::TextReplacements));
+        let page = spec(PageId::TextReplacements, &model(&info, &opts));
+        assert_eq!(page.groups[0].items[0].label, "No Text Replacements", "the list is empty in a fresh shell");
+        assert_eq!(page.groups[0].items[0].action, Action::None);
     }
 }
 
