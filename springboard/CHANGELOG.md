@@ -1,5 +1,24 @@
 # BifrOSt changelog
 
+## 0.6.3 — 2026-10-12
+
+One display mode from power-on to the desktop, and a desktop that cannot freeze on the audio server.
+
+- Boot: Bootweave keeps the mode the firmware started in (the monitor's preferred mode) instead of switching to the
+  fastest refresh, so the compositor's start is no longer a second switch back: two black gaps fewer. The fastest
+  refresh stays opt-in (`refresh=max` in /etc/bifrost/display.conf). New installs keep the kernel console off the
+  display (`fbcon=map:9`), so nothing can wipe the boot frame.
+- Boot: the initramfs carries only storage, file system, virtio and display drivers instead of every module the
+  machine ever loaded; the boot bench reads the loader's time correctly.
+- Shell: no audio server call runs on the UI thread any more (microphone probe, volume, the speaker stream), and
+  reconnects back off from 1 s to 30 s instead of five times a second. A server that accepts and never answers costs
+  the desktop nothing.
+- Audio server: clients that never say Hello or stop reading are dropped, a device stop no longer waits forever on its
+  IO thread, and it stops within 5 s when asked.
+- Session: a stall no longer counts toward the start-failure limit, the session waits for its bus, and the exit
+  status of the shell is logged.
+- Audio bench: a failed bench is reported and never recorded as zeros.
+
 ## 0.6.2 — 2026-10-12
 
 The audio server and the after-desktop services reach installed machines.
