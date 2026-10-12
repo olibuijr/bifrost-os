@@ -640,6 +640,7 @@ pub mod pdfpage;
 pub mod pdfselect;
 pub mod pdfannot;
 pub mod transform3d;
+pub mod scene3d;
 pub mod path;
 pub mod gradient;
 pub mod workflow;
