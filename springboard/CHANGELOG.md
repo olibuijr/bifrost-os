@@ -1,5 +1,11 @@
 # BifrOSt changelog
 
+## 0.5.42 — 2026-10-12
+
+- Control Center and Notification Center open above app windows (they were drawn behind them), and Edit Widgets sits
+  just under the last widget.
+- Menus and search open right under the menu bar again (0.5.40 moved them down by the bar's height).
+
 ## 0.5.41 — 2026-10-12
 
 Parity wiring, wave 4.
