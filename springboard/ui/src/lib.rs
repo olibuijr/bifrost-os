@@ -865,6 +865,7 @@ pub mod scan_job;
 pub mod camera_device;
 pub mod video_device;
 pub mod video_property;
+pub mod camera_region;
 pub mod capture_sync;
 pub mod geo;
 pub mod record_store;
