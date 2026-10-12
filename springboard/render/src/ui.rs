@@ -763,3 +763,10 @@ mod appearance_guard {
         assert!(bad.is_empty(), "dark-only BLACK/CELL fill; use ui::system / DETAIL_BG / CARD_BG with .now() (or allowlist with a reason):\n{}", bad.join("\n"));
     }
 }
+
+/// Vibrant strengths over a material (`NSAppearance` vibrant dark / light; SwiftUI hierarchical `.primary` ..
+/// `.quaternary`): [Dark, Light] x [primary, secondary, tertiary, quaternary]. Labels follow the label colours'
+/// alphas. Mirrors `bifrost_ui::vibrancy::strength` (`Role::Label`).
+pub const VIBRANT_LABEL: [[f32; 4]; 2] = [[0.85, 0.55, 0.25, 0.10], [0.85, 0.50, 0.26, 0.10]];
+/// Vibrant fills (`fillColor` .. `quaternarySystemFill` alphas), same layout. Mirrors `Role::Fill`.
+pub const VIBRANT_FILL: [[f32; 4]; 2] = [[0.36, 0.32, 0.24, 0.18], [0.20, 0.16, 0.12, 0.08]];

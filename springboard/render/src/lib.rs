@@ -15,6 +15,7 @@ pub mod purgeable;
 pub mod clipboard;
 pub mod appearance;
 pub mod glass;
+pub mod vibrancy;
 pub mod motion;
 pub mod assets;
 pub mod fontprefs;
