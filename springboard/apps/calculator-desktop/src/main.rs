@@ -2,6 +2,7 @@
 //! unchanged, hosted through the SDK.
 
 mod calc;
+mod copy_service;
 mod convert;
 mod engine;
 mod eval;
@@ -11,7 +12,7 @@ mod icon;
 mod paste;
 mod sci;
 
-use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::kit::{clipboard, Damage, Event, Surface};
 use bifrost_app::{App, Command, Commands, Ctx, Input, TouchKind, KeyInput};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
@@ -21,6 +22,23 @@ use std::path::Path;
 
 struct CalculatorApp {
     calc: Option<calc::Calculator>,
+    /// Copies sent to the shell's pasteboard that have not been answered yet: (request, number).
+    copies: Vec<(u32, String)>,
+}
+
+/// How many unanswered copies are kept; the oldest is dropped beyond this.
+const MAX_PENDING_COPIES: usize = 16;
+
+impl CalculatorApp {
+    /// Sends the calculator's pending Copy (if any) to the general board through the `pasteboard` service.
+    fn send_copy(&mut self, ctx: &Ctx) {
+        let Some(req) = self.calc.as_mut().and_then(|c| c.take_copy()) else { return };
+        let id = copy_service::send(ctx, &req);
+        self.copies.push((id, req.number));
+        if self.copies.len() > MAX_PENDING_COPIES {
+            self.copies.remove(0);
+        }
+    }
 }
 
 impl App for CalculatorApp {
@@ -44,6 +62,7 @@ impl App for CalculatorApp {
             return match command {
                 Command::Copy => {
                     calc.copy(&ctx.ui);
+                    self.send_copy(ctx);
                     false
                 }
                 Command::Paste => calc.paste(&ctx.ui),
@@ -80,7 +99,19 @@ impl App for CalculatorApp {
             TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
         };
         c.touch(&ctx.ui, e, t);
+        self.send_copy(ctx);
         true
+    }
+
+    /// The shell's answer to a copy: when the copy did not reach the pasteboard service (an older shell, or an error),
+    /// the number goes to the plain clipboard instead.
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        let Some(pos) = self.copies.iter().position(|(id, _)| *id == request) else { return false };
+        let (_, number) = self.copies.remove(pos);
+        if result.is_err() {
+            clipboard::set_text(&number);
+        }
+        false
     }
 
     /// Copy and Paste are enabled in the shell's Edit menu only when they have something to act on.
@@ -143,5 +174,5 @@ pub fn test_ui() -> bifrost_app::Ui {
 }
 
 fn main() {
-    bifrost_app::run(CalculatorApp { calc: None });
+    bifrost_app::run(CalculatorApp { calc: None, copies: Vec::new() });
 }

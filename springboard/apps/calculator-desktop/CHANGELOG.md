@@ -10,6 +10,9 @@
 - Copy and Paste work in Convert: Copy takes the converted value, Paste sets the amount.
 - Convert is not kept across a restart; the calculator opens as before.
 - Every Convert control is published as a named control for accessibility.
+- Copy now goes through the system pasteboard service: one copy holds the number as plain digits and as the same
+  number in the calculator's language, so other apps see the copy as a change on the shared clipboard.
+- If the shell cannot take the copy, Copy still puts the number on the plain clipboard.
 
 ## 1.3.2 — 2026-10-11
 
