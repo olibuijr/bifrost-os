@@ -317,16 +317,31 @@ def text_keys(text):
     return seq
 
 
+def lab_account():
+    """The account a `reinstall` creates: `username=` and `full_name=` lines in out/lab/account.conf (untracked), else
+    the lab default tester / Tester. Its password lives in out/lab/<username>.password (untracked, mode 0600)."""
+    user, name = "tester", "Tester"
+    conf = os.path.join(os.path.dirname(KEY), "account.conf")
+    if os.path.exists(conf):
+        for line in open(conf, encoding="utf-8"):
+            key, _, value = line.strip().partition("=")
+            if key == "username" and re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", value):
+                user = value
+            elif key == "full_name" and value and '"' not in value and "\\" not in value:
+                name = value
+    return user, name
+
+
 def login_password():
-    """The password `unlock` types: ~/.config/bifrost/midget-login (yours, mode 600) when present, else the lab tester
-    password a `reinstall` created (out/lab/tester.password). Never printed or logged."""
+    """The password `unlock` types: ~/.config/bifrost/midget-login (yours, mode 600) when present, else the lab account's
+    password (out/lab/<username>.password, see `lab_account`). Never printed or logged."""
     path = Path.home() / ".config/bifrost/midget-login"
     if path.exists():
         st = path.stat()
         if st.st_uid != os.getuid() or st.st_mode & 0o077:
             raise SystemExit(f"{path} must be owned by you and mode 600 (chmod 600 {path}); refusing to read it")
         return path.read_text().rstrip("\n")
-    pw_file = os.path.join(os.path.dirname(KEY), "tester.password")
+    pw_file = os.path.join(os.path.dirname(KEY), f"{lab_account()[0]}.password")
     return open(pw_file).read().strip() if os.path.exists(pw_file) else None
 
 
@@ -872,10 +887,12 @@ def _stamp(msg):
 
 
 def lab_password():
-    """The tester account's lab password: out/lab/tester.password (untracked, 0600), made once. It is published to the netbooted
-    installer as out/lab/sync/lab/tester.pw on titan's lab HTTP server (10.99.0.1:8078), never into the repo or the preset."""
+    """The lab account's password (`lab_account`): out/lab/<username>.password (untracked, 0600), generated once when
+    missing. It is published to the netbooted installer as out/lab/sync/lab/<username>.pw on titan's lab HTTP server
+    (10.99.0.1:8078), never into the repo or the preset."""
     labdir = os.path.dirname(KEY)
-    pw_file = os.path.join(labdir, "tester.password")
+    user = lab_account()[0]
+    pw_file = os.path.join(labdir, f"{user}.password")
     if not os.path.exists(pw_file):
         import secrets
         fd = os.open(pw_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -884,7 +901,7 @@ def lab_password():
     pw = open(pw_file).read().strip()
     pub = os.path.join(labdir, "sync", "lab")
     os.makedirs(pub, exist_ok=True)
-    with open(os.path.join(pub, "tester.pw"), "w") as f:
+    with open(os.path.join(pub, f"{user}.pw"), "w") as f:
         f.write(pw + "\n")
     return pw, pw_file
 
@@ -923,10 +940,11 @@ def write_preset(host, live_disk=None):
     tz = "Atlantic/Reykjavik" if live_disk else ssh("readlink -f /etc/localtime | sed 's|.*/zoneinfo/||'", 5).strip()
     zone = tz if re.fullmatch(r"[A-Za-z0-9_+/-]+", tz or "") else "Atlantic/Reykjavik"
     now = int(time.time())
+    user, full_name = lab_account()
     toml = (f"# written by tools/midget.py reinstall; read by bifrost-installer on the netbooted lab ISO\nversion = 1\n"
             f"disk_id = \"{disk_id}\"\nmac = \"00:23:24:dc:c8:40\"\nhostname = \"{host}\"\nlocale = \"en_US.UTF-8\"\nkeyboard = \"us\"\n"
-            f"timezone = \"{zone}\"\nusername = \"tester\"\nfull_name = \"Tester\"\nautologin = true\nmcp = true\n"
-            f"password_url = \"http://10.99.0.1:8078/lab/tester.pw\"\nmirror = \"{MIRROR_URL}\"\ncreated_epoch = {now}\n"
+            f"timezone = \"{zone}\"\nusername = \"{user}\"\nfull_name = \"{full_name}\"\nautologin = true\nmcp = true\n"
+            f"password_url = \"http://10.99.0.1:8078/lab/{user}.pw\"\nmirror = \"{MIRROR_URL}\"\ncreated_epoch = {now}\n"
             f"expires_s = 1800\njob = \"{now}-reinstall\"\n")
     # a live system: the installer's own copy of the ESP stash in /run (it reads that first), for this disk
     dest = (f"cat > /run/bifrost-unattended.toml && printf %s {shlex.quote(live_disk)} > /run/bifrost-unattended.toml.disk" if live_disk
@@ -1106,8 +1124,9 @@ def follow_install(t0, budget, live, every=10.0):
         _stamp("FAILED: the new system did not boot cleanly (update guard phase, shell ready)")
         return 1
     _stamp("phase 5/7 phase=accepted")
+    account = lab_account()[0]
     def tester_up():
-        return bool(ssh("getent passwd tester >/dev/null && ps -u tester -o comm= | head -n 1", 15).strip())
+        return bool(ssh(f"getent passwd {account} >/dev/null && ps -u {account} -o comm= | head -n 1", 15).strip())
     def locked():
         return shell_screen() == "lock"
     ok = wait(shooting(tester_up, "session"), min(180, left()), min(5, every))
@@ -1118,7 +1137,7 @@ def follow_install(t0, budget, live, every=10.0):
         wait(shooting(lambda: not locked(), "unlock"), 20, min(1, every))
         last_shot[0] = 0.0
         install_shot("desktop")
-    _stamp("phase 6/7 tester session " + ("running" if ok else "NOT running"))
+    _stamp(f"phase 6/7 {account} session " + ("running" if ok else "NOT running"))
     mcp = wait(lambda: port_open(7420) and "host=" in mcp_call("system", {"what": "overview"}, 20), min(120, left()), 5)
     _stamp("phase 7/7 MCP " + ("reachable on :7420 and answering" if mcp else "NOT reachable"))
     _stamp(f"done in {time.time() - t0:.0f}s: " + ("OK" if ok and mcp else "INCOMPLETE"))

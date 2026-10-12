@@ -104,7 +104,7 @@ def run(a):
             ", then boot the installed disk and verify ssh + springboard", fh)
         return finish(True, "dry run only")
 
-    pw = os.environ.get(a.password_env, "testpass12")
+    pw = os.environ.get(a.password_env) or m.login_password() or "testpass12"
     if st == "installed":
         log("midget is installed: BootNext to PXE and reboot into the live lab ISO", fh)
         if m.cmd_bootnext("pxe"):
@@ -174,8 +174,8 @@ def main():
     p.add_argument("--disk", required=True, help="the only disk that may be erased, e.g. /dev/nvme0n1")
     p.add_argument("--confirm", required=True, help='must equal "WIPE <host> <disk>"')
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--user", default="tester")
-    p.add_argument("--password-env", default="MIDGET_WIPE_PASSWORD", help="env var holding the new account password (default fallback: lab password)")
+    p.add_argument("--user", default=m.lab_account()[0], help="account to create (default: out/lab/account.conf, else tester)")
+    p.add_argument("--password-env", default="MIDGET_WIPE_PASSWORD", help="env var holding the new account password (default: the lab account's password file)")
     p.add_argument("--timeout", type=int, default=1800, help="seconds to wait for the installer")
     return run(p.parse_args())
 
