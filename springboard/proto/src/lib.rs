@@ -20,7 +20,7 @@ pub mod axtext;
 pub use bifrost_ui::ax::{AxMeta, AxText, Priority as AnnouncePriority};
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
-pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 
 pub const MAX_PACKET: usize = 16 * 1024;
 
@@ -415,6 +415,8 @@ pub enum ToApp {
     NotificationStatus { request: u32, status: NotifStatus },
     /// The answer to `ToShell::NotifyQuery` (`getDeliveredNotifications`, `getPendingNotificationRequests`).
     NotificationList { request: u32, delivered: bool, ids: Vec<String> },
+    /// The answer to `ToShell::NotifySettings`. Tag 56.
+    NotificationSettings { request: u32, settings: NotifSettings },
     /// The user picked a target of `ToShell::Share`; `target` is the app id, "copy" for Copy, empty when dismissed.
     ShareDone { request: u32, target: String },
     /// The answer to `ToShell::LoginItem` (`SMAppService.status`). Tag 0x1b0.
@@ -691,6 +693,9 @@ pub enum ToShell {
     NotifyRemove { delivered: bool, ids: Vec<String> },
     /// `getDeliveredNotifications` / `getPendingNotificationRequests`: answered with `NotificationList`.
     NotifyQuery { request: u32, delivered: bool },
+    /// The notification settings query: answered with `NotificationSettings`, also when the app has no
+    /// `notifications` permission (then `authorized` is false). Tag 0x14a.
+    NotifySettings { request: u32 },
     /// `NativeSharingServicePicker.show(relativeTo:)`: `anchor` is in window points. Answered with `ShareDone`.
     Share { request: u32, items: Vec<Payload>, anchor: UiRect },
     /// `SMAppService.mainApp` register, unregister or status; always answered with `LoginItemStatus`. Tag 0x1b0.
@@ -1109,7 +1114,7 @@ impl ToApp {
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
@@ -1353,7 +1358,7 @@ impl ToShell {
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);

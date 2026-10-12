@@ -5,7 +5,7 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifStatus, ToApp, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 use std::collections::HashMap;
 
 /// Pending requests one app may hold (`UNUserNotificationCenter` allows 64 local notifications).
@@ -216,6 +216,13 @@ impl Registry {
     }
 }
 
+/// What the settings query answers. Without the permission nothing is allowed; a muted app is stored and badged
+/// nowhere, so its alert, sound and badge are off; Focus is reported on its own.
+pub fn settings_for(permitted: bool, muted: bool, focus: bool) -> NotifSettings {
+    let on = permitted && !muted;
+    NotifSettings { authorized: permitted, alert: on, sound: on, badge: on, focus }
+}
+
 /// The text a delivered request shows: the subtitle goes between title and body the way Golden Gate stacks them.
 pub fn display(req: &NotifRequest) -> (String, String) {
     let body = if req.subtitle.is_empty() { req.body.clone() } else if req.body.is_empty() { req.subtitle.clone() } else { format!("{}\n{}", req.subtitle, req.body) };
@@ -257,6 +264,11 @@ impl super::Shell {
                 self.usernotif_prune();
                 let ids = self.usernotif.list(&app, delivered);
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
+            }
+            ToShell::NotifySettings { request } => {
+                let muted = self.notify.store().is_muted(super::AppId::External(slot));
+                let settings = settings_for(permitted, muted, self.dnd());
+                self.ext_send(slot as usize, &ToApp::NotificationSettings { request, settings });
             }
             _ => {}
         }
@@ -354,6 +366,31 @@ mod tests {
     use bifrost_proto::TextInput;
 
     const APP: &str = "is.example.chat";
+
+    #[test]
+    fn a_denied_app_is_told_nothing_is_allowed_but_still_sees_focus() {
+        assert_eq!(settings_for(false, false, false), NotifSettings::default());
+        assert_eq!(settings_for(false, false, false).bits(), 0);
+        assert_eq!(settings_for(false, false, true).bits(), 16);
+        assert!(!settings_for(false, true, false).authorized);
+    }
+
+    #[test]
+    fn a_granted_app_gets_alert_sound_and_badge_until_it_is_muted() {
+        let open = settings_for(true, false, false);
+        assert!(open.authorized && open.alert && open.sound && open.badge);
+        assert!(!open.focus);
+        assert_eq!(open.bits(), 15);
+        let muted = settings_for(true, true, false);
+        assert_eq!(muted, NotifSettings { authorized: true, ..Default::default() });
+        assert_eq!(muted.bits(), 1);
+    }
+
+    #[test]
+    fn focus_is_reported_for_a_granted_app_without_changing_its_grant() {
+        assert_eq!(settings_for(true, false, true).bits(), 31);
+        assert_eq!(settings_for(true, true, true).bits(), 17);
+    }
 
     fn req(id: &str) -> NotifRequest {
         NotifRequest { id: id.into(), title: "T".into(), body: "B".into(), ..Default::default() }

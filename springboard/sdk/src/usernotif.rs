@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifStatus, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -32,6 +32,8 @@ pub enum Event {
     Status { request: u32, status: NotifStatus },
     /// the answer to [`delivered`] or [`pending`]
     List { request: u32, delivered: bool, ids: Vec<String> },
+    /// the answer to [`settings`]
+    Settings { request: u32, settings: NotifSettings },
 }
 
 /// A request under construction (`UNMutableNotificationContent` plus a trigger).
@@ -120,6 +122,14 @@ pub fn pending(ctx: &Ctx) -> u32 {
     request
 }
 
+/// The notification settings query: the answer arrives as [`Event::Settings`]. Also answered for an app without the
+/// permission, with `authorized` false and no alert, sound or badge.
+pub fn settings(ctx: &Ctx) -> u32 {
+    let request = ctx.next_request();
+    ctx.send_to_shell(ToShell::NotifySettings { request });
+    request
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,6 +175,15 @@ mod tests {
         let b = Request::new("same", "T").body("y");
         assert_eq!(a.0.id, b.0.id);
         assert_ne!(a.0, b.0);
+    }
+
+    #[test]
+    fn settings_event_carries_flags_and_request() {
+        let flags = NotifSettings { authorized: true, alert: true, sound: true, badge: true, focus: false };
+        assert_eq!(flags.bits(), 15);
+        let e = Event::Settings { request: 3, settings: flags };
+        assert_eq!(e, Event::Settings { request: 3, settings: NotifSettings { focus: false, ..flags } });
+        assert_ne!(e, Event::Settings { request: 3, settings: NotifSettings::default() });
     }
 
     #[test]
