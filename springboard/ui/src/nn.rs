@@ -1,5 +1,9 @@
 //! Output sizes of windowed operators (convolution and pooling) and the scale factor of a Fourier transform.
 //! These are the shape rules a graph needs before such an operator is recorded. Nothing is convolved here.
+//!
+//! The second part is a small inference path for fully connected networks: [`DenseLayer`] applies a weight matrix,
+//! a bias and an [`Activation`] to one input vector, and [`softmax`] and [`argmax`] turn the last layer's scores into
+//! probabilities and a class index. It runs on the CPU in `f32`, allocates only the output vector, and has no training.
 
 /// How a window is laid over the input. `Explicit` names the pixels added before and after; `Same` and `Valid`
 /// derive them from the input size.
@@ -109,6 +113,143 @@ impl FftScaling {
     }
 }
 
+/// Activation applied to each output of a dense layer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Activation {
+    Identity,
+    /// `max(x, 0)`.
+    Relu,
+    /// `x` for `x >= 0`, and `slope * x` below zero.
+    LeakyRelu(f32),
+    /// `1 / (1 + e^-x)`, which maps every value into (0, 1).
+    Sigmoid,
+    /// Hyperbolic tangent, which maps every value into (-1, 1).
+    Tanh,
+}
+
+impl Activation {
+    /// The activation's value at `x`.
+    pub fn eval(self, x: f32) -> f32 {
+        match self {
+            Activation::Identity => x,
+            Activation::Relu => {
+                if x > 0.0 {
+                    x
+                } else {
+                    0.0
+                }
+            }
+            Activation::LeakyRelu(slope) => {
+                if x >= 0.0 {
+                    x
+                } else {
+                    slope * x
+                }
+            }
+            Activation::Sigmoid => 1.0 / (1.0 + (-x).exp()),
+            Activation::Tanh => x.tanh(),
+        }
+    }
+}
+
+/// Why a dense layer cannot be built or applied.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DenseError {
+    /// The layer has no inputs or no outputs.
+    EmptyLayer,
+    /// The weights, the bias or the input do not match the layer's shape.
+    ShapeMismatch,
+}
+
+/// A fully connected layer: `outputs` neurons, each reading all `inputs` values.
+///
+/// The weights are row-major, one row of `inputs` values per output, so output `o` is
+/// `activation(bias[o] + sum over i of weights[o * inputs + i] * input[i])`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DenseLayer {
+    inputs: usize,
+    outputs: usize,
+    weights: Vec<f32>,
+    bias: Vec<f32>,
+    activation: Activation,
+}
+
+impl DenseLayer {
+    /// Builds a layer from its weights and bias. The weights must hold `inputs * outputs` values and the bias
+    /// one value per output.
+    pub fn new(
+        inputs: usize,
+        outputs: usize,
+        weights: Vec<f32>,
+        bias: Vec<f32>,
+        activation: Activation,
+    ) -> Result<Self, DenseError> {
+        if inputs == 0 || outputs == 0 {
+            return Err(DenseError::EmptyLayer);
+        }
+        let expected = inputs.checked_mul(outputs).ok_or(DenseError::ShapeMismatch)?;
+        if weights.len() != expected || bias.len() != outputs {
+            return Err(DenseError::ShapeMismatch);
+        }
+        Ok(DenseLayer { inputs, outputs, weights, bias, activation })
+    }
+
+    /// Number of values the layer reads.
+    pub fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    /// Number of values the layer produces.
+    pub fn outputs(&self) -> usize {
+        self.outputs
+    }
+
+    /// Applies the layer to one input vector of exactly `inputs` values.
+    pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, DenseError> {
+        if input.len() != self.inputs {
+            return Err(DenseError::ShapeMismatch);
+        }
+        let out = self
+            .weights
+            .chunks_exact(self.inputs)
+            .zip(&self.bias)
+            .map(|(row, b)| {
+                let sum: f32 = row.iter().zip(input).map(|(w, x)| w * x).sum();
+                self.activation.eval(b + sum)
+            })
+            .collect();
+        Ok(out)
+    }
+}
+
+/// Softmax of a vector: `e^(v - max) / sum`, so the outputs are positive and sum to 1. Subtracting the maximum keeps
+/// large scores from overflowing. An empty input gives an empty output.
+pub fn softmax(values: &[f32]) -> Vec<f32> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let exps: Vec<f32> = values.iter().map(|v| (v - max).exp()).collect();
+    let total: f32 = exps.iter().sum();
+    exps.iter().map(|e| e / total).collect()
+}
+
+/// Index of the largest value. The first of several equal maxima wins, NaN values are skipped, and an input with no
+/// usable value (including an empty one) gives None.
+pub fn argmax(values: &[f32]) -> Option<usize> {
+    let mut best: Option<(usize, f32)> = None;
+    for (i, &v) in values.iter().enumerate() {
+        if v.is_nan() {
+            continue;
+        }
+        match best {
+            Some((_, b)) if v <= b => {}
+            _ => best = Some((i, v)),
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +309,61 @@ mod tests {
         assert_eq!(FftScaling::Size.factor(16), 0.0625);
         assert_eq!(FftScaling::Unitary.factor(16), 0.25);
         assert_eq!(FftScaling::Unitary.factor(4), 0.5);
+    }
+
+    #[test]
+    fn activations_follow_their_definitions() {
+        assert_eq!(Activation::Relu.eval(-2.0), 0.0);
+        assert_eq!(Activation::Relu.eval(3.0), 3.0);
+        assert!((Activation::LeakyRelu(0.1).eval(-2.0) + 0.2).abs() < 1e-6);
+        assert_eq!(Activation::Identity.eval(-7.5), -7.5);
+        assert!((Activation::Sigmoid.eval(0.0) - 0.5).abs() < 1e-6);
+        assert!((Activation::Tanh.eval(0.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn dense_layer_computes_weighted_sums_plus_bias() {
+        // Row 0 is [1, 2], row 1 is [3, 4]; with input [1, 1] the sums are 3 and 7.
+        let layer = DenseLayer::new(2, 2, vec![1.0, 2.0, 3.0, 4.0], vec![0.5, -1.0], Activation::Identity).unwrap();
+        assert_eq!(layer.forward(&[1.0, 1.0]).unwrap(), vec![3.5, 6.0]);
+        assert_eq!((layer.inputs(), layer.outputs()), (2, 2));
+    }
+
+    #[test]
+    fn relu_clips_the_negative_output_of_a_dense_layer() {
+        let layer = DenseLayer::new(2, 2, vec![1.0, 2.0, 3.0, 4.0], vec![-10.0, 0.0], Activation::Relu).unwrap();
+        // Outputs before the activation are 3 - 10 = -7, which clips to 0, and 7 + 0 = 7, which passes through.
+        assert_eq!(layer.forward(&[1.0, 1.0]).unwrap(), vec![0.0, 7.0]);
+    }
+
+    #[test]
+    fn dense_layer_refuses_bad_shapes() {
+        assert_eq!(DenseLayer::new(0, 2, vec![], vec![0.0; 2], Activation::Identity), Err(DenseError::EmptyLayer));
+        assert_eq!(
+            DenseLayer::new(2, 2, vec![1.0; 3], vec![0.0; 2], Activation::Identity),
+            Err(DenseError::ShapeMismatch),
+            "2 x 2 weights need four values"
+        );
+        let layer = DenseLayer::new(2, 1, vec![1.0, 1.0], vec![0.0], Activation::Identity).unwrap();
+        assert_eq!(layer.forward(&[1.0, 2.0, 3.0]), Err(DenseError::ShapeMismatch));
+    }
+
+    #[test]
+    fn softmax_sums_to_one_and_survives_large_scores() {
+        let even = softmax(&[0.0, 0.0]);
+        assert_eq!(even, vec![0.5, 0.5]);
+        let big = softmax(&[1000.0, 1000.0, 999.0]);
+        assert!(big.iter().all(|p| p.is_finite()));
+        assert!((big[0] - big[1]).abs() < 1e-6);
+        assert!((big.iter().sum::<f32>() - 1.0).abs() < 1e-6);
+        assert!(softmax(&[]).is_empty());
+    }
+
+    #[test]
+    fn argmax_picks_the_first_largest_value() {
+        assert_eq!(argmax(&[1.0, 3.0, 3.0, 2.0]), Some(1), "a tie goes to the first index");
+        assert_eq!(argmax(&[f32::NAN, -1.0]), Some(1), "NaN is skipped");
+        assert_eq!(argmax(&[]), None);
+        assert_eq!(argmax(&[f32::NAN]), None);
     }
 }

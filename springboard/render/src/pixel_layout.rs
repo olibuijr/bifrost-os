@@ -141,9 +141,112 @@ pub fn from_bytes_u8(bytes: &[u8], layout: Layout) -> Option<Vec<u32>> {
     Some(px)
 }
 
+/// Converts 8-bit CMYK pixels (four bytes each) to RGB (three bytes each). Each colour channel is the light
+/// left after the cyan (or magenta, or yellow) ink and the black ink, `(255 - ink) * (255 - k) / 255`, so the
+/// result is exact at the corners of the cube and has no paper colour. Returns None when the length is not a
+/// whole number of CMYK pixels.
+pub fn cmyk_to_rgb_u8(bytes: &[u8]) -> Option<Vec<u8>> {
+    if bytes.len() % 4 != 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    for p in bytes.chunks_exact(4) {
+        let light_k = 255 - p[3] as u32;
+        for &ink in &p[..3] {
+            let light = (255 - ink as u32) * light_k;
+            out.push(((light + 127) / 255) as u8);
+        }
+    }
+    Some(out)
+}
+
+/// Converts 8-bit grey pixels (one byte each) to RGB by repeating the value in every channel.
+pub fn gray_to_rgb_u8(bytes: &[u8]) -> Vec<u8> {
+    bytes.iter().flat_map(|&g| [g, g, g]).collect()
+}
+
+/// Converts 8-bit RGB pixels to grey with the Rec. 601 luma weights, in integers: `(77 r + 150 g + 29 b + 128) / 256`.
+/// Returns None when the length is not a whole number of RGB pixels.
+pub fn rgb_to_gray_u8(bytes: &[u8]) -> Option<Vec<u8>> {
+    if bytes.len() % 3 != 0 {
+        return None;
+    }
+    let grey: Vec<u8> = bytes
+        .chunks_exact(3)
+        .map(|p| ((77 * p[0] as u32 + 150 * p[1] as u32 + 29 * p[2] as u32 + 128) / 256) as u8)
+        .collect();
+    Some(grey)
+}
+
+/// Splits an interleaved 8-bit buffer with `channels` values per pixel into one plane per channel.
+/// Returns None when `channels` is zero or the length is not a whole number of pixels.
+pub fn deinterleave_u8(bytes: &[u8], channels: usize) -> Option<Vec<Vec<u8>>> {
+    if channels == 0 || bytes.len() % channels != 0 {
+        return None;
+    }
+    let planes: Vec<Vec<u8>> = (0..channels)
+        .map(|c| bytes.iter().skip(c).step_by(channels).copied().collect())
+        .collect();
+    Some(planes)
+}
+
+/// Joins equal-length 8-bit planes into one interleaved buffer, channel by channel within each pixel.
+/// Returns None when there are no planes or the planes differ in length.
+pub fn interleave_u8(planes: &[&[u8]]) -> Option<Vec<u8>> {
+    let n = planes.first()?.len();
+    if planes.iter().any(|p| p.len() != n) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(n * planes.len());
+    for i in 0..n {
+        for plane in planes {
+            out.push(plane[i]);
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cmyk_corners_map_to_the_rgb_cube() {
+        assert_eq!(cmyk_to_rgb_u8(&[0, 0, 0, 0]), Some(vec![255, 255, 255]), "no ink is white");
+        assert_eq!(cmyk_to_rgb_u8(&[0, 0, 0, 255]), Some(vec![0, 0, 0]), "full black is black");
+        assert_eq!(cmyk_to_rgb_u8(&[255, 0, 0, 0]), Some(vec![0, 255, 255]), "full cyan removes red");
+        assert_eq!(cmyk_to_rgb_u8(&[128, 0, 0, 0]), Some(vec![127, 255, 255]), "half cyan: 127 * 255 / 255");
+        assert_eq!(cmyk_to_rgb_u8(&[0, 0, 0, 128]), Some(vec![127, 127, 127]), "half black on white");
+    }
+
+    #[test]
+    fn cmyk_refuses_partial_pixels() {
+        assert_eq!(cmyk_to_rgb_u8(&[1, 2, 3]), None);
+        assert_eq!(cmyk_to_rgb_u8(&[]), Some(Vec::new()));
+    }
+
+    #[test]
+    fn grey_expands_to_rgb_and_luma_collapses_back() {
+        assert_eq!(gray_to_rgb_u8(&[10, 200]), vec![10, 10, 10, 200, 200, 200]);
+        let luma = rgb_to_gray_u8(&[255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]).unwrap();
+        // Red 77*255 + 128 = 19763, /256 = 77; green 150*255 + 128 = 38378, /256 = 149; blue 29; white 255.
+        assert_eq!(luma, vec![77, 149, 29, 255]);
+        assert_eq!(rgb_to_gray_u8(&[1, 2]), None);
+    }
+
+    #[test]
+    fn planes_split_and_join_without_losing_order() {
+        let planes = deinterleave_u8(&[1, 2, 3, 4, 5, 6], 3).unwrap();
+        assert_eq!(planes, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+        let a = [1u8, 4];
+        let b = [2u8, 5];
+        let c = [3u8, 6];
+        assert_eq!(interleave_u8(&[&a[..], &b[..], &c[..]]), Some(vec![1, 2, 3, 4, 5, 6]));
+        assert_eq!(deinterleave_u8(&[1, 2, 3], 0), None);
+        assert_eq!(deinterleave_u8(&[1, 2], 3), None, "two bytes are not whole three-channel pixels");
+        assert_eq!(interleave_u8(&[&a[..], &[9u8][..]]), None, "planes of different length are refused");
+        assert_eq!(interleave_u8(&[]), None);
+    }
 
     #[test]
     fn buffer_sizes_follow_depth_and_alpha() {
