@@ -51,6 +51,7 @@ pub mod crash_report;
 pub mod status_item;
 pub mod share;
 pub mod print;
+pub mod print_panel;
 pub mod pasteboard;
 pub mod dnd;
 pub mod review;
