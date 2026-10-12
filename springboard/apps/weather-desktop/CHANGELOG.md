@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3
+
+- A Moon tile in the forecast shows the moon's lit share and its phase, such as "Waxing Gibbous", for right now.
+- An error screen names the problem in plain words and says what to do next: allow weather access, or check the
+  connection and try again.
+- Wind speed follows the temperature setting: km/h with Celsius, mph with Fahrenheit.
+- Each other place in Locations shows how far away it is from the selected place, in km or miles to match the setting.
+
 ## 1.2.2 — 2026-10-11
 
 - Background forecast and quote fetches run on the shared dispatch queue; finished results apply on the app loop, so

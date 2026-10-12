@@ -26,6 +26,9 @@ use springboard::shell::music::radio::Fetch;
 use springboard::shell::textfield::TextField;
 use springboard::shell::weather::data::{self, Forecast, Location, Quote, Sky, Store, Summary, Units};
 use springboard::shell::weather::glyph;
+use bifrost_app::controls::geo::{format_distance, Coordinate, DistanceUnits};
+use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -114,7 +117,7 @@ enum Target {
 }
 
 enum Done {
-    Forecast { key: String, result: Result<Forecast, String> },
+    Forecast { key: String, result: Result<Forecast, WeatherError> },
     Places { query: String, result: Result<Vec<Location>, String> },
     Quotes(Result<Vec<Quote>, String>),
 }
@@ -177,7 +180,7 @@ pub struct Weather {
     /// when each place was last asked for (ms), and the asks in flight
     tried: HashMap<String, f64>,
     pending: HashSet<String>,
-    error: Option<String>,
+    error: Option<WeatherError>,
     results: Vec<Location>,
     searching: bool,
     note: Option<String>,
@@ -510,7 +513,7 @@ impl Weather {
             self.forecasts.len(),
             self.watch.len(),
             self.quotes.len(),
-            self.error.as_deref().unwrap_or("")
+            self.error.map_or("", |e| e.description())
         )
     }
 
@@ -624,7 +627,7 @@ impl Weather {
             self.tried.insert(key.clone(), t);
             self.pending.insert(key.clone());
             let (store, net) = (self.store.clone(), self.fetcher.clone());
-            self.spawn(move || Done::Forecast { key, result: store.fetch_forecast(&p, &*net).map_err(|_| "Can't reach Open-Meteo".to_string()) });
+            self.spawn(move || Done::Forecast { key, result: store.fetch_forecast(&p, &*net).map_err(|e| WeatherError::from_io(&e)) });
         }
         if self.screen == Screen::Stocks && !self.watch.is_empty() {
             if !self.quotes_pending && t - self.quotes_at >= QUOTES_MS {
@@ -684,6 +687,14 @@ impl Weather {
     fn units_rect(&self, ui: &Ui, u: Units) -> Rect {
         let half = self.card_w(ui) / 2.0;
         (ui.pt(MARGIN) + if u == Units::Celsius { 0.0 } else { half }, ui.pt(nav_bottom_pt() + 10.0), half, ui.pt(34.0))
+    }
+
+    /// The place's region, with its distance from the selected place when it is another place.
+    fn subtitle_with_distance(&self, p: &Location) -> String {
+        match away_text(self.place(), p, self.units) {
+            Some(d) => format!("{} \u{b7} {}", p.subtitle(), d),
+            None => p.subtitle().to_string(),
+        }
     }
 
     /// The rows of the Locations list with their top and height in points.
@@ -1059,8 +1070,11 @@ impl Weather {
         let _ = place_name;
         let cx = self.w as f32 / 2.0;
         let Some(f) = forecast else {
-            let text = self.error.clone().unwrap_or_else(|| "Loading\u{2026}".into());
-            self.put(s, ui, &text, MAC_BODY_PT, Weight::Regular, WHITE, Align::Centre, cx, ui.pt(nav_bottom_pt() + 200.0));
+            let text = self.error.map_or("Loading\u{2026}", |e| e.description());
+            self.put(s, ui, text, MAC_BODY_PT, Weight::Regular, WHITE, Align::Centre, cx, ui.pt(nav_bottom_pt() + 200.0));
+            if let Some(e) = self.error {
+                self.put(s, ui, e.recovery_suggestion(), MAC_FOOTNOTE_PT, Weight::Regular, fade(WHITE, 160), Align::Centre, cx, ui.pt(nav_bottom_pt() + 226.0));
+            }
             return;
         };
         let mut c = s.rows(top, bottom);
@@ -1122,7 +1136,8 @@ impl Weather {
         }
         // detail tiles: two columns of rounded cards, a caption, a big value and a note
         let today = f.days.first();
-        let wind = f.current.wind_kmh.round() as i32;
+        let wind = wind_text(f.current.wind_kmh, self.units);
+        let (moon_value, moon_note) = moon_text(now_unix());
         let uv = today.map_or(0.0, |d| d.uv);
         let uv_note = match uv.round() as i32 {
             0..=2 => "Low",
@@ -1137,9 +1152,10 @@ impl Weather {
         let tiles = [
             ("UV INDEX", format!("{}", uv.round() as i32), uv_note.to_string()),
             ("SUNRISE", sun(today, true), format!("Sunset: {}", sun(today, false))),
-            ("WIND", format!("{wind} km/h"), "Current speed".to_string()),
+            ("WIND", wind, "Current speed".to_string()),
             ("HUMIDITY", format!("{}%", f.current.humidity), "Relative humidity".to_string()),
             ("FEELS LIKE", units.degrees(f.current.feels), feels_note.to_string()),
+            ("MOON", moon_value, moon_note),
         ];
         let tile_w = (card_w - ui.pt(TILE_GAP)) / 2.0;
         for (i, (name, value, note)) in tiles.iter().enumerate() {
@@ -1179,7 +1195,7 @@ impl Weather {
                         }
                         let name = ui.fit(&p.name, MAC_BODY_PT, w - ui.pt(150.0));
                         self.put(&mut c, ui, &name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
-                        let region = ui.fit(p.subtitle(), MAC_FOOTNOTE_PT, w - ui.pt(150.0));
+                        let region = ui.fit(&self.subtitle_with_distance(&p), MAC_FOOTNOTE_PT, w - ui.pt(150.0));
                         self.put(&mut c, ui, &region, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(37.0));
                         let right = if self.places.len() > 1 { x + w - ui.pt(REMOVE_W) } else { x + w - ui.pt(SPACE_L) };
                         let temp = self.forecasts.get(&p.key()).map_or("\u{2013}".to_string(), |f| self.units.degrees(f.current.temp));
@@ -1193,7 +1209,7 @@ impl Weather {
                         c.fill_rrect(x, y, w, ui.pt(rh - 4.0), ui.pt(RADIUS), CARD_BG.now());
                         let name = ui.fit(&p.name, MAC_BODY_PT, w - ui.pt(80.0));
                         self.put(&mut c, ui, &name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
-                        let region = ui.fit(p.subtitle(), MAC_FOOTNOTE_PT, w - ui.pt(80.0));
+                        let region = ui.fit(&self.subtitle_with_distance(&p), MAC_FOOTNOTE_PT, w - ui.pt(80.0));
                         self.put(&mut c, ui, &region, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(37.0));
                         self.put(&mut c, ui, "+", MAC_LARGE_TITLE_PT, Weight::Regular, LINK, Align::Centre, x + w - ui.pt(REMOVE_W / 2.0), y + ui.pt(26.0));
                     }
@@ -1265,6 +1281,39 @@ impl Weather {
         }
         self.draw_bar(&mut d, ui);
     }
+}
+
+/// Wind speed as the detail tile shows it: km/h with the Celsius setting, mph with Fahrenheit (the imperial set).
+fn wind_text(kmh: f64, units: Units) -> String {
+    match units {
+        Units::Celsius => format!("{} km/h", kmh.round() as i32),
+        Units::Fahrenheit => format!("{} mph", Wind::new(kmh, 0.0, None).speed_mph().round() as i32),
+    }
+}
+
+/// The distance from one saved or found place to another, such as "343 km away", in the unit system of the
+/// temperature setting. None for the same place or for coordinates that are out of range.
+fn away_text(from: &Location, to: &Location, units: Units) -> Option<String> {
+    if from.key() == to.key() {
+        return None;
+    }
+    let a = Coordinate::new(from.lat, from.lon)?;
+    let b = Coordinate::new(to.lat, to.lon)?;
+    let system = match units {
+        Units::Celsius => DistanceUnits::Metric,
+        Units::Fahrenheit => DistanceUnits::Imperial,
+    };
+    Some(format!("{} away", format_distance(a.distance_m(b), system)))
+}
+
+/// The Moon tile at a Unix time: the lit share of the disk as a value and the phase name as the note.
+fn moon_text(unix: f64) -> (String, String) {
+    let lit = (illuminated_fraction(unix) * 100.0).round() as i32;
+    (format!("{lit}%"), MoonPhase::at_unix(unix).label().to_string())
+}
+
+fn now_unix() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
 }
 
 #[cfg(test)]
@@ -1364,3 +1413,48 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+
+    fn loc(name: &str, lat: f64, lon: f64) -> Location {
+        Location { name: name.into(), region: "Iceland".into(), lat, lon }
+    }
+
+    #[test]
+    fn wind_follows_the_temperature_setting_unit_system() {
+        assert_eq!(wind_text(20.4, Units::Celsius), "20 km/h");
+        assert_eq!(wind_text(100.0, Units::Fahrenheit), "62 mph");
+    }
+
+    #[test]
+    fn distance_is_metric_or_imperial_and_omitted_for_the_same_place() {
+        let reykjavik = loc("Reykjavik", 64.1466, -21.9426);
+        let paris = loc("Paris", 48.8566, 2.3522);
+        let metric = away_text(&reykjavik, &paris, Units::Celsius).unwrap();
+        assert!(metric.ends_with(" km away"), "{metric}");
+        assert!(!metric.starts_with("0"), "{metric}");
+        let imperial = away_text(&reykjavik, &paris, Units::Fahrenheit).unwrap();
+        assert!(imperial.ends_with(" mi away"), "{imperial}");
+        assert_eq!(away_text(&reykjavik, &reykjavik, Units::Celsius), None);
+        assert_eq!(away_text(&reykjavik, &loc("Off", 95.0, 0.0), Units::Celsius), None);
+    }
+
+    #[test]
+    fn moon_tile_shows_new_and_full_moon_at_the_cycle_marks() {
+        let reference_new_moon = 947_182_440.0;
+        assert_eq!(moon_text(reference_new_moon), ("0%".to_string(), "New Moon".to_string()));
+        let half = reference_new_moon + bifrost_app::controls::weather_model::SYNODIC_MONTH_DAYS / 2.0 * 86_400.0;
+        assert_eq!(moon_text(half), ("100%".to_string(), "Full Moon".to_string()));
+    }
+
+    #[test]
+    fn subtitle_gets_distance_only_for_other_places() {
+        let here = loc("Here", 64.1466, -21.9426);
+        let other = loc("There", 65.6835, -18.1262);
+        assert_eq!(here.subtitle(), "Iceland");
+        assert!(away_text(&here, &other, Units::Celsius).is_some());
+        assert!(away_text(&here, &here, Units::Celsius).is_none());
+    }
+}
