@@ -995,3 +995,5 @@ pub mod input_switches;
 pub mod device_match;
 pub mod window_list;
 pub mod event_tap;
+pub mod media_time;
+pub mod media_timebase;
