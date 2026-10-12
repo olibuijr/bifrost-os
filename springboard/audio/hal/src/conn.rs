@@ -346,6 +346,9 @@ mod tests {
                     }
                 }
             }
+            // Hold the peer open until the client goes away: closing it straight after the last batch is a real end
+            // of stream, and the reader correctly marks the connection dead.
+            let _ = recv_packet(sock.as_raw_fd(), &mut buf);
         })
     }
 
