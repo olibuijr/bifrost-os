@@ -54,7 +54,10 @@ def budget_breaches(r, midget=False):
     """List of breach strings for one result."""
     b, out = r.get("bench"), []
     if b == "midi-latency":
-        lim = quantum_ms(r) + (r.get("extra") or {}).get("output_latency_ms", 0.0) + SLACK_MS
+        # reported_ms is the output path the HAL predicts (output latency + safety offset + one quantum); without it,
+        # fall back to one quantum
+        rep = r.get("reported_ms")
+        lim = (rep if rep is not None else quantum_ms(r)) + SLACK_MS
         if r["p99_ms"] > lim:
             out.append(f"midi-latency q{r['quantum']}: p99 {r['p99_ms']:.3f} > {lim:.3f} ms")
     elif b == "audio-roundtrip":
@@ -64,7 +67,7 @@ def budget_breaches(r, midget=False):
             if abs(r["p50_ms"] - rep) > frame:
                 out.append(f"audio-roundtrip q{r['quantum']}: p50 {r['p50_ms']:.3f} vs reported {rep:.3f} ms (> 1 frame {frame:.3f})")
     elif b == "xrun-sweep" and midget:
-        q = (r.get("extra") or {}).get("min_stable_quantum")
+        q = (r.get("extra") or {}).get("smallest_clean_quantum")
         if q is None or q > MAX_SWEEP_QUANTUM:
             out.append(f"xrun-sweep: smallest stable quantum {q} > {MAX_SWEEP_QUANTUM}")
     return out

@@ -20,9 +20,9 @@ covers parsing, budgets and the table. Exit code 3 means a budget was exceeded.
 
 | Bench | Budget |
 |---|---|
-| midi-latency | p99 <= quantum + output latency (`extra.output_latency_ms`) + 0.5 ms |
+| midi-latency | p99 <= the reported output path (`reported_ms`: output latency + safety offset + one quantum) + 0.5 ms |
 | audio-roundtrip | measured p50 within 1 frame of `reported_ms` (what the HAL latency properties predict) |
-| xrun-sweep (Midget) | smallest stable quantum (`extra.min_stable_quantum`) <= 64 |
+| xrun-sweep (Midget) | smallest stable quantum (`extra.smallest_clean_quantum`) <= 64 |
 
 ## The physical floor
 

@@ -27,11 +27,14 @@ class T(unittest.TestCase):
         self.assertIsNone(ab.pick_card([]))
 
     def test_midi_budget(self):
-        # quantum 48 at 48 kHz = 1 ms; limit 1 + 0.5 + 0.5 = 2.0
-        r = res("midi-latency", p99=2.0, extra={"output_latency_ms": 0.5})
+        # reported (output latency + safety + quantum) 1.5 ms; limit 1.5 + 0.5 = 2.0
+        r = res("midi-latency", p99=2.0, reported_ms=1.5)
         self.assertEqual(ab.budget_breaches(r), [])
         r["p99_ms"] = 2.01
         self.assertEqual(len(ab.budget_breaches(r)), 1)
+        # no reported latency: one quantum (48 at 48 kHz = 1 ms) + 0.5
+        self.assertEqual(ab.budget_breaches(res("midi-latency", p99=1.5)), [])
+        self.assertEqual(len(ab.budget_breaches(res("midi-latency", p99=1.51))), 1)
 
     def test_roundtrip_budget(self):
         # one frame at 48 kHz = 0.0208 ms
@@ -40,8 +43,8 @@ class T(unittest.TestCase):
         self.assertEqual(ab.budget_breaches(res("audio-roundtrip", p50=9.0)), [])
 
     def test_sweep_budget(self):
-        ok = res("xrun-sweep", extra={"min_stable_quantum": 64})
-        bad = res("xrun-sweep", extra={"min_stable_quantum": 128})
+        ok = res("xrun-sweep", extra={"smallest_clean_quantum": 64})
+        bad = res("xrun-sweep", extra={"smallest_clean_quantum": 128})
         self.assertEqual(ab.budget_breaches(ok, True), [])
         self.assertEqual(len(ab.budget_breaches(bad, True)), 1)
         self.assertEqual(ab.budget_breaches(bad, False), [])
