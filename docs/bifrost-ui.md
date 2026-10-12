@@ -773,6 +773,18 @@ the windows behind the window. Ours, end to end:
   modes. `widgets::vibrant_text()` says when to use it (vibrancy on, no Reduce Transparency). `source_list` draws
   labels, headers, counts and subtitles this way off the selection plate (the plate is opaque, so its text is plain).
   Apple's exact per-level vibrant values are private; the strengths above are the documented label alphas.
+- Vibrancy model (`bifrost_ui::vibrancy`, pixel math in `bifrost_render::vibrancy`, tables `ui::VIBRANT_LABEL` /
+  `VIBRANT_FILL`): `Role` (label or fill) x `Level` (primary .. quaternary, SwiftUI hierarchical `.primary` ..
+  `.quaternary`) gives a strength; `blend(light, on_material, reduce_transparency)` gives plus-lighter (Dark),
+  plus-darker (Light) or `Normal`. Labels use the label alphas (0.85 / 0.55 / 0.25 / 0.10; Light 0.50, 0.26 for
+  secondary and tertiary); fills use the system fill alphas (Dark 0.36 / 0.32 / 0.24 / 0.18, Light 0.20 / 0.16 /
+  0.12 / 0.08). `render::vibrancy::blit_image` (text, symbols) and `fill_rect` (shapes) draw on the CPU surface;
+  alpha is kept so the GPU glass path composites backdrop plus or minus the amount. `glass::Kind::allows_vibrancy`
+  is false for shell chrome (Liquid Glass) and under Reduce Transparency, where both draw the opaque colour at
+  the level's alpha. Mapping: `allowsVibrancy` = `Kind::allows_vibrancy`, `vibrantLight/vibrantDark` = the scheme
+  position, `foregroundStyle` hierarchy = `Level`. Apple's exact vibrant values are private; these are the
+  documented label and fill alphas. Not yet wired: `widgets::Vibrant` (SDK) still carries its own copy of the
+  label table and the symbol/fill call sites in `source_list` use plain colours.
 - Backdrops: every window whose materials look active (focused, or `State::Active`) gets its own backdrop of the
   windows under it; a rebuild the 30 Hz cap skipped wakes the main loop when due (`Presenter::retry_in_ms`).
 - Model: `bifrost_ui::visual_effect` (`MaterialKind`, `BlendingMode`, `MaterialState::looks_active`,

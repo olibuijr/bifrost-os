@@ -644,6 +644,7 @@ pub mod animated_values;
 pub mod mesh;
 pub mod scene_material;
 pub mod visual_effect;
+pub mod vibrancy;
 pub mod scene_light;
 pub mod voxel_array;
 pub mod mesh_primitives;

@@ -56,6 +56,12 @@ impl Kind {
         }
     }
 
+    /// `allowsVibrancy`: content on window materials and menus blends vibrantly (`vibrancy`); the shell's own
+    /// chrome glass is Liquid Glass, whose content stays plain. False when Reduce Transparency is on.
+    pub fn allows_vibrancy(self) -> bool {
+        !crate::appearance::reduce_transparency() && !matches!(self, Kind::Chrome)
+    }
+
     /// The opaque colour of the material while its window is inactive (premultiplied, current scheme).
     pub fn inactive(self) -> u32 {
         use crate::ui::{MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR_SOLID, MENU_SOLID};
