@@ -1,5 +1,6 @@
 //! Desktop networking and power state. All D-Bus/CLI work runs off the UI thread.
 use super::{Network, SavedNetwork, WifiAction};
+use crate::net::wifi_config::{Eap, Security};
 use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex, OnceLock},
@@ -235,10 +236,18 @@ fn read() -> Snapshot {
                 ) {
                     let ssid = ssid.trim().to_owned();
                     if !ssid.is_empty() {
+                        // an open network has no key management: nmcli prints an empty value, which reads as Open
+                        let security = output(
+                            "nmcli",
+                            &["-g", "802-11-wireless-security.key-mgmt", "connection", "show", &f[0]],
+                        )
+                        .ok()
+                        .and_then(|v| security_of(v.trim()));
                         s.saved.push(SavedNetwork {
                             ssid,
                             auto_join: f[2] == "yes",
                             note: String::new(),
+                            security,
                         });
                     }
                 }
@@ -266,6 +275,30 @@ fn read() -> Snapshot {
         .into();
     s
 }
+/// The security type of a saved network, from NetworkManager's `802-11-wireless-security.key-mgmt`
+/// (a list such as `wpa-psk`, `sae`, `wpa-eap`; empty or `none` for an open network). None for a value
+/// the Wi-Fi pages do not name, so the row shows no type rather than a wrong one.
+pub fn security_of(key_mgmt: &str) -> Option<Security> {
+    let words: Vec<&str> = key_mgmt
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |w: &str| words.iter().any(|x| *x == w);
+    if words.is_empty() || has("none") || has("owe") {
+        return Some(Security::Open);
+    }
+    if has("wpa-eap") || has("ieee8021x") {
+        // the EAP method is not reported by the key list; the label does not show it either
+        return Some(Security::Enterprise(Eap::Peap));
+    }
+    match (has("sae"), has("wpa-psk")) {
+        (true, true) => Some(Security::Wpa2Wpa3),
+        (true, false) => Some(Security::Wpa3),
+        (false, true) => Some(Security::Wpa2),
+        (false, false) => None,
+    }
+}
+
 fn saved_uuid(ssid: &str) -> Result<String, String> {
     let text = output("nmcli", &["-t", "-f", "UUID,TYPE", "connection", "show"])?;
     for line in text.lines() {
@@ -329,4 +362,22 @@ fn apply(request: Request) -> Result<(), String> {
         },
     };
     result.map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::security_of;
+    use crate::net::wifi_config::{Eap, Security};
+
+    #[test]
+    fn key_management_maps_to_the_security_the_pages_name() {
+        assert_eq!(security_of(""), Some(Security::Open), "an open network prints an empty key list");
+        assert_eq!(security_of("none"), Some(Security::Open));
+        assert_eq!(security_of("wpa-psk"), Some(Security::Wpa2));
+        assert_eq!(security_of("sae"), Some(Security::Wpa3));
+        assert_eq!(security_of("wpa-psk,sae"), Some(Security::Wpa2Wpa3));
+        assert_eq!(security_of("wpa-psk sae"), Some(Security::Wpa2Wpa3), "a space-separated list reads the same");
+        assert_eq!(security_of("wpa-eap"), Some(Security::Enterprise(Eap::Peap)));
+        assert_eq!(security_of("wpa-eap-suite-b-192"), None, "a suite name the shell does not name shows no type");
+    }
 }

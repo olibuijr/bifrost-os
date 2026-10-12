@@ -522,8 +522,20 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             ];
             if info.current_ssid.as_deref() == Some(m.detail) {
                 groups.push(rows(vec![("IP Address", info.ip.clone()), ("Router", info.router.clone())]).header("IPV4 ADDRESS"));
+                // the link's details: security from the saved entry, the Wi-Fi interface from the desktop network state
+                let mut details: Vec<(&'static str, String)> = vec![("Security", place.and_then(|i| info.saved[i].security).map_or("—", |s| s.label()).to_string())];
+                if let Some(i) = info.desktop_network.as_ref().and_then(|n| n.interfaces.iter().find(|i| i.kind == "wifi")) {
+                    details.push(("Interface", i.name.clone()));
+                    details.push(("Configure IPv4", match i.method.as_str() { "auto" => "Automatic (DHCP)", "manual" => "Manually", _ => "—" }.to_string()));
+                    details.push(("DNS Servers", if i.dns.is_empty() { "—".to_string() } else { i.dns.join(", ") }));
+                }
+                groups.push(rows(details).header("DETAILS"));
             }
             groups.push(rows(vec![("Wi-Fi Address", info.mac.clone())]));
+            // why the last join failed (the saved note), so a network that will not connect says so here
+            if let Some(problem) = place.map(|i| info.saved[i].note.as_str()).filter(|n| !n.is_empty()) {
+                groups.push(rows(vec![("Problem", problem.to_string())]).header("DIAGNOSTICS"));
+            }
             if let Some(i) = place {
                 let step = |label: &str, up: bool, possible: bool| {
                     let row = Item::new(label).tint(if possible { Tint::Blue } else { Tint::Dim });
@@ -565,7 +577,13 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .saved
                 .iter()
                 .map(|n| {
-                    let value = if !n.note.is_empty() { n.note.as_str() } else if n.auto_join { "" } else { "Auto-Join Off" };
+                    // security first, then the problem or "Auto-Join Off": "WPA2 Personal, Incorrect Password"
+                    let state = if !n.note.is_empty() { n.note.clone() } else if n.auto_join { String::new() } else { "Auto-Join Off".to_string() };
+                    let value = match (n.security, state.is_empty()) {
+                        (Some(s), true) => s.label().to_string(),
+                        (Some(s), false) => format!("{}, {}", s.label(), state),
+                        (None, _) => state,
+                    };
                     Item { accessory: Accessory::Info, action: Action::Push(PageId::WifiDetail), ..Item::new(&n.ssid).value(value) }
                 })
                 .collect();
@@ -1391,7 +1409,7 @@ mod tests {
     #[test]
     fn saved_networks_show_notes_priority_and_the_other_row() {
         let (mut info, opts) = (info(), Options::default());
-        let saved = |ssid: &str, auto_join, note: &str| SavedNetwork { ssid: ssid.into(), auto_join, note: note.into() };
+        let saved = |ssid: &str, auto_join, note: &str| SavedNetwork { ssid: ssid.into(), auto_join, note: note.into(), security: None };
         info.saved = vec![saved("WIFI-5G", true, ""), saved("Cafe", false, "Incorrect Password")];
         let s = spec(PageId::Wifi, &model(&info, &opts));
         assert_eq!(s.groups[1].items[0].value, "Incorrect Password", "the failure shows in the row");
@@ -1409,6 +1427,32 @@ mod tests {
         assert_eq!(priority.items[1].action, Action::Wifi(WifiAction::Move { ssid: "WIFI-5G".into(), up: false }));
         let off = Model { detail: "Cafe", ..model(&info, &opts) };
         assert_eq!(spec(PageId::WifiDetail, &off).groups[1].items[0].accessory, Accessory::Switch(false));
+    }
+
+    #[test]
+    fn known_networks_name_the_security_and_the_details_show_the_link() {
+        use crate::net::wifi_config::Security;
+        let (mut info, opts) = (info(), Options::default());
+        let saved = |ssid: &str, auto_join, note: &str, security| SavedNetwork { ssid: ssid.into(), auto_join, note: note.into(), security };
+        info.saved = vec![saved("WIFI-5G", true, "", Some(Security::Wpa3)), saved("Cafe", false, "Incorrect Password", Some(Security::Open))];
+        let k = spec(PageId::KnownNetworks, &model(&info, &opts));
+        assert_eq!(k.groups[0].items[0].value, "WPA3 Personal");
+        assert_eq!(k.groups[0].items[1].value, "None, Incorrect Password", "the problem follows the type");
+        info.desktop_network = Some(Default::default());
+        if let Some(n) = info.desktop_network.as_mut() {
+            n.interfaces = vec![crate::shell::desktop_network::Interface { name: "wlan0".into(), kind: "wifi".into(), method: "auto".into(), dns: vec!["10.0.0.1".into()], ..Default::default() }];
+        }
+        let d = spec(PageId::WifiDetail, &model(&info, &opts));
+        assert_eq!(d.title, "WIFI-5G");
+        let details = d.groups.iter().find(|g| g.header.as_deref() == Some("DETAILS")).unwrap();
+        assert_eq!(details.items[0].value, "WPA3 Personal");
+        assert_eq!(details.items[1].value, "wlan0");
+        assert_eq!(details.items[2].value, "Automatic (DHCP)");
+        assert_eq!(details.items[3].value, "10.0.0.1");
+        assert!(d.groups.iter().all(|g| g.header.as_deref() != Some("DIAGNOSTICS")), "WIFI-5G has no problem");
+        let cafe = spec(PageId::WifiDetail, &Model { detail: "Cafe", ..model(&info, &opts) });
+        let problem = cafe.groups.iter().find(|g| g.header.as_deref() == Some("DIAGNOSTICS")).unwrap();
+        assert_eq!(problem.items[0].value, "Incorrect Password");
     }
 
     #[test]
