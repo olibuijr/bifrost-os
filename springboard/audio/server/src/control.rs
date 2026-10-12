@@ -96,6 +96,10 @@ struct DeviceHost {
     shared: Arc<Shared>,
     thread: Option<std::thread::JoinHandle<()>>,
     manual: Option<DeviceRunner>,
+    /// Drops the PCM from the control thread (see `DeviceIo::abort_hook`); held while the IO thread lives.
+    abort: Option<Box<dyn Fn() + Send + Sync>>,
+    /// An IO thread that outlived its stop request. The device stays busy (no reopen) until it is reaped.
+    stopping: Option<std::thread::JoinHandle<()>>,
     running: bool,
     idle_since: Option<Instant>,
 }
@@ -155,7 +159,7 @@ impl ServerCore {
 
     fn host(driver: usize, desc: DeviceDesc) -> DeviceHost {
         let q = DEFAULT_QUANTUM.clamp(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM));
-        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, running: false, idle_since: None }
+        DeviceHost { driver, desc, shared: Shared::new(q), thread: None, manual: None, abort: None, stopping: None, running: false, idle_since: None }
     }
 
     pub fn device_count(&self) -> usize {
@@ -376,6 +380,10 @@ impl ServerCore {
         if self.devices[idx].running {
             return Ok(());
         }
+        if !self.reap_stopping(idx) {
+            log("io", &format!("device {} still stopping; not reopening", self.devices[idx].desc.uid));
+            return Err(AudioError::Io);
+        }
         let desc = self.devices[idx].desc.clone();
         let rate = if desc.rates.iter().any(|r| 48_000.0 >= r.0 && 48_000.0 <= r.1) {
             48_000.0
@@ -395,6 +403,7 @@ impl ServerCore {
             out_channels: desc.output_channels,
             wait: self.cfg.wait,
         };
+        let abort = io.abort_hook();
         let mut runner = DeviceRunner::new(io, shared.clone(), rc);
         shared.stop.store(false, Ordering::Release);
         if self.cfg.spawn_threads {
@@ -404,6 +413,7 @@ impl ServerCore {
                 AudioError::Io
             })?;
             self.devices[idx].thread = Some(h);
+            self.devices[idx].abort = abort;
         } else {
             runner.start().map_err(|_| AudioError::Io)?;
             self.devices[idx].manual = Some(runner);
@@ -420,18 +430,31 @@ impl ServerCore {
         }
         d.shared.stop.store(true, Ordering::Release);
         if let Some(h) = d.thread.take() {
-            // The IO thread may sit in a driver call; the control loop must not wait for it forever (it answers every
-            // client and SIGTERM). Give it `STOP_WAIT`, then detach it: it ends by itself once the driver returns.
-            let until = Instant::now() + STOP_WAIT;
-            while !h.is_finished() && Instant::now() < until {
-                std::thread::sleep(Duration::from_millis(2));
+            // The IO loop checks the stop flag every period, so this normally takes a few ms. If it does not end,
+            // drop the PCM from here (wakes a thread blocked in the driver), wait once more, and never detach: the
+            // handle is kept in `stopping` and the device cannot be reopened until the thread has really ended.
+            let wait = |h: &std::thread::JoinHandle<()>| {
+                let until = Instant::now() + STOP_WAIT;
+                while !h.is_finished() && Instant::now() < until {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            };
+            wait(&h);
+            if !h.is_finished() {
+                log("io", &format!("device {} did not stop within {:?}; dropping the stream", d.desc.uid, STOP_WAIT));
+                if let Some(a) = &d.abort {
+                    a();
+                }
+                wait(&h);
             }
             if h.is_finished() {
                 let _ = h.join();
+                d.abort = None;
+                crate::rt::device_stopped();
             } else {
-                log("io", &format!("device {} did not stop within {:?}; detached", d.desc.uid, STOP_WAIT));
+                log("io", &format!("device {} IO thread still alive; the device stays busy until it ends", d.desc.uid));
+                d.stopping = Some(h);
             }
-            crate::rt::device_stopped();
         }
         d.shared.fallback_floor.store(0, Ordering::Release);
         if let Some(mut r) = d.manual.take() {
@@ -442,12 +465,39 @@ impl ServerCore {
         log("io", &format!("device {} stopped", d.desc.uid));
     }
 
+    /// Joins a stop-requested IO thread that has ended since. False while one is still alive.
+    fn reap_stopping(&mut self, idx: usize) -> bool {
+        let d = &mut self.devices[idx];
+        match d.stopping.take() {
+            None => true,
+            Some(h) if h.is_finished() => {
+                let _ = h.join();
+                d.abort = None;
+                crate::rt::device_stopped();
+                log("io", &format!("device {} IO thread ended; reopen allowed", d.desc.uid));
+                true
+            }
+            Some(h) => {
+                if let Some(a) = &d.abort {
+                    a();
+                }
+                d.stopping = Some(h);
+                false
+            }
+        }
+    }
+
     fn running_slots(&self, dev: usize) -> usize {
         self.slots.values().filter(|r| r.device == dev && r.slot.running.load(Ordering::Acquire)).count()
     }
 
     /// Stops devices that have been idle for `idle_stop`, and picks up driver events.
     pub fn tick(&mut self, now: Instant) {
+        for i in 0..self.devices.len() {
+            if self.devices[i].stopping.is_some() {
+                self.reap_stopping(i);
+            }
+        }
         for i in 0..self.devices.len() {
             if !self.devices[i].running {
                 continue;
@@ -740,6 +790,32 @@ mod tests {
         match c.handle(client, proc_req(frames)).reply {
             Reply::IoProcAdded { id, .. } => id,
             other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_threaded_device_stops_quickly_and_can_start_again_for_every_quantum() {
+        let d = NullDriver::new(vec![NullDriver::stereo("n0", 48_000.0)]);
+        let h = d.handle();
+        let cfg = CoreConfig { spawn_threads: true, wait: WaitPolicy::Futex { budget_ns: 2_500_000 }, idle_stop: Duration::from_secs(2) };
+        let mut c = ServerCore::new(vec![Box::new(d)], Box::new(NoObjects), cfg);
+        // SAFETY: getuid cannot fail.
+        c.add_client(1, std::process::id() as i32, unsafe { libc::getuid() });
+        hello(&mut c, 1, false);
+        for q in [32, 64, 128, 256] {
+            let a = add(&mut c, 1, q);
+            assert_eq!(c.handle(1, Request::StartIoProc { id: a }).reply, Reply::Done);
+            assert!(c.device_running(0));
+            // A client that never signals: the IO loop must still see the stop within a bound.
+            std::thread::sleep(Duration::from_millis(30));
+            let t0 = Instant::now();
+            c.remove_client(1);
+            c.stop_device(0);
+            assert!(t0.elapsed() < Duration::from_millis(400), "stop took {:?}", t0.elapsed());
+            assert!(!c.device_running(0) && !h.is_running("n0"));
+            assert!(c.devices[0].stopping.is_none());
+            c.add_client(1, std::process::id() as i32, unsafe { libc::getuid() });
+            hello(&mut c, 1, false);
         }
     }
 

@@ -695,6 +695,35 @@ fn spawn_event_logger(name: String, shared: Arc<Shared>) {
     });
 }
 
+/// A cycle target more than this many periods ahead of now is not believed (see `resync_target`).
+pub const MAX_AHEAD_PERIODS: u64 = 8;
+
+/// The IO thread never sleeps for more than a few periods on one target: a target beyond `MAX_AHEAD_PERIODS`
+/// periods from `now` is replaced by `now`, so the loop runs a cycle, re-reads the driver and can see a stop.
+pub fn resync_target(target: u64, now: u64, period_ns: u64) -> u64 {
+    if target > now.saturating_add(MAX_AHEAD_PERIODS * period_ns.max(1)) {
+        now
+    } else {
+        target
+    }
+}
+
+/// Waits until `arm` (host ns) in slices of at most `slice_ns`, checking `stop` between slices, so a stop request
+/// is seen within one slice whatever the timer or the sleep would otherwise do.
+pub fn wait_until(timer: Option<&bifrost_audio_alsa::CycleTimer>, arm: u64, stop: &AtomicBool, slice_ns: u64) {
+    loop {
+        let now = now_raw_ns();
+        if now >= arm || stop.load(Ordering::Acquire) {
+            return;
+        }
+        let slice = (arm - now).min(slice_ns);
+        let fired = timer.map(|t| t.arm_raw(now + slice).and_then(|_| t.wait_timeout(slice + 1_000_000)));
+        if !matches!(fired, Some(Ok(_))) {
+            std::thread::sleep(std::time::Duration::from_nanos(slice));
+        }
+    }
+}
+
 /// Runs `runner` on its own SCHED_FIFO thread until `shared.stop` is set; then stops the hardware.
 pub fn spawn_io_thread(runner: DeviceRunner, name: String) -> std::io::Result<std::thread::JoinHandle<()>> {
     spawn_io_thread_tuned(runner, name, crate::rt::Tuning::default())
@@ -734,17 +763,22 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
         log("io", &format!("{name}: started at quantum {}", runner.quantum()));
         spawn_event_logger(name.clone(), runner.shared.clone());
         while !runner.shared.stop.load(Ordering::Acquire) {
-            let target = (next as i64 + offset).max(0) as u64;
+            let period_ns = runner.quantum() as u64 * 1_000_000_000 / runner.cfg.rate.max(1) as u64;
+            // A target far ahead (a bad DLL extrapolation, a quantum change) never parks the thread: resync to now.
+            let target = resync_target((next as i64 + offset).max(0) as u64, now_raw_ns(), period_ns);
             let arm = target.saturating_sub(margin);
+            let slice = (2 * period_ns).clamp(1_000_000, 10_000_000);
             let now = now_raw_ns();
             if arm > now {
-                match timer.as_ref().map(|t| t.arm_raw(arm).and_then(|_| t.wait())) {
-                    Some(Ok(_)) => {}
-                    _ => std::thread::sleep(std::time::Duration::from_nanos(arm - now)),
-                }
+                wait_until(timer.as_ref(), arm, &runner.shared.stop, slice);
                 jitter.record(now_raw_ns().saturating_sub(arm));
             }
-            rt::spin_until(target);
+            if runner.shared.stop.load(Ordering::Acquire) {
+                break;
+            }
+            while now_raw_ns() < target && !runner.shared.stop.load(Ordering::Relaxed) {
+                std::hint::spin_loop();
+            }
             let rep = runner.cycle(now_raw_ns());
             // Counters only: the real-time thread must not allocate or write to stderr.
             if rep.device_xrun {
@@ -779,6 +813,23 @@ mod tests {
     use super::*;
     use bifrost_audio_driver::null::NullDriver;
     use bifrost_audio_driver::{Driver, IoConfig};
+
+    #[test]
+    fn a_far_target_is_resynced_and_a_stop_ends_the_wait() {
+        assert_eq!(resync_target(1_000, 0, 1_000_000), 1_000);
+        assert_eq!(resync_target(1_000_000_000, 50, 1_000_000), 50);
+        let stop = Arc::new(AtomicBool::new(false));
+        let s2 = stop.clone();
+        let t = std::thread::spawn(move || {
+            let timer = bifrost_audio_alsa::CycleTimer::new().ok();
+            let t0 = std::time::Instant::now();
+            wait_until(timer.as_ref(), now_raw_ns() + 60_000_000_000, &s2, 2_000_000);
+            t0.elapsed()
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        stop.store(true, Ordering::Release);
+        assert!(t.join().unwrap() < std::time::Duration::from_millis(500));
+    }
 
     const UID: &str = "n0";
     const NS_PER_256: u64 = 5_333_333;

@@ -57,3 +57,20 @@ unit drop-in brings back the loopback-only server.
   tree) to add and remove device hosts; device ids are indexes fixed at start.
 - An aggregate device (task 11) that wraps sub-device `DeviceIo`s should forward its clock master's `take_restart`.
 - The IO thread keeps its driver-to-raw clock offset across a restart (both are `CLOCK_MONOTONIC_RAW` for ALSA).
+
+## Stopping a device (IO thread lifetime)
+
+- Every wait in the IO loop is bounded and checks `Shared::stop`: the cycle timer is waited in slices of at most two
+  periods (1 to 10 ms, `io::wait_until`), the final spin also checks the flag, and the client futex wait is capped by
+  the per-cycle budget. A cycle target more than `MAX_AHEAD_PERIODS` (8) periods ahead is replaced by now
+  (`io::resync_target`), so a bad DLL extrapolation or quantum change cannot park the thread. The ALSA PCM is mapped
+  and non-blocking, so the driver calls never block.
+- `stop_device` sets the flag and waits `STOP_WAIT` (500 ms). If the thread is still alive it calls the driver's
+  `abort_hook` (a PCM `DROP` on a duplicate fd) and waits once more. It never detaches the thread: the handle is kept
+  in `DeviceHost::stopping`, and `start_device` refuses to reopen (`AudioError::Io`, logged) until `tick`/`reap_stopping`
+  has joined it. An earlier version detached after 500 ms, which leaked a RUNNING PCM and made every later open fail
+  with `Busy`.
+- A quantum change on an open device is applied by the runner at a cycle boundary, without a reopen. A reopen only
+  happens after the idle stop (2 s with no running IO proc), and always after the old instance has been joined.
+- A client's disconnect marks its IO procs not running before anything else (`remove_client` -> `remove_slot`), so
+  the loop neither triggers nor waits for it.

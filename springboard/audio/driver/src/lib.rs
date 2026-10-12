@@ -144,6 +144,11 @@ pub trait DeviceIo: Send {
     fn take_restart(&mut self) -> Option<ZeroTimeStamp> {
         None
     }
+    /// A closure that stops the hardware stream from another thread (a PCM `DROP` on a duplicate descriptor), so
+    /// the control thread can end a stop the IO thread has not finished. `None`: nothing to abort.
+    fn abort_hook(&self) -> Option<Box<dyn Fn() + Send + Sync>> {
+        None
+    }
 }
 
 /// A driver with devices on a manual clock: tests advance time with `advance` and every device's hardware pointer
