@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0
+
+- A contact's card lists its phone, email and address under the labels you chose (Mobile, Home, Work and so on). Only the
+  values the contact has are shown, in the same order as before. Copying a value works as before.
+- The list and the contact card sit on the window's content colour, so the background matches other apps in Light and
+  Dark.
+- Still to come: choosing whether names show first name or last name first. The sort order (Settings) is the only name
+  order for now.
+
 ## 1.4.0
 
 - Groups can be renamed and deleted. With a group shown in the sidebar, Rename Group types the new name in the search
