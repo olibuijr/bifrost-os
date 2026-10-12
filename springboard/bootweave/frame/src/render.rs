@@ -336,8 +336,8 @@ pub fn render(frame: &Frame, out: &mut [u32], stride: usize, order: PixelOrder) 
         bar(&mut c, w, h, p, &pal);
     }
     // the controls sit where the bar's row continues
-    let (bx, by, _, bh) = bar_rect(w, h);
-    let (x_ctl, y_ctl) = (bx as i64, (by + bh) as i64);
+    let (_, by, _, bh) = bar_rect(w, h);
+    let y_ctl = (by + bh) as i64;
     let wi = w as i64;
     let unit = |v: u32| (v * h / 1440).max(1) as i64;
     match &frame.screen {

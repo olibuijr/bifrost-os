@@ -448,7 +448,7 @@ pub fn wait_ext(a: &Value) -> Result<Value, String> {
         }
     }
     if let Some(q) = s(a, "app_exit") {
-        let mut last = String::from("running");
+        let mut last: String;
         loop {
             match find_sock(q) {
                 Err(_) => return done(format!("app {q} socket gone")),

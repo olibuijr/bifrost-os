@@ -2,7 +2,7 @@
 //! learned/ignored words. The learned words persist through [`KeyValues`]: the SDK stores them in `UserDefaults`,
 //! the shell in its settings file. Ranges are byte ranges on char boundaries.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Range;
 
 /// The string store that keeps the learned words. The SDK implements it for `UserDefaults`; the shell for its
@@ -203,6 +203,7 @@ impl SpellChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     /// An in-memory store for the learned words.
     #[derive(Default)]

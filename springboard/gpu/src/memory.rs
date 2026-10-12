@@ -182,11 +182,14 @@ impl SubAllocator {
     }
 
     /// Total free bytes, not counting fragmentation.
+    #[cfg(test)]
     pub(crate) fn free_bytes(&self) -> u64 {
         self.free.values().sum()
     }
 
     /// Whether the whole block is free (a block that is empty can be released).
+    /// Test-only for now: releasing a block would shift the indices live allocations hold.
+    #[cfg(test)]
     pub(crate) fn is_unused(&self) -> bool {
         self.free_bytes() == self.capacity
     }

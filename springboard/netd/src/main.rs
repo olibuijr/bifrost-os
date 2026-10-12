@@ -5,7 +5,7 @@
 use bifrost_proto::svc;
 use bifrost_proto::svc::net::{Ap, Cmd, Evt, Status};
 use springboard::net::wifi::{self, State, Wifi};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

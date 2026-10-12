@@ -11,7 +11,7 @@
 //! `%P` is this module's own spec for a byte sequence, shown as hex.
 //! The official case list of `OSLogMessageComponent.ArgumentCategory` is not in the abstract-level documentation
 //! this was checked against, so the categories here are this module's own (integer, unsigned, double, text, data).
-use crate::log::{Level, LogEntry};
+use crate::log::LogEntry;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
@@ -303,6 +303,7 @@ pub fn activity_chain(activities: &[Activity], id: u64) -> Vec<u64> {
 mod tests {
     use super::*;
 
+    use crate::log::Level;
     use std::time::{Duration, UNIX_EPOCH};
 
     fn entry(secs: u64, msg: &str) -> LogEntry {
