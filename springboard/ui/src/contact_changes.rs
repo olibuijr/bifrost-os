@@ -138,6 +138,53 @@ impl<T: Clone> Store<T> {
     }
 }
 
+/// External-change observers. A client registers with the token it has seen, and after each save the caller passes the
+/// store's token to `notify`. It gets back the observers that are behind it, and each of them moves to that token, so
+/// one save tells each observer once, not once per record. Pure: the caller runs the callbacks for the identifiers.
+#[derive(Debug, Default)]
+pub struct Observers {
+    next: u64,
+    seen: BTreeMap<u64, u64>,
+}
+
+impl Observers {
+    pub fn new() -> Self {
+        Observers { next: 0, seen: BTreeMap::new() }
+    }
+
+    /// Registers an observer that has seen the store up to `token`. Identifiers are never reused.
+    pub fn register(&mut self, token: u64) -> u64 {
+        self.next += 1;
+        self.seen.insert(self.next, token);
+        self.next
+    }
+
+    /// Removes an observer. `false` when no observer has this identifier.
+    pub fn unregister(&mut self, observer: u64) -> bool {
+        self.seen.remove(&observer).is_some()
+    }
+
+    pub fn len(&self) -> usize {
+        self.seen.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.seen.is_empty()
+    }
+
+    /// The observers that have not seen `token` yet, in identifier order. Each one is moved to `token`.
+    pub fn notify(&mut self, token: u64) -> Vec<u64> {
+        let mut due = Vec::new();
+        for (id, seen) in self.seen.iter_mut() {
+            if *seen < token {
+                *seen = token;
+                due.push(*id);
+            }
+        }
+        due
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,5 +277,58 @@ mod tests {
         assert_eq!(store.changes_since(0), Err(Error::Expired), "event 1 was dropped");
         let tail = store.changes_since(1).unwrap();
         assert_eq!(tail.iter().map(|e| e.seq).collect::<Vec<_>>(), vec![2, 3]);
+    }
+
+    #[test]
+    fn observers_are_told_once_per_store_move_and_ids_are_not_reused() {
+        let mut observers = Observers::new();
+        assert_eq!(observers.register(0), 1);
+        assert_eq!(observers.register(0), 2);
+        assert_eq!(observers.len(), 2);
+        assert_eq!(observers.notify(0), Vec::<u64>::new(), "nothing is behind token 0");
+        assert_eq!(observers.notify(3), vec![1, 2]);
+        assert_eq!(observers.notify(3), Vec::<u64>::new(), "already told about token 3");
+        assert_eq!(observers.notify(5), vec![1, 2]);
+        assert!(observers.unregister(1));
+        assert!(!observers.unregister(1), "a second unregister finds nothing");
+        assert_eq!(observers.register(5), 3, "identifier 1 is not handed out again");
+        assert_eq!(observers.notify(6), vec![2, 3]);
+    }
+
+    #[test]
+    fn an_observer_registered_at_the_current_token_waits_for_the_next_change() {
+        let mut observers = Observers::new();
+        let id = observers.register(4);
+        assert_eq!(observers.notify(4), Vec::<u64>::new());
+        assert_eq!(observers.notify(5), vec![id]);
+        assert!(!observers.is_empty());
+        assert!(observers.unregister(id));
+        assert!(observers.is_empty());
+        assert_eq!(observers.notify(9), Vec::<u64>::new(), "an unregistered observer is never told");
+    }
+
+    #[test]
+    fn a_store_save_moves_observers_to_its_token_and_each_is_told_once() {
+        let mut store: Store<String> = Store::new(100);
+        let mut observers = Observers::new();
+        let watcher = observers.register(store.token());
+        store.save(vec![Op::Add(text("a")), Op::Add(text("b"))], any).unwrap();
+        assert_eq!(observers.notify(store.token()), vec![watcher], "two records, one call");
+        store.save(vec![Op::Delete(1)], any).unwrap();
+        assert_eq!(observers.notify(store.token()), vec![watcher]);
+        assert_eq!(observers.notify(store.token()), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn an_observer_can_fetch_what_changed_since_its_token() {
+        let mut store: Store<String> = Store::new(100);
+        store.save(vec![Op::Add(text("a"))], any).unwrap();
+        let mut observers = Observers::new();
+        let id = observers.register(store.token());
+        store.save(vec![Op::Update(1, text("b"))], any).unwrap();
+        assert_eq!(observers.notify(store.token()), vec![id]);
+        let since = store.changes_since(1).unwrap();
+        assert_eq!(since.len(), 1);
+        assert_eq!(since[0].change, Change::Updated { before: text("a"), after: text("b") });
     }
 }
