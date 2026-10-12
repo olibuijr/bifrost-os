@@ -67,6 +67,7 @@ pub mod sharing;
 pub mod workspace;
 pub mod services;
 pub mod game_controllers_page;
+mod now_playing_menu;
 pub mod dnd;
 pub mod photos;
 pub mod music;
