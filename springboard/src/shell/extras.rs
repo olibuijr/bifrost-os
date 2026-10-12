@@ -61,6 +61,11 @@ impl Registry {
         true
     }
 
+    /// Moves an approved login item one place earlier in the start order. True when the order changed.
+    pub fn move_earlier(&mut self, app: &str) -> bool {
+        super::services::login_items_approval::move_earlier(&mut self.login, app)
+    }
+
     /// An app asks to open at login: it waits for the user's approval. True when the request is new.
     pub fn request(&mut self, app: &str) -> bool {
         if self.login.iter().any(|a| a == app) || self.pending.iter().any(|a| a == app) {
@@ -253,6 +258,18 @@ impl super::Shell {
         }
     }
 
+    /// The user moved login items earlier in Settings > Login Items > Start Order.
+    pub(super) fn login_items_move(&mut self, ids: Vec<String>) {
+        let mut changed = false;
+        for id in &ids {
+            changed |= self.extras.move_earlier(id);
+        }
+        if changed {
+            self.login_save();
+            self.dirty = true;
+        }
+    }
+
     /// The user removed login items in Settings.
     pub(super) fn login_items_remove(&mut self, ids: Vec<String>) {
         let mut changed = false;
@@ -292,6 +309,16 @@ mod tests {
         assert_eq!(r.login_op("a", LoginOp::Unregister), (LoginStatus::NotRegistered, true));
         assert_eq!(Registry::from_pref(Some(&r.to_pref())).login_ids(), ["b", "c"]);
         assert_eq!(Registry::from_pref(None).login_ids().len(), 0);
+    }
+
+    #[test]
+    fn login_items_move_earlier_and_keep_the_order_when_saved() {
+        let mut r = Registry::from_pref(Some("a,b,c"));
+        assert!(r.move_earlier("c"));
+        assert_eq!(r.login_ids(), ["a", "c", "b"]);
+        assert!(!r.move_earlier("a"), "the first item cannot move");
+        assert_eq!(r.to_pref(), "a,c,b");
+        assert_eq!(Registry::from_pref(Some(&r.to_pref())).login_ids(), ["a", "c", "b"]);
     }
 
     #[test]

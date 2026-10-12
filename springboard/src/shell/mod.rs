@@ -77,6 +77,7 @@ pub mod permission_sheet;
 pub mod options;
 pub mod pageedit;
 pub mod pages;
+mod login_items_page;
 pub mod axmap;
 pub mod power_menu;
 mod compose_sheet;
@@ -2445,6 +2446,7 @@ impl Shell {
                 let dock_changes = st.take_dock_changes();
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
+                let login_moved = st.take_login_moved();
                 let login_approved = st.take_login_approved();
                 let preview = st.take_screensaver_preview();
                 for change in changes {
@@ -2465,6 +2467,7 @@ impl Shell {
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
                 self.login_items_approve(login_approved);
+                self.login_items_move(login_moved);
                 if self.desk.is_some() {
                     for change in dock_changes {
                         let _ = self.dock_change(change, t);

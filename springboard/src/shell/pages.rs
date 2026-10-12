@@ -294,6 +294,8 @@ pub enum Action {
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
     GameController(super::game_controllers_page::Edit),
+    /// Login Items: start this app (id) one place earlier
+    LoginItemMove(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -729,6 +731,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .header("OPEN AT LOGIN")
                     .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
                 );
+                groups.extend(super::login_items_page::order_group(m.login_items));
                 groups
             },
         ),
