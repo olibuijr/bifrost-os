@@ -1881,3 +1881,24 @@ the daemon owns the hub and delivers to apps.
 Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
 daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
 tests in `sdk/src/midi.rs` are unrun.
+
+## Image analysis: subject lifting and Visual Look Up (`bifrost_app::image_analysis`)
+
+Models: `springboard/ui/src/subject_lift.rs` (subjects, hit test, highlight, cutout) and
+`springboard/ui/src/visual_lookup.rs` (`AnalysisTypes`, `look_up`). The SDK re-exports both from
+`springboard/sdk/src/image_analysis.rs`. The shape follows `ImageAnalysisInteraction` (`subjects`,
+`highlightedSubjects`, `analysisTypes`, the Look Up action).
+
+Decisions:
+
+- A subject is an id, an 8-bit alpha mask in image pixels, and its tight bounds. A pixel belongs to the
+  subject at alpha 128 or more (`SUBJECT_THRESHOLD`). A subject with no such pixel is refused.
+- Hit testing is topmost-first: a later subject is on top of an earlier one. Duplicate ids are dropped.
+- A cutout keeps soft edges: alpha = mask alpha times image alpha, cropped to the subject bounds.
+- `look_up` builds a request only when `AnalysisTypes` includes `VISUAL_LOOK_UP`. It returns the id,
+  bounds and cutout. The lookup service itself is not in the repo.
+
+Gaps still open: no segmentation model (the masks come from the caller), no lookup service, no image view
+that draws the subject highlight or the Look Up button, and no text recognition. Matrix rows
+"Subject lifting and background removal" and "Visual Look Up" are `partial` at best until the model runs
+on a device with a segmenter.
