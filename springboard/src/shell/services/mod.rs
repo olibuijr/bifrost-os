@@ -30,6 +30,7 @@ pub mod accessibility_display;
 pub mod text_services;
 pub mod focus_filter;
 pub mod notify_bus;
+pub mod launch_services;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -76,6 +77,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(text_services::TextServices),
         Box::new(focus_filter::FocusFilterService::default()),
         Box::new(notify_bus::NotifyBus::default()),
+        Box::new(launch_services::LaunchServices),
     ]
 }
 

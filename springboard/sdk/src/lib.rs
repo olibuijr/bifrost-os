@@ -50,6 +50,7 @@ pub mod font_descriptor;
 pub mod screen_saver_defaults;
 pub mod screen_time;
 pub mod screens;
+pub mod launch_services;
 pub mod notify_bus;
 pub mod locale;
 pub mod bundle_resources;

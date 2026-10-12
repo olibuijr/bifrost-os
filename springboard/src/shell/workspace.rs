@@ -196,7 +196,7 @@ impl super::Shell {
         }
     }
 
-    fn workspace_open_url(&mut self, url: &str, t: f64) -> Reply {
+    pub(super) fn workspace_open_url(&mut self, url: &str, t: f64) -> Reply {
         self.ensure_defaults();
         let route = match &self.defaults {
             Some((_, r, _)) => route_url(r, url),

@@ -521,7 +521,7 @@ fn run() -> std::io::Result<()> {
                     Ok(Request::Appearance(mode))=>{match shell.set_appearance(&mode){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::OpenApp(id))=>{if shell.desktop_open_app(&id,t){b"ok\n".to_vec()}else{b"error: App not installed\n".to_vec()}},
                     Ok(Request::OpenFolder(id,folder))=>{match shell.desktop_open_folder(&id,&folder,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
-                    Ok(Request::OpenUrl(url))=>{match shell.desktop_open_url(&url,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
+                    Ok(Request::OpenUrl(url))=>{match shell.desktop_open_link(&url,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::Tap(x, y)) => {
                         path((x, y), (x, y), 40.0);
                         b"ok\n".to_vec()

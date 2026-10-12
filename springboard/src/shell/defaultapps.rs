@@ -4,7 +4,8 @@
 //! kept in one preference. Apps are keyed by `AppDef::icon`, the stable identifier (the bundle id for installed apps).
 use super::apphost;
 use super::apps::{apps, AppId};
-use bifrost_ui::launch::{Handler, Rank, Registry};
+use bifrost_proto::WorkspaceStatus;
+use bifrost_ui::launch::{Choice, Handler, Rank, Registry};
 
 /// The preference holding the user's choices.
 pub const PREF: &str = "default.apps";
@@ -25,6 +26,7 @@ pub const CATEGORIES: &[Category] = &[
     Category { label: "Text", types: &["public.plain-text", "net.daringfireball.markdown", "public.json", "public.xml", "public.yaml", "org.toml.toml"], scheme: None },
     Category { label: "PDF Documents", types: &["com.adobe.pdf"], scheme: None },
     Category { label: "Archives", types: &["public.zip-archive", "public.tar-archive", "org.gnu.gnu-zip-archive"], scheme: None },
+    Category { label: "Email", types: &[], scheme: Some("mailto") },
 ];
 
 /// What each built-in app opens (installed apps declare it in their manifest).
@@ -132,6 +134,33 @@ impl super::Shell {
     pub fn default_app_for_file(&mut self, name: &str) -> Option<String> {
         self.ensure_defaults();
         self.defaults.as_ref().and_then(|(_, r, _)| r.default_for_file(name)).map(str::to_string)
+    }
+}
+
+impl super::Shell {
+    /// The Open With candidates for a file name, the default first (the `launch` service's `open_with`).
+    pub(super) fn open_with_choices(&mut self, name: &str) -> Vec<Choice> {
+        self.ensure_defaults();
+        self.defaults.as_ref().map_or_else(Vec::new, |(_, r, _)| r.open_with(name))
+    }
+
+    /// The app that opens a URL scheme, from the user's choice or the best declaration (the `launch` service).
+    pub(super) fn default_app_for_scheme(&mut self, scheme: &str) -> Option<String> {
+        self.ensure_defaults();
+        self.defaults.as_ref().and_then(|(_, r, _)| r.default_for_scheme(scheme)).map(str::to_string)
+    }
+
+    /// Opens a link from the control socket (`open-url`, `bifrost-open-url`): web links go to the browser, any other
+    /// scheme to the app the registry names for it (`mailto:`, `bifrost-app:`). Local and script schemes are refused.
+    pub fn desktop_open_link(&mut self, url: &str, t: f64) -> std::io::Result<()> {
+        let why = match self.workspace_open_url(url, t).0 {
+            WorkspaceStatus::Ok => return Ok(()),
+            WorkspaceStatus::Denied => "Unsupported link",
+            WorkspaceStatus::NotFound => "No app opens this link",
+            WorkspaceStatus::Unsupported => "Links are not supported here",
+            WorkspaceStatus::Failed => "The link could not be opened",
+        };
+        Err(std::io::Error::other(why))
     }
 }
 
@@ -251,6 +280,31 @@ mod tests {
         let saved = sh.prefs.get(PREF).unwrap().to_string();
         let again = registry(Some(&saved));
         assert_eq!(again.default_for_file("a.jpeg"), Some("bifrost.files"));
+    }
+
+    #[test]
+    fn the_email_category_names_the_mailto_handler() {
+        let mut r = Registry::new();
+        r.register(Handler::new("bifrost.mail").scheme("mailto"));
+        let v = views(&r);
+        let mail = CATEGORIES.iter().position(|c| c.label == "Email").unwrap();
+        assert_eq!(v[mail].apps, [("bifrost.mail".to_string(), "bifrost.mail".to_string())]);
+        assert_eq!(v[mail].current.as_deref(), Some("bifrost.mail"));
+        assert_eq!(r.default_for_scheme("MAILTO"), Some("bifrost.mail"), "schemes are case-insensitive");
+    }
+
+    #[test]
+    fn open_with_lists_the_default_first_and_links_are_refused_without_a_handler() {
+        let mut sh = crate::shell::tests::shell();
+        let c = sh.open_with_choices("holiday.PNG");
+        assert_eq!(c[0].app, "bifrost.photos");
+        assert!(c[0].is_default);
+        assert!(c.iter().any(|x| x.app == "bifrost.files" && !x.is_default), "Files can open PNG too: {c:?}");
+        assert!(sh.open_with_choices("notes.unknownext").is_empty());
+        assert_eq!(sh.default_app_for_scheme("mailto"), None, "nothing declares mailto in the test shell");
+        // a local scheme is refused before any app is looked up
+        assert_eq!(sh.desktop_open_link("file:///etc/passwd", 0.0).unwrap_err().to_string(), "Unsupported link");
+        assert_eq!(sh.desktop_open_link("gopher://x", 0.0).unwrap_err().to_string(), "No app opens this link");
     }
 
     #[test]
