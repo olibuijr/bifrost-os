@@ -38,6 +38,9 @@ pub mod replicator;
 pub mod emitter;
 pub mod plane_stats;
 pub mod plane_arith;
+pub mod blend;
+pub mod blur_kernels;
+pub mod effect_chain;
 
 #[cfg(test)]
 mod tests {
