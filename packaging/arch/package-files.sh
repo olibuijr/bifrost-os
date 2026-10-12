@@ -32,6 +32,14 @@ package_bifrost_files() {
   install -Dm644 "$here/bifrost-privd.service" "$pkgdir/usr/lib/systemd/system/bifrost-privd.service"
   install -Dm644 "$here/pam-bifrost-login" "$pkgdir/etc/pam.d/bifrost-login"
   install -Dm644 "$here/sysusers-bifrost.conf" "$pkgdir/usr/lib/sysusers.d/bifrost.conf"
+  # audio server (docs/audio-architecture.md): own `audio` user, /run/bifrost/audio, CAP_SYS_NICE unit
+  audiod=${PC_AUDIOD:-$(dirname "$binary")/bifrost-audiod}
+  if [[ -x $audiod ]]; then
+    install -Dm755 "$audiod" "$pkgdir/usr/bin/bifrost-audiod"
+  fi
+  install -Dm644 "$here/bifrost-audiod.service" "$pkgdir/usr/lib/systemd/system/bifrost-audiod.service"
+  install -Dm644 "$here/sysusers-bifrost-audio.conf" "$pkgdir/usr/lib/sysusers.d/bifrost-audio.conf"
+  install -Dm644 "$here/tmpfiles-bifrost-audio.conf" "$pkgdir/usr/lib/tmpfiles.d/bifrost-audio.conf"
   # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
   install -Dm644 "$here/sysctl-bifrost.conf" "$pkgdir/usr/lib/sysctl.d/60-bifrost.conf"
   install -Dm755 "$here/seed-data" "$pkgdir/usr/lib/springboard/seed-data"
