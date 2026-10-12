@@ -13,6 +13,7 @@ const HOUR_X_PT: f32 = 196.0;
 const UNDO_LABEL_ROOM_PT: f32 = 200.0;
 use super::*;
 use bifrost_app::kit::Surface;
+use bifrost_app::controls::tips::TipSection;
 
 const BLUE: u32 = bifrost_app::kit::ui::SYSTEM_BLUE;
 const RED: u32 = bifrost_app::kit::ui::SYSTEM_RED;
@@ -144,7 +145,7 @@ impl Reminders {
         let h = ui.pt(ITEM_H);
         let indent = ui.pt(30.0) * depth as f32;
         let accent = list_color(&self.data, r.list);
-        c.fill_rrect(x, y, w + shift, h, 0.0, if self.selected == Some(r.id) { CARD_BG.now() } else { bifrost_app::kit::ui::DETAIL_BG.now() });
+        c.fill_rrect(x, y, w + shift, h, 0.0, if self.selected == Some(r.id) { CARD_BG.now() } else { bifrost_app::kit::ui::CONTENT_BG.now() });
         let (cx, cy, rad) = (x + ui.pt(26.0) + indent, y + h / 2.0, ui.pt(SPACE_M));
         paint(c, (cx - rad - 2.0, cy - rad - 2.0, 2.0 * rad + 4.0, 2.0 * rad + 4.0), if r.completed { BLUE } else { accent }, ring((cx, cy), rad, ui.pt(1.5)));
         if r.completed {
@@ -344,6 +345,34 @@ impl Reminders {
         }
     }
 
+    /// The first-use alert tip: a card with the tip's title and message (`TipView`, Mini style). The first time
+    /// it is drawn it is recorded as shown.
+    fn draw_tip(&mut self, c: &mut Surface, ui: &Ui, rect: (f32, f32, f32, f32)) {
+        let (x, y, _, _) = rect;
+        let now = now_seconds();
+        let sections = self.tip_sections(now);
+        if !sections.is_empty() && !self.tip_marked {
+            self.tip_marked = true;
+            if let Some(store) = &mut self.tips {
+                let _ = store.mark_shown(AlertHint.id(), now);
+            }
+        }
+        self.cell(c, ui, rect);
+        let mut line_y = y + ui.pt(SPACE_M);
+        for section in &sections {
+            match section {
+                TipSection::Title(title) => {
+                    self.text(c, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), x + ui.pt(SPACE_L), line_y);
+                    line_y += ui.pt(MAC_BODY_PT) + ui.pt(SPACE_XS);
+                }
+                TipSection::Message(message) => {
+                    self.text(c, ui, message, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + ui.pt(SPACE_L), line_y);
+                }
+                TipSection::Actions(_) => {}
+            }
+        }
+    }
+
     fn draw_form_row(&mut self, c: &mut Surface, ui: &Ui, target: Target, rect: (f32, f32, f32, f32), t: f64) {
         let (x, y, w, h) = rect;
         let draft = self.editor.as_ref().map(|e| e.draft.clone());
@@ -364,6 +393,7 @@ impl Reminders {
                 bifrost_app::widgets::text_field(c, ui, &kit, r, hint, field.focused);
                 let _ = t;
             }
+            Target::Tip => self.draw_tip(c, ui, rect),
             Target::Due => {
                 self.cell(c, ui, rect);
                 self.text(c, ui, "Date", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));

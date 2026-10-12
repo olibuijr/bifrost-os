@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.0 — 2026-10-12
+
+- A new reminder's details now show a short tip under Due: set a due date and a time, and the alert still shows when Reminders is closed. Setting a date, or tapping the tip, dismisses it for good.
+- The window background is the content grey in Dark (white in Light) instead of black, so the list and the details sit on the same surface.
+
 ## 1.10.0 — 2026-10-12
 
 - Due-date alerts are now scheduled with the system. Each upcoming alert (and each early alert) is handed to the shell as a notification with a time trigger, so it shows on time even when Reminders is closed, and it is replaced or removed when the reminder changes. The app keeps up to 32 alerts pending and re-plans when the list changes, when the time zone changes, and at least once an hour.
