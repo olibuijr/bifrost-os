@@ -16,13 +16,18 @@ use bifrost_app::kit::ui::{
 use bifrost_app::kit::{Event, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
+use bifrost_app::controls::contact_card::Entry;
+use bifrost_app::controls::contact_display::{ContactsDefaults, SortOrder};
 use bifrost_app::controls::contact_groups::Groups;
+use bifrost_app::controls::contact_picker::{Choice, Mode, Picker};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::contactstore as store;
 use springboard::shell::keyboard::Out;
 use springboard::shell::textarea::TextArea;
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use crate::display_file;
 use crate::dupes;
 use crate::exchange;
 use crate::group_file;
@@ -43,6 +48,13 @@ const BAR_EXPORT: u32 = 8;
 const BAR_EXPORT_V4: u32 = 9;
 const BAR_NEW_GROUP: u32 = 10;
 const BAR_GROUP: u32 = 11;
+/// Group management: add people to the shown group, rename and delete it, and finish picking or renaming.
+const BAR_ADD_PEOPLE: u32 = 12;
+const BAR_RENAME: u32 = 13;
+const BAR_DELETE_GROUP: u32 = 14;
+const BAR_FINISH: u32 = 15;
+/// Opens the Settings screen (sort order of the list).
+const BAR_SETTINGS: u32 = 16;
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
@@ -51,6 +63,7 @@ const LIST_DUPLICATES: u32 = 103;
 /// Group `n` is the sidebar row `LIST_GROUP + n`; groups number from 1 and there are at most 1000 of them.
 const LIST_GROUP: u32 = 1000;
 const GROUPS_FILE: &str = "groups.txt";
+const DISPLAY_FILE: &str = "display.txt";
 
 /// What the list shows. Every filter but `All` narrows the list to a set of contact identifiers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +117,8 @@ const NODE_COPY: u64 = 210;
 const NODE_FIELD: u64 = 220;
 const NODE_LABEL: u64 = 230;
 const NODE_ADD: u64 = 240;
+/// The sort-order row of the Settings screen (its id sits above the form's add rows).
+const NODE_SORT: u64 = 250;
 const ROW_NODE: u64 = 10_000;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
@@ -120,6 +135,8 @@ const ADD_TITLES: [&str; 3] = ["add phone", "add email", "add address"];
 /// Focus index of the notes and of the search field (0..6 are the form fields).
 const NOTES: usize = 6;
 const SEARCH: usize = 7;
+/// Focus index of the group name field, which takes the search field's place while a group is renamed.
+const RENAME: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
@@ -127,6 +144,8 @@ enum Screen {
     List,
     Detail(u64),
     Editor(Option<u64>),
+    /// Display settings (the sort order of the list), in the detail pane.
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,8 +165,40 @@ enum Target {
     Field(usize),
     AddRow(usize),
     Label(usize),
+    /// The sort-order row of the Settings screen: each press moves to the next choice.
+    Sort,
     List,
     Content,
+}
+
+/// The sort choices the Settings row cycles through, in order.
+const SORT_CHOICES: [SortOrder; 4] = [SortOrder::UserDefault, SortOrder::FamilyName, SortOrder::GivenName, SortOrder::None];
+
+fn sort_label(order: SortOrder) -> &'static str {
+    match order {
+        SortOrder::UserDefault => "System Default",
+        SortOrder::FamilyName => "Family Name",
+        SortOrder::GivenName => "Given Name",
+        SortOrder::None => "Keep Order",
+    }
+}
+
+/// Orders two contacts for the list. `Keep Order` keeps the identifier order. The family and given names are split
+/// at the last space; the collation is the app's own (see `names`), so accents and Icelandic letters sort as before.
+fn compare_contacts(order: SortOrder, a: &Contact, b: &Contact) -> Ordering {
+    if order == SortOrder::None {
+        return a.id.cmp(&b.id);
+    }
+    let (ag, af) = names::split(a.display_name());
+    let (bg, bf) = names::split(b.display_name());
+    let (af, bf) = (if af.is_empty() { ag } else { af }, if bf.is_empty() { bg } else { bf });
+    let by_given = names::key(ag).cmp(&names::key(bg)).then(names::key(af).cmp(&names::key(bf)));
+    let by_family = names::key(af).cmp(&names::key(bf)).then(names::key(ag).cmp(&names::key(bg)));
+    let by_name = match order {
+        SortOrder::GivenName => by_given,
+        _ => by_family,
+    };
+    by_name.then(names::key(a.display_name().trim()).cmp(&names::key(b.display_name().trim()))).then(a.id.cmp(&b.id))
 }
 
 struct Row {
@@ -199,8 +250,17 @@ pub struct Contacts {
     history: History,
     /// Contact groups, saved beside the contacts file.
     groups: Groups,
+    /// The identifiers of the groups in sidebar order (the model does not list them).
+    group_ids: Vec<u64>,
     /// The groups file could not be read; the group commands are off so it is not overwritten.
     groups_failed: bool,
+    /// The group being renamed. Its name is typed in `rename`, which takes the search field's place.
+    renaming: Option<u64>,
+    rename: TextField,
+    /// The group that people are being added to from the picker. The list shows every contact while it is set.
+    picking: Option<u64>,
+    /// Display settings: the sort order of the list, saved beside the contacts file.
+    display: ContactsDefaults,
     /// A line of feedback about the last import or export, shown in place of nothing when there is no error.
     status: Option<String>,
     query: TextField,
@@ -246,11 +306,12 @@ impl Contacts {
             Err(e) => (vec![], Some(format!("Unable to load contacts: {e}"))),
         };
         let load_failed = error.is_some();
-        let (groups, groups_error) = match group_file::load(&path.with_file_name(GROUPS_FILE)) {
-            Ok(groups) => (groups, None),
-            Err(e) => (Groups::new(), Some(format!("Unable to load groups: {e}"))),
+        let (groups, group_ids, groups_error) = match group_file::load(&path.with_file_name(GROUPS_FILE)) {
+            Ok((groups, ids)) => (groups, ids, None),
+            Err(e) => (Groups::new(), Vec::new(), Some(format!("Unable to load groups: {e}"))),
         };
         let groups_failed = groups_error.is_some();
+        let display = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap_or_default();
         contacts.sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
         let history = History::new(&contacts);
         let mut app = Self {
@@ -265,7 +326,12 @@ impl Contacts {
             filter: Filter::All,
             history,
             groups,
+            group_ids,
             groups_failed,
+            renaming: None,
+            rename: TextField::new(),
+            picking: None,
+            display,
             status: None,
             query: TextField::new(),
             fields: Default::default(),
@@ -333,6 +399,7 @@ impl Contacts {
             Screen::List => "list".into(),
             Screen::Detail(id) => format!("detail:{id}"),
             Screen::Editor(id) => format!("editor:{}", id.map_or_else(|| "new".into(), |id| id.to_string())),
+            Screen::Settings => "settings".into(),
         };
         format!(
             "contacts_screen={screen}\ncontacts_count={}\ncontacts_shown={}\ncontacts_sidebar={}\ncontacts_confirm_delete={}\ncontacts_error={}\n",
@@ -382,15 +449,26 @@ impl Contacts {
         (self.detail_x() + (pane - cw) / 2.0, cw)
     }
     fn list_bar(&self) -> Toolbar {
-        Toolbar::new(vec![
-            ToolbarItem::icon(BAR_SIDEBAR, if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" }, "sidebar.left"),
-            ToolbarItem::flexible_space(),
-            ToolbarItem::button(BAR_IMPORT, "Import").enabled(!self.load_failed),
-            ToolbarItem::button(BAR_EXPORT, "Export 3.0").enabled(!self.load_failed),
-            ToolbarItem::button(BAR_EXPORT_V4, "Export 4.0").enabled(!self.load_failed),
-            ToolbarItem::button(BAR_NEW_GROUP, "New Group").enabled(!self.load_failed && !self.groups_failed),
-            ToolbarItem::icon(BAR_ADD, "New Contact", "plus").enabled(!self.load_failed),
-        ])
+        let groups_ok = !self.load_failed && !self.groups_failed;
+        let mut items = vec![ToolbarItem::icon(BAR_SIDEBAR, if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" }, "sidebar.left")];
+        if self.renaming.is_some() || self.picking.is_some() {
+            items.push(ToolbarItem::flexible_space());
+            items.push(ToolbarItem::button(BAR_FINISH, "Done"));
+            return Toolbar::new(items);
+        }
+        items.push(ToolbarItem::flexible_space());
+        if let Filter::Group(_) = self.filter {
+            items.push(ToolbarItem::button(BAR_ADD_PEOPLE, "Add People").enabled(groups_ok));
+            items.push(ToolbarItem::button(BAR_RENAME, "Rename Group").enabled(groups_ok));
+            items.push(ToolbarItem::button(BAR_DELETE_GROUP, "Delete Group").enabled(groups_ok));
+        }
+        items.push(ToolbarItem::button(BAR_IMPORT, "Import").enabled(!self.load_failed));
+        items.push(ToolbarItem::button(BAR_EXPORT, "Export 3.0").enabled(!self.load_failed));
+        items.push(ToolbarItem::button(BAR_EXPORT_V4, "Export 4.0").enabled(!self.load_failed));
+        items.push(ToolbarItem::button(BAR_NEW_GROUP, "New Group").enabled(groups_ok));
+        items.push(ToolbarItem::icon(BAR_SETTINGS, "Settings", "gearshape"));
+        items.push(ToolbarItem::icon(BAR_ADD, "New Contact", "plus").enabled(!self.load_failed));
+        Toolbar::new(items)
     }
     fn list_bar_bounds(&self) -> Rect {
         let x = if self.sidebar_shown { self.side() + SPACE_M } else { traffic_lights_trailing() + widgets::TOOLBAR_GAP_PT };
@@ -413,6 +491,7 @@ impl Contacts {
                 items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
                 items.push(ToolbarItem::button(BAR_DONE, "Done"));
             }
+            Screen::Settings => items.push(ToolbarItem::button(BAR_DONE, "Done")),
         }
         Toolbar::new(items)
     }
@@ -444,7 +523,7 @@ impl Contacts {
             (LIST_DUPLICATES, "Possible Duplicates".to_string(), "doc"),
             (0, "Groups".to_string(), ""),
         ];
-        for id in 1..=self.groups.len() as u64 {
+        for &id in &self.group_ids {
             if let Some(group) = self.groups.get(id) {
                 rows.push((LIST_GROUP + id as u32, group.name.clone(), "square.grid.2x2"));
             }
@@ -568,8 +647,15 @@ impl Contacts {
             Screen::List => 0.0,
             Screen::Detail(_) => self.card_layout(ui).height,
             Screen::Editor(_) => self.edit_layout(ui).height,
+            Screen::Settings => 0.0,
         };
         self.scroll.set_max(height - self.h);
+    }
+
+    /// The sort-order row of the Settings screen, in window points.
+    fn sort_row(&self) -> Rect {
+        let (x, cw) = self.column();
+        rect(x, UNIFIED_BAR_PT + 3.0 * SPACE_XL, cw, ROW)
     }
 
     // ---- model ----
@@ -596,8 +682,8 @@ impl Contacts {
     }
 
     fn rebuild(&mut self, ui: &Ui) {
-        self.contacts
-            .sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
+        let order = self.display.effective_sort_order(SortOrder::FamilyName);
+        self.contacts.sort_by(|a, b| compare_contacts(order, a, b));
         self.rows.clear();
         let mut top = 0.0;
         let mut previous = None;
@@ -606,7 +692,12 @@ impl Contacts {
             if shown.as_ref().is_some_and(|ids| !ids.contains(&self.contacts[i].id)) {
                 continue;
             }
-            let letter = names::section(self.contacts[i].display_name());
+            let name = self.contacts[i].display_name();
+            let letter = match order {
+                // The given name leads the sort, so its first word gives the section.
+                SortOrder::GivenName => names::section(names::split(name).0.split_whitespace().next().unwrap_or(name)),
+                _ => names::section(name),
+            };
             let section = (previous != Some(letter)).then_some(letter);
             if section.is_some() {
                 top += HEADER;
@@ -782,7 +873,7 @@ impl Contacts {
     }
 
     fn save_groups(&mut self) {
-        if let Err(e) = group_file::save(&self.path.with_file_name(GROUPS_FILE), &self.groups) {
+        if let Err(e) = group_file::save(&self.path.with_file_name(GROUPS_FILE), &self.groups, &self.group_ids) {
             self.error = Some(format!("Unable to save groups: {e}"));
         }
     }
@@ -796,6 +887,7 @@ impl Contacts {
         match self.groups.add(&name, None) {
             Ok(id) => {
                 self.error = None;
+                self.group_ids.push(id);
                 self.filter = Filter::Group(id);
                 self.list_scroll.jump_top();
                 self.save_groups();
@@ -803,6 +895,127 @@ impl Contacts {
             }
             Err(e) => self.error = Some(format!("Unable to add a group: {e:?}")),
         }
+    }
+
+    /// The group the list shows, when a group is selected in the sidebar and the groups file is usable.
+    fn shown_group(&self) -> Option<u64> {
+        match self.filter {
+            Filter::Group(group) if !self.load_failed && !self.groups_failed => Some(group),
+            _ => None,
+        }
+    }
+
+    /// Starts renaming the group the list shows: its name moves into the field that takes the search field's place.
+    fn start_rename(&mut self, ui: &Ui) {
+        let Some(group) = self.shown_group() else { return };
+        let Some(name) = self.groups.get(group).map(|g| g.name.clone()) else { return };
+        self.rename = TextField::new();
+        self.rename.push_str(&name);
+        self.renaming = Some(group);
+        self.query.clear();
+        self.error = None;
+        self.focus_field(RENAME);
+        self.rebuild(ui);
+    }
+
+    /// Saves the typed name, or keeps the old one when the name is empty or too long.
+    fn finish_rename(&mut self, ui: &Ui) {
+        let Some(group) = self.renaming.take() else { return };
+        let name = self.rename.to_string();
+        self.focus = None;
+        match self.groups.rename(group, &name) {
+            Ok(()) => {
+                self.error = None;
+                self.save_groups();
+            }
+            Err(e) => self.error = Some(format!("A group needs a name of 1 to 160 characters ({e:?})")),
+        }
+        self.rebuild(ui);
+    }
+
+    /// Ends a rename without saving it.
+    fn cancel_rename(&mut self, ui: &Ui) {
+        self.renaming = None;
+        self.focus = None;
+        self.rename = TextField::new();
+        self.rebuild(ui);
+    }
+
+    /// Deletes the group the list shows. Its contacts stay in the list; only the group and its memberships go.
+    fn delete_group(&mut self, ui: &Ui) {
+        let Some(group) = self.shown_group() else { return };
+        match self.groups.remove(group) {
+            Ok(removed) => {
+                self.group_ids.retain(|id| !removed.contains(id));
+                self.filter = Filter::All;
+                self.error = None;
+                self.list_scroll.jump_top();
+                self.save_groups();
+                self.rebuild(ui);
+            }
+            Err(e) => self.error = Some(format!("Unable to delete the group: {e:?}")),
+        }
+    }
+
+    /// Starts the people picker for the group the list shows. Every contact is listed; a press adds it to the group.
+    fn start_picking(&mut self, ui: &Ui) {
+        let Some(group) = self.shown_group() else { return };
+        self.picking = Some(group);
+        self.filter = Filter::All;
+        self.error = None;
+        self.status = Some("Click the people to add to the group, then Done".into());
+        self.list_scroll.jump_top();
+        self.rebuild(ui);
+    }
+
+    /// Picks one contact in the people picker. Members of the group are listed but cannot be chosen again.
+    fn pick_person(&mut self, ui: &Ui, row: usize) {
+        let Some(group) = self.picking else { return };
+        let Some(contact) = self.rows.get(row).map(|r| self.contacts[r.contact].clone()) else { return };
+        let entries: Vec<Entry> = self
+            .contacts
+            .iter()
+            .map(|c| Entry { id: c.id, name: c.display_name().to_string(), fields: Vec::new() })
+            .collect();
+        let mut picker = Picker::new(entries, Mode::Contact { need: None });
+        for member in self.groups.members(group, false).unwrap_or_default() {
+            picker.disable(member);
+        }
+        let name = contact.display_name().to_string();
+        match picker.select(contact.id) {
+            Ok(Some(Choice::Contact(id))) => match self.groups.add_member(group, id) {
+                Ok(_) => {
+                    self.error = None;
+                    self.status = Some(format!("Added {name} to the group"));
+                    self.save_groups();
+                }
+                Err(_) => self.error = Some("That group no longer exists".into()),
+            },
+            Ok(_) | Err(_) => self.status = Some(format!("{name} is already in the group")),
+        }
+        self.dirty = true;
+        self.rebuild(ui);
+    }
+
+    /// Ends the people picker and shows the group again.
+    fn finish_picking(&mut self, ui: &Ui) {
+        if let Some(group) = self.picking.take() {
+            self.filter = Filter::Group(group);
+            self.status = None;
+            self.list_scroll.jump_top();
+            self.rebuild(ui);
+        }
+    }
+
+    /// Moves the sort order to the next choice and saves it. The list is sorted again at once.
+    fn cycle_sort(&mut self, ui: &Ui) {
+        let current = self.display.sort_order();
+        let at = SORT_CHOICES.iter().position(|&c| c == current).unwrap_or(0);
+        self.display.set_sort_order(SORT_CHOICES[(at + 1) % SORT_CHOICES.len()]);
+        if let Err(e) = display_file::save(&self.path.with_file_name(DISPLAY_FILE), &self.display) {
+            self.error = Some(format!("Unable to save the settings: {e}"));
+        }
+        self.rebuild(ui);
     }
 
     /// Adds the open contact to the group the list shows, or takes it out when it is already a member.
@@ -997,12 +1210,41 @@ impl Contacts {
                     return Some(Target::Field(i));
                 }
             }
+            Screen::Settings => {
+                if self.sort_row().contains(x, y) {
+                    return Some(Target::Sort);
+                }
+            }
         }
         Some(Target::Content)
     }
 
     fn bar(&mut self, ui: &Ui, id: u32) {
+        // A rename is cancelled by any other control; the picker ends when a control outside it is pressed.
+        if self.renaming.is_some() && !matches!(id, BAR_FINISH | SEARCH_ID) {
+            self.cancel_rename(ui);
+        }
+        if self.picking.is_some() && !matches!(id, BAR_FINISH | SEARCH_ID) {
+            self.finish_picking(ui);
+        }
         match id {
+            BAR_FINISH => {
+                if self.renaming.is_some() {
+                    self.finish_rename(ui);
+                } else {
+                    self.finish_picking(ui);
+                }
+            }
+            BAR_ADD_PEOPLE => self.start_picking(ui),
+            BAR_RENAME => self.start_rename(ui),
+            BAR_DELETE_GROUP => self.delete_group(ui),
+            // An open editor keeps its unsaved edits, so Settings waits until it is done or cancelled.
+            BAR_SETTINGS if !self.editing() => {
+                self.screen = Screen::Settings;
+                self.focus = None;
+                self.status = None;
+                self.fit_scroll(ui);
+            }
             BAR_SIDEBAR => {
                 self.sidebar_shown = !self.sidebar_shown;
                 self.fit_scroll(ui);
@@ -1014,13 +1256,20 @@ impl Contacts {
                 }
             }
             BAR_CANCEL => self.cancel_editor(ui),
-            BAR_DONE => self.save_editor(ui),
+            BAR_DONE => {
+                if self.screen == Screen::Settings {
+                    self.screen = Screen::List;
+                    self.fit_scroll(ui);
+                } else {
+                    self.save_editor(ui);
+                }
+            }
             BAR_IMPORT => self.import_vcards(ui),
             BAR_EXPORT => self.export_vcards(exchange::Version::V3),
             BAR_EXPORT_V4 => self.export_vcards(exchange::Version::V4),
             BAR_NEW_GROUP => self.new_group(ui),
             BAR_GROUP => self.toggle_group(ui),
-            SEARCH_ID => self.focus_field(SEARCH),
+            SEARCH_ID => self.focus_field(if self.renaming.is_some() { RENAME } else { SEARCH }),
             _ => {}
         }
     }
@@ -1038,6 +1287,7 @@ impl Contacts {
             NODE_FAVORITE => Target::Favorite,
             NODE_SHARE => Target::Share,
             NODE_COPY_CONTACT => Target::CopyContact,
+            NODE_SORT => Target::Sort,
             NODE_DELETE if self.confirm_delete => Target::ConfirmDelete,
             NODE_DELETE => Target::Delete,
             NODE_CANCEL => Target::CancelDelete,
@@ -1058,26 +1308,35 @@ impl Contacts {
         if !matches!(target, Target::Field(_) | Target::Search) && self.focus == Some(SEARCH) {
             self.focus = None;
         }
+        if self.renaming.is_some() && !matches!(target, Target::Search | Target::Bar(_)) {
+            self.cancel_rename(ui);
+        }
         match target {
             Target::Bar(id) => self.bar(ui, id),
             Target::Sidebar(id) => {
+                if self.picking.is_some() {
+                    self.finish_picking(ui);
+                }
                 self.filter = Filter::from_sidebar_id(id);
                 self.status = None;
                 self.list_scroll.jump_top();
                 self.rebuild(ui);
             }
-            Target::Search => self.focus_field(SEARCH),
+            Target::Search => self.focus_field(if self.renaming.is_some() { RENAME } else { SEARCH }),
             Target::SearchClear => {
                 self.query.clear();
                 self.list_scroll.jump_top();
                 self.rebuild(ui);
             }
             Target::Row(i) => {
-                if let Some(row) = self.rows.get(i) {
+                if self.picking.is_some() {
+                    self.pick_person(ui, i);
+                } else if let Some(row) = self.rows.get(i) {
                     let id = self.contacts[row.contact].id;
                     self.open_detail(ui, id);
                 }
             }
+            Target::Sort => self.cycle_sort(ui),
             Target::List => {
                 if matches!(self.screen, Screen::Detail(_)) {
                     self.close_detail(ui);
@@ -1133,6 +1392,7 @@ impl Contacts {
     fn field_mut(&mut self, i: usize) -> Option<&mut TextField> {
         match i {
             SEARCH => Some(&mut self.query),
+            RENAME => Some(&mut self.rename),
             0..=5 => Some(&mut self.fields[i]),
             _ => None,
         }
@@ -1143,9 +1403,28 @@ impl Contacts {
         let Some(i) = self.focus else {
             if matches!(out, Out::Hide | Out::Named("Escape")) && matches!(self.screen, Screen::Editor(_)) {
                 self.cancel_editor(ui);
+            } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.screen == Screen::Settings {
+                self.screen = Screen::List;
+                self.fit_scroll(ui);
             }
             return;
         };
+        if i == RENAME {
+            match out {
+                Out::Enter => self.finish_rename(ui),
+                Out::Hide | Out::Named("Escape") => self.cancel_rename(ui),
+                Out::Text(s) => {
+                    let room = bifrost_app::controls::contact_groups::MAX_NAME.saturating_sub(self.rename.chars().count());
+                    let text: String = s.chars().take(room).collect();
+                    self.rename.push_str(&text);
+                }
+                Out::Backspace => self.rename.pop(),
+                Out::Named("Left") => self.rename.move_caret(false),
+                Out::Named("Right") => self.rename.move_caret(true),
+                _ => {}
+            }
+            return;
+        }
         if matches!(out, Out::Hide | Out::Named("Escape")) {
             if i == SEARCH {
                 self.focus = None;
@@ -1202,6 +1481,7 @@ impl Contacts {
         let clip = clipboard::text().is_some_and(|s| !s.is_empty());
         match self.focus {
             Some(SEARCH) => self.query.commands(clip),
+            Some(RENAME) => self.rename.commands(clip),
             Some(i) if i < 6 => self.fields[i].commands(clip),
             _ => Commands::default(),
         }
@@ -1233,7 +1513,11 @@ impl Contacts {
                 }
             }
         }
-        nodes.push(Node { id: SEARCH_ID as u64, role: Role::TextField, label: "Search".into(), value: self.query.to_string(), bounds: self.search_rect(), enabled: true });
+        if self.renaming.is_some() {
+            nodes.push(Node { id: SEARCH_ID as u64, role: Role::TextField, label: "Group Name".into(), value: self.rename.to_string(), bounds: self.search_rect(), enabled: true });
+        } else {
+            nodes.push(Node { id: SEARCH_ID as u64, role: Role::TextField, label: "Search".into(), value: self.query.to_string(), bounds: self.search_rect(), enabled: true });
+        }
         if self.sidebar_shown {
             let list = self.sidebar();
             let bounds = self.sidebar_bounds();
@@ -1296,6 +1580,11 @@ impl Contacts {
                 if let Some(c) = l.cancel {
                     nodes.push(button(NODE_CANCEL, "Cancel", c));
                 }
+            }
+            Screen::Settings => {
+                let value = sort_label(self.display.effective_sort_order(SortOrder::FamilyName));
+                let shown = if self.display.sort_order() == SortOrder::UserDefault { format!("{value} (System Default)") } else { value.to_string() };
+                nodes.push(Node { id: NODE_SORT, role: Role::Button, label: "Sort Order".into(), value: shown, bounds: self.sort_row(), enabled: true });
             }
         }
         nodes
@@ -1440,7 +1729,30 @@ impl Contacts {
         // the list's own band above the rows, so scrolled rows never show under the search field
         let count = format!("{} Contacts", self.contacts.len());
         self.centre_text(s, ui, &count, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x0 + self.list_w() / 2.0, (bottom + self.h) / 2.0);
-        widgets::search_field(s, ui, &self.query, self.search_rect(), "Search", self.focus == Some(SEARCH));
+        if self.renaming.is_some() {
+            widgets::search_field(s, ui, &self.rename, self.search_rect(), "Group Name", self.focus == Some(RENAME));
+        } else {
+            widgets::search_field(s, ui, &self.query, self.search_rect(), "Search", self.focus == Some(SEARCH));
+        }
+    }
+
+    /// The Settings screen: one grouped card with the sort order. A press on the row moves to the next choice.
+    fn draw_settings(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, cw) = self.column();
+        let mid = UNIFIED_BAR_PT + SPACE_XL;
+        self.centre_text(s, ui, "Settings", MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x + cw / 2.0, mid);
+        let r = self.sort_row();
+        Self::fill(s, ui, r, m::CARD_RADIUS, CARD_BG.now());
+        self.text(s, ui, "Sort Order", MAC_BODY_PT, Weight::Regular, LABEL.now(), r.x + SPACE_L, r.y + r.h / 2.0);
+        let value = sort_label(self.display.effective_sort_order(SortOrder::FamilyName));
+        let room = ui.pt(cw - 2.0 * SPACE_L - MAC_BODY_PT * 8.0);
+        let value = ui.fit(value, MAC_BODY_PT, room);
+        let end = r.x + r.w - SPACE_L;
+        let width = ui.measure(&value, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
+        self.text(s, ui, &value, MAC_BODY_PT, Weight::Regular, LINK.now(), end - width, r.y + r.h / 2.0);
+        let note = "Applies to the contact list. Keep Order lists contacts as they were added.";
+        let note = ui.fit(note, MAC_FOOTNOTE_PT, ui.pt(cw));
+        self.centre_text(s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, r.y + r.h + SPACE_M);
     }
 
     fn sync_notes(&mut self, ui: &Ui) {
@@ -1550,6 +1862,7 @@ impl Contacts {
             }
             Screen::Detail(_) => self.draw_detail(s, ui, t),
             Screen::Editor(_) => self.draw_editor(s, ui, t),
+            Screen::Settings => self.draw_settings(s, ui),
         }
         // the list column and the sidebar are opaque columns left of the detail pane
         s.fill_rect(0, 0, dx as usize, s.h, DETAIL_BG.now());
@@ -1669,11 +1982,85 @@ mod tests {
         app.toggle_group(&ui);
         let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["Anna As"]);
-        let saved = group_file::load(&path.with_file_name(GROUPS_FILE)).unwrap();
-        assert_eq!(saved.members(1, false).unwrap(), vec![1]);
+        let (saved, ids) = group_file::load(&path.with_file_name(GROUPS_FILE)).unwrap();
+        assert_eq!(saved.members(ids[0], false).unwrap(), vec![1]);
         app.open_detail(&ui, 1);
         app.toggle_group(&ui);
         assert!(app.listed().is_empty(), "a second press takes the contact out again");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_group_can_be_renamed_and_deleted_and_the_file_keeps_the_rest() {
+        let path = file_with("rename", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.new_group(&ui);
+        app.new_group(&ui);
+        assert_eq!(app.group_ids, vec![1, 2]);
+        app.filter = Filter::Group(1);
+        app.start_rename(&ui);
+        assert_eq!(app.renaming, Some(1));
+        assert_eq!(app.rename.to_string(), "Group 1", "the name is typed into the field that replaces search");
+        app.rename.clear();
+        app.rename.push_str("Friends");
+        app.finish_rename(&ui);
+        assert_eq!(app.renaming, None);
+        assert_eq!(app.groups.get(1).unwrap().name, "Friends");
+
+        app.filter = Filter::Group(1);
+        app.delete_group(&ui);
+        assert_eq!(app.filter, Filter::All);
+        assert_eq!(app.group_ids, vec![2], "the deleted group leaves the sidebar");
+        let (back, ids) = group_file::load(&path.with_file_name(GROUPS_FILE)).unwrap();
+        assert_eq!(ids.len(), 1, "the file keeps only the group that is left");
+        assert_eq!(back.get(ids[0]).unwrap().name, "Group 2");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_people_picker_adds_each_contact_once() {
+        let path = file_with("picker", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.new_group(&ui);
+        app.start_picking(&ui);
+        assert_eq!(app.picking, Some(1));
+        assert_eq!(app.filter, Filter::All, "the picker lists every contact");
+        app.pick_person(&ui, 0);
+        assert_eq!(app.groups.members(1, false).unwrap(), vec![1]);
+        assert!(app.status.as_deref().unwrap().contains("Added Anna As"), "{:?}", app.status);
+        app.pick_person(&ui, 0);
+        assert_eq!(app.groups.members(1, false).unwrap(), vec![1], "a member cannot be chosen twice");
+        assert!(app.status.as_deref().unwrap().contains("already"), "{:?}", app.status);
+        app.finish_picking(&ui);
+        assert_eq!(app.picking, None);
+        assert_eq!(app.filter, Filter::Group(1));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_sort_order_decides_which_name_leads() {
+        let zoe = contact(1, "Zoe Ann");
+        let adam = contact(2, "Adam Zed");
+        assert_eq!(compare_contacts(SortOrder::FamilyName, &zoe, &adam), Ordering::Less, "Ann sorts before Zed");
+        assert_eq!(compare_contacts(SortOrder::GivenName, &zoe, &adam), Ordering::Greater, "Adam sorts before Zoe");
+        assert_eq!(compare_contacts(SortOrder::None, &zoe, &adam), Ordering::Less, "identifier order");
+    }
+
+    #[test]
+    fn the_settings_row_cycles_the_sort_and_saves_it() {
+        let path = file_with("settings", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.screen = Screen::Settings;
+        assert_eq!(app.display.effective_sort_order(SortOrder::FamilyName), SortOrder::FamilyName);
+        app.cycle_sort(&ui);
+        assert_eq!(app.display.sort_order(), SortOrder::FamilyName);
+        app.cycle_sort(&ui);
+        assert_eq!(app.display.sort_order(), SortOrder::GivenName);
+        let saved = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert_eq!(saved.sort_order(), SortOrder::GivenName);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
