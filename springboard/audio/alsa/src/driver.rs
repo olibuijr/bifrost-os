@@ -356,6 +356,8 @@ pub struct AlsaIo {
     started: bool,
     /// The kernel reported the device disconnected (unplugged).
     gone: bool,
+    /// The zero timestamp of a restart `recover` did, until the server takes it (`take_restart`).
+    restarted: Option<ZeroTimeStamp>,
 }
 
 impl AlsaIo {
@@ -381,7 +383,7 @@ impl AlsaIo {
         let buffer = out.as_ref().or(inp.as_ref()).map_or(0, |p| p.buffer_frames);
         let prefill = (cfg.quantum * 2).min(buffer / 2).max(cfg.quantum.min(buffer));
         dlog!("opened {} {}Hz quantum {} prefill {} buffer {}", e.desc.uid, rate, cfg.quantum, prefill, buffer);
-        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0, conv_out: 0, conv_in: 0, started: false, gone: false })
+        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0, conv_out: 0, conv_in: 0, started: false, gone: false, restarted: None })
     }
 
     /// Cycles lost to under- and overruns since open.
@@ -446,7 +448,8 @@ impl AlsaIo {
             Recovery::Restart => {
                 dlog!("stream left RUNNING (state {state}), restarting");
                 match self.start() {
-                    Ok(_) => {}
+                    // The counter starts over and the DLL was reset: the server re-anchors on this stamp.
+                    Ok(z) => self.restarted = Some(z),
                     Err(DriverError::NotFound) | Err(DriverError::Busy) => self.gone = true,
                     Err(e) => dlog!("restart failed: {e:?}"),
                 }
@@ -567,6 +570,7 @@ impl DeviceIo for AlsaIo {
 
     fn stop(&mut self) {
         self.started = false;
+        self.restarted = None;
         if let Some(p) = self.primary() {
             let _ = p.drop_stream();
         }
@@ -594,6 +598,10 @@ impl DeviceIo for AlsaIo {
 
     fn host_time_of(&self, hw_frames: u64) -> Option<u64> {
         (self.dll.updates() > 0).then(|| self.dll.host_time_of(hw_frames))
+    }
+
+    fn take_restart(&mut self) -> Option<ZeroTimeStamp> {
+        self.restarted.take()
     }
 }
 

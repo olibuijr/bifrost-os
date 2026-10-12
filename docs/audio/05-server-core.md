@@ -12,7 +12,7 @@ Contract: `docs/audio-architecture.md`. Task: `tasks/audio/05-server-core.md`.
 | `springboard/audio/server/src/io.rs` | `ClientSlot` (memfd, eventfd, rings), `Shared` (client list handoff, quantum, counters), `DeviceRunner::cycle` (steps 1 to 6), the SCHED_FIFO 88 + uclamp IO thread on a timerfd, `set_realtime`. |
 | `springboard/audio/server/src/client.rs` | `Conn`, `SO_PEERCRED`, `send_msg`/`recv_msg` with `SCM_RIGHTS`. |
 | `springboard/audio/server/src/control.rs` | `ServerCore` (Hello, IO procs, device start on first running client and stop after 2 s idle, quantum = smallest running buffer, overload notices), the `ObjectApi` seam for task 02, and the `SOCK_SEQPACKET` loop. |
-| `springboard/audio/server/src/main.rs` | args, `mlockall`, signalfd, drop to `audio` keeping CAP_SYS_NICE, `LoopbackDriver`, serve. |
+| `springboard/audio/server/src/main.rs` | args, `mlockall`, signalfd, drop to `audio` keeping CAP_SYS_NICE, drivers (`--drivers`, task 24), serve. |
 | `springboard/audio/server/examples/sine-client.rs` | Raw test client for Midget. |
 | `packaging/arch/` | `bifrost-audiod.service`, `sysusers-bifrost-audio.conf`, `tmpfiles-bifrost-audio.conf`, install lines in `package-files.sh`. |
 
@@ -34,7 +34,7 @@ Contract: `docs/audio-architecture.md`. Task: `tasks/audio/05-server-core.md`.
 
 ## Left (todo_left)
 
-- Wire task 02's object tree into `ObjectApi` and `ServerCore::device_id`; wire `bifrost-audio-alsa`'s `AlsaDriver` into `main.rs` (one line, the comment marks it).
+- Wire task 02's object tree into `ObjectApi` and `ServerCore::device_id`. (`AlsaDriver` is wired into `main.rs` since task 24, `docs/audio/24-server-driver-wiring.md`.)
 - The eventfd of each IO proc is created and sent but not signalled (a write is a syscall other than the futex, which the real-time rule forbids). Epoll-style clients need a design decision (a non-RT helper thread that mirrors `wake`).
 - Hot-plug events are read on the 250 ms tick and on socket activity only; the ALSA driver should expose a pollable fd for them.
 - `PromoteThread` checks the tid against `/proc/<peer pid>/task/` instead of the pidfd; the pidfd arrives and is closed.

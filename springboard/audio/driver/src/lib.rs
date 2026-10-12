@@ -137,6 +137,13 @@ pub trait DeviceIo: Send {
         let _ = hw_frames;
         None
     }
+    /// The zero timestamp of a restart the driver did on its own since the last call: it recovered from an xrun or
+    /// a suspend by restarting the stream, so the hardware counter starts over at `sample_time` and its DLL was
+    /// reset. The server polls this after every cycle and, on `Some`, re-anchors its cycle timeline and republishes
+    /// the zero timestamp (with a new seed). `None` (the default): no restart. Added by task 24.
+    fn take_restart(&mut self) -> Option<ZeroTimeStamp> {
+        None
+    }
 }
 
 /// A driver with devices on a manual clock: tests advance time with `advance` and every device's hardware pointer

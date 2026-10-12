@@ -4,14 +4,16 @@
 //! Per cycle: (1) apply a pending quantum change, (2) read the hardware position and publish the zero timestamp,
 //! (3) ReadInput into the clients' input rings, (4) trigger the clients through their activation records and wait
 //! for them until the budget is spent, (5) MixOutput from the clients' output rings (a client without a full
-//! quantum is skipped, counted and told; the device never waits for it), (6) WriteMix to the driver.
+//! quantum is skipped, counted and told; the device never waits for it), (6) WriteMix to the driver, (7) when the
+//! driver restarted the stream on its own (xrun or suspend recovery), re-anchor the timeline and republish the zero
+//! timestamp with a new seed.
 //!
 //! The hot path (`cycle`) never allocates, locks (the client list is read with `try_lock` and only when its
 //! generation changed) or makes a syscall other than the futex. `unsafe` is confined to the shared-memory accessors
 //! of `ClientSlot` and the scheduling syscalls; each block has a SAFETY comment. Owner: task 05.
 
 use crate::mixer::{self, VolumeRamp, RAMP_FRAMES};
-use bifrost_audio_driver::{DeviceIo, DriverError, HwPosition};
+use bifrost_audio_driver::{DeviceIo, DriverError, HwPosition, ZeroTimeStamp};
 use bifrost_audio_shm::{self as shm, Activation, Region, Ring, RingHeader, ZeroStamp, ZeroStampValue};
 use bifrost_audio_types::control::ShmLayout;
 use bifrost_audio_types::{Buffer, BufferList};
@@ -250,6 +252,8 @@ pub struct Shared {
     pub cycles: AtomicU64,
     pub xruns: AtomicU64,
     pub late_total: AtomicU64,
+    /// Stream restarts the driver did on its own (xrun or suspend recovery), each a new timeline.
+    pub restarts: AtomicU64,
     /// The quantum the sustained-xrun fallback raised to (0 = none); the control thread never goes below it.
     pub fallback_floor: AtomicU32,
 }
@@ -264,6 +268,7 @@ impl Shared {
             cycles: AtomicU64::new(0),
             xruns: AtomicU64::new(0),
             late_total: AtomicU64::new(0),
+            restarts: AtomicU64::new(0),
             fallback_floor: AtomicU32::new(0),
         })
     }
@@ -323,6 +328,8 @@ pub struct CycleReport {
     /// Clients triggered this cycle.
     pub triggered: u32,
     pub device_xrun: bool,
+    /// The driver restarted the stream during this cycle: the timeline was re-anchored on its new zero timestamp.
+    pub restarted: bool,
     /// The driver-clock time at which the next cycle starts.
     pub next_ns: u64,
 }
@@ -398,6 +405,11 @@ impl DeviceRunner {
         self.cycle
     }
 
+    /// The zero-timestamp seed: it changes whenever the timeline starts over, so clients drop their extrapolation.
+    pub fn seed(&self) -> u32 {
+        self.seed
+    }
+
     pub fn latency(&self) -> bifrost_audio_driver::Latency {
         self.io.latency()
     }
@@ -451,6 +463,21 @@ impl DeviceRunner {
             1.0
         };
         let v = ZeroStampValue { sample_time: pos.hw_frames, host_ns: pos.host_ns, rate_scalar, seed: self.seed };
+        for s in self.snapshot.iter() {
+            s.zero().publish(v);
+        }
+    }
+
+    /// Re-anchors the timeline on the zero timestamp of a stream restart the driver did on its own: the next cycle
+    /// is the stamp's frame (cycles follow at the quantum from there), and every client gets the new zero timestamp
+    /// at once, with a new seed and a rate scalar of 1 (the DLL starts over too).
+    fn reanchor(&mut self, z: ZeroTimeStamp) {
+        let rate = self.cfg.rate.max(1) as u128;
+        self.start_host = z.host_ns.saturating_sub((z.sample_time as u128 * 1_000_000_000 / rate) as u64);
+        self.timeline_frames = z.sample_time;
+        self.seed = self.seed.wrapping_add(1);
+        self.shared.restarts.fetch_add(1, Ordering::Relaxed);
+        let v = ZeroStampValue { sample_time: z.sample_time, host_ns: z.host_ns, rate_scalar: 1.0, seed: self.seed };
         for s in self.snapshot.iter() {
             s.zero().publish(v);
         }
@@ -587,8 +614,15 @@ impl DeviceRunner {
         }
 
         self.cycle += 1;
-        self.timeline_frames += q as u64;
         self.shared.cycles.store(self.cycle, Ordering::Relaxed);
+        // 7. A restart the driver did on its own (in `read_input` or `write_mix`) starts a new timeline.
+        match self.io.take_restart() {
+            Some(z) => {
+                self.reanchor(z);
+                report.restarted = true;
+            }
+            None => self.timeline_frames += q as u64,
+        }
         report.next_ns = self.next_ns();
         report
     }
@@ -649,6 +683,9 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
             let rep = runner.cycle(now_raw_ns());
             if rep.device_xrun {
                 log("xrun", &format!("{name}: device xrun at cycle {}", runner.cycles()));
+            }
+            if rep.restarted {
+                log("driver", &format!("{name}: stream restarted at cycle {}, timeline re-anchored (seed {})", runner.cycles(), runner.seed()));
             }
             if rep.late > 0 {
                 log("xrun", &format!("{name}: {} late client(s) at cycle {}", rep.late, runner.cycles()));
@@ -875,5 +912,39 @@ mod tests {
         // The second cycle starts at 10_666_666 ns: 10_666_666 * 48000 / 1e9 = 511.99 frames, rounded down.
         assert_eq!(z.sample_time, 2 * 5_333_333 * 48_000 / 1_000_000_000);
         assert_eq!(z.host_ns, 2 * NS_PER_256);
+    }
+
+    #[test]
+    fn a_driver_restart_republishes_the_zero_timestamp_and_reanchors_the_timeline() {
+        const RESTART_NS: u64 = 2 * NS_PER_256 + 1_000_000;
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        Rig::play(&a, 256, &[0.0, 0.0]);
+        let rep = r.step();
+        // 256 frames after the start at 0: 256e9 / 48000 = 5_333_333.3 ns.
+        assert_eq!((rep.restarted, rep.next_ns), (false, 5_333_333));
+        assert_eq!(r.runner.seed(), 1);
+        // The second cycle runs 1 ms late, at 11_666_666 ns, and the driver restarts the stream (xrun recovery).
+        r.h.advance(NS_PER_256 + 1_000_000);
+        r.h.force_restart(UID);
+        Rig::play(&a, 256, &[0.0, 0.0]);
+        let rep = r.runner.cycle(r.h.clock().now());
+        // Re-anchored: the next cycle is frame 0 of the new stream, at the restart (the old timeline said 512
+        // frames after 0 = 10_666_666), and the clients already have the new stamp with a new seed.
+        assert_eq!((rep.restarted, rep.next_ns), (true, RESTART_NS));
+        assert_eq!(r.shared.restarts.load(Ordering::Relaxed), 1);
+        assert_eq!(r.runner.seed(), 2);
+        assert_eq!(a.zero().read(), ZeroStampValue { sample_time: 0, host_ns: RESTART_NS, rate_scalar: 1.0, seed: 2 });
+        // The next cycle follows the new anchor: 5_333_333 ns after the restart the hardware has played
+        // 5_333_333 * 48000 / 1e9 = 255.99 -> 255 frames of the new stream.
+        Rig::play(&a, 256, &[0.0, 0.0]);
+        let rep = r.step();
+        assert!(!rep.restarted);
+        let z = a.zero().read();
+        assert_eq!((z.sample_time, z.host_ns, z.seed), (255, RESTART_NS + NS_PER_256, 2));
+        // 256 frames after the restart: 11_666_666 + 5_333_333 (the old timeline said 768 frames = 16_000_000).
+        assert_eq!(rep.next_ns, 16_999_999);
+        assert_eq!(r.runner.next_cycle_ns(), 16_999_999);
+        assert_eq!(r.shared.restarts.load(Ordering::Relaxed), 1);
     }
 }

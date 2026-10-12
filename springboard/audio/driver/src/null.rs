@@ -53,6 +53,9 @@ struct NullDev {
     written: Vec<Vec<f32>>,
     input: Vec<VecDeque<f32>>,
     xrun_next_write: Option<u32>,
+    /// The zero timestamp of a forced restart not yet taken by `take_restart`.
+    restart: Option<ZeroTimeStamp>,
+    restarts: u32,
 }
 
 #[derive(Default)]
@@ -96,6 +99,24 @@ impl NullHandle {
     /// The next `write_mix` fails with an xrun of `frames` frames.
     pub fn inject_xrun(&self, uid: &str, frames: u32) {
         self.st.lock().unwrap().devs.get_mut(uid).unwrap().xrun_next_write = Some(frames);
+    }
+    /// Restarts a running device's stream now, as a driver does on its own to recover from an xrun or a suspend:
+    /// the hardware pointer starts over at 0 from the current clock and `take_restart` reports the new zero
+    /// timestamp once. Does nothing to a device that is not running.
+    pub fn force_restart(&self, uid: &str) {
+        let now = self.clock.now();
+        let mut s = self.st.lock().unwrap();
+        let d = s.devs.get_mut(uid).unwrap();
+        if !d.running {
+            return;
+        }
+        d.start_ns = now;
+        d.restarts += 1;
+        d.restart = Some(ZeroTimeStamp { sample_time: 0, host_ns: now });
+    }
+    /// Restarts forced since the driver was made.
+    pub fn restarts(&self, uid: &str) -> u32 {
+        self.st.lock().unwrap().devs[uid].restarts
     }
     pub fn push_event(&self, e: DriverEvent) {
         self.st.lock().unwrap().events.push(e);
@@ -209,6 +230,7 @@ impl DeviceIo for NullIo {
         d.running = true;
         d.start_ns = now;
         d.starts += 1;
+        d.restart = None;
         Ok(ZeroTimeStamp { sample_time: 0, host_ns: now })
     }
 
@@ -261,6 +283,10 @@ impl DeviceIo for NullIo {
             self.cfg.input.then(|| StreamFormat::float32(self.cfg.rate, self.in_ch)),
             self.cfg.output.then(|| StreamFormat::float32(self.cfg.rate, self.out_ch)),
         )
+    }
+
+    fn take_restart(&mut self) -> Option<ZeroTimeStamp> {
+        self.h.st.lock().unwrap().devs.get_mut(&self.uid).unwrap().restart.take()
     }
 }
 
@@ -330,6 +356,28 @@ mod tests {
         io.read_input(3, &mut dst).unwrap();
         assert_eq!(dst.buffers[0].data, vec![1.0, 2.0, 0.0]);
         assert_eq!(dst.buffers[1].data, vec![3.0, 4.0, 0.0]);
+    }
+
+    #[test]
+    fn a_forced_restart_starts_the_pointer_over_and_is_reported_once() {
+        let mut d = NullDriver::new(vec![NullDriver::stereo("n0", 48_000.0)]);
+        let h = d.handle();
+        let mut io = d.open("n0", &cfg()).unwrap();
+        // Not running: nothing to restart.
+        h.force_restart("n0");
+        assert_eq!(io.take_restart(), None);
+        io.start().unwrap();
+        h.advance(1_000_000_000);
+        assert_eq!(io.position().hw_frames, 48_000);
+        h.force_restart("n0");
+        assert_eq!(io.take_restart(), Some(ZeroTimeStamp { sample_time: 0, host_ns: 1_000_000_000 }));
+        assert_eq!(io.take_restart(), None);
+        assert_eq!(io.position().hw_frames, 0);
+        // 10 ms after the restart: 480 frames.
+        h.advance(10_000_000);
+        assert_eq!(io.position().hw_frames, 480);
+        assert_eq!(h.restarts("n0"), 1);
+        assert_eq!(h.start_stop_counts("n0"), (1, 0));
     }
 
     #[test]
