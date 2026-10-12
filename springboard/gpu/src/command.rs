@@ -416,7 +416,7 @@ impl CommandBuffer {
         self.keep.push(Keep::Buffer(src.clone()));
         self.keep.push(Keep::Texture(dst.clone()));
         let regions = [vk::BufferImageCopy2::default()
-            .buffer_offset(offset as u64)
+            .buffer_offset(src.inner.offset + offset as u64)
             .buffer_row_length(row)
             .buffer_image_height(0)
             .image_subresource(color_layers())
@@ -754,7 +754,7 @@ impl RenderEncoder<'_> {
     pub fn set_vertex_buffer(&mut self, binding: u32, buffer: &Buffer, offset: usize) {
         self.cb.keep.push(Keep::Buffer(buffer.clone()));
         // SAFETY: the buffer is live (kept above) and the offset is within it for the draws that follow.
-        unsafe { self.cb.device.inner.device.cmd_bind_vertex_buffers(self.cb.raw, binding, &[buffer.inner.buffer], &[offset as u64]) };
+        unsafe { self.cb.device.inner.device.cmd_bind_vertex_buffers(self.cb.raw, binding, &[buffer.inner.buffer], &[buffer.inner.offset + offset as u64]) };
     }
 
     /// Binds a sampled texture at descriptor `binding` of set 0.
@@ -1130,5 +1130,27 @@ mod gpu_tests {
         drop(file);
         device.wait_idle().expect("idle");
         assert!(device.inner.retired.lock().unwrap().is_empty());
+    }
+
+    /// Small buffers are slices of a shared block: a copy from the second one must read its own bytes, not the
+    /// block's first bytes (the sub-allocation offset is added).
+    #[test]
+    fn copies_from_a_sub_allocated_buffer_use_its_offset() {
+        use crate::BufferUsage;
+        let device = Device::open(None).expect("a Vulkan 1.3 device");
+        let queue = device.new_command_queue();
+        let first = device.new_buffer(16, BufferUsage::STAGING).expect("first small buffer");
+        let second = device.new_buffer(16, BufferUsage::STAGING).expect("second small buffer");
+        assert!(second.inner.offset > 0 || first.inner.buffer != second.inner.buffer, "second buffer is a later slice");
+        first.write(0, &[9u8; 16]).unwrap();
+        let pixels: Vec<u8> = (1..=16).collect();
+        second.write(0, &pixels).unwrap();
+        let tex = device
+            .new_texture(&TextureDescriptor { width: 2, height: 2, format: PixelFormat::Rgba8Unorm, usage: TextureUsage::COPY_DST | TextureUsage::COPY_SRC, exportable: false, modifiers: vec![] })
+            .expect("texture");
+        let mut cb = queue.command_buffer().expect("command buffer");
+        cb.copy_buffer_to_texture(&second, 0, 8, &tex, Region { x: 0, y: 0, width: 2, height: 2 }).expect("copy");
+        cb.commit().expect("commit").wait().expect("wait");
+        assert_eq!(tex.read_region(Region { x: 0, y: 0, width: 2, height: 2 }).unwrap(), pixels);
     }
 }
