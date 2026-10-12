@@ -807,6 +807,8 @@ pub mod media_artwork;
 pub mod media_playlist;
 pub mod media_changes;
 pub mod audio_hardware;
+pub mod audio_clock;
+pub mod channel_layout;
 pub mod process_tap;
 pub mod scan;
 pub mod analysis;
