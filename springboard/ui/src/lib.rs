@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod fs_volume;
+pub mod fs_probe;
+pub mod fs_maintenance;
