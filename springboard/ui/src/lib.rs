@@ -726,6 +726,7 @@ pub mod voice_activity;
 pub mod analyzer_input;
 pub mod audio_session;
 pub mod playback_arbiter;
+pub mod remote_command;
 pub mod audio_hardware;
 pub mod scan;
 pub mod analysis;
