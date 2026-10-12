@@ -12,4 +12,5 @@ pub mod params;
 pub mod playback;
 pub mod render;
 pub mod store;
+pub mod system;
 pub mod wav;
