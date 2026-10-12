@@ -358,7 +358,9 @@ pub enum ToApp {
     Configure(Configure),
     Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32 },
     Key(KeyInput),
-    Release { buf: u32 },
+    /// The shell is done with buffer `buf` of the `Buffers` set numbered `generation`; an app ignores it when
+    /// that is not its current set (a late release must not free a slot of the new set).
+    Release { buf: u32, generation: u32 },
     Resume,
     Suspend,
     Quit,
@@ -599,7 +601,8 @@ pub enum AxAction {
 pub enum ToShell {
     Hello { sdk_version: u32, app_id: String },
     /// two buffers of `w * h * 4` bytes follow as SCM_RIGHTS fds
-    Buffers { w: u32, h: u32 },
+    /// `generation` counts the sets the app has sent (wrapping, starting at 1).
+    Buffers { w: u32, h: u32, generation: u32 },
     Frame { buf: u32, damage: Vec<Rect> },
     WantsKeyboard { on: bool },
     Haptic,
@@ -898,16 +901,24 @@ fn bytes_(b: &mut Vec<u8>, v: &[u8]) {
     b.extend_from_slice(&v[..n]);
 }
 
-/// Pasteboard items: at most 16, payloads cut so the packet stays under `MAX_PACKET`.
+/// Longest pasteboard type, in bytes.
+const MAX_PB_TYPE: usize = 128;
+
+/// Pasteboard items: at most 16. An item whose payload does not fit its share of the packet is left out whole
+/// (never cut, so no receiver ever sees a shortened payload under the full type); types are cut on a char boundary.
 fn items_(b: &mut Vec<u8>, items: &[(String, Vec<u8>)]) {
     let items = &items[..items.len().min(16)];
-    u32_(b, items.len() as u32);
     let per = (MAX_PACKET - 4096) / items.len().max(1);
-    for (t, d) in items {
-        str_(b, &t[..t.len().min(128)]);
-        let n = d.len().min(per);
-        u32_(b, n as u32);
-        b.extend_from_slice(&d[..n]);
+    let kept: Vec<&(String, Vec<u8>)> = items.iter().filter(|(_, d)| d.len() <= per).collect();
+    u32_(b, kept.len() as u32);
+    for (t, d) in kept {
+        let mut n = t.len().min(MAX_PB_TYPE);
+        while !t.is_char_boundary(n) {
+            n -= 1;
+        }
+        str_(b, &t[..n]);
+        u32_(b, d.len() as u32);
+        b.extend_from_slice(d);
     }
 }
 
@@ -949,6 +960,9 @@ impl<'a> Reader<'a> {
         let mut v = Vec::with_capacity(n);
         for _ in 0..n {
             let t = self.str()?;
+            if t.len() > MAX_PB_TYPE {
+                return Err(DecodeError::BadValue);
+            }
             let l = self.u32()? as usize;
             v.push((t, self.take(l)?.to_vec()));
         }
@@ -1033,9 +1047,10 @@ impl ToApp {
                     }
                 }
             }
-            ToApp::Release { buf } => {
+            ToApp::Release { buf, generation } => {
                 u32_(&mut b, tag::RELEASE);
                 u32_(&mut b, *buf);
+                u32_(&mut b, *generation);
             }
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
@@ -1154,7 +1169,7 @@ impl ToApp {
                 1 => ToApp::Key(KeyInput::Code(r.u32()?)),
                 _ => return Err(DecodeError::BadValue),
             },
-            tag::RELEASE => ToApp::Release { buf: r.u32()? },
+            tag::RELEASE => ToApp::Release { buf: r.u32()?, generation: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -1255,10 +1270,11 @@ impl ToShell {
                 u32_(&mut b, *sdk_version);
                 str_(&mut b, app_id);
             }
-            ToShell::Buffers { w, h } => {
+            ToShell::Buffers { w, h, generation } => {
                 u32_(&mut b, tag::BUFFERS);
                 u32_(&mut b, *w);
                 u32_(&mut b, *h);
+                u32_(&mut b, *generation);
             }
             ToShell::Frame { buf, damage } => {
                 u32_(&mut b, tag::FRAME);
@@ -1542,7 +1558,7 @@ impl ToShell {
             tag::COMMANDS => ToShell::Commands(Commands(r.u32()?)),
             tag::UNDO_TITLES => ToShell::UndoTitles { undo: r.str()?, redo: r.str()? },
             tag::HELLO => ToShell::Hello { sdk_version: r.u32()?, app_id: r.str()? },
-            tag::BUFFERS => ToShell::Buffers { w: r.u32()?, h: r.u32()? },
+            tag::BUFFERS => ToShell::Buffers { w: r.u32()?, h: r.u32()?, generation: r.u32()? },
             tag::FRAME => {
                 let buf = r.u32()?;
                 let n = r.u32()? as usize;
@@ -1905,7 +1921,7 @@ mod tests {
             ToApp::Touch { kind: TouchKind::Cancel, id: 0, x: 0.0, y: 0.0, t_ms: 0 },
             ToApp::Key(KeyInput::Text("héllo ✓".into())),
             ToApp::Key(KeyInput::Code(66)),
-            ToApp::Release { buf: 1 },
+            ToApp::Release { buf: 1, generation: 5 },
             ToApp::Command(Command::Paste),
             ToApp::KeyboardConfig(KeyboardConfig::default()),
             ToApp::KeyboardConfig(KeyboardConfig { layout: KeyboardLayout::Floating, return_key: ReturnKey::Send, flags: kbflags::PREDICTIVE | kbflags::SHOWN, languages: 3, language: 1 }),
@@ -1926,7 +1942,7 @@ mod tests {
     fn to_shell_round_trips() {
         let all = vec![
             ToShell::Hello { sdk_version: SDK_VERSION, app_id: "is.olibuijr.calculator".into() },
-            ToShell::Buffers { w: 1200, h: 1920 },
+            ToShell::Buffers { w: 1200, h: 1920, generation: 2 },
             ToShell::Frame { buf: 1, damage: vec![[0, 0, 1200, 1920], [5, 6, 7, 8]] },
             ToShell::Frame { buf: 0, damage: vec![] },
             ToShell::WantsKeyboard { on: true },
@@ -1962,7 +1978,7 @@ mod tests {
 
     #[test]
     fn exact_layout() {
-        assert_eq!(ToApp::Release { buf: 1 }.encode(), [4, 0, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(ToApp::Release { buf: 1, generation: 2 }.encode(), [4, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0]);
         assert_eq!(ToShell::Haptic.encode(), [5, 1, 0, 0]);
         assert_eq!(ToApp::Key(KeyInput::Code(7)).encode(), [3, 0, 0, 0, 1, 7, 0, 0, 0]);
     }
@@ -2002,10 +2018,10 @@ mod sys_tests {
         let shm = shm_create("test", 4096).unwrap();
         let mut m1 = Map::new(&shm, 4096).unwrap();
         m1.pixels_mut()[3] = 0xdead_beef;
-        a.send(&ToShell::Buffers { w: 32, h: 32 }.encode(), &[shm.0]).unwrap();
+        a.send(&ToShell::Buffers { w: 32, h: 32, generation: 1 }.encode(), &[shm.0]).unwrap();
         a.send(&ToShell::Haptic.encode(), &[]).unwrap();
         let Recv::Packet(p, fds) = b.recv(true).unwrap() else { panic!() };
-        assert_eq!(ToShell::decode(&p), Ok(ToShell::Buffers { w: 32, h: 32 }));
+        assert_eq!(ToShell::decode(&p), Ok(ToShell::Buffers { w: 32, h: 32, generation: 1 }));
         assert_eq!(fds.len(), 1);
         let m2 = Map::new(&fds[0], 4096).unwrap();
         assert_eq!(m2.pixels()[3], 0xdead_beef, "the same memory");
@@ -2170,6 +2186,7 @@ mod ax_tree_tests {
 
 #[cfg(test)]
 mod material_tests {
+    use super::sys::*;
     use super::*;
 
     #[test]
@@ -2206,5 +2223,65 @@ mod material_tests {
             bad[at] = bad_byte;
             assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
         }
+    }
+
+    #[test]
+    fn pasteboard_encode_never_panics_or_shortens() {
+        // a multibyte char straddling byte 128 of the type (IPC-2)
+        let m = ToApp::Pasteboard { change_count: 1, items: vec![("é".repeat(100), vec![])] };
+        let Ok(ToApp::Pasteboard { items, .. }) = ToApp::decode(&m.encode()) else { panic!("decode") };
+        assert!(items[0].0.len() <= 128 && !items[0].0.is_empty());
+        // a payload that does not fit is left out whole, never cut (IPC-5)
+        let big = ToShell::PasteboardSet { items: vec![("public.png".into(), vec![7; 50_000]), ("public.utf8-plain-text".into(), b"hi".to_vec())] };
+        let bytes = big.encode();
+        assert!(bytes.len() < MAX_PACKET);
+        let Ok(ToShell::PasteboardSet { items }) = ToShell::decode(&bytes) else { panic!("decode") };
+        assert_eq!(items, vec![("public.utf8-plain-text".to_string(), b"hi".to_vec())]);
+        // a type over 128 bytes is refused on decode
+        let mut p = Vec::new();
+        u32_(&mut p, tag::PASTEBOARD_SET);
+        u32_(&mut p, 1);
+        str_(&mut p, &"t".repeat(129));
+        u32_(&mut p, 0);
+        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn oversized_service_reply_is_refused_not_cut() {
+        let m = ToApp::ServiceReply { request: 3, ok: true, body: "x".repeat(20_000) };
+        let bytes = m.encode();
+        assert!(bytes.len() <= MAX_PACKET);
+        assert_eq!(ToApp::decode(&bytes), Ok(ToApp::ServiceReply { request: 3, ok: false, body: "body too large".into() }));
+        let fits = ToApp::ServiceReply { request: 3, ok: true, body: "y".repeat(15_000) };
+        assert_eq!(ToApp::decode(&fits.encode()), Ok(fits));
+    }
+
+    #[test]
+    fn short_memfd_is_measurable_and_shrink_seal_holds() {
+        let fd = shm_create("seal-test", 4096).unwrap();
+        assert_eq!(shm_len(&fd).unwrap(), 4096);
+        seal_shrink(&fd).unwrap();
+        assert!(shm_resize(&fd, 0).is_err(), "a sealed memfd cannot shrink");
+        assert!(shm_resize(&fd, 8192).is_ok());
+    }
+
+    #[test]
+    fn try_send_does_not_block_and_oversized_packets_are_errors() {
+        let (a, b) = socketpair_pair().unwrap();
+        set_nonblocking(a.fd()).unwrap();
+        let pkt = vec![0u8; 16 * 1024];
+        let mut sent = 0;
+        let err = loop {
+            match a.try_send(&pkt, &[]) {
+                Ok(()) => sent += 1,
+                Err(e) => break e,
+            }
+            assert!(sent < 100_000, "a never-read socket must fill up");
+        };
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+        drop(b);
+        let (c, d) = socketpair_pair().unwrap();
+        c.send(&vec![1u8; 20 * 1024], &[]).unwrap();
+        assert!(d.recv(true).is_err(), "a 20 KiB packet is a protocol error, not a cut Packet");
     }
 }
