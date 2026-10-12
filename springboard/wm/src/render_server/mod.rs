@@ -17,6 +17,7 @@ pub mod clock;
 pub mod compose;
 pub mod import;
 pub mod layers;
+pub mod layers_dispatch;
 pub mod material;
 pub mod output;
 pub mod stats;
