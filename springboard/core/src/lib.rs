@@ -54,3 +54,5 @@ pub mod midi_endpoints;
 pub mod disk_image;
 pub mod guest_vm;
 pub mod imgmeta;
+pub mod net_path;
+pub mod websocket;
