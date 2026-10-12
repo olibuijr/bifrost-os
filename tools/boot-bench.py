@@ -159,9 +159,10 @@ def load_midget():
 def collect(midget):
     """Reads everything one boot leaves behind, over ssh. Returns the run record (no derived keys)."""
     analyze = parse_analyze(midget.ssh("systemd-analyze 2>/dev/null | head -1", 20).strip())
-    # efivarfs file: 4 attribute bytes, then the value as a UTF-16LE decimal string (Boot Loader Interface)
-    init = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeInitUSec')} 2>/dev/null | xxd -p", 10))
-    exe = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeExecUSec')} 2>/dev/null | xxd -p", 10))
+    # efivarfs file: 4 attribute bytes, then the value as a UTF-16LE decimal string (Boot Loader Interface); od is
+    # coreutils (xxd comes with vim, which an install does not have)
+    init = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeInitUSec')} 2>/dev/null | od -An -tx1 -v", 10))
+    exe = parse_loader_var(midget.ssh(f"tail -c +5 {LOADER_VARS.format('LoaderTimeExecUSec')} 2>/dev/null | od -An -tx1 -v", 10))
     marks = parse_marks(midget.ssh("cat /run/bifrost/boot-marks 2>/dev/null", 10))
     modesets = int(midget.ssh("journalctl -b -o cat --no-pager 2>/dev/null | grep -acE "
                               "'Modesetting with|display mode .*\\(selected\\)'", 60).strip() or 0)

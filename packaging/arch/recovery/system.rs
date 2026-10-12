@@ -263,6 +263,8 @@ const BOOT_MODULE_DIRS: &[&str] = &[
     "kernel/drivers/scsi/",
     "kernel/drivers/block/",
     "kernel/drivers/md/",
+    // virtio_pci and friends: a VM's disk and display sit behind them
+    "kernel/drivers/virtio/",
     "kernel/drivers/gpu/",
     "kernel/fs/btrfs/",
     "kernel/crypto/",
