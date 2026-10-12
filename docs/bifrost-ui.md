@@ -1836,3 +1836,20 @@ Code: `springboard/render/src/effects.rs` (planes, layers, shadow, mask, group o
 | `Canvas`, `GraphicsContext` fill, stroke, draw image, draw text, transforms, clip, opacity, blend, layers, shadow | `Canvas::draw`, `GraphicsContext::{fill, stroke, draw_image, draw_text, translate, scale, rotate, clip, set_opacity, set_blend_mode, add_shadow, draw_layer, save, restore}` |
 
 Gaps, decided: no hue/saturation/brightness/colour-matrix filters on views, no variable `blur` modifier in this module (glass blur lives in `render/src/glass.rs`); strokes have round joins and caps only, no dashes or miter limit; `draw_image` and `draw_text` take axis-aligned transforms only; no gradients/shading in `GraphicsContext` yet (use `render::gradient`); no resolved symbols or child views; view-tree integration (`.shadow()` style modifiers on widgets) is not wired because `sdk/src/widgets.rs` is owned by another wave. Not built or run in this round; tests are unrun golden-pixel tests (`effects.rs`, `graphics_context.rs`).
+
+## CallKit: incoming-call card and default calling app (`CXCallUpdate`, `CXAnswerCallAction`, default calling app)
+
+Pure models in `springboard/ui/src/call_ui.rs` and `springboard/ui/src/call_apps.rs`, re-exported by the SDK as
+`bifrost_app::calling_ui` and `bifrost_app::calling_apps` (the call controller itself is `bifrost_app::calling`, from
+`call.rs`). Host unit tests only; not wired into the shell and not yet run on the VM or Midget, so the matrix rows stay `partial`.
+
+- Incoming-call card: `CallUpdate` mirrors `CXCallUpdate` (handle, caller name, video, and hold, group and DTMF support, all
+  defaulting to supported). A blank caller name falls back to the handle value. `IncomingCard::for_call` builds the card for a
+  ringing call only; the presentation is a banner while the screen is in use and full screen while it is locked.
+  Decline sends `CallAction::End` and Answer sends `CallAction::Answer`, the same requests `CXEndCallAction` and
+  `CXAnswerCallAction` produce.
+- Decided gaps: no PushKit-style VoIP push wake-up and no ringtone or vibration (the shell and audio service own them); the
+  presentation depends on a caller-supplied `screen_locked` flag until the shell reports lock state to the model.
+- Default calling app: `CallingApps` keeps the apps that registered for calling, in registration order, and one default.
+  Only a registered app can be chosen. Unregistering the default clears it. The Settings page that lets the user pick the
+  default is not built yet (the decision is recorded here; the page belongs to the shell).

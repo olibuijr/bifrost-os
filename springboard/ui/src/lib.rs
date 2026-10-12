@@ -781,6 +781,8 @@ pub mod downloadqueue;
 pub mod environment;
 pub mod preferences;
 pub mod call;
+pub mod call_ui;
+pub mod call_apps;
 pub mod hfp;
 pub mod markup;
 pub mod drawing;
