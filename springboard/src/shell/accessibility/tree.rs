@@ -201,7 +201,7 @@ mod tests {
         let st = AxState::default();
         let text = listing(&m, &st, "os/settings");
         assert!(text.contains("os/settings/general/reduce-motion\ttoggle\tReduce Motion\ton\tenabled\tos/settings/general\tchecked\t\n"), "{text}");
-        assert!(text.contains("\tbold-text\ttoggle\tBold Text\toff\tenabled\tos/settings/general\tunchecked\t\n"), "{text}");
+        assert!(text.contains("os/settings/general/bold-text\ttoggle\tBold Text\toff\tenabled\tos/settings/general\tunchecked\t\n"), "{text}");
         assert!(text.contains("os/settings/general/reset\tbutton\tReset\ton\tenabled\tos/settings/general\t\t\n"), "a button is not checkable: {text}");
     }
 

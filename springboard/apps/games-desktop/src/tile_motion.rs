@@ -138,7 +138,7 @@ mod tests {
     fn an_empty_sequence_is_finished_and_reads_full_size() {
         let s = Sequence::new(0.0, 0.5, &[]);
         assert!(s.is_done(0.0));
-        assert!(close(s.value(3.0), 0.5), "no steps: the start value is the only value");
+        assert!(close(s.value(3.0), 1.0), "no steps: a tile without motion reads full size");
     }
 
     #[test]
