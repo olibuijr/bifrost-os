@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.5.2 — 2026-10-12
 
 - Removed `insights::alert_banner`, which nothing drew. The forecast request asks for no alerts (`DATA_HAS_ALERTS` is
