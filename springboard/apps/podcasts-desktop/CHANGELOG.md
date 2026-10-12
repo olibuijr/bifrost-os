@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 — 2026-10-12
+
+- The Speed button in the Now Playing sheet opens a menu with the rates 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x and 2x.
+  The current rate is highlighted. Pick a rate to set it, or tap Speed again to close the menu. The rate is kept for the
+  session; the audio engine still plays at normal speed until the audio service can change speed.
+- Back skips are 15 seconds everywhere: the mini player's back button now reads "-15s", the Left arrow key and the
+  system's skip-back command also move 15 seconds. Forward skips stay at 30 seconds.
+- Album art and per-episode pictures are not in this release. Podcasts does not read pictures from feeds yet.
+
 ## 1.6.0 — 2026-10-12
 
 - The Now Playing sheet shows a line about the episode under its show name: the kind of audio, the codec (MP3, AAC,

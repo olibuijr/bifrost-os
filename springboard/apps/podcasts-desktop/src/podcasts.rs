@@ -56,6 +56,8 @@ const EPISODE_LIMIT: usize = 160 << 20;
 const CHUNK: u64 = 2 << 20;
 /// sleep timer choices in minutes; 0 is off
 const SLEEPS: [u32; 5] = [0, 5, 15, 30, 60];
+/// height of one row of the speed menu, in points (a menu row at body size)
+const SPEED_ROW_PT: f32 = 26.0;
 const SAVE_EVERY_MS: f64 = 5_000.0;
 /// how long a started episode may take to show up as playing in the service
 const START_TIMEOUT_MS: f64 = 5_000.0;
@@ -77,7 +79,10 @@ enum Target {
     CloseSheet,
     PlayPause,
     Scrub,
+    /// opens or closes the speed menu
     Speed,
+    /// one rate of the speed menu, an index into `transport::RATES`
+    Rate(usize),
     Sleep,
 }
 
@@ -146,6 +151,8 @@ pub struct Podcasts {
     scrubbing: Option<f64>,
     /// the playback rate the speed control shows, one of `transport::RATES` (kept per session; the engine plays at 1x)
     rate: f64,
+    /// the speed menu is open above the Speed button
+    speed_menu: bool,
     sleep: usize,
     sleep_at: Option<f64>,
     resume: Vec<(String, u64)>,
@@ -200,6 +207,7 @@ impl Podcasts {
             sheet: false,
             scrubbing: None,
             rate: 1.0,
+            speed_menu: false,
             sleep: 0,
             sleep_at: None,
             resume,
@@ -284,8 +292,8 @@ impl Podcasts {
                 self.paused = !self.paused;
             }
             Command::Stop => self.stop_playback(),
-            Command::SkipForward => self.skip(false, transport::PLAYER_SKIP_S),
-            Command::SkipBackward => self.skip(true, transport::PLAYER_SKIP_S),
+            Command::SkipForward => self.skip(false, transport::FORWARD_SKIP_S),
+            Command::SkipBackward => self.skip(true, transport::BACK_SKIP_S),
             Command::Seek(ms) => self.seek_to(ms),
             Command::Next | Command::Previous => {}
         }
@@ -591,6 +599,33 @@ impl Podcasts {
         }
     }
 
+    /// The speed menu's card: one row per rate in `transport::RATES`, opening above the Speed button and as wide as it.
+    fn speed_menu_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let b = self.sheet_button(ui, 3);
+        let h = ui.pt(SPACE_XXS) * 2.0 + ui.pt(SPEED_ROW_PT) * transport::RATES.len() as f32;
+        (b.0, b.1 - ui.pt(SPACE_S) - h, b.2, h)
+    }
+
+    /// One row of the speed menu.
+    fn speed_item(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        let (x, y, w, _) = self.speed_menu_rect(ui);
+        (x, y + ui.pt(SPACE_XXS) + ui.pt(SPEED_ROW_PT) * i as f32, w, ui.pt(SPEED_ROW_PT))
+    }
+
+    /// Draws the speed menu over the sheet's controls: the current rate's row is selected, and each row names its rate.
+    fn draw_speed_menu(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, y, w, h) = self.speed_menu_rect(ui);
+        s.fill_rrect(x, y, w, h, ui.pt(SPACE_M), CARD_BG.now());
+        let current = transport::rate_index(self.rate);
+        for (i, rate) in transport::RATES.iter().enumerate() {
+            let r = self.speed_item(ui, i);
+            if current == Some(i) {
+                s.fill_rrect(r.0 + ui.pt(SPACE_XXS), r.1, r.2 - ui.pt(SPACE_XXS) * 2.0, r.3, ui.pt(m::SELECTION_RADIUS), SELECTION.now());
+            }
+            self.centred(s, ui, &format!("{rate}x"), MAC_BODY_PT, LABEL.now(), r);
+        }
+    }
+
     // subscriptions -----------------------------------------------------
 
     fn open_show(&mut self, i: usize) {
@@ -793,6 +828,11 @@ impl Podcasts {
             return None;
         }
         if self.sheet && self.playing.is_some() {
+            if self.speed_menu {
+                if let Some(i) = (0..transport::RATES.len()).find(|&i| Self::inside(self.speed_item(ui, i), x, y)) {
+                    return Some(Target::Rate(i));
+                }
+            }
             let sc = self.scrub_rect(ui);
             if Self::inside((sc.0 - ui.pt(SPACE_M), sc.1, sc.2 + ui.pt(SPACE_XL), sc.3), x, y) {
                 return Some(Target::Scrub);
@@ -822,6 +862,9 @@ impl Podcasts {
     fn activate(&mut self, ui: &Ui, target: Target, t: f64) {
         if target != Target::Remove {
             self.confirm_remove = false;
+        }
+        if !matches!(target, Target::Speed | Target::Rate(_)) {
+            self.speed_menu = false;
         }
         match target {
             Target::Add => {
@@ -862,7 +905,7 @@ impl Podcasts {
                 }
             },
             Target::Stop => self.stop_playback(),
-            Target::SkipBack => self.skip(true, if self.sheet { transport::SHEET_BACK_S } else { transport::PLAYER_SKIP_S }),
+            Target::SkipBack => self.skip(true, transport::BACK_SKIP_S),
             Target::Sheet => self.sheet = true,
             Target::CloseSheet => self.sheet = false,
             Target::Scrub => {}
@@ -872,12 +915,16 @@ impl Podcasts {
                     self.paused = !self.paused;
                 }
             }
-            Target::Speed => self.rate = transport::next_rate(self.rate),
+            Target::Speed => self.speed_menu = !self.speed_menu,
+            Target::Rate(i) => {
+                self.rate = transport::RATES.get(i).copied().unwrap_or(self.rate);
+                self.speed_menu = false;
+            }
             Target::Sleep => {
                 self.sleep = (self.sleep + 1) % SLEEPS.len();
                 self.sleep_at = (SLEEPS[self.sleep] > 0).then(|| t + SLEEPS[self.sleep] as f64 * 60_000.0);
             }
-            Target::SkipFwd => self.skip(false, transport::PLAYER_SKIP_S),
+            Target::SkipFwd => self.skip(false, transport::FORWARD_SKIP_S),
             Target::List => {}
         }
         self.dirty = true;
@@ -902,8 +949,8 @@ impl Podcasts {
             // transport keys, the in-app stand-in for the system's remote commands: space plays or pauses, arrows skip
             match &out {
                 Out::Text(s) if s == " " => self.activate(ui, Target::PlayPause, t),
-                Out::Named("Left") => self.skip(true, transport::PLAYER_SKIP_S),
-                Out::Named("Right") => self.skip(false, transport::PLAYER_SKIP_S),
+                Out::Named("Left") => self.skip(true, transport::BACK_SKIP_S),
+                Out::Named("Right") => self.skip(false, transport::FORWARD_SKIP_S),
                 _ => {}
             }
         }
@@ -1099,6 +1146,9 @@ impl Podcasts {
         self.button(s, ui, Target::Speed, &transport::speed_label(self.rate), LINK, self.sheet_button(ui, 3));
         let label = self.sleep_label(t);
         self.button(s, ui, Target::Sleep, &label, LINK, self.sheet_button(ui, 4));
+        if self.speed_menu {
+            self.draw_speed_menu(s, ui);
+        }
     }
 
     fn draw_rows(&mut self, s: &mut Surface, ui: &Ui) {
@@ -1173,7 +1223,7 @@ impl Podcasts {
         let x = c.0 + ui.pt(SPACE_L) + ui.pt(SPACE_XS);
         self.text(s, ui, &title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), x, c.1 + ui.pt(SPACE_S + SPACE_XXS));
         self.text(s, ui, &now, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x, c.1 + ui.pt(SPACE_S + SPACE_XXS + 18.0));
-        self.button(s, ui, Target::SkipBack, "-30s", LINK, self.player_rect(ui, 0));
+        self.button(s, ui, Target::SkipBack, "-15s", LINK, self.player_rect(ui, 0));
         self.button(s, ui, Target::Stop, "Stop", DESTRUCTIVE, self.player_rect(ui, 1));
         self.button(s, ui, Target::SkipFwd, "+30s", LINK, self.player_rect(ui, 2));
     }
