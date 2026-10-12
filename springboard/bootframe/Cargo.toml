@@ -1,0 +1,7 @@
+[package]
+name = "bifrost-bootframe"
+version = "0.1.0"
+edition = "2021"
+description = "The one boot frame of every boot stage, and the boot timing record (docs/boot-architecture.md)"
+
+[dependencies]
