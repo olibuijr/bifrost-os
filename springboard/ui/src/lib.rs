@@ -684,6 +684,8 @@ pub mod auth_view;
 pub mod one_time_code;
 pub mod entitlement;
 pub mod purchase;
+pub mod store_test;
+pub mod jws;
 pub mod offer;
 pub mod download;
 pub mod nav_policy;
