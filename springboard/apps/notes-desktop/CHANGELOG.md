@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.1 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.14.0 — 2026-10-12
 
 - The remote state dump is now served as the notes.state control method, so an agent can read the open screen and state without the screen.
