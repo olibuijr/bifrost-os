@@ -106,6 +106,17 @@ impl<T> Mutex<T> {
     }
 }
 
+/// The unfair lock of `OSAllocatedUnfairLock<State>`: a lock that guards a state value and is used only through
+/// closures. BifrOSt has one scoped lock, so this is `Mutex` under the framework's name. The std mutex does not
+/// expose the `flags:` spin and data-sync hints, so they are not modelled; `lock()` and `unlock()` (the unscoped
+/// form) are not provided either, because a guard cannot be held across calls without `unsafe`.
+pub type UnfairLock<State> = Mutex<State>;
+
+/// A lock that protects no state (`OSAllocatedUnfairLock()`).
+pub fn stateless_unfair_lock() -> UnfairLock<()> {
+    Mutex::new(())
+}
+
 /// An integer type `Atomic` can hold. Implemented for the fixed-size std atomic integers only.
 pub trait AtomicInteger: Copy + Eq + Send + Sync + 'static {
     type Cell: Send + Sync;
@@ -522,5 +533,62 @@ mod tests {
         }
         writer.join().unwrap();
         assert_eq!(cell.load(), WordPair::new(2000, 2000));
+    }
+}
+
+#[cfg(test)]
+mod unfair_lock_tests {
+    use super::*;
+
+    #[test]
+    fn unfair_lock_with_state_mutates_and_returns_the_result() {
+        let lock = UnfairLock::new(3);
+        let after = lock.with_lock(|s| {
+            *s += 4;
+            *s
+        });
+        assert_eq!(after, 7);
+        assert_eq!(lock.with_lock(|s| *s), 7);
+    }
+
+    #[test]
+    fn stateless_unfair_lock_runs_its_closure() {
+        let lock = stateless_unfair_lock();
+        assert_eq!(lock.with_lock(|_| 42), 42);
+    }
+
+    #[test]
+    fn lock_if_available_is_none_inside_a_held_scope() {
+        let lock = UnfairLock::new(1u8);
+        let inner = lock.with_lock(|s| {
+            *s = 2;
+            lock.with_lock_if_available(|s| *s)
+        });
+        assert_eq!(inner, None);
+        assert_eq!(lock.with_lock_if_available(|s| *s), Some(2));
+    }
+
+    #[test]
+    fn unfair_lock_counts_exactly_across_three_threads() {
+        let lock = UnfairLock::new(0u32);
+        std::thread::scope(|s| {
+            for _ in 0..3 {
+                s.spawn(|| {
+                    for _ in 0..300 {
+                        lock.with_lock(|n| *n += 1);
+                    }
+                });
+            }
+        });
+        assert_eq!(lock.with_lock(|n| *n), 900);
+    }
+
+    #[test]
+    fn unfair_lock_stays_usable_after_a_holder_panics() {
+        let lock = std::sync::Arc::new(UnfairLock::new(5i32));
+        let held = std::sync::Arc::clone(&lock);
+        let joined = std::thread::spawn(move || held.with_lock(|_| -> i32 { panic!("expected test panic") })).join();
+        assert!(joined.is_err());
+        assert_eq!(lock.with_lock_if_available(|s| *s * 2), Some(10));
     }
 }
