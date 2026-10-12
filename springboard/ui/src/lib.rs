@@ -801,6 +801,8 @@ pub mod remote_command;
 pub mod media_content;
 pub mod media_session;
 pub mod media_artwork;
+pub mod media_playlist;
+pub mod media_changes;
 pub mod audio_hardware;
 pub mod process_tap;
 pub mod scan;
