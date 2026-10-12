@@ -2216,7 +2216,7 @@ impl Shell {
             return vec![];
         }
         if let Some(fx)=self.overview_event(ev,t) {return fx;}
-        // the Quick Look card takes its pointer in every build, not only with the desktop bar; a locked screen does not
+        // the preview card takes its pointer in every build, not only with the desktop bar; a locked screen does not
         let quick_look_took = !self.is_locked() && match ev {
             Event::Down(x, y) => self.quick_look_pointer(x, y, false),
             Event::Up(x, y) => self.quick_look_pointer(x, y, true),
