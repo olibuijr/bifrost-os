@@ -142,6 +142,7 @@ pub mod http_cookies;
 pub mod passkey_client_data;
 pub mod http_auth;
 pub mod host_addressing;
+pub mod ftp;
 pub mod dns_service;
 pub mod net_diagnostic;
 pub mod stream;
