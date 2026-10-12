@@ -1,12 +1,16 @@
 //! Reader (Browser: the Reader button in the address field, Cmd+Shift+R). A page script finds the article (an
 //! `<article>`/`<main>` element or the block with the most paragraph text, scored by text length and link density),
-//! the app renders its title, byline and body as a clean `data:` page with a system font stack and the window's
+//! the script reports the article as flat node records; the app builds a `DomSnapshot` (ui `dom_snapshot`) from them and
+//! writes the body from that tree, so only the allowed tags and attributes reach the page. The app renders its title,
+//! byline and body as a clean `data:` page with a system font stack and the window's
 //! Light/Dark appearance, and loads it in the same view. Esc, the button or Cmd+Shift+R loads the original URL again.
 //! Answers arrive through the token-correlated dev eval (a plain eval reply is capped at 4 KB).
 //! Print (Cmd+P) is not possible: Servo 0.7.0 exposes no printing API (`WebView` has no print call), so there is no item.
 use std::collections::HashMap;
 
+use bifrost_app::controls::dom_snapshot::{DomSnapshot, NodeKind, NodeRecord};
 use bifrost_app::controls::Rect;
+use bifrost_core::json::Json;
 use bifrost_app::webview::{WebProcessPool, WebViewId};
 use bifrost_app::webview_dev::DevEvent;
 
@@ -30,7 +34,7 @@ const FIND: &str = concat!("(function(){", pick!(), "return 'bfr:'+Math.round(bs
 const EXTRACT: &str = concat!(
     "(function(){",
     pick!(),
-    r#"if(!best)return 'bfr:';var n=best.cloneNode(true);var bad=n.querySelectorAll('script,style,noscript,nav,aside,footer,form,iframe,button,input,select,textarea,svg,canvas,video,audio,object,embed,dialog,[hidden],[aria-hidden=true]');for(var i=0;i<bad.length;i++)bad[i].remove();var keep={P:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,UL:1,OL:1,LI:1,BLOCKQUOTE:1,PRE:1,CODE:1,IMG:1,FIGURE:1,FIGCAPTION:1,A:1,EM:1,STRONG:1,B:1,I:1,BR:1,SUP:1,SUB:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TD:1,TH:1,HR:1,SPAN:1,DIV:1,SECTION:1,ARTICLE:1,MAIN:1};var all=n.querySelectorAll('*');for(var j=all.length-1;j>=0;j--){var e=all[j];if(!keep[e.tagName]){e.replaceWith.apply(e,Array.prototype.slice.call(e.childNodes));continue;}var href=e.tagName=='A'?e.href:null,src=e.tagName=='IMG'?e.src:null,alt=e.getAttribute('alt');var a=e.attributes;for(var q=a.length-1;q>=0;q--)e.removeAttribute(a[q].name);if(href&&href.toLowerCase().indexOf('javascript:')!=0)e.setAttribute('href',href);if(src)e.setAttribute('src',src);if(alt)e.setAttribute('alt',alt);}var h=best.querySelector('h1')||document.querySelector('h1');var by=document.querySelector('[rel=author],[itemprop=author],.byline,.author,meta[name=author]');var byt=by?(by.content||by.textContent||'').trim().replace(/\s+/g,' '):'';if(h){var hh=n.querySelector('h1');if(hh&&hh.textContent==h.textContent)hh.remove();}return 'bfr:'+JSON.stringify({title:(h?h.textContent:document.title).trim().replace(/\s+/g,' '),byline:byt.slice(0,120),html:n.innerHTML});})()"#
+    r#"if(!best)return 'bfr:';var n=best.cloneNode(true);var bad=n.querySelectorAll('script,style,noscript,nav,aside,footer,form,iframe,button,input,select,textarea,svg,canvas,video,audio,object,embed,dialog,[hidden],[aria-hidden=true]');for(var i=0;i<bad.length;i++)bad[i].remove();var h=best.querySelector('h1')||document.querySelector('h1');if(h){var hh=n.querySelector('h1');if(hh&&hh.textContent==h.textContent)hh.remove();}var by=document.querySelector('[rel=author],[itemprop=author],.byline,.author,meta[name=author]');var byt=by?(by.content||by.textContent||'').trim().replace(/\s+/g,' '):'';var keep={P:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,UL:1,OL:1,LI:1,BLOCKQUOTE:1,PRE:1,CODE:1,IMG:1,FIGURE:1,FIGCAPTION:1,A:1,EM:1,STRONG:1,B:1,I:1,BR:1,SUP:1,SUB:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TD:1,TH:1,HR:1,SPAN:1,DIV:1,SECTION:1,ARTICLE:1,MAIN:1};var recs=[{id:0,parent:null,kind:'document',name:'',text:'',attributes:{}}];var id=1;function walk(node,parent){for(var c=node.firstChild;c;c=c.nextSibling){if(c.nodeType==3){recs.push({id:id++,parent:parent,kind:'text',name:'',text:c.textContent,attributes:{}});}else if(c.nodeType==1){if(!keep[c.tagName]){walk(c,parent);continue;}var me=id++;var at={};if(c.tagName=='A'){var href=c.href||'';if(href&&href.toLowerCase().indexOf('javascript:')!=0)at.href=href;}if(c.tagName=='IMG'){if(c.src)at.src=c.src;var alt=c.getAttribute('alt');if(alt)at.alt=alt;}recs.push({id:me,parent:parent,kind:'element',name:c.tagName.toLowerCase(),text:'',attributes:at});walk(c,me);}}}walk(n,0);return 'bfr:'+JSON.stringify({title:(h?h.textContent:document.title).trim().replace(/\s+/g,' '),byline:byt.slice(0,120),nodes:recs});})()"#
 );
 
 #[derive(Default)]
@@ -134,11 +138,98 @@ pub struct Article {
 }
 
 fn parse_article(raw: &str) -> Option<Article> {
-    use bifrost_core::json::Json;
-    let Ok(Json::Obj(o)) = bifrost_core::json::parse(raw) else { return None };
-    let get = |k: &str| o.iter().find(|(n, _)| n == k).and_then(|(_, v)| if let Json::Str(s) = v { Some(s.clone()) } else { None });
-    let html = get("html")?;
-    (!html.trim().is_empty()).then(|| Article { title: get("title").unwrap_or_default(), byline: get("byline").unwrap_or_default(), html })
+    let root = bifrost_core::json::parse(raw).ok()?;
+    let nodes = parse_nodes(root.get("nodes")?.as_array()?)?;
+    let snap = DomSnapshot::new(nodes).ok()?;
+    let html = render_body(&snap);
+    (!html.trim().is_empty()).then(|| Article {
+        title: root.str_field("title").unwrap_or_default(),
+        byline: root.str_field("byline").unwrap_or_default(),
+        html,
+    })
+}
+
+/// Reads the collector's flat records (`{id, parent, kind, name, text, attributes}`); `None` when one is malformed.
+fn parse_nodes(items: &[Json]) -> Option<Vec<NodeRecord>> {
+    let mut out = Vec::with_capacity(items.len());
+    for it in items {
+        let id = u32::try_from(it.get("id")?.as_u64()?).ok()?;
+        let parent = match it.get("parent")? {
+            Json::Null => None,
+            p => Some(u32::try_from(p.as_u64()?).ok()?),
+        };
+        let kind = match it.get("kind")?.as_str()? {
+            "document" => NodeKind::Document,
+            "element" => NodeKind::Element,
+            "text" => NodeKind::Text,
+            _ => return None,
+        };
+        let attributes: Vec<(String, String)> = match it.get("attributes") {
+            Some(Json::Obj(v)) => v.iter().filter_map(|(k, val)| val.as_str().map(|s| (k.clone(), s.to_string()))).collect(),
+            _ => Vec::new(),
+        };
+        out.push(NodeRecord {
+            id,
+            parent,
+            kind,
+            name: it.str_field("name").unwrap_or_default(),
+            text: it.str_field("text").unwrap_or_default(),
+            attributes,
+        });
+    }
+    Some(out)
+}
+
+/// Tags the reader page keeps. Any other element is dropped and its children are kept.
+const ALLOWED: &[&str] = &[
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "pre", "code", "img", "figure", "figcaption",
+    "a", "em", "strong", "b", "i", "br", "sup", "sub", "table", "thead", "tbody", "tr", "td", "th", "hr", "span", "div",
+    "section", "article", "main",
+];
+/// Tags with no end tag.
+const VOID: &[&str] = &["img", "br", "hr"];
+
+/// The article body, rebuilt from the snapshot tree: text is escaped, and only `href`, `src` and `alt` attributes pass.
+fn render_body(snap: &DomSnapshot) -> String {
+    let mut out = String::new();
+    for &c in snap.children(snap.root()) {
+        render_node(snap, c, &mut out);
+    }
+    out
+}
+
+fn render_node(snap: &DomSnapshot, id: u32, out: &mut String) {
+    let Some(n) = snap.node(id) else { return };
+    match n.kind {
+        NodeKind::Document => {}
+        NodeKind::Text => out.push_str(&esc(&n.text)),
+        NodeKind::Element => {
+            let tag = n.name.as_str();
+            if !ALLOWED.contains(&tag) {
+                for &c in snap.children(id) {
+                    render_node(snap, c, out);
+                }
+                return;
+            }
+            out.push('<');
+            out.push_str(tag);
+            for (k, v) in &n.attributes {
+                if matches!(k.as_str(), "href" | "src" | "alt") {
+                    out.push_str(&format!(" {}=\"{}\"", k, esc(v)));
+                }
+            }
+            out.push('>');
+            if VOID.contains(&tag) {
+                return;
+            }
+            for &c in snap.children(id) {
+                render_node(snap, c, out);
+            }
+            out.push_str("</");
+            out.push_str(tag);
+            out.push('>');
+        }
+    }
 }
 
 fn esc(s: &str) -> String {
@@ -201,9 +292,18 @@ mod tests {
     }
 
     #[test]
-    fn article_parses() {
-        let a = parse_article(r#"{"title":"T","byline":"","html":"<p>x</p>"}"#).unwrap();
+    fn article_is_rebuilt_from_the_node_snapshot() {
+        let raw = r#"{"title":"T","byline":"","nodes":[{"id":0,"parent":null,"kind":"document","name":"","text":"","attributes":{}},{"id":1,"parent":0,"kind":"element","name":"p","text":"","attributes":{}},{"id":2,"parent":1,"kind":"text","name":"","text":"a < b","attributes":{}},{"id":3,"parent":0,"kind":"element","name":"script","text":"","attributes":{}},{"id":4,"parent":0,"kind":"element","name":"a","text":"","attributes":{"href":"https://e.com/?a=1&b=2"}}]}"#;
+        let a = parse_article(raw).unwrap();
         assert_eq!(a.title, "T");
-        assert!(parse_article(r#"{"html":" "}"#).is_none());
+        assert_eq!(a.html, "<p>a &lt; b</p><a href=\"https://e.com/?a=1&amp;b=2\"></a>");
+    }
+
+    #[test]
+    fn empty_or_malformed_snapshots_are_no_article() {
+        let empty = r#"{"title":"","byline":"","nodes":[{"id":0,"parent":null,"kind":"document","name":"","text":"","attributes":{}}]}"#;
+        assert!(parse_article(empty).is_none());
+        assert!(parse_article(r#"{"title":"T","nodes":[{"id":0,"parent":null,"kind":"bogus"}]}"#).is_none());
+        assert!(parse_article(r#"{"title":"T"}"#).is_none());
     }
 }

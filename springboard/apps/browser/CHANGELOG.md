@@ -1,3 +1,10 @@
+## 0.11.0 — 2026-10-12
+
+- Reader from the page's structure: the reader page is now rebuilt from a snapshot of the article's element tree instead of the page's raw HTML. Only paragraphs, headings, lists, quotes, code, tables, images and links come through, with their text escaped, and scripts, forms and navigation stay out.
+- View > Show Reader: the View menu has a Show Reader item (Cmd+Shift+R) with a check mark while the reader page is up. It is greyed out on pages without an article.
+- File > Share: the File menu has Share, which sends the page address to the share menu (Copy and the apps that take links).
+- Style: the content area behind the page uses the window content colour (white in Light, dark grey in Dark) instead of the pure black detail colour.
+
 ## 0.10.0 — 2026-10-12
 
 - Import Bookmarks: Settings (Cmd+,) has an "Import Bookmarks..." row. It reads the newest bookmark export in Downloads (a `bookmark*.html` file in the Netscape Bookmarks form that browsers and Safari write) and adds the links you do not have yet. Bookmarks you already have keep their names. The import reports how many it added. Folder names are not kept, only the links and their titles.
