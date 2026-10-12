@@ -51,15 +51,38 @@ pub struct StreamFormat {
 impl StreamFormat {
     /// The server's internal (virtual) format: f32, native endian, packed, non-interleaved.
     pub fn float32(sample_rate: f64, channels: u32) -> StreamFormat {
-        let _ = (sample_rate, channels);
-        todo!("audio-01")
+        StreamFormat {
+            sample_rate,
+            format: FormatId::LinearPcm,
+            flags: FormatFlags::FLOAT | FormatFlags::PACKED | FormatFlags::NON_INTERLEAVED,
+            bytes_per_packet: 4,
+            frames_per_packet: 1,
+            bytes_per_frame: 4,
+            channels,
+            bits_per_channel: 32,
+        }
     }
 
     /// Interleaved signed integer PCM of `bits` in a `container`-byte sample (S16 = 16/2, S24 in 32 = 24/4,
     /// S32 = 32/4), little endian.
     pub fn integer(sample_rate: f64, channels: u32, bits: u32, container: u32) -> StreamFormat {
-        let _ = (sample_rate, channels, bits, container);
-        todo!("audio-01")
+        let mut flags = FormatFlags::SIGNED_INTEGER;
+        if bits == container * 8 {
+            flags = flags | FormatFlags::PACKED;
+        } else {
+            flags = flags | FormatFlags::ALIGNED_HIGH;
+        }
+        let frame = container * channels;
+        StreamFormat {
+            sample_rate,
+            format: FormatId::LinearPcm,
+            flags,
+            bytes_per_packet: frame,
+            frames_per_packet: 1,
+            bytes_per_frame: frame,
+            channels,
+            bits_per_channel: bits,
+        }
     }
 
     pub fn is_float(&self) -> bool {
@@ -72,13 +95,59 @@ impl StreamFormat {
 
     /// Frames in `seconds` at this rate (rounded to the nearest frame).
     pub fn frames_for(&self, seconds: f64) -> u64 {
-        let _ = seconds;
-        todo!("audio-01")
+        let f = seconds * self.sample_rate;
+        if f <= 0.0 || f != f {
+            0
+        } else {
+            (f + 0.5) as u64
+        }
     }
 
     /// Bytes of `frames` frames across all channels.
     pub fn bytes_for(&self, frames: u32) -> u64 {
-        let _ = frames;
-        todo!("audio-01")
+        let per_frame = if self.is_interleaved() {
+            self.bytes_per_frame as u64
+        } else {
+            self.bytes_per_frame as u64 * self.channels as u64
+        };
+        per_frame * frames as u64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn float32_is_packed_non_interleaved() {
+        let f = StreamFormat::float32(48000.0, 2);
+        assert!(f.is_float());
+        assert!(!f.is_interleaved());
+        assert_eq!(f.bytes_per_frame, 4);
+        assert_eq!(f.bits_per_channel, 32);
+        assert_eq!(f.bytes_for(10), 80); // 10 frames * 2 channels * 4 bytes
+    }
+
+    #[test]
+    fn integer_formats() {
+        let s16 = StreamFormat::integer(44100.0, 2, 16, 2);
+        assert_eq!(s16.bytes_per_frame, 4);
+        assert!(s16.flags.contains(FormatFlags::PACKED));
+        assert!(s16.is_interleaved() && !s16.is_float());
+        assert_eq!(s16.bytes_for(100), 400);
+        let s24 = StreamFormat::integer(96000.0, 6, 24, 4);
+        assert_eq!(s24.bytes_per_frame, 24);
+        assert!(s24.flags.contains(FormatFlags::ALIGNED_HIGH));
+        assert!(!s24.flags.contains(FormatFlags::PACKED));
+        assert_eq!(s24.bytes_for(1), 24);
+    }
+
+    #[test]
+    fn frames_for_duration() {
+        let f = StreamFormat::float32(48000.0, 2);
+        assert_eq!(f.frames_for(1.0), 48000);
+        assert_eq!(f.frames_for(0.0105), 504);
+        assert_eq!(f.frames_for(-1.0), 0);
+        assert_eq!(StreamFormat::float32(44100.0, 1).frames_for(0.5), 22050);
     }
 }

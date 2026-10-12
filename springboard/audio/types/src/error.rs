@@ -24,3 +24,14 @@ pub enum AudioError {
     /// An underlying I/O or driver failure.
     Io,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_compare() {
+        assert_eq!(AudioError::Hogged, AudioError::Hogged);
+        assert_ne!(AudioError::Io, AudioError::Protocol);
+    }
+}
