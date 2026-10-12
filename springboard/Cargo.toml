@@ -22,12 +22,11 @@ zune-jpeg = "0.5"
 zune-core = "0.5"
 png = "0.18"
 bifrost-core = { path = "core" }
-# the one boot frame (docs/boot-architecture.md, "One frame"): the kernel hand-off, the installer and the window server
+# the one boot frame and the timing record (docs/boot-architecture.md, "One frame"; no_std, no dependencies): the
+# kernel hand-off, the installer, the supervisor's progress bar and failure screens
 bootweave-frame = { path = "bootweave/frame" }
 bifrost-render = { path = "render" }
 bifrost-ui = { path = "ui" }
-# the one boot frame and the timing record (docs/boot-architecture.md); no_std, no dependencies
-bootweave-frame = { path = "bootweave/frame" }
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"], optional = true }
 wayland-client = { version = "0.31", optional = true }
 wayland-protocols-wlr = { version = "0.3", features = ["client"], optional = true }
@@ -38,8 +37,6 @@ zbus = { version = "5", optional = true }
 bifrost-proto = { path = "proto" }
 # the chrome model the shell serves to the menu bar, Dock and panels clients (src/shell/chrome_host)
 bifrost-chrome = { path = "chrome" }
-# the one boot frame (docs/boot-architecture.md): the supervisor draws the failure screens with it
-bootweave-frame = { path = "bootweave/frame" }
 termcore = { package = "iosterm", path = "../../iOSTerm" }
 # AAC-LC audio decoding (pure Rust; the only codec crate — video is decoded
 # by the hardware through media::VideoDecoder).
