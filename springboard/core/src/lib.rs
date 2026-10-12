@@ -83,3 +83,5 @@ pub mod gifframes;
 pub mod surface_registry;
 pub mod exception_policy;
 pub mod resource_exception;
+pub mod usb_pipe;
+pub mod serial_line;
