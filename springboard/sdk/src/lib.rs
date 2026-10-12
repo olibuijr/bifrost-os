@@ -39,6 +39,7 @@ pub mod kit {
 }
 
 pub mod widgets;
+pub mod widgets_timeline;
 pub mod glyphs;
 pub mod defaults;
 pub mod font_descriptor;

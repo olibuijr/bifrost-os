@@ -13,6 +13,7 @@ pub mod keychain_groups;
 pub mod search_ranking;
 pub mod privacy_permissions;
 pub mod system;
+pub mod widgets_timeline;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -42,6 +43,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(keychain_groups::KeychainGroups::default()),
         Box::new(search_ranking::SearchRanking::default()),
         Box::new(privacy_permissions::PrivacyPermissions),
+        Box::new(widgets_timeline::WidgetsTimeline),
     ]
 }
 
