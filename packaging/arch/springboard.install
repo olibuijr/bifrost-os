@@ -13,6 +13,9 @@ bifrost_post_update() {
     # agent access (docs/bifrost-mcp.md), on by default; restart picks up the new binary
     systemctl enable bifrost-mcp.service >/dev/null 2>&1 || true
     systemctl restart bifrost-mcp.service >/dev/null 2>&1 || true
+    # socket-activated services: started on the first desktop frame by bifrost-desktop-ready (docs/boot-architecture.md)
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable bifrost-desktop-ready.service bifrostd.service >/dev/null 2>&1 || true
     # root helper: the group, the installed account's membership, then the daemon (docs/login-session.md)
     systemd-sysusers /usr/lib/sysusers.d/bifrost.conf >/dev/null 2>&1 || true
     acct=$(sed -n 's/^username=//p' /var/lib/springboard/account 2>/dev/null | head -n1)

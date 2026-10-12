@@ -1,7 +1,7 @@
 [Unit]
 Description=BifrOSt MCP server (agent access: screen, input, windows, apps, system)
 Documentation=file:///usr/share/doc/bifrost/bifrost-mcp.md
-After=network.target springboard.service
+After=network.target springboard.service bifrost-after-desktop.target
 
 [Service]
 ExecStart=/usr/bin/bifrost-mcp --serve
@@ -11,4 +11,5 @@ RestartSec=1
 Nice=-5
 
 [Install]
-WantedBy=multi-user.target
+# agent access is not needed for the first desktop frame: it starts after the desktop is on screen
+WantedBy=bifrost-after-desktop.target

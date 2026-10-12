@@ -1,0 +1,17 @@
+[Unit]
+Description=BifrOSt service supervisor (socket-activated services: audio, network)
+Documentation=file:///usr/share/doc/bifrost/services.md
+# Started after the first desktop frame, not on the boot path: the services bind their sockets here and start
+# only when a client connects (docs/boot-architecture.md, "Services on demand").
+After=springboard.service bifrost-after-desktop.target
+PartOf=bifrost-after-desktop.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bifrostd /var/lib/springboard
+Environment=BIFROST_ROOT=/var/lib/springboard
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=bifrost-after-desktop.target

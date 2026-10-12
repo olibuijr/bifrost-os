@@ -11,6 +11,24 @@ pub use crate::DecodeError;
 
 pub const MAX_FRAME: usize = 256 * 1024;
 
+/// Set to `1` by bifrostd when it starts a service on a connection (socket activation). The service's listening
+/// socket is then its stdin (fd 0), already bound and holding the waiting connection.
+pub const ACTIVATED_ENV: &str = "BIFROST_ACTIVATED";
+
+/// The service's listening socket. Under socket activation (`ACTIVATED_ENV`) it is the socket bifrostd passed on
+/// stdin; otherwise (a service run by hand) the socket is bound at `sock`, replacing a stale file.
+pub fn listen(sock: &std::path::Path) -> io::Result<std::os::unix::net::UnixListener> {
+    use std::os::unix::io::FromRawFd;
+    use std::os::unix::net::UnixListener;
+    if std::env::var_os(ACTIVATED_ENV).is_some_and(|v| v == "1") {
+        // SAFETY: bifrostd passed a bound, listening unix socket as this process's stdin and set ACTIVATED_ENV;
+        // nothing else in the process owns fd 0 at this point, so taking ownership of it here is sound.
+        return Ok(unsafe { UnixListener::from_raw_fd(0) });
+    }
+    let _ = std::fs::remove_file(sock);
+    UnixListener::bind(sock)
+}
+
 pub fn write_frame<W: Write>(w: &mut W, payload: &[u8]) -> io::Result<()> {
     let mut buf = Vec::with_capacity(payload.len() + 4);
     buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());

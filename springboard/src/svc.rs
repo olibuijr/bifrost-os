@@ -55,16 +55,29 @@ pub mod audio {
         backoff: f64,
         /// bumped on every (re)connect, so a caller can resend what it set (volume, mute)
         connects: u32,
+        /// false until `arm`: a lazy client does not connect, and so does not start the service (socket activation)
+        armed: bool,
     }
 
     impl Client {
         pub fn new(path: PathBuf) -> Self {
-            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0 }
+            Client { path, stream: None, rx: Vec::new(), tx: Vec::new(), received: idle(), received_at: 0.0, clock: 0.0, view: idle(), recording: None, done: Vec::new(), version: None, retry_at: 0.0, backoff: RETRY_MIN_MS, connects: 0, armed: true }
         }
 
-        /// The client of the service under the shell data dir `root`.
+        /// The client of the service under the shell data dir `root`. It connects lazily: nothing is sent to the
+        /// service (so bifrostd does not start it) until `arm`.
         pub fn for_root(root: &Path) -> Self {
-            Self::new(socket_path(root))
+            Client { armed: false, ..Self::new(socket_path(root)) }
+        }
+
+        /// Allows the connection. The shell arms its client once the first desktop frame is drawn, so the audio
+        /// service starts after the desktop is on screen and not on the boot path.
+        pub fn arm(&mut self) {
+            self.armed = true;
+        }
+
+        pub fn armed(&self) -> bool {
+            self.armed
         }
 
         /// The fd to wait for readability on, -1 while disconnected.
@@ -132,7 +145,7 @@ pub mod audio {
         /// Reconnects when due and advances the position; true when the snapshot changed on screen.
         pub fn tick(&mut self, now: f64) -> bool {
             let mut changed = false;
-            if self.stream.is_none() && now >= self.retry_at {
+            if self.armed && self.stream.is_none() && now >= self.retry_at {
                 changed |= self.connect(now);
             }
             if self.flush().is_err() {
@@ -156,7 +169,7 @@ pub mod audio {
         /// When `tick` next has to run on its own: the next reconnect attempt, only while the
         /// service socket exists (a missing service is not polled for).
         pub fn next_wake(&self, now: f64) -> Option<f64> {
-            (self.stream.is_none() && self.path.exists()).then_some(self.retry_at.max(now))
+            (self.armed && self.stream.is_none() && self.path.exists()).then_some(self.retry_at.max(now))
         }
 
         fn connect(&mut self, now: f64) -> bool {
@@ -343,6 +356,24 @@ pub mod audio {
         }
 
         #[test]
+        fn a_lazy_client_connects_only_once_armed() {
+            let dir = std::env::temp_dir().join(format!("svc-audio-lazy-{}", std::process::id()));
+            std::fs::create_dir_all(dir.join("run")).unwrap();
+            let sock = socket_path(&dir);
+            let _ = std::fs::remove_file(&sock);
+            let l = UnixListener::bind(&sock).unwrap();
+            let mut c = Client::for_root(&dir);
+            // a waiting socket does not make the lazy client connect: nothing is sent, so the service is not started
+            assert!(!c.armed() && !c.tick(0.0) && !c.connected());
+            assert!(c.next_wake(0.0).is_none(), "an unarmed client schedules no reconnects");
+            l.set_nonblocking(true).unwrap();
+            assert!(l.accept().is_err(), "no connection was made");
+            c.arm();
+            assert!(c.tick(0.0) && c.connected());
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
         fn subscribes_caches_state_sends_commands_and_reconnects() {
             let dir = std::env::temp_dir().join(format!("svc-audio-{}", std::process::id()));
             std::fs::create_dir_all(dir.join("run")).unwrap();
@@ -350,6 +381,7 @@ pub mod audio {
             let _ = std::fs::remove_file(&sock);
             let l = UnixListener::bind(&sock).unwrap();
             let mut c = Client::for_root(&dir);
+            c.arm();
             assert!(c.tick(0.0) && c.connected());
             let (mut srv, _) = l.accept().unwrap();
             let first = Cmd::decode(&read_frame(&mut srv).unwrap()).unwrap();

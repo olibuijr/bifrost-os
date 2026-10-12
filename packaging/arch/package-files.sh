@@ -24,6 +24,14 @@ package_bifrost_files() {
     install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
   fi
   install -Dm644 "$here/bifrost-mcp.service" "$pkgdir/usr/lib/systemd/system/bifrost-mcp.service"
+  # socket-activated services (docs/boot-architecture.md "Services on demand"): the supervisor, the target it runs
+  # under, and the trigger that starts the target on the first desktop frame
+  if [[ -n ${PC_BIFROSTD:-} && -x ${PC_BIFROSTD} ]]; then
+    install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
+  fi
+  install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
+  install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
+  install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
   # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
