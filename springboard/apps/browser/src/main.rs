@@ -20,7 +20,7 @@ use std::{fs, io};
 
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, TINT};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -34,7 +34,7 @@ mod system;
 use inspector::Inspector;
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
 use bifrost_app::network_path::{self, Status};
-use bifrost_app::{glyphs, widgets, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{glyphs, widgets, App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 
 /// The engine archive bundled in assets/servo.tar.gz (version and the first 12 hex digits of its SHA-256).
 const ENGINE: &str = "servo-0.7.0-bifrost.12-9c0bb55f87bb";
@@ -64,6 +64,9 @@ const KEY_K: u32 = 37;
 const KEY_T: u32 = 20;
 const KEY_W: u32 = 17;
 const KEY_R: u32 = 19;
+/// Main-menu item ids (`App::menu_action`): View > Show Reader and File > Share.
+const MENU_READER: u32 = 1;
+const MENU_SHARE: u32 = 2;
 const KEY_D: u32 = 32;
 const KEY_Y: u32 = 21;
 const KEY_B: u32 = 48;
@@ -513,6 +516,39 @@ impl Browser {
         }
     }
 
+    /// The address of the page in the current tab, when it is a web page (http or https).
+    fn web_url(&self) -> Option<String> {
+        let v = self.view()?;
+        let url = self.pool.as_ref()?.state(v)?.url.clone();
+        (url.starts_with("http://") || url.starts_with("https://")).then_some(url)
+    }
+
+    /// File > Share and View > Show Reader: the shell merges these into its own File and View menus.
+    fn menus(&self) -> Vec<AppMenu> {
+        let reader_ok = self.view().is_some_and(|v| self.reader.button(v));
+        let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
+        vec![
+            AppMenu {
+                title: "File".into(),
+                items: vec![AppMenuItem::new(MENU_SHARE, "Share\u{2026}").enabled(self.web_url().is_some())],
+            },
+            AppMenu {
+                title: "View".into(),
+                items: vec![AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok)],
+            },
+        ]
+    }
+
+    /// Share sends the page address to the shell's share menu (Copy and the apps that take links). The shell
+    /// answers with the chosen target; the app keeps no state for it.
+    fn share_page(&self, ctx: &Ctx) -> bool {
+        if let Some(url) = self.web_url() {
+            let anchor = Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
+            let _ = bifrost_app::share::show_picker(ctx, &[bifrost_app::share::Payload::Url(url)], anchor);
+        }
+        false
+    }
+
     fn toggle_reader(&mut self) {
         let (Some(v), Some(p)) = (self.view(), self.pool.as_mut()) else { return };
         let url = p.state(v).map(|s| s.url.clone()).unwrap_or_default();
@@ -900,6 +936,21 @@ impl Browser {
 impl App for Browser {
     fn id(&self) -> &str {
         "is.olibuijr.browser.desktop"
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.menus()
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        match id {
+            MENU_READER => {
+                self.toggle_reader();
+                true
+            }
+            MENU_SHARE => self.share_page(ctx),
+            _ => false,
+        }
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -1522,7 +1573,7 @@ impl App for Browser {
         let ui = &ctx.ui;
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         let wpt = w as f32 / Self::pt(ui);
-        s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         if let Some(p) = &mut self.pool {
             p.draw(s);
         }
