@@ -978,3 +978,5 @@ pub mod bt_chooser;
 pub mod bt_passkey;
 pub mod input_switches;
 pub mod device_match;
+pub mod window_list;
+pub mod event_tap;
