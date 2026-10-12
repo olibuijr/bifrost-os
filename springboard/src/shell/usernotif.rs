@@ -57,7 +57,8 @@ impl Registry {
         self.categories.get(app)?.iter().find(|c| c.id == id)
     }
 
-    fn check(&self, app: &str, req: &NotifRequest) -> Option<NotifStatus> {
+    /// Why a request is refused (empty identifier or content, unknown category), or None when it is valid.
+    pub fn check(&self, app: &str, req: &NotifRequest) -> Option<NotifStatus> {
         if req.id.is_empty() || (req.title.is_empty() && req.body.is_empty() && req.subtitle.is_empty()) {
             return Some(NotifStatus::Param);
         }
@@ -229,6 +230,11 @@ pub fn display(req: &NotifRequest) -> (String, String) {
     (req.title.clone(), body)
 }
 
+/// True when the app `app` (its id) has the `notifications` permission in its manifest.
+pub(super) fn permitted(app: &str) -> bool {
+    super::apphost::installed().iter().any(|p| p.manifest.id == app && p.manifest.permissions.iter().any(|x| x == "notifications"))
+}
+
 /// Shell side: the sockets in, the notification UI out.
 impl super::Shell {
     /// A `Notify*` message from the app in `slot`.
@@ -294,12 +300,17 @@ impl super::Shell {
     pub(super) fn usernotif_tick(&mut self, t: f64) {
         if self.usernotif.next_due().is_some_and(|due| due <= t) {
             for (app, req) in self.usernotif.due(t) {
-                if let Some(slot) = super::apphost::slot_of(&app) {
-                    // a repeat replaces the one before it with the same identifier, as a delivered request does
-                    let replaced = self.usernotif.take_delivered(&app, &req.id);
-                    self.usernotif_deliver(slot as u8, &app, req, replaced, t);
-                }
+                self.usernotif_fire(&app, req, t);
             }
+        }
+    }
+
+    /// Delivers a request whose trigger fired now, from the registry or from the `notification-schedule` service. An
+    /// earlier delivery with the same identifier is replaced, as for a request that was due at once.
+    pub(super) fn usernotif_fire(&mut self, app: &str, req: NotifRequest, t: f64) {
+        if let Some(slot) = super::apphost::slot_of(app) {
+            let replaced = self.usernotif.take_delivered(app, &req.id);
+            self.usernotif_deliver(slot as u8, app, req, replaced, t);
         }
     }
 
