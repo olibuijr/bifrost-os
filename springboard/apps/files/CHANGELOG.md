@@ -1,3 +1,8 @@
+## 1.17.1 — 2026-10-12
+
+- Tests: under the test pin the first folder is read at once, so a busy machine never snapshots "Loading…".
+- View Options and the column headers use the named radius and type tokens (card radius 13 pt, callout and headline sizes).
+
 ## 1.17.0 — 2026-10-11
 
 - Undo: the Edit menu names the step ("Undo Move", "Undo Rename", "Undo Trash", "Undo New Folder") and Undo is enabled only when there is something to undo (system 0.5.33).

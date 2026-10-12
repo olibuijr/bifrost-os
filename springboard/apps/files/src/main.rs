@@ -1,7 +1,9 @@
 //! Desktop Files is independently delivered through the App Store.
 #![allow(unused_imports)]
 use bifrost_app::kit::ui::{SPACE_S, SPACE_XXS};
-use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::{CELL_RADIUS_PT, MAC_CALLOUT_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT};
+/// Grouped cards and the View Options panel: `prefs_layout::m::CARD_RADIUS`, 13 pt.
+const CARD_R: f32 = bifrost_app::controls::prefs_layout::m::CARD_RADIUS;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::controls::{Controls, Node, Role, Rect, TextField};
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};

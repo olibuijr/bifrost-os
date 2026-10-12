@@ -18,9 +18,9 @@ impl Files {
             let label = if by == Sort::Date { "Date Modified" } else { by.label() };
             let active = by == self.sort;
             let color = if active { LABEL.now() } else { LABEL_2.now() };
-            text(s, ui, label, 12., color, x, 70., if by == Sort::Name { w - 580. } else { 110. });
+            text(s, ui, label, MAC_CALLOUT_PT, color, x, 70., if by == Sort::Name { w - 580. } else { 110. });
             if active {
-                let tw = ui.measure(label, 12., Weight::Regular) / ui.pt(1.);
+                let tw = ui.measure(label, MAC_CALLOUT_PT, Weight::Regular) / ui.pt(1.);
                 // arrow up for A to Z / smallest first, down for newest / largest first
                 let natural_up = matches!(by, Sort::Name | Sort::Kind);
                 let up = natural_up == self.vo.asc;

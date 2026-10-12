@@ -16,7 +16,9 @@
   "deckcraft-desktop": {},
   "designcraft-desktop": {},
   "effectcraft-desktop": {},
-  "files": {},
+  "files": {
+    "RES-02": 1
+  },
   "filmcraft-desktop": {},
   "freeform-desktop": {},
   "games-desktop": {},

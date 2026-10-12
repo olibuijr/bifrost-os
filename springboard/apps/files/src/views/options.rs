@@ -303,7 +303,7 @@ impl Files {
         let (top, cols, first) = self.strip_geom(visible);
         let (x0, y0, x1) = (self.side() + 16., HEADER_H + 6., self.w - 16.);
         let y1 = top - 8.;
-        s.fill_rrect(ui.pt(x0), ui.pt(y0), ui.pt(x1 - x0), ui.pt((y1 - y0).max(0.)), ui.pt(13.), CARD_BG.now());
+        s.fill_rrect(ui.pt(x0), ui.pt(y0), ui.pt(x1 - x0), ui.pt((y1 - y0).max(0.)), ui.pt(CARD_R), CARD_BG.now());
         let e = &self.rows[cur];
         let info_h = 56.;
         let box_h = (y1 - y0 - info_h - 16.).max(32.);
@@ -436,23 +436,23 @@ impl Files {
             return;
         }
         let p = self.panel_rect();
-        s.fill_rrect(ui.pt(p.x - 1.), ui.pt(p.y - 1.), ui.pt(p.w + 2.), ui.pt(p.h + 2.), ui.pt(13.), SEPARATOR_C.now());
-        s.fill_rrect(ui.pt(p.x), ui.pt(p.y), ui.pt(p.w), ui.pt(p.h), ui.pt(13.), DETAIL_BG.now());
-        text(s, ui, "View Options", 13., LABEL.now(), p.x + 16., p.y + 14., p.w - 32.);
+        s.fill_rrect(ui.pt(p.x - 1.), ui.pt(p.y - 1.), ui.pt(p.w + 2.), ui.pt(p.h + 2.), ui.pt(CARD_R), SEPARATOR_C.now());
+        s.fill_rrect(ui.pt(p.x), ui.pt(p.y), ui.pt(p.w), ui.pt(p.h), ui.pt(CARD_R), DETAIL_BG.now());
+        text(s, ui, "View Options", MAC_HEADLINE_PT, LABEL.now(), p.x + 16., p.y + 14., p.w - 32.);
         for (name, dy) in [("Icon size", 40.), ("Text size", 70.), ("Group By", 100.), ("Sort By", 134.)] {
-            text(s, ui, name, 12., LABEL_2.now(), p.x + 16., p.y + dy + 4., 70.);
+            text(s, ui, name, MAC_CALLOUT_PT, LABEL_2.now(), p.x + 16., p.y + dy + 4., 70.);
         }
-        text(s, ui, &format!("{}", self.vo.icon as i32), 12., LABEL.now(), p.x + p.w - 62., p.y + 44., 18.);
-        text(s, ui, &format!("{}", self.vo.text as i32), 12., LABEL.now(), p.x + p.w - 62., p.y + 74., 18.);
+        text(s, ui, &format!("{}", self.vo.icon as i32), MAC_CALLOUT_PT, LABEL.now(), p.x + p.w - 62., p.y + 44., 18.);
+        text(s, ui, &format!("{}", self.vo.text as i32), MAC_CALLOUT_PT, LABEL.now(), p.x + p.w - 62., p.y + 74., 18.);
         for (r, act) in self.panel_hits() {
             let (name, on) = match act {
                 OptAct::Icon(d) | OptAct::Text(d) => (if d < 0. { "−" } else { "+" }, false),
                 OptAct::Group(g) => (g.label(), g == self.vo.group),
                 OptAct::SortBy(by) => (by.label(), by == self.sort),
             };
-            s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(6.), if on { SELECTION.now() } else { CARD_BG.now() });
-            let wpt = ui.measure(name, 12., Weight::Regular) / ui.pt(1.);
-            text(s, ui, name, 12., ink(on), r.x + (r.w - wpt) / 2., r.y + 4., r.w);
+            s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(CELL_RADIUS_PT), if on { SELECTION.now() } else { CARD_BG.now() });
+            let wpt = ui.measure(name, MAC_CALLOUT_PT, Weight::Regular) / ui.pt(1.);
+            text(s, ui, name, MAC_CALLOUT_PT, ink(on), r.x + (r.w - wpt) / 2., r.y + 4., r.w);
         }
     }
 }
