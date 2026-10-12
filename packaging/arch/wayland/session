@@ -52,7 +52,14 @@ fi
 mark compositor-start
 # The window server: labwc, or BifrOSt's own (docs/window-server.md) when /etc/bifrost/compositor says bifrost-wm.
 compositor=$(tr -dc 'a-z-' < /etc/bifrost/compositor 2>/dev/null || true)
-[[ "$compositor" == bifrost-wm && -x /usr/bin/bifrost-wm ]] || compositor=labwc
+# A bifrost-wm that exited three times within 60 s makes the session fall back to labwc until the next boot.
+[[ "$compositor" == bifrost-wm && -x /usr/bin/bifrost-wm && ! -e /run/bifrost/compositor-fallback ]] || compositor=labwc
+# The new stack's switches (docs/graphics-architecture.md): renderer and chrome, read as plain words.
+renderer=$(tr -dc 'a-z' < /etc/bifrost/renderer 2>/dev/null || true)
+chrome=$(tr -dc '0-9' < /etc/bifrost/chrome 2>/dev/null || true)
+source /usr/lib/bifrost/session-policy
+wm_flags=()
+while IFS= read -r word; do [[ -n "$word" ]] && wm_flags+=("$word"); done < <(session_compositor_flags "$compositor" "$renderer" "$chrome")
 # the first desktop of this boot fades in from the loader's frame; a session restart does not
 fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
 # glibc: two arenas and early trim keep the compositor heap (was 18 MiB idle) small; gles2 is the wlroots default, named so a stray env cannot pull in vulkan
@@ -60,7 +67,7 @@ runtime_env=(MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65
 if [[ "$compositor" == bifrost-wm ]]; then
     # bifrost-wm owns the screen, so it shows the loader's frame and does the boot fade, not the shell
     runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 ${fade:+BIFROST_BOOT_FADE=1} \
-        /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
+        "${wm_flags[@]}" /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
     compositor_pid=$!
     for ((i=0;i<250;i++)); do
         [[ -S "$runtime/wayland-0" ]] && break
@@ -95,10 +102,18 @@ mark shell-launch
 # under bifrost-wm the compositor fades; the shell only fades on labwc
 shell_fade=; [[ "$compositor" == labwc ]] && shell_fade=$fade
 launch_shell() {
-    env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 ${shell_fade:+BIFROST_BOOT_FADE=1} "$client" &
+    env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 SPRINGBOARD_WAYLAND=1 ${shell_fade:+BIFROST_BOOT_FADE=1} \
+        ${wm_flags[@]+"${wm_flags[@]}"} "$client" &
     shell_pid=$!
 }
 launch_shell
+# With the chrome switch the menu bar, Dock and panels run as their own clients beside the shell (docs/graphics-architecture.md).
+if [[ "$compositor" == bifrost-wm && "$chrome" == 1 ]]; then
+    for chrome_client in bifrost-menubar bifrost-dock bifrost-panels; do
+        [[ -x /usr/bin/$chrome_client ]] || continue
+        runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 "${wm_flags[@]}" "/usr/bin/$chrome_client" 1>&2 &
+    done
+fi
 # learns the display mode for the next boot's command line; off the critical path
 /usr/lib/bifrost/video-arg >&2 &
 set +e
@@ -110,7 +125,16 @@ if [[ "$compositor" == bifrost-wm ]]; then
         started=$SECONDS
         wait -n "$shell_pid" "$compositor_pid"
         status=$?
-        kill -0 "$compositor_pid" 2>/dev/null || break   # the compositor ended: the session ends
+        if ! kill -0 "$compositor_pid" 2>/dev/null; then
+            # bifrost-wm died on its own: three such exits within 60 s make the next session start use labwc
+            if [[ "$(wm_exit_action "$(date +%s)" /run/bifrost/wm-exits)" == fallback ]]; then
+                : > /run/bifrost/compositor-fallback
+                echo 'bifrost-wm exited three times within 60 s: falling back to labwc' >&2
+                status=1
+                break
+            fi
+            break
+        fi
         [[ "$status" == 3 ]] && break                      # Software Update restarts the whole session
         if (( SECONDS - started < 60 )); then quick=$((quick + 1)); else quick=0; fi
         (( quick >= 3 )) && break
