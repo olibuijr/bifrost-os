@@ -13,9 +13,12 @@ const MENU_FIND_NEXT: u32 = 2;
 const MENU_FIND_PREVIOUS: u32 = 3;
 const MENU_HIGHLIGHT: u32 = 4;
 const MENU_WHOLE_WORDS: u32 = 5;
+const MENU_COPY_QUOTE: u32 = 6;
 
+/// How the shelf reaches the search index: a book is sent when it is new or changed (see `books::search_index`).
 struct BooksApp {
     books: Option<books::Books>,
+    index: books::search_index::SearchIndex,
 }
 
 impl App for BooksApp {
@@ -47,6 +50,10 @@ impl App for BooksApp {
                 items: vec![AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open && bifrost_app::print::available())],
             },
             AppMenu {
+                title: "Edit".into(),
+                items: vec![AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some())],
+            },
+            AppMenu {
                 title: "Find".into(),
                 items: vec![
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(hits),
@@ -60,7 +67,14 @@ impl App for BooksApp {
         ]
     }
 
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id == MENU_COPY_QUOTE {
+            // a quotation goes to the shared clipboard as plain text, with its citation; no frame is needed
+            if let Some(quotation) = self.books.as_ref().and_then(|b| b.quotation()) {
+                books::quote::copy(ctx, &quotation);
+            }
+            return false;
+        }
         if matches!(id, MENU_FIND_NEXT | MENU_FIND_PREVIOUS | MENU_HIGHLIGHT | MENU_WHOLE_WORDS) {
             let Some(books) = &mut self.books else { return false };
             let t = bifrost_app::proto::sys::now_ms();
@@ -131,7 +145,19 @@ impl App for BooksApp {
         self.books.as_ref().map_or_else(Vec::new, |b| b.controls(&ctx.ui))
     }
 
+    fn continue_activity(&mut self, _ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
+        // a result of this app picked in the desktop search panel opens its book
+        let Some(path) = books::search_index::path_from_activity(&activity) else { return false };
+        let Some(books) = &mut self.books else { return false };
+        books.open_path(&path);
+        true
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        // sends only the books that changed since the last frame (see `books::search_index`)
+        if let Some(b) = &self.books {
+            self.index.sync(ctx, &b.index_entries());
+        }
         self.books.as_mut().is_some_and(|b| b.tick(&ctx.ui, t))
     }
 
@@ -150,5 +176,5 @@ impl App for BooksApp {
 }
 
 fn main() {
-    bifrost_app::run(BooksApp { books: None });
+    bifrost_app::run(BooksApp { books: None, index: Default::default() });
 }

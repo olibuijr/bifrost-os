@@ -7,6 +7,8 @@
 pub use springboard::shell::books::engine;
 pub mod icon;
 pub mod layout;
+pub mod quote;
+pub mod search_index;
 pub mod store;
 
 mod draw;
@@ -37,6 +39,8 @@ use store::{Pos, Span, Store, Theme, SIZES};
 
 #[cfg(test)]
 mod highlight_tests;
+#[cfg(test)]
+mod connect_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).
@@ -629,6 +633,24 @@ impl Books {
         self.save_now();
         self.dirty = true;
         on
+    }
+
+    /// Edit menu: the quotation for the match the last find went to, with its citation (see `quote`).
+    pub fn quotation(&self) -> Option<String> {
+        let r = self.reader.as_ref()?;
+        let (block, offset, len) = r.highlight?;
+        quote::quotation(&r.book, Span { block, offset, len })
+    }
+
+    /// The shelf as the search index sees it: each book's path, title and author.
+    pub fn index_entries(&self) -> Vec<search_index::Entry> {
+        self.shelf
+            .iter()
+            .map(|c| {
+                let pdf = c.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+                search_index::Entry { path: c.path.clone(), title: c.title.clone(), author: c.author.clone(), format: if pdf { "PDF" } else { "EPUB" } }
+            })
+            .collect()
     }
 
     fn open_hit(&mut self, i: usize, t: f64) {
