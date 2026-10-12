@@ -2,6 +2,11 @@
 
 ## 1.3.0
 
+- Copy Contact on the contact card puts the person on the shared pasteboard as a vCard and as plain text (name, company,
+  phone, email, address, one per line). Pasting into a text field gives the text; apps that take vCards get the card.
+  The status line says whether the copy worked.
+- Contacts are indexed for desktop search by name, company, phone numbers and emails, so Search finds a person by any of
+  them. Only changed contacts are sent again, and the index is cleared and rebuilt when the app starts.
 - Import and export of contacts as vCard files. Import reads every `.vcf` file in the Contacts `Import` folder, in
   vCard 3.0 or 4.0; a card that matches a contact already in the list is skipped. Export writes `contacts-3.0.vcf` or
   `contacts-4.0.vcf` to the `Export` folder. Groups (vCard 4.0 `KIND:group` cards) are not imported.
