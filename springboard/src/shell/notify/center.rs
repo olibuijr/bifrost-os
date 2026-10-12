@@ -6,7 +6,7 @@
 //! empty space or a swipe up puts the sheet away; a long list scrolls.
 
 use super::super::control_center::Frost;
-use super::super::services::widgets_timeline::{self, Row};
+use super::super::services::widgets_timeline::{self, Listing, Row};
 use super::super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::super::ui::{centred, Weight, WHITE};
 use super::super::{apps, AppId, Effect, Event, Screen, Shell};
@@ -65,11 +65,13 @@ pub struct Center {
     empty: Option<Image>,
     /// the desktop column's control under the pointer at press
     desk_press: Option<DeskHit>,
+    /// the desktop column shows the Edit Widgets gallery instead of its widgets and cards
+    editing: bool,
 }
 
 impl Default for Center {
     fn default() -> Self {
-        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None }
+        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false }
     }
 }
 
@@ -423,6 +425,16 @@ impl Shell {
 // 58 pt high, 10 apart, above the notification cards.
 
 const NC_WIDGET_PT: f32 = 58.0;
+/// a widget set to Large in the Edit Widgets gallery
+const NC_WIDGET_LARGE_PT: f32 = 96.0;
+/// the Edit Widgets capsule at the foot of the column, its height and the gap above it
+const NC_EDIT_PT: f32 = 28.0;
+const NC_EDIT_TOP_PT: f32 = 14.0;
+/// the gallery's Done capsule, the add/remove disc and the Small/Large chips
+const NC_DONE_PT: f32 = 64.0;
+const NC_DISC_PT: f32 = 24.0;
+const NC_CHIP_W_PT: f32 = 56.0;
+const NC_CHIP_GAP_PT: f32 = 6.0;
 const NC_W_PT: f32 = 342.0;
 const NC_RIGHT_PT: f32 = 18.0;
 const NC_TOP_GAP_PT: f32 = 6.0;
@@ -441,7 +453,18 @@ enum DeskHit {
     ClearAll,
     Card(AppId),
     Close(AppId),
+    /// the Edit Widgets capsule at the foot of the column
+    EditWidgets,
+    /// the gallery's Done
+    Done,
+    /// the gallery row's add or remove disc (index into the gallery listing)
+    Toggle(usize),
+    /// the gallery row's Small (false) or Large (true) chip
+    Size(usize, bool),
 }
+
+/// One gallery row: (index in the listing, row rect, add/remove disc, Small chip, Large chip).
+type GalleryRow = (usize, R4, R4, R4, R4);
 
 type R4 = (f32, f32, f32, f32);
 
@@ -485,7 +508,7 @@ impl Shell {
         let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT) + ui.pt(NC_TITLE_PT);
         let mut out = vec![];
         for row in widgets_timeline::rows(self.notify.now()) {
-            let h = ui.pt(NC_WIDGET_PT);
+            let h = ui.pt(if row.large { NC_WIDGET_LARGE_PT } else { NC_WIDGET_PT });
             if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
                 break;
             }
@@ -495,10 +518,51 @@ impl Shell {
         out
     }
 
+    /// The Edit Widgets capsule: the column's width, at the foot of the column above the dock.
+    fn center_edit_rect(&self) -> R4 {
+        let ui = &self.ui;
+        let w = ui.pt(NC_W_PT);
+        let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
+        (x, self.h as f32 - ui.pt(NC_BOTTOM_PT) + ui.pt(NC_EDIT_TOP_PT), w, ui.pt(NC_EDIT_PT))
+    }
+
+    /// The gallery's title row (with Done at its trailing end), then one row per widget in the listing that fits.
+    fn center_gallery_layout(&self) -> (R4, R4, Vec<GalleryRow>) {
+        let ui = &self.ui;
+        let w = ui.pt(NC_W_PT);
+        let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
+        let top = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT);
+        let title = (x, top, w, ui.pt(NC_TITLE_PT));
+        let (dw, disc, chip, gap) = (ui.pt(NC_DONE_PT), ui.pt(NC_DISC_PT), ui.pt(NC_CHIP_W_PT), ui.pt(NC_CHIP_GAP_PT));
+        let cy_title = top + (ui.pt(NC_TITLE_PT) - ui.pt(NC_DISC_PT)) / 2.0;
+        let done = (x + w - dw, cy_title, dw, ui.pt(NC_DISC_PT));
+        let pad = ui.pt(NC_PAD_PT);
+        let mut y = top + ui.pt(NC_TITLE_PT);
+        let mut rows = vec![];
+        for i in 0..widgets_timeline::gallery(self.notify.now()).len() {
+            let h = ui.pt(NC_WIDGET_PT);
+            if y + h > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
+                break;
+            }
+            let cy = y + h / 2.0;
+            let toggle = (x + w - pad - disc, cy - disc / 2.0, disc, disc);
+            let large = (toggle.0 - gap - chip, cy - disc / 2.0, chip, disc);
+            let small = (large.0 - gap - chip, cy - disc / 2.0, chip, disc);
+            rows.push((i, (x, y, w, h), toggle, small, large));
+            y += h + ui.pt(NC_GAP_PT);
+        }
+        (title, done, rows)
+    }
+
     /// The column's bounds in px, for the presenter's opaque regions.
     pub(crate) fn center_desk_rect(&self) -> Option<R4> {
         if self.notify.center.is_hidden() || !self.desk_active() {
             return None;
+        }
+        if self.notify.center.editing {
+            let (t, _, rows) = self.center_gallery_layout();
+            let bottom = rows.last().map(|r| r.1 .1 + r.1 .3).unwrap_or(t.1 + t.3);
+            return Some((t.0, t.1, t.2, bottom - t.1));
         }
         let (t, _, cards) = self.center_desk_layout();
         let bottom = cards
@@ -506,10 +570,37 @@ impl Shell {
             .map(|c| c.1 .1 + c.1 .3 + self.ui.pt(NC_STACK_PT))
             .or_else(|| self.center_widget_rects().last().map(|(r, _)| r.1 + r.3))
             .unwrap_or(t.1 + t.3);
-        Some((t.0, t.1, t.2, bottom - t.1))
+        // the Edit Widgets capsule is part of the column too
+        let edit = self.center_edit_rect();
+        Some((t.0, t.1, t.2, bottom.max(edit.1 + edit.3) - t.1))
+    }
+
+    fn center_gallery_hit(&self, x: f32, y: f32) -> Option<DeskHit> {
+        let (_, done, rows) = self.center_gallery_layout();
+        if within(done, x, y) {
+            return Some(DeskHit::Done);
+        }
+        for (i, _, toggle, small, large) in rows {
+            if within(toggle, x, y) {
+                return Some(DeskHit::Toggle(i));
+            }
+            if within(small, x, y) {
+                return Some(DeskHit::Size(i, false));
+            }
+            if within(large, x, y) {
+                return Some(DeskHit::Size(i, true));
+            }
+        }
+        None
     }
 
     fn center_desk_hit(&self, x: f32, y: f32) -> Option<DeskHit> {
+        if self.notify.center.editing {
+            return self.center_gallery_hit(x, y);
+        }
+        if within(self.center_edit_rect(), x, y) {
+            return Some(DeskHit::EditWidgets);
+        }
         let (_, clear, cards) = self.center_desk_layout();
         if within(clear, x, y) {
             return Some(DeskHit::ClearAll);
@@ -527,8 +618,15 @@ impl Shell {
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         let c = &mut self.notify.center;
         c.backdrop = None;
+        // it opens on the widgets, not on the gallery of an earlier visit
+        c.editing = false;
         c.settle(0.0, true, t);
         self.dirty = true;
+    }
+
+    /// The gallery's listing entry at `i`, as the service has it now.
+    fn gallery_item(&self, i: usize) -> Option<Listing> {
+        widgets_timeline::gallery(self.notify.now()).into_iter().nth(i)
     }
 
     fn center_desk_event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
@@ -550,6 +648,18 @@ impl Shell {
                             self.notify.center.hide();
                             self.open_from_notification(app, t);
                         }
+                        DeskHit::EditWidgets => self.notify.center.editing = true,
+                        DeskHit::Done => self.notify.center.editing = false,
+                        DeskHit::Toggle(i) => {
+                            if let Some(item) = self.gallery_item(i) {
+                                widgets_timeline::place(&item.app, &item.kind, !item.placed);
+                            }
+                        }
+                        DeskHit::Size(i, large) => {
+                            if let Some(item) = self.gallery_item(i) {
+                                widgets_timeline::resize(&item.app, &item.kind, large);
+                            }
+                        }
                     }
                     self.dirty = true;
                 }
@@ -561,13 +671,16 @@ impl Shell {
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
         use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA};
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
             // the column floats over the live desktop: clear only its own rect (and the slide) for the glass
             let pad = self.ui.pt(32.0);
             s.fill_rect((x - pad).max(0.0) as usize, (y - pad).max(0.0) as usize, (w + 2.0 * pad) as usize, (h + 2.0 * pad) as usize, 0);
+        }
+        if self.notify.center.editing {
+            return self.draw_desk_gallery(s, p);
         }
         let c = &self.notify.center;
         let alpha = (p * 255.0) as u32;
@@ -634,6 +747,76 @@ impl Shell {
             ly += t1.h as f32;
             s.blit(&t2, (x + pad) as i32, ly as i32, 255, alpha);
             disc(s, close, FIELD_BG.now(), label);
+        }
+        // Edit Widgets: a glass capsule with a link-coloured label, at the foot of the column above the dock
+        let (ex, ey, ew, eh) = self.center_edit_rect();
+        desk_glass(s, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
+        let et = ui.text("Edit Widgets", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
+        s.blit(&et, (ex + slide + (ew - et.w as f32) / 2.0) as i32, (ey + (eh - et.h as f32) / 2.0) as i32, 255, alpha);
+    }
+
+    /// The Edit Widgets gallery in the column's place: the title with Done, then a row per widget with a disc that adds
+    /// it to or removes it from the column, and Small and Large chips for its size.
+    fn draw_desk_gallery(&self, s: &mut Surface, p: f32) {
+        use super::super::control_center::desk_glass;
+        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA};
+        let alpha = (p * 255.0) as u32;
+        let ui = &self.ui;
+        let slide = (1.0 - p) * ui.pt(24.0);
+        let (title, done, rows) = self.center_gallery_layout();
+        let list = widgets_timeline::gallery(self.notify.now());
+        let (label, secondary, field) = (LABEL.now(), LABEL_2.now(), FIELD_BG.now());
+        let r = ui.pt(NC_CARD_R_PT);
+        let pad = ui.pt(NC_PAD_PT);
+        // the title sits on the wallpaper like the column's title: white with a soft shadow
+        let tm = ui.text("Edit Widgets", MAC_TITLE3_PT, Weight::Bold, WHITE);
+        let ty = (title.1 + (title.3 - tm.h as f32) / 2.0) as i32;
+        s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * alpha / 255);
+        s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, alpha);
+        // Done: a glass capsule with a link-coloured label
+        let (dx, dy, dw, dh) = (done.0 + slide, done.1, done.2, done.3);
+        desk_glass(s, (dx, dy, dw, dh), dh / 2.0, alpha);
+        let dl = ui.text("Done", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
+        s.blit(&dl, (dx + (dw - dl.w as f32) / 2.0) as i32, (dy + (dh - dl.h as f32) / 2.0) as i32, 255, alpha);
+        if list.is_empty() {
+            let none = ui.text("No widgets yet", MAC_SUBHEAD_PT, Weight::Regular, secondary);
+            s.blit(&none, (title.0 + slide) as i32, (title.1 + title.3 + ui.pt(NC_GAP_PT)) as i32, 255, alpha);
+        }
+        for (i, (x, y, w, h), toggle, small, large) in rows {
+            let item = &list[i];
+            let x = x + slide;
+            desk_glass(s, (x, y, w, h), r, alpha);
+            // the name, and the search view's description under it, as far as the room between the pad and the controls
+            let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - 3.0 * ui.pt(NC_CHIP_GAP_PT) - 2.0 * ui.pt(NC_CHIP_W_PT);
+            let name = ui.text(&ui.fit(&item.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
+            let desc = item.description.as_ref().map(|d| ui.text(&ui.fit(d, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary));
+            let block = name.h as f32 + desc.as_ref().map_or(0.0, |d| d.h as f32);
+            let mut ly = y + (h - block) / 2.0;
+            s.blit(&name, (x + pad) as i32, ly as i32, 255, alpha);
+            ly += name.h as f32;
+            if let Some(d) = &desc {
+                s.blit(d, (x + pad) as i32, ly as i32, 255, alpha);
+            }
+            // the add (+, link colour) or remove (-, label colour) disc
+            let (tx, ty2, tw, th) = (toggle.0 + slide, toggle.1, toggle.2, toggle.3);
+            let ink = if item.placed { label } else { LINK };
+            s.fill_rrect(tx, ty2, tw, th, tw / 2.0, crate::gfx::scale(field, alpha));
+            let (cx, cy) = (tx + tw / 2.0, ty2 + th / 2.0);
+            let (arm, bar) = (tw * 0.28, ui.pt(1.5));
+            s.fill_rect((cx - arm) as usize, (cy - bar / 2.0) as usize, (2.0 * arm) as usize, bar as usize, crate::gfx::scale(ink, alpha));
+            if !item.placed {
+                s.fill_rect((cx - bar / 2.0) as usize, (cy - arm) as usize, bar as usize, (2.0 * arm) as usize, crate::gfx::scale(ink, alpha));
+            }
+            // the size chips: the chosen one has a plate and the label colour
+            for (rect, text, selected) in [(small, "Small", !item.large), (large, "Large", item.large)] {
+                let (cx0, cy0, cw, ch) = (rect.0 + slide, rect.1, rect.2, rect.3);
+                if selected {
+                    s.fill_rrect(cx0, cy0, cw, ch, ch / 2.0, crate::gfx::scale(field, alpha));
+                }
+                let (weight, col) = if selected { (Weight::Semibold, label) } else { (Weight::Regular, secondary) };
+                let t = ui.text(text, MAC_SUBHEAD_PT, weight, col);
+                s.blit(&t, (cx0 + (cw - t.w as f32) / 2.0) as i32, (cy0 + (ch - t.h as f32) / 2.0) as i32, 255, alpha);
+            }
         }
     }
 }
