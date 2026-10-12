@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.2 — 2026-10-12
+
+- Removed `insights::alert_banner`, which nothing drew. The forecast request asks for no alerts (`DATA_HAS_ALERTS` is
+  false) and the data model has no alert field, so the footer's "Weather alerts are not available" line is what the
+  screen shows. A banner comes back with the alert data, from the shared `weather_alert` control.
+
 ## 1.5.1 — 2026-10-12
 
 - Removed the unused needs_frame helper (tick already reports when a frame is needed); the state dump is test-only.

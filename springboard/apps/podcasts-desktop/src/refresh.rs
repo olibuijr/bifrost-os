@@ -80,9 +80,12 @@ impl Status {
         self.failed
     }
 
-    /// The status line for the list, or None when no batch is running.
+    /// The status line for the list, or None when no batch is running. Failed feeds are named once there are any.
     pub fn text(&self) -> Option<String> {
-        self.progress().map(|(done, total)| format!("Updating feeds, {done} of {total}"))
+        self.progress().map(|(done, total)| match self.failed() {
+            0 => format!("Updating feeds, {done} of {total}"),
+            n => format!("Updating feeds, {done} of {total}, {n} failed"),
+        })
     }
 }
 
@@ -109,6 +112,17 @@ mod tests {
         s.pump();
         assert_eq!(s.progress(), Some((1, 2)));
         assert_eq!(s.text().as_deref(), Some("Updating feeds, 1 of 2"));
+    }
+
+    #[test]
+    fn the_status_line_names_failed_feeds_while_the_batch_runs() {
+        let mut s = Status::new();
+        s.started();
+        s.started();
+        s.started();
+        s.finished(false);
+        s.pump();
+        assert_eq!(s.text().as_deref(), Some("Updating feeds, 1 of 3, 1 failed"));
     }
 
     #[test]

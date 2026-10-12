@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — 2026-10-12
+
+- The subtractive synths drop state nothing read: the oscillator ratio and pan, the voice pitch, the song origin and the
+  LFO value. Behaviour is unchanged. The `width` (Pulse, Reese) and `spread` (Pad) parameters still do nothing, as before:
+  the voice filter is mono, so pan needs a stereo filter first.
+
 ## 0.5.1 — 2026-10-12
 
 - Removed dead code: the unused saturation helper, the unused tremolo sample-rate field, the duplicate choke field on zone voices, the unused scenes accessor, and an unread tempo variable.

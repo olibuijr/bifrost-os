@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1 — 2026-10-12
+
+- Removed `Query::is_empty` and `Buffer::is_empty` from the release build. Only the tests asked for them, so they are
+  compiled under `cfg(test)` now. Nothing a user sees changes.
+
 ## 1.4.0 — 2026-10-12
 
 - Reports has two new rows. Hang Diagnostics lists each time the shell's UI loop stopped answering for 20 seconds or

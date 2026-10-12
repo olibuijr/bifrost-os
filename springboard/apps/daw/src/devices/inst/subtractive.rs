@@ -158,17 +158,14 @@ pub fn spec(kind: &str) -> Option<&'static [P]> {
 /// Builds a subtractive instrument.
 pub fn new(kind: &str, params: &Params, ctx: &Ctx) -> Option<Box<dyn Instrument>> {
     let spec = spec(kind)?;
-    Some(Box::new(Sub { kind: kind.to_string(), spec, p: params.clone(), sr: ctx.sr, rng: Rng::new(ctx.seed ^ 0x5B), voices: vec![], bpm: 120.0, origin: 0, lfo: Osc::new(ctx.sr, 1.0), lfo_val: 0.0, last_hz: None, bend_ev: vec![], bend_cursor: 0, bend_ratio: 1.0 }))
+    Some(Box::new(Sub { kind: kind.to_string(), spec, p: params.clone(), sr: ctx.sr, rng: Rng::new(ctx.seed ^ 0x5B), voices: vec![], bpm: 120.0, lfo: Osc::new(ctx.sr, 1.0), last_hz: None, bend_ev: vec![], bend_cursor: 0, bend_ratio: 1.0 }))
 }
 
 /// One oscillator in a voice.
 struct Oscillator {
     osc: Osc,
     wave: Wave,
-    /// frequency ratio to the note (octave/semitone offsets and detune)
-    ratio: f32,
     gain: f32,
-    pan: f32,
     /// Pulse (synth PWM): this oscillator's saw is minus a delayed copy of itself
     pwm: Option<Delay>,
 }
@@ -182,7 +179,6 @@ struct SubVoice {
     start: u64,
     /// frame of note-off; the amp release follows
     off: u64,
-    pitch: f64,
     vel: f32,
     oscs: Vec<Oscillator>,
     amp: Adsr,
@@ -217,9 +213,7 @@ struct Sub {
     rng: Rng,
     voices: Vec<SubVoice>,
     bpm: f64,
-    origin: u64,
     lfo: Osc,
-    lfo_val: f32,
     /// base pitch of the previous note (glide source)
     last_hz: Option<f64>,
     /// pitch-bend events (frame, semitones), sorted; `bend_ratio` is applied to every oscillator
@@ -303,29 +297,28 @@ impl Sub {
                 let pwm = self.pwm_on();
                 let wave = if pwm { Wave::Saw } else { Self::wave_of(self.p.get("wave").round() as i32) };
                 let detune = self.p.get("detune") as f32;
-                let width = self.p.get("width") as f32;
                 let gain = (self.p.get("gain") as f32 * 0.32 * vel) / (n as f32).sqrt();
                 for i in 0..n {
                     let pos = if n > 1 { i as f32 / (n - 1) as f32 * 2.0 - 1.0 } else { 0.0 };
                     let cents = pos * detune;
                     // the delay line spans one period (+ margin) so the lowest note is never clamped
                     let pwm_line = if pwm { Some(Delay::new(self.sr, 1.0 / base + 0.01)) } else { None };
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(cents / 1200.0)), wave, ratio: 1.0, gain, pan: pos * width, pwm: pwm_line });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(cents / 1200.0)), wave, gain, pwm: pwm_line });
                 }
                 if self.p.get("osc2") > 0.0 {
                     let w2 = Self::wave_of(self.p.get("osc2").round() as i32 - 1);
                     let r = 2f32.powf(self.p.get("semi2") as f32 / 12.0);
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * r), wave: w2, ratio: r, gain: self.p.get("mix2") as f32 * gain, pan: 0.0, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * r), wave: w2, gain: self.p.get("mix2") as f32 * gain, pwm: None });
                 }
                 if self.p.get("sub") > 0.0 {
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, ratio: 0.5, gain: self.p.get("sub") as f32 * gain, pan: 0.0, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, gain: self.p.get("sub") as f32 * gain, pwm: None });
                 }
             }
             "pad" | "supersaw" => {
-                let (n, det, spread, mix) = if self.kind == "pad" {
-                    (self.p.get("voices").round() as usize, self.p.get("detune") as f32, self.p.get("spread") as f32, 1.0f32)
+                let (n, det, mix) = if self.kind == "pad" {
+                    (self.p.get("voices").round() as usize, self.p.get("detune") as f32, 1.0f32)
                 } else {
-                    (self.p.get("voices").round() as usize, self.p.get("detune") as f32 * 60.0, self.p.get("spread") as f32, self.p.get("mix") as f32)
+                    (self.p.get("voices").round() as usize, self.p.get("detune") as f32 * 60.0, self.p.get("mix") as f32)
                 };
                 let n = n.clamp(1, 9);
                 let shape = self.p.get("shape").round() as i32;
@@ -333,30 +326,29 @@ impl Sub {
                 for i in 0..n {
                     let pos = if n > 1 { i as f32 / (n - 1) as f32 * 2.0 - 1.0 } else { 0.0 };
                     let wave = if shape == 2 || (shape == 3 && i % 2 == 1) { Wave::Square } else { Wave::Saw };
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(pos * det / 1200.0)), wave, ratio: 1.0, gain, pan: pos * spread, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(pos * det / 1200.0)), wave, gain, pwm: None });
                 }
             }
             "bass" => {
                 let wave = if self.p.get("wave") >= 0.5 { Wave::Square } else { Wave::Saw };
                 let acc = self.accent_of(vel);
                 let gain = self.p.get("gain") as f32 * 0.5 * vel * (1.0 + acc * 0.5);
-                out.push(Oscillator { osc: Osc::new(self.sr, base), wave, ratio: 1.0, gain, pan: 0.0, pwm: None });
+                out.push(Oscillator { osc: Osc::new(self.sr, base), wave, gain, pwm: None });
                 if self.p.get("sub") > 0.0 {
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, ratio: 0.5, gain: self.p.get("sub") as f32 * gain, pan: 0.0, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, gain: self.p.get("sub") as f32 * gain, pwm: None });
                 }
             }
             "reese" | "wobble" => {
                 let saws = if self.kind == "reese" { self.p.get("saws").round() as usize } else { 2 };
                 let det = if self.kind == "reese" { self.p.get("detune") as f32 } else { 8.0 };
-                let width = if self.kind == "reese" { self.p.get("width") as f32 } else { 0.5 };
                 let gain = self.p.get("gain") as f32 * 0.35 / (saws as f32).sqrt();
                 for i in 0..saws.max(1) {
                     let pos = if saws > 1 { i as f32 / (saws - 1) as f32 * 2.0 - 1.0 } else { 0.0 };
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(pos * det / 1200.0)), wave: Wave::Saw, ratio: 1.0, gain, pan: pos * width, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 2f32.powf(pos * det / 1200.0)), wave: Wave::Saw, gain, pwm: None });
                 }
                 let sub = self.p.get("sub") as f32;
                 if sub > 0.0 {
-                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, ratio: 0.5, gain: sub * gain, pan: 0.0, pwm: None });
+                    out.push(Oscillator { osc: Osc::new(self.sr, base * 0.5), wave: Wave::Sine, gain: sub * gain, pwm: None });
                 }
             }
             _ => {}
@@ -443,7 +435,6 @@ impl Instrument for Sub {
                     v.base = base;
                     v.hz.iter_mut().for_each(|h| *h *= k);
                     v.off = at + dur.max(1);
-                    v.pitch = pitch;
                     v.env_amt = self.p.get("envMod") as f32 * (1.0 + acc);
                     v.q_scale = 1.0 + acc * 0.3;
                     self.last_hz = Some(base);
@@ -476,14 +467,12 @@ impl Instrument for Sub {
         if !two_pole {
             filt.set(kind, self.sr, cut, q, 0.0);
         }
-        let release_frames = (amp.release * self.sr) as u64;
         let voice = SubVoice {
             hz,
             glide,
             base,
             start: at,
             off: at + dur.max(1),
-            pitch,
             vel,
             oscs,
             amp,
@@ -505,7 +494,6 @@ impl Instrument for Sub {
             lfo: bass_lfo,
             q_scale: 1.0 + acc * 0.3,
         };
-        let _ = release_frames;
         self.voices.push(voice);
         if self.voices.len() > 48 {
             self.voices.remove(0);
@@ -516,9 +504,8 @@ impl Instrument for Sub {
         self.p.set(self.spec, name, value);
     }
 
-    fn tempo(&mut self, bpm: f64, origin: u64) {
+    fn tempo(&mut self, bpm: f64, _origin: u64) {
         self.bpm = bpm;
-        self.origin = origin;
     }
 
     fn bend(&mut self, semis: f64, at: u64) {
@@ -540,7 +527,6 @@ impl Instrument for Sub {
             }
             let bend = self.bend_ratio;
             let lfo = self.lfo.tick(shape);
-            self.lfo_val = lfo;
             let (mut sl, mut sr) = (0.0f32, 0.0f32);
             for v in self.voices.iter_mut() {
                 if v.done || f < v.start {

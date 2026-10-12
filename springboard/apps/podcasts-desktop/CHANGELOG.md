@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.1 — 2026-10-12
+
+- The feed refresh status line names the feeds that failed while a batch is still running, for example "Updating feeds,
+  1 of 3, 1 failed". The failure count was tracked but never shown.
+
 ## 1.7.0 — 2026-10-12
 
 - The Speed button in the Now Playing sheet opens a menu with the rates 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x and 2x.
