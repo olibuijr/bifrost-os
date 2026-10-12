@@ -20,7 +20,7 @@ use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{DESTRUCTIVE, LINK};
 use bifrost_app::controls::prefs_layout::m;
-use bifrost_app::kit::ui::{home_zone, Ui, Weight, BLACK, CARD_BG, CONTROL_PRESSED, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{home_zone, Ui, Weight, BLACK, CARD_BG, CONTENT_BG, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{Event, Surface, TextCache};
 use springboard::shell::controls::draw_switch;
 use springboard::shell::glyphs;
@@ -76,6 +76,8 @@ const SWIPE_DELETE: f32 = 0.35;
 const BAR_TAB: u32 = 1;
 const BAR_EDIT: u32 = 10;
 const BAR_ADD: u32 = 11;
+/// Stopwatch tab: copy the lap table to the pasteboard
+const BAR_EXPORT: u32 = 12;
 
 /// Popover bar buttons (Cancel, Save, Back) are this wide.
 const POP_BAR_BTN_PT: f32 = 100.0;
@@ -131,6 +133,8 @@ pub enum Target {
     Right,
     Add,
     Edit,
+    /// the Stopwatch toolbar's Copy Laps item
+    Export,
     Switch(usize),
     Delete(usize),
     /// a picker column: timer 0..3, add-alarm 0..2
@@ -229,6 +233,8 @@ pub struct Clock {
     swipe: Option<Swipe>,
     swipe_dirty: bool,
     pressed: Option<Target>,
+    /// text copied by Copy Laps, waiting for the app to put it on the pasteboard
+    pending_export: Option<String>,
     /// the wall second last drawn, to repaint faces and countdowns once a second
     drawn_sec: i64,
     cache: TextCache,
@@ -263,6 +269,7 @@ impl Clock {
             swipe: None,
             swipe_dirty: false,
             pressed: None,
+            pending_export: None,
             drawn_sec: -1,
             cache: TextCache::default(),
         }
@@ -306,6 +313,11 @@ impl Clock {
     /// The current wall-clock anchor, shared with apps that show dates.
     pub fn wall(&self) -> Wall {
         self.wall
+    }
+
+    /// The lap table copied since the last call, if any (the app puts it on the pasteboard).
+    pub fn take_export(&mut self) -> Option<String> {
+        self.pending_export.take()
     }
 
     pub fn tab(&self) -> Tab {
@@ -403,6 +415,10 @@ impl Clock {
         items.push(ToolbarItem::flexible_space());
         if editable {
             items.push(ToolbarItem::icon(BAR_ADD, if self.tab == Tab::World { "Add City" } else { "Add Alarm" }, "plus"));
+        }
+        if self.tab == Tab::Stopwatch {
+            // laps exist once the watch has started; the table is empty before that
+            items.push(ToolbarItem::icon(BAR_EXPORT, "Copy Laps", "square.and.arrow.up").enabled(!self.stopwatch.laps(0.0).is_empty()));
         }
         Toolbar::new(items)
     }
@@ -672,6 +688,7 @@ impl Clock {
             return match self.bar_layout(ui).hit(x / p, y / p)? {
                 BAR_EDIT => Some(Target::Edit),
                 BAR_ADD => Some(Target::Add),
+                BAR_EXPORT => Some(Target::Export),
                 id if (BAR_TAB..BAR_TAB + 4).contains(&id) => Some(Target::Tab((id - BAR_TAB) as usize)),
                 _ => None,
             };
@@ -917,6 +934,12 @@ impl Clock {
                     return self.persist_timers(t);
                 }
             }
+            Target::Export => {
+                // the app's input loop hands this text to the pasteboard (`take_export`)
+                if let Some(text) = self.stopwatch.export_text(t) {
+                    self.pending_export = Some(text);
+                }
+            }
             Target::Add => {
                 if self.tab == Tab::World {
                     self.add_city_sheet(ui);
@@ -1124,7 +1147,7 @@ impl Clock {
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, DETAIL_BG.now());
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         self.drawn_sec = self.wall.now(t);
         match self.tab {
             Tab::World => self.draw_world(s, ui, t),
@@ -1147,6 +1170,7 @@ impl Clock {
         let pressed = match self.pressed {
             Some(Target::Edit) => Some(BAR_EDIT),
             Some(Target::Add) => Some(BAR_ADD),
+            Some(Target::Export) => Some(BAR_EXPORT),
             Some(Target::Tab(i)) => Some(BAR_TAB + i as u32),
             _ => None,
         };
@@ -1570,6 +1594,24 @@ pub(crate) mod tests {
         select_tab(&mut c, &ui, 0);
         select_tab(&mut c, &ui, 2);
         assert!(!c.stopwatch().started(9000.0));
+    }
+
+    #[test]
+    fn copy_laps_queues_the_lap_table_once() {
+        let ui = ui();
+        let mut c = clock(&ui);
+        select_tab(&mut c, &ui, 2);
+        let right = c.button_centre(&ui, true);
+        let left = c.button_centre(&ui, false);
+        // a touch's release (Up) is at t + 20 ms and that is the time the press acts on
+        tap(&mut c, &ui, right.0, right.1, 0.0); // start: running from 20 ms
+        tap(&mut c, &ui, left.0, left.1, 3610.0); // lap 1 mark: 3610 ms elapsed
+        tap(&mut c, &ui, right.0, right.1, 5000.0); // stop: banked 5000 ms
+        assert!(c.take_export().is_none(), "nothing copied yet");
+        let (x, y) = bar_point(&c, &ui, BAR_EXPORT);
+        tap(&mut c, &ui, x, y, 6000.0);
+        assert_eq!(c.take_export().unwrap(), "Lap\tSplit\tTotal\n1\t00:03,61\t00:03,61\n2\t00:01,39\t00:05,00\n");
+        assert!(c.take_export().is_none(), "the text is handed over once");
     }
 
     #[test]

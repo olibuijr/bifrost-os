@@ -145,6 +145,10 @@ impl ClockApp {
             TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
         };
         c.touch(&ctx.ui, e, t);
+        // Copy Laps: the lap table goes on the general pasteboard as plain text
+        if let Some(text) = c.take_export() {
+            bifrost_app::pasteboard::NativePasteboard::general().set_string(ctx, &text);
+        }
         true
     }
 }
