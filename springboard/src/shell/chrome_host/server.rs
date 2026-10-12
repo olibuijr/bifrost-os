@@ -54,7 +54,15 @@ impl Snapshot {
 pub struct ChromeServer {
     host: HostLink,
     snapshot: Snapshot,
+    /// `MenuBarModel.generation` of the bar the clients have; bumped whenever a changed bar is published.
+    bar_generation: u32,
+    /// When (monotonic ms) the shell's bar was last compared with the clients' (`BAR_CHECK_MS` apart).
+    bar_checked_at: f64,
 }
+
+/// How often the shell's menu bar is rebuilt and compared with what the clients have. Building it walks every menu
+/// (rows, shortcut parsing), so it is not done on every frame and input event (IPC-9); a click forces a check.
+const BAR_CHECK_MS: f64 = 200.0;
 
 impl ChromeServer {
     /// Binds the chrome socket.
@@ -63,7 +71,7 @@ impl ChromeServer {
     }
 
     fn from_host(host: HostLink) -> ChromeServer {
-        ChromeServer { host, snapshot: Snapshot::default() }
+        ChromeServer { host, snapshot: Snapshot::default(), bar_generation: 0, bar_checked_at: f64::NEG_INFINITY }
     }
 
     /// The socket's fd, for the shell's poll set.
@@ -94,13 +102,40 @@ impl ChromeServer {
         self.snapshot.record(&m);
     }
 
-    /// Publishes the menu bar model of the shell's current menus, when it differs from the one the clients have.
-    #[cfg(feature = "desktop-wayland")]
-    pub fn publish_menu_bar(&mut self, shell: &Shell) {
-        let m = ToChrome::MenuBar(super::menubar::model(shell));
-        if self.snapshot.changed(&m) {
-            self.publish(m);
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    /// Whether the bar is due for a rebuild at `t` (ms); true at most once per `BAR_CHECK_MS`.
+    fn bar_due(&mut self, t: f64) -> bool {
+        if t - self.bar_checked_at < BAR_CHECK_MS {
+            return false;
         }
+        self.bar_checked_at = t;
+        true
+    }
+
+    /// Publishes the menu bar model of the shell's current menus when it differs from the one the clients have,
+    /// stamped with the next generation. True when it published.
+    #[cfg(feature = "desktop-wayland")]
+    fn publish_menu_bar_now(&mut self, shell: &Shell) -> bool {
+        let mut bar = super::menubar::model(shell);
+        bar.generation = self.bar_generation;
+        if !self.snapshot.changed(&ToChrome::MenuBar(bar.clone())) {
+            return false;
+        }
+        self.bar_generation = self.bar_generation.wrapping_add(1);
+        bar.generation = self.bar_generation;
+        self.publish(ToChrome::MenuBar(bar));
+        true
+    }
+
+    /// Whether a `MenuAction` still means what the user saw: the clicked bar is the one the clients have, and the
+    /// shell's bar has not changed since (a changed bar is published at once and the click is dropped), because
+    /// the ids are positions in the bar (IPC-7).
+    #[cfg(feature = "desktop-wayland")]
+    fn action_is_current(&mut self, shell: &Shell, generation: u32) -> bool {
+        if generation != self.bar_generation {
+            return false;
+        }
+        !self.publish_menu_bar_now(shell)
     }
 
     /// One pass of the chrome socket in the shell loop: runs the menu items the clients chose on the shell, then
@@ -109,11 +144,15 @@ impl ChromeServer {
     pub fn serve_shell(&mut self, shell: &mut Shell, t: f64) -> Vec<Effect> {
         let mut effects = Vec::new();
         for (_, msg) in self.service() {
-            if let FromChrome::MenuAction { menu, item } = msg {
-                effects.extend(super::menubar::menu_action(shell, menu, item, t));
+            if let FromChrome::MenuAction { menu, item, generation } = msg {
+                if self.action_is_current(shell, generation) {
+                    effects.extend(super::menubar::menu_action(shell, menu, item, t));
+                }
             }
         }
-        self.publish_menu_bar(shell);
+        if self.bar_due(t) {
+            self.publish_menu_bar_now(shell);
+        }
         effects
     }
 }
@@ -138,6 +177,12 @@ mod tests {
     use super::*;
     use bifrost_chrome::model::{ControlModule, DockModel, DockPosition, MenuBarModel, PanelsModel};
 
+    fn test_host(tag: &str) -> (HostLink, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("bcsrv-{tag}-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        (HostLink::bind_at(&dir.join("bifrost-chrome.sock")).expect("bind"), dir)
+    }
+
     fn dock(size: f32) -> ToChrome {
         ToChrome::Dock(DockModel { items: vec![], size, magnified: 0.0, position: DockPosition::Bottom, autohide: false })
     }
@@ -155,7 +200,7 @@ mod tests {
     fn one_model_per_kind_and_the_latest_wins() {
         let mut snap = Snapshot::default();
         snap.record(&dock(48.0));
-        snap.record(&ToChrome::MenuBar(MenuBarModel { app_name: "Files".into(), menus: vec![], status: vec![] }));
+        snap.record(&ToChrome::MenuBar(MenuBarModel { app_name: "Files".into(), menus: vec![], status: vec![], generation: 0 }));
         snap.record(&dock(64.0));
         assert_eq!(snap.models().len(), 2);
         assert_eq!(snap.models()[0], dock(64.0), "the dock is replaced in place");
@@ -206,11 +251,20 @@ mod tests {
     #[test]
     fn a_menu_bar_is_sent_again_only_when_it_changes() {
         let mut snap = Snapshot::default();
-        let bar = |name: &str| ToChrome::MenuBar(MenuBarModel { app_name: name.into(), menus: vec![], status: vec![] });
+        let bar = |name: &str| ToChrome::MenuBar(MenuBarModel { app_name: name.into(), menus: vec![], status: vec![], generation: 0 });
         assert!(snap.changed(&bar("Files")));
         snap.record(&bar("Files"));
         assert!(!snap.changed(&bar("Files")));
         assert!(snap.changed(&bar("Notes")));
+    }
+
+    #[test]
+    fn the_bar_is_rebuilt_at_most_once_per_interval() {
+        let (host, _dir) = test_host("due");
+        let mut server = ChromeServer::from_host(host);
+        let due = (0..100).filter(|i| server.bar_due(1000.0 + f64::from(*i) * 0.5)).count();
+        assert_eq!(due, 1, "100 idle passes within 50 ms rebuild the bar once");
+        assert!(server.bar_due(1000.0 + BAR_CHECK_MS));
     }
 
     #[test]

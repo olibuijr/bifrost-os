@@ -123,7 +123,8 @@ impl HostLink {
         HostLink::bind_at(&socket_path())
     }
 
-    fn bind_at(path: &Path) -> io::Result<HostLink> {
+    /// Binds at `path` (replacing a stale file); `bind` uses the runtime directory's path.
+    pub fn bind_at(path: &Path) -> io::Result<HostLink> {
         let _ = std::fs::remove_file(path);
         let socket = UnixDatagram::bind(path)?;
         socket.set_nonblocking(true)?;

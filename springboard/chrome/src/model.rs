@@ -38,6 +38,9 @@ pub struct MenuBarModel {
     pub app_name: String,
     pub menus: Vec<Menu>,
     pub status: Vec<StatusItem>,
+    /// Counts the published models; a `MenuAction` echoes it so the shell can tell a click on a bar that has
+    /// changed since (the ids are positions in the bar).
+    pub generation: u32,
 }
 
 /// One Dock item.
@@ -117,7 +120,8 @@ pub enum ToChrome {
 #[derive(Debug, Clone, PartialEq)]
 pub enum FromChrome {
     /// A menu bar item was chosen: the menu id and the item id (status items use their own id as the menu).
-    MenuAction { menu: u32, item: u32 },
+    /// `generation` is the `MenuBarModel.generation` the ids were read from.
+    MenuAction { menu: u32, item: u32, generation: u32 },
     DockActivate { app_id: String },
     /// The Dock's context menu asked for an action ("quit", "keep", "remove", "show").
     DockCommand { app_id: String, command: String },
@@ -336,6 +340,7 @@ pub fn encode_to_chrome(m: &ToChrome) -> Vec<u8> {
                 w.str(&s.text);
                 w.menu_items(&s.menu);
             }
+            w.u32(mb.generation);
             w.out
         }
         ToChrome::Dock(d) => {
@@ -405,7 +410,8 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
             let app_name = r.str()?;
             let menus = r.menus()?;
             let status = r.status()?;
-            ToChrome::MenuBar(MenuBarModel { app_name, menus, status })
+            let generation = r.u32()?;
+            ToChrome::MenuBar(MenuBarModel { app_name, menus, status, generation })
         }
         TO_DOCK => {
             let n = r.count(MIN_DOCK_ITEM)?;
@@ -471,10 +477,11 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
 
 pub fn encode_from_chrome(m: &FromChrome) -> Vec<u8> {
     match m {
-        FromChrome::MenuAction { menu, item } => {
+        FromChrome::MenuAction { menu, item, generation } => {
             let mut w = Writer::new(FROM_MENU_ACTION);
             w.u32(*menu);
             w.u32(*item);
+            w.u32(*generation);
             w.out
         }
         FromChrome::DockActivate { app_id } => {
@@ -520,7 +527,7 @@ pub fn encode_from_chrome(m: &FromChrome) -> Vec<u8> {
 pub fn decode_from_chrome(b: &[u8]) -> Result<FromChrome, DecodeError> {
     let mut r = reader(b)?;
     let m = match r.u8()? {
-        FROM_MENU_ACTION => FromChrome::MenuAction { menu: r.u32()?, item: r.u32()? },
+        FROM_MENU_ACTION => FromChrome::MenuAction { menu: r.u32()?, item: r.u32()?, generation: r.u32()? },
         FROM_DOCK_ACTIVATE => FromChrome::DockActivate { app_id: r.str()? },
         FROM_DOCK_COMMAND => FromChrome::DockCommand { app_id: r.str()?, command: r.str()? },
         FROM_MINIMIZE_TARGET => {
@@ -555,6 +562,7 @@ mod tests {
                     items: vec![item(10, "New", vec![]), item(11, "", vec![item(12, "Deep", vec![])])],
                 }],
                 status: vec![StatusItem { id: 90, symbol: "wifi".into(), text: "".into(), menu: vec![] }],
+                generation: 3,
             }),
             ToChrome::Dock(DockModel {
                 items: vec![DockItem {
@@ -590,7 +598,7 @@ mod tests {
 
     fn sample_from_chrome() -> Vec<FromChrome> {
         vec![
-            FromChrome::MenuAction { menu: 1, item: 10 },
+            FromChrome::MenuAction { menu: 1, item: 10, generation: 3 },
             FromChrome::DockActivate { app_id: "terminal".into() },
             FromChrome::DockCommand { app_id: "terminal".into(), command: "keep".into() },
             FromChrome::MinimizeTarget { app_id: "files".into(), rect: [10.0, 900.5, 64.0, 64.0] },
@@ -711,6 +719,7 @@ mod tests {
             app_name: String::new(),
             menus: vec![Menu { id: 1, title: "t".into(), items: vec![deep] }],
             status: vec![],
+            generation: 0,
         });
         assert_eq!(decode_to_chrome(&encode_to_chrome(&too_deep)), Err(DecodeError::BadValue));
         // Items at the top level are depth 0; a leaf at depth MAX_DEPTH - 1 still decodes.
@@ -722,6 +731,7 @@ mod tests {
             app_name: String::new(),
             menus: vec![Menu { id: 1, title: "t".into(), items: vec![ok] }],
             status: vec![],
+            generation: 0,
         });
         assert_eq!(decode_to_chrome(&encode_to_chrome(&limit)), Ok(limit));
     }
