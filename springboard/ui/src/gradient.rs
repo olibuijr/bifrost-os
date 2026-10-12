@@ -74,6 +74,43 @@ impl Gradient {
         let d = ((x - center.0).powi(2) + (y - center.1).powi(2)).sqrt();
         (d / radius).clamp(0.0, 1.0)
     }
+
+    /// The ramp position of `(x, y)` as its clockwise angle from `start_angle` around `center`, as a fraction of a full
+    /// turn in 0..1. `start_angle` is in radians, measured from the positive x axis towards positive y. A point at the
+    /// centre has no direction of its own and is taken as angle 0 before `start_angle` is applied.
+    pub fn conic_t(center: (f32, f32), start_angle: f32, x: f32, y: f32) -> f32 {
+        let angle = (y - center.1).atan2(x - center.0) - start_angle;
+        angle.rem_euclid(std::f32::consts::TAU) / std::f32::consts::TAU
+    }
+
+    /// The ramp position of `(x, y)` for a layer of `kind`. The rule matches the reference SDK's layer, with the radius
+    /// and the start angle taken from the end point: axial projects onto the line from `start` to `end`; radial uses
+    /// `start` as the centre and the distance to `end` as the radius (a circle, not an ellipse); conic starts at the
+    /// direction of `end` from `start`.
+    pub fn layer_t(kind: GradientType, start: (f32, f32), end: (f32, f32), x: f32, y: f32) -> f32 {
+        match kind {
+            GradientType::Axial => Gradient::linear_t(start, end, x, y),
+            GradientType::Radial => {
+                let radius = ((end.0 - start.0).powi(2) + (end.1 - start.1).powi(2)).sqrt();
+                Gradient::radial_t(start, radius, x, y)
+            }
+            GradientType::Conic => {
+                let start_angle = (end.1 - start.1).atan2(end.0 - start.0);
+                Gradient::conic_t(start, start_angle, x, y)
+            }
+        }
+    }
+}
+
+/// The style of gradient a layer draws (the reference SDK's gradient layer type).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GradientType {
+    /// Varies along the axis between the start and end points.
+    Axial,
+    /// Varies with the distance from the start point, out to the end point.
+    Radial,
+    /// Varies with the angle around the start point, starting in the direction of the end point.
+    Conic,
 }
 
 fn mix(a: [u8; 4], b: [u8; 4], f: f32) -> [u8; 4] {
@@ -164,5 +201,43 @@ mod tests {
         assert_eq!(Gradient::radial_t(c, 10.0, 30.0, 40.0), 1.0);
         assert_eq!(Gradient::radial_t(c, 10.0, 0.0, 0.0), 0.0);
         assert_eq!(Gradient::radial_t(c, 0.0, 0.0, 0.0), 1.0, "a zero radius is outside the ramp");
+    }
+
+    #[test]
+    fn conic_position_is_the_clockwise_fraction_of_a_turn() {
+        // Straight down (positive y) from the centre is a quarter turn from the positive x axis.
+        let t = Gradient::conic_t((0.0, 0.0), 0.0, 0.0, 1.0);
+        assert!((t - 0.25).abs() < 1e-6, "got {t}");
+        // Up and to the right is -45 degrees, which is 7/8 of a turn clockwise.
+        let t = Gradient::conic_t((0.0, 0.0), 0.0, 1.0, -1.0);
+        assert!((t - 0.875).abs() < 1e-6, "got {t}");
+    }
+
+    #[test]
+    fn conic_start_angle_moves_the_seam() {
+        // With the seam at straight down (pi/2), the point on the positive x axis is three quarters of a turn on.
+        let t = Gradient::conic_t((0.0, 0.0), std::f32::consts::FRAC_PI_2, 1.0, 0.0);
+        assert!((t - 0.75).abs() < 1e-6, "got {t}");
+    }
+
+    #[test]
+    fn conic_centre_is_position_zero_with_no_start_offset() {
+        assert_eq!(Gradient::conic_t((4.0, 4.0), 0.0, 4.0, 4.0), 0.0);
+    }
+
+    #[test]
+    fn layer_axial_matches_the_linear_position() {
+        let (a, b) = ((0.0, 0.0), (10.0, 0.0));
+        assert_eq!(Gradient::layer_t(GradientType::Axial, a, b, 5.0, 3.0), 0.5);
+        assert_eq!(Gradient::layer_t(GradientType::Axial, a, b, 5.0, 3.0), Gradient::linear_t(a, b, 5.0, 3.0));
+    }
+
+    #[test]
+    fn layer_radial_takes_its_radius_from_the_end_point() {
+        // The end point (3, 4) is 5 away from the start, so the ramp runs out to a radius of 5.
+        let (start, end) = ((0.0, 0.0), (3.0, 4.0));
+        assert_eq!(Gradient::layer_t(GradientType::Radial, start, end, 0.0, 0.0), 0.0);
+        assert_eq!(Gradient::layer_t(GradientType::Radial, start, end, 3.0, 4.0), 1.0);
+        assert_eq!(Gradient::layer_t(GradientType::Radial, start, end, 1.5, 2.0), 0.5);
     }
 }
