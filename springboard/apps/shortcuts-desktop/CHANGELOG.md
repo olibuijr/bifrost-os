@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- The shortcut picker results are built from one typed list: each shortcut has its position as its id, its name, its colour and its step count, so searches from other apps read the same values as the window.
+- The shortcut in front in the window (an open editor or picker) is the one used when "Run Shortcut" or "Plan Shortcut" is asked without a shortcut. A grid with no editor open still asks for one.
+- "Plan Shortcut" works out its steps on a separate worker thread, so the window never waits for a plan.
+- Shortcut parameters are optional in the intent declaration; a request with no shortcut and nothing in front says that a shortcut is required.
+- Needs system 0.4.84, as before.
+
 ## 1.3.0 — 2026-10-12
 
 - Shortcuts can be used from other apps and from automation. A shortcut is found by its id or its name; a name that two shortcuts share asks for the id, and a name that matches none says so.

@@ -18,6 +18,8 @@ use std::path::Path;
 
 struct ShortcutsApp {
     w: Option<widget::Shortcuts>,
+    /// runs the dry-run plans off the window's thread
+    planner: automation::Planner,
     /// the reminders the shell was last sent; `None` until the first sync, when the app clears any left over
     reminders: Option<Vec<services::Reminder>>,
     /// whether the Login Items status has been asked for
@@ -31,6 +33,12 @@ impl ShortcutsApp {
             Some(c) => c.list().to_vec(),
             None => automation::stored(data_dir),
         }
+    }
+
+    /// The shortcut in front in the window (an open editor or picker), if any.
+    fn frontmost(&self) -> Option<usize> {
+        let shown = self.w.as_ref().map(|c| c.on_screen()).unwrap_or_default();
+        automation::frontmost(&automation::onscreen_context(&shown))
     }
 
     /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
@@ -115,7 +123,7 @@ impl App for ShortcutsApp {
     }
 
     fn perform_intent(&mut self, _ctx: Option<&Ctx>, data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
-        automation::perform(&self.shortcuts(data_dir), id, params)
+        automation::perform(&self.shortcuts(data_dir), id, params, self.frontmost(), &self.planner)
     }
 
     fn entities(&mut self, data_dir: &Path, ty: &str, query: &EntityQuery) -> Result<Vec<Entity>, RpcError> {
@@ -164,5 +172,5 @@ impl App for ShortcutsApp {
 }
 
 fn main() {
-    bifrost_app::run(ShortcutsApp { w: None, reminders: None, asked_login: false });
+    bifrost_app::run(ShortcutsApp { w: None, planner: automation::Planner::new(), reminders: None, asked_login: false });
 }

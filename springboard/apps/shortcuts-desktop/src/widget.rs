@@ -148,6 +148,21 @@ impl Shortcuts {
         &self.list
     }
 
+    /// The shortcuts on screen as (index, in front). The grid shows every tile and none is in front; an open editor or
+    /// picker shows its one shortcut in front.
+    pub fn on_screen(&self) -> Vec<(usize, bool)> {
+        match self.view {
+            View::Grid => (0..self.list.len()).map(|i| (i, false)).collect(),
+            View::Editor(i) | View::Picker(i) => {
+                if i < self.list.len() {
+                    vec![(i, true)]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
     /// Runs `f` on a copy of the list and keeps the copy, and saves it, only when `f` changed it. Intents and
     /// scripts change the list through here, so the window and the saved file stay the same.
     pub fn edit_list<T>(&mut self, f: impl FnOnce(&mut Vec<Shortcut>) -> T) -> T {
