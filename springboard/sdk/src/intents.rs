@@ -30,6 +30,10 @@ pub enum ParamType {
     Entity(String),
     /// one of a fixed set of case names, sent as text: `enum(open|closed)`. Case names cannot contain `|`, `)` or `"`.
     Enum(Vec<String>),
+    /// a finite floating-point number (`Doubles`)
+    Double,
+    /// `Currencies`: an object `{"amount": <finite number>, "code": "<ISO 4217 code, three capitals>"}`
+    Currency,
 }
 
 impl ParamType {
@@ -43,6 +47,8 @@ impl ParamType {
             ParamType::Url => "url".into(),
             ParamType::Entity(t) => format!("entity({t})"),
             ParamType::Enum(cases) => format!("enum({})", cases.join("|")),
+            ParamType::Double => "double".into(),
+            ParamType::Currency => "currency".into(),
         }
     }
     pub fn parse(s: &str) -> Option<ParamType> {
@@ -52,6 +58,8 @@ impl ParamType {
             "bool" => ParamType::Bool,
             "date" => ParamType::Date,
             "url" => ParamType::Url,
+            "double" => ParamType::Double,
+            "currency" => ParamType::Currency,
             t if t.starts_with("enum(") => {
                 let inner = t.strip_prefix("enum(")?.strip_suffix(')')?;
                 let cases: Vec<String> = inner.split('|').map(|c| c.trim().to_string()).collect();
@@ -81,9 +89,18 @@ impl ParamType {
                 .is_some_and(|(scheme, rest)| !scheme.is_empty() && !rest.is_empty() && scheme.chars().all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))),
             (ParamType::Entity(_), Json::Str(s)) => !s.is_empty(),
             (ParamType::Enum(cases), Json::Str(s)) => cases.iter().any(|c| c == s),
+            (ParamType::Double, Json::Num(n)) => n.is_finite(),
+            (ParamType::Currency, Json::Obj(_)) => {
+                v.get("amount").and_then(|a| a.number()).is_some_and(f64::is_finite) && v.get("code").and_then(|c| c.as_str()).is_some_and(is_currency_code)
+            }
             _ => false,
         }
     }
+}
+
+/// An ISO 4217 code as written in parameters: exactly three ASCII capital letters.
+fn is_currency_code(s: &str) -> bool {
+    s.len() == 3 && s.bytes().all(|b| b.is_ascii_uppercase())
 }
 
 /// `YYYY-MM-DD` optionally followed by `T` and `hh:mm` (then anything, such as seconds or a zone).
@@ -365,14 +382,20 @@ pub struct IntentResult {
     pub continue_foreground: bool,
     /// `result(opensIntent:)`: the next intent to run, with its parameters (checked by `Intent::check_result`).
     pub opens: Option<(String, Json)>,
+    /// `result(view:)`: a result view shown next to the dialog.
+    pub snippet: Option<Snippet>,
 }
 
 impl IntentResult {
     pub fn value(value: Json) -> IntentResult {
-        IntentResult { value, dialog: None, continue_foreground: false, opens: None }
+        IntentResult { value, dialog: None, continue_foreground: false, opens: None, snippet: None }
     }
     pub fn dialog(text: &str) -> IntentResult {
-        IntentResult { value: Json::Null, dialog: Some(text.into()), continue_foreground: false, opens: None }
+        IntentResult { value: Json::Null, dialog: Some(text.into()), continue_foreground: false, opens: None, snippet: None }
+    }
+    pub fn with_snippet(mut self, snippet: Snippet) -> IntentResult {
+        self.snippet = Some(snippet);
+        self
     }
     pub fn with_dialog(mut self, text: &str) -> IntentResult {
         self.dialog = Some(text.into());
@@ -395,6 +418,9 @@ impl IntentResult {
         if let Some((id, params)) = &self.opens {
             f.push(("opens".into(), Json::Obj(vec![("intent".into(), Json::Str(id.clone())), ("parameters".into(), params.clone())])));
         }
+        if let Some(snippet) = &self.snippet {
+            f.push(("snippet".into(), snippet.to_json()));
+        }
         Json::Obj(f)
     }
     /// Reads back a reply produced by `to_json` (`{"value": .., "dialog": text or null}`); `None` for any other shape.
@@ -410,11 +436,66 @@ impl IntentResult {
             None => None,
             Some(o) => Some((o.get("intent")?.as_str()?.to_string(), o.get("parameters")?.clone())),
         };
-        Some(IntentResult { value, dialog, continue_foreground, opens })
+        let snippet = match j.get("snippet") {
+            None | Some(Json::Null) => None,
+            Some(s) => Some(Snippet::from_json(s)?),
+        };
+        Some(IntentResult { value, dialog, continue_foreground, opens, snippet })
     }
     /// The value at `path` (see [`PropertyPath`]), or `None` when the path does not exist in `value`.
     pub fn at(&self, path: &str) -> Option<&Json> {
         PropertyPath::parse(path)?.resolve(&self.value)
+    }
+}
+
+/// `IntentResult.Snippet`: a result view that goes with the dialog. It is a title and an ordered list of label and
+/// text rows; the shell draws the rows, the app only builds the model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snippet {
+    pub title: String,
+    pub rows: Vec<SnippetRow>,
+}
+
+/// One row of a [`Snippet`]: a caption and the text beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SnippetRow {
+    pub label: String,
+    pub text: String,
+}
+
+impl Snippet {
+    pub fn new(title: &str) -> Snippet {
+        Snippet { title: title.into(), rows: Vec::new() }
+    }
+    pub fn row(mut self, label: &str, text: &str) -> Snippet {
+        self.rows.push(SnippetRow { label: label.into(), text: text.into() });
+        self
+    }
+    /// `{"title": text, "rows": [{"label": text, "text": text}, ...]}`
+    pub fn to_json(&self) -> Json {
+        Json::Obj(vec![
+            ("title".into(), Json::Str(self.title.clone())),
+            (
+                "rows".into(),
+                Json::Arr(
+                    self.rows
+                        .iter()
+                        .map(|r| Json::Obj(vec![("label".into(), Json::Str(r.label.clone())), ("text".into(), Json::Str(r.text.clone()))]))
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+    /// Reads back `to_json`; `None` when the title is missing or any row lacks a label or text.
+    pub fn from_json(j: &Json) -> Option<Snippet> {
+        let title = j.get("title")?.as_str()?.to_string();
+        let rows = j
+            .get("rows")?
+            .as_array()?
+            .iter()
+            .map(|r| Some(SnippetRow { label: r.get("label")?.as_str()?.to_string(), text: r.get("text")?.as_str()?.to_string() }))
+            .collect::<Option<Vec<SnippetRow>>>()?;
+        Some(Snippet { title, rows })
     }
 }
 
@@ -550,6 +631,72 @@ pub fn failed(message: impl Into<String>) -> RpcError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn snippet_rows_keep_their_order_and_round_trip_through_a_result() {
+        let snippet = Snippet::new("Totals").row("Net", "100").row("VAT", "24");
+        assert_eq!(snippet.rows.len(), 2);
+        assert_eq!(snippet.rows[1], SnippetRow { label: "VAT".into(), text: "24".into() });
+        let r = IntentResult::value(Json::Null).with_snippet(snippet.clone());
+        let j = r.to_json();
+        assert_eq!(j.get("snippet").and_then(|s| s.get("title")).and_then(Json::as_str), Some("Totals"));
+        let back = IntentResult::from_json(&j).unwrap();
+        assert_eq!(back.snippet, Some(snippet));
+        assert_eq!(back, r);
+    }
+
+    #[test]
+    fn result_without_a_snippet_has_no_snippet_key() {
+        let plain = IntentResult::value(Json::Num(1.0)).with_dialog("Done");
+        assert!(plain.to_json().get("snippet").is_none());
+        let back = IntentResult::from_json(&json::parse(r#"{"value":1,"dialog":"Done","snippet":null}"#).unwrap()).unwrap();
+        assert_eq!(back.snippet, None);
+        assert_eq!(back, plain);
+    }
+
+    #[test]
+    fn snippet_from_json_rejects_a_row_without_text() {
+        let bad_row = json::parse(r#"{"title":"x","rows":[{"label":"a"}]}"#).unwrap();
+        assert_eq!(Snippet::from_json(&bad_row), None);
+        assert_eq!(Snippet::from_json(&json::parse(r#"{"rows":[]}"#).unwrap()), None, "a title is required");
+        let empty = Snippet::from_json(&json::parse(r#"{"title":"Empty","rows":[]}"#).unwrap()).unwrap();
+        assert!(empty.rows.is_empty());
+        assert_eq!(IntentResult::from_json(&json::parse(r#"{"value":1,"dialog":null,"snippet":{"rows":[]}}"#).unwrap()), None);
+    }
+
+    #[test]
+    fn double_parameter_takes_finite_numbers_only() {
+        assert_eq!(ParamType::parse("double"), Some(ParamType::Double));
+        assert_eq!(ParamType::Double.name(), "double");
+        assert!(ParamType::Double.accepts(&Json::Num(2.5)));
+        assert!(ParamType::Double.accepts(&Json::Num(-3.0)));
+        assert!(!ParamType::Double.accepts(&Json::Num(f64::INFINITY)));
+        assert!(!ParamType::Double.accepts(&Json::Num(f64::NAN)));
+        assert!(!ParamType::Double.accepts(&Json::Str("2.5".into())));
+    }
+
+    #[test]
+    fn currency_parameter_needs_an_amount_and_a_three_letter_code() {
+        let money = |amount: Json, code: &str| Json::Obj(vec![("amount".into(), amount), ("code".into(), Json::Str(code.into()))]);
+        assert_eq!(ParamType::parse("currency"), Some(ParamType::Currency));
+        assert!(ParamType::Currency.accepts(&money(Json::Num(12.5), "ISK")));
+        assert!(ParamType::Currency.accepts(&money(Json::Num(-4.0), "EUR")), "refunds are negative");
+        assert!(!ParamType::Currency.accepts(&money(Json::Num(1.0), "isk")), "codes are capitals");
+        assert!(!ParamType::Currency.accepts(&money(Json::Num(1.0), "ISKK")), "codes are three letters");
+        assert!(!ParamType::Currency.accepts(&money(Json::Num(f64::INFINITY), "USD")), "amount is finite");
+        assert!(!ParamType::Currency.accepts(&Json::Obj(vec![("code".into(), Json::Str("USD".into()))])), "amount is required");
+        assert!(!ParamType::Currency.accepts(&Json::Str("ISK 12".into())), "a bare string is not a currency");
+    }
+
+    #[test]
+    fn validate_checks_a_currency_parameter_by_its_declaration() {
+        let pay = Intent::new("pay", "Pay", "").param(Param::new("price", "Price", ParamType::Currency));
+        let ok = json::parse(r#"{"price":{"amount":9.99,"code":"USD"}}"#).unwrap();
+        assert!(pay.validate(&ok).is_ok());
+        let bad = json::parse(r#"{"price":{"amount":9.99,"code":"usd"}}"#).unwrap();
+        assert!(pay.validate(&bad).is_err());
+        assert!(pay.manifest_toml().contains(""price:currency""));
+    }
+
     use super::*;
     use bifrost_core::json;
 
