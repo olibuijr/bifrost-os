@@ -1,7 +1,8 @@
 //! What the protocol session needs from the audio server: the devices, and a way to open a playback or capture
 //! stream on one. [`HalBackend`] makes each stream a HAL client (an IO procedure with its own buffer size on the
-//! stream's device); [`MockBackend`] is the deterministic test double.
+//! stream's device); the deterministic test double (`MockBackend`) exists in test builds only.
 
+use crate::proto::err::{INTERNAL as ERR_INTERNAL, NOENTITY as ERR_NOENTITY};
 use crate::ring::{Resampler, Ring, MAX_CHANNELS};
 use bifrost_audio_hal::{Device, IoProcConfig, IoProcId, Role, System};
 use bifrost_audio_types::props;
@@ -71,9 +72,6 @@ pub trait Backend {
 }
 
 const MAX_CYCLE_FRAMES: usize = 8192;
-/// Protocol error: no such entity.
-const ERR_NOENTITY: u32 = 5;
-const ERR_INTERNAL: u32 = 10;
 
 /// The IO cycle a stream asks of its device: its period (frames at its own rate) converted to the device rate,
 /// rounded up to a power of two and kept within 64 to 4096 frames.
@@ -311,6 +309,7 @@ impl Backend for HalBackend {
 }
 
 /// The test double: fixed devices, and the opened streams are kept for the test to drive.
+#[cfg(test)]
 #[derive(Default)]
 pub struct MockBackend {
     pub sinks: Vec<DeviceInfo>,
@@ -320,9 +319,12 @@ pub struct MockBackend {
     pub volumes: Vec<(bool, String, f32, bool)>,
 }
 
+#[cfg(test)]
 struct NoHandle;
+#[cfg(test)]
 impl StreamHandle for NoHandle {}
 
+#[cfg(test)]
 impl MockBackend {
     pub fn standard() -> MockBackend {
         let dev = |n: &str| DeviceInfo { name: n.to_string(), description: n.to_string(), rate: 48000, channels: 2, latency_us: 10_000 };
@@ -330,6 +332,7 @@ impl MockBackend {
     }
 }
 
+#[cfg(test)]
 impl Backend for MockBackend {
     fn sinks(&self) -> Vec<DeviceInfo> {
         self.sinks.clone()

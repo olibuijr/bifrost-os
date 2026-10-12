@@ -42,7 +42,6 @@ struct Playback {
     channels: usize,
     rate: u32,
     frame_bytes: usize,
-    sink: String,
     sink_index: u32,
     /// Device latency in microseconds, read once at creation (no server enumeration per latency query).
     latency_us: u64,
@@ -738,7 +737,6 @@ impl Session {
             channels,
             rate,
             frame_bytes,
-            sink: dev.name.clone(),
             sink_index,
             latency_us: dev.latency_us,
             ring,
