@@ -4,6 +4,7 @@
 mod feed;
 mod icon;
 mod podcasts;
+mod transport;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};

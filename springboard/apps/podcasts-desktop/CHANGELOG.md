@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- Skips stop at the ends of an episode: a back skip never goes before the start, and a forward skip stops at the end
+  once the length is known. The skip buttons use the shared skip-interval rules.
+- The speed button steps through 0.5x to 2x and wraps back to 0.5x after 2x. The chosen speed is shown; the engine
+  still plays at normal speed until the audio service takes a rate.
+- Keyboard transport: Space plays or pauses, and the Left and Right arrows skip back and forward 30 seconds, when no
+  text field has focus.
+
 ## 1.3.3 — 2026-10-11
 
 - Compliance: feed and download results reach the app loop through a shared inbox filled on the main queue, instead of
