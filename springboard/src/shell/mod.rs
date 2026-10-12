@@ -77,6 +77,7 @@ pub mod pages;
 pub mod axmap;
 pub mod power_menu;
 mod compose_sheet;
+mod print_sheet;
 pub mod session;
 pub mod prefs;
 pub mod markup;
@@ -568,6 +569,8 @@ pub struct Shell {
     power_menu: Option<power_menu::PowerMenu>,
     /// the compose post sheet opened from the share menu
     compose: Option<compose_sheet::ComposeOverlay>,
+    /// File > Print…: the print sheet over the captured desktop (see `print_sheet.rs`)
+    print_sheet: Option<print_sheet::PrintSheet>,
     /// the share sheet, the nearby service and the incoming-file prompt
     share: Option<share::Sheet>,
     share_svc: Option<crate::net::share::Service>,
@@ -798,6 +801,7 @@ impl Shell {
             corner_start: None,
             power_menu: None,
             compose: None,
+            print_sheet: None,
             share: None,
             share_svc: None,
             share_prompt: None,
@@ -1079,6 +1083,13 @@ impl Shell {
                 }
                 power_menu::Outcome::Idle | power_menu::Outcome::Redraw => vec![],
             });
+        }
+        if self.print_sheet.is_some() {
+            // the print sheet takes every touch until Cancel or Print
+            if let Event::Up(x, y) = ev {
+                self.print_sheet_touch(x, y);
+            }
+            return Some(vec![]);
         }
         if self.permission_sheet.is_some() {
             // the sheet takes every touch until the person answers it
@@ -3013,7 +3024,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.compose.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.compose.is_some() || self.print_sheet.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3028,6 +3039,9 @@ impl Shell {
             }
             if let Some(c) = &self.compose {
                 c.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.print_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
             }
         }
         self.draw_share(s);
@@ -3047,7 +3061,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
         if !quiet {
             return None;
         }
@@ -3068,7 +3082,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.print_sheet.is_none() && !self.notify_damage_all() && !self.announce_damage();
         if !quiet {
             return None;
         }
