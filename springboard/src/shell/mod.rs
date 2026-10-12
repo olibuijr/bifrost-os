@@ -70,6 +70,7 @@ pub mod photos;
 pub mod music;
 pub mod list;
 pub mod low_battery;
+pub mod permission_sheet;
 pub mod options;
 pub mod pageedit;
 pub mod pages;
@@ -565,6 +566,8 @@ pub struct Shell {
     share_prompt: Option<share::prompt::Prompt>,
     /// the "Low Battery" alert on screen
     low_alert: Option<low_battery::Alert>,
+    /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
+    permission_sheet: Option<permission_sheet::Sheet>,
     low_monitor: low_battery::Monitor,
     battery_checked: f64,
     dirty: bool,
@@ -787,6 +790,7 @@ impl Shell {
             share_svc: None,
             share_prompt: None,
             low_alert: None,
+            permission_sheet: None,
             low_monitor: low_battery::Monitor::default(),
             battery_checked: f64::NEG_INFINITY,
             dirty: true,
@@ -1015,6 +1019,17 @@ impl Shell {
         }
     }
 
+    /// Shows the next app privacy request as an Allow / Don't Allow sheet when none is on screen.
+    fn permission_tick(&mut self, t: f64) {
+        if self.permission_sheet.is_some() {
+            return;
+        }
+        let Some(prompt) = services::privacy_permissions::take_prompt() else { return };
+        self.permission_sheet = permission_sheet::Sheet::new(&self.ui, prompt, t.max(0.0) as u64);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
     /// Touches for the power sheet and the low-battery alert, which sit on
     /// top of everything: None when neither is up (or for a non-touch event).
     fn modal_event(&mut self, ev: Event) -> Option<Vec<Effect>> {
@@ -1039,6 +1054,21 @@ impl Shell {
                 }
                 power_menu::Outcome::Idle | power_menu::Outcome::Redraw => vec![],
             });
+        }
+        if self.permission_sheet.is_some() {
+            // the sheet takes every touch until the person answers it
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.permission_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(button) = hit {
+                    if let Some(sheet) = self.permission_sheet.take() {
+                        // the question has no expiry, so the clock does not matter to the answer
+                        let _ = sheet.finish(button, 0);
+                    }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
         }
         let alert = self.low_alert.as_ref()?;
         if matches!(ev, Event::Up(..)) {
@@ -2603,6 +2633,7 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        self.permission_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
         self.perf_only = perf_changed && !self.dirty;
@@ -2935,7 +2966,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -2944,6 +2975,9 @@ impl Shell {
             }
             if let Some(m) = &self.power_menu {
                 m.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.permission_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
             }
         }
         self.draw_share(s);
@@ -2963,7 +2997,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && !self.notify_damage_all();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all();
         if !quiet {
             return None;
         }
@@ -2984,7 +3018,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && !self.notify_damage_all();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.notify_damage_all();
         if !quiet {
             return None;
         }
@@ -3184,6 +3218,7 @@ impl Shell {
             ("share", self.share.is_some()),
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
+            ("permission-sheet", self.permission_sheet.is_some()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
             ("clock-alert", self.clock.alert().is_some()),

@@ -20,3 +20,12 @@ pub use bifrost_core::permission_request::{
 /// The button an app puts in its UI to ask a guardian (the model in `bifrost_ui::permission_question`). It sends its
 /// question once, reads the answer back from an `AskCenter`, and reports a [`ButtonState`] for the shell to draw.
 pub use bifrost_ui::permission_question::{ButtonState, PermissionButton};
+
+/// The question model the shell's permission sheet is built from (`springboard/src/shell/permission_sheet.rs`): a
+/// question about a topic, the queue that holds it until the person answers, and the answer. An app that builds its own
+/// question for a guardian uses the same types.
+///
+/// The shell's sheet for the privacy permissions is not an app-side API: an app asks through
+/// `privacy_permissions::request` and `privacy_permissions::location_request`, and the person answers Allow or Don't
+/// Allow on the sheet.
+pub use bifrost_ui::permission_question::{AskCenter, AskError, PermissionQuestion, PermissionResponse, QuestionTopic};

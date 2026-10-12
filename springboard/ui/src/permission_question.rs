@@ -142,6 +142,13 @@ impl PermissionQuestion<SignificantAppUpdateTopic> {
 }
 
 impl<T: QuestionTopic> PermissionQuestion<T> {
+    /// A question about any topic, with the default choices (approve, decline; decline is the default). Use
+    /// [`PermissionQuestion::with_choices`] to offer other choices. The topic types above need no more than this, so a
+    /// shell can ask about its own topics (for example a privacy permission) through the same queue.
+    pub fn for_topic(topic: T, id: u64, expires_at: Option<u64>) -> Self {
+        PermissionQuestion { id, topic, handles: Vec::new(), choices: default_choices(), default_index: 1, expires_at }
+    }
+
     pub fn id(&self) -> u64 {
         self.id
     }
@@ -585,5 +592,42 @@ mod tests {
         );
         assert_eq!(base.clone().with_choices(&["yes"], 1).unwrap_err(), AskError::InvalidQuestion);
         assert_eq!(base.with_choices(&[" "], 0).unwrap_err(), AskError::InvalidQuestion);
+    }
+}
+
+#[cfg(test)]
+mod for_topic_tests {
+    use super::*;
+
+    /// A shell-defined topic, the way a privacy sheet names one.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Privacy(&'static str);
+
+    impl QuestionTopic for Privacy {
+        fn topic_name(&self) -> &'static str {
+            self.0
+        }
+    }
+
+    #[test]
+    fn a_custom_topic_question_is_asked_answered_and_routed_by_its_topic() {
+        let q = PermissionQuestion::for_topic(Privacy("location"), 3, Some(100)).with_choices(&["allow", "dont_allow"], 1).unwrap();
+        assert_eq!(q.choices(), &["allow".to_string(), "dont_allow".to_string()]);
+        assert_eq!(q.default_choice(), "dont_allow", "an unanswered question never grants");
+        let mut center = AskCenter::new();
+        center.ask(&q, 10).unwrap();
+        assert!(center.is_pending(3));
+        let r = center.answer(3, "allow", 20).unwrap();
+        assert_eq!(r.topic, "location");
+        assert_eq!(r.choice, "allow");
+        assert_eq!(center.take_responses("location").len(), 1);
+    }
+
+    #[test]
+    fn a_custom_topic_question_expires_like_the_others() {
+        let q = PermissionQuestion::for_topic(Privacy("camera"), 4, Some(50));
+        let mut center = AskCenter::new();
+        assert_eq!(center.ask(&q, 50), Err(AskError::InvalidQuestion), "already expired when sent");
+        assert_eq!(PermissionQuestion::for_topic(Privacy("camera"), 5, None).choices().len(), 2);
     }
 }
