@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+- Saved searches: Log, Save Search keeps the text in the search field as a row in a Saved Searches section of the
+  sidebar. Choosing the row shows the live journal with that search in the field. Log, Delete Saved Search removes the
+  row for the text in the search field. Saved searches last until the Console quits; they are not written to disk yet.
+- Search tokens: `level:error` works like `type:error`. A new `message:` token keeps only the messages whose text
+  contains its value (process, subsystem and category are not checked for it).
+
 ## 1.2.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
