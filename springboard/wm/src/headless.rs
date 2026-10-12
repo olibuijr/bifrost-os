@@ -31,7 +31,15 @@ use smithay::{
     utils::{Rectangle, Transform},
 };
 
-use crate::state::WmState;
+use bifrost_gpu::{Device, LoadAction, PixelFormat, Region, Texture, TextureDescriptor, TextureUsage};
+
+use crate::{
+    render_server::{
+        compose::{DamageRects, SceneNode},
+        server::Server,
+    },
+    state::WmState,
+};
 
 /// The desktop colour where nothing is drawn (the wallpaper is a background layer surface).
 const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
@@ -167,5 +175,124 @@ impl Drop for Compositor {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
+    }
+}
+
+/// The premultiplied clear colour of the Vulkan path (the GLES path's `CLEAR` in 0..1 RGBA).
+const CLEAR_VK: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
+
+/// The Vulkan headless path (wave G2 `wm-nested-headless`): one `Server` renders into an offscreen BGRA target and the
+/// frame is read back to CPU pixels, for the end-to-end tests (`tests/vulkan_*.rs`, behind `gpu-tests`) and for
+/// screenshots. Scene nodes come from the caller; building them from the window stack is `wm-scene`'s work.
+pub struct VulkanHeadless {
+    pub server: Server,
+    target: Texture,
+    size: (u32, u32),
+}
+
+impl VulkanHeadless {
+    /// A `w` x `h` target on the first render node the Vulkan loader offers.
+    pub fn new(w: u32, h: u32) -> bifrost_gpu::Result<VulkanHeadless> {
+        let server = Server::new(None, PixelFormat::Bgra8Unorm)?;
+        let target = new_target(&server.device, w, h)?;
+        Ok(VulkanHeadless { server, target, size: (w, h) })
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    /// Reallocates the target when the output size changes; a no-op for the same size.
+    pub fn resize(&mut self, w: u32, h: u32) -> bifrost_gpu::Result<()> {
+        if (w, h) != self.size {
+            self.target = new_target(&self.server.device, w, h)?;
+            self.size = (w, h);
+        }
+        Ok(())
+    }
+
+    /// Composites `nodes` (back to front) over the clear colour, redrawing `damage` only, waits for the GPU and returns
+    /// the whole target as BGRA rows, top first.
+    pub fn render(&mut self, nodes: &[SceneNode], damage: &DamageRects) -> bifrost_gpu::Result<Vec<u8>> {
+        let (w, h) = self.size;
+        self.server.frame(nodes, &self.target, damage, LoadAction::Clear(CLEAR_VK))?.wait()?;
+        self.target.read_region(Region { x: 0, y: 0, width: w, height: h })
+    }
+}
+
+fn new_target(device: &Device, w: u32, h: u32) -> bifrost_gpu::Result<Texture> {
+    device.new_texture(&TextureDescriptor {
+        width: w,
+        height: h,
+        format: PixelFormat::Bgra8Unorm,
+        usage: TextureUsage::RENDER_TARGET | TextureUsage::SAMPLED | TextureUsage::COPY_SRC,
+        exportable: false,
+        modifiers: vec![],
+    })
+}
+
+/// Converts BGRA rows (memory order B, G, R, A) to RGBA rows, one 4-byte pixel at a time.
+pub fn bgra_to_rgba(bgra: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bgra.len());
+    for px in bgra.chunks_exact(4) {
+        out.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
+    }
+    out
+}
+
+/// The RGBA value of pixel `(x, y)` in a `w` x `h` RGBA buffer, or `None` outside the buffer.
+pub fn rgba_at(rgba: &[u8], w: u32, h: u32, x: u32, y: u32) -> Option<[u8; 4]> {
+    if x >= w || y >= h || rgba.len() < w as usize * h as usize * 4 {
+        return None;
+    }
+    let i = (y as usize * w as usize + x as usize) * 4;
+    Some([rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]])
+}
+
+/// Damage covering the whole `w` x `h` output, in the form `Server::frame` takes.
+pub fn full_damage(w: u32, h: u32) -> DamageRects {
+    vec![[0, 0, w as i32, h as i32]]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bgra_swaps_red_and_blue_and_keeps_alpha() {
+        // a red pixel (B=0, G=0, R=255, A=255) and a half-transparent cyan (B=255, G=255, R=0, A=128)
+        assert_eq!(bgra_to_rgba(&[0, 0, 255, 255, 255, 255, 0, 128]), vec![255, 0, 0, 255, 0, 255, 255, 128]);
+    }
+
+    #[test]
+    fn bgra_conversion_of_an_empty_buffer_is_empty() {
+        assert!(bgra_to_rgba(&[]).is_empty());
+    }
+
+    #[test]
+    fn bgra_conversion_drops_a_trailing_partial_pixel() {
+        assert_eq!(bgra_to_rgba(&[1, 2, 3, 4, 5, 6]), vec![3, 2, 1, 4]);
+    }
+
+    #[test]
+    fn rgba_at_reads_the_row_major_offset() {
+        // 3 x 2 image; pixel (2, 1) is the last one: index (1 * 3 + 2) * 4 = 20
+        let mut img = vec![0u8; 3 * 2 * 4];
+        img[20..24].copy_from_slice(&[9, 8, 7, 6]);
+        assert_eq!(rgba_at(&img, 3, 2, 2, 1), Some([9, 8, 7, 6]));
+        assert_eq!(rgba_at(&img, 3, 2, 0, 0), Some([0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn rgba_at_refuses_coordinates_outside_the_image() {
+        let img = vec![0u8; 3 * 2 * 4];
+        assert_eq!(rgba_at(&img, 3, 2, 3, 0), None);
+        assert_eq!(rgba_at(&img, 3, 2, 0, 2), None);
+        assert_eq!(rgba_at(&img[..10], 3, 2, 0, 0), None, "a short buffer is refused");
+    }
+
+    #[test]
+    fn full_damage_is_the_whole_output_as_one_rectangle() {
+        assert_eq!(full_damage(1280, 800), vec![[0, 0, 1280, 800]]);
     }
 }
