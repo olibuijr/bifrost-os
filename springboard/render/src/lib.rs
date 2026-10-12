@@ -67,3 +67,5 @@ mod tests {
 pub mod pixel_format;
 pub mod buffer_attach;
 pub mod buffer_pool;
+pub mod hdr_metadata;
+pub mod bayer;
