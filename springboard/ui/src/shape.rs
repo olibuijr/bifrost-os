@@ -186,6 +186,151 @@ impl Path {
         }
         out
     }
+
+    /// Whether the point lies inside the filled path. Every subpath is closed for the test, as a fill closes it.
+    /// Non-zero counts signed crossings of a ray to the right, even-odd counts all of them.
+    pub fn contains(&self, x: f32, y: f32, rule: FillRule) -> bool {
+        let mut winding = 0i32;
+        let mut crossings = 0u32;
+        for s in &self.subpaths {
+            let n = s.points.len();
+            if n < 2 {
+                continue;
+            }
+            for i in 0..n {
+                let (a, b) = (s.points[i], s.points[(i + 1) % n]);
+                if (a.y <= y) != (b.y <= y) {
+                    let xi = a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x);
+                    if xi > x {
+                        crossings += 1;
+                        winding += if b.y > a.y { 1 } else { -1 };
+                    }
+                }
+            }
+        }
+        match rule {
+            FillRule::NonZero => winding != 0,
+            FillRule::EvenOdd => crossings % 2 == 1,
+        }
+    }
+
+    /// The path split into dashes, following a dash pattern (the reference SDK's line dash pattern). `pattern` lists
+    /// on and off lengths in path units and repeats; `phase` moves the start into the pattern. An empty pattern, a
+    /// negative length or a pattern that sums to zero returns the path unchanged. Each dash is an open subpath, and
+    /// a dash never joins across subpaths.
+    pub fn dashed(&self, pattern: &[f32], phase: f32) -> Path {
+        let total: f32 = pattern.iter().sum();
+        if pattern.is_empty() || pattern.iter().any(|&d| d < 0.0) || total <= 0.0 {
+            return self.clone();
+        }
+        let n = pattern.len();
+        // Walk the phase into the pattern: `idx` is the entry, `left` what remains of it.
+        let (mut idx, mut left, mut p) = (0usize, pattern[0], phase.rem_euclid(total));
+        while p > 0.0 {
+            if p >= left {
+                p -= left;
+                idx = (idx + 1) % n;
+                left = pattern[idx];
+            } else {
+                left -= p;
+                p = 0.0;
+            }
+        }
+        let mut out = Path::new();
+        for s in &self.subpaths {
+            let k = s.points.len();
+            let mut edges: Vec<(Point, Point)> = s.points.windows(2).map(|w| (w[0], w[1])).collect();
+            if s.closed && k > 1 {
+                edges.push((s.points[k - 1], s.points[0]));
+            }
+            let mut open = false;
+            for (p0, p1) in edges {
+                let len = p0.dist(p1);
+                let mut t0 = 0.0f32;
+                while len > 0.0 && t0 < len {
+                    let step = left.min(len - t0);
+                    if idx % 2 == 0 {
+                        let (a, b) = (p0.lerp(p1, t0 / len), p0.lerp(p1, (t0 + step) / len));
+                        if !open {
+                            out.move_to(a);
+                            open = true;
+                        }
+                        out.line_to(b);
+                    }
+                    t0 += step;
+                    left -= step;
+                    if left <= 0.0 {
+                        idx = (idx + 1) % n;
+                        left = pattern[idx];
+                        if idx % 2 == 1 {
+                            open = false;
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// How overlapping subpaths decide what is inside a filled path.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FillRule {
+    #[default]
+    NonZero,
+    EvenOdd,
+}
+
+/// How the open ends of a stroke are drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LineCap {
+    #[default]
+    Butt,
+    Round,
+    Square,
+}
+
+/// How two stroke edges meet at a corner.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LineJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
+}
+
+/// The stroke settings of a shape (the reference SDK's line width, cap, join and miter limit).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StrokeStyle {
+    pub width: f32,
+    pub cap: LineCap,
+    pub join: LineJoin,
+    /// The longest miter, as a multiple of the line width, before the corner falls back to a bevel.
+    pub miter_limit: f32,
+}
+
+impl Default for StrokeStyle {
+    fn default() -> Self {
+        StrokeStyle { width: 1.0, cap: LineCap::Butt, join: LineJoin::Miter, miter_limit: 10.0 }
+    }
+}
+
+impl StrokeStyle {
+    /// The join drawn at a corner whose interior angle is `angle` radians. A miter reaches `1 / sin(angle / 2)`
+    /// line widths from the corner; past `miter_limit` that becomes a bevel. Round and bevel joins stay as set.
+    pub fn effective_join(&self, angle: f32) -> LineJoin {
+        match self.join {
+            LineJoin::Miter => {
+                let s = (angle / 2.0).sin().abs();
+                if s <= 1e-6 || 1.0 / s > self.miter_limit {
+                    LineJoin::Bevel
+                } else {
+                    LineJoin::Miter
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 /// The built-in shapes, each as a path inside a rect.
@@ -318,5 +463,85 @@ mod tests {
         assert!(near(p.length(), 10.0), "closing adds the edge back, 5 more");
         p.line_to(Point { x: 0.0, y: 0.0 });
         assert_eq!(p.subpaths().len(), 2, "a closed subpath is not extended");
+    }
+
+    fn square(x0: f32, size: f32) -> Path {
+        let mut p = Path::new();
+        p.add_rect(Rect { x: x0, y: 0.0, w: size, h: size });
+        p
+    }
+
+    #[test]
+    fn contains_follows_the_fill_rule_for_nested_subpaths() {
+        // Two same-direction squares, one inside the other: the centre has winding 2.
+        let mut p = square(0.0, 10.0);
+        p.add_rect(Rect { x: 2.0, y: 2.0, w: 6.0, h: 6.0 });
+        assert!(p.contains(5.0, 5.0, FillRule::NonZero));
+        assert!(!p.contains(5.0, 5.0, FillRule::EvenOdd), "two crossings cancel under even-odd");
+        assert!(p.contains(1.0, 1.0, FillRule::EvenOdd), "the ring between the squares is inside");
+        assert!(!p.contains(12.0, 5.0, FillRule::NonZero), "outside both");
+    }
+
+    #[test]
+    fn contains_reverses_winding_for_a_hole() {
+        // Outer square one way, inner square the other way: the hole has winding 0 under non-zero.
+        let mut p = square(0.0, 10.0);
+        let mut hole = Path::new();
+        hole.move_to(Point { x: 2.0, y: 2.0 });
+        hole.line_to(Point { x: 2.0, y: 8.0 });
+        hole.line_to(Point { x: 8.0, y: 8.0 });
+        hole.line_to(Point { x: 8.0, y: 2.0 });
+        hole.close();
+        p.subpaths.push(hole.subpaths[0].clone());
+        assert!(!p.contains(5.0, 5.0, FillRule::NonZero));
+        assert!(!p.contains(5.0, 5.0, FillRule::EvenOdd));
+        assert!(p.contains(1.0, 5.0, FillRule::NonZero));
+    }
+
+    #[test]
+    fn miter_joins_fall_back_to_bevel_past_the_limit() {
+        let style = StrokeStyle::default();
+        let right = std::f32::consts::FRAC_PI_2;
+        assert_eq!(style.effective_join(right), LineJoin::Miter, "a right angle reaches 1.41 widths");
+        // 10 degrees: 1 / sin(5 degrees) is about 11.5, above the limit of 10.
+        assert_eq!(style.effective_join(10f32.to_radians()), LineJoin::Bevel);
+        assert_eq!(style.effective_join(30f32.to_radians()), LineJoin::Miter, "3.86 widths is within the limit");
+        let round = StrokeStyle { join: LineJoin::Round, ..style };
+        assert_eq!(round.effective_join(10f32.to_radians()), LineJoin::Round, "only miter joins fall back");
+    }
+
+    #[test]
+    fn dashes_follow_the_pattern_along_a_line() {
+        let mut line = Path::new();
+        line.move_to(Point { x: 0.0, y: 0.0 });
+        line.line_to(Point { x: 10.0, y: 0.0 });
+        // On 2, off 3: dashes over 0 to 2 and 5 to 7, the rest is off.
+        let d = line.dashed(&[2.0, 3.0], 0.0);
+        assert_eq!(d.subpaths().len(), 2);
+        assert_eq!(d.subpaths()[0].points, vec![Point { x: 0.0, y: 0.0 }, Point { x: 2.0, y: 0.0 }]);
+        assert_eq!(d.subpaths()[1].points, vec![Point { x: 5.0, y: 0.0 }, Point { x: 7.0, y: 0.0 }]);
+        assert!(near(d.length(), 4.0));
+    }
+
+    #[test]
+    fn dash_phase_moves_the_start_into_the_pattern() {
+        let mut line = Path::new();
+        line.move_to(Point { x: 0.0, y: 0.0 });
+        line.line_to(Point { x: 10.0, y: 0.0 });
+        // A phase of 2 uses up the first on-length, so the line starts with 3 units off.
+        let d = line.dashed(&[2.0, 3.0], 2.0);
+        assert_eq!(d.subpaths().len(), 2);
+        assert_eq!(d.subpaths()[0].points[0], Point { x: 3.0, y: 0.0 });
+        assert_eq!(d.subpaths()[1].points[0], Point { x: 8.0, y: 0.0 });
+    }
+
+    #[test]
+    fn invalid_dash_patterns_return_the_path_whole() {
+        let mut line = Path::new();
+        line.move_to(Point { x: 0.0, y: 0.0 });
+        line.line_to(Point { x: 10.0, y: 0.0 });
+        assert_eq!(line.dashed(&[], 0.0), line);
+        assert_eq!(line.dashed(&[0.0, 0.0], 0.0), line);
+        assert_eq!(line.dashed(&[2.0, -1.0], 0.0), line);
     }
 }
