@@ -2,6 +2,7 @@
 //! is looking at, badges on items under managed directories, the current selection and the target folder.
 //! Pure model: the host reports what the user is doing (`begin_observing`, `set_selection`) and the Files app reads
 //! the badge of each item (`badge_for`). Nothing is drawn here and nothing is shared across processes.
+use crate::extensions::{Entry, Registry, Scene};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -116,6 +117,106 @@ impl SyncController {
     /// The folder the file manager is showing, if one is reported.
     pub fn targeted(&self) -> Option<&Path> {
         self.target.as_deref()
+    }
+}
+
+/// The controller's enablement: whether the user has a provider's extension switched on, and the list the management
+/// sheet shows. The choices live in the shared extension registry under the `file-manager-sync` point, so the shell's one
+/// browser list serves file-manager providers as well as app extensions. Off until the user enables it.
+#[derive(Clone, Debug, Default)]
+pub struct ExtensionEnablement {
+    registry: Registry,
+}
+
+impl ExtensionEnablement {
+    /// The extension point the file manager's providers plug into.
+    pub const POINT: &'static str = "file-manager-sync";
+
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Declares a provider extension `app` ships, shown under `title` in the management list. `false` when the app id,
+    /// the identifier or the title is not usable.
+    pub fn declare(&mut self, app: &str, identifier: &str, title: &str) -> bool {
+        match Scene::new(Self::POINT, identifier, title) {
+            Some(scene) => self.registry.declare(app, scene),
+            None => false,
+        }
+    }
+
+    /// Whether the user has the provider's extension enabled.
+    pub fn is_extension_enabled(&self, app: &str, identifier: &str) -> bool {
+        self.registry.is_enabled(app, identifier)
+    }
+
+    /// Records the user's choice. It applies as soon as the extension is declared.
+    pub fn set_extension_enabled(&mut self, app: &str, identifier: &str, enabled: bool) {
+        self.registry.set_enabled(app, identifier, enabled);
+    }
+
+    /// The management list: every declared provider extension, enabled and disabled alike, sorted by title.
+    pub fn management_list(&self) -> Vec<Entry<'_>> {
+        self.registry.browser(&[Self::POINT]).into_iter().flat_map(|section| section.entries).collect()
+    }
+}
+
+#[cfg(test)]
+mod enablement_tests {
+    use super::*;
+
+    #[test]
+    fn a_provider_is_off_until_the_user_enables_it() {
+        let mut e = ExtensionEnablement::new();
+        assert!(e.declare("com.example.sync", "badges", "Sync Badges"));
+        assert!(!e.is_extension_enabled("com.example.sync", "badges"));
+        e.set_extension_enabled("com.example.sync", "badges", true);
+        assert!(e.is_extension_enabled("com.example.sync", "badges"));
+        e.set_extension_enabled("com.example.sync", "badges", false);
+        assert!(!e.is_extension_enabled("com.example.sync", "badges"));
+    }
+
+    #[test]
+    fn the_management_list_shows_enabled_and_disabled_sorted_by_title() {
+        let mut e = ExtensionEnablement::new();
+        e.declare("b.app", "z", "Zed");
+        e.declare("a.app", "y", "alpha");
+        e.set_extension_enabled("b.app", "z", true);
+        let list = e.management_list();
+        let titles: Vec<&str> = list.iter().map(|x| x.extension.scene.title.as_str()).collect();
+        assert_eq!(titles, vec!["alpha", "Zed"]);
+        assert_eq!(list.iter().map(|x| x.enabled).collect::<Vec<bool>>(), vec![false, true]);
+    }
+
+    #[test]
+    fn a_choice_made_before_the_declaration_applies_when_declared() {
+        let mut e = ExtensionEnablement::new();
+        e.set_extension_enabled("a.app", "x", true);
+        assert!(!e.management_list().iter().any(|_| true));
+        assert!(e.declare("a.app", "x", "Badges"));
+        assert!(e.is_extension_enabled("a.app", "x"));
+        assert!(e.management_list()[0].enabled);
+    }
+
+    #[test]
+    fn unusable_app_ids_identifiers_and_titles_are_refused() {
+        let mut e = ExtensionEnablement::new();
+        assert!(!e.declare("bad app", "x", "Title"));
+        assert!(!e.declare("a.app", "Not A Token", "Title"));
+        assert!(!e.declare("a.app", "x", "   "));
+        assert!(e.management_list().is_empty());
+    }
+
+    #[test]
+    fn redeclaring_keeps_the_choice_and_takes_the_new_title() {
+        let mut e = ExtensionEnablement::new();
+        e.declare("a.app", "x", "Old");
+        e.set_extension_enabled("a.app", "x", true);
+        assert!(e.declare("a.app", "x", "New"));
+        let list = e.management_list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].extension.scene.title, "New");
+        assert!(list[0].enabled);
     }
 }
 
