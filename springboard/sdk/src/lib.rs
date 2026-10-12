@@ -235,6 +235,8 @@ pub mod central;
 pub use process_info::{Activity, ActivityOptions, ProcessInfo, ThermalState};
 /// Mach-style host statistics (`host_statistics64`, `task_info`, `os_proc_available_memory`); see `docs/bifrost-ui.md`.
 pub use bifrost_core::host;
+/// Raw accelerometer and gyroscope updates (the motion manager model) and the kernel sensor reader; see `docs/core-motion.md`.
+pub use bifrost_core::{inertial_sensors, motion_manager};
 mod runtime;
 pub use kit::{Damage, Surface, Ui};
 pub use runtime::{run, run_on, Ctx, Document, DocumentEvent, Input, OpenOptions};
