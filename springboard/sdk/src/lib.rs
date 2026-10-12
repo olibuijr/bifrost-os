@@ -96,6 +96,7 @@ pub mod now_playing;
 pub mod webview;
 pub mod webview_dev;
 pub mod power_sources;
+pub mod hid_devices;
 pub mod serial_ports;
 pub mod ble_midi;
 pub mod script_value;
