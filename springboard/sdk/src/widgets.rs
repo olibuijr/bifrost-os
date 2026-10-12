@@ -2,6 +2,7 @@
 use crate::kit::ui::{Weight, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
 use crate::kit::{Surface, Ui};
 use crate::kit::rgba;
+use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, RectF};
 #[cfg(test)]
 use crate::kit::pack;
 use crate::layout::{Layout, TITLE_GAP_PT};
@@ -161,13 +162,15 @@ pub fn set_vibrancy(on: bool, all_materials: bool) {
 /// shell: the pixels inside the rounded rectangle are written (not blended) as the premultiplied translucent tint,
 /// so the shell's blur shows through them; anti-aliased corner pixels mix the tint with what was drawn there.
 /// Returns false (and draws nothing) when vibrancy is off; the caller then paints its opaque colour.
-fn window_material(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, material: Material, state: State) -> bool {
+fn window_material(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, material: Material, state: State) -> bool {
     if !vibrancy() || crate::kit::appearance::reduce_transparency() {
         return false;
     }
     let tint = material.tint();
     let (x, y, w, h, r) = (ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(bounds.w), ui.pt(bounds.h), ui.pt(radius));
-    write_rrect(s, x, y, w, h, r, tint);
+    // The translucent tint goes over what is drawn there (the window's own pixels are transparent under a behind-window
+    // material), so the window server's blur shows through it on every path.
+    s.fill_rrect(RectF::new(x, y, w, h), r, tint);
     let (kind, state) = if ALL_MATERIALS.with(|v| v.get()) { (material.kind(), state) } else { (material.kind().legacy(), State::default()) };
     FRAME_MATERIALS.with(|m| {
         let mut m = m.borrow_mut();
@@ -176,33 +179,6 @@ fn window_material(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, material
         }
     });
     true
-}
-
-/// Writes `color` (premultiplied) into the rounded rectangle (px), replacing the pixels inside it; edge pixels mix it
-/// with the pixel under them by coverage.
-fn write_rrect(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
-    let r = r.max(0.0).min(w / 2.0).min(h / 2.0);
-    let (x0, y0) = (x.floor().max(0.0) as usize, (y.floor().max(0.0) as usize).max(s.y0));
-    let (x1, y1) = (((x + w).ceil().max(0.0) as usize).min(s.w), ((y + h).ceil().max(0.0) as usize).min(s.h));
-    for py in y0..y1 {
-        let base = (py - s.y0) * s.stride;
-        for px in x0..x1 {
-            let c = crate::kit::gfx::rrect_coverage(px as f32 + 0.5 - x, py as f32 + 0.5 - y, w, h, r).clamp(0.0, 1.0);
-            if c <= 0.0 {
-                continue;
-            }
-            let d = &mut s.px[base + px];
-            *d = if c >= 1.0 { color } else { mix_px(*d, color, (c * 256.0) as u32) };
-        }
-    }
-}
-
-/// `a` towards `b` by `t`/256, per premultiplied channel.
-fn mix_px(a: u32, b: u32, t: u32) -> u32 {
-    (0..4).fold(0, |o, ch| {
-        let (x, y) = ((a >> (ch * 8)) & 255, (b >> (ch * 8)) & 255);
-        o | ((x * (256 - t) + y * t) >> 8) << (ch * 8)
-    })
 }
 
 /// Vibrant label levels: `labelColor` to `quaternaryLabelColor` drawn on a vibrant material (`NativeAppearance`
@@ -239,7 +215,8 @@ pub fn vibrant_text() -> bool {
 /// Blends a text image (drawn in `WHITE`; its alpha is the glyph coverage) into `s` at (`x`, `y`) px as a vibrant
 /// label: plus-lighter in Dark, plus-darker in Light (see `Vibrant`). Alpha is unchanged, so on a translucent
 /// material the compositor's premultiplied blend gives backdrop + label (Dark) or backdrop + label - 1 (Light).
-pub fn blit_vibrant(s: &mut Surface, img: &crate::kit::Image, x: i32, y: i32, level: Vibrant) {
+/// Pixel form of `blit_vibrant` for code that holds the `Surface` itself (the exact plus-lighter / plus-darker blend).
+pub fn blit_vibrant_px(s: &mut Surface, img: &crate::kit::Image, x: i32, y: i32, level: Vibrant) {
     let k = level.strength();
     let light = crate::kit::appearance::scheme() >= 0.5;
     for row in 0..img.h as i32 {
@@ -263,6 +240,36 @@ pub fn blit_vibrant(s: &mut Surface, img: &crate::kit::Image, x: i32, y: i32, le
     }
 }
 
+/// `blit_vibrant` on a `Canvas`. The canvas vocabulary has no plus-lighter or plus-darker blend, so the coverage of the
+/// text is drawn over the material in white (Dark) or black (Light) at the level's strength. That keeps the material's
+/// alpha and reads as the same label; the exact additive blend stays in `blit_vibrant_px` (see g2-kit-canvas.md).
+pub fn blit_vibrant(c: &mut dyn Canvas, img: &crate::kit::Image, x: i32, y: i32, level: Vibrant) {
+    let a = (level.strength().clamp(0.0, 1.0) * 255.0).round() as u8;
+    let tint = if crate::kit::appearance::scheme() >= 0.5 { rgba(0, 0, 0, a) } else { rgba(255, 255, 255, a) };
+    image_tinted_at(c, img, x, y, tint);
+}
+
+/// The stable id of a rasterised image for the GPU cache: a hash of its size and pixels.
+pub fn image_id(img: &crate::kit::Image) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (img.w, img.h).hash(&mut h);
+    img.px.hash(&mut h);
+    h.finish()
+}
+
+/// Draws `img` at (`x`, `y`) px unscaled and unblended: the canvas form of `Surface::blit` with full tint and alpha.
+pub fn blit(c: &mut dyn Canvas, img: &crate::kit::Image, x: i32, y: i32) {
+    let dst = RectF::new(x as f32, y as f32, img.w as f32, img.h as f32);
+    c.image(ImageRef { id: image_id(img), image: img }, dst, 1.0);
+}
+
+/// Draws the coverage of a white text image at (`x`, `y`) px in `color` (`Canvas::image_tinted`).
+pub fn image_tinted_at(c: &mut dyn Canvas, img: &crate::kit::Image, x: i32, y: i32, color: u32) {
+    let dst = RectF::new(x as f32, y as f32, img.w as f32, img.h as f32);
+    c.image_tinted(ImageRef { id: image_id(img), image: img }, dst, color);
+}
+
 /// One premultiplied pixel with `amount` (0..1) of light added (Dark: plus-lighter) or removed (Light:
 /// plus-darker); alpha is kept.
 fn vibrant_px(d: u32, amount: f32, light: bool) -> u32 {
@@ -277,12 +284,12 @@ fn vibrant_px(d: u32, amount: f32, light: bool) -> u32 {
 /// Draws `text` as a sidebar label at `x` and the top `y(height)` px: vibrantly (`blit_vibrant`) when `vibrant`,
 /// else in `plain`. Returns the image size.
 #[allow(clippy::too_many_arguments)]
-fn label_text(s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, x: i32, y: impl Fn(i32) -> i32, vibrant: Option<Vibrant>, plain: u32) -> (usize, usize) {
+fn label_text(s: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight, x: i32, y: impl Fn(i32) -> i32, vibrant: Option<Vibrant>, plain: u32) -> (usize, usize) {
     let img = ui.text(text, pt, weight, if vibrant.is_some() { WHITE } else { plain });
     let top = y(img.h as i32);
     match vibrant {
         Some(v) => blit_vibrant(s, &img, x, top, v),
-        None => s.blit(&img, x, top, 255, 255),
+        None => blit(s, &img, x, top),
     }
     (img.w, img.h)
 }
@@ -294,9 +301,14 @@ pub fn take_frame_materials() -> Vec<crate::proto::Material> {
 
 /// Draws `material` over what is already on `s` inside `bounds` (logical points) with corner `radius` (points),
 /// blending within the window (`visual_effect` with `Blending::WithinWindow`).
-pub fn material(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, material: Material) {
-    let Rect { x, y, w, h } = bounds;
-    s.glass_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(radius), material.tint(), material.solid(), ui.pt(material.blur_pt()) as usize);
+pub fn material(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, material: Material) {
+    let r = RectF::new(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(bounds.w), ui.pt(bounds.h));
+    if crate::kit::appearance::reduce_transparency() {
+        // Reduce Transparency: the opaque colour, as `Surface::glass_rrect` does
+        s.fill_rrect(r, ui.pt(radius), material.solid());
+        return;
+    }
+    s.material(r, ui.pt(radius), MaterialStyle { blur: ui.pt(material.blur_pt()), tint: material.tint(), saturation: 1.0 });
 }
 
 /// `NativeVisualEffectView`: draws `material` in `bounds` (points) with corner `radius` (points). Behind-window
@@ -304,13 +316,13 @@ pub fn material(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, material: M
 /// windows under this one there; `state` decides whether it turns opaque while the window is inactive. Where the
 /// shell offers no vibrancy (or Reduce Transparency is on) it draws the material's opaque colour. Within-window
 /// blending blurs the app's own pixels (`material`). Draw the content under a within-window material first.
-pub fn visual_effect(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, mat: Material, blending: Blending, state: State) {
+pub fn visual_effect(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32, mat: Material, blending: Blending, state: State) {
     match blending {
         Blending::WithinWindow => material(s, ui, bounds, radius, mat),
         Blending::BehindWindow => {
             if !window_material(s, ui, bounds, radius, mat, state) {
                 let Rect { x, y, w, h } = bounds;
-                s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(radius), mat.solid());
+                s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(radius), mat.solid());
             }
         }
     }
@@ -318,31 +330,31 @@ pub fn visual_effect(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32, mat: M
 
 /// A root screen's large title (the native toolkit/HIG: large title, bold) on the leading edge of the readable column.
 /// `y` is the top in points; returns the y (points) where content below it starts.
-pub fn large_title(s: &mut Surface, ui: &Ui, l: &Layout, text: &str, y: f32) -> f32 {
+pub fn large_title(s: &mut dyn Canvas, ui: &Ui, l: &Layout, text: &str, y: f32) -> f32 {
     let (x, _) = l.readable();
     let img = ui.text(text, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now());
-    s.blit(&img, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
+    blit(s, &img, ui.pt(x) as i32, ui.pt(y) as i32);
     y + MAC_LARGE_TITLE_PT * 1.25 + TITLE_GAP_PT
 }
 
 /// A group header or footer: footnote size, secondary grey, on the leading edge of the readable column.
 /// Returns the y (points) below it.
-pub fn section_label(s: &mut Surface, ui: &Ui, l: &Layout, text: &str, y: f32) -> f32 {
+pub fn section_label(s: &mut dyn Canvas, ui: &Ui, l: &Layout, text: &str, y: f32) -> f32 {
     let (x, _) = l.readable();
     let img = ui.text(text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-    s.blit(&img, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
+    blit(s, &img, ui.pt(x) as i32, ui.pt(y) as i32);
     y + MAC_FOOTNOTE_PT * 1.6
 }
 
 /// Show Borders (Golden Gate Accessibility > Display, bifrost Button Shapes): when the setting is on, a control gets a visible
 /// one-point outline so its edges can be seen without relying on a fill. `bounds` and `radius` are in points.
 /// Controls call this after drawing their fill; it draws nothing when the setting is off.
-pub fn outline_if_borders(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32) {
+pub fn outline_if_borders(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
     if !crate::kit::appearance::button_shapes() {
         return;
     }
     let Rect { x, y, w, h } = bounds;
-    s.stroke_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(radius), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    s.stroke_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(radius), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
 }
 
 /// Height of a toolbar capsule and the side of a glyph button, in points (Golden Gate toolbar buttons).
@@ -355,22 +367,22 @@ pub const TOOLBAR_GAP_PT: f32 = 10.0;
 /// The unified toolbar band (`NativeToolbar` in a full-size window): the content colour with a hairline at the bottom,
 /// or the translucent `.titlebar` material over the blurred desktop when the shell offers vibrancy.
 /// Draw it first, then `toolbar` over it. `bounds` in points.
-pub fn toolbar_band(s: &mut Surface, ui: &Ui, bounds: Rect) {
+pub fn toolbar_band(s: &mut dyn Canvas, ui: &Ui, bounds: Rect) {
     let Rect { x, y, w, h } = bounds;
     if !window_material(s, ui, bounds, 0.0, Material::Titlebar, State::default()) {
-        s.fill_rect(ui.pt(x) as usize, ui.pt(y) as usize, ui.pt(w).ceil() as usize, ui.pt(h).ceil() as usize, DETAIL_BG.now());
+        s.fill_rect(RectF::new((ui.pt(x) as usize) as f32, (ui.pt(y) as usize) as f32, (ui.pt(w).ceil() as usize) as f32, (ui.pt(h).ceil() as usize) as f32), DETAIL_BG.now());
     }
-    s.fill_rect(ui.pt(x) as usize, (ui.pt(y + h) as usize).saturating_sub(1), ui.pt(w).ceil() as usize, 1, SEPARATOR_C.now());
+    s.fill_rect(RectF::new((ui.pt(x) as usize) as f32, ((ui.pt(y + h) as usize).saturating_sub(1)) as f32, (ui.pt(w).ceil() as usize) as f32, (1) as f32), SEPARATOR_C.now());
 }
 
 /// A Golden Gate glass capsule (`bounds` in points): a soft ring, the plate and a one-pixel edge.
-pub fn capsule(s: &mut Surface, ui: &Ui, bounds: Rect) {
+pub fn capsule(s: &mut dyn Canvas, ui: &Ui, bounds: Rect) {
     let Rect { x, y, w, h } = bounds;
     let r = h / 2.0;
     let o = ui.pt(1.0).max(1.0);
-    s.fill_rrect(ui.pt(x) - o, ui.pt(y) - o + o * 0.5, ui.pt(w) + 2.0 * o, ui.pt(h) + 2.0 * o, ui.pt(r) + o, CAPSULE_SHADOW.now());
-    s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(r), CAPSULE_BG.now());
-    s.stroke_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(r), o, CAPSULE_EDGE.now());
+    s.fill_rrect(RectF::new(ui.pt(x) - o, ui.pt(y) - o + o * 0.5, ui.pt(w) + 2.0 * o, ui.pt(h) + 2.0 * o), ui.pt(r) + o, CAPSULE_SHADOW.now());
+    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(r), CAPSULE_BG.now());
+    s.stroke_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(r), o, CAPSULE_EDGE.now());
 }
 
 /// Width a pull-down toolbar item (`ToolbarItem::menu`) adds for its chevron, in points.
@@ -394,7 +406,7 @@ pub fn toolbar_layout(ui: &Ui, bounds: Rect, bar: &Toolbar) -> ToolbarLayout {
 /// group (`in_group`) with hairline dividers, the selected segment of a group on a grey plate, titled buttons as
 /// their own capsule. `Custom` slots are only laid out; the app draws them at the returned rectangles. Buttons that
 /// do not fit move behind a `»` button. The band behind the bar is `toolbar_band`. `pressed` is the id being pressed.
-pub fn toolbar(s: &mut Surface, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>) -> ToolbarLayout {
+pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>) -> ToolbarLayout {
     let placed = toolbar_layout(ui, bounds, bar);
     for (_, r) in &placed.groups {
         capsule(s, ui, *r);
@@ -408,12 +420,12 @@ pub fn toolbar(s: &mut Surface, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: O
         } else if k > 0 && bar.items.iter().find(|i| i.id == placed.visible[k - 1].0).is_some_and(|p| p.group == item.group) {
             // a hairline between neighbours of one group
             let inset = r.h * 0.25;
-            s.fill_rect(ui.pt(r.x) as usize, ui.pt(r.y + inset) as usize, ui.pt(1.0).max(1.0) as usize, ui.pt(r.h - 2.0 * inset) as usize, SEPARATOR_C.now());
+            s.fill_rect(RectF::new((ui.pt(r.x) as usize) as f32, (ui.pt(r.y + inset) as usize) as f32, (ui.pt(1.0).max(1.0) as usize) as f32, (ui.pt(r.h - 2.0 * inset) as usize) as f32), SEPARATOR_C.now());
         }
         let plate = Rect { x: r.x + 3.0, y: r.y + 3.0, w: r.w - 6.0, h: r.h - 6.0 };
         let fill = if pressed == Some(*id) && item.enabled { Some(ROW_PRESSED.now()) } else if item.selected { Some(SEGMENT_ON.now()) } else { None };
         if let Some(fill) = fill {
-            s.fill_rrect(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h), ui.pt(plate.h / 2.0), fill);
+            s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h)), ui.pt(plate.h / 2.0), fill);
         }
         let color = if item.enabled { LABEL.now() } else { LABEL_3.now() };
         // a pull-down item keeps its chevron in the trailing TOOLBAR_MENU_CHEVRON_PT; the face is centred in the rest
@@ -431,13 +443,13 @@ pub fn toolbar(s: &mut Surface, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: O
         });
         if !drew {
             let img = ui.text(&ui.fit(&item.label, MAC_BODY_PT, ui.pt(r.w - 2.0 * SPACE_S)), MAC_BODY_PT, Weight::Regular, color);
-            s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
+            blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
         }
     }
     if let Some(r) = placed.overflow_button {
         capsule(s, ui, r);
         let img = ui.text("\u{bb}", MAC_BODY_PT, Weight::Regular, LABEL.now());
-        s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
+        blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     }
     placed
 }
@@ -454,10 +466,10 @@ const SIDEBAR_DOT_PT: f32 = 12.0;
 /// whole `bounds` in the sidebar colour, then the visible rows scrolled by `scroll` points: section headers in small
 /// grey semibold text, rows with an accent glyph (`with_symbol`), the selection as a neutral plate under a bold
 /// label (Files, Notes, Reminders), counts on the right. `pressed` is the row id being pressed.
-pub fn source_list(s: &mut Surface, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
+pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
     let (bx, by, bw, bh) = (ui.pt(bounds.x) as usize, ui.pt(bounds.y) as usize, ui.pt(bounds.w).ceil() as usize, ui.pt(bounds.h).ceil() as usize);
     if !window_material(s, ui, bounds, 0.0, Material::Sidebar, State::default()) {
-        s.fill_rect(bx, by, bw, bh, SIDEBAR_BG.now());
+        s.fill_rect(RectF::new((bx) as f32, (by) as f32, (bw) as f32, (bh) as f32), SIDEBAR_BG.now());
     }
     // labels on the material blend vibrantly; a selected or pressed row's plate is opaque, so its text is plain
     let vibrant = vibrant_text();
@@ -488,9 +500,9 @@ pub fn source_list(s: &mut Surface, ui: &Ui, bounds: Rect, list: &SourceList, sc
                 bifrost_ui::ax::record(bifrost_ui::Role::Row, label, if selected { "selected" } else { "" }, r, *enabled);
                 let plate = Rect { x: r.x + inset, y: r.y + 1.0, w: r.w - 2.0 * inset, h: r.h - 2.0 };
                 if selected {
-                    s.fill_rrect(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h), ui.pt(m::SELECTION_RADIUS), SIDEBAR_PLATE.now());
+                    s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h)), ui.pt(m::SELECTION_RADIUS), SIDEBAR_PLATE.now());
                 } else if pressed == Some(*id) && *enabled {
-                    s.fill_rrect(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
+                    s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(plate.w), ui.pt(plate.h)), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
                 }
                 outline_if_borders(s, ui, plate, m::SELECTION_RADIUS);
                 let color = if !*enabled { LABEL_3.now() } else { LABEL.now() };
@@ -501,14 +513,14 @@ pub fn source_list(s: &mut Surface, ui: &Ui, bounds: Rect, list: &SourceList, sc
                 if let Some((initials, c)) = avatar {
                     let d = (plate.h - 6.0).min(SIDEBAR_AVATAR_PT);
                     let (cx, cy) = (text_x + d / 2.0, plate.y + plate.h / 2.0);
-                    springboard::shell::icons::disc(s, ui.pt(cx), ui.pt(cy), ui.pt(d / 2.0), *c);
+                    crate::glyphs::disc(s, ui.pt(cx), ui.pt(cy), ui.pt(d / 2.0), *c);
                     let img = ui.text(initials, MAC_FOOTNOTE_PT, Weight::Semibold, WHITE);
-                    s.blit(&img, ui.pt(cx) as i32 - img.w as i32 / 2, ui.pt(cy) as i32 - img.h as i32 / 2, 255, 255);
+                    blit(s, &img, ui.pt(cx) as i32 - img.w as i32 / 2, ui.pt(cy) as i32 - img.h as i32 / 2);
                     text_x += d + SPACE_S;
                 } else if let Some(c) = dot {
                     let g = SIDEBAR_GLYPH_PT;
                     let r = ui.pt(SIDEBAR_DOT_PT / 2.0);
-                    springboard::shell::icons::disc(s, ui.pt(text_x + g / 2.0), ui.pt(plate.y + plate.h / 2.0), r, *c);
+                    crate::glyphs::disc(s, ui.pt(text_x + g / 2.0), ui.pt(plate.y + plate.h / 2.0), r, *c);
                     text_x += g + SPACE_S;
                 } else if let Some(name) = symbol {
                     let g = SIDEBAR_GLYPH_PT;
@@ -545,16 +557,16 @@ pub fn source_list(s: &mut Surface, ui: &Ui, bounds: Rect, list: &SourceList, sc
 /// A search field (`NativeSearchField`): a capsule with a leading magnifier, the placeholder or text, a clear button
 /// while there is text, and the focus ring when `focused`. Geometry and clear-button hit-testing are
 /// `bifrost_ui::search` (`search::hits_clear(bounds, !field.is_empty(), x, y)`). `bounds` in points.
-pub fn search_field(s: &mut Surface, ui: &Ui, field: &TextField, bounds: Rect, placeholder: &str, focused: bool) {
+pub fn search_field(s: &mut dyn Canvas, ui: &Ui, field: &TextField, bounds: Rect, placeholder: &str, focused: bool) {
     let Rect { x, y, w, h } = bounds;
     bifrost_ui::ax::record(bifrost_ui::Role::TextField, placeholder, field, bounds, true);
     let r = h / 2.0;
     if focused {
         let o = 3.0;
-        s.fill_rrect(ui.pt(x - o), ui.pt(y - o), ui.pt(w + 2.0 * o), ui.pt(h + 2.0 * o), ui.pt(r + o), TINT);
-        s.fill_rrect(ui.pt(x - 1.0), ui.pt(y - 1.0), ui.pt(w + 2.0), ui.pt(h + 2.0), ui.pt(r + 1.0), DETAIL_BG.now());
+        s.fill_rrect(RectF::new(ui.pt(x - o), ui.pt(y - o), ui.pt(w + 2.0 * o), ui.pt(h + 2.0 * o)), ui.pt(r + o), TINT);
+        s.fill_rrect(RectF::new(ui.pt(x - 1.0), ui.pt(y - 1.0), ui.pt(w + 2.0), ui.pt(h + 2.0)), ui.pt(r + 1.0), DETAIL_BG.now());
     }
-    s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(r), FIELD_BG.now());
+    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(r), FIELD_BG.now());
     outline_if_borders(s, ui, bounds, r);
     let value: &str = field;
     let parts = bifrost_ui::search::layout(bounds, !value.is_empty());
@@ -568,7 +580,7 @@ pub fn search_field(s: &mut Surface, ui: &Ui, field: &TextField, bounds: Rect, p
     let top = ui.pt(y) + (ui.pt(h) - im_h) / 2.0;
     if value.is_empty() {
         let im = ui.text(&ui.fit(placeholder, MAC_BODY_PT, room), MAC_BODY_PT, Weight::Regular, LABEL_2.now());
-        s.blit(&im, left as i32, top as i32, 255, 255);
+        blit(s, &im, left as i32, top as i32);
     } else {
         let mut start = 0;
         while start < field.caret() && ui.measure(&value[start..field.caret()], MAC_BODY_PT, Weight::Regular) > room {
@@ -581,22 +593,22 @@ pub fn search_field(s: &mut Surface, ui: &Ui, field: &TextField, bounds: Rect, p
             let (a, b) = (rel(sel.start), rel(sel.end));
             let sx = ui.measure(&visible[..a], MAC_BODY_PT, Weight::Regular);
             let ex = ui.measure(&visible[..b], MAC_BODY_PT, Weight::Regular);
-            s.fill_rrect(left + sx, top, ex - sx + ui.pt(1.0), im_h, 0.0, SELECTION.now());
+            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.0), im_h), 0.0, SELECTION.now());
             let mut cx = left as i32;
             for (part, color) in [(&visible[..a], LABEL.now()), (&visible[a..b], WHITE), (&visible[b..], LABEL.now())] {
                 if part.is_empty() {
                     continue;
                 }
                 let im = ui.text(part, MAC_BODY_PT, Weight::Regular, color);
-                s.blit(&im, cx, top as i32, 255, 255);
+                blit(s, &im, cx, top as i32);
                 cx += ui.measure(part, MAC_BODY_PT, Weight::Regular) as i32;
             }
         } else {
             let im = ui.text(&visible, MAC_BODY_PT, Weight::Regular, LABEL.now());
-            s.blit(&im, left as i32, top as i32, 255, 255);
+            blit(s, &im, left as i32, top as i32);
             if focused {
                 let cx = ui.measure(&value[start..field.caret()], MAC_BODY_PT, Weight::Regular).min(room);
-                s.fill_rrect(left + cx, top, ui.pt(1.0), im_h, 0.0, TINT);
+                s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.0), im_h), 0.0, TINT);
             }
         }
     }
@@ -612,7 +624,7 @@ fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> u32 {
 /// a faint white paper edge, the front body with a soft vertical gradient and darker bottom edge, and an optional
 /// embossed SF symbol (`emblem`, Desktop, Documents, Downloads, ...) in a darker blue. Folders look the same in Dark
 /// and Light, as in Files.
-pub fn folder_icon(s: &mut Surface, ui: &Ui, bounds: Rect, emblem: Option<&str>) {
+pub fn folder_icon(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, emblem: Option<&str>) {
     let side = bounds.w.min(bounds.h);
     let (x, y) = (bounds.x + (bounds.w - side) / 2.0, bounds.y + (bounds.h - side) / 2.0);
     let (w, h) = (side * 0.92, side * 0.74);
@@ -620,23 +632,23 @@ pub fn folder_icon(s: &mut Surface, ui: &Ui, bounds: Rect, emblem: Option<&str>)
     let r = side * 0.07;
     // the back: a tab on the left and the band above the front
     let back = rgba(89, 189, 233, 255);
-    s.fill_rrect(ui.pt(fx), ui.pt(fy), ui.pt(w * 0.42), ui.pt(h * 0.3), ui.pt(r), back);
-    s.fill_rrect(ui.pt(fx), ui.pt(fy + h * 0.08), ui.pt(w), ui.pt(h * 0.92), ui.pt(r), back);
+    s.fill_rrect(RectF::new(ui.pt(fx), ui.pt(fy), ui.pt(w * 0.42), ui.pt(h * 0.3)), ui.pt(r), back);
+    s.fill_rrect(RectF::new(ui.pt(fx), ui.pt(fy + h * 0.08), ui.pt(w), ui.pt(h * 0.92)), ui.pt(r), back);
     // the paper edge between the back and the front
     let body_y = fy + h * 0.2;
-    s.fill_rrect(ui.pt(fx + w * 0.03), ui.pt(body_y - side * 0.02), ui.pt(w * 0.94), ui.pt(side * 0.04), ui.pt(side * 0.02), rgba(255, 255, 255, 150));
+    s.fill_rrect(RectF::new(ui.pt(fx + w * 0.03), ui.pt(body_y - side * 0.02), ui.pt(w * 0.94), ui.pt(side * 0.04)), ui.pt(side * 0.02), rgba(255, 255, 255, 150));
     // the front body: a darker bottom edge, then the gradient in horizontal bands
     let body_h = fy + h - body_y;
     let one = 1.0 / ui.pt(1.0).max(1.0);
-    s.fill_rrect(ui.pt(fx), ui.pt(body_y), ui.pt(w), ui.pt(body_h), ui.pt(r), rgba(62, 150, 196, 255));
+    s.fill_rrect(RectF::new(ui.pt(fx), ui.pt(body_y), ui.pt(w), ui.pt(body_h)), ui.pt(r), rgba(62, 150, 196, 255));
     let (top, bottom) = ((88, 170, 207), (74, 178, 227));
-    s.fill_rrect(ui.pt(fx), ui.pt(body_y), ui.pt(w), ui.pt(body_h - one), ui.pt(r), mix(top, bottom, 0.5));
+    s.fill_rrect(RectF::new(ui.pt(fx), ui.pt(body_y), ui.pt(w), ui.pt(body_h - one)), ui.pt(r), mix(top, bottom, 0.5));
     let inner_top = ui.pt(body_y + r);
     let inner_bottom = ui.pt(body_y + body_h - one - r);
     let rows = (inner_bottom - inner_top).max(0.0) as usize;
     for k in 0..rows {
         let t = (k as f32 + 0.5) / rows.max(1) as f32;
-        s.fill_rect(ui.pt(fx) as usize, inner_top as usize + k, ui.pt(w).ceil() as usize, 1, mix(top, bottom, t));
+        s.fill_rect(RectF::new((ui.pt(fx) as usize) as f32, (inner_top as usize + k) as f32, (ui.pt(w).ceil() as usize) as f32, (1) as f32), mix(top, bottom, t));
     }
     if let Some(name) = emblem {
         let g = body_h * 0.4;
@@ -647,13 +659,13 @@ pub fn folder_icon(s: &mut Surface, ui: &Ui, bounds: Rect, emblem: Option<&str>)
 /// A collapsed search control (Golden Gate toolbars): a round glass capsule `CAPSULE_PT` wide with a magnifier at
 /// `origin` (points). The app swaps it for `search_field` when clicked and back when the field is emptied and loses
 /// focus or on Esc. `pressed` shades the plate. Returns the button rectangle for hit-testing.
-pub fn search_button(s: &mut Surface, ui: &Ui, origin: (f32, f32), pressed: bool) -> Rect {
+pub fn search_button(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), pressed: bool) -> Rect {
     let r = Rect { x: origin.0, y: origin.1, w: CAPSULE_PT, h: CAPSULE_PT };
     bifrost_ui::ax::record(bifrost_ui::Role::Button, "Search", "", r, true);
     capsule(s, ui, r);
     outline_if_borders(s, ui, r, r.h / 2.0);
     if pressed {
-        s.fill_rrect(ui.pt(r.x + 3.0), ui.pt(r.y + 3.0), ui.pt(r.w - 6.0), ui.pt(r.h - 6.0), ui.pt((r.h - 6.0) / 2.0), ROW_PRESSED.now());
+        s.fill_rrect(RectF::new(ui.pt(r.x + 3.0), ui.pt(r.y + 3.0), ui.pt(r.w - 6.0), ui.pt(r.h - 6.0)), ui.pt((r.h - 6.0) / 2.0), ROW_PRESSED.now());
     }
     let g = TOOLBAR_GLYPH_PT;
     glyph(s, ui, "magnifyingglass", Rect { x: r.x + (r.w - g) / 2.0, y: r.y + (r.h - g) / 2.0, w: g, h: g }, LABEL.now());
@@ -667,7 +679,7 @@ const PATH_CHEVRON_PT: f32 = 14.0;
 /// A path bar (Files's View > Show Path Bar, `NativePathControl`) in `bounds` (points): each `(label, symbol)` from the
 /// root with a glyph, chevrons between, middle labels shrinking to their glyph when it is narrow. Returns the
 /// segments for hit-testing (`bifrost_ui::pathbar::hit`).
-pub fn path_bar(s: &mut Surface, ui: &Ui, bounds: Rect, items: &[(&str, &str)]) -> Vec<Segment> {
+pub fn path_bar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, items: &[(&str, &str)]) -> Vec<Segment> {
     let pt = MAC_CALLOUT_PT;
     let widths: Vec<f32> = items.iter().map(|(l, _)| ui.measure(l, pt, Weight::Regular) / ui.pt(1.0)).collect();
     let segs = pathbar::layout(&widths, bounds, PATH_GLYPH_PT + SPACE_XS, PATH_CHEVRON_PT);
@@ -679,7 +691,7 @@ pub fn path_bar(s: &mut Surface, ui: &Ui, bounds: Rect, items: &[(&str, &str)]) 
         glyph(s, ui, symbol, Rect { x: r.x, y: r.y + (r.h - g) / 2.0, w: g, h: g }, if k + 1 == segs.len() { LABEL_2.now() } else { TINT });
         if seg.label_w > 0.5 {
             let img = ui.text(&ui.fit(label, pt, ui.pt(seg.label_w)), pt, Weight::Regular, LABEL_2.now());
-            s.blit(&img, ui.pt(r.x + g + SPACE_XS) as i32, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
+            blit(s, &img, ui.pt(r.x + g + SPACE_XS) as i32, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
         }
         if k + 1 < segs.len() {
             let c = 8.0;
@@ -691,7 +703,7 @@ pub fn path_bar(s: &mut Surface, ui: &Ui, bounds: Rect, items: &[(&str, &str)]) 
 
 /// A single-line field with selection, caret and visible keyboard focus.
 pub fn text_field(
-    s: &mut Surface,
+    s: &mut dyn Canvas,
     ui: &Ui,
     field: &TextField,
     bounds: Rect,
@@ -700,23 +712,9 @@ pub fn text_field(
 ) {
     let Rect { x, y, w, h } = bounds;
     bifrost_ui::ax::record(bifrost_ui::Role::TextField, placeholder, field, bounds, true);
-    s.fill_rrect(
-        ui.pt(x),
-        ui.pt(y),
-        ui.pt(w),
-        ui.pt(h),
-        ui.pt(6.),
-        if focused { TINT } else { FIELD_BG.now() },
-    );
+    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(6.), if focused { TINT } else { FIELD_BG.now() });
     if focused {
-        s.fill_rrect(
-            ui.pt(x + 1.),
-            ui.pt(y + 1.),
-            ui.pt(w - 2.),
-            ui.pt(h - 2.),
-            ui.pt(5.),
-            FIELD_BG.now(),
-        );
+        s.fill_rrect(RectF::new(ui.pt(x + 1.), ui.pt(y + 1.), ui.pt(w - 2.), ui.pt(h - 2.)), ui.pt(5.), FIELD_BG.now());
     }
     outline_if_borders(s, ui, bounds, 6.);
     let room = ui.pt((w - 24.).max(0.));
@@ -738,12 +736,12 @@ pub fn text_field(
         let sx = ui.measure(&value[start..a], 13., Weight::Regular).min(room);
         let ex = ui.measure(&value[start..b], 13., Weight::Regular).min(room);
         if ex > sx {
-            s.fill_rrect(left + sx, top, ex - sx + ui.pt(1.), ui.pt(17.), 0., SELECTION.now());
+            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.), ui.pt(17.)), 0., SELECTION.now());
         }
     }
     if value.is_empty() {
         let im = ui.text(placeholder, 13., Weight::Regular, LABEL_2.now());
-        s.blit(&im, left as i32, top as i32, 255, 255);
+        blit(s, &im, left as i32, top as i32);
     } else if focused && !field.selection().is_empty() {
         // Selected characters are white on the selection plate; the rest keeps the label colour.
         let sel = field.selection();
@@ -755,18 +753,18 @@ pub fn text_field(
                 continue;
             }
             let im = ui.text(part, 13., Weight::Regular, color);
-            s.blit(&im, x, top as i32, 255, 255);
+            blit(s, &im, x, top as i32);
             x += ui.measure(part, 13., Weight::Regular) as i32;
         }
     } else {
         let im = ui.text(&visible, 13., Weight::Regular, LABEL.now());
-        s.blit(&im, left as i32, top as i32, 255, 255);
+        blit(s, &im, left as i32, top as i32);
     }
     if focused && field.selection().is_empty() {
         let cx = ui
             .measure(&value[start..field.caret()], 13., Weight::Regular)
             .min(room);
-        s.fill_rrect(left + cx, top, ui.pt(1.), ui.pt(17.), 0., TINT);
+        s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.), ui.pt(17.)), 0., TINT);
     }
 }
 
@@ -778,57 +776,57 @@ const MENU_INSET_PT: f32 = 5.0;
 
 /// A pop-up button (`NativePopUpButton`): the current choice with an up/down chevron pair. `open` draws it pressed.
 /// `bounds` in points; the standard height is 22.
-pub fn popup_button(s: &mut Surface, ui: &Ui, bounds: Rect, title: &str, open: bool, enabled: bool) {
+pub fn popup_button(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, title: &str, open: bool, enabled: bool) {
     let Rect { x, y, w, h } = bounds;
     bifrost_ui::ax::record(bifrost_ui::Role::Button, title, if open { "open" } else { "" }, bounds, enabled);
-    s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h), ui.pt(6.), if open { CONTROL_PRESSED.now() } else { FIELD_BG.now() });
+    s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(6.), if open { CONTROL_PRESSED.now() } else { FIELD_BG.now() });
     outline_if_borders(s, ui, bounds, 6.);
     let color = if enabled { LABEL.now() } else { LABEL_3.now() };
     let room = ui.pt((w - 34.).max(0.));
     let img = ui.text(&ui.fit(title, MAC_BODY_PT, room), MAC_BODY_PT, Weight::Regular, color);
-    s.blit(&img, ui.pt(x + 10.) as i32, (ui.pt(y) + (ui.pt(h) - img.h as f32) / 2.0) as i32, 255, 255);
+    blit(s, &img, ui.pt(x + 10.) as i32, (ui.pt(y) + (ui.pt(h) - img.h as f32) / 2.0) as i32);
     // chevrons: two small triangles, tapering one pixel row at a time, centred in the right 24 pt
     let (cx, cy) = (ui.pt(x + w - 14.), ui.pt(y + h / 2.));
     let row = ui.pt(1.0).max(1.0);
     // up triangle on top (apex up), down triangle below (apex down): each is three rows, one pixel wider per row
     for k in 0..3 {
         let half = (k as f32 + 0.5) * row;
-        s.fill_rrect(cx - half, cy - ui.pt(4.5) + k as f32 * row, half * 2.0, row, 0.0, color);
-        s.fill_rrect(cx - half, cy + ui.pt(4.5) - (k as f32 + 1.0) * row, half * 2.0, row, 0.0, color);
+        s.fill_rrect(RectF::new(cx - half, cy - ui.pt(4.5) + k as f32 * row, half * 2.0, row), 0.0, color);
+        s.fill_rrect(RectF::new(cx - half, cy + ui.pt(4.5) - (k as f32 + 1.0) * row, half * 2.0, row), 0.0, color);
     }
 }
 
 /// An open menu on the Popover material at `origin` (points). The highlighted row is the accent colour with white
 /// text, disabled rows are tertiary, separators are hairlines, checked rows carry a check mark, and shortcuts sit
 /// at the trailing edge. Returns the menu's rectangle in points.
-pub fn menu(s: &mut Surface, ui: &Ui, origin: (f32, f32), width: f32, menu: &Menu) -> Rect {
+pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &Menu) -> Rect {
     let (rows, total) = menu.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
     let bounds = Rect { x: origin.0, y: origin.1, w: width, h: total };
     material(s, ui, bounds, 8.0, Material::Popover);
-    s.stroke_rrect(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(width), ui.pt(total), ui.pt(8.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    s.stroke_rrect(RectF::new(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(width), ui.pt(total)), ui.pt(8.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     for (i, (item, &(top, h))) in menu.items.iter().zip(&rows).enumerate() {
         let y = origin.1 + top;
         if item.separator {
-            s.fill_rect(ui.pt(origin.0 + MENU_INSET_PT * 2.) as usize, ui.pt(y + h / 2.) as usize, ui.pt(width - MENU_INSET_PT * 4.) as usize, ui.pt(1.0).max(1.0) as usize, SEPARATOR_C.now());
+            s.fill_rect(RectF::new((ui.pt(origin.0 + MENU_INSET_PT * 2.) as usize) as f32, (ui.pt(y + h / 2.) as usize) as f32, (ui.pt(width - MENU_INSET_PT * 4.) as usize) as f32, (ui.pt(1.0).max(1.0) as usize) as f32), SEPARATOR_C.now());
             continue;
         }
         let hot = menu.highlighted == Some(i) && item.enabled;
         if hot {
-            s.fill_rrect(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h), ui.pt(5.), TINT);
+            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h)), ui.pt(5.), TINT);
         }
         let color = if hot { WHITE } else if !item.enabled { LABEL_3.now() } else if item.destructive { bifrost_render::ui::DESTRUCTIVE } else { LABEL.now() };
         let line = |t: &str, c: u32| ui.text(t, MAC_BODY_PT, Weight::Regular, c);
         let center = |img: &crate::kit::Image| (ui.pt(y) + (ui.pt(h) - img.h as f32) / 2.0) as i32;
         if item.checked {
             let tick = line("\u{2713}", color);
-            s.blit(&tick, ui.pt(origin.0 + MENU_INSET_PT + 6.) as i32, center(&tick), 255, 255);
+            blit(s, &tick, ui.pt(origin.0 + MENU_INSET_PT + 6.) as i32, center(&tick));
         }
         let room = ui.pt(width - 2. * MENU_INSET_PT - 26. - 12. - item.shortcut.as_ref().map_or(0.0, |_| 48.));
         let title = line(&ui.fit(&item.title, MAC_BODY_PT, room.max(0.)), color);
-        s.blit(&title, ui.pt(origin.0 + MENU_INSET_PT + 24.) as i32, center(&title), 255, 255);
+        blit(s, &title, ui.pt(origin.0 + MENU_INSET_PT + 24.) as i32, center(&title));
         if let Some(sc) = &item.shortcut {
             let t = ui.text(sc, MAC_BODY_PT, Weight::Regular, if hot { WHITE } else { LABEL_2.now() });
-            s.blit(&t, (ui.pt(origin.0 + width - MENU_INSET_PT - 10.) - t.w as f32) as i32, center(&t), 255, 255);
+            blit(s, &t, (ui.pt(origin.0 + width - MENU_INSET_PT - 10.) - t.w as f32) as i32, center(&t));
         }
     }
     bounds
@@ -897,31 +895,31 @@ impl PlayerLayout {
 /// `MPRemoteCommandCenter` transport): a glass capsule with an artwork slot, the title and subtitle, a thin progress
 /// line, and skip/play buttons. The app draws its artwork into `artwork` afterwards (a music note shows meanwhile).
 /// `pressed` is the button rect being pressed (compare with the layout's rects).
-pub fn player(s: &mut Surface, ui: &Ui, bounds: Rect, p: &Player, pressed: Option<Rect>) -> PlayerLayout {
+pub fn player(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, p: &Player, pressed: Option<Rect>) -> PlayerLayout {
     let l = PlayerLayout::new(bounds, p);
     let c = l.capsule;
     capsule(s, ui, c);
     outline_if_borders(s, ui, c, c.h / 2.0);
     let a = l.artwork;
-    s.fill_rrect(ui.pt(a.x), ui.pt(a.y), ui.pt(a.w), ui.pt(a.h), ui.pt(a.h / 2.0), FIELD_BG.now());
+    s.fill_rrect(RectF::new(ui.pt(a.x), ui.pt(a.y), ui.pt(a.w), ui.pt(a.h)), ui.pt(a.h / 2.0), FIELD_BG.now());
     let g = a.w * 0.5;
     glyph(s, ui, "music.note", Rect { x: a.x + (a.w - g) / 2.0, y: a.y + (a.h - g) / 2.0, w: g, h: g }, LABEL_3.now());
     let room = ui.pt(l.text.w);
     let title = ui.text(&ui.fit(p.title, MAC_BODY_PT, room), MAC_BODY_PT, Weight::Semibold, LABEL.now());
     let sub = ui.text(&ui.fit(p.subtitle, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
     let top = ui.pt(l.text.y + l.text.h / 2.0) as i32 - (title.h + sub.h) as i32 / 2 - if l.progress.is_some() { ui.pt(2.0) as i32 } else { 0 };
-    s.blit(&title, ui.pt(l.text.x) as i32, top, 255, 255);
-    s.blit(&sub, ui.pt(l.text.x) as i32, top + title.h as i32, 255, 255);
+    blit(s, &title, ui.pt(l.text.x) as i32, top);
+    blit(s, &sub, ui.pt(l.text.x) as i32, top + title.h as i32);
     if let (Some(r), Some(f)) = (l.progress, p.progress) {
         let t = 2.0;
         let y = r.y + (r.h - t) / 2.0;
-        s.fill_rrect(ui.pt(r.x), ui.pt(y), ui.pt(r.w), ui.pt(t), ui.pt(t / 2.0), SEPARATOR_C.now());
-        s.fill_rrect(ui.pt(r.x), ui.pt(y), ui.pt(r.w * f.clamp(0.0, 1.0)), ui.pt(t), ui.pt(t / 2.0), LABEL_2.now());
+        s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(y), ui.pt(r.w), ui.pt(t)), ui.pt(t / 2.0), SEPARATOR_C.now());
+        s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(y), ui.pt(r.w * f.clamp(0.0, 1.0)), ui.pt(t)), ui.pt(t / 2.0), LABEL_2.now());
     }
-    let button = |s: &mut Surface, r: Rect, name: &str, label: &str| {
+    let button = |s: &mut dyn Canvas, r: Rect, name: &str, label: &str| {
         bifrost_ui::ax::record(bifrost_ui::Role::Button, label, "", r, true);
         if pressed == Some(r) {
-            s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(r.h / 2.0), ROW_PRESSED.now());
+            s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(r.h / 2.0), ROW_PRESSED.now());
         }
         let g = TOOLBAR_GLYPH_PT.min(r.h * 0.6);
         glyph(s, ui, name, Rect { x: r.x + (r.w - g) / 2.0, y: r.y + (r.h - g) / 2.0, w: g, h: g }, LABEL.now());
@@ -966,12 +964,12 @@ pub const POPOVER_ARROW_PT: (f32, f32) = (18.0, 9.0);
 /// arrow pointing at the anchor. `size` is the content size; the panel opens on `preferred` and flips when there is
 /// no room (`controls::split::place_popover`). Returns the content rectangle to draw the inspector into (Calendar
 /// event details, Reminders info). Dismiss on a click outside it, as `NativePopover.Behavior.transient`.
-pub fn popover(s: &mut Surface, ui: &Ui, anchor: Rect, size: (f32, f32), bounds: Rect, preferred: bifrost_ui::geometry::Edge) -> Rect {
+pub fn popover(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, size: (f32, f32), bounds: Rect, preferred: bifrost_ui::geometry::Edge) -> Rect {
     use bifrost_ui::geometry::Edge;
     let (aw, ah) = POPOVER_ARROW_PT;
     let (r, edge) = bifrost_ui::split::place_popover(anchor, size, bounds, preferred, ah);
     material(s, ui, r, 10.0, Material::Popover);
-    s.stroke_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(10.0), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(10.0), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let fill = Material::Popover.solid();
     // the arrow sits on the side facing the anchor, centred on it as far as the panel's corners allow
     let cx = (anchor.x + anchor.w / 2.0).clamp(r.x + 14.0 + aw / 2.0, (r.right() - 14.0 - aw / 2.0).max(r.x + 14.0 + aw / 2.0));
@@ -983,44 +981,44 @@ pub fn popover(s: &mut Surface, ui: &Ui, anchor: Rect, size: (f32, f32), bounds:
         Edge::Left => [(r.right() - 1.0, cy - aw / 2.0), (r.right() + ah, cy), (r.right() - 1.0, cy + aw / 2.0)],
     };
     let px: Vec<(f32, f32)> = pts.iter().map(|&(x, y)| (ui.pt(x), ui.pt(y))).collect();
-    springboard::shell::icons::polygon(s, &px, fill);
+    crate::glyphs::polygon(s, &px, fill);
     r
 }
 
 /// Draws the keyboard focus ring around a control of `bounds` and corner `radius` (points): 3 pt of accent at
 /// 45% strength outside the control (`bifrost_ui::sheet::focus_ring_rect`).
-pub fn focus_ring(s: &mut Surface, ui: &Ui, bounds: Rect, radius: f32) {
+pub fn focus_ring(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
     let (r, rad) = bifrost_ui::sheet::focus_ring_rect(bounds, radius);
     let c = crate::kit::pack(4, 59, 115, 115); // systemBlue at ~45%, premultiplied
-    s.stroke_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(rad), ui.pt(bifrost_ui::sheet::FOCUS_RING_PT), c);
+    s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(rad), ui.pt(bifrost_ui::sheet::FOCUS_RING_PT), c);
 }
 
 /// A push button of a sheet. The default button is filled with the accent and white text; others are control plates;
 /// destructive titles are red. `pressed` darkens.
-fn sheet_button(s: &mut Surface, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool) {
+fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool) {
     use bifrost_ui::sheet::ButtonRole;
     bifrost_ui::ax::record(bifrost_ui::Role::Button, &b.title, if b.role == ButtonRole::Default { "default" } else { "" }, r, true);
     let default = b.role == ButtonRole::Default;
     let fill = if default { TINT } else if pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
-    s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(6.), fill);
+    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), fill);
     if !default {
-        s.stroke_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(6.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+        s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     }
     let color = if default { WHITE } else if b.role == ButtonRole::Destructive { crate::kit::ui::DESTRUCTIVE } else { LABEL.now() };
     let img = ui.text(&ui.fit(&b.title, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
-    s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32, 255, 255);
+    blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
 }
 
 /// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel hanging from
 /// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`). Alerts draw their
 /// title and message; free-form sheets draw the title and leave the area above the buttons to the caller, who gets the
 /// content rectangle back. Return/Escape and click blocking: `bifrost_ui::sheet::Sheet::key` and `::hit`.
-pub fn sheet(s: &mut Surface, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
+pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
     use bifrost_ui::sheet::SHEET_PAD_PT;
     let l = sheet.layout(parent, titlebar_h, progress);
     bifrost_ui::ax::record(bifrost_ui::Role::Window, &sheet.title, "sheet", l.panel, true);
     let dim = (0.28 * progress.clamp(0.0, 1.0) * 255.0) as u8;
-    s.fill_rrect(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
+    s.fill_rrect(RectF::new(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h)), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
     // the top edge is square against the title bar: extend the rounded panel upward and keep it inside the parent
     let r = bifrost_ui::sheet::SHEET_RADIUS_PT;
     let top = (l.panel.y - r).max(parent.y);
@@ -1029,19 +1027,19 @@ pub fn sheet(s: &mut Surface, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bi
         return l.panel;
     }
     material(s, ui, body, r, Material::Popover);
-    s.stroke_rrect(ui.pt(body.x), ui.pt(body.y), ui.pt(body.w), ui.pt(body.h), ui.pt(r), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    s.stroke_rrect(RectF::new(ui.pt(body.x), ui.pt(body.y), ui.pt(body.w), ui.pt(body.h)), ui.pt(r), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let mut y = l.panel.y + SHEET_PAD_PT;
     let tw = ui.pt(l.panel.w - SHEET_PAD_PT * 2.0);
     let head = ui.text(&ui.fit(&sheet.title, bifrost_render::ui::MAC_HEADLINE_PT, tw), bifrost_render::ui::MAC_HEADLINE_PT, Weight::Semibold, LABEL.now());
     let cx = ui.pt(l.panel.x + l.panel.w / 2.0) as i32;
     let centred = sheet.alert;
     let hx = if centred { cx - head.w as i32 / 2 } else { ui.pt(l.panel.x + SHEET_PAD_PT) as i32 };
-    s.blit(&head, hx, ui.pt(y) as i32, 255, 255);
+    blit(s, &head, hx, ui.pt(y) as i32);
     y += 26.0;
     if sheet.alert {
         for line in sheet.message.split('\n') {
             let t = ui.text(&ui.fit(line, MAC_CALLOUT_PT, tw), MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            s.blit(&t, cx - t.w as i32 / 2, ui.pt(y) as i32, 255, 255);
+            blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
             y += 15.0;
         }
     }
@@ -1055,45 +1053,45 @@ pub fn sheet(s: &mut Surface, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bi
 /// A segmented control (`NativeSegmentedControl`): a rounded plate of `labels`, the `selected` segment on the raised
 /// segment plate, hairline dividers between unselected neighbours. Returns the segment rectangles for
 /// `bifrost_ui::sheet::segment_hit`. Draw `focus_ring` around `bounds` when it has keyboard focus.
-pub fn segmented(s: &mut Surface, ui: &Ui, bounds: Rect, labels: &[&str], selected: usize, enabled: bool) -> Vec<Rect> {
+pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], selected: usize, enabled: bool) -> Vec<Rect> {
     let segs = bifrost_ui::sheet::segments(bounds, labels.len());
     let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return segs };
     let all = Rect { x: first.x, y: first.y, w: last.right() - first.x, h: first.h };
     bifrost_ui::ax::record(bifrost_ui::Role::SegmentedControl, labels.get(selected).copied().unwrap_or(""), "", all, enabled);
-    s.fill_rrect(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h), ui.pt(7.), CAPSULE_BG.now());
-    s.stroke_rrect(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h), ui.pt(7.), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
+    s.fill_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), CAPSULE_BG.now());
+    s.stroke_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
     for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
         if i == selected {
-            s.fill_rrect(ui.pt(r.x + 2.), ui.pt(r.y + 2.), ui.pt(r.w - 4.), ui.pt(r.h - 4.), ui.pt(5.), SEGMENT_ON.now());
+            s.fill_rrect(RectF::new(ui.pt(r.x + 2.), ui.pt(r.y + 2.), ui.pt(r.w - 4.), ui.pt(r.h - 4.)), ui.pt(5.), SEGMENT_ON.now());
         } else if i > 0 && i != selected + 1 {
-            s.fill_rect(ui.pt(r.x) as usize, ui.pt(r.y + 5.) as usize, ui.pt(1.0).max(1.0) as usize, ui.pt(r.h - 10.) as usize, SEPARATOR_C.now());
+            s.fill_rect(RectF::new((ui.pt(r.x) as usize) as f32, (ui.pt(r.y + 5.) as usize) as f32, (ui.pt(1.0).max(1.0) as usize) as f32, (ui.pt(r.h - 10.) as usize) as f32), SEPARATOR_C.now());
         }
         let color = if enabled { LABEL.now() } else { LABEL_3.now() };
         let img = ui.text(&ui.fit(label, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
-        s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32, 255, 255);
+        blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
     }
     segs
 }
 
 /// A stepper (`NativeStepper`): a 13 x 22 plate with an up and a down chevron. `pressed` darkens one half.
 /// Returns its rectangle; hit-test with `bifrost_ui::sheet::stepper_hit`.
-pub fn stepper(s: &mut Surface, ui: &Ui, origin: (f32, f32), pressed: Option<bifrost_ui::sheet::StepperPart>, enabled: bool) -> Rect {
+pub fn stepper(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), pressed: Option<bifrost_ui::sheet::StepperPart>, enabled: bool) -> Rect {
     use bifrost_ui::sheet::StepperPart;
     let r = bifrost_ui::sheet::stepper_rect(origin);
     bifrost_ui::ax::record(bifrost_ui::Role::Button, "Stepper", "", r, enabled);
-    s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(5.), FIELD_BG.now());
+    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(5.), FIELD_BG.now());
     if let Some(p) = pressed {
         let hy = if p == StepperPart::Up { r.y } else { r.y + r.h / 2.0 };
-        s.fill_rrect(ui.pt(r.x), ui.pt(hy), ui.pt(r.w), ui.pt(r.h / 2.0), ui.pt(3.), CONTROL_PRESSED.now());
+        s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(hy), ui.pt(r.w), ui.pt(r.h / 2.0)), ui.pt(3.), CONTROL_PRESSED.now());
     }
-    s.stroke_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(5.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(5.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let color = if enabled { LABEL.now() } else { LABEL_3.now() };
     let row = ui.pt(1.0).max(1.0);
     let cx = ui.pt(r.x + r.w / 2.);
     for k in 0..3 {
         let half = (k as f32 + 0.5) * row;
-        s.fill_rrect(cx - half, ui.pt(r.y + 5.5) + k as f32 * row, half * 2.0, row, 0.0, color);
-        s.fill_rrect(cx - half, ui.pt(r.y + r.h - 5.5) - (k as f32 + 1.0) * row, half * 2.0, row, 0.0, color);
+        s.fill_rrect(RectF::new(cx - half, ui.pt(r.y + 5.5) + k as f32 * row, half * 2.0, row), 0.0, color);
+        s.fill_rrect(RectF::new(cx - half, ui.pt(r.y + r.h - 5.5) - (k as f32 + 1.0) * row, half * 2.0, row), 0.0, color);
     }
     r
 }
@@ -1103,11 +1101,11 @@ pub fn stepper(s: &mut Surface, ui: &Ui, origin: (f32, f32), pressed: Option<bif
 /// `selected` a neutral plate, and days in `marked` a small dot under them (days with events). Returns the layout for
 /// `hit_day`, `prev` and `next`. `month_title` is the app's localised "October 2026".
 #[allow(clippy::too_many_arguments)]
-pub fn mini_month(s: &mut Surface, ui: &Ui, bounds: Rect, year: i32, month: u32, first_weekday: u32, month_title: &str, today: Option<u32>, selected: Option<u32>, marked: &[u32]) -> bifrost_ui::calendar::MiniMonth {
+pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u32, first_weekday: u32, month_title: &str, today: Option<u32>, selected: Option<u32>, marked: &[u32]) -> bifrost_ui::calendar::MiniMonth {
     let l = bifrost_ui::calendar::MiniMonth::new(bounds, year, month, first_weekday);
     let mid = |r: &Rect, img: &crate::kit::Image| ((ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     let t = ui.text(&ui.fit(month_title, MAC_CALLOUT_PT, ui.pt(l.title.w)), MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
-    s.blit(&t, ui.pt(l.title.x + SPACE_XS) as i32, (ui.pt(l.title.y + l.title.h / 2.0) as i32) - t.h as i32 / 2, 255, 255);
+    blit(s, &t, ui.pt(l.title.x + SPACE_XS) as i32, (ui.pt(l.title.y + l.title.h / 2.0) as i32) - t.h as i32 / 2);
     for (r, name, label) in [(l.prev, "chevron.left", "Previous Month"), (l.next, "chevron.right", "Next Month")] {
         bifrost_ui::ax::record(bifrost_ui::Role::Button, label, "", r, true);
         let g = 10.0;
@@ -1117,22 +1115,22 @@ pub fn mini_month(s: &mut Surface, ui: &Ui, bounds: Rect, year: i32, month: u32,
     for (c, r) in l.weekdays.iter().enumerate() {
         let img = ui.text(INITIALS[l.weekday_of_column[c] as usize], MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
         let (x, y) = mid(r, &img);
-        s.blit(&img, x, y, 255, 255);
+        blit(s, &img, x, y);
     }
     for (d, r) in &l.days {
         let side = r.w.min(r.h) - 4.0;
         let plate = Rect { x: r.x + (r.w - side) / 2.0, y: r.y + (r.h - side) / 2.0, w: side, h: side };
         let is_today = today == Some(*d);
         if is_today {
-            s.fill_rrect(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side), ui.pt(side / 2.0), bifrost_render::ui::DESTRUCTIVE);
+            s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side)), ui.pt(side / 2.0), bifrost_render::ui::DESTRUCTIVE);
         } else if selected == Some(*d) {
-            s.fill_rrect(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side), ui.pt(side / 2.0), SIDEBAR_PLATE.now());
+            s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side)), ui.pt(side / 2.0), SIDEBAR_PLATE.now());
         }
         let img = ui.text(&d.to_string(), MAC_FOOTNOTE_PT, if is_today { Weight::Semibold } else { Weight::Regular }, if is_today { WHITE } else { LABEL.now() });
         let (x, y) = mid(r, &img);
-        s.blit(&img, x, y, 255, 255);
+        blit(s, &img, x, y);
         if marked.contains(d) && !is_today {
-            springboard::shell::icons::disc(s, ui.pt(r.x + r.w / 2.0), ui.pt(plate.bottom() - 2.0), ui.pt(1.5), LABEL_2.now());
+            crate::glyphs::disc(s, ui.pt(r.x + r.w / 2.0), ui.pt(plate.bottom() - 2.0), ui.pt(1.5), LABEL_2.now());
         }
     }
     l
@@ -1617,7 +1615,7 @@ mod gallery {
             let placed = toolbar(&mut s, &ui, Rect { x: side + 12.0, y: 0.0, w: wp - side - 24.0, h: bar }, &tb, Some(4));
             if let Some(r) = placed.rect_of(9) {
                 let t = ui.text("olibuijr", crate::kit::ui::MAC_TITLE3_PT, Weight::Bold, LABEL.now());
-                s.blit(&t, ui.pt(r.x) as i32, (ui.pt(r.y + r.h / 2.0) as i32) - t.h as i32 / 2, 255, 255);
+                blit(&mut s, &t, ui.pt(r.x) as i32, (ui.pt(r.y + r.h / 2.0) as i32) - t.h as i32 / 2);
             }
             let mut query = TextField::new();
             if let Some(r) = placed.rect_of(10) {
@@ -1626,9 +1624,9 @@ mod gallery {
             // content: controls in a column
             let x = side + 24.0;
             let mut y = bar + 16.0;
-            let row = |s: &mut Surface, label: &str, y: f32| {
+            let row = |s: &mut dyn Canvas, label: &str, y: f32| {
                 let t = ui.text(label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-                s.blit(&t, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
+                blit(s, &t, ui.pt(x) as i32, ui.pt(y) as i32);
             };
             row(&mut s, "search_field: empty, focused with text, focused with a selection", y);
             y += 18.0;
@@ -1680,5 +1678,191 @@ mod gallery {
             let png = springboard::shell::screenshot::encode(&img);
             std::fs::write(std::path::Path::new(&dir).join(format!("gallery-{name}.png")), png).unwrap();
         }
+    }
+}
+
+/// A `Canvas` that records every call, for the drawing tests of the kit (`glyphs` and `widgets`).
+#[cfg(test)]
+pub(crate) mod recorder {
+    use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, PathData, PathPaint, PathVerb, RectF, Stop, TextRun, Transform2D};
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Op {
+        Fill(RectF, f32, u32),
+        FillRect(RectF, u32),
+        Stroke(RectF, f32, f32, u32),
+        Path(Vec<PathVerb>, PathPaint, u32),
+        Image(u64, RectF, f32),
+        Tinted(u64, RectF, u32),
+        Material(RectF, f32, MaterialStyle),
+        Other(&'static str),
+    }
+
+    #[derive(Default)]
+    pub struct Rec {
+        pub ops: Vec<Op>,
+    }
+
+    impl Canvas for Rec {
+        fn size(&self) -> (u32, u32) {
+            (0, 0)
+        }
+        fn fill_rect(&mut self, r: RectF, color: u32) {
+            self.ops.push(Op::FillRect(r, color));
+        }
+        fn fill_rrect(&mut self, r: RectF, radius: f32, color: u32) {
+            self.ops.push(Op::Fill(r, radius, color));
+        }
+        fn stroke_rrect(&mut self, r: RectF, radius: f32, width: f32, color: u32) {
+            self.ops.push(Op::Stroke(r, radius, width, color));
+        }
+        fn linear_gradient(&mut self, _: RectF, _: f32, _: (f32, f32), _: (f32, f32), _: &[Stop]) {
+            self.ops.push(Op::Other("gradient"));
+        }
+        fn shadow(&mut self, _: RectF, _: f32, _: f32, _: (f32, f32), _: u32) {
+            self.ops.push(Op::Other("shadow"));
+        }
+        fn image(&mut self, img: ImageRef<'_>, dst: RectF, alpha: f32) {
+            self.ops.push(Op::Image(img.id, dst, alpha));
+        }
+        fn image_tinted(&mut self, img: ImageRef<'_>, dst: RectF, color: u32) {
+            self.ops.push(Op::Tinted(img.id, dst, color));
+        }
+        fn text(&mut self, _: &TextRun, _: u32) {
+            self.ops.push(Op::Other("text"));
+        }
+        fn path(&mut self, path: &PathData, paint: PathPaint, color: u32) {
+            self.ops.push(Op::Path(path.verbs.clone(), paint, color));
+        }
+        fn material(&mut self, r: RectF, radius: f32, style: MaterialStyle) {
+            self.ops.push(Op::Material(r, radius, style));
+        }
+        fn push_clip(&mut self, _: RectF, _: f32) {}
+        fn pop_clip(&mut self) {}
+        fn push_transform(&mut self, _: Transform2D) {}
+        fn pop_transform(&mut self) {}
+        fn push_opacity(&mut self, _: f32) {}
+        fn pop_opacity(&mut self) {}
+    }
+}
+
+#[cfg(test)]
+mod canvas_tests {
+    use super::recorder::{Op, Rec};
+    use super::*;
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(crate::kit::Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn img(w: usize, h: usize, v: u32) -> crate::kit::Image {
+        crate::kit::Image { w, h, px: vec![v; w * h] }
+    }
+
+    #[test]
+    fn the_image_id_is_stable_for_the_same_pixels_and_changes_with_them() {
+        let a = img(4, 2, 0xff00_00ff);
+        let b = img(4, 2, 0xff00_00ff);
+        assert_eq!(image_id(&a), image_id(&b));
+        assert_ne!(image_id(&a), image_id(&img(4, 2, 0xffff_0000)));
+        // the same pixels in another shape are another image
+        assert_ne!(image_id(&img(4, 2, 1)), image_id(&img(2, 4, 1)));
+    }
+
+    #[test]
+    fn blit_draws_the_whole_image_at_its_pixel_origin_at_full_alpha() {
+        let mut r = Rec::default();
+        let a = img(3, 5, 7);
+        blit(&mut r, &a, 10, -2);
+        assert_eq!(r.ops.len(), 1);
+        match &r.ops[0] {
+            Op::Image(id, dst, alpha) => {
+                assert_eq!(*id, image_id(&a));
+                assert_eq!(*dst, RectF::new(10.0, -2.0, 3.0, 5.0));
+                assert_eq!(*alpha, 1.0);
+            }
+            other => panic!("expected an image op, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_vibrant_label_is_a_tint_whose_alpha_is_the_level_strength() {
+        for level in [Vibrant::Label, Vibrant::Secondary, Vibrant::Tertiary, Vibrant::Quaternary] {
+            let mut r = Rec::default();
+            blit_vibrant(&mut r, &img(2, 2, 0xffff_ffff), 0, 0, level);
+            let want = (level.strength().clamp(0.0, 1.0) * 255.0).round() as u32;
+            match &r.ops[0] {
+                Op::Tinted(_, _, color) => assert_eq!(color >> 24, want, "{level:?}"),
+                other => panic!("expected a tinted op, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_behind_window_material_with_vibrancy_fills_its_tint_and_declares_the_region() {
+        set_vibrancy(true, true);
+        let mut r = Rec::default();
+        visual_effect(&mut r, &ui(), Rect { x: 0.0, y: 0.0, w: 40.0, h: 20.0 }, 4.0, Material::Popover, Blending::BehindWindow, State::Active);
+        set_vibrancy(false, false);
+        let declared = take_frame_materials();
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0].rect, Rect { x: 0.0, y: 0.0, w: 40.0, h: 20.0 });
+        match &r.ops[..] {
+            [Op::Fill(rect, radius, color)] => {
+                assert_eq!(*rect, RectF::new(0.0, 0.0, 40.0, 20.0));
+                assert_eq!(*radius, 4.0);
+                assert_eq!(*color, Material::Popover.tint());
+            }
+            other => panic!("expected one fill, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn without_vibrancy_a_behind_window_material_is_its_opaque_colour_and_declares_nothing() {
+        set_vibrancy(false, false);
+        let mut r = Rec::default();
+        visual_effect(&mut r, &ui(), Rect { x: 2.0, y: 3.0, w: 30.0, h: 10.0 }, 0.0, Material::Sidebar, Blending::BehindWindow, State::Inactive);
+        assert!(take_frame_materials().is_empty());
+        match &r.ops[..] {
+            [Op::Fill(rect, _, color)] => {
+                assert_eq!(*rect, RectF::new(2.0, 3.0, 30.0, 10.0));
+                assert_eq!(*color, Material::Sidebar.solid());
+            }
+            other => panic!("expected one opaque fill, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_within_window_material_is_a_canvas_material_with_the_blur_in_points_times_scale() {
+        let mut r = Rec::default();
+        let u = ui();
+        material(&mut r, &u, Rect { x: 1.0, y: 2.0, w: 50.0, h: 40.0 }, 6.0, Material::Hud);
+        match &r.ops[..] {
+            [Op::Material(rect, radius, style)] => {
+                assert_eq!(*rect, RectF::new(1.0, 2.0, 50.0, 40.0));
+                assert_eq!(*radius, 6.0);
+                assert_eq!(style.blur, Material::Hud.blur_pt());
+                assert_eq!(style.tint, Material::Hud.tint());
+                assert_eq!(style.saturation, 1.0);
+            }
+            other => panic!("expected one material op, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_toolbar_band_draws_its_separator_as_a_one_pixel_rectangle_at_the_bottom() {
+        let mut r = Rec::default();
+        toolbar_band(&mut r, &ui(), Rect { x: 0.0, y: 0.0, w: 100.0, h: 40.0 });
+        let last = r.ops.last().expect("a separator");
+        match last {
+            Op::FillRect(rect, _) => {
+                assert_eq!(rect.h, 1.0);
+                assert_eq!(rect.y, 39.0);
+                assert_eq!(rect.w, 100.0);
+            }
+            other => panic!("expected the separator, got {other:?}"),
+        }
+        assert!(matches!(r.ops[0], Op::FillRect(..) | Op::Material(..)));
     }
 }
