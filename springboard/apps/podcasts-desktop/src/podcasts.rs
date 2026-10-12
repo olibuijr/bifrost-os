@@ -7,7 +7,11 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
+use crate::media::{self, Bar, Shown};
 use crate::transport;
+use bifrost_app::Ctx;
+use bifrost_app::dock_tile;
+use bifrost_app::now_playing::{self, Command};
 use bifrost_app::audio::{self, Track};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -146,6 +150,13 @@ pub struct Podcasts {
     dirty: bool,
     cache: TextCache,
     cache_style: (u32, u32, bool),
+    /// the Now Playing session last sent, and the Dock bar last sent (`sync_services` sends only what changed)
+    published: Option<Shown>,
+    dock: Bar,
+    /// service calls waiting for their reply (replies are only consumed, never retried)
+    calls: Vec<u32>,
+    /// an episode finished downloading: the Dock tile bounces once, if the app is not in front
+    bounce_ready: bool,
 }
 
 impl Podcasts {
@@ -192,6 +203,10 @@ impl Podcasts {
             dirty: true,
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
+            published: None,
+            dock: Bar::Off,
+            calls: Vec::new(),
+            bounce_ready: false,
         }
     }
 
@@ -201,6 +216,93 @@ impl Podcasts {
             self.set_resume(&url, Some(self.position_ms as u64).filter(|&ms| ms >= 5_000));
         }
         self.audio.pump();
+    }
+
+    // system services ---------------------------------------------------
+
+    /// Keeps the Control Center tile and the Dock bar in step with the app. Each service is called only when what it
+    /// shows changes (never per frame); a finished download asks the Dock tile to bounce once.
+    pub fn sync_services(&mut self, ctx: &Ctx) {
+        let found = self.playing.as_deref().and_then(|url| {
+            self.shows.iter().find_map(|s| s.episodes.iter().find(|e| e.url == url).map(|e| (url, e.title.as_str(), s.title.as_str())))
+        });
+        let want = media::shown(found, self.started, self.paused, self.duration_ms);
+        if want != self.published {
+            match &want {
+                Some(shown) => {
+                    if let Some(id) = media::publish(ctx, shown, self.position_ms) {
+                        self.note_call(id);
+                    }
+                }
+                None => {
+                    if self.published.is_some() {
+                        let id = now_playing::clear(ctx);
+                        self.note_call(id);
+                    }
+                }
+            }
+            self.published = want;
+        }
+        let bar = media::dock_bar(self.downloading.is_some(), self.progress);
+        if bar != self.dock {
+            let id = media::send_bar(ctx, bar);
+            self.note_call(id);
+            self.dock = bar;
+        }
+        if std::mem::take(&mut self.bounce_ready) {
+            let id = dock_tile::bounce(ctx, false);
+            self.note_call(id);
+        }
+    }
+
+    /// A transport command from the Control Center tile. Only an episode the audio service has confirmed is acted on;
+    /// the tile is published again by `sync_services` when the playback state changes.
+    pub fn remote(&mut self, command: Command) {
+        if self.playing.is_none() || !self.started {
+            return;
+        }
+        match command {
+            Command::Play => {
+                if self.paused {
+                    self.audio.play();
+                    self.paused = false;
+                }
+            }
+            Command::Pause => {
+                if !self.paused {
+                    self.audio.pause();
+                    self.paused = true;
+                }
+            }
+            Command::Toggle => {
+                self.audio.toggle();
+                self.paused = !self.paused;
+            }
+            Command::Stop => self.stop_playback(),
+            Command::SkipForward => self.skip(false, transport::PLAYER_SKIP_S),
+            Command::SkipBackward => self.skip(true, transport::PLAYER_SKIP_S),
+            Command::Seek(ms) => self.seek_to(ms),
+            Command::Next | Command::Previous => {}
+        }
+        self.dirty = true;
+    }
+
+    /// Consumes the reply to one of this app's service calls. False for any other request.
+    pub fn service_reply(&mut self, request: u32) -> bool {
+        match self.calls.iter().position(|&id| id == request) {
+            Some(i) => {
+                self.calls.remove(i);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn note_call(&mut self, id: u32) {
+        self.calls.push(id);
+        if self.calls.len() > 32 {
+            self.calls.remove(0);
+        }
     }
 
     // network -----------------------------------------------------------
@@ -279,7 +381,10 @@ impl Podcasts {
                         self.progress = None;
                     }
                     match r {
-                        Ok(path) => self.play_file(&url, path),
+                        Ok(path) => {
+                            self.bounce_ready = true;
+                            self.play_file(&url, path);
+                        }
                         Err(e) => self.error = format!("Cannot download: {e}"),
                     }
                 }

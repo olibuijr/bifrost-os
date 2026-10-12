@@ -8,6 +8,11 @@
   still plays at normal speed until the audio service takes a rate.
 - Keyboard transport: Space plays or pauses, and the Left and Right arrows skip back and forward 30 seconds, when no
   text field has focus.
+- Control Center's Now Playing tile shows the episode's title, its show and its length while an episode plays or is
+  paused. Its taps (play or pause, stop, skip back and forward, and seek) reach Podcasts. The tile is updated when playback
+  starts, pauses, resumes or ends, not every second.
+- The Dock icon shows a bar while an episode downloads: a sweep until the size is known, then the percent done. When a
+  download finishes while Podcasts is in the background, the icon bounces once.
 
 ## 1.3.3 — 2026-10-11
 
