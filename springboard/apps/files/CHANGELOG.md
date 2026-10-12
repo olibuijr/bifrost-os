@@ -1,3 +1,9 @@
+## 1.22.0 — 2026-10-12
+
+- Smart Folders: saved searches in a Smart Folders section of the sidebar. Each names a scope folder and filters it by words in the name (every word, ignoring case), item type (the same types as the search filter), a colour tag and an age in days. A smart folder lists its matches sorted by name (up to 1000), is read-only like Tags, and shows its name in the path bar and title.
+- Saved searches are read from `.smart-folders` at home (one per line, tab-separated). Creating one from the app is not available yet; the file is the way to add one for now.
+- Not yet: tabs, sidebar customisation (hide and reorder rows), and a sheet to create or edit a smart folder.
+
 ## 1.21.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

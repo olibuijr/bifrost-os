@@ -58,6 +58,17 @@ impl Files {
             (Some("Locations"), locations),
             (Some("Tags"), tags),
         ]
+        .into_iter()
+        .chain(self.smart_section())
+        .collect()
+    }
+    /// The Smart Folders section: one row per saved search, none when there are none.
+    pub(crate) fn smart_section(&self) -> Vec<(Option<&'static str>, Vec<Place>)> {
+        if self.smart.is_empty() {
+            return vec![];
+        }
+        let rows = self.smart.iter().enumerate().map(|(i, f)| Place { label: f.name.clone(), symbol: "magnifyingglass", dot: None, path: smart::smart_path(i) }).collect();
+        vec![(Some("Smart Folders"), rows)]
     }
     /// Every sidebar row in order; row `i` has id `100 + i`.
     pub(crate) fn places(&self) -> Vec<Place> {
