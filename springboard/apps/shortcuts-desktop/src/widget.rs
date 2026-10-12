@@ -4,6 +4,7 @@
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
+use crate::automation;
 use crate::model;
 use bifrost_app::kit::ui::{
     Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, CONTENT_BG, LABEL, LABEL_2, LABEL_3, LINK,
@@ -63,6 +64,8 @@ enum Target {
     Inc(usize),
     AddAction,
     Pick(usize),
+    /// An intent in the Intents section of the action library: runs it on the shortcut in front.
+    Intent(usize),
     Color(usize),
     Delete,
     /// The "Daily Reminder" row of the open shortcut: steps to the next time.
@@ -81,6 +84,8 @@ enum Look {
     Minus,
     Stepper(bool),
     Swatch { color: u32, on: bool },
+    /// A footer under a catalog row: the intent's description.
+    Note(String),
 }
 
 struct Cell {
@@ -110,6 +115,8 @@ pub struct Shortcuts {
     login: Option<Status>,
     /// the toggle the last tap asked for: `Some(true)` to open at login, `Some(false)` to stop
     login_request: Option<bool>,
+    /// the intents the last taps asked to run, oldest first
+    intent_requests: Vec<String>,
 }
 
 const ROW_POS_FIRST: u8 = 1;
@@ -140,6 +147,7 @@ impl Shortcuts {
             cache: TextCache::default(),
             login: None,
             login_request: None,
+            intent_requests: Vec::new(),
         }
     }
 
@@ -191,6 +199,17 @@ impl Shortcuts {
     /// The actions the last tap asked the shell to run, oldest first.
     pub fn take_runs(&mut self) -> Vec<Action> {
         std::mem::take(&mut self.runs)
+    }
+
+    /// The ids of the intents the last taps asked to run from the action library, oldest first.
+    pub fn take_intent_requests(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.intent_requests)
+    }
+
+    /// Shows the outcome of an intent run from the action library: its dialog, or why it did not run.
+    pub fn show_result(&mut self, text: &str, t: f64) {
+        self.toast = Some((text.to_string(), t + 3000.0));
+        self.dirty = true;
     }
 
     /// The Login Items status the shell reported, or `None` when it has not answered.
@@ -402,6 +421,16 @@ impl Shortcuts {
                         *chevron = true;
                     }
                 }
+                // the intents this app declares, with the title and description from the catalog
+                y += ui.pt(SPACE_L);
+                cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Intents".into()) });
+                y += ui.pt(SPACE_XXXL);
+                for (k, intent) in automation::declared().iter().enumerate() {
+                    self.row(ui, &mut cells, &mut y, &intent.title, "", LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Intent(k)));
+                    let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+                    cells.push(Cell { target: None, rect: note, look: Look::Note(intent.description.clone()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
             }
         }
         (cells, y + self.scroll)
@@ -514,6 +543,11 @@ impl Shortcuts {
                 if let Some(s) = self.editing() {
                     s.color = c;
                     self.save();
+                }
+            }
+            Target::Intent(k) => {
+                if let Some(intent) = automation::declared().get(k) {
+                    self.intent_requests.push(intent.id.clone());
                 }
             }
             Target::Schedule => {
@@ -658,7 +692,7 @@ impl Shortcuts {
                     if *centre {
                         self.put(s, ui, text, MAC_BODY_PT, Weight::Regular, *tint, x + cw / 2.0, y, ch, 1);
                     } else {
-                        let tx = if text == "Add Action" || *chevron || matches!(c.target, Some(Target::Pick(_))) { x + ui.pt(SPACE_L) } else { x + ui.pt(46.0) };
+                        let tx = if text == "Add Action" || *chevron || matches!(c.target, Some(Target::Pick(_)) | Some(Target::Intent(_))) { x + ui.pt(SPACE_L) } else { x + ui.pt(46.0) };
                         self.put(s, ui, text, MAC_BODY_PT, Weight::Regular, *tint, tx, y, ch, 0);
                     }
                     if !value.is_empty() {
@@ -677,6 +711,10 @@ impl Shortcuts {
                 Look::Stepper(up) => {
                     let col = if pressed { LABEL_2.now() } else { LINK };
                     self.put(s, ui, if *up { "+" } else { "\u{2212}" }, MAC_TITLE1_PT, Weight::Regular, col, x + cw / 2.0, y, ch, 1);
+                }
+                Look::Note(text) => {
+                    let fitted = ui.fit(text, MAC_FOOTNOTE_PT, cw);
+                    self.put(s, ui, &fitted, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y, ch, 0);
                 }
                 Look::Swatch { color, on } => {
                     if *on {

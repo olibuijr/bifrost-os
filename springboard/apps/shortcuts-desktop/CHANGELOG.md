@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 — 2026-10-12
+
+- The Add Action list has an Intents section. It lists the actions other apps can ask Shortcuts to do, each with its name and a one-line description.
+- Tapping an intent in that list runs it on the shortcut you are editing. Its result shows at the bottom of the window: the steps for "Plan Shortcut", or the reason for "Run Shortcut" (this device cannot run shortcut actions yet).
+- Nothing else changes; the grid, the editor and the scripting and control socket behave as before.
+
 ## 1.4.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.
