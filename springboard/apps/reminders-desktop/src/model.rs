@@ -54,6 +54,78 @@ impl Reminder {
             early: None,
         }
     }
+
+    /// The `#tags` of the title and the notes, each once, in order.
+    pub fn tags(&self) -> Vec<String> {
+        let mut out = tags_in(&self.title);
+        for t in tags_in(&self.notes) {
+            if out.iter().all(|o| tag_key(o) != tag_key(&t)) {
+                out.push(t);
+            }
+        }
+        out
+    }
+}
+
+/// A tag key: the FNV-1a hash of the lowercase tag. A `View::Tag` holds it, so the view stays `Copy` and the key
+/// does not change when the tag list does.
+pub fn tag_key(tag: &str) -> u64 {
+    tag.to_lowercase()
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3))
+}
+
+/// The `#tags` in `text`, in order, each once. Matching ignores case and the first spelling is kept. A tag is a `#`
+/// at the start or after a space or punctuation (so `C#` is not one), then a letter, then letters, digits, `_` or
+/// `-` (a trailing `-` is left out).
+pub fn tags_in(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<String> = vec![];
+    for i in 0..chars.len() {
+        if chars[i] != '#' {
+            continue;
+        }
+        if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '#' || chars[i - 1] == '&') {
+            continue;
+        }
+        if !chars.get(i + 1).is_some_and(|c| c.is_alphabetic()) {
+            continue;
+        }
+        let word: String = chars[i + 1..].iter().take_while(|c| c.is_alphanumeric() || **c == '_' || **c == '-').collect();
+        let word = word.trim_end_matches('-').to_string();
+        if out.iter().all(|t| tag_key(t) != tag_key(&word)) {
+            out.push(word);
+        }
+    }
+    out
+}
+
+/// Every tag the reminders carry, sorted by name without case, with the number of open reminders that carry it.
+/// A tag used only by completed reminders is listed with 0.
+pub fn tag_counts(items: &[Reminder]) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = vec![];
+    for r in items {
+        for t in r.tags() {
+            let key = tag_key(&t);
+            let pos = match out.iter().position(|(name, _)| tag_key(name) == key) {
+                Some(p) => p,
+                None => {
+                    out.push((t, 0));
+                    out.len() - 1
+                }
+            };
+            if !r.completed {
+                out[pos].1 += 1;
+            }
+        }
+    }
+    out.sort_by_cached_key(|(name, _)| name.to_lowercase());
+    out
+}
+
+/// The name (first spelling) of the tag with `key`, when any reminder carries it.
+pub fn tag_name(items: &[Reminder], key: u64) -> Option<String> {
+    tag_counts(items).into_iter().find(|(name, _)| tag_key(name) == key).map(|(name, _)| name)
 }
 
 /// The fields a smart list's predicate reads (`fetch::Record`): completion, the flag, whether a day is set and the day.
@@ -173,6 +245,8 @@ impl Smart {
 pub enum View {
     Smart(Smart),
     List(u64),
+    /// Every reminder carrying the tag with this key (`tag_key`).
+    Tag(u64),
 }
 
 pub fn list_count(items: &[Reminder], list: u64) -> usize {
@@ -308,6 +382,7 @@ pub fn visible(
             View::Smart(Smart::Completed) => r.completed,
             View::Smart(s) => s.matches(r, today) || (opts.show_completed && r.completed && s == Smart::All),
             View::List(l) => r.list == l && (opts.show_completed || !r.completed),
+            View::Tag(key) => r.tags().iter().any(|t| tag_key(t) == key) && (opts.show_completed || !r.completed),
         }
     };
     let nested = !searching && matches!(view, View::List(_));
@@ -669,6 +744,40 @@ mod tests {
         assert_eq!(Smart::All.count(&items, TODAY), 3);
         assert_eq!(Smart::Completed.count(&items, TODAY), 1);
         assert_eq!(list_count(&items, DEFAULT_LIST), 3);
+    }
+    #[test]
+    fn tags_are_hashtags_in_title_and_notes() {
+        assert_eq!(tags_in("Buy #Milk, #milk and #Bread-1 #2024 C#sharp # x"), vec!["Milk", "Bread-1"]);
+        assert_eq!(tags_in("##a"), Vec::<String>::new(), "a tag starts with a letter after one #");
+        assert_eq!(tags_in("#work-"), vec!["work"], "a trailing hyphen is not part of the tag");
+        let mut call = r(1, "Call #mom");
+        call.notes = "#mom and #Family".into();
+        assert_eq!(call.tags(), vec!["mom", "Family"]);
+        assert_ne!(tag_key("Home"), tag_key("Work"));
+        assert_eq!(tag_key("HOME"), tag_key("home"));
+    }
+    #[test]
+    fn tag_counts_count_open_reminders_and_sort_by_name() {
+        let mut done = r(2, "#home #work");
+        done.completed = true;
+        let items = vec![r(1, "#Home chores"), done, r(3, "Work #Work")];
+        assert_eq!(tag_counts(&items), vec![("Home".to_string(), 1), ("work".to_string(), 1)]);
+        assert_eq!(tag_name(&items, tag_key("WORK")), Some("work".to_string()));
+        assert_eq!(tag_name(&items, tag_key("gym")), None);
+    }
+    #[test]
+    fn tag_view_lists_the_reminders_with_that_tag() {
+        let mut done = r(2, "#home done");
+        done.completed = true;
+        let items = vec![r(1, "#Home"), done, r(3, "no tag")];
+        let d = data(items.clone());
+        let none = HashSet::new();
+        let key = tag_key("home");
+        let rows = visible(&d, View::Tag(key), Options::default(), TODAY, "", &none);
+        assert_eq!(ids(&rows, &items), vec![(1, 0)], "completed ones are hidden as in a list");
+        let opts = Options { show_completed: true, ..Options::default() };
+        let rows = visible(&d, View::Tag(key), opts, TODAY, "", &none);
+        assert_eq!(ids(&rows, &items), vec![(1, 0), (2, 0)]);
     }
     #[test]
     fn list_view_nests_subtasks_and_collapses() {
