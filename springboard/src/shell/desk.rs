@@ -672,7 +672,6 @@ impl Shell {
                     _ => {}
                 }
             }
-            let (ww, wh) = (w.r.w as f32, w.r.h as f32);
             let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active)| {
                 expand_material((x, y, rw, rh, r, kind, active), (w.r.w as f32, w.r.h as f32), w.maximized, corner)
             }).collect();
