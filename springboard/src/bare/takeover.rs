@@ -118,7 +118,7 @@ extern "C" {
 fn watch_term(dir: &str) {
     const SIGTERM: i32 = 15;
     // SAFETY: the handler only stores an atomic flag, which is async-signal-safe.
-    unsafe { signal(SIGTERM, on_term as usize) };
+    unsafe { signal(SIGTERM, on_term as *const () as usize) };
     let dir = dir.to_string();
     crate::bare::sys::spawn_named("term-watch", move || loop {
         std::thread::sleep(Duration::from_millis(100));
