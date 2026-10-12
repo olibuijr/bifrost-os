@@ -27,7 +27,7 @@ use springboard::shell::clock::Wall;
 
 use springboard::shell::ui::{
     Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, TINT, WHITE,
-    WINDOW_FRAME_FOCUSED,
+    CONTENT_BG,
 };
 use std::{
     collections::BTreeSet,

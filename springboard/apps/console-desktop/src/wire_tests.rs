@@ -80,6 +80,9 @@ fn show_only_this_subsystem_does_nothing_for_a_message_without_one() {
 fn the_security_events_view_lists_every_event_and_the_search_filters_by_category() {
     let mut c = Console::new(1200.0, 780.0, Vec::new());
     c.open_view(View::Security);
+    assert_eq!(c.visible.len(), 5, "Info is off by default, so only the five Authorize rows show");
+    c.levels.info = true;
+    c.rebuild();
     assert_eq!(c.visible.len(), 13, "one row per valid (kind, phase) pair");
     assert_eq!(c.footer_text(), "13 messages");
     assert_eq!(c.status, crate::security::NOTE);

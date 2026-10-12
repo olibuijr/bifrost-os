@@ -47,6 +47,8 @@ pub const DOCK_TINT: Pair = Pair::new(crate::gfx::pack(15, 15, 17, 150), crate::
 pub const SIDEBAR_BG: Pair = Pair::new(pack(20, 20, 22, 255), pack(235, 235, 235, 255));
 /// The detail pane behind the cards.
 pub const DETAIL_BG: Pair = Pair::new(pack(0, 0, 0, 255), pack(255, 255, 255, 255));
+/// A content view in a window (file lists and grids): white in Light, the dark content grey in Dark, never pure black.
+pub const CONTENT_BG: Pair = Pair::new(pack(30, 30, 30, 255), pack(255, 255, 255, 255));
 /// A grouped card (secondarySystemGroupedBackground).
 pub const CARD_BG: Pair = Pair::new(pack(28, 28, 30, 255), pack(247, 247, 247, 255));
 /// Hairline between rows.

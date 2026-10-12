@@ -31,6 +31,14 @@ pub fn change_event(last: &mut Option<bool>, now: bool) -> Option<Event> {
     }
 }
 
+/// The current Dim Flashing Lights flag: the open Settings window's copy when there is one, else the saved pref.
+fn dim_flashing_lights(shell: &Shell) -> bool {
+    shell.settings.as_ref().map_or_else(
+        || crate::shell::accessibility::AccessibilitySettings::load(&shell.prefs).dim_flashing_lights,
+        |st| st.accessibility().dim_flashing_lights,
+    )
+}
+
 impl SystemService for AccessibilityDisplay {
     fn name(&self) -> &'static str {
         SERVICE
@@ -38,13 +46,13 @@ impl SystemService for AccessibilityDisplay {
 
     fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, _params: &Json, _t: f64) -> Result<Json, String> {
         match method {
-            METHOD_GET => Ok(Json::Bool(shell.accessibility().dim_flashing_lights)),
+            METHOD_GET => Ok(Json::Bool(dim_flashing_lights(shell))),
             _ => Err(format!("accessibility_display has no method {method}")),
         }
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
-        let now = shell.accessibility().dim_flashing_lights;
+        let now = dim_flashing_lights(shell);
         change_event(&mut self.last, now).into_iter().collect()
     }
 }

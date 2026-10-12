@@ -1749,7 +1749,7 @@ impl Contacts {
         let value = ui.fit(value, MAC_BODY_PT, room);
         let end = r.x + r.w - SPACE_L;
         let width = ui.measure(&value, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
-        self.text(s, ui, &value, MAC_BODY_PT, Weight::Regular, LINK.now(), end - width, r.y + r.h / 2.0);
+        self.text(s, ui, &value, MAC_BODY_PT, Weight::Regular, LINK, end - width, r.y + r.h / 2.0);
         let note = "Applies to the contact list. Keep Order lists contacts as they were added.";
         let note = ui.fit(note, MAC_FOOTNOTE_PT, ui.pt(cw));
         self.centre_text(s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, r.y + r.h + SPACE_M);

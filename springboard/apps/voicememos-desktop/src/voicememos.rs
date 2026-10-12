@@ -1391,7 +1391,7 @@ impl VoiceMemos {
         let y_of = |line: usize| oy + ui.pt(line as f32 * NOTES_LINE_PT - scroll);
         for h in &highlights {
             let (x0, w) = (ox + ui.pt(h.x0), ui.pt(h.x1 - h.x0).max(0.0));
-            s.fill_rect(x0.max(0.0) as usize, y_of(h.line).max(0.0) as usize, w as usize, lh as usize, SELECTION.now());
+            s.fill_rect(x0.max(0.0) as usize, y_of(h.line).max(0.0) as usize, w as usize, lh as usize, bifrost_app::kit::ui::SELECTION.now());
         }
         for (line, row) in &rows {
             if !row.is_empty() {

@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-assistant"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-console"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-contacts"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.17.2"
+version = "1.18.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -366,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-games"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-shortcuts"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -482,7 +482,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.2.3"
+version = "1.3.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
