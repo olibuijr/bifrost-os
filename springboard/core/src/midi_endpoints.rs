@@ -203,6 +203,46 @@ impl Registry {
         true
     }
 
+    /// Removes an entity with its endpoints and every connection to those endpoints. The owning device keeps its other
+    /// entities. Returns `false` for an unknown entity.
+    pub fn remove_entity(&mut self, id: ObjectId) -> bool {
+        let entity = match self.entities.remove(&id) {
+            Some(e) => e,
+            None => return false,
+        };
+        if let Some(d) = self.devices.get_mut(&entity.device) {
+            d.entities.retain(|&e| e != id);
+        }
+        for endpoint in entity.sources.iter().chain(entity.destinations.iter()) {
+            self.endpoints.remove(endpoint);
+        }
+        self.connections.retain(|&(_, source)| !entity.sources.contains(&source));
+        true
+    }
+
+    /// Removes a device with all its entities, as the system does when a driver removes the device. Returns `false`
+    /// for an unknown device.
+    pub fn remove_device(&mut self, id: ObjectId) -> bool {
+        let device = match self.devices.remove(&id) {
+            Some(d) => d,
+            None => return false,
+        };
+        for entity in device.entities {
+            self.remove_entity(entity);
+        }
+        true
+    }
+
+    /// Removes an external device, as unplugging it does. Returns `false` when the device is unknown or built in.
+    pub fn remove_external_device(&mut self, id: ObjectId) -> bool {
+        let external = self.devices.get(&id).map_or(false, |d| d.external);
+        if external {
+            self.remove_device(id)
+        } else {
+            false
+        }
+    }
+
     pub fn device(&self, id: ObjectId) -> Option<&Device> {
         self.devices.get(&id)
     }
@@ -402,5 +442,68 @@ mod tests {
         assert!(r.dispose_endpoint(v));
         assert!(!r.dispose_endpoint(v));
         assert!(!r.set_ref_con(v, 1));
+    }
+
+    #[test]
+    fn removing_a_device_removes_its_entities_endpoints_and_connections() {
+        let mut r = Registry::new();
+        let app = r.create_client("app");
+        let dev = r.add_device("keys", true);
+        let ent = r.add_entity(dev, "ch 1").unwrap();
+        let src = r.add_endpoint(ent, Direction::Source, "out").unwrap();
+        let other = r.add_device("pad", true);
+        let pad_ent = r.add_entity(other, "ch 1").unwrap();
+        let pad = r.add_endpoint(pad_ent, Direction::Source, "out").unwrap();
+        assert!(r.connect_source(app, src));
+        assert!(r.connect_source(app, pad));
+        assert!(r.remove_device(dev));
+        assert!(r.device(dev).is_none());
+        assert!(r.entity(ent).is_none());
+        assert!(r.endpoint(src).is_none());
+        assert!(!r.is_connected(app, src));
+        assert_eq!(r.sources_for(app), vec![pad]);
+        assert_eq!(r.number_of_devices(), 1);
+        assert!(!r.remove_device(dev));
+    }
+
+    #[test]
+    fn removing_one_entity_keeps_the_device_and_its_other_entities() {
+        let mut r = Registry::new();
+        let dev = r.add_device("bank", true);
+        let a = r.add_entity(dev, "a").unwrap();
+        let b = r.add_entity(dev, "b").unwrap();
+        let ep = r.add_endpoint(b, Direction::Destination, "in").unwrap();
+        assert!(r.remove_entity(a));
+        assert_eq!(r.device(dev).unwrap().entities, vec![b]);
+        assert!(r.endpoint(ep).is_some());
+        assert!(r.remove_entity(b));
+        assert!(r.endpoint(ep).is_none());
+        assert_eq!(r.device(dev).unwrap().entities, Vec::<ObjectId>::new());
+        assert!(!r.remove_entity(b));
+    }
+
+    #[test]
+    fn only_an_external_device_can_be_removed_as_unplugged() {
+        let mut r = Registry::new();
+        let built_in = r.add_device("internal", false);
+        let plugged = r.add_device("usb", true);
+        assert!(!r.remove_external_device(built_in));
+        assert_eq!(r.number_of_external_devices(), 1);
+        assert!(r.remove_external_device(plugged));
+        assert_eq!(r.number_of_external_devices(), 0);
+        assert_eq!(r.number_of_devices(), 1);
+        assert!(r.device(built_in).is_some());
+        assert!(!r.remove_external_device(plugged));
+    }
+
+    #[test]
+    fn identifiers_are_not_reused_after_a_removal() {
+        let mut r = Registry::new();
+        let dev = r.add_device("usb", true);
+        assert!(r.remove_device(dev));
+        let next = r.add_device("usb again", true);
+        assert_eq!(dev, ObjectId(1));
+        assert_eq!(next, ObjectId(2));
+        assert_eq!(r.external_device_at(0), Some(next));
     }
 }
