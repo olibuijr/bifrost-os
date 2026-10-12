@@ -3,13 +3,14 @@
 use crate::ffi::*;
 use crate::ring::{Fmt, PcmRing};
 use bifrost_audio_hal::{Device, IoProcConfig, IoProcId, Role, System};
-use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue};
+use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue, Scope};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 const EIO: c_int = 5;
+const EAGAIN: c_int = 11;
 const ENOMEM: c_int = 12;
 const EACCES: c_int = 13;
 const EBUSY: c_int = 16;
@@ -17,6 +18,9 @@ const ENODEV: c_int = 19;
 const EINVAL: c_int = 22;
 const POLLIN: u16 = 1;
 const POLLOUT: u16 = 4;
+const POLLERR: u16 = 8;
+const POLLHUP: u16 = 16;
+const POLLNVAL: u16 = 32;
 
 /// Unified Logging, subsystem `is.olibuijr.audio` (the plug-in lives in third-party processes, so it writes the
 /// category-prefixed line to stderr).
@@ -179,11 +183,98 @@ pub unsafe fn read_to_areas(ring: &PcmRing, fmt: Fmt, areas: *const ChannelArea,
     size
 }
 
-/// True when the ring lets the application make progress by one period.
-pub fn poll_ready(dir: Dir, ring: &PcmRing, period: u32) -> bool {
+/// True when the ring lets the application make progress by `threshold` frames (see `ready_threshold`).
+pub fn poll_ready(dir: Dir, ring: &PcmRing, threshold: u32) -> bool {
     match dir {
-        Dir::Playback => ring.writable() >= period,
-        Dir::Capture => ring.fill() >= period,
+        Dir::Playback => ring.writable() >= threshold,
+        Dir::Capture => ring.fill() >= threshold,
+    }
+}
+
+/// The frames that make the PCM ready for the application: the sw_params `avail_min` when one was set, else one
+/// period, kept within 1 and the ring size so a too-large value can never block forever.
+pub fn ready_threshold(avail_min: u32, period: u32, ring_frames: u32) -> u32 {
+    let want = if avail_min > 0 { avail_min } else { period };
+    want.clamp(1, ring_frames.max(1))
+}
+
+/// What `poll_revents` reports. The poll descriptor is the eventfd the IO side signals (polled for POLLIN, which
+/// is when the eventfd is readable); alsa-lib wants POLLOUT for a ready playback stream and POLLIN for a ready
+/// capture stream, and POLLERR when the descriptor itself failed.
+pub fn poll_mask(dir: Dir, ready: bool, fd_revents: u16) -> u16 {
+    if fd_revents & (POLLERR | POLLHUP | POLLNVAL) != 0 {
+        return POLLERR;
+    }
+    match (ready, dir) {
+        (false, _) => 0,
+        (true, Dir::Playback) => POLLOUT,
+        (true, Dir::Capture) => POLLIN,
+    }
+}
+
+/// What one look at the queue during `drain` decides.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DrainStep {
+    /// Nothing left to wait for: capture, an empty queue, or a stream that is not running (paused or stopped),
+    /// whose queued frames would never play.
+    Done,
+    /// Frames are still playing and the PCM is non-blocking: `-EAGAIN`, alsa-lib calls drain again.
+    Again,
+    /// Frames are still playing: wait for the IO procedure.
+    Wait,
+}
+
+pub fn drain_step(dir: Dir, running: bool, fill: u32, nonblock: bool) -> DrainStep {
+    if dir == Dir::Capture || fill == 0 || !running {
+        DrainStep::Done
+    } else if nonblock {
+        DrainStep::Again
+    } else {
+        DrainStep::Wait
+    }
+}
+
+/// Bounds a blocking drain: the whole budget (`drain_budget_ms`) and a stall limit, the longest the IO procedure
+/// may go without consuming a frame before drain stops waiting for it (the server stopped calling it).
+pub struct DrainWatch {
+    budget_ms: u64,
+    stall_ms: u64,
+    waited_ms: u64,
+    idle_ms: u64,
+    last: u64,
+}
+
+impl DrainWatch {
+    pub fn new(budget_ms: u64, stall_ms: u64, consumed: u64) -> DrainWatch {
+        DrainWatch { budget_ms, stall_ms, waited_ms: 0, idle_ms: 0, last: consumed }
+    }
+
+    /// One millisecond passed and the consumer stands at `consumed`. False when drain should stop waiting.
+    pub fn tick(&mut self, consumed: u64) -> bool {
+        self.waited_ms += 1;
+        if consumed != self.last {
+            self.last = consumed;
+            self.idle_ms = 0;
+        } else {
+            self.idle_ms += 1;
+        }
+        self.waited_ms < self.budget_ms && self.idle_ms < self.stall_ms
+    }
+}
+
+/// The stall limit for `DrainWatch`: two periods of `period` frames at `rate`, plus 100 ms of scheduling slack.
+pub fn drain_stall_ms(period: u32, rate: u32) -> u64 {
+    2 * period as u64 * 1000 / rate.max(1) as u64 + 100
+}
+
+/// What `pause` does with the IO procedure: `Some(false)` stops it (pause), `Some(true)` starts it again (resume),
+/// `None` when it already is in the wanted state. Neither touches the ring, so a resume continues at the same ring
+/// position and `pointer` stays continuous across the pause.
+pub fn pause_action(running: bool, enable: bool) -> Option<bool> {
+    match (enable, running) {
+        (true, true) => Some(false),
+        (false, false) => Some(true),
+        _ => None,
     }
 }
 
@@ -209,6 +300,15 @@ struct Bf {
     shared: Option<Arc<Shared>>,
     proc_id: Option<IoProcId>,
     waker: Option<std::thread::JoinHandle<()>>,
+    /// True while the IO procedure runs (after start or resume, until stop, pause or teardown). Atomic because
+    /// alsa-lib releases the PCM lock around `drain`, so another thread may pause while drain reads it.
+    running: AtomicBool,
+    /// The sw_params `avail_min` (0 until sw_params ran), the poll readiness threshold.
+    avail_min: u32,
+    /// What the plug-in offered alsa-lib at open; hw_params checks the result against it.
+    offer: Offer,
+    /// The PERIOD_BYTES list handed to alsa-lib, kept alive with the PCM.
+    period_bytes: Vec<c_uint>,
 }
 
 /// # Safety
@@ -219,6 +319,7 @@ unsafe fn bf<'a>(io: *mut Ioplug) -> &'a mut Bf {
 
 impl Bf {
     fn teardown(&mut self) {
+        self.running.store(false, Ordering::Release);
         if let Some(id) = self.proc_id.take() {
             let _ = self.device.stop(id);
             let _ = self.device.remove_io_proc(id);
@@ -238,6 +339,7 @@ unsafe fn cb_start_impl(io: *mut Ioplug) -> c_int {
     let (Some(id), Some(sh)) = (b.proc_id, b.shared.as_ref()) else { return -EINVAL };
     match b.device.start(id) {
         Ok(()) => {
+            b.running.store(true, Ordering::Release);
             sh.kick_eventfd();
             0
         }
@@ -250,15 +352,17 @@ unsafe fn cb_start_impl(io: *mut Ioplug) -> c_int {
 
 unsafe fn cb_stop_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
-    if let Some(id) = b.proc_id {
-        if let Err(e) = b.device.stop(id) {
-            return errno_of(e);
-        }
-    }
+    // The HAL ends the IO thread even when the server's reply fails, so the stream is stopped either way.
+    b.running.store(false, Ordering::Release);
+    let r = match b.proc_id {
+        Some(id) => b.device.stop(id).map_or_else(errno_of, |()| 0),
+        None => 0,
+    };
+    // Wake a poller so it sees the new state.
     if let Some(sh) = b.shared.as_ref() {
         sh.kick_eventfd();
     }
-    0
+    r
 }
 
 unsafe fn cb_pointer_impl(io: *mut Ioplug) -> Sframes {
@@ -288,13 +392,27 @@ unsafe fn cb_delay_impl(io: *mut Ioplug, delayp: *mut Sframes) -> c_int {
 
 unsafe fn cb_hw_params_impl(io: *mut Ioplug, _p: *mut SndPcmHwParams) -> c_int {
     let b = bf(io);
-    match Fmt::from_alsa((*io).format as u32) {
-        Some(f) => {
+    // alsa-lib fills format, channels, period and buffer in `io` before this call.
+    let (format, channels, period, buffer) = (b.io.format as u32, b.io.channels, b.io.period_size as u64, b.io.buffer_size as u64);
+    match b.offer.check(format, channels, period, buffer) {
+        Ok(f) => {
             b.fmt = f;
             0
         }
-        None => -EINVAL,
+        Err(e) => {
+            log("client", &format!("hw_params refused: format {format}, {channels} channels, period {period}, buffer {buffer}"));
+            e
+        }
     }
+}
+
+unsafe fn cb_sw_params_impl(io: *mut Ioplug, p: *mut SndPcmSwParams) -> c_int {
+    let b = bf(io);
+    let mut v: Uframes = 0;
+    if snd_pcm_sw_params_get_avail_min(p, &mut v) >= 0 {
+        b.avail_min = v.min(u32::MAX as Uframes) as u32;
+    }
+    0
 }
 
 unsafe fn cb_hw_free_impl(io: *mut Ioplug) -> c_int {
@@ -312,8 +430,12 @@ unsafe fn cb_prepare_impl(io: *mut Ioplug) -> c_int {
         Err(e) => return e,
     };
     let sh = Arc::new(Shared { ring: PcmRing::new(frames, ch), wake: AtomicU32::new(0), quit: AtomicBool::new(false), evfd: b.evfd });
-    // Clear a stale readiness count from the previous run.
+    // Clear a stale readiness count from the previous run. An empty playback ring is ready at once, and the IO
+    // procedure does not run before start, so signal that now or a poller in the prepared state would wait forever.
     sh.drain_eventfd();
+    if b.dir == Dir::Playback {
+        sh.kick_eventfd();
+    }
     let cfg = match b.dir {
         Dir::Playback => IoProcConfig { input_channels: 0, output_channels: ch, buffer_frames: 0 },
         Dir::Capture => IoProcConfig { input_channels: ch, output_channels: 0, buffer_frames: 0 },
@@ -362,25 +484,31 @@ unsafe fn cb_prepare_impl(io: *mut Ioplug) -> c_int {
 
 unsafe fn cb_drain_impl(io: *mut Ioplug) -> c_int {
     let b = bf(io);
-    if b.dir == Dir::Playback {
-        if let Some(sh) = b.shared.as_ref() {
-            // Wait for the IO procedure to consume the queue, bounded by the buffer length plus slack.
-            let ms = drain_budget_ms(sh.ring.frames(), b.dev_rate);
-            let mut waited = 0;
-            while sh.ring.fill() > 0 && waited < ms {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-                waited += 1;
-            }
+    let Some(sh) = b.shared.as_ref() else { return 0 };
+    let nonblock = b.io.nonblock != 0;
+    let period = b.io.period_size.min(u32::MAX as Uframes) as u32;
+    // Wait for the IO procedure to play the queue, bounded by the buffer length plus slack and by a stall limit.
+    let mut watch = DrainWatch::new(drain_budget_ms(sh.ring.frames(), b.dev_rate), drain_stall_ms(period, b.dev_rate), sh.ring.consumed());
+    loop {
+        match drain_step(b.dir, b.running.load(Ordering::Acquire), sh.ring.fill(), nonblock) {
+            DrainStep::Done => return 0,
+            DrainStep::Again => return -EAGAIN,
+            DrainStep::Wait => {}
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        if !watch.tick(sh.ring.consumed()) {
+            log("client", &format!("drain stopped waiting with {} frames queued", sh.ring.fill()));
+            return 0;
         }
     }
-    0
 }
 
 unsafe fn cb_pause_impl(io: *mut Ioplug, enable: c_int) -> c_int {
-    if enable != 0 {
-        cb_stop_impl(io)
-    } else {
-        cb_start_impl(io)
+    // alsa-lib's ioplug moves the state between RUNNING and PAUSED itself and calls this only for a valid move.
+    match pause_action(bf(io).running.load(Ordering::Acquire), enable != 0) {
+        Some(false) => cb_stop_impl(io),
+        Some(true) => cb_start_impl(io),
+        None => 0,
     }
 }
 
@@ -389,15 +517,26 @@ unsafe fn cb_poll_revents_impl(io: *mut Ioplug, pfd: *mut Pollfd, nfds: c_uint, 
     if nfds != 1 {
         return -EINVAL;
     }
-    let events = (*pfd).events as u16;
+    let fd_revents = (*pfd).revents as u16;
     let ready = match b.shared.as_ref() {
         Some(sh) => {
-            sh.drain_eventfd();
-            poll_ready(b.dir, &sh.ring, (*io).period_size as u32)
+            let t = ready_threshold(b.avail_min, b.io.period_size.min(u32::MAX as Uframes) as u32, sh.ring.frames());
+            let mut ready = poll_ready(b.dir, &sh.ring, t);
+            // Level-triggered: the eventfd stays readable while the PCM is ready and is emptied only when it is
+            // not, so the next poll sleeps until the IO side signals. Look again after emptying it: the IO side
+            // may have made room or delivered data in between, and its signal must not be lost.
+            if !ready {
+                sh.drain_eventfd();
+                ready = poll_ready(b.dir, &sh.ring, t);
+                if ready {
+                    sh.kick_eventfd();
+                }
+            }
+            ready
         }
         None => true,
     };
-    *revents = if ready { events & (POLLIN | POLLOUT) } else { 0 };
+    *revents = poll_mask(b.dir, ready, fd_revents);
     0
 }
 
@@ -466,6 +605,9 @@ unsafe extern "C" fn cb_hw_params(io: *mut Ioplug, p: *mut SndPcmHwParams) -> c_
 unsafe extern "C" fn cb_hw_free(io: *mut Ioplug) -> c_int {
     guard_i(|| if live(io) { cb_hw_free_impl(io) } else { -EINVAL })
 }
+unsafe extern "C" fn cb_sw_params(io: *mut Ioplug, p: *mut SndPcmSwParams) -> c_int {
+    guard_i(|| if live(io) && !p.is_null() { cb_sw_params_impl(io, p) } else { -EINVAL })
+}
 unsafe extern "C" fn cb_prepare(io: *mut Ioplug) -> c_int {
     guard_i(|| if live(io) { cb_prepare_impl(io) } else { -EINVAL })
 }
@@ -490,7 +632,7 @@ static CALLBACKS: IoplugCallback = IoplugCallback {
     close: Some(cb_close),
     hw_params: Some(cb_hw_params),
     hw_free: Some(cb_hw_free),
-    sw_params: None,
+    sw_params: Some(cb_sw_params),
     prepare: Some(cb_prepare),
     drain: Some(cb_drain),
     pause: Some(cb_pause),
@@ -542,19 +684,120 @@ unsafe fn config_client(conf: *mut SndConfig) -> Option<String> {
     None
 }
 
-/// The constraint lists offered to alsa-lib: formats in preference order.
-pub const FORMATS: [c_uint; 4] = [SND_PCM_FORMAT_S16_LE, SND_PCM_FORMAT_S24_LE, SND_PCM_FORMAT_S32_LE, SND_PCM_FORMAT_FLOAT_LE];
+/// The device's channel count in the stream direction (the sum over its streams' virtual formats), when the
+/// server reports one.
+fn device_channels(d: &Device, dir: Dir) -> Option<u32> {
+    let scope = if dir == Dir::Playback { Scope::Output } else { Scope::Input };
+    let Ok(PropertyValue::Objects(streams)) = d.get(PropertyAddress::scoped(props::STREAMS, scope)) else { return None };
+    let total: u32 = streams
+        .iter()
+        .filter_map(|&s| match d.system.get(s, PropertyAddress::global(props::VIRTUAL_FORMAT)) {
+            Ok(PropertyValue::Format(f)) => Some(f.channels),
+            _ => None,
+        })
+        .sum();
+    (total > 0).then_some(total)
+}
+
+/// The device's current buffer size (the server quantum), when the server reports one.
+fn server_quantum(d: &Device) -> Option<u32> {
+    match d.get(PropertyAddress::global(props::BUFFER_FRAMES)) {
+        Ok(PropertyValue::U32(n)) if n > 0 => Some(n),
+        _ => None,
+    }
+}
+
+/// The server's quantum limits (bifrost-audiod `MIN_QUANTUM`, `MAX_QUANTUM`, `DEFAULT_QUANTUM`).
+pub const MIN_QUANTUM: u32 = 16;
+pub const MAX_QUANTUM: u32 = 4096;
+pub const DEFAULT_QUANTUM: u32 = 256;
+/// The most channels the plug-in offers.
+pub const MAX_OFFER_CHANNELS: u32 = 8;
+/// Every offered format has 4-byte samples, so a frame has a fixed size and the period list in bytes is exact.
+pub const SAMPLE_BYTES: u32 = 4;
+/// The largest buffer offered: 65536 frames (1.37 s at 48 kHz).
+pub const MAX_BUFFER_FRAMES: u32 = 1 << 16;
+/// The most periods per buffer offered.
+pub const MAX_PERIODS: u32 = 1024;
+
+/// The constraint lists offered to alsa-lib, in ascending order (alsa-lib snaps interval ends onto list entries).
+/// Formats are the 4-byte ones; `plug` in front of the plug-in converts S16 and every other format.
+pub const FORMATS: [c_uint; 3] = [SND_PCM_FORMAT_S24_LE, SND_PCM_FORMAT_S32_LE, SND_PCM_FORMAT_FLOAT_LE];
 pub const ACCESSES: [c_uint; 2] = [SND_PCM_ACCESS_MMAP_INTERLEAVED, SND_PCM_ACCESS_RW_INTERLEAVED];
 
-unsafe fn set_constraints(io: *mut Ioplug, rate: u32) -> c_int {
+/// The hardware configuration the plug-in offers alsa-lib, worked out at open from the server.
+///
+/// ioplug constrains periods and buffers in bytes only, so an exact frame constraint needs a fixed frame size:
+/// one channel count (the device's) and 4-byte samples. Periods are the powers of two from the server's quantum
+/// up to the largest quantum (4096): a period shorter than the quantum cannot wake the application more often,
+/// since the IO procedure runs once per quantum, and alsa-lib's default choice (the smallest period) then lands on
+/// the quantum, the preferred period.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Offer {
+    pub channels: u32,
+    /// The smallest period in frames: the server quantum rounded up to a power of two in 16..=4096.
+    pub period_min: u32,
+}
+
+impl Offer {
+    pub fn new(device_channels: Option<u32>, server_quantum: Option<u32>) -> Offer {
+        Offer {
+            channels: device_channels.unwrap_or(2).clamp(1, MAX_OFFER_CHANNELS),
+            period_min: server_quantum.unwrap_or(DEFAULT_QUANTUM).clamp(MIN_QUANTUM, MAX_QUANTUM).next_power_of_two(),
+        }
+    }
+
+    pub fn frame_bytes(&self) -> u32 {
+        SAMPLE_BYTES * self.channels
+    }
+
+    /// The offered period sizes in frames, ascending.
+    pub fn periods(&self) -> Vec<u32> {
+        let mut v = Vec::new();
+        let mut p = self.period_min.max(1);
+        while p <= MAX_QUANTUM {
+            v.push(p);
+            p *= 2;
+        }
+        v
+    }
+
+    /// The PERIOD_BYTES list, ascending.
+    pub fn period_bytes(&self) -> Vec<c_uint> {
+        self.periods().into_iter().map(|p| p * self.frame_bytes()).collect()
+    }
+
+    /// The BUFFER_BYTES range: two of the smallest periods up to `MAX_BUFFER_FRAMES`.
+    pub fn buffer_bytes(&self) -> (c_uint, c_uint) {
+        (2 * self.period_min * self.frame_bytes(), MAX_BUFFER_FRAMES * self.frame_bytes())
+    }
+
+    /// Checks what alsa-lib negotiated (hw_params) against the offer. Refinement keeps it inside already; this
+    /// refuses anything else cleanly with `-EINVAL` instead of running with a geometry the server cannot serve.
+    pub fn check(&self, format: u32, channels: u32, period: u64, buffer: u64) -> Result<Fmt, c_int> {
+        let fmt = match Fmt::from_alsa(format) {
+            Some(f) if FORMATS.contains(&format) => f,
+            _ => return Err(-EINVAL),
+        };
+        let period_ok = period.is_power_of_two() && period >= self.period_min as u64 && period <= MAX_QUANTUM as u64;
+        let buffer_ok = buffer >= 2 * period && buffer <= MAX_BUFFER_FRAMES as u64;
+        if channels != self.channels || !period_ok || !buffer_ok {
+            return Err(-EINVAL);
+        }
+        Ok(fmt)
+    }
+}
+
+unsafe fn set_constraints(io: *mut Ioplug, rate: u32, offer: &Offer, period_bytes: &[c_uint]) -> c_int {
+    let (bmin, bmax) = offer.buffer_bytes();
     let r = [
         snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_ACCESS, ACCESSES.len() as c_uint, ACCESSES.as_ptr()),
         snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_FORMAT, FORMATS.len() as c_uint, FORMATS.as_ptr()),
-        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_CHANNELS, 1, 8),
+        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_CHANNELS, offer.channels, offer.channels),
         snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_RATE, rate, rate),
-        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_PERIOD_BYTES, 128, 2 * 1024 * 1024),
-        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_BUFFER_BYTES, 256, 4 * 1024 * 1024),
-        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_PERIODS, 2, 1024),
+        snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_PERIOD_BYTES, period_bytes.len() as c_uint, period_bytes.as_ptr()),
+        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_BUFFER_BYTES, bmin, bmax),
+        snd_pcm_ioplug_set_param_minmax(io, SND_PCM_IOPLUG_HW_PERIODS, 2, MAX_PERIODS),
     ];
     r.into_iter().find(|&v| v < 0).unwrap_or(0)
 }
@@ -590,6 +833,7 @@ unsafe fn open_impl(pcmp: *mut *mut SndPcm, name: *const c_char, _root: *mut Snd
         }
     };
     let dev_rate = device_rate(&device);
+    let offer = Offer::new(device_channels(&device, dir), server_quantum(&device));
     let evfd = libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC);
     if evfd < 0 {
         return -EIO;
@@ -601,17 +845,23 @@ unsafe fn open_impl(pcmp: *mut *mut SndPcm, name: *const c_char, _root: *mut Snd
         name: cname,
         device,
         dev_rate,
-        fmt: Fmt::S16,
+        fmt: Fmt::F32,
         evfd,
         shared: None,
         proc_id: None,
         waker: None,
+        running: AtomicBool::new(false),
+        avail_min: 0,
+        offer,
+        period_bytes: offer.period_bytes(),
     });
     b.io.version = SND_PCM_IOPLUG_VERSION;
     b.io.name = b.name.as_ptr();
     b.io.flags = SND_PCM_IOPLUG_FLAG_LISTED | SND_PCM_IOPLUG_FLAG_MONOTONIC;
+    // One poll descriptor in both directions: the eventfd, readable (POLLIN) when the IO side signalled.
+    // `poll_revents` turns that into POLLOUT for playback. Polling an eventfd for POLLOUT would always succeed.
     b.io.poll_fd = evfd;
-    b.io.poll_events = if dir == Dir::Playback { POLLOUT as c_uint } else { POLLIN as c_uint };
+    b.io.poll_events = POLLIN as c_uint;
     b.io.mmap_rw = 0;
     b.io.callback = &CALLBACKS;
     let raw = Box::into_raw(b);
@@ -624,7 +874,7 @@ unsafe fn open_impl(pcmp: *mut *mut SndPcm, name: *const c_char, _root: *mut Snd
         libc::close(b.evfd);
         return err;
     }
-    let err = set_constraints(io, dev_rate);
+    let err = set_constraints(io, dev_rate, &(*raw).offer, &(*raw).period_bytes);
     if err < 0 {
         snd_pcm_ioplug_delete(io);
         return err;
@@ -787,6 +1037,7 @@ mod tests {
             assert_eq!(cb_delay(null, core::ptr::null_mut()), -EINVAL);
             assert_eq!(cb_hw_params(null, core::ptr::null_mut()), -EINVAL);
             assert_eq!(cb_hw_free(null), -EINVAL);
+            assert_eq!(cb_sw_params(null, core::ptr::null_mut()), -EINVAL);
             assert_eq!(cb_prepare(null), -EINVAL);
             assert_eq!(cb_drain(null), -EINVAL);
             assert_eq!(cb_pause(null, 1), -EINVAL);
@@ -836,7 +1087,171 @@ mod tests {
 
     #[test]
     fn constraint_tables() {
-        assert_eq!(FORMATS, [2, 6, 10, 14]);
+        // S24_LE, S32_LE, FLOAT_LE: ascending, all 4-byte samples.
+        assert_eq!(FORMATS, [6, 10, 14]);
         assert_eq!(ACCESSES, [0, 3]);
+    }
+
+    #[test]
+    fn offer_follows_the_server() {
+        // Stereo device, quantum 256: periods 256..4096, 8-byte frames.
+        let o = Offer::new(Some(2), Some(256));
+        assert_eq!(o, Offer { channels: 2, period_min: 256 });
+        assert_eq!(o.periods(), vec![256, 512, 1024, 2048, 4096]);
+        assert_eq!(o.frame_bytes(), 8);
+        assert_eq!(o.period_bytes(), vec![2048, 4096, 8192, 16384, 32768]);
+        // 2 * 256 * 8 = 4096; 65536 * 8 = 524288
+        assert_eq!(o.buffer_bytes(), (4096, 524_288));
+        // Nothing reported: stereo at the default quantum.
+        assert_eq!(Offer::new(None, None), Offer { channels: 2, period_min: 256 });
+        // 12 channels clamp to 8; quantum 300 rounds up to 512.
+        assert_eq!(Offer::new(Some(12), Some(300)), Offer { channels: 8, period_min: 512 });
+        // Quantum 5 clamps to 16: nine periods 16, 32, ..., 4096.
+        let small = Offer::new(Some(1), Some(5));
+        assert_eq!(small, Offer { channels: 1, period_min: 16 });
+        assert_eq!(small.periods().len(), 9);
+        assert_eq!(small.periods().first(), Some(&16));
+        assert_eq!(small.periods().last(), Some(&4096));
+        assert_eq!(small.period_bytes()[0], 64);
+        // Quantum 10000 clamps to 4096: one period.
+        assert_eq!(Offer::new(Some(0), Some(10_000)), Offer { channels: 1, period_min: 4096 });
+        assert_eq!(Offer::new(Some(2), Some(10_000)).periods(), vec![4096]);
+    }
+
+    #[test]
+    fn hw_params_check_refuses_what_the_server_cannot_serve() {
+        let o = Offer::new(Some(2), Some(256));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 256, 1024), Ok(Fmt::F32));
+        assert_eq!(o.check(SND_PCM_FORMAT_S24_LE, 2, 512, 2048), Ok(Fmt::S24));
+        assert_eq!(o.check(SND_PCM_FORMAT_S32_LE, 2, 4096, 65536), Ok(Fmt::S32));
+        // S16 and unknown formats go through `plug`, not straight to the plug-in.
+        assert_eq!(o.check(SND_PCM_FORMAT_S16_LE, 2, 256, 1024), Err(-EINVAL));
+        assert_eq!(o.check(99, 2, 256, 1024), Err(-EINVAL));
+        assert_eq!(o.check(u32::MAX, 2, 256, 1024), Err(-EINVAL));
+        // Another channel count than offered.
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 1, 256, 1024), Err(-EINVAL));
+        // Below the quantum, not a power of two, above 4096.
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 128, 1024), Err(-EINVAL));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 384, 1536), Err(-EINVAL));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 8192, 16384), Err(-EINVAL));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 0, 1024), Err(-EINVAL));
+        // Buffer shorter than two periods or longer than 65536 frames.
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 256, 256), Err(-EINVAL));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 256, 512), Ok(Fmt::F32));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 256, 65536), Ok(Fmt::F32));
+        assert_eq!(o.check(SND_PCM_FORMAT_FLOAT_LE, 2, 256, 65537), Err(-EINVAL));
+    }
+
+    #[test]
+    fn drain_returns_at_once_unless_frames_are_playing() {
+        use DrainStep::*;
+        // Stopped or paused with frames queued: they would never play, so no wait.
+        assert_eq!(drain_step(Dir::Playback, false, 512, false), Done);
+        assert_eq!(drain_step(Dir::Playback, true, 0, false), Done);
+        assert_eq!(drain_step(Dir::Capture, true, 512, false), Done);
+        assert_eq!(drain_step(Dir::Playback, true, 512, false), Wait);
+        assert_eq!(drain_step(Dir::Playback, true, 512, true), Again);
+        assert_eq!(drain_step(Dir::Playback, false, 512, true), Done);
+    }
+
+    #[test]
+    fn drain_watch_stops_on_stall_and_budget() {
+        // No progress: stall limit 3 ends the wait on the third tick.
+        let mut w = DrainWatch::new(10, 3, 0);
+        assert!(w.tick(0));
+        assert!(w.tick(0));
+        assert!(!w.tick(0));
+        // Steady progress: the budget of 5 ms ends it on the fifth tick.
+        let mut w = DrainWatch::new(5, 100, 0);
+        assert!(w.tick(1));
+        assert!(w.tick(2));
+        assert!(w.tick(3));
+        assert!(w.tick(4));
+        assert!(!w.tick(5));
+        // Progress resets the stall count: idle 2, then progress, then idle 2 again stays under 3.
+        let mut w = DrainWatch::new(100, 3, 7);
+        assert!(w.tick(7));
+        assert!(w.tick(7));
+        assert!(w.tick(8));
+        assert!(w.tick(8));
+        assert!(w.tick(8));
+        assert!(!w.tick(8));
+        // 2 * 256 * 1000 / 48000 = 10 (integer), plus 100.
+        assert_eq!(drain_stall_ms(256, 48_000), 110);
+        // 2 * 4096 * 1000 / 8000 = 1024, plus 100.
+        assert_eq!(drain_stall_ms(4096, 8_000), 1124);
+        // A zero rate does not divide by zero.
+        assert_eq!(drain_stall_ms(16, 0), 32_100);
+    }
+
+    #[test]
+    fn pause_and_resume_keep_the_ring_position() {
+        assert_eq!(pause_action(true, true), Some(false));
+        assert_eq!(pause_action(false, true), None);
+        assert_eq!(pause_action(false, false), Some(true));
+        assert_eq!(pause_action(true, false), None);
+        // Neither pause nor resume touches the ring: the pointer before and after is the same.
+        let ring = PcmRing::new(8, 1);
+        ring.push(6, |_, _| {});
+        ring.pop(3, |_, _| {});
+        let before = ring_pointer(Dir::Playback, &ring);
+        assert_eq!(before, 3);
+        assert_eq!(ring.fill(), 3);
+        // (pause: the IO procedure stops; resume: it starts again; the ring is the same object)
+        assert_eq!(ring_pointer(Dir::Playback, &ring), before);
+        ring.pop(3, |_, _| {});
+        assert_eq!(ring_pointer(Dir::Playback, &ring), 6);
+    }
+
+    #[test]
+    fn poll_revents_translation() {
+        // The eventfd is readable (POLLIN); playback reports POLLOUT, capture POLLIN.
+        assert_eq!(poll_mask(Dir::Playback, true, POLLIN), POLLOUT);
+        assert_eq!(poll_mask(Dir::Capture, true, POLLIN), POLLIN);
+        assert_eq!(poll_mask(Dir::Playback, false, POLLIN), 0);
+        assert_eq!(poll_mask(Dir::Capture, false, POLLIN), 0);
+        // Readiness comes from the ring, not from the descriptor alone.
+        assert_eq!(poll_mask(Dir::Playback, true, 0), POLLOUT);
+        // A failed descriptor is an error whatever the ring says.
+        assert_eq!(poll_mask(Dir::Capture, true, POLLHUP), POLLERR);
+        assert_eq!(poll_mask(Dir::Playback, false, POLLERR | POLLIN), POLLERR);
+        assert_eq!(poll_mask(Dir::Playback, true, POLLNVAL), POLLERR);
+        assert_eq!((POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL), (1, 4, 8, 16, 32));
+    }
+
+    #[test]
+    fn ready_threshold_uses_avail_min() {
+        assert_eq!(ready_threshold(0, 256, 1024), 256);
+        assert_eq!(ready_threshold(100, 256, 1024), 100);
+        assert_eq!(ready_threshold(5000, 256, 1024), 1024);
+        assert_eq!(ready_threshold(0, 0, 0), 1);
+        // Playback ring of 8 with 5 queued: 3 writable, ready at avail_min 3, not at 4.
+        let ring = PcmRing::new(8, 1);
+        ring.push(5, |_, _| {});
+        assert!(poll_ready(Dir::Playback, &ring, ready_threshold(3, 4, 8)));
+        assert!(!poll_ready(Dir::Playback, &ring, ready_threshold(0, 4, 8)));
+        assert!(poll_ready(Dir::Capture, &ring, ready_threshold(0, 4, 8)));
+    }
+
+    #[test]
+    fn eventfd_stays_readable_while_ready() {
+        // The level-triggered rule `poll_revents` follows: kick once, the descriptor stays readable until drained.
+        // SAFETY: plain eventfd creation.
+        let evfd = unsafe { libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC) };
+        assert!(evfd >= 0);
+        let sh = Shared { ring: PcmRing::new(4, 1), wake: AtomicU32::new(0), quit: AtomicBool::new(false), evfd };
+        let readable = || {
+            let mut pfd = libc::pollfd { fd: evfd, events: libc::POLLIN, revents: 0 };
+            // SAFETY: one valid pollfd, zero timeout.
+            unsafe { libc::poll(&mut pfd, 1, 0) == 1 }
+        };
+        assert!(!readable());
+        sh.kick_eventfd();
+        assert!(readable());
+        assert!(readable());
+        sh.drain_eventfd();
+        assert!(!readable());
+        // SAFETY: closing our own fd.
+        unsafe { libc::close(evfd) };
     }
 }

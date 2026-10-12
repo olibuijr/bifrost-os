@@ -116,6 +116,7 @@ extern "C" {
     pub fn snd_pcm_ioplug_set_param_minmax(io: *mut Ioplug, typ: c_int, min: c_uint, max: c_uint) -> c_int;
     pub fn snd_pcm_ioplug_set_param_list(io: *mut Ioplug, typ: c_int, num: c_uint, list: *const c_uint) -> c_int;
     pub fn snd_pcm_ioplug_params_reset(io: *mut Ioplug);
+    pub fn snd_pcm_sw_params_get_avail_min(params: *const SndPcmSwParams, val: *mut Uframes) -> c_int;
     pub fn snd_config_get_id(config: *const SndConfig, value: *mut *const c_char) -> c_int;
     pub fn snd_config_get_type(config: *const SndConfig) -> c_int;
     pub fn snd_config_get_string(config: *const SndConfig, value: *mut *const c_char) -> c_int;

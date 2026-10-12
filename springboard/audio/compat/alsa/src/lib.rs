@@ -8,7 +8,8 @@
 //! the futex wake of a small helper thread, which signals the poll eventfd.
 //!
 //! `/etc/alsa/conf.d/50-bifrost.conf` routes `pcm.!default` through alsa-lib's `plug` onto this plug-in, so rate,
-//! channel and format conversion are alsa-lib's; the plug-in offers the device's nominal rate only.
+//! channel and format conversion are alsa-lib's; the plug-in offers the device's nominal rate and channel count,
+//! 4-byte sample formats, and power-of-two periods from the server quantum to 4096 frames (`plugin::Offer`).
 
 pub mod ffi;
 pub mod plugin;
