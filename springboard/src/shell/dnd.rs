@@ -330,9 +330,12 @@ impl super::Shell {
         let items = self.dnd.session.as_ref().map(|s| s.items.clone()).unwrap_or_default();
         let registered = super::apphost::installed();
         let Some(dest_app) = registered.get(dest_slot as usize).map(|a| a.manifest.id.clone()) else { return Vec::new() };
-        let grants: Vec<_> = items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
+        // Without the desktop broker there is no grant mapping, so `map_files` drops every file item.
         #[cfg(feature = "desktop-wayland")]
-        let mapping = if grants.is_empty() { Vec::new() } else { self.inbound_files(source_app, &dest_app, dest_slot, id, &grants) };
+        let mapping = {
+            let grants: Vec<_> = items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
+            if grants.is_empty() { Vec::new() } else { self.inbound_files(source_app, &dest_app, dest_slot, id, &grants) }
+        };
         #[cfg(not(feature = "desktop-wayland"))]
         let mapping: Vec<(bifrost_proto::GrantId, bifrost_proto::GrantId)> = {
             let _ = (id, source_app, &dest_app);

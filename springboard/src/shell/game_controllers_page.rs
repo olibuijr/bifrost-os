@@ -113,7 +113,7 @@ pub enum Edit {
 
 /// Applies an edit: saves the remap and updates the snapshot the page reads. Returns the new table.
 pub fn apply(prefs: &mut Prefs, edit: &Edit) -> io::Result<Remap> {
-    let (pad, mut remap) = match edit {
+    let (pad, remap) = match edit {
         Edit::Cycle { pad, from } => {
             let mut remap = load(prefs, pad);
             remap.cycle(*from);

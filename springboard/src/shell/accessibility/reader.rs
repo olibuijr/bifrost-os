@@ -16,7 +16,9 @@
 //! the built-in apps. See docs/parity/wire6-a11y-roles.md.
 
 use super::tree::{add_app_tree, AxState};
-use super::walk::{self, BAR, BAR_ROW, SETTINGS};
+use super::walk::{self, SETTINGS};
+#[cfg(feature = "desktop-wayland")]
+use super::walk::{BAR, BAR_ROW};
 use super::AccessibilitySettings;
 use crate::gfx::Surface;
 use crate::shell::axmap::item_role;

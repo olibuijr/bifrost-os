@@ -218,6 +218,7 @@ impl super::Shell {
     }
 
     /// The extras the bar shows now (apps that are running), the order `Menu::Status(i)` indexes.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn status_entries_now(&self) -> Vec<&StatusEntry> {
         self.extras.status_entries(|slot| self.ext.get(slot as usize).is_some_and(|h| h.is_some()))
     }

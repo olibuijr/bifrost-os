@@ -1137,21 +1137,6 @@ impl Shell {
         }
     }
 
-    /// The caret of the foreground app's field in screen px `(x, y, w, h)`, from its `CaretRect` (window points) and
-    /// the window body; for candidate and keyboard popups.
-    pub(super) fn ext_caret_screen(&self) -> Option<(f32, f32, f32, f32)> {
-        let n = self.ext_fg?;
-        let h = self.ext.get(n as usize)?.as_ref()?;
-        let (cx, cy, cw, ch) = h.caret_rect?;
-        let m = self.desk_metrics();
-        let (ox, oy) = match self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(n)).map(|i| d.wins[i].body(&m))) {
-            Some(b) => (b.x as f32, b.y as f32),
-            None => (0.0, 0.0),
-        };
-        let s = m.pt;
-        Some((ox + cx * s, oy + cy * s, cw * s, ch * s))
-    }
-
     /// Shows or hides the keyboard over the foreground app and tells it the new safe area.
     fn ext_set_keyboard(&mut self, on: bool, t: f64) {
         // a desktop has a hardware keyboard: physical keys reach the app, no docked one

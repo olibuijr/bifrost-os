@@ -27,8 +27,8 @@ const FOOTER_GAP_PT: f32 = 8.0;
 pub const RADIUS_PT: f32 = 13.0;
 /// The navigation bar below the status bar.
 pub const NAV_PT: f32 = 44.0;
-/// The bifrost's navigation bar is taller than the phone's.
-pub const bifrost_NAV_PT: f32 = 50.0;
+/// The tablet navigation bar is taller than the phone's.
+pub const BIFROST_NAV_PT: f32 = 50.0;
 /// bifrost Settings sidebar: width, side margin of its groups, the local account card.
 pub const SIDEBAR_PT: f32 = bifrost_ui::prefs_layout::m::SIDEBAR_W;
 pub const SIDEBAR_MARGIN_PT: f32 = bifrost_ui::prefs_layout::m::SIDEBAR_INSET;

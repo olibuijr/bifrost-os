@@ -10,7 +10,10 @@ impl Shell {
         if modal && !matches!(key, TermKey::Find) {
             return vec![];
         }
+        #[cfg(feature = "desktop-wayland")]
         let mut fx = vec![];
+        #[cfg(not(feature = "desktop-wayland"))]
+        let fx = vec![];
         match key {
             // Cmd+C never sends ^C: with nothing selected it does nothing
             TermKey::Copy => {

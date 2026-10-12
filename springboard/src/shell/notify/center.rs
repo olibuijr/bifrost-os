@@ -789,7 +789,6 @@ impl Shell {
         if self.notify.center.editing {
             return self.draw_desk_gallery(s, p);
         }
-        let c = &self.notify.center;
         let alpha = (p * 255.0) as u32;
         let ui = &self.ui;
         let slide = (1.0 - p) * ui.pt(24.0);
