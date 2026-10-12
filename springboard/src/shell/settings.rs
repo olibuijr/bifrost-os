@@ -540,6 +540,7 @@ impl Settings {
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
             }
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
+            PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: backup::latest(&self.data_dir).map(|(_, t)| t) }),
             _ => spec(id, &self.model()),
         }
@@ -1933,6 +1934,16 @@ impl Settings {
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),
             Toggle::CornerSwipe => flip(&mut self.opts.corner_swipe),
+            Toggle::Permission(media, index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    let id = app.manifest.id.clone();
+                    let allowed = !super::services::privacy_permissions::access(&id).can_capture(media);
+                    // a restricted app refuses the change; the switch then shows the answer that stands
+                    let _ = super::services::privacy_permissions::set_by_user(&id, media, allowed);
+                    super::services::privacy_permissions::access(&id).can_capture(media)
+                }
+                None => false,
+            },
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),
             Toggle::DockRecents => flip(&mut self.opts.dock_recents),
             Toggle::DockAutohide => {
@@ -2503,6 +2514,7 @@ mod tests {
             (vec!["Wallpaper"], PageId::Wallpaper),
             (vec!["Battery"], PageId::Battery),
             (vec!["Privacy"], PageId::Privacy),
+            (vec!["Privacy", "App Permissions"], PageId::PrivacyPermissions),
             (vec!["Privacy", "Analytics & Diagnostics"], PageId::Diagnostics),
             (vec!["General", "bifrost Storage"], PageId::Storage),
             (vec!["General", "Backup"], PageId::Backup),
