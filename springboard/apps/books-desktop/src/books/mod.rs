@@ -16,6 +16,7 @@ use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
+use bifrost_app::controls::textfind;
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
@@ -32,7 +33,10 @@ use layout::{Layout, Metrics};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use store::{Pos, Store, Theme, SIZES};
+use store::{Pos, Span, Store, Theme, SIZES};
+
+#[cfg(test)]
+mod highlight_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).
@@ -102,6 +106,32 @@ fn drain<T>(inbox: &Inbox<T>) -> Vec<T> {
     inbox.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect()
 }
 
+/// The hit a Find Next (`delta` 1) or Find Previous (`delta` -1) goes to, wrapping at both ends. With no hit visited
+/// yet, Find Next takes the first and Find Previous the last. None when there are no hits.
+pub(super) fn step_index(current: Option<usize>, delta: i32, n: usize) -> Option<usize> {
+    if n == 0 {
+        return None;
+    }
+    let n = n as i64;
+    Some(match current {
+        None if delta >= 0 => 0,
+        None => (n - 1) as usize,
+        Some(i) => (i as i64 + delta as i64).rem_euclid(n) as usize,
+    })
+}
+
+/// The hits whose match is a whole word: the match touches no letter or digit on either side (textfind rule).
+pub(super) fn keep_whole_words(blocks: &[engine::Block], query: &str, hits: Vec<Hit>) -> Vec<Hit> {
+    let opts = textfind::Options { ignore_case: true, whole_word: true };
+    let q = query.trim();
+    hits.into_iter()
+        .filter(|h| {
+            let Some(text) = blocks.get(h.block).and_then(|b| b.text()) else { return false };
+            textfind::find_all(text, q, opts).iter().any(|r| text[..r.start].chars().count() == h.offset)
+        })
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Panel {
     Contents,
@@ -161,6 +191,8 @@ pub(super) struct Reader {
     pub search: TextField,
     pub query: String,
     pub hits: Vec<Hit>,
+    /// the hit the last Find Next or Find Previous went to
+    pub find_at: Option<usize>,
     pub searched: bool,
     pub highlight: Option<(usize, usize, usize)>,
     /// pictures scaled for the current layout, by (block, width)
@@ -232,6 +264,8 @@ pub struct Books {
     pub(super) sidebar_hidden: bool,
     /// the library's search text; it narrows the shelf by title and author
     pub(super) library_search: TextField,
+    /// Find in book matches whole words only (Find menu); kept for the session
+    pub(super) whole_words: bool,
 }
 
 impl Books {
@@ -275,6 +309,7 @@ impl Books {
                 f.focused = false;
                 f
             },
+            whole_words: false,
         };
         b.rescan();
         b
@@ -383,6 +418,7 @@ impl Books {
             search: TextField::new(ui, "Search in book", MAC_BODY_PT, false, 100),
             query: String::new(),
             hits: vec![],
+            find_at: None,
             searched: false,
             highlight: None,
             images: HashMap::new(),
@@ -538,12 +574,61 @@ impl Books {
     // --- search ---
 
     fn run_search(&mut self) {
+        let whole = self.whole_words;
         let Some(r) = &mut self.reader else { return };
         r.query = r.search.text().trim().to_string();
         r.hits = r.book.search(&r.query, SEARCH_LIMIT);
+        if whole {
+            r.hits = keep_whole_words(&r.book.blocks, &r.query, std::mem::take(&mut r.hits));
+        }
+        r.find_at = None;
         r.searched = true;
         self.panel_scroll.jump_top();
         self.dirty = true;
+    }
+
+    /// Find menu: match whole words only (or any part of a word). Searches again when a search is open.
+    pub fn set_whole_words(&mut self, on: bool) {
+        self.whole_words = on;
+        if self.reader.as_ref().is_some_and(|r| r.searched) {
+            self.run_search();
+        }
+    }
+
+    pub fn whole_words(&self) -> bool {
+        self.whole_words
+    }
+
+    /// Whether the open book's search has matches (Find Next and Find Previous are enabled).
+    pub fn has_hits(&self) -> bool {
+        self.reader.as_ref().is_some_and(|r| !r.hits.is_empty())
+    }
+
+    /// Find menu: Find Next (`delta` 1) or Find Previous (-1) through the open search's hits.
+    pub fn find_step(&mut self, delta: i32, t: f64) {
+        let Some(r) = &mut self.reader else { return };
+        let Some(i) = step_index(r.find_at, delta, r.hits.len()) else { return };
+        r.find_at = Some(i);
+        self.open_hit(i, t);
+    }
+
+    /// The text the last find went to, as a highlight span, and whether it is already highlighted.
+    pub fn match_span(&self) -> Option<(Span, bool)> {
+        let r = self.reader.as_ref()?;
+        let (block, offset, len) = r.highlight?;
+        let span = Span { block, offset, len };
+        let saved = self.store.entry(&r.path).is_some_and(|e| e.highlights.contains(&span));
+        Some((span, saved))
+    }
+
+    /// Find menu: highlights the found text, or removes its highlight. True when it is now highlighted.
+    pub fn toggle_match_highlight(&mut self) -> bool {
+        let Some((span, _)) = self.match_span() else { return false };
+        let Some(path) = self.reader.as_ref().map(|r| r.path.clone()) else { return false };
+        let on = self.store.toggle_highlight(&path, span);
+        self.save_now();
+        self.dirty = true;
+        on
     }
 
     fn open_hit(&mut self, i: usize, t: f64) {
