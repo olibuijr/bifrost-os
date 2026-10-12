@@ -100,6 +100,9 @@ pub struct Vector4 {
 }
 
 impl Vector4 {
+    /// The zero vector (`NativeVector4Zero`).
+    pub const ZERO: Vector4 = Vector4 { x: 0.0, y: 0.0, z: 0.0, w: 0.0 };
+
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Vector4 { x, y, z, w }
     }
@@ -642,6 +645,14 @@ mod tests {
         for i in 0..16 {
             assert!(close(actual.m[i], expected.m[i]), "element {i}: expected {:?}, got {:?}", expected.m, actual.m);
         }
+    }
+
+    #[test]
+    fn zero_vectors_are_all_zero_and_equal_to_defaults() {
+        assert_eq!(Vector4::ZERO, Vector4::new(0.0, 0.0, 0.0, 0.0));
+        assert_eq!(Vector4::ZERO, Vector4::default());
+        assert_eq!(Vector3::ZERO.to_vector4(0.0), Vector4::ZERO);
+        assert_eq!(Vector4::ZERO.xyz(), Vector3::ZERO);
     }
 
     #[test]

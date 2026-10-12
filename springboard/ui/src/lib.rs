@@ -622,6 +622,8 @@ pub mod mesh;
 pub mod scene_material;
 pub mod scene_light;
 pub mod voxel_array;
+pub mod mesh_primitives;
+pub mod morph_skin;
 pub mod shading;
 pub mod composition;
 pub mod candidates;
