@@ -24,6 +24,7 @@ pub struct ClientObj {
 pub struct PortObj {
     pub id: u32,
     buf: *mut f32,
+    meta: Arc<PortMeta>,
 }
 
 // SAFETY: the buffer pointer is only handed to the client, which uses it on the process thread.
@@ -89,7 +90,7 @@ fn string_array(names: &[CString]) -> *mut *const c_char {
 fn port_handle(rt: &Runtime, e: &Engine, id: u32) -> *mut c_void {
     let Some(p) = e.port(id) else { return std::ptr::null_mut() };
     let mut h = rt.handles.lock().unwrap_or_else(|p| p.into_inner());
-    let b = h.entry(id).or_insert_with(|| Box::new(PortObj { id, buf: p.buf_ptr() }));
+    let b = h.entry(id).or_insert_with(|| Box::new(PortObj { id, buf: p.buf_ptr(), meta: p.meta.clone() }));
     &mut **b as *mut PortObj as *mut c_void
 }
 
@@ -399,25 +400,20 @@ pub unsafe extern "C" fn jack_port_get_buffer(port: *mut c_void, _nframes: u32) 
 }
 
 /// Looks `port` up and applies `f`; `d` is the default when the port is gone.
-unsafe fn with_port<T>(port: *mut c_void, d: T, f: impl FnOnce(&Port) -> T) -> T {
-    let (Some(rt), Some(id)) = (runtime(), pid(port)) else { return d };
-    let e = lock(&rt);
-    e.port(id).map_or(d, f)
+/// Never takes the engine lock: these queries are called from the process callback, which runs under it.
+unsafe fn with_port<T>(port: *mut c_void, d: T, f: impl FnOnce(&PortMeta) -> T) -> T {
+    (port as *const PortObj).as_ref().map_or(d, |p| f(&p.meta))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_name(port: *mut c_void) -> *const c_char {
-    with_port(port, std::ptr::null(), |p| p.full.as_ptr())
+    with_port(port, std::ptr::null(), |p| p.full_ptr())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_short_name(port: *mut c_void) -> *const c_char {
     // The short name is the part after the colon of the full name.
-    with_port(port, std::ptr::null(), |p| {
-        let full = p.full.as_bytes_with_nul();
-        let colon = full.iter().position(|&b| b == b':').map_or(0, |i| i + 1);
-        full[colon..].as_ptr() as *const c_char
-    })
+    with_port(port, std::ptr::null(), |p| p.short_ptr())
 }
 
 #[no_mangle]
@@ -443,23 +439,19 @@ pub unsafe extern "C" fn jack_port_type_id(port: *mut c_void) -> u32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_is_mine(client: *const ClientObj, port: *mut c_void) -> c_int {
-    let (Some(c), Some(id)) = ((client as *mut ClientObj).as_ref(), pid(port)) else { return 0 };
-    lock(&c.rt).port(id).map_or(false, |p| p.client == c.id) as c_int
+    let Some(c) = (client as *mut ClientObj).as_ref() else { return 0 };
+    with_port(port, false, |p| p.client == c.id) as c_int
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_connected(port: *const c_void) -> c_int {
-    with_port(port as *mut c_void, 0, |p| p.conns.len() as c_int)
+    with_port(port as *mut c_void, 0, |p| p.connection_count() as c_int)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_connected_to(port: *const c_void, name: *const c_char) -> c_int {
-    let (Some(rt), Some(id), Some(n)) = (runtime(), pid(port as *mut c_void), cstr(name)) else { return 0 };
-    let e = lock(&rt);
-    match (e.port(id), e.port_by_name(n)) {
-        (Some(p), Some(o)) => p.conns.contains(&o) as c_int,
-        _ => 0,
-    }
+    let Some(n) = cstr(name) else { return 0 };
+    with_port(port as *mut c_void, false, |p| p.connected_to(n)) as c_int
 }
 
 #[no_mangle]
@@ -469,9 +461,7 @@ pub unsafe extern "C" fn jack_port_get_connections(port: *const c_void) -> *mut 
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_get_all_connections(_client: *const ClientObj, port: *const c_void) -> *mut *const c_char {
-    let (Some(rt), Some(id)) = (runtime(), pid(port as *mut c_void)) else { return std::ptr::null_mut() };
-    let e = lock(&rt);
-    let names: Vec<CString> = e.port(id).map(|p| p.conns.iter().filter_map(|&c| e.port(c).map(|q| q.full.clone())).collect()).unwrap_or_default();
+    let names = with_port(port as *mut c_void, Vec::new(), |p| p.peer_names());
     string_array(&names)
 }
 
@@ -610,7 +600,9 @@ pub unsafe extern "C" fn jack_port_set_latency(port: *mut c_void, frames: u32) {
 
 #[no_mangle]
 pub unsafe extern "C" fn jack_port_get_latency(port: *mut c_void) -> u32 {
-    with_port(port, 0, |p| p.latency[1].1)
+    let (Some(rt), Some(id)) = (runtime(), pid(port)) else { return 0 };
+    let e = lock(&rt);
+    e.port(id).map_or(0, |p| p.latency[1].1)
 }
 
 #[no_mangle]
@@ -906,6 +898,9 @@ mod tests {
         // SAFETY: arg is the Ctx below, alive until the client is closed.
         unsafe {
             let ctx = &*(arg as *const Ctx);
+            // Port queries from the process callback must not take the engine lock (it is held by this very cycle).
+            assert!(!jack_port_name(ctx.input).is_null());
+            let _ = jack_port_connected(ctx.output) + jack_port_flags(ctx.output);
             let i = jack_port_get_buffer(ctx.input, nframes) as *const f32;
             let o = jack_port_get_buffer(ctx.output, nframes) as *mut f32;
             for k in 0..nframes as usize {
