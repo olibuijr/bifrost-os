@@ -894,6 +894,7 @@ impl Shell {
             let (unix, offset) = self.wall_now(0.0);
             bifrost_render::appearance::jump_to(mode.is_light(((unix + offset as i64).rem_euclid(86_400) / 3600) as u32));
         }
+        services::text_services::load(&self.prefs);
         self.conf = HomeConf::load(&self.prefs);
         self.folders = folders::Folders::load(&self.prefs);
         self.removed = jiggle::load_removed(&self.prefs);

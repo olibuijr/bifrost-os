@@ -119,6 +119,7 @@ impl Alert {
             Command::Reboot => ("Restart?", "The computer restarts.".to_string(), "Restart", true),
             Command::Forget(ssid) => ("Forget Wi-Fi Network?", format!("“{ssid}” will no longer join automatically."), "Forget", true),
             Command::ForgetBluetooth(_) => ("Forget Bluetooth Device?", "This computer will no longer pair with it automatically.".to_string(), "Forget", true),
+            Command::RemoveTextReplacement(shortcut) => ("Remove Text Replacement?", format!("“{shortcut}” will no longer expand to its phrase."), "Remove", true),
             Command::ClearCache(c) => (c.label(), c.footer().to_string(), "Clear", false),
             Command::RootedOff => (
                 "Turn Off Rooted Debugging?",
@@ -2155,6 +2156,11 @@ impl Settings {
             Command::Forget(ssid) => {
                 self.pop(t);
                 vec![Effect::Wifi(WifiAction::Forget(ssid))]
+            }
+            Command::RemoveTextReplacement(shortcut) => {
+                super::services::text_services::remove_replacement(prefs, &shortcut);
+                self.rebuild(ui);
+                Vec::new()
             }
             Command::ForgetBluetooth(addr) => {
                 self.pop(t);
