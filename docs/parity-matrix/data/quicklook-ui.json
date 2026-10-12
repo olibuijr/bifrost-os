@@ -10,9 +10,9 @@
     {
       "feature": "Preview panel (QLPreviewPanel)",
       "apple": "QLPreviewPanel: shared(), dataSource, reloadData(), refreshCurrentPreviewItem(), currentController",
-      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, reload_data, make_key_and_order_front, close); springboard/proto/src/peek.rs (ToShell::Preview 0x1e0, PreviewClose 0x1e1)",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, reload_data, make_key_and_order_front, close); springboard/proto/src/peek.rs (ToShell::Preview 0x1e0, PreviewClose 0x1e1); wired: springboard/src/shell/preview_panel.rs",
       "status": "partial",
-      "note": "The SDK sends the messages, but the shell has no consumer for ToShell::Preview, so nothing is drawn. No shared() singleton, no refreshCurrentPreviewItem(), no controller responder chain."
+      "note": "The SDK sends the messages, but the shell has no consumer for ToShell::Preview, so nothing is drawn. No shared() singleton, no refreshCurrentPreviewItem(), no controller responder chain. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Preview items (QLPreviewItem)",

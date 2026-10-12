@@ -38,9 +38,9 @@
     {
       "feature": "Home-screen placement and gallery (Add Widget, edit, resize, remove)",
       "apple": "Widget gallery on the Home screen, widget editing",
-      "bifrost": "springboard/src/shell/widgetgallery.rs, springboard/src/shell/homeedit.rs, springboard/src/shell/homeconf.rs",
+      "bifrost": "springboard/src/shell/widgetgallery.rs, springboard/src/shell/homeedit.rs, springboard/src/shell/homeconf.rs; wired: springboard/src/shell/notify/center.rs; springboard/src/shell/services/widgets_timeline.rs (set_placed, set_large)",
       "status": "partial",
-      "note": "Users can place, resize and remove shell widgets from a long-press gallery. Third-party widgets do not appear in it."
+      "note": "Users can place, resize and remove shell widgets from a long-press gallery. Third-party widgets do not appear in it. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Today View and widget list ordering",

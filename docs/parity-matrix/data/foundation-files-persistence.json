@@ -10,16 +10,16 @@
     {
       "feature": "File System (create, read, write, examine files)",
       "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
-      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs",
+      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
       "status": "partial",
-      "note": "Apps use Rust std fs in their data dir; user files go through the file portal grants and document grants. No FileManager-like SDK type, no FileWrapper."
+      "note": "Apps use Rust std fs in their data dir; user files go through the file portal grants and document grants. No FileManager-like SDK type, no FileWrapper. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "File coordination and presenters",
       "apple": "NSFileCoordinator, NSFilePresenter",
-      "bifrost": "springboard/sdk/src/file_coordination.rs",
+      "bifrost": "springboard/sdk/src/file_coordination.rs; wired: springboard/apps/files/src/ops.rs (transfer_now, compress_now, extract_now) via src/coordinate.rs (writing_in, refused)",
       "status": "partial",
-      "note": "Advisory flock; no relinquish or move negotiation, no versions."
+      "note": "Advisory flock; no relinquish or move negotiation, no versions. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "File change events",

@@ -24,9 +24,9 @@
     {
       "feature": "Element hierarchy (parent, focus, checked state)",
       "apple": "NSAccessibility accessibilityChildren and accessibilityParent",
-      "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt)",
+      "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt); wired: springboard/src/shell/accessibility/tree.rs; springboard/src/shell/axmap.rs (ax_state); springboard/src/bare/control.rs (ax list)",
       "status": "partial",
-      "note": "The SDK exposes controls_tree and View::controls_tree, but no app in springboard/apps overrides it yet, so every app reads as a flat list under its window."
+      "note": "The SDK exposes controls_tree and View::controls_tree, but no app in springboard/apps overrides it yet, so every app reads as a flat list under its window. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Labels, titles and help text",
@@ -52,16 +52,16 @@
     {
       "feature": "Accessibility announcements",
       "apple": "AccessibilityNotification, announcement requested (low, medium, high priority)",
-      "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK",
+      "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK; wired: springboard/src/shell/accessibility/banner.rs; springboard/src/shell/apphost.rs (announce_banner); springboard/src/shell/mod.rs (tick, draw)",
       "status": "partial",
-      "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified."
+      "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Custom actions and value setting",
       "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
-      "bifrost": "springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus)",
+      "bifrost": "springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
       "status": "partial",
-      "note": "Default ax_set maps Press to a tap and ignores SetValue and Focus; only apps that override ax_set accept them. Shared kit sliders and text fields do not yet."
+      "note": "Default ax_set maps Press to a tap and ignores SetValue and Focus; only apps that override ax_set accept them. Shared kit sliders and text fields do not yet. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "System accessibility settings readable by apps",

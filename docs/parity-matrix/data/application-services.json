@@ -10,9 +10,9 @@
     {
       "feature": "Pasteboard (NSPasteboard)",
       "apple": "Pasteboard class, NSPasteboard.general, UTType items",
-      "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/src/shell/pasteboard.rs, springboard/render/src/clipboard.rs; wired: springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs",
       "status": "partial",
-      "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name."
+      "note": "Text, file URLs, png, html, rtf and uri-list through UTType ids and MIME mapping; only the text-like type reaches the Wayland selection, and no change count is exposed to the Apple name. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)",

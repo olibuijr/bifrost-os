@@ -87,9 +87,9 @@
     {
       "feature": "Network debugging and diagnostics",
       "apple": "CFNetwork diagnostic logging, packet trace, Debugging HTTP Server-Side Errors",
-      "bifrost": "springboard/core/src/log.rs (Logger, bifrost-log); springboard/sdk/src/log.rs",
+      "bifrost": "springboard/core/src/log.rs (Logger, bifrost-log); springboard/sdk/src/log.rs; wired: springboard/src/shell/pages.rs (WifiDetail DIAGNOSTICS group shows a saved network's failure note; DETAILS group shows interface, IPv4 method and DNS)",
       "status": "partial",
-      "note": "Apps can log through os.Logger. No packet traces, no CFNetwork-style HTTP logging, and no network inspector"
+      "note": "Apps can log through os.Logger. No packet traces, no CFNetwork-style HTTP logging, and no network inspector Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Privacy attribution and local network identity",

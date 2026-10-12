@@ -31,9 +31,9 @@
     {
       "feature": "Appearance Customization",
       "apple": "NSAppearance, Dark Mode, accent colour, NSColor named colours",
-      "bifrost": "springboard/render/src/appearance.rs; springboard/render/src/ui.rs; wired: springboard/render/src/ui.rs (CONTENT_BG) applied in springboard/apps/{assistant,console,daw,games,music,podcasts,shortcuts,voicememos,weather}-desktop/src",
+      "bifrost": "springboard/render/src/appearance.rs; springboard/render/src/ui.rs; wired: springboard/render/src/ui.rs (CONTENT_BG) applied in springboard/apps/{assistant,console,daw,games,music,podcasts,shortcuts,voicememos,weather}-desktop/src; wired: springboard/render/src/ui.rs CONTENT_BG applied in springboard/src/shell/settings.rs (detail pane) and springboard/src/shell/store/mod.rs (store main area)",
       "status": "parity",
-      "note": "Light, Dark and Auto with cross-fade, named adaptive colours; external apps follow it via portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Light, Dark and Auto with cross-fade, named adaptive colours; external apps follow it via portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Animation",

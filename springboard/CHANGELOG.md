@@ -1,5 +1,27 @@
 # BifrOSt changelog
 
+## 0.5.41 — 2026-10-12
+
+Parity wiring, wave 4.
+
+- Notification Center: Edit Widgets at the foot of the column opens a gallery to add or remove widgets and pick
+  Small or Large.
+- Accessibility: the accessibility tree reports each element's parent and its checked and focused state; apps can
+  post announcements, shown as a banner; windows offer Zoom, Minimize and Close as custom actions.
+- Apps can post and listen for named notifications through a new system service, and the system posts appearance,
+  lock and network changes.
+- Settings > Wi-Fi shows each known network's security type, and the network sheet has Details and Diagnostics.
+- Photos: Exposure, Saturation and Warmth adjustments, Blur and Vignette effects, and a Sepia filter.
+- Quick Look classifies pictures, text, PDF and audio and names the app that opens them.
+- Dark appearance: Settings and the App Store use the dark grey content colour instead of black.
+- The thin line that could stay under the menu bar after a menu closed is gone.
+- Apps: Calendar 1.10 (File > New Event from Text; copy a phone number from the notes), Reminders 1.12 (Undo and
+  Redo; smart list counts), Console 1.3 (saved searches; level: and message: search terms), Shortcuts 1.5 (intent
+  titles in Add Action; run an intent and see its result), Browser 0.12 (History > Back and Forward lists), Files 1.20
+  (permissions and owner in Get Info; writes wait for a folder in use), Voice Memos 1.5 (input meter, playback
+  volume), Podcasts 1.6 (episode type, codec and length), Games 1.5 (2048 tiles swell and grow in), DAW 0.4 (Rack
+  sliders, instrument presets, track format).
+
 ## 0.5.40 — 2026-10-12
 
 - Window tiling now goes through the compositor: Ctrl+Cmd+Left and Right snap the front window to a half,

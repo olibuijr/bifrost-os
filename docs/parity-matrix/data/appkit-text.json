@@ -38,9 +38,9 @@
     {
       "feature": "Text Display: data detectors",
       "apple": "NSDataDetector via text checking types",
-      "bifrost": "springboard/ui/src/detect.rs; wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (uses springboard/ui/src/detect.rs Kind::Address; editor row FillAddress in src/calendar.rs)",
+      "bifrost": "springboard/ui/src/detect.rs; wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (uses springboard/ui/src/detect.rs Kind::Address; editor row FillAddress in src/calendar.rs); wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (address, phone) over springboard/ui/src/detect.rs",
       "status": "partial",
-      "note": "link, date and phone detection only as documented in bifrost-ui.md Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "link, date and phone detection only as documented in bifrost-ui.md Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Text Display: line breaking and truncation",

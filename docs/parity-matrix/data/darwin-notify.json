@@ -10,23 +10,23 @@
     {
       "feature": "Posting a named notification (notify_post)",
       "apple": "notify_post(_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with); wired: springboard/src/shell/services/notify_bus.rs (post); springboard/sdk/src/notify_bus.rs (post)",
       "status": "partial",
-      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names."
+      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Registering a handler for a name (notify_register_dispatch)",
       "apple": "notify_register_dispatch(_:_:_:_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer); wired: springboard/src/shell/services/notify_bus.rs (notified event); springboard/sdk/src/notify_bus.rs (notified)",
       "status": "partial",
-      "note": "Observers run on the main thread, not on a caller-chosen dispatch queue. Observer closures are tied to the main thread; no queue argument."
+      "note": "Observers run on the main thread, not on a caller-chosen dispatch queue. Observer closures are tied to the main thread; no queue argument. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Polling a registration token (notify_check)",
       "apple": "notify_check(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs",
+      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (register mode poll, check); springboard/sdk/src/notify_bus.rs (check)",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token API; delivery is push only."
+      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token API; delivery is push only. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Signal-based delivery (notify_register_signal)",
@@ -52,16 +52,16 @@
     {
       "feature": "Token lifecycle (notify_cancel, notify_suspend, notify_resume, notify_is_valid_token)",
       "apple": "notify_cancel(_:), notify_suspend(_:), notify_resume(_:), notify_is_valid_token(_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (ObserverToken drop removes observer)",
+      "bifrost": "springboard/sdk/src/notification.rs (ObserverToken drop removes observer); wired: springboard/src/shell/services/notify_bus.rs (cancel, suspend, resume, valid); springboard/sdk/src/notify_bus.rs",
       "status": "partial",
-      "note": "Dropping the token removes the observer. No suspend or resume, and no integer token validity check."
+      "note": "Dropping the token removes the observer. No suspend or resume, and no integer token validity check. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Per-name state values (notify_set_state, notify_get_state)",
       "apple": "notify_set_state(_:_:), notify_get_state(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs",
+      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (set_state, state); springboard/sdk/src/notify_bus.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing stores a 64-bit state alongside a name."
+      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing stores a 64-bit state alongside a name. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Posting to a non-running app (suspensionBehavior)",
@@ -73,9 +73,9 @@
     {
       "feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)",
       "apple": "Notify Macros constants",
-      "bifrost": "springboard/core/src/notify_center.rs",
+      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (system.appearance.change, system.screen.locked, system.screen.unlocked, system.network.change); only four of the names are posted",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No shell broadcast for time zone, clock, mount, disk-space, network or host-name changes under these names. Workspace app-launch events exist but use their own message, not Darwin names."
+      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No shell broadcast for time zone, clock, mount, disk-space, network or host-name changes under these names. Workspace app-launch events exist but use their own message, not Darwin names. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Status codes and macros (NOTIFY_STATUS_*, NOTIFY_TOKEN_INVALID)",

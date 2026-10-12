@@ -38,9 +38,9 @@
     {
       "feature": "Parameters and presets",
       "apple": "AudioUnitParameter, AUParameterTree, presets",
-      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params)",
+      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset)",
       "status": "partial",
-      "note": "parameters are defined per built-in device; no parameter tree or preset API for external processors"
+      "note": "parameters are defined per built-in device; no parameter tree or preset API for external processors Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Audio rendering and offline render",

@@ -38,23 +38,23 @@
     {
       "feature": "Saved network profiles (CWNetworkProfile, CWMutableNetworkProfile)",
       "apple": "CWNetworkProfile, CWMutableNetworkProfile: ssid, security, priority, password reference",
-      "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network)",
+      "bifrost": "springboard/src/net/wifi_config.rs:83 (NetworkConfig), springboard/src/net/wifi_config.rs:207 (conf), springboard/src/net/wifi_config.rs:289 (move_network); wired: springboard/src/shell/pages.rs (PageId::KnownNetworks, PageId::WifiDetail); springboard/src/shell/desktop_network.rs (saved list now carries security)",
       "status": "partial",
-      "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API"
+      "note": "saved list with priority, auto-join and hidden flags; written to springboard.conf, not a managed profile store; no SDK API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Security types (CWSecurity)",
       "apple": "CWSecurity: none, WEP, WPA personal and enterprise, WPA2 personal and enterprise, WPA3 personal and transition, and others",
-      "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap))",
+      "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap)); wired: springboard/src/shell/desktop_network.rs (security_of maps NetworkManager key-mgmt onto springboard/src/net/wifi_config.rs Security)",
       "status": "partial",
-      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method"
+      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Configuration (CWConfiguration, CWMutableConfiguration)",
       "apple": "CWConfiguration, CWMutableConfiguration: interface mode, channel, network profiles, access-point and IBSS settings",
-      "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move)",
+      "bifrost": "springboard/src/net/wifi.rs:83 (Cmd::Enable, Cmd::SetAutoJoin, Cmd::Move); wired: springboard/src/shell/pages.rs (WifiDetail: Auto-Join, Move Up/Down; unchanged this round)",
       "status": "partial",
-      "note": "client mode only; no access-point or IBSS configuration and no channel setting"
+      "note": "client mode only; no access-point or IBSS configuration and no channel setting Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Join, select and forget",

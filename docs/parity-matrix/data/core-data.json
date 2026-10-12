@@ -31,9 +31,9 @@
     {
       "feature": "Fetch requests and predicates",
       "apple": "NSFetchRequest, NSPredicate, NSSortDescriptor (https://developer.apple.com/documentation/coredata/nsfetchrequest)",
-      "bifrost": "springboard/core/src/migrate.rs, springboard/ui/src/fetch.rs, springboard/ui/src/history.rs",
+      "bifrost": "springboard/core/src/migrate.rs, springboard/ui/src/fetch.rs, springboard/ui/src/history.rs; wired: springboard/apps/reminders-desktop/src/model.rs (impl Record for Reminder, Smart::predicate, Smart::count via fetch_indices)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Queries are ordinary Rust iterator code over in-memory vectors. No fetch request object, no predicate language, no batch or offset fetching."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Queries are ordinary Rust iterator code over in-memory vectors. No fetch request object, no predicate language, no batch or offset fetching. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Asynchronous fetch results",
@@ -52,9 +52,9 @@
     {
       "feature": "Undo and redo of model changes",
       "apple": "NSUndoManager integration with managed object contexts (https://developer.apple.com/documentation/coredata/undo-and-redo-of-individual-and-batched-changes)",
-      "bifrost": "springboard/ui/src/undo.rs (UndoManager<T>, groups, coalesced registration, levels of undo)",
+      "bifrost": "springboard/ui/src/undo.rs (UndoManager<T>, groups, coalesced registration, levels of undo); wired: springboard/apps/reminders-desktop/src/app.rs (commit_named, step_history, edit_commands, edit_titles); src/main.rs (Input::Command, commands, undo_titles)",
       "status": "partial",
-      "note": "The undo manager is generic over the app's state and does not track model edits. The app must register each undo action itself."
+      "note": "The undo manager is generic over the app's state and does not track model edits. The app must register each undo action itself. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Persistent history and change tracking",

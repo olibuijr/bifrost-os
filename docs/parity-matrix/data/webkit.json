@@ -17,9 +17,9 @@
     {
       "feature": "Navigation and back-forward list",
       "apple": "WKNavigationDelegate, WKBackForwardList, WKNavigationAction/Response, WKFormInfo",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent: LoadStarted, LoadCommitted, LoadFinished, HistoryChanged; go_back, go_forward, reload)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent: LoadStarted, LoadCommitted, LoadFinished, HistoryChanged; go_back, go_forward, reload); wired: springboard/apps/browser/src/tabdiscard.rs (history_menu, jump_to, jump_step); springboard/apps/browser/src/main.rs (menus, menu_action)",
       "status": "partial",
-      "note": "no navigation policy callback (decide allow or cancel per request); no back-forward list object; stop_loading is a no-op because Servo 0.7.0 cannot cancel a load"
+      "note": "no navigation policy callback (decide allow or cancel per request); no back-forward list object; stop_loading is a no-op because Servo 0.7.0 cannot cancel a load Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Web data management (cookies, website data, URL scheme handling)",

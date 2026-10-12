@@ -10,9 +10,9 @@
     {
       "feature": "Preview panel (floating panel, items, index, Space toggle)",
       "apple": "QLPreviewController, QLPreviewPanel-style data source (Quick Look UI, macOS 10.5+; https://developer.apple.com/documentation/quicklook/qlpreviewcontroller)",
-      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, make_key_and_order_front, close)",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, make_key_and_order_front, close); wired: springboard/src/shell/preview_panel.rs; springboard/apps/files/src/system.rs (Files Space)",
       "status": "partial",
-      "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn."
+      "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Preview items (URL and title)",
@@ -31,9 +31,9 @@
     {
       "feature": "In-app preview of common file types",
       "apple": "Quick Look previews for common file types (https://developer.apple.com/documentation/quicklook)",
-      "bifrost": "springboard/apps/files/src/peek.rs (Files::peek), springboard/src/files/preview.rs (preview_for, is_pdf, zoom and pan limits), springboard/src/files/mod.rs (spawn_preview; previous and next at :435)",
+      "bifrost": "springboard/apps/files/src/peek.rs (Files::peek), springboard/src/files/preview.rs (preview_for, is_pdf, zoom and pan limits), springboard/src/files/mod.rs (spawn_preview; previous and next at :435); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
       "status": "partial",
-      "note": "Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel."
+      "note": "Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Markup on picture previews",

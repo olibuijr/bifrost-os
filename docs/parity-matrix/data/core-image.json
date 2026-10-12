@@ -17,30 +17,30 @@
     {
       "feature": "Filter objects and chaining (CIFilter)",
       "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
-      "bifrost": "springboard/render/src/effect_chain.rs",
+      "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply; still not an app API)",
       "status": "partial",
-      "note": "Wave 4 (w4-core-image, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name"
+      "note": "Wave 4 (w4-core-image, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
       "apple": "CIGaussianBlur, CIBoxBlur, CIMotionBlur, CIZoomBlur, CIDiscBlur, CIBokehBlur",
-      "bifrost": "springboard/render/src/gfx.rs (blur at :476, blur_material at :423)",
+      "bifrost": "springboard/render/src/gfx.rs (blur at :476, blur_material at :423); wired: springboard/src/shell/photos/edit.rs (Blur slider on the Effects tab, disc blur from springboard/render/src/blur_kernels.rs)",
       "status": "partial",
-      "note": "Only a CPU blur of repeated box passes, plus the GPU backdrop blur for materials (springboard/render/src/glass.rs). No motion, zoom, disc or bokeh blur, and no radius or sigma API"
+      "note": "Only a CPU blur of repeated box passes, plus the GPU backdrop blur for materials (springboard/render/src/glass.rs). No motion, zoom, disc or bokeh blur, and no radius or sigma API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Colour adjustment (exposure, brightness, contrast, saturation, hue, temperature, tone curve)",
       "apple": "CIColorControls, CIExposureAdjust, CIHueAdjust, CITemperatureAndTint, CIToneCurve, CIVibrance, CIGammaAdjust",
-      "bifrost": "springboard/src/shell/photos/edit.rs (adjust at :300, brightness and contrast only); springboard/render/src/glass.rs (saturation at :74)",
+      "bifrost": "springboard/src/shell/photos/edit.rs (adjust at :300, brightness and contrast only); springboard/render/src/glass.rs (saturation at :74); wired: springboard/src/shell/photos/edit.rs (Adjust tab: Exposure, Saturation, Warmth via springboard/render/src/effect_chain.rs)",
       "status": "partial",
-      "note": "Brightness and contrast exist inside Photos. Saturation is only applied to material backdrops. No hue, exposure, temperature, tint, vibrance or tone curve"
+      "note": "Brightness and contrast exist inside Photos. Saturation is only applied to material backdrops. No hue, exposure, temperature, tint, vibrance or tone curve Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Photo and colour effects (sepia, mono, noir, vignette, false colour, posterize)",
       "apple": "CIPhotoEffect* (chrome, fade, instant, mono, noir, process, tonal, transfer), CISepiaTone, CIVignette, CIFalseColor, CIColorPosterize, CIColorInvert",
-      "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum: Original, Vivid, Mono, Noir, Warm; apply at :98)",
+      "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum: Original, Vivid, Mono, Noir, Warm; apply at :98); wired: springboard/src/shell/photos/edit.rs (Sepia filter chip; Vignette slider on the Effects tab, via effect_chain sepia and vignette)",
       "status": "partial",
-      "note": "Four looks in Photos only, not exposed as SDK filters. No sepia, vignette, chrome, fade, false colour or posterize"
+      "note": "Four looks in Photos only, not exposed as SDK filters. No sepia, vignette, chrome, fade, false colour or posterize Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Colour lookup and conversion (colour cube, colour map, Lab, palettize)",

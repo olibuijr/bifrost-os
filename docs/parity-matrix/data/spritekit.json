@@ -38,9 +38,9 @@
     {
       "feature": "Actions",
       "apple": "SKAction, Getting Started with Actions",
-      "bifrost": "springboard/sdk/src/view/animation.rs",
+      "bifrost": "springboard/sdk/src/view/animation.rs; wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
       "status": "partial",
-      "note": "Window::animate interpolates frame, opacity and background when a closure changes them; there are no composable action objects (sequence, group, repeat, remove) run by a node"
+      "note": "Window::animate interpolates frame, opacity and background when a closure changes them; there are no composable action objects (sequence, group, repeat, remove) run by a node Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Timing curves and springs",

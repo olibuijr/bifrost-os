@@ -59,9 +59,9 @@
     {
       "feature": "Property change notifications",
       "apple": "AudioHardwareObject.addPropertyListener, PropertyListenerDelegate",
-      "bifrost": "springboard/src/svc.rs (Client subscribes and pumps events), springboard/proto/src/svc.rs (Evt)",
+      "bifrost": "springboard/src/svc.rs (Client subscribes and pumps events), springboard/proto/src/svc.rs (Evt); wired: springboard/apps/voicememos-desktop/src/main.rs (service_event); src/voicememos.rs (devices_changed, set_input); existing wiring, unchanged",
       "status": "partial",
-      "note": "Clients receive state events from the service. Device properties such as default device or sample rate changes are not published."
+      "note": "Clients receive state events from the service. Device properties such as default device or sample rate changes are not published. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Volume and mute controls",
@@ -80,9 +80,9 @@
     {
       "feature": "Microphone capture",
       "apple": "AudioHardwareDevice input streams",
-      "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes), springboard/audiod/src/main.rs (Record events)",
+      "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes), springboard/audiod/src/main.rs (Record events); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (sync_audio input_level, draw meter); src/services.rs caption",
       "status": "partial",
-      "note": "Recording goes through the audio service for Voice Memos. Apps cannot open an input stream directly, and there is no input device selection."
+      "note": "Recording goes through the audio service for Voice Memos. Apps cannot open an input stream directly, and there is no input device selection. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Hardware clocks and sample-accurate sync",

@@ -17,9 +17,9 @@
     {
       "feature": "Media assets (AVAsset, tracks, metadata)",
       "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem",
-      "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs",
+      "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork)",
       "status": "partial",
-      "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps"
+      "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Media reading and writing",

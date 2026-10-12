@@ -59,9 +59,9 @@
     {
       "feature": "Quick Look preview panel (QLPreviewPanel, QLPreviewItem, QLPreviewPanelDataSource)",
       "apple": "QLPreviewPanel protocols, QLPreviewItem, QLPreviewPanelDelegate",
-      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354; wired: springboard/src/shell/preview_panel.rs",
       "status": "partial",
-      "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet."
+      "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Quick Look thumbnails (QLThumbnailGenerator, QLThumbnailGenerator update)",

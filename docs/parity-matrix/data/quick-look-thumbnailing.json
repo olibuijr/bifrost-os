@@ -59,9 +59,9 @@
     {
       "feature": "Quick Look panel showing thumbnails and previews",
       "apple": "QLPreviewPanel and QLPreviewItem (the preview panel is a separate Apple framework, linked from this page)",
-      "bifrost": "springboard/sdk/src/peek.rs:13 (PreviewPanel), springboard/proto/src/peek.rs (ToShell::Preview 0x1e0)",
+      "bifrost": "springboard/sdk/src/peek.rs:13 (PreviewPanel), springboard/proto/src/peek.rs (ToShell::Preview 0x1e0); wired: springboard/src/shell/preview_panel.rs (no thumbnails yet; stays partial)",
       "status": "partial",
-      "note": "The panel model and wire message exist. The shell decodes the message and does not draw the panel yet, so no thumbnail is shown through it."
+      "note": "The panel model and wire message exist. The shell decodes the message and does not draw the panel yet, so no thumbnail is shown through it. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Error reporting for thumbnail generation",

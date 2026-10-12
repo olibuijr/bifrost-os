@@ -45,16 +45,16 @@
     {
       "feature": "Basic playback (AVAudioPlayer)",
       "apple": "AVAudioPlayer: play, pause, stop, volume, pan, rate, loops, currentTime, duration",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume)",
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired",
       "status": "partial",
-      "note": "queue, transport, seek, volume and mute reach apps; no pan, rate or per-player fade"
+      "note": "queue, transport, seek, volume and mute reach apps; no pan, rate or per-player fade Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Basic recording (AVAudioRecorder)",
       "apple": "AVAudioRecorder: record, pause, stop, metering, channel assignments",
-      "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes); springboard/proto/src/svc.rs (Evt::Record with level, Evt::RecordDone)",
+      "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes); springboard/proto/src/svc.rs (Evt::Record with level, Evt::RecordDone); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (level_db, meter_fraction, meter_title, draw recording branch)",
       "status": "partial",
-      "note": "records 16-bit WAV from one capture PCM; no pause, no scheduled start, no per-channel metering API, no settings-based formats"
+      "note": "records 16-bit WAV from one capture PCM; no pause, no scheduled start, no per-channel metering API, no settings-based formats Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "MIDI playback (AVMIDIPlayer)",
@@ -80,9 +80,9 @@
     {
       "feature": "Mixing and volume control",
       "apple": "AVAudioMixing, volume and pan on players and mixer nodes",
-      "bifrost": "springboard/src/media/mixer.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted)",
+      "bifrost": "springboard/src/media/mixer.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_rect, volume_at, set_volume, draw_volume)",
       "status": "partial",
-      "note": "one system volume and mute for the playback service; no per-source mixing"
+      "note": "one system volume and mute for the playback service; no per-source mixing Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Playback via video pipeline (AVPlayer-adjacent audio out)",

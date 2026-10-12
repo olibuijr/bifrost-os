@@ -24,9 +24,9 @@
     {
       "feature": "Phone numbers",
       "apple": "DDMatchPhoneNumber",
-      "bifrost": "springboard/ui/src/detect.rs (Kind::Phone)",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Phone); wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (phone), Target::CopyPhone in src/calendar.rs, share_copy in src/main.rs",
       "status": "partial",
-      "note": "range only, 7 to 15 digits; no parsed number value"
+      "note": "range only, 7 to 15 digits; no parsed number value Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Postal addresses",
@@ -38,9 +38,9 @@
     {
       "feature": "Calendar events and dates",
       "apple": "DDMatchCalendarEvent",
-      "bifrost": "springboard/ui/src/detect.rs (Kind::Date)",
+      "bifrost": "springboard/ui/src/detect.rs (Kind::Date); wired: springboard/apps/calendar-desktop/src/calendar/quick.rs (parse), Calendar::new_event_from_text in src/calendar.rs, File > New Event from Text in src/main.rs",
       "status": "partial",
-      "note": "only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates"
+      "note": "only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Email addresses",

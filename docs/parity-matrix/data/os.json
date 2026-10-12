@@ -31,9 +31,9 @@
     {
       "feature": "Logging: reading logs (OSLogStore, log show and stream)",
       "apple": "OSLogStore, OSLogEntryLog",
-      "bifrost": "springboard/core/src/log.rs:679 (LogStore), :498 (Query), :706 (entries), :729 (stream)",
+      "bifrost": "springboard/core/src/log.rs:679 (LogStore), :498 (Query), :706 (entries), :729 (stream); wired: springboard/apps/console-desktop/src/model.rs, console.rs (search tokens and saved searches)",
       "status": "partial",
-      "note": "current_process and local (entitlement) stores exist. The journal reader shells out to journalctl. No persistent position tokens (getEntries(at:))."
+      "note": "current_process and local (entitlement) stores exist. The journal reader shells out to journalctl. No persistent position tokens (getEntries(at:)). Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Signposts (OSSignposter, os_signpost)",

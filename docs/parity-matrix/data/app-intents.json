@@ -10,9 +10,9 @@
     {
       "feature": "AppIntent declaration and metadata (title, description)",
       "apple": "AppIntent, title, description, init()",
-      "bifrost": "springboard/sdk/src/intents.rs (Intent::new, Intent::to_json)",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::new, Intent::to_json); wired: springboard/apps/shortcuts-desktop/src/automation.rs declared; src/widget.rs picker Intents section",
       "status": "partial",
-      "note": "id, title and description are declared and listed by intent.list; no isDiscoverable flag"
+      "note": "id, title and description are declared and listed by intent.list; no isDiscoverable flag Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Intent parameters",
@@ -24,9 +24,9 @@
     {
       "feature": "Perform and IntentResult (value and dialog)",
       "apple": "perform(), IntentResult, Dialog, result(dialog:), result(value:)",
-      "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult::value, with_dialog)",
+      "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult::value, with_dialog); wired: springboard/apps/shortcuts-desktop/src/automation.rs perform; src/main.rs run_intent; src/widget.rs show_result",
       "status": "partial",
-      "note": "returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog"
+      "note": "returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Snippets and result views",

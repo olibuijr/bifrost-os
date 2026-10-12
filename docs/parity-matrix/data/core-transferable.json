@@ -10,9 +10,9 @@
     {
       "feature": "Transferable protocol and TransferRepresentation builder",
       "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation",
-      "bifrost": "springboard/sdk/src/transfer.rs",
+      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-model protocol that declares import and export representations; apps convert by hand"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-model protocol that declares import and export representations; apps convert by hand Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Data transfer (Codable and binary data)",
@@ -31,16 +31,16 @@
     {
       "feature": "Copy and paste of typed items",
       "apple": "NSPasteboard-backed Transferable items, PasteButton",
-      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item); springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs (best method)",
       "status": "partial",
-      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps"
+      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Drag and drop of typed items",
       "apple": "draggable and dropDestination (Transferable-based), NSDraggingSource and NSDraggingDestination",
-      "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/proto/src/rich.rs (DragItem, DragPreview)",
+      "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/proto/src/rich.rs (DragItem, DragPreview); wired: springboard/sdk/src/transfer.rs (begin_drag, drop_values); springboard/sdk/src/dnd.rs",
       "status": "partial",
-      "note": "typed source and destination exist; no declarative per-model drag or drop modifier"
+      "note": "typed source and destination exist; no declarative per-model drag or drop modifier Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Share sheet for transferable items",
@@ -59,9 +59,9 @@
     {
       "feature": "Proxy representation and transfer visibility",
       "apple": "ProxyRepresentation, TransferRepresentationVisibility",
-      "bifrost": "springboard/sdk/src/transfer.rs",
+      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item hides OwnProcess representations)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to limit which apps or processes see a transferred item"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to limit which apps or processes see a transferred item Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     }
   ],
   "gaps": [

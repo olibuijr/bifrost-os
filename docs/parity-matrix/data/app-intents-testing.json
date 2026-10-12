@@ -17,9 +17,9 @@
     {
       "feature": "Intent catalog (IntentDefinitions)",
       "apple": "IntentDefinitions, AppIntentDefinition, intents",
-      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json at line 145)",
+      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json at line 145); wired: springboard/apps/shortcuts-desktop/src/widget.rs picker Intents section (title and description of each declared intent)",
       "status": "partial",
-      "note": "The catalog is served as intent.list JSON; there is no typed definition collection for tests"
+      "note": "The catalog is served as intent.list JSON; there is no typed definition collection for tests Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Entity queries (suggested, by id, by string)",

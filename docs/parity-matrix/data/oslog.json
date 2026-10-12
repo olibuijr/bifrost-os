@@ -10,9 +10,9 @@
     {
       "feature": "Log store (read historical entries)",
       "apple": "OSLogStore, OSLogStore.Scope",
-      "bifrost": "springboard/core/src/log.rs (LogStore::current_process, LogStore::local, LogStore::system, LogStore::entries)",
+      "bifrost": "springboard/core/src/log.rs (LogStore::current_process, LogStore::local, LogStore::system, LogStore::entries); wired: springboard/apps/console-desktop/src/console.rs (Saved Searches sidebar section, open_saved, keep_search, drop_search); model.rs (SavedSearch, save_search, remove_search)",
       "status": "partial",
-      "note": "current_process reads an in-memory ring of 2000 entries; local() needs kind = \"system-app\" and the log-store entitlement; no Apple scope enum type"
+      "note": "current_process reads an in-memory ring of 2000 entries; local() needs kind = \"system-app\" and the log-store entitlement; no Apple scope enum type Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Log entries (OSLogEntryLog)",
@@ -31,16 +31,16 @@
     {
       "feature": "Live streaming of entries",
       "apple": "OSLogStore.entries(...) polled or streamed in Console and Instruments",
-      "bifrost": "springboard/core/src/log.rs (LogStore::stream, blocking, run on a thread)",
+      "bifrost": "springboard/core/src/log.rs (LogStore::stream, blocking, run on a thread); wired: springboard/apps/console-desktop/src/console.rs (drain applies the search to each arriving message)",
       "status": "partial",
-      "note": "journald follow via journalctl for system scope; in-process stream polls the ring every 200 ms"
+      "note": "journald follow via journalctl for system scope; in-process stream polls the ring every 200 ms Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Predicate queries",
       "apple": "NSPredicate over subsystem, category, process, level, composedMessage",
-      "bifrost": "springboard/core/src/log.rs (Query, Query::parse_predicate, Query::matches)",
+      "bifrost": "springboard/core/src/log.rs (Query, Query::parse_predicate, Query::matches); wired: springboard/core/src/log.rs (Query); springboard/apps/console-desktop/src/model.rs (Query::parse with level: and message: tokens)",
       "status": "partial",
-      "note": "subset: ==, >=, CONTAINS joined by AND; subsystem, category, process, level, message, last, limit"
+      "note": "subset: ==, >=, CONTAINS joined by AND; subsystem, category, process, level, message, last, limit Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Privacy of dynamic values",

@@ -7,19 +7,97 @@
   "summary": "Core Audio Types is a set of C data types (buffers, channel layouts, timestamps, format descriptions, SMPTE time) shared by Core Audio. BifrOSt has no shared type set for these: the media stack passes plain rate and channel counts, interleaved S16 PCM and microseconds, and keeps its format and channel handling inside each decoder. SMPTE timecode and the OSStatus error model have no counterpart.",
   "rea_evidence": "ev_98c7b647aeb9a63cfda5aad9fb900d0d1f51f13a1c9a5723f27315c033167e44",
   "features": [
-    {"feature": "AudioStreamBasicDescription and format flags", "apple": "AudioStreamBasicDescription, AudioFormatFlags", "bifrost": "springboard/src/media/speaker.rs (SpeakerOut::new(rate, channels)), springboard/src/media/audiofile.rs (interleaved S16 at the stream's own rate and channel count)", "status": "partial", "note": "The format is two integers (rate, channels) plus an implied S16 sample type. There is no bits-per-sample, bytes-per-frame or format-flag description."},
-    {"feature": "AudioBuffer and AudioBufferList", "apple": "AudioBuffer, AudioBufferList", "bifrost": "springboard/src/media/audiofile.rs (interleaved S16 packets); springboard/third_party/symphonia-codec-aac/src/aac/mod.rs (planar AudioBuffer<f32> inside the AAC decoder)", "status": "partial", "note": "Buffers are a Vec or a planar decoder buffer. There is no multi-buffer list type shared with apps."},
-    {"feature": "Channel layouts and channel descriptions", "apple": "AudioChannelLayout, AudioChannelDescription", "bifrost": "springboard/src/media/aac.rs (downmix from 3.0, 4.0, 5.0, 5.1 and 7.1 bitstream order to stereo)", "status": "partial", "note": "Channel order is handled only inside the AAC downmix. No layout tag or per-channel label is exposed, and the layout is not carried through the audio service."},
-    {"feature": "Codec class descriptions", "apple": "AudioClassDescription", "bifrost": "springboard/src/media/codec.rs (codec sniff from content type and first bytes)", "status": "partial", "note": "Codec identity is an internal enum chosen by sniffing. There is no descriptor type that apps can query."},
-    {"feature": "AudioTimeStamp and timestamp flags", "apple": "AudioTimeStamp, AudioTimeStampFlags", "bifrost": "springboard/src/media/demux/mod.rs (Sample with pts_us and dts_us in microseconds)", "status": "partial", "note": "Only presentation and decode times in microseconds. No sample time, host time, rate scalar or flag set."},
-    {"feature": "SMPTE time", "apple": "SMPTETime, SMPTETimeFlags, SMPTETimeType", "bifrost": "none found", "status": "n/a", "note": "Timecode for broadcast and studio work. No sensible counterpart on a desktop without a timecode source."},
-    {"feature": "Audio value range and translation", "apple": "AudioValueRange, AudioValueTranslation", "bifrost": "springboard/src/media/volume.rs (output level)", "status": "n/a", "note": "Used for AudioUnit parameter ranges and conversion buffers. BifrOSt has no AudioUnit layer; volume is a plain level."},
-    {"feature": "Audio format identifiers", "apple": "AudioFormatID, Audio Format Identifiers (kAudioFormatAPAC and others)", "bifrost": "springboard/src/media/mp4.rs (fourcc match on sample description entries, line 484); springboard/src/media/audiofile.rs (MP3, AAC, FLAC, Ogg Vorbis, WAV decoders)", "status": "partial", "note": "Formats are recognised by container fourcc or file extension and decoded internally. There is no public format-ID enum, and APAC is not supported."},
-    {"feature": "AAC object types and AudioSpecificConfig", "apple": "MPEG4ObjectID", "bifrost": "springboard/src/media/mp4.rs (asc_params, line 564, returns rate and channels); springboard/src/media/sbr.rs (SBR for HE-AAC)", "status": "partial", "note": "Only the sample rate and channel count are read from the config. The object type is not exposed."},
-    {"feature": "Packet descriptions and packet dependencies", "apple": "AudioStreamPacketDescription, AudioStreamPacketDependencyDescription", "bifrost": "springboard/src/media/demux/mp4.rs (Mp4Sample with offset and size per sample); springboard/src/media/demux/mod.rs (Sample with keyframe flag)", "status": "partial", "note": "Each sample carries offset, size and keyframe. There is no variable-bit-rate packet table and no dependency description."},
-    {"feature": "Sample type and fixed-point canonical format", "apple": "AudioSampleType, AudioUnitSampleType, kAudioUnitSampleFractionBits", "bifrost": "springboard/src/media/aac.rs (decoder output converted to 48 kHz stereo S16); springboard/third_party/symphonia-codec-aac/src/aac/mod.rs (f32 internally)", "status": "n/a", "note": "The canonical format is an internal choice (S16 out, f32 in the decoder). BifrOSt does not use the 8.24 fixed-point AudioUnit format."},
-    {"feature": "Error codes", "apple": "kAudio_ParamError, kAudio_MemFullError, kAudio_FileNotFoundError, kAudio_UnimplementedError and others (OSStatus)", "bifrost": "springboard/src/media/aac.rs (Result with Error::Invalid)", "status": "n/a", "note": "OSStatus is the C convention. The Rust Result and Error types cover the same cases in Rust."},
-    {"feature": "Audio service boundary", "apple": "Not part of the framework (Core Audio HAL and AudioUnit)", "bifrost": "springboard/audiod/src/main.rs (the audio service owns the speaker and microphone); springboard/src/media/capture.rs (ALSA capture to S16 WAV)", "status": "os", "note": "The service and its wire protocol exist, but the SDK exposes no Core Audio types or audio API to apps. Apps reach audio only through the service."}
+    {
+      "feature": "AudioStreamBasicDescription and format flags",
+      "apple": "AudioStreamBasicDescription, AudioFormatFlags",
+      "bifrost": "springboard/src/media/speaker.rs (SpeakerOut::new(rate, channels)), springboard/src/media/audiofile.rs (interleaved S16 at the stream's own rate and channel count); wired: springboard/apps/daw/src/rack.rs (describe), springboard/ui/src/audio_render.rs (StreamFormat)",
+      "status": "partial",
+      "note": "The format is two integers (rate, channels) plus an implied S16 sample type. There is no bits-per-sample, bytes-per-frame or format-flag description. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+    },
+    {
+      "feature": "AudioBuffer and AudioBufferList",
+      "apple": "AudioBuffer, AudioBufferList",
+      "bifrost": "springboard/src/media/audiofile.rs (interleaved S16 packets); springboard/third_party/symphonia-codec-aac/src/aac/mod.rs (planar AudioBuffer<f32> inside the AAC decoder)",
+      "status": "partial",
+      "note": "Buffers are a Vec or a planar decoder buffer. There is no multi-buffer list type shared with apps."
+    },
+    {
+      "feature": "Channel layouts and channel descriptions",
+      "apple": "AudioChannelLayout, AudioChannelDescription",
+      "bifrost": "springboard/src/media/aac.rs (downmix from 3.0, 4.0, 5.0, 5.1 and 7.1 bitstream order to stereo); wired: springboard/apps/daw/src/rack.rs (describe), springboard/ui/src/channel_layout.rs (ChannelLayout)",
+      "status": "partial",
+      "note": "Channel order is handled only inside the AAC downmix. No layout tag or per-channel label is exposed, and the layout is not carried through the audio service. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+    },
+    {
+      "feature": "Codec class descriptions",
+      "apple": "AudioClassDescription",
+      "bifrost": "springboard/src/media/codec.rs (codec sniff from content type and first bytes)",
+      "status": "partial",
+      "note": "Codec identity is an internal enum chosen by sniffing. There is no descriptor type that apps can query."
+    },
+    {
+      "feature": "AudioTimeStamp and timestamp flags",
+      "apple": "AudioTimeStamp, AudioTimeStampFlags",
+      "bifrost": "springboard/src/media/demux/mod.rs (Sample with pts_us and dts_us in microseconds)",
+      "status": "partial",
+      "note": "Only presentation and decode times in microseconds. No sample time, host time, rate scalar or flag set."
+    },
+    {
+      "feature": "SMPTE time",
+      "apple": "SMPTETime, SMPTETimeFlags, SMPTETimeType",
+      "bifrost": "none found",
+      "status": "n/a",
+      "note": "Timecode for broadcast and studio work. No sensible counterpart on a desktop without a timecode source."
+    },
+    {
+      "feature": "Audio value range and translation",
+      "apple": "AudioValueRange, AudioValueTranslation",
+      "bifrost": "springboard/src/media/volume.rs (output level)",
+      "status": "n/a",
+      "note": "Used for AudioUnit parameter ranges and conversion buffers. BifrOSt has no AudioUnit layer; volume is a plain level."
+    },
+    {
+      "feature": "Audio format identifiers",
+      "apple": "AudioFormatID, Audio Format Identifiers (kAudioFormatAPAC and others)",
+      "bifrost": "springboard/src/media/mp4.rs (fourcc match on sample description entries, line 484); springboard/src/media/audiofile.rs (MP3, AAC, FLAC, Ogg Vorbis, WAV decoders)",
+      "status": "partial",
+      "note": "Formats are recognised by container fourcc or file extension and decoded internally. There is no public format-ID enum, and APAC is not supported."
+    },
+    {
+      "feature": "AAC object types and AudioSpecificConfig",
+      "apple": "MPEG4ObjectID",
+      "bifrost": "springboard/src/media/mp4.rs (asc_params, line 564, returns rate and channels); springboard/src/media/sbr.rs (SBR for HE-AAC)",
+      "status": "partial",
+      "note": "Only the sample rate and channel count are read from the config. The object type is not exposed."
+    },
+    {
+      "feature": "Packet descriptions and packet dependencies",
+      "apple": "AudioStreamPacketDescription, AudioStreamPacketDependencyDescription",
+      "bifrost": "springboard/src/media/demux/mp4.rs (Mp4Sample with offset and size per sample); springboard/src/media/demux/mod.rs (Sample with keyframe flag)",
+      "status": "partial",
+      "note": "Each sample carries offset, size and keyframe. There is no variable-bit-rate packet table and no dependency description."
+    },
+    {
+      "feature": "Sample type and fixed-point canonical format",
+      "apple": "AudioSampleType, AudioUnitSampleType, kAudioUnitSampleFractionBits",
+      "bifrost": "springboard/src/media/aac.rs (decoder output converted to 48 kHz stereo S16); springboard/third_party/symphonia-codec-aac/src/aac/mod.rs (f32 internally)",
+      "status": "n/a",
+      "note": "The canonical format is an internal choice (S16 out, f32 in the decoder). BifrOSt does not use the 8.24 fixed-point AudioUnit format."
+    },
+    {
+      "feature": "Error codes",
+      "apple": "kAudio_ParamError, kAudio_MemFullError, kAudio_FileNotFoundError, kAudio_UnimplementedError and others (OSStatus)",
+      "bifrost": "springboard/src/media/aac.rs (Result with Error::Invalid)",
+      "status": "n/a",
+      "note": "OSStatus is the C convention. The Rust Result and Error types cover the same cases in Rust."
+    },
+    {
+      "feature": "Audio service boundary",
+      "apple": "Not part of the framework (Core Audio HAL and AudioUnit)",
+      "bifrost": "springboard/audiod/src/main.rs (the audio service owns the speaker and microphone); springboard/src/media/capture.rs (ALSA capture to S16 WAV)",
+      "status": "os",
+      "note": "The service and its wire protocol exist, but the SDK exposes no Core Audio types or audio API to apps. Apps reach audio only through the service."
+    }
   ],
   "gaps": [
     "No shared audio format description type (sample rate, channel count, bits per sample, format flags) for apps or services; formats are passed as two loose integers.",
