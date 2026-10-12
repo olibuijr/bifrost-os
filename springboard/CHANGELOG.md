@@ -1,5 +1,15 @@
 # BifrOSt changelog
 
+## 0.6.2 — 2026-10-12
+
+The audio server and the after-desktop services reach installed machines.
+
+- Packaging: the update package now carries bifrostd, the audio server (bifrost-audiod), its latency bench and the
+  ALSA plug-in. 0.6.0 and 0.6.1 shipped without them, so the desktop-ready trigger failed and nothing that waits for
+  the first desktop frame started (the agent access server among them). A package whose units name a missing binary
+  now fails to build.
+- Audio: the install script creates the audio user and enables bifrost-audiod; ALSA's default device goes through it.
+
 ## 0.6.1 — 2026-10-12
 
 The real-time kernel by default, a loader built from source, and installs driven like a user.
