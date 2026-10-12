@@ -41,66 +41,14 @@ impl SuddenTermination {
     }
 }
 
-// ---- thermal state ---------------------------------------------------------------------------------------------
+// ---- thermal state --------------------------------------------------------------------------------------------
 
-/// `ProcessInfo.ThermalState`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ThermalState {
-    Nominal,
-    Fair,
-    Serious,
-    Critical,
-}
-
-/// One kernel trip point of a thermal zone: `kind` is the `trip_point_N_type` text, `temp` is millidegrees C.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TripPoint {
-    pub kind: String,
-    pub temp: i64,
-}
-
-/// The state of one zone: the `passive` trip reached is Fair, `hot` Serious, 5 C below `critical` Critical. Zones
-/// without such trips use fixed limits (75, 85 and 95 C).
-pub fn thermal_state_for(temp: i64, trips: &[TripPoint]) -> ThermalState {
-    let find = |kind: &str| trips.iter().filter(|t| t.kind == kind && t.temp > 0).map(|t| t.temp).min();
-    let known = trips.iter().any(|t| matches!(t.kind.as_str(), "passive" | "hot" | "critical"));
-    let (fair, serious, critical) = if known {
-        let critical = find("critical");
-        (find("passive"), find("hot").or(critical.map(|c| c - 10_000)), critical.map(|c| c - 5_000))
-    } else {
-        (Some(75_000), Some(85_000), Some(95_000))
-    };
-    if critical.is_some_and(|c| temp >= c) {
-        ThermalState::Critical
-    } else if serious.is_some_and(|c| temp >= c) {
-        ThermalState::Serious
-    } else if fair.is_some_and(|c| temp >= c) {
-        ThermalState::Fair
-    } else {
-        ThermalState::Nominal
-    }
-}
+// The model lives in `bifrost_core::thermal` (the shell's `power` service reads it too).
+pub use bifrost_core::thermal::{thermal_state_for, ThermalState, TripPoint};
 
 /// The worst state over every `/sys/class/thermal/thermal_zone*`.
 fn read_thermal_state() -> ThermalState {
-    let Ok(dir) = std::fs::read_dir("/sys/class/thermal") else { return ThermalState::Nominal };
-    let num = |p: &std::path::Path| std::fs::read_to_string(p).ok().and_then(|t| t.trim().parse::<i64>().ok());
-    let mut worst = ThermalState::Nominal;
-    for e in dir.flatten() {
-        if !e.file_name().to_string_lossy().starts_with("thermal_zone") {
-            continue;
-        }
-        let zone = e.path();
-        let Some(temp) = num(&zone.join("temp")) else { continue };
-        let mut trips = Vec::new();
-        for i in 0..16 {
-            let Some(t) = num(&zone.join(format!("trip_point_{i}_temp"))) else { break };
-            let kind = std::fs::read_to_string(zone.join(format!("trip_point_{i}_type"))).unwrap_or_default().trim().to_owned();
-            trips.push(TripPoint { kind, temp: t });
-        }
-        worst = worst.max(thermal_state_for(temp, &trips));
-    }
-    worst
+    bifrost_core::thermal::worst_in(std::path::Path::new("/sys/class/thermal"))
 }
 
 // ---- low power mode --------------------------------------------------------------------------------------------
@@ -297,22 +245,6 @@ mod tests {
         assert_eq!(s.enable(), None, "still one disable outstanding");
         assert_eq!(s.enable(), Some(true));
         assert!(s.is_enabled());
-    }
-
-    #[test]
-    fn thermal_state_follows_the_trip_points() {
-        let trips = vec![
-            TripPoint { kind: "passive".into(), temp: 80_000 },
-            TripPoint { kind: "hot".into(), temp: 90_000 },
-            TripPoint { kind: "critical".into(), temp: 100_000 },
-        ];
-        assert_eq!(thermal_state_for(50_000, &trips), ThermalState::Nominal);
-        assert_eq!(thermal_state_for(80_000, &trips), ThermalState::Fair);
-        assert_eq!(thermal_state_for(90_000, &trips), ThermalState::Serious);
-        assert_eq!(thermal_state_for(95_000, &trips), ThermalState::Critical);
-        assert_eq!(thermal_state_for(70_000, &[]), ThermalState::Nominal);
-        assert_eq!(thermal_state_for(96_000, &[]), ThermalState::Critical);
-        assert!(ThermalState::Fair < ThermalState::Serious);
     }
 
     #[test]
