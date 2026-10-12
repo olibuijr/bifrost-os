@@ -32,3 +32,5 @@ pub mod codereq;
 pub mod biometry;
 pub mod tunnel;
 pub mod proxy;
+pub mod disk_image;
+pub mod guest_vm;
