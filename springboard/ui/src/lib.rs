@@ -885,6 +885,7 @@ pub mod default_device;
 pub mod volume_control;
 pub mod scheduled_region;
 pub mod video_session;
+pub mod video_compression;
 pub mod media_block;
 pub mod sample_attach;
 pub mod audio_engine;
