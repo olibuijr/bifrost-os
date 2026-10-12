@@ -64,11 +64,6 @@ pub enum Effect {
 }
 
 impl Effect {
-    /// Whether the effect adds to the node's current value instead of setting an absolute one.
-    fn is_relative(self) -> bool {
-        matches!(self, Effect::MoveBy(_) | Effect::RotateBy { .. } | Effect::ScaleBy(_))
-    }
-
     /// The effect that undoes this one, when it is relative. `None` for absolute effects.
     fn reversed(self) -> Option<Effect> {
         match self {
