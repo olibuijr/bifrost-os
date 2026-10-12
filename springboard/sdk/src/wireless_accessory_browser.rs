@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(check("short7!"), Err(ConfigError::BadPassphrase));
         assert!(check("password").is_ok());
         assert!(check(&"a".repeat(63)).is_ok());
-        assert_eq!(check(&"a".repeat(64)), Err(ConfigError::BadPassphrase));
+        assert_eq!(check(&"z".repeat(64)), Err(ConfigError::BadPassphrase)); // 64 a's would be a valid hex key
         assert!(check(&"0123456789abcdef".repeat(4)).is_ok());
         assert_eq!(check(&format!("g{}", "a".repeat(63))), Err(ConfigError::BadPassphrase));
     }

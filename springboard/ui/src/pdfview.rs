@@ -7,7 +7,14 @@
 //! wider of the viewport and the widest row. Pages in a row are top-aligned, separated by the page gap. A view draws
 //! the returned frames; nothing here draws.
 
-use crate::Rect;
+/// A page rectangle in document points. Layout keeps f64, so long documents do not drift.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
 
 /// How pages are arranged in the view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +58,7 @@ pub enum ViewError {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PageFrame {
     pub index: usize,
-    pub rect: Rect,
+    pub rect: PageRect,
 }
 
 /// Default scale limits: a page can be shown at a tenth of its size up to sixteen times its size.
@@ -306,7 +313,7 @@ impl PdfView {
             let mut x = (content_w - row_w) / 2.0;
             for &i in row {
                 let (w, h) = self.sizes[i];
-                frames.push(PageFrame { index: i, rect: Rect { x, y: top, w: w * s, h: h * s } });
+                frames.push(PageFrame { index: i, rect: PageRect { x, y: top, w: w * s, h: h * s } });
                 x += (w + self.page_gap) * s;
             }
             top += (self.row_height_unscaled(row) + self.page_gap) * s;

@@ -59,7 +59,7 @@ fn apply_details(inst: &mut ServiceInstance, records: &[Record]) -> bool {
         .and_then(|r| dnssd::parse_srv(&r.rdata))
     {
         inst.port = Some(srv.port);
-        inst.host = Some(srv.target);
+        inst.host = Some(srv.target.trim_end_matches('.').to_string());
     }
     if let Some(txt) = records
         .iter()
@@ -131,7 +131,7 @@ impl ServiceBrowser {
                 .to_string();
             let mut inst = ServiceInstance {
                 name,
-                full_name: full,
+                full_name: trimmed.to_string(),
                 service: service.clone(),
                 host: None,
                 port: None,
@@ -272,7 +272,8 @@ mod tests {
         assert_eq!(msg.id, 7);
         assert!(!msg.is_response());
         assert_eq!(msg.questions.len(), 1);
-        assert_eq!(msg.questions[0].name, "_http._tcp.local");
+        // the wire message keeps the fully qualified name; the browser's own fields drop the root dot
+        assert_eq!(msg.questions[0].name, "_http._tcp.local.");
         assert_eq!(msg.questions[0].rtype, rtype::PTR);
         assert_eq!(msg.questions[0].class, dnssd::CLASS_IN);
     }

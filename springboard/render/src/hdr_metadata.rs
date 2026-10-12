@@ -172,7 +172,9 @@ mod tests {
     fn pq_endpoints_are_exact() {
         assert_eq!(pq_to_nits(0.0), 0.0);
         assert!(close(pq_to_nits(1.0), 10000.0, 1e-6));
-        assert_eq!(nits_to_pq(0.0), 0.0);
+        // the curve's offset c1 makes black code to c1^m2 (about 7.3e-7), not exactly 0
+        assert!(close(nits_to_pq(0.0), 0.8359375_f64.powf(78.84375), 1e-12));
+        assert!(nits_to_pq(0.0) < 1e-6);
         assert!(close(nits_to_pq(10000.0), 1.0, 1e-9));
     }
 
