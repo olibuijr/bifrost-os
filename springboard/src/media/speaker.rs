@@ -242,8 +242,10 @@ struct Stream {
 }
 
 impl Stream {
+    /// Runs on an opener thread, never under the session lock: the Hello gets 100 ms, so a server that accepts and
+    /// never answers costs the caller nothing.
     fn open(role: Role, source_rate: u32) -> io::Result<Stream> {
-        let system = System::connect(CLIENT).map_err(|e| io_err("connect to the audio server", e))?;
+        let system = System::connect_within(CLIENT, Duration::from_millis(100)).map_err(|e| io_err("connect to the audio server", e))?;
         let device = system.default_device(role).map_err(|e| io_err("default output device", e))?;
         let rate = match device.get(PropertyAddress::global(props::NOMINAL_RATE)) {
             Ok(PropertyValue::F64(r)) => r,
@@ -284,33 +286,54 @@ struct Session {
     /// No new connection before this; set after a failed open (1 s, doubling to 30 s), cleared by a good one.
     retry_after: Option<Instant>,
     backoff: Duration,
+    /// An open in flight on its own thread; polled by `ensure`, so no caller waits for the server.
+    opening: Option<std::sync::mpsc::Receiver<io::Result<Stream>>>,
 }
 
 impl Session {
-    /// Opens the stream if that has not happened yet.
+    /// Opens the stream if that has not happened yet. Never waits for the audio server: the open runs on its own
+    /// thread and this returns `WouldBlock` until it has finished (the caller drops the frames and writes again).
     fn ensure(&mut self) -> io::Result<()> {
         if self.desk.is_some() {
             return Ok(());
+        }
+        if let Some(rx) = &self.opening {
+            match rx.try_recv() {
+                Ok(Ok(s)) => {
+                    self.opening = None;
+                    self.retry_after = None;
+                    self.backoff = Duration::from_secs(1);
+                    s.ring.set_paused(self.paused);
+                    self.desk = Some(s);
+                    eprintln!("audio.speaker: opened the {:?} device of the audio server", self.role);
+                    return Ok(());
+                }
+                Ok(Err(e)) => {
+                    self.opening = None;
+                    self.retry_after = Some(Instant::now() + self.backoff);
+                    self.backoff = (self.backoff * 2).min(Duration::from_secs(30));
+                    return Err(e);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Err(io::Error::new(io::ErrorKind::WouldBlock, "opening the audio server stream")),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.opening = None;
+                    self.retry_after = Some(Instant::now() + self.backoff);
+                    return Err(io::Error::other("the stream opener ended"));
+                }
+            }
         }
         if let Some(at) = self.retry_after {
             if Instant::now() < at {
                 return Err(io::Error::new(io::ErrorKind::NotConnected, "the audio server is not reachable; retrying later"));
             }
         }
-        let s = match Stream::open(self.role, self.rate) {
-            Ok(s) => s,
-            Err(e) => {
-                self.retry_after = Some(Instant::now() + self.backoff);
-                self.backoff = (self.backoff * 2).min(Duration::from_secs(30));
-                return Err(e);
-            }
-        };
-        self.retry_after = None;
-        self.backoff = Duration::from_secs(1);
-        s.ring.set_paused(self.paused);
-        self.desk = Some(s);
-        eprintln!("audio.speaker: opened the {:?} device of the audio server", self.role);
-        Ok(())
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (role, rate) = (self.role, self.rate);
+        std::thread::Builder::new().name("speaker-open".into()).spawn(move || {
+            let _ = tx.send(Stream::open(role, rate));
+        })?;
+        self.opening = Some(rx);
+        Err(io::Error::new(io::ErrorKind::WouldBlock, "opening the audio server stream"))
     }
 
     fn is_open(&self) -> bool {
@@ -325,8 +348,14 @@ impl Session {
         eprintln!("audio.speaker: trace {} frames in {} writes, peak {}, slowest write {:?}, played {played}, underruns {under}", m.frames, m.writes, m.peak, m.slowest);
     }
 
+    /// Closes the stream. Dropping it asks the server to stop and remove the IO proc (up to 5 s each when the
+    /// server is wedged), so the drop happens on its own thread.
     fn release(&mut self) {
-        self.desk = None;
+        if let Some(d) = self.desk.take() {
+            if std::thread::Builder::new().name("speaker-close".into()).spawn(move || drop(d)).is_err() {
+                eprintln!("audio.speaker: could not spawn the closer thread");
+            }
+        }
     }
 }
 
@@ -345,7 +374,7 @@ impl SpeakerOut {
     }
 
     pub fn with_role(role: Role, rate: u32, _channels: u32) -> Self {
-        let session = Arc::new(Mutex::new(Session { role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false, retry_after: None, backoff: Duration::from_secs(1) }));
+        let session = Arc::new(Mutex::new(Session { role, rate, desk: None, active: Instant::now(), meter: Meter::default(), reported: Instant::now(), paused: false, retry_after: None, backoff: Duration::from_secs(1), opening: None }));
         let weak: Weak<Mutex<Session>> = Arc::downgrade(&session);
         std::thread::Builder::new()
             .name("speaker-idle".into())
