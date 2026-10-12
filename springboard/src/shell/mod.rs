@@ -46,6 +46,7 @@ pub mod icons;
 pub mod row_glyphs;
 pub mod keyboard;
 pub mod textinput;
+pub mod compose_window;
 pub mod kb_layouts;
 pub mod kb_capslock;
 pub mod kb_clicks;
@@ -479,6 +480,8 @@ pub struct Shell {
     switcher: Switcher,
     /// the search card pulled down over the home screen
     quicksearch: QuickSearch,
+    /// the built-in compose method over the Search field and its candidate window
+    compose_ime: compose_window::ComposeWindow,
     notify: notify::Notify,
     /// `UNUserNotificationCenter` state of the external apps (categories, pending and delivered requests)
     usernotif: usernotif::Registry,
@@ -743,6 +746,7 @@ impl Shell {
             perf_drawn: false,
             switcher: Switcher::default(),
             quicksearch,
+            compose_ime: compose_window::ComposeWindow::default(),
             notify: notify::Notify::default(),
             usernotif: usernotif::Registry::default(),
             extras: extras::Registry::default(),
@@ -2875,6 +2879,8 @@ impl Shell {
                         damage.all();
                     }
                 }
+                // the compose candidate window floats above the windows
+                self.draw_compose(s, &self.ui, self.w, self.h);
                 match self.desk_clear.take() {
                     Some(rects) => match before {
                         Some(b) => damage.union(&Damage::changed_in(&rects, &b, s.px, s.stride, s.w, s.h)),

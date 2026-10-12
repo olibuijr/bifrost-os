@@ -679,6 +679,7 @@ pub mod controller_motion;
 pub mod racing_wheel;
 pub mod virtual_controller;
 pub mod input_method;
+pub mod compose_method;
 pub mod vertical_text;
 pub mod affine;
 pub mod pdfpage;
