@@ -767,6 +767,8 @@ pub mod compute;
 pub mod ml_model;
 pub mod ml_state;
 pub mod ml_update;
+pub mod model_assets;
+pub mod model_specialization;
 pub mod work_stream;
 pub mod postal;
 pub mod recordsearch;
