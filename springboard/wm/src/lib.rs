@@ -4,6 +4,7 @@ pub mod background_effect;
 pub mod boot;
 #[cfg(feature = "drm")]
 pub mod drm;
+#[cfg(feature = "drm")]
 pub mod drm_vulkan;
 pub mod glass;
 pub mod grabs;
