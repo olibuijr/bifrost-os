@@ -487,7 +487,7 @@ impl Files {
                     Nav::Up => self.go_up(),
                     Nav::Path(p) => {
                         let p = self.ctl_abs(&p);
-                        let virtual_folder = p == Path::new(fs::RECENTS) || p.starts_with(TAGGED);
+                        let virtual_folder = p == Path::new(fs::RECENTS) || p.starts_with(TAGGED) || smart::folder_index(&p).is_some();
                         if !virtual_folder && !p.is_dir() {
                             return Err(RpcError::new(NOT_FOUND, format!("not a folder: {}", p.display())));
                         }
