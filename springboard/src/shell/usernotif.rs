@@ -45,6 +45,8 @@ pub struct Registry {
     pending: Vec<Pending>,
     delivered: Vec<Delivered>,
     queued: Vec<(String, ToApp)>,
+    /// requests that wait for the first-time alert of their app: app, slot, request id, request
+    held: Vec<(String, u8, u32, NotifRequest)>,
 }
 
 impl Registry {
@@ -191,6 +193,18 @@ impl Registry {
         Some((d.app.clone(), ToApp::NotificationAction { id: d.req.id.clone(), action: action.to_string(), text, thread: d.req.thread.clone(), category: d.req.category.clone() }))
     }
 
+    /// A request waits until the person answers the first-time alert of its app (`take_held` returns it then).
+    pub fn hold(&mut self, app: &str, slot: u8, request: u32, req: NotifRequest) {
+        self.held.push((app.to_string(), slot, request, req));
+    }
+
+    /// The app's requests that waited for its answer, oldest first, as (slot, request id, request).
+    pub fn take_held(&mut self, app: &str) -> Vec<(u8, u32, NotifRequest)> {
+        let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.held).into_iter().partition(|(a, ..)| a == app);
+        self.held = rest;
+        mine.into_iter().map(|(_, slot, request, req)| (slot, request, req)).collect()
+    }
+
     /// Holds an answer for an app that is not running; delivered by `take_queued` when it starts.
     pub fn queue(&mut self, app: &str, msg: ToApp) {
         let n = self.queued.iter().filter(|(a, _)| a == app).count();
@@ -214,6 +228,7 @@ impl Registry {
         self.pending.retain(|p| p.app != app);
         self.delivered.retain(|d| d.app != app);
         self.queued.retain(|(a, _)| a != app);
+        self.held.retain(|(a, ..)| a != app);
     }
 }
 
@@ -243,22 +258,16 @@ impl super::Shell {
         let registered = super::apphost::installed();
         let Some(package) = registered.get(slot as usize) else { return };
         let app = package.manifest.id.clone();
+        let name = package.manifest.name.clone();
         let permitted = package.manifest.permissions.iter().any(|p| p == "notifications");
         match msg {
             ToShell::NotifyCategories(list) if permitted => self.usernotif.set_categories(&app, list),
+            // the first request of an app that was never asked waits for the first-time alert (`permission.rs`)
+            ToShell::NotifyRequest { request, req } if permitted && !self.notify.store().is_asked(super::AppId::External(slot)) => {
+                self.usernotif_hold(slot, &app, &name, request, req);
+            }
             ToShell::NotifyRequest { request, req } => {
-                let status = if !permitted {
-                    NotifStatus::NotPermitted
-                } else {
-                    match self.usernotif.add(&app, req.clone(), t) {
-                        Added::Refused(status) => status,
-                        Added::Scheduled => NotifStatus::Ok,
-                        Added::Deliver { replaced } => {
-                            self.usernotif_deliver(slot, &app, req, replaced, t);
-                            NotifStatus::Ok
-                        }
-                    }
-                };
+                let status = if permitted { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
                 self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
             }
             ToShell::NotifyRemove { delivered, ids } if permitted => {
@@ -277,6 +286,76 @@ impl super::Shell {
                 self.ext_send(slot as usize, &ToApp::NotificationSettings { request, settings });
             }
             _ => {}
+        }
+    }
+
+    /// Adds a request of a permitted app: it is delivered now, scheduled, or refused. Returns the status for the app.
+    fn usernotif_submit(&mut self, slot: u8, app: &str, req: NotifRequest, t: f64) -> NotifStatus {
+        match self.usernotif.add(app, req.clone(), t) {
+            Added::Refused(status) => status,
+            Added::Scheduled => NotifStatus::Ok,
+            Added::Deliver { replaced } => {
+                self.usernotif_deliver(slot, app, req, replaced, t);
+                NotifStatus::Ok
+            }
+        }
+    }
+
+    /// A request of an app that was never asked waits for the first-time alert. The alert is queued once per app.
+    fn usernotif_hold(&mut self, slot: u8, app: &str, name: &str, request: u32, req: NotifRequest) {
+        self.usernotif.hold(app, slot, request, req);
+        let id = super::AppId::External(slot);
+        let queued = self.notify.ask_queue.iter().any(|(a, _)| *a == id);
+        let showing = self.notify.ask.as_ref().is_some_and(|s| s.app() == id);
+        if !queued && !showing {
+            self.notify.ask_queue.push((id, name.to_string()));
+        }
+    }
+
+    /// Shows the next first-time alert when none is on screen (the shell's frame tick).
+    pub(super) fn usernotif_ask_tick(&mut self, t: f64) {
+        if self.notify.ask.is_some() || self.notify.ask_queue.is_empty() {
+            return;
+        }
+        let (id, name) = self.notify.ask_queue.remove(0);
+        match super::notify::permission::Sheet::new(&self.ui, id, &name, t.max(0.0) as u64) {
+            Some(sheet) => self.notify.ask = Some(sheet),
+            // the alert could not be made, so the question stays unanswered, which grants nothing
+            None => self.usernotif_answer(id, false, t),
+        }
+        self.dirty = true;
+        self.drawn = super::Drawn::Nothing;
+    }
+
+    /// Touches while the first-time alert is up: it takes every touch until the person answers it.
+    pub(super) fn usernotif_ask_event(&mut self, ev: super::Event) -> Option<Vec<super::Effect>> {
+        self.notify.ask.as_ref()?;
+        if let super::Event::Up(x, y) = ev {
+            let hit = self.notify.ask.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+            if let Some(button) = hit {
+                if let Some(sheet) = self.notify.ask.take() {
+                    let app = sheet.app();
+                    let t = self.notify.t;
+                    // the question has no expiry, so the clock does not change the answer
+                    let allowed = sheet.finish(button, t.max(0.0) as u64).unwrap_or(false);
+                    self.usernotif_answer(app, allowed, t);
+                }
+            }
+        }
+        self.drawn = super::Drawn::Nothing;
+        self.dirty = true;
+        Some(vec![])
+    }
+
+    /// The person answered the first-time alert of `id`: the answer is stored and the Allow Notifications switch
+    /// follows it. The requests the app made while it waited get their status now (refused when not allowed).
+    fn usernotif_answer(&mut self, id: super::AppId, allowed: bool, t: f64) {
+        self.notify.answer_permission(id, allowed);
+        let super::AppId::External(slot) = id else { return };
+        let Some(app) = super::apphost::installed().get(slot as usize).map(|p| p.manifest.id.clone()) else { return };
+        for (slot, request, req) in self.usernotif.take_held(&app) {
+            let status = if allowed { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
+            self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
         }
     }
 
@@ -564,6 +643,20 @@ mod tests {
         r.forget_app(APP);
         assert!(r.list(APP, true).is_empty() && r.list(APP, false).is_empty() && r.take_queued(APP).is_empty());
         assert!(r.category(APP, "MSG").is_none());
+    }
+
+    #[test]
+    fn requests_held_for_the_first_alert_come_back_with_the_answer_in_order() {
+        let mut r = Registry::default();
+        r.hold(APP, 2, 7, req("a"));
+        r.hold("other", 3, 8, req("x"));
+        r.hold(APP, 2, 9, req("b"));
+        assert_eq!(r.take_held(APP), vec![(2, 7, req("a")), (2, 9, req("b"))]);
+        assert_eq!(r.take_held("other"), vec![(3, 8, req("x"))]);
+        assert!(r.take_held(APP).is_empty());
+        r.hold(APP, 2, 1, req("gone"));
+        r.forget_app(APP);
+        assert!(r.take_held(APP).is_empty());
     }
 
     #[test]

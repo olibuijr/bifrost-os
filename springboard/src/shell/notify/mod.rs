@@ -20,10 +20,12 @@ pub mod banner;
 pub mod center;
 pub mod list;
 pub mod lockwidgets;
+pub mod permission;
 pub mod schedule;
 pub mod store;
 
 use super::clock::Wall;
+use super::notify_page::{pref_key, AppNotif};
 use super::ui::Ui;
 use super::{AppId, Effect, Event, Info, Screen, Shell, apps, IN_DOCK};
 use crate::deildu::DeilduEvent;
@@ -101,7 +103,7 @@ pub struct Notify {
     store: Store,
     wall: Wall,
     /// the last tick's time
-    t: f64,
+    pub(super) t: f64,
     /// bumped whenever the store changes
     gen: u32,
     banner: Option<Banner>,
@@ -135,6 +137,10 @@ pub struct Notify {
     sched_on: bool,
     /// Focus was switched off inside the window: it stays off until the window ends
     sched_skip: bool,
+    /// first-time permission alerts waiting for their turn: the app and the name the alert shows
+    pub(super) ask_queue: Vec<(AppId, String)>,
+    /// the first-time permission alert on screen (`permission.rs`)
+    pub(super) ask: Option<permission::Sheet>,
 }
 
 impl Default for Notify {
@@ -163,6 +169,8 @@ impl Default for Notify {
             dnd: false,
             sched_on: false,
             sched_skip: false,
+            ask_queue: Vec::new(),
+            ask: None,
         }
     }
 }
@@ -197,6 +205,13 @@ impl Notify {
     /// Whether a notification of `app` may show a banner or wake the screen.
     pub fn delivers(&self, app: AppId) -> bool {
         !self.dnd() && !self.store.is_muted(app)
+    }
+
+    /// The person answered the first-time alert for `app`: the answer is stored (the app is not asked again) and the
+    /// Allow Notifications switch follows it.
+    pub fn answer_permission(&mut self, app: AppId, allowed: bool) {
+        permission::apply_answer(&mut self.store, app, allowed);
+        self.gen = self.gen.wrapping_add(1);
     }
 
     /// Drops what Focus silences: the banner and a pending wake.
@@ -342,7 +357,8 @@ impl Shell {
         self.screentime.note_notification(app);
         self.store_changed();
         self.notify.refresh_schedule();
-        if !self.notify.delivers(app) {
+        // the Alert Style None of the app's page: stored, badged and listed, but no banner and no wake
+        if !self.notify.delivers(app) || !self.app_notif(app).banners {
             return id;
         }
         if !self.screen_on {
@@ -371,8 +387,14 @@ impl Shell {
         let now = self.notify.now();
         let Some(n) = self.notify.store.get(id).cloned() else { return };
         let icon = self.notification_icon(app);
+        let alerts = self.app_notif(app).persistent;
         self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, false));
-        self.notify.banner = Some(Banner::new(id, self.notify.t));
+        self.notify.banner = Some(Banner::new(id, self.notify.t).persistent(alerts));
+    }
+
+    /// The app's options from its page of Settings > Notifications (the defaults when it has none).
+    pub(super) fn app_notif(&self, app: AppId) -> AppNotif {
+        self.prefs.get(&pref_key(app)).map_or_else(AppNotif::default, AppNotif::decode)
     }
 
     /// The app's icon at the card size, rendered once per app.
