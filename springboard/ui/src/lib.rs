@@ -613,6 +613,7 @@ pub mod dock_tile;
 pub mod cursor;
 pub mod screen;
 pub mod menu;
+pub mod menu_extras;
 pub mod launch;
 pub mod detect;
 pub mod prefs_layout;
