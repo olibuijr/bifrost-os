@@ -73,9 +73,9 @@ impl Shell {
  pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.desktop_menu_hover(x,y);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
  pub(super) fn dock_tick(&mut self,t:f64){
   let now=t/1000.;let menu_open=self.desktop_menu==Some(Menu::Dock);
-  let keep_flags:Vec<bool>=self.desk.as_ref().map(|d|d.dock_bounce.iter().map(|&(i,start)|now-start<BOUNCE_MAX_S&&!self.dock_item_running(i)).collect()).unwrap_or_default();
+  let keep_flags:Vec<bool>=self.desk.as_ref().map(|d|d.dock_bounce.iter().map(|&(i,start)|{let el=now-start;el<BOUNCE_MAX_S&&(!self.dock_item_running(i)||el<motion::duration(Kind::DockBounce) as f64)}).collect()).unwrap_or_default();
   let Some(d)=self.desk.as_mut()else{return;};
-  // launch bounces end when the app's first window maps (or after a timeout)
+  // a launch bounce lasts one hop once the app's first window maps (none under Reduce Motion), or ends after a timeout
   if !d.dock_bounce.is_empty(){let mut keep=keep_flags.into_iter();let before=d.dock_bounce.len();d.dock_bounce.retain(|_|keep.next().unwrap_or(false));if d.dock_bounce.len()!=before{self.dirty=true;}}
   let d=self.desk.as_mut().unwrap();
   if d.dock_preferences.autohide&&d.dock_hide_at.is_some_and(|at|t>=at)&&d.grab_idle()&&!menu_open{

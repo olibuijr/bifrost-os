@@ -296,6 +296,19 @@ mod tests {
     }
 
     #[test]
+    fn a_closing_window_shrinks_and_fades_over_its_close_time() {
+        // Close lasts 0.16 s on an ease-out curve: halfway (0.08 s) the progress is 1 - (1 - 0.5)^3 = 0.875
+        let c = WindowFx::new(Effect::Close, 0.0, false);
+        let f = c.fx(0.08, 40.0);
+        assert!((f.alpha - 0.125).abs() < 1e-3, "alpha {}", f.alpha);
+        assert!((f.scale - (1.0 - 0.1 * 0.875)).abs() < 1e-3, "scale {}", f.scale);
+        assert!(!c.done(0.08) && c.done(0.5), "the close is kept only while it runs");
+        let mut t = FxTracker::default();
+        assert!(t.begin(3, Effect::Close, AnimationBehavior::Utility, false, 0.0), "utility windows close with an effect");
+        assert!(!t.begin(4, Effect::Minimize { to_dx: 1.0, to_dy: 1.0 }, AnimationBehavior::Utility, false, 0.0));
+    }
+
+    #[test]
     fn minimize_effect_index_follows_the_settings_list() {
         assert_eq!(MinimizeEffect::from_index(0), MinimizeEffect::Funnel);
         assert_eq!(MinimizeEffect::from_index(1), MinimizeEffect::Scale);
