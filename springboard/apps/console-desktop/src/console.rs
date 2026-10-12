@@ -2,6 +2,7 @@
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
 use crate::cursor;
+use crate::diagnostics::{self, DailySource, HangSource};
 use crate::model::{self, Buffer, Levels, LogEntry, Query, SavedSearch, MAX_ENTRIES};
 use crate::signposts;
 use crate::security::{self, Security};
@@ -42,11 +43,14 @@ const LOAD: usize = 500;
 /// Messages waiting for the window while the reader runs ahead of it (the rest are dropped).
 const PENDING_MAX: usize = 20_000;
 
-// Sidebar row ids: This Mac, Crash Reports, then log file `i` as `FILE_ROW + i`, saved search `i` as `SAVED_ROW + i`.
+// Sidebar row ids: the live journal, Crash Reports, Hang Diagnostics, Daily Summary, Signposts and Security Events,
+// then log file `i` as `FILE_ROW + i`, saved search `i` as `SAVED_ROW + i`.
 const ROW_LIVE: u32 = 1;
 const ROW_CRASH: u32 = 2;
 const ROW_SIGNPOST: u32 = 3;
 const ROW_SECURITY: u32 = 4;
+const ROW_HANG: u32 = 5;
+const ROW_DAILY: u32 = 6;
 const FILE_ROW: u32 = 100;
 const SAVED_ROW: u32 = 200;
 
@@ -62,6 +66,8 @@ pub const B_SEARCH: u32 = 5;
 pub enum View {
     Live,
     Crashes,
+    Hangs,
+    Daily,
     Signposts,
     Security,
     File(usize),
@@ -187,6 +193,8 @@ impl Console {
         self.source = match view {
             View::Live => Box::new(Journal),
             View::Crashes => Box::new(Coredumps),
+            View::Hangs => Box::new(HangSource),
+            View::Daily => Box::new(DailySource),
             View::Signposts => Box::new(Journal),
             View::Security => Box::new(Security),
             View::File(i) => Box::new(LogFile { path: self.files.get(i).cloned().unwrap_or_default() }),
@@ -209,8 +217,11 @@ impl Console {
             }
             Err(err) => self.status = err,
         }
-        if view == View::Security {
-            self.status = security::NOTE.to_string();
+        match view {
+            View::Security => self.status = security::NOTE.to_string(),
+            View::Hangs => self.status = diagnostics::HANG_NOTE.to_string(),
+            View::Daily => self.status = diagnostics::DAILY_NOTE.to_string(),
+            _ => {}
         }
         self.rebuild();
         self.stick = self.is_live() && self.streaming;
@@ -342,6 +353,8 @@ impl Console {
         let mut items = vec![SidebarItem::header("Live"), SidebarItem::row(ROW_LIVE, "This Mac").with_symbol("desktopcomputer")];
         items.push(SidebarItem::header("Reports"));
         items.push(SidebarItem::row(ROW_CRASH, "Crash Reports").with_symbol("xmark.circle.fill"));
+        items.push(SidebarItem::row(ROW_HANG, "Hang Diagnostics").with_symbol("exclamationmark.triangle"));
+        items.push(SidebarItem::row(ROW_DAILY, "Daily Summary").with_symbol("calendar"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
         items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
         // the section appears once a search is saved, so the default sidebar is unchanged
@@ -360,6 +373,8 @@ impl Console {
         list.set_selected(Some(match self.view {
             View::Live => ROW_LIVE,
             View::Crashes => ROW_CRASH,
+            View::Hangs => ROW_HANG,
+            View::Daily => ROW_DAILY,
             View::Signposts => ROW_SIGNPOST,
             View::Security => ROW_SECURITY,
             View::File(i) => FILE_ROW + i as u32,
@@ -385,6 +400,8 @@ impl Console {
             ROW_CRASH => View::Crashes,
             ROW_SIGNPOST => View::Signposts,
             ROW_SECURITY => View::Security,
+            ROW_HANG => View::Hangs,
+            ROW_DAILY => View::Daily,
             id if id >= FILE_ROW && ((id - FILE_ROW) as usize) < self.files.len() => View::File((id - FILE_ROW) as usize),
             _ => return,
         };
@@ -753,6 +770,8 @@ impl Console {
         match self.view {
             View::Live => "No Messages",
             View::Crashes => "No Crash Reports",
+            View::Hangs => "No Hang Diagnostics",
+            View::Daily => "No Crashes or Hangs",
             View::Signposts => "No Signposts",
             View::Security => "No Security Events",
             View::File(_) => "No Log Entries",

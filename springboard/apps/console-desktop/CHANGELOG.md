@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- Reports has two new rows. Hang Diagnostics lists each time the shell's UI loop stopped answering for 20 seconds or
+  more, with how long it stalled. Its detail says that no call stack is kept for a hang. Daily Summary counts the crash
+  reports and hangs for each day (UTC), and its rows say how many of each happened and the stall time added up.
+- Crash Reports is unchanged: its detail still shows the call stacks that systemd-coredump kept.
+- Not in this version: metric reports from the shell's per-app counters, and opening or saving log archives. The
+  shell does not send its counters to the Console, and BifrOSt has no log archive format yet.
+
 ## 1.3.0 — 2026-10-12
 
 - Saved searches: Log, Save Search keeps the text in the search field as a row in a Saved Searches section of the
