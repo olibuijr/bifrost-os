@@ -7,6 +7,10 @@
   connection and try again.
 - Wind speed follows the temperature setting: km/h with Celsius, mph with Fahrenheit.
 - Each other place in Locations shows how far away it is from the selected place, in km or miles to match the setting.
+- The current conditions for the selected place are offered to Notification Centre as a widget. The entry shows the place,
+  the temperature and the sky, and it is refreshed about every 15 minutes or when the forecast changes.
+- Weather follows the system's network path: with no connection and nothing saved, the error screen shows; when the
+  connection comes back, the forecast is fetched at once instead of waiting for the next retry.
 
 ## 1.2.2 — 2026-10-11
 

@@ -2,10 +2,12 @@
 //! hosted through the SDK. The shell draws the keyboard; the app
 //! asks for it with `wants_keyboard` and receives typed keys as `Input::Key`.
 
+mod services;
 mod weather;
 
 use bifrost_app::kit::{Damage, Event, Surface};
-use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{network_path, widgets_timeline, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::shell::music::radio::{Fetch, Http};
 use std::sync::Arc;
@@ -13,6 +15,12 @@ use std::sync::Arc;
 struct WeatherApp {
     w: Option<weather::Weather>,
     kb: bool,
+    /// the network path request sent once at start; its reply (and each `pathUpdate`) sets online or offline
+    path_request: Option<u32>,
+    /// the last widget timeline reload sent
+    timeline_request: Option<u32>,
+    /// the shell has no `widgets_timeline` service (an older shell): the app stops sending to it
+    timeline_off: bool,
 }
 
 impl WeatherApp {
@@ -21,6 +29,29 @@ impl WeatherApp {
         if on != self.kb {
             self.kb = on;
             ctx.wants_keyboard(on);
+        }
+    }
+
+    /// After any input or tick: the keyboard, and the widget timeline when the saved summary changed.
+    fn sync(&mut self, ctx: &Ctx) {
+        self.sync_keyboard(ctx);
+        if self.w.as_mut().is_some_and(|w| w.take_summary_changed()) {
+            self.push_timeline(ctx);
+        }
+    }
+
+    /// Sends the current-conditions timeline for the selected place (or removes it when no forecast is known).
+    fn push_timeline(&mut self, ctx: &Ctx) {
+        if self.timeline_off {
+            return;
+        }
+        let summary = self.w.as_ref().and_then(|w| w.summary());
+        self.timeline_request = Some(services::push_timeline(ctx, summary.as_ref(), services::now_unix()));
+    }
+
+    fn set_path(&mut self, path: &network_path::Path) {
+        if let Some(c) = &mut self.w {
+            c.set_online(services::online(path));
         }
     }
 }
@@ -47,6 +78,11 @@ impl App for WeatherApp {
         match &mut self.w {
             Some(c) => c.set_size(w, h),
             None => self.w = Some(weather::Weather::new(&ctx.ui, w, h, ctx.data_dir.clone(), pinned_fetcher())),
+        }
+        if self.path_request.is_none() {
+            // once at start: the saved forecast goes to the widget, and the path decides online or offline
+            self.path_request = Some(network_path::request_path(ctx));
+            self.push_timeline(ctx);
         }
     }
 
@@ -79,14 +115,47 @@ impl App for WeatherApp {
             Input::Open(_) => return false,
             _ => return false,
         }
-        self.sync_keyboard(ctx);
+        self.sync(ctx);
         true
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let r = self.w.as_mut().is_some_and(|c| c.tick(&ctx.ui, t));
-        self.sync_keyboard(ctx);
+        self.sync(ctx);
         r
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if Some(request) == self.path_request {
+            // an error (for example an older shell) keeps the app online, as it was before the service existed
+            if let Ok(path) = network_path::decode_reply(result.clone()) {
+                self.set_path(&path);
+            }
+            return true;
+        }
+        if Some(request) == self.timeline_request {
+            if services::missing_service(result) {
+                self.timeline_off = true;
+            }
+            return true;
+        }
+        false
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if let Some(widgets_timeline::Event::Reload { kind }) = widgets_timeline::parse_event(service, event, body) {
+            if kind == services::TIMELINE_KIND {
+                self.push_timeline(ctx);
+            }
+            return false;
+        }
+        match network_path::path_event(service, event, body) {
+            Some(Ok(path)) => {
+                self.set_path(&path);
+                true
+            }
+            _ => false,
+        }
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
@@ -108,5 +177,5 @@ impl App for WeatherApp {
 }
 
 fn main() {
-    bifrost_app::run(WeatherApp { w: None, kb: false });
+    bifrost_app::run(WeatherApp { w: None, kb: false, path_request: None, timeline_request: None, timeline_off: false });
 }
