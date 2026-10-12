@@ -8,6 +8,9 @@
 - Highlight Match (⇧⌘Y) marks the text the last find went to. Highlights stay on the page at any font size and across
   restarts, and choosing it again removes the highlight.
 - Highlights are saved with the book's reading position in the Books state file, one line per highlight.
+- Edit > Copy Quote (⇧⌘C) copies the sentence around the match the last find went to, with its citation (the book's
+  title, author and chapter), as plain text on the shared clipboard. It is enabled while the match is highlighted.
+- Desktop search finds books by their title and author, and picking a book there opens it in Books.
 
 ## 1.2.5
 
