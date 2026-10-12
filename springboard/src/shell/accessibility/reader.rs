@@ -21,6 +21,7 @@ use super::AccessibilitySettings;
 use crate::gfx::Surface;
 use crate::shell::axmap::item_role;
 use crate::shell::desk::full_size;
+#[cfg(feature = "desktop-wayland")]
 use crate::shell::desktop_bar::menu_spans;
 use crate::shell::list::Spec;
 use crate::shell::ui::LINK;

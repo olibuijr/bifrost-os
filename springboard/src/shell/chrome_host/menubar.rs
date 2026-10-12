@@ -3,12 +3,16 @@
 //! id is its row index in `menu_rows(menu)`, so a `MenuAction` is resolved against the shell as it is when it arrives.
 //! Owner: wave G2 agent `chrome-menubar`.
 
+#[cfg(feature = "desktop-wayland")]
 use super::super::desktop_bar::{Menu, Row};
+#[cfg(feature = "desktop-wayland")]
 use super::super::{Effect, Shell};
+#[cfg(feature = "desktop-wayland")]
 use bifrost_chrome::model::{Menu as BarMenu, MenuBarModel, MenuItem, StatusItem};
 
 /// A row as the model reads it: the text the shell draws (a checked row starts with a check mark), whether it is a
 /// separator, its shortcut and whether it has an action.
+#[cfg(feature = "desktop-wayland")]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct RowView {
     pub text: String,
@@ -17,6 +21,7 @@ pub(super) struct RowView {
     pub enabled: bool,
 }
 
+#[cfg(feature = "desktop-wayland")]
 impl RowView {
     fn of(row: &Row) -> RowView {
         RowView {
@@ -29,6 +34,7 @@ impl RowView {
 }
 
 /// The model's items for one menu's rows. The id is the row index; the check mark becomes `checked`.
+#[cfg(feature = "desktop-wayland")]
 pub(super) fn items_from(rows: &[RowView]) -> Vec<MenuItem> {
     rows.iter()
         .enumerate()
@@ -92,7 +98,7 @@ pub(super) fn menu_action(shell: &mut Shell, menu: u32, item: u32, t: f64) -> Ve
     shell.run_menu_action(action, t)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "desktop-wayland"))]
 mod tests {
     use super::*;
 

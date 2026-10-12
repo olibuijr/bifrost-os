@@ -3,7 +3,7 @@
 //! gives the `Fx` the GPU presenter applies to the window's content and shadow. Timing comes from
 //! `motion::duration`, so Reduce Motion makes every effect a short cross-fade in place.
 use bifrost_render::glass::Fx;
-use bifrost_render::motion::{self, Anim, Kind};
+use bifrost_render::motion::{Anim, Kind};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Effect {
