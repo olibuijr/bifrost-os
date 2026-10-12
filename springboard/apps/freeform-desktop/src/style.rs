@@ -15,9 +15,10 @@ use bifrost_app::controls::stroke_style::dash_polyline;
 pub const OPACITY_STEPS: [f32; 3] = [1.0, 0.5, 0.25];
 /// Dash on and off lengths, in points.
 const DASH_PT: [f32; 2] = [6.0, 4.0];
-/// The shadow: its opacity and its offset (points, right and down). Its blur radius is not drawn (a hard shadow).
+/// The shadow: its opacity, its offset (points, right and down) and its blur radius (points).
 const SHADOW_OPACITY: f32 = 0.35;
 const SHADOW_OFFSET_PT: (f32, f32) = (3.0, 4.0);
+const SHADOW_BLUR_PT: f32 = 3.0;
 
 /// What fills a closed shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,9 +63,24 @@ fn ramp(a: u32, b: u32) -> Gradient {
     Gradient::new(vec![Stop { at: 0.0, rgba: rgba_of(a) }, Stop { at: 1.0, rgba: rgba_of(b) }])
 }
 
-/// The shadow the inspector draws: the model's shadow, with the offset and opacity above.
-fn shadow_model() -> Shadow {
-    Shadow { opacity: SHADOW_OPACITY, radius: 0.0, offset: SHADOW_OFFSET_PT }
+/// The shadow the inspector draws: the model's shadow, with the offset, opacity and blur radius above.
+fn shadow_model(blur_pt: f32) -> Shadow {
+    Shadow { opacity: SHADOW_OPACITY, radius: blur_pt, offset: SHADOW_OFFSET_PT }
+}
+
+/// The offsets (pixels) of the copies a blurred shadow is painted as: the centre, then eight points on a ring of
+/// the blur radius. Each copy takes an equal share of the shadow's opacity, so the copies together spread the shadow
+/// over the ring and the total stays the same. A radius that is not positive gives the centre alone (a hard shadow).
+fn blur_taps(radius_px: f32) -> Vec<(f32, f32)> {
+    if !(radius_px > 0.0 && radius_px.is_finite()) {
+        return vec![(0.0, 0.0)];
+    }
+    let mut taps = vec![(0.0, 0.0)];
+    for k in 0..8 {
+        let angle = k as f32 * std::f32::consts::FRAC_PI_4;
+        taps.push((radius_px * angle.cos(), radius_px * angle.sin()));
+    }
+    taps
 }
 
 /// Paints the outline of a polyline: a disc at each point and along each segment, or, when dashed, only along the
@@ -144,16 +160,25 @@ fn fill_polygon(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], fill: 
 /// Paints one stroke with its style into `px`, a `cw` x `ch` canvas. `scale` converts points to pixels. Without a
 /// style (the default) the result is the same as `ink::paint_stroke`.
 pub fn paint(px: &mut [u32], cw: usize, ch: usize, s: &Stroke, st: &Style, scale: f32) {
+    paint_with_blur(px, cw, ch, s, st, scale, SHADOW_BLUR_PT);
+}
+
+/// `paint`, with the shadow's blur radius (points) given. A radius of zero paints the shadow hard.
+fn paint_with_blur(px: &mut [u32], cw: usize, ch: usize, s: &Stroke, st: &Style, scale: f32, blur_pt: f32) {
     let pts: Vec<(f32, f32)> = s.points.iter().map(|p| (p.x, p.y)).collect();
     if pts.is_empty() {
         return;
     }
     let opacity = st.opacity.clamp(0.0, 1.0);
     if st.shadow {
-        let sh = shadow_model();
+        let sh = shadow_model(blur_pt);
         let (dx, dy) = (sh.offset.0 * scale, sh.offset.1 * scale);
-        let moved: Vec<(f32, f32)> = pts.iter().map(|&(x, y)| (x + dx, y + dy)).collect();
-        outline(px, cw, ch, &moved, s.ink.width, st.dashed, scale, 0xFF00_0000, sh.effective_opacity() * opacity);
+        let taps = blur_taps(sh.radius * scale);
+        let each = sh.effective_opacity() * opacity / taps.len() as f32;
+        for (ox, oy) in taps {
+            let moved: Vec<(f32, f32)> = pts.iter().map(|&(x, y)| (x + dx + ox, y + dy + oy)).collect();
+            outline(px, cw, ch, &moved, s.ink.width, st.dashed, scale, 0xFF00_0000, each);
+        }
     }
     if st.shape {
         fill_polygon(px, cw, ch, &pts, st.fill, opacity);
@@ -240,6 +265,34 @@ mod tests {
         let mut px = vec![WHITE; 20 * 10];
         paint(&mut px, 20, 10, &stroke, &Style::default(), 1.0);
         assert!(px[5 * 20 + 8] & 255 < 128, "no gap without the dash");
+    }
+
+    #[test]
+    fn a_blur_radius_gives_nine_copies_and_none_gives_one() {
+        assert_eq!(blur_taps(0.0), vec![(0.0, 0.0)], "no blur is one hard copy");
+        let taps = blur_taps(3.0);
+        assert_eq!(taps.len(), 9, "the centre plus eight points on the ring");
+        assert_eq!(taps[1], (3.0, 0.0), "the first ring point is to the right");
+        assert!((taps[3].0).abs() < 1e-4 && (taps[3].1 - 3.0).abs() < 1e-4, "the ring point at 90 degrees is down");
+    }
+
+    #[test]
+    fn a_blurred_shadow_reaches_past_the_hard_shadow_edge() {
+        // The stroke runs along y = 30 from x 5 to 25 (2 pt wide). The hard shadow is offset (3, 4): y = 34.
+        // The blur copy at (0, 3) runs along y = 37, so pixel (15, 37) is painted only when it is blurred.
+        let stroke = Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 2.0 },
+            points: vec![StrokePoint::at(5.0, 30.0), StrokePoint::at(25.0, 30.0)],
+        };
+        let st = Style { shadow: true, ..Style::default() };
+        let (cw, ch) = (40, 50);
+        let mut hard = vec![WHITE; cw * ch];
+        paint_with_blur(&mut hard, cw, ch, &stroke, &st, 1.0, 0.0);
+        assert_eq!(hard[37 * cw + 15], WHITE, "a hard shadow stops at its own edge");
+        let mut soft = vec![WHITE; cw * ch];
+        paint_with_blur(&mut soft, cw, ch, &stroke, &st, 1.0, 3.0);
+        assert_ne!(soft[37 * cw + 15], WHITE, "the blur spreads the shadow to the ring");
+        assert!(soft[37 * cw + 15] & 255 > 200, "the spread is faint: one ninth of the shadow's opacity");
     }
 
     #[test]

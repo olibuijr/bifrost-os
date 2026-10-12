@@ -46,6 +46,7 @@ const BAR_DELETE: u32 = 11;
 const BAR_COPY: u32 = 12;
 const BAR_ARRANGE: u32 = 13;
 const BAR_INSPECTOR: u32 = 14;
+const BAR_PENCIL: u32 = 15;
 
 const UNDO_DEPTH: usize = 12;
 
@@ -155,6 +156,7 @@ const COLORS: [u32; 7] = [
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Tool {
     Pen,
+    Pencil,
     Marker,
     Eraser,
     Lasso,
@@ -233,6 +235,7 @@ pub struct Freeform {
 fn ink_width(tool: Tool) -> f32 {
     match tool {
         Tool::Pen | Tool::Lasso | Tool::Rectangle | Tool::Oval => 2.0 * SPACE_XS,
+        Tool::Pencil => SPACE_XS,
         Tool::Marker => 2.0 * SPACE_M,
         Tool::Eraser => 2.0 * SPACE_L,
     }
@@ -242,6 +245,7 @@ fn ink_width(tool: Tool) -> f32 {
 fn id_target(id: u32) -> Option<Target> {
     Some(match id {
         BAR_PEN => Target::Tool(Tool::Pen),
+        BAR_PENCIL => Target::Tool(Tool::Pencil),
         BAR_MARKER => Target::Tool(Tool::Marker),
         BAR_ERASER => Target::Tool(Tool::Eraser),
         BAR_LASSO => Target::Tool(Tool::Lasso),
@@ -262,6 +266,7 @@ fn id_target(id: u32) -> Option<Target> {
 fn target_id(t: Target) -> Option<u32> {
     Some(match t {
         Target::Tool(Tool::Pen) => BAR_PEN,
+        Target::Tool(Tool::Pencil) => BAR_PENCIL,
         Target::Tool(Tool::Marker) => BAR_MARKER,
         Target::Tool(Tool::Eraser) => BAR_ERASER,
         Target::Tool(Tool::Lasso) => BAR_LASSO,
@@ -436,7 +441,7 @@ impl Freeform {
             return Kind::Arrow;
         }
         match self.tool {
-            Tool::Pen | Tool::Marker | Tool::Rectangle | Tool::Oval => Kind::Crosshair,
+            Tool::Pen | Tool::Pencil | Tool::Marker | Tool::Rectangle | Tool::Oval => Kind::Crosshair,
             Tool::Eraser => Kind::DisappearingItem,
             Tool::Lasso => {
                 let (cx, cy) = self.canvas_point(ui, x, y);
@@ -500,6 +505,7 @@ impl Freeform {
     fn bar(&self) -> Toolbar {
         Toolbar::new(vec![
             ToolbarItem::button(BAR_PEN, "Pen").in_group(1).selected(self.tool == Tool::Pen),
+            ToolbarItem::button(BAR_PENCIL, "Pencil").in_group(1).selected(self.tool == Tool::Pencil),
             ToolbarItem::button(BAR_MARKER, "Marker").in_group(1).selected(self.tool == Tool::Marker),
             ToolbarItem::button(BAR_ERASER, "Eraser").in_group(1).selected(self.tool == Tool::Eraser),
             ToolbarItem::button(BAR_LASSO, "Lasso").in_group(1).selected(self.tool == Tool::Lasso),
@@ -621,6 +627,7 @@ impl Freeform {
     fn pen_ink(&self) -> Ink {
         let (kind, color) = match self.tool {
             Tool::Marker => (InkKind::Marker, COLORS[self.color]),
+            Tool::Pencil => (InkKind::Pencil, COLORS[self.color]),
             Tool::Eraser => (InkKind::Pen, PAPER),
             _ => (InkKind::Pen, COLORS[self.color]),
         };
@@ -752,7 +759,7 @@ impl Freeform {
     fn canvas_down(&mut self, ui: &Ui, x: f32, y: f32) {
         let (cx, cy) = self.canvas_point(ui, x, y);
         match self.tool {
-            Tool::Pen | Tool::Marker | Tool::Eraser => {
+            Tool::Pen | Tool::Pencil | Tool::Marker | Tool::Eraser => {
                 self.selection = None;
                 self.push_undo();
                 self.drawing = true;
@@ -1456,6 +1463,19 @@ mod model_tests {
         assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::OpenHand, "over the selected stroke");
         app.moving = Some((0.0, 0.0));
         assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::ClosedHand, "while it is dragged");
+    }
+
+    #[test]
+    fn the_pencil_is_a_thin_pencil_ink_in_the_pen_group() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.tool = Tool::Pencil;
+        let ink = app.pen_ink();
+        assert_eq!(ink.kind, InkKind::Pencil, "the pencil draws with the pencil ink of the drawing model");
+        assert_eq!(ink.width, SPACE_XS, "half the pen's width (the pen is 2 x SPACE_XS)");
+        assert_eq!(id_target(BAR_PENCIL), Some(Target::Tool(Tool::Pencil)));
+        assert_eq!(target_id(Target::Tool(Tool::Pencil)), Some(BAR_PENCIL));
+        assert_eq!(app.pointer_for(&ui, 10.0, app.canvas_top(&ui) as f32 + 10.0), Kind::Crosshair);
     }
 
     /// A whole-board lasso, so every stroke is selected.
