@@ -1,6 +1,10 @@
 ## 1.17.2 — 2026-10-12
 
 - Moving an item to the Trash takes the item's folder under the shared file coordination lock, so another app that coordinates its reads and writes never sees the item half moved. If the folder stays busy for five seconds the item is left in place and the report says "The item is in use by another app."
+- Space shows the desktop's preview panel for the selection, and the arrow keys step through it; the selected row follows the item shown. Space again closes it. Without the panel the in-app preview still opens.
+- Copy puts the selected files on the shared pasteboard, so another app can paste them. Paste takes the files another app copied, and the Copy or Cut from Files keeps its move.
+- A document you open is indexed for desktop search by its name and folder.
+- A long copy, move or duplicate shows its progress on the Files Dock icon until it finishes.
 
 ## 1.17.1 — 2026-10-12
 
