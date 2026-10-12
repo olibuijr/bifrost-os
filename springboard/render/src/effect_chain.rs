@@ -49,6 +49,53 @@ fn defaults(kind: Kind) -> Vec<(&'static str, f32)> {
     }
 }
 
+/// The range of one input: the least and greatest value it accepts, and its default. These follow the
+/// minimum, maximum and default attribute keys that a parameter description carries.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InputRange {
+    pub key: &'static str,
+    pub min: f32,
+    pub max: f32,
+    pub default: f32,
+}
+
+/// The group a filter is listed under in a filter browser.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Category {
+    /// Changes the tone or colour balance of the whole image: exposure, saturation, contrast, hue, temperature.
+    ColorAdjustment,
+    /// Maps each colour to another: sepia, invert, posterize.
+    ColorEffect,
+    /// Adds a visual treatment on top of the image: vignette.
+    Stylize,
+}
+
+/// The range (min, max) of each input of an effect. The defaults come from `defaults`. Inputs with no range
+/// are absent, so `input_range` returns `None` for them.
+fn ranges(kind: Kind) -> Vec<(&'static str, f32, f32)> {
+    match kind {
+        Kind::Exposure => vec![("ev", -10.0, 10.0)],
+        Kind::Saturation => vec![("amount", 0.0, 2.0)],
+        Kind::Contrast => vec![("amount", 0.0, 4.0)],
+        Kind::HueRotate => vec![("degrees", -180.0, 180.0)],
+        Kind::TemperatureTint => vec![("temperature", -100.0, 100.0), ("tint", -100.0, 100.0)],
+        Kind::Sepia => vec![("amount", 0.0, 1.0)],
+        Kind::Invert => Vec::new(),
+        Kind::Posterize => vec![("levels", 2.0, 32.0)],
+        Kind::Vignette => vec![("strength", 0.0, 1.0)],
+    }
+}
+
+fn category_of(kind: Kind) -> Category {
+    match kind {
+        Kind::Exposure | Kind::Saturation | Kind::Contrast | Kind::HueRotate | Kind::TemperatureTint => {
+            Category::ColorAdjustment
+        }
+        Kind::Sepia | Kind::Invert | Kind::Posterize => Category::ColorEffect,
+        Kind::Vignette => Category::Stylize,
+    }
+}
+
 /// A named filter with its inputs. Build one with `Filter::named`, then set inputs by key.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Filter {
@@ -88,6 +135,30 @@ impl Filter {
             }
             None => false,
         }
+    }
+
+    /// Sets input `key` to `value`, clamped to the input's range. Returns `false` when the filter has no
+    /// such input or `value` is not finite; the input is then left as it was.
+    pub fn set_clamped(&mut self, key: &str, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
+        match self.input_range(key) {
+            Some(r) => self.set(key, value.clamp(r.min, r.max)),
+            None => false,
+        }
+    }
+
+    /// The range of input `key`, or `None` when the filter has no such input or the input has no range.
+    pub fn input_range(&self, key: &str) -> Option<InputRange> {
+        let (k, min, max) = ranges(self.kind).into_iter().find(|e| e.0 == key)?;
+        let default = defaults(self.kind).into_iter().find(|e| e.0 == k)?.1;
+        Some(InputRange { key: k, min, max, default })
+    }
+
+    /// The browser group this filter is listed under.
+    pub fn category(&self) -> Category {
+        category_of(self.kind)
     }
 
     /// Applies the effect to the pixel at (x, y) of a `w` by `h` buffer.
@@ -131,6 +202,26 @@ impl Filter {
             }
         }
     }
+}
+
+/// The names of every filter, in catalogue order.
+pub fn filter_names() -> Vec<&'static str> {
+    NAMES.iter().map(|e| e.0).collect()
+}
+
+/// The names of the filters in `category`, in catalogue order.
+pub fn filters_in(category: Category) -> Vec<&'static str> {
+    NAMES.iter().filter(|e| category_of(e.1) == category).map(|e| e.0).collect()
+}
+
+/// The names that contain `query`, ignoring case, in catalogue order. A blank query matches every name.
+pub fn search(query: &str) -> Vec<&'static str> {
+    let q = query.trim().to_lowercase();
+    NAMES
+        .iter()
+        .filter(|e| q.is_empty() || e.0.to_lowercase().contains(q.as_str()))
+        .map(|e| e.0)
+        .collect()
 }
 
 /// An ordered list of filters. `apply` runs each one over the whole buffer in turn.
@@ -250,5 +341,59 @@ mod tests {
         let out = chain.apply(&[white; 4], 2, 2).unwrap();
         assert_eq!(out[0], 0xff00_0000);
         assert_eq!(out[3], white);
+    }
+
+    #[test]
+    fn set_clamped_limits_the_value_to_the_input_range() {
+        // Exposure accepts -10 to 10 stops. Values outside are clamped; NaN is refused and leaves the input alone.
+        let mut f = Filter::named("exposure").unwrap();
+        assert!(f.set_clamped("ev", 99.0));
+        assert_eq!(f.get("ev"), Some(10.0));
+        assert!(f.set_clamped("ev", -99.0));
+        assert_eq!(f.get("ev"), Some(-10.0));
+        assert!(!f.set_clamped("gain", 1.0));
+        assert!(!f.set_clamped("ev", f32::NAN));
+        assert_eq!(f.get("ev"), Some(-10.0));
+    }
+
+    #[test]
+    fn input_range_reports_min_max_and_default() {
+        // Saturation's amount runs from 0 (grey) to 2 (double saturation) and starts at 1 (unchanged).
+        let sat = Filter::named("saturation").unwrap();
+        assert_eq!(
+            sat.input_range("amount"),
+            Some(InputRange { key: "amount", min: 0.0, max: 2.0, default: 1.0 })
+        );
+        assert_eq!(sat.input_range("ev"), None);
+        assert_eq!(Filter::named("invert").unwrap().input_range("amount"), None);
+    }
+
+    #[test]
+    fn every_default_lies_inside_its_range() {
+        for name in filter_names() {
+            let f = Filter::named(name).unwrap();
+            for key in f.input_keys() {
+                let r = f.input_range(key).unwrap();
+                assert!(r.min <= r.default && r.default <= r.max, "{name}.{key}");
+            }
+        }
+    }
+
+    #[test]
+    fn categories_group_the_filters_as_the_browser_lists_them() {
+        assert_eq!(Filter::named("exposure").unwrap().category(), Category::ColorAdjustment);
+        assert_eq!(Filter::named("invert").unwrap().category(), Category::ColorEffect);
+        assert_eq!(Filter::named("vignette").unwrap().category(), Category::Stylize);
+        assert_eq!(filters_in(Category::ColorEffect), vec!["sepia", "invert", "posterize"]);
+        assert_eq!(filters_in(Category::Stylize), vec!["vignette"]);
+    }
+
+    #[test]
+    fn search_matches_names_ignoring_case_and_blank_matches_all() {
+        assert_eq!(search("TINT"), vec!["temperatureTint"]);
+        assert_eq!(search("  "), filter_names());
+        // Names with an "o": exposure, saturation, contrast, hueRotate and posterize.
+        assert_eq!(search("o"), vec!["exposure", "saturation", "contrast", "hueRotate", "posterize"]);
+        assert!(search("zzz").is_empty());
     }
 }
