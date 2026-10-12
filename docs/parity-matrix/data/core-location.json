@@ -17,9 +17,9 @@
     {
       "feature": "Authorization and usage descriptions",
       "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
-      "bifrost": "springboard/src/bare/app_policy.rs:34 (from_permissions)",
-      "status": "gap",
-      "note": "The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead."
+      "bifrost": "springboard/ui/src/location_auth.rs",
+      "status": "partial",
+      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead."
     },
     {
       "feature": "Coordinates and location values",
@@ -80,9 +80,9 @@
     {
       "feature": "Errors and diagnostics",
       "apple": "CLError, kCLErrorDomain, CLServiceSession diagnostics, CLLocationPushServiceErrorDomain",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No location error domain or diagnostics exist. They depend on the missing location manager."
+      "bifrost": "springboard/ui/src/location_auth.rs",
+      "status": "partial",
+      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No location error domain or diagnostics exist. They depend on the missing location manager."
     }
   ],
   "gaps": [

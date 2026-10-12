@@ -45,9 +45,9 @@
     {
       "feature": "Flashing lights detection and dimming",
       "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter."
+      "bifrost": "springboard/ui/src/flashing_lights.rs",
+      "status": "partial",
+      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter."
     },
     {
       "feature": "Music Haptics",

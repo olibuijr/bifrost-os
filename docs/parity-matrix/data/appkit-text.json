@@ -24,9 +24,9 @@
     {
       "feature": "Text Display: multi-line text view widget",
       "apple": "NSTextView, NSScrollView text container",
-      "bifrost": "springboard/sdk/src/attributed.rs (RichTextView model only)",
-      "status": "gap",
-      "note": "docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK"
+      "bifrost": "springboard/ui/src/textview.rs",
+      "status": "partial",
+      "note": "Wave 6 (b14, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK"
     },
     {
       "feature": "Text Display: spell checking",

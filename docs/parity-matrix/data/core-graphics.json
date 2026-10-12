@@ -108,9 +108,9 @@
     {
       "feature": "Layers and offscreen reusable content (CGLayer)",
       "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-      "bifrost": "springboard/sdk/src/view/animation.rs:470 Backdrop save and :479 blend (internal, used for group opacity)",
-      "status": "gap",
-      "note": "Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object."
+      "bifrost": "springboard/render/src/reusable_layer.rs",
+      "status": "partial",
+      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object."
     },
     {
       "feature": "Display services (Quartz Display Services)",

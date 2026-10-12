@@ -66,16 +66,16 @@
     {
       "feature": "Particle systems",
       "apple": "SCNParticleSystem, SCNParticlePropertyController",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no particle emitter in the SDK or render crates"
+      "bifrost": "springboard/ui/src/particle_system3d.rs",
+      "status": "partial",
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no particle emitter in the SDK or render crates"
     },
     {
       "feature": "Positional audio",
       "apple": "SCNAudioSource, SCNAudioPlayer",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "audiod has no spatial or panned playback; the audio service is springboard/audiod"
+      "bifrost": "springboard/ui/src/scene_audio.rs",
+      "status": "partial",
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. audiod has no spatial or panned playback; the audio service is springboard/audiod"
     },
     {
       "feature": "Custom shaders and render passes",

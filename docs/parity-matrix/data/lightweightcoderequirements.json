@@ -59,9 +59,9 @@
     {
       "feature": "Requirement-building operators and errors",
       "apple": "allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "There is no requirement DSL or constraint builder. Apps have no way to express identity tests."
+      "bifrost": "springboard/core/src/codereq.rs (Constraint, Scope, ConstraintError)",
+      "status": "partial",
+      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. There is no requirement DSL or constraint builder. Apps have no way to express identity tests."
     }
   ],
   "gaps": [

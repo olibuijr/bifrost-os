@@ -10,9 +10,9 @@
     {
       "feature": "Authorization requests (controller, results)",
       "apple": "ASAuthorizationController, ASAuthorizationResult, AuthorizationController (SwiftUI)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no request/controller abstraction for sign-in providers; the desktop login screen is shell-internal"
+      "bifrost": "springboard/ui/src/authorization_request.rs",
+      "status": "partial",
+      "note": "Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no request/controller abstraction for sign-in providers; the desktop login screen is shell-internal"
     },
     {
       "feature": "Sign in with Apple",
@@ -52,9 +52,9 @@
     {
       "feature": "AutoFill credential provider",
       "apple": "ASCredentialProviderViewController, AutoFill Credential Provider entitlement, ASCredentialDataManager, ASCredentialUpdater",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no system-wide AutoFill; the browser has no password fill"
+      "bifrost": "springboard/ui/src/credential_identity.rs",
+      "status": "partial",
+      "note": "Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no system-wide AutoFill; the browser has no password fill"
     },
     {
       "feature": "One-time passcodes",

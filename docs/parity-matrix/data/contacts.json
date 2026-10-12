@@ -80,9 +80,9 @@
     {
       "feature": "Predefined display preferences",
       "apple": "CNContactsUserDefaults",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No contact display preferences such as sort order or name order."
+      "bifrost": "springboard/ui/src/contact_display.rs",
+      "status": "partial",
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order."
     },
     {
       "feature": "Search index for system search",

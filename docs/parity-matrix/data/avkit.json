@@ -45,9 +45,9 @@
     {
       "feature": "Media trimming and export",
       "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No trim control in the player HUD (springboard/src/deildu/player_view.rs)."
+      "bifrost": "springboard/ui/src/media_trim.rs",
+      "status": "partial",
+      "note": "Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs)."
     },
     {
       "feature": "Display management (HDR, refresh mode switching)",

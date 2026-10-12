@@ -45,9 +45,9 @@
     {
       "feature": "Synchronization (OSAllocatedUnfairLock)",
       "apple": "OSAllocatedUnfairLock, OSAllocatedUnfairLockFlags",
-      "bifrost": "springboard/sdk/src/dispatch.rs (DispatchGroup uses Mutex and Condvar); std::sync used in apps",
-      "status": "gap",
-      "note": "No unfair-lock wrapper in the SDK. Apps use std::sync::Mutex directly; the poison-recovery helper lock() appears in several modules."
+      "bifrost": "springboard/sdk/src/synchronization.rs (UnfairLock, stateless_unfair_lock)",
+      "status": "partial",
+      "note": "Wave 6 (b19, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No unfair-lock wrapper in the SDK. Apps use std::sync::Mutex directly; the poison-recovery helper lock() appears in several modules."
     },
     {
       "feature": "Task scheduling used with locks (DispatchGroup, DispatchWorkItem)",

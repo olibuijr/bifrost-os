@@ -10,9 +10,9 @@
     {
       "feature": "Image and context objects (CIImage, CIContext)",
       "apple": "CIImage, CIContext",
-      "bifrost": "springboard/render/src/gfx.rs (Image: premultiplied RGBA u32 buffer)",
-      "status": "gap",
-      "note": "The renderer's Image is CPU pixels only; no SDK type wraps it as a lazily evaluated image with a render context"
+      "bifrost": "springboard/render/src/lazy_image.rs",
+      "status": "partial",
+      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The renderer's Image is CPU pixels only; no SDK type wraps it as a lazily evaluated image with a render context"
     },
     {
       "feature": "Filter objects and chaining (CIFilter)",

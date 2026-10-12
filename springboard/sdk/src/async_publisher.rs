@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn subject_values_come_out_in_send_order() {
         let subject: PassthroughSubject<i32> = PassthroughSubject::new();
-        let mut seq = AsyncPublisher::from_subject(&subject);
+        let mut seq = AsyncPublisher::<i32, Never>::from_subject(&subject);
         subject.send(1);
         subject.send(2);
         assert_eq!(seq.buffered(), 2);

@@ -31,16 +31,16 @@
     {
       "feature": "People picker and person view",
       "apple": "ABPeoplePickerView, ABPersonView",
-      "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (app-private card and form)",
-      "status": "gap",
-      "note": "No SDK picker or embeddable person view; each app would have to rebuild one"
+      "bifrost": "springboard/ui/src/contact_picker.rs",
+      "status": "partial",
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one"
     },
     {
       "feature": "Groups",
       "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups",
-      "bifrost": "springboard/apps/contacts-desktop/CHANGELOG.md (Lists sidebar: All Contacts, Favorites)",
-      "status": "gap",
-      "note": "Favorites is a flag on the contact; there are no group records or membership"
+      "bifrost": "springboard/ui/src/contact_groups.rs",
+      "status": "partial",
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Favorites is a flag on the contact; there are no group records or membership"
     },
     {
       "feature": "vCard import and export",

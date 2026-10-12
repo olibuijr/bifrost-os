@@ -7,13 +7,55 @@
   "summary": "Apple's framework is a set of low-level Swift primitives: typed atomics, a lazy atomic reference, a closure-scoped Mutex and memory-ordering enums. BifrOSt apps are Rust and use the std equivalents directly; the SDK has no wrapper module for these and no WordPair equivalent.",
   "rea_evidence": "ev_6fea1ac9f2e1722b2413b00336b9d3d5a18d4d447fa76ead52cd0a7f93c6b4a9",
   "features": [
-    {"feature": "Atomic values", "apple": "Atomic<Value> with add, bitwiseAnd, load, store, exchange, compareExchange (https://developer.apple.com/documentation/synchronization/atomic)", "bifrost": "springboard/sdk/src/dispatch.rs:108 (AtomicU64), springboard/sdk/src/dispatch.rs:529 (AtomicBool), std::sync::atomic", "status": "partial", "note": "Rust std atomics only; no SDK-level wrapper or documented SDK API for atomics"},
-    {"feature": "Lazily initialised atomic reference", "apple": "AtomicLazyReference (https://developer.apple.com/documentation/synchronization/atomiclazyreference)", "bifrost": "springboard/sdk/src/dispatch.rs:112 (OnceLock pool), springboard/src/bare/app_manager.rs:31 (OnceLock static)", "status": "partial", "note": "std OnceLock covers the one-time init case; no atomic-reference type for arbitrary strong references"},
-    {"feature": "WordPair", "apple": "WordPair, a pair of two word-sized UInts stored atomically (https://developer.apple.com/documentation/synchronization/wordpair)", "bifrost": "none found", "status": "gap", "note": "grep for WordPair and pair-atomic wrappers in springboard/sdk, ui, render and core returned nothing"},
-    {"feature": "Atomic representable protocols", "apple": "AtomicRepresentable, AtomicOptionalRepresentable (https://developer.apple.com/documentation/synchronization/atomicrepresentable)", "bifrost": "none", "status": "n/a", "note": "Swift protocol mechanism for storing custom types atomically; Rust uses the fixed std atomic types, so there is no counterpart to expose"},
-    {"feature": "Memory ordering semantics", "apple": "AtomicLoadOrdering, AtomicStoreOrdering, AtomicUpdateOrdering (https://developer.apple.com/documentation/synchronization/atomicloadordering)", "bifrost": "springboard/sdk/src/dispatch.rs:187 (Ordering::Relaxed), springboard/sdk/src/dispatch.rs:544 (Ordering::SeqCst)", "status": "partial", "note": "std::sync::atomic::Ordering used directly; no per-operation ordering type in an SDK API"},
-    {"feature": "Atomic memory fence", "apple": "atomicMemoryFence(ordering:) (https://developer.apple.com/documentation/synchronization/atomicmemoryfence(ordering:))", "bifrost": "std::sync::atomic::fence (not observed in springboard/sdk/src/dispatch.rs)", "status": "partial", "note": "std fence is available to Rust code; no SDK function or documented use found"},
-    {"feature": "Mutex with scoped lock", "apple": "Mutex<Value> with init, withLock and withLockIfAvailable (https://developer.apple.com/documentation/synchronization/mutex)", "bifrost": "springboard/sdk/src/dispatch.rs:24 (lock helper over std::sync::Mutex), springboard/sdk/src/dispatch.rs:250 (static JOBS Mutex)", "status": "partial", "note": "std Mutex used widely; the closure-scoped withLock and withLockIfAvailable shape is not offered as an SDK type"}
+    {
+      "feature": "Atomic values",
+      "apple": "Atomic<Value> with add, bitwiseAnd, load, store, exchange, compareExchange (https://developer.apple.com/documentation/synchronization/atomic)",
+      "bifrost": "springboard/sdk/src/dispatch.rs:108 (AtomicU64), springboard/sdk/src/dispatch.rs:529 (AtomicBool), std::sync::atomic",
+      "status": "partial",
+      "note": "Rust std atomics only; no SDK-level wrapper or documented SDK API for atomics"
+    },
+    {
+      "feature": "Lazily initialised atomic reference",
+      "apple": "AtomicLazyReference (https://developer.apple.com/documentation/synchronization/atomiclazyreference)",
+      "bifrost": "springboard/sdk/src/dispatch.rs:112 (OnceLock pool), springboard/src/bare/app_manager.rs:31 (OnceLock static)",
+      "status": "partial",
+      "note": "std OnceLock covers the one-time init case; no atomic-reference type for arbitrary strong references"
+    },
+    {
+      "feature": "WordPair",
+      "apple": "WordPair, a pair of two word-sized UInts stored atomically (https://developer.apple.com/documentation/synchronization/wordpair)",
+      "bifrost": "springboard/sdk/src/synchronization.rs (WordPair, AtomicWordPair)",
+      "status": "partial",
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. grep for WordPair and pair-atomic wrappers in springboard/sdk, ui, render and core returned nothing"
+    },
+    {
+      "feature": "Atomic representable protocols",
+      "apple": "AtomicRepresentable, AtomicOptionalRepresentable (https://developer.apple.com/documentation/synchronization/atomicrepresentable)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Swift protocol mechanism for storing custom types atomically; Rust uses the fixed std atomic types, so there is no counterpart to expose"
+    },
+    {
+      "feature": "Memory ordering semantics",
+      "apple": "AtomicLoadOrdering, AtomicStoreOrdering, AtomicUpdateOrdering (https://developer.apple.com/documentation/synchronization/atomicloadordering)",
+      "bifrost": "springboard/sdk/src/dispatch.rs:187 (Ordering::Relaxed), springboard/sdk/src/dispatch.rs:544 (Ordering::SeqCst)",
+      "status": "partial",
+      "note": "std::sync::atomic::Ordering used directly; no per-operation ordering type in an SDK API"
+    },
+    {
+      "feature": "Atomic memory fence",
+      "apple": "atomicMemoryFence(ordering:) (https://developer.apple.com/documentation/synchronization/atomicmemoryfence(ordering:))",
+      "bifrost": "std::sync::atomic::fence (not observed in springboard/sdk/src/dispatch.rs)",
+      "status": "partial",
+      "note": "std fence is available to Rust code; no SDK function or documented use found"
+    },
+    {
+      "feature": "Mutex with scoped lock",
+      "apple": "Mutex<Value> with init, withLock and withLockIfAvailable (https://developer.apple.com/documentation/synchronization/mutex)",
+      "bifrost": "springboard/sdk/src/dispatch.rs:24 (lock helper over std::sync::Mutex), springboard/sdk/src/dispatch.rs:250 (static JOBS Mutex)",
+      "status": "partial",
+      "note": "std Mutex used widely; the closure-scoped withLock and withLockIfAvailable shape is not offered as an SDK type"
+    }
   ],
   "gaps": [
     "No SDK wrapper for Mutex with closure-scoped withLock and withLockIfAvailable; apps use std::sync::Mutex guards directly",

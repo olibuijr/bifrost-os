@@ -38,9 +38,9 @@
     {
       "feature": "Coordinate spaces",
       "apple": "CoordinateSpace3D, CoordinateSpaceValue3D, WorldReferenceCoordinateSpace, ProjectiveTransformable3D",
-      "bifrost": "springboard/sdk/src/view/mod.rs (views use window points, with no per-view transform)",
-      "status": "gap",
-      "note": "views have no transform or coordinate space conversion"
+      "bifrost": "springboard/ui/src/coordinate_space3d.rs",
+      "status": "partial",
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. views have no transform or coordinate space conversion"
     },
     {
       "feature": "Angles and trigonometry",

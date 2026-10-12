@@ -10,9 +10,9 @@
     {
       "feature": "Compose post sheet",
       "apple": "SLComposeViewController, SLComposeServiceViewController",
-      "bifrost": "springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs",
-      "status": "gap",
-      "note": "The share menu hands items to installed apps. It does not show an editor that posts to a network."
+      "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs",
+      "status": "partial",
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The share menu hands items to installed apps. It does not show an editor that posts to a network."
     },
     {
       "feature": "Service availability check",

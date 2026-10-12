@@ -38,9 +38,9 @@
     {
       "feature": "Shader functions and libraries",
       "apple": "MTLLibrary, MTLFunction, Metal Shading Language",
-      "bifrost": "springboard/src/gpu/shaders.rs (built-in GLSL source)",
-      "status": "gap",
-      "note": "no app-supplied shaders, no shader compilation API; shaders are fixed in the compositor"
+      "bifrost": "springboard/ui/src/shader_library.rs",
+      "status": "partial",
+      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no app-supplied shaders, no shader compilation API; shaders are fixed in the compositor"
     },
     {
       "feature": "Buffers and textures",

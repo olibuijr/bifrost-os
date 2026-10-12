@@ -31,9 +31,9 @@
     {
       "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",
       "apple": "MTRDevice, MTRReadParams, MTRWriteParams, MTRSubscribeParams, MTRAttributePath, MTRCommandPath",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No client for the Matter interaction model and no SDK API for accessories."
+      "bifrost": "springboard/core/src/matter_interaction.rs",
+      "status": "partial",
+      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No client for the Matter interaction model and no SDK API for accessories."
     },
     {
       "feature": "Clusters (typed On/Off, Level Control, Switch and others)",

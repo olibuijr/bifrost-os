@@ -24,9 +24,9 @@
     {
       "feature": "Service browser (IOBluetoothServiceBrowserController)",
       "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
-      "bifrost": "none found; springboard/src/bare/bluetooth.rs parses EIR for audio profile UUIDs only (struct Eir, audio_uuid)",
-      "status": "gap",
-      "note": "No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse."
+      "bifrost": "springboard/core/src/bt_service_browser.rs",
+      "status": "partial",
+      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse."
     },
     {
       "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",

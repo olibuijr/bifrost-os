@@ -10,9 +10,9 @@
     {
       "feature": "Library entry point (MLMediaLibrary)",
       "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey",
-      "bifrost": "springboard/apps/music-desktop/src/app.rs (Music roots = $HOME/Music)",
-      "status": "gap",
-      "note": "no shared entry point; each app picks its own roots, and there is no include/exclude source filter"
+      "bifrost": "springboard/ui/src/media_sources.rs (LoadOptions::from_keys)",
+      "status": "partial",
+      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no shared entry point; each app picks its own roots, and there is no include/exclude source filter"
     },
     {
       "feature": "Media sources (MLMediaSource)",

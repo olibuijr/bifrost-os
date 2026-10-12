@@ -31,9 +31,9 @@
     {
       "feature": "Embedded preview view (QLPreviewView)",
       "apple": "QLPreviewView: init(frame:style:), previewItem, refreshPreviewItem(), displayState, autostarts, close",
-      "bifrost": "springboard/src/files/preview.rs (Preview enum, line 10); springboard/src/files/mod.rs (spawn_preview, line 396)",
-      "status": "gap",
-      "note": "The preview is a Files-owned page, not an SDK view an app can place in its own view hierarchy."
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewView, ViewStyle)",
+      "status": "partial",
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The preview is a Files-owned page, not an SDK view an app can place in its own view hierarchy."
     },
     {
       "feature": "Built-in previews for common file types",
@@ -66,9 +66,9 @@
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",
       "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment)",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No out-of-process preview extension that returns data, PDF or HTML replies."
+      "bifrost": "springboard/ui/src/preview.rs (PreviewProvider, Registry::preview)",
+      "status": "partial",
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No out-of-process preview extension that returns data, PDF or HTML replies."
     }
   ],
   "gaps": [

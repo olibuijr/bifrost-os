@@ -333,6 +333,8 @@ mod tests {
     #[test]
     fn vertical_moves_keep_the_goal_column() {
         let mut v = TextView::new("aa bb cc dd", 50.0, 20.0, 40.0);
+        // a new view's caret is at the end of its text; start from the top
+        v.editor.buf.set_selection(0, 0);
         assert!(v.move_vertical(true, false, &m));
         assert_eq!(v.editor.buf.caret(), 6);
         assert_eq!(v.caret_point(&m), (0.0, 20.0));

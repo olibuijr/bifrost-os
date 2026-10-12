@@ -592,7 +592,6 @@ pub mod utdecl;
 pub mod accessible_look;
 pub mod shared_list;
 pub mod preview;
-pub mod preview_view;
 pub mod thumbnail;
 pub mod fileaction;
 pub mod actionrequest;

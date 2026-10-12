@@ -80,9 +80,9 @@
     {
       "feature": "Async publishers",
       "apple": "AsyncPublisher, AsyncThrowingPublisher",
-      "bifrost": "",
-      "status": "gap",
-      "note": "no async sequence bridge"
+      "bifrost": "springboard/sdk/src/async_publisher.rs",
+      "status": "partial",
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no async sequence bridge"
     },
     {
       "feature": "Encoders and decoders",

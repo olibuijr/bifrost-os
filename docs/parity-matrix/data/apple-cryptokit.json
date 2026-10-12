@@ -38,9 +38,9 @@
     {
       "feature": "AES ciphers (AES.GCM)",
       "apple": "AES",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no AES in springboard/; the noVNC JavaScript under springboard/apps/remote is a web client and not used by apps"
+      "bifrost": "springboard/core/src/aes_gcm.rs (bifrost_core::aes_gcm)",
+      "status": "partial",
+      "note": "Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no AES in springboard/; the noVNC JavaScript under springboard/apps/remote is a web client and not used by apps"
     },
     {
       "feature": "Per-app key derivation (HKDF)",

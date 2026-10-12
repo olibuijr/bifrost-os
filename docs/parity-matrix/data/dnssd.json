@@ -59,9 +59,9 @@
     {
       "feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)",
       "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection",
-      "bifrost": "springboard/sdk/src/dispatch.rs (GCD counterpart, unrelated to DNS-SD)",
-      "status": "gap",
-      "note": "No DNSServiceRef or daemon connection exists. The SDK dispatch module does not drive DNS-SD sockets."
+      "bifrost": "springboard/core/src/dnssd_ref.rs",
+      "status": "partial",
+      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No DNSServiceRef or daemon connection exists. The SDK dispatch module does not drive DNS-SD sockets."
     },
     {
       "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",

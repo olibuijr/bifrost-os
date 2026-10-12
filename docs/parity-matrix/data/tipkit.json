@@ -24,9 +24,9 @@
     {
       "feature": "Inline tip view and style",
       "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
-      "bifrost": "springboard/sdk/src/widgets.rs (cards, materials)",
-      "status": "gap",
-      "note": "No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip."
+      "bifrost": "springboard/ui/src/tips.rs (TipView, TipViewStyle)",
+      "status": "partial",
+      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip."
     },
     {
       "feature": "Popover tip",

@@ -38,9 +38,9 @@
     {
       "feature": "Model-judge evaluators",
       "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No LLM-as-judge scoring anywhere in docs/ or tools/."
+      "bifrost": "springboard/ui/src/evaluation.rs",
+      "status": "partial",
+      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No LLM-as-judge scoring anywhere in docs/ or tools/."
     },
     {
       "feature": "Tool-call trajectory evaluation",

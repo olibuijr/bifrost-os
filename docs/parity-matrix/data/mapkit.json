@@ -10,9 +10,9 @@
     {
       "feature": "Map view (MKMapView, Map)",
       "apple": "MKMapView, Map (SwiftUI)",
-      "bifrost": "none found in springboard/src or springboard/sdk/src",
-      "status": "gap",
-      "note": "no map renderer, tile source or map widget in the SDK"
+      "bifrost": "springboard/ui/src/mapview.rs (MapView, MapType, MapInteraction)",
+      "status": "partial",
+      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK"
     },
     {
       "feature": "Map camera and region",

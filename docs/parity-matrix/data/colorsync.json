@@ -24,9 +24,9 @@
     {
       "feature": "Color profiles (ICC load, create, inspect, embed)",
       "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
-      "bifrost": "springboard/src/shell/books/engine/pdf/image.rs",
-      "status": "gap",
-      "note": "The PDF reader takes ICCBased images only by component count (1 gray, 4 CMYK, else RGB) and ignores the profile bytes. Nothing parses ICC tags."
+      "bifrost": "springboard/render/src/icc.rs (built in an earlier wave; no code added in b09)",
+      "status": "partial",
+      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The PDF reader takes ICCBased images only by component count (1 gray, 4 CMYK, else RGB) and ignores the profile bytes. Nothing parses ICC tags."
     },
     {
       "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto)",
@@ -59,9 +59,9 @@
     {
       "feature": "HDR, extended range and tone mapping",
       "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)",
-      "bifrost": "springboard/src/gpu/nv12.rs",
-      "status": "gap",
-      "note": "No HDR transfer function (PQ or HLG) and no HAGC metadata. nv12.rs selects Rec.601 or Rec.709 by frame height only."
+      "bifrost": "springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs (built in an earlier wave; no code added in b09)",
+      "status": "partial",
+      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No HDR transfer function (PQ or HLG) and no HAGC metadata. nv12.rs selects Rec.601 or Rec.709 by frame height only."
     },
     {
       "feature": "Color management modules (CMM plug-ins)",

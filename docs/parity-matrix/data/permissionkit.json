@@ -45,9 +45,9 @@
     {
       "feature": "Permission button UI (PermissionButton)",
       "apple": "PermissionButton",
-      "bifrost": "springboard/src/shell/screentime/shield.rs (Time Limit shield with OK and Ignore Limit)",
-      "status": "gap",
-      "note": "The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."
+      "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs",
+      "status": "partial",
+      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."
     },
     {
       "feature": "Question topic protocol (QuestionTopic)",

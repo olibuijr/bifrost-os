@@ -38,16 +38,16 @@
     {
       "feature": "Value query results (ResolvedValueQueryResult)",
       "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type}"
+      "bifrost": "springboard/ui/src/value_query.rs",
+      "status": "partial",
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type}"
     },
     {
       "feature": "Entity annotation and onscreen context",
       "apple": "ViewAnnotation (entity, isSelected)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link"
+      "bifrost": "springboard/ui/src/onscreen_entity.rs",
+      "status": "partial",
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link"
     },
     {
       "feature": "Type-erased intent and entity wrappers",

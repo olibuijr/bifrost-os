@@ -59,9 +59,9 @@
     {
       "feature": "MIDI playback (AVMIDIPlayer)",
       "apple": "AVMIDIPlayer with a sound bank",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no MIDI sequencing or soundbank playback in the SDK or audiod"
+      "bifrost": "springboard/core/src/smf.rs",
+      "status": "partial",
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod"
     },
     {
       "feature": "Audio engine graph (AVAudioEngine)",

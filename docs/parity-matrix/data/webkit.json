@@ -59,16 +59,16 @@
     {
       "feature": "DOM node snapshot",
       "apple": "WKDOMNodeSnapshot",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no DOM tree snapshot object; dev_eval can read DOM state through script only"
+      "bifrost": "springboard/ui/src/dom_snapshot.rs",
+      "status": "partial",
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no DOM tree snapshot object; dev_eval can read DOM state through script only"
     },
     {
       "feature": "Contextual menus",
       "apple": "WKContextMenuElementInfo",
-      "bifrost": "none; desktop pointer input is sent to the page as touch (springboard/sdk/src/webview.rs, pool.touch)",
-      "status": "gap",
-      "note": "no right click or context menu; the engine path does not expose link info"
+      "bifrost": "springboard/ui/src/context_element.rs",
+      "status": "partial",
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no right click or context menu; the engine path does not expose link info"
     },
     {
       "feature": "Web UI delegate (alerts, file panels, new windows, window features)",

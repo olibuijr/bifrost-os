@@ -31,9 +31,9 @@
     {
       "feature": "Variable color effect",
       "apple": "variableColor (VariableColorSymbolEffect)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no variable layers in glyphs.rs; each glyph is one colour"
+      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "status": "partial",
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no variable layers in glyphs.rs; each glyph is one colour"
     },
     {
       "feature": "Content transitions (replace, automatic)",
@@ -59,9 +59,9 @@
     {
       "feature": "Symbol weights, scales and rendering modes",
       "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)",
-      "bifrost": "springboard/sdk/src/glyphs.rs (one stroke width, t = side * 0.085)",
-      "status": "gap",
-      "note": "one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
+      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "status": "partial",
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
     },
     {
       "feature": "Generic implicit animation of views",

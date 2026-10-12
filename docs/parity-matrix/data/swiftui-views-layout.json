@@ -94,9 +94,9 @@
     {
       "feature": "Custom layout (Layout protocol)",
       "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
-      "bifrost": "springboard/ui/src/constraint.rs",
-      "status": "gap",
-      "note": "constraint solver exists, no Layout protocol or AnyLayout transitions"
+      "bifrost": "springboard/ui/src/layout_protocol.rs",
+      "status": "partial",
+      "note": "Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions"
     },
     {
       "feature": "Lists",

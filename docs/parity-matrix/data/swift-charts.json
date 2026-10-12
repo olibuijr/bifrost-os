@@ -94,9 +94,9 @@
     {
       "feature": "3D charts and surface plots",
       "apple": "Chart3D, Chart3DContent, Chart3DContentBuilder, SurfacePlot, Chart3DSurfaceStyle (macOS 26.0)",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no 3D chart or surface renderer in springboard/render/src"
+      "bifrost": "springboard/ui/src/chart_surface.rs",
+      "status": "partial",
+      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no 3D chart or surface renderer in springboard/render/src"
     },
     {
       "feature": "Accessibility and localization of charts",

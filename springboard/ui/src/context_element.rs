@@ -49,7 +49,7 @@ impl ContextElement {
             .filter(|e| e.tag.eq_ignore_ascii_case("img"))
             .find_map(|e| e.src.as_deref().and_then(web_address));
         let editable = chain.first().map(|e| e.editable).unwrap_or(false);
-        ContextElement { link_url, image_url, editable }
+        ContextElement { link_url: link_url.map(str::to_string), image_url: image_url.map(str::to_string), editable }
     }
 
     /// The link address, if the pointer is over a link.

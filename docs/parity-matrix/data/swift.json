@@ -45,9 +45,9 @@
     {
       "feature": "Actors and isolation",
       "apple": "Actor, @MainActor, Sendable",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK"
+      "bifrost": "springboard/sdk/src/actor.rs",
+      "status": "partial",
+      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK"
     },
     {
       "feature": "Distributed actors",

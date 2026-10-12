@@ -10,23 +10,23 @@
     {
       "feature": "Persistent store and stack setup",
       "apple": "NSPersistentContainer, NSPersistentStoreDescription, NSPersistentStoreCoordinator (Core Data stack, https://developer.apple.com/documentation/coredata/setting-up-a-core-data-stack)",
-      "bifrost": "springboard/sdk/src/defaults.rs (atomic per-app file), springboard/core/src/fsutil.rs (crash-safe replace)",
-      "status": "gap",
-      "note": "No managed store abstraction; each app writes its own files in its data directory. No SQLite-backed store."
+      "bifrost": "springboard/sdk/src/object_graph.rs (Container, Store)",
+      "status": "partial",
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No managed store abstraction; each app writes its own files in its data directory. No SQLite-backed store."
     },
     {
       "feature": "Data modeling (object graph and relationships)",
       "apple": "Core Data model editor, NSManagedObjectModel, NSEntityDescription, NSRelationshipDescription (https://developer.apple.com/documentation/coredata/modeling-data)",
-      "bifrost": "springboard/sdk/src/coding.rs (Codable Value tree)",
-      "status": "gap",
-      "note": "Codable encodes a value tree per type by hand or with the codable! macro. There is no entity model, no relationships and no inverse tracking."
+      "bifrost": "springboard/sdk/src/object_graph.rs (Model, Entity, Relationship)",
+      "status": "partial",
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Codable encodes a value tree per type by hand or with the codable! macro. There is no entity model, no relationships and no inverse tracking."
     },
     {
       "feature": "Managed objects and contexts",
       "apple": "NSManagedObject, NSManagedObjectContext (https://developer.apple.com/documentation/coredata/nsmanagedobjectcontext)",
-      "bifrost": "springboard/src/shell/contactstore.rs (Contact struct), springboard/src/shell/calendar/store.rs (CalendarEvent struct)",
-      "status": "gap",
-      "note": "Apps keep plain Rust structs in memory and rewrite the whole store on save. No faulting, no per-object dirty tracking, no context isolation."
+      "bifrost": "springboard/sdk/src/object_graph.rs (Context)",
+      "status": "partial",
+      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Apps keep plain Rust structs in memory and rewrite the whole store on save. No faulting, no per-object dirty tracking, no context isolation."
     },
     {
       "feature": "Fetch requests and predicates",

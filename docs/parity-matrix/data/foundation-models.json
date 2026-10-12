@@ -94,9 +94,9 @@
     {
       "feature": "Safety guardrails for generated output",
       "apple": "Improving the safety of generative model output (guidance, guardrail errors)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no output filtering in the SDK"
+      "bifrost": "springboard/ui/src/guardrail.rs",
+      "status": "partial",
+      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no output filtering in the SDK"
     },
     {
       "feature": "Content tagging and entity detection",

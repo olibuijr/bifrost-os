@@ -80,9 +80,9 @@
     {
       "feature": "Target queues and concurrentPerform",
       "apple": "setTarget(queue:), DispatchQueue.concurrentPerform",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "docs/bifrost-ui.md:1095-1096 lists both as gaps"
+      "bifrost": "springboard/sdk/src/dispatch.rs (concurrent_perform); target queues still missing",
+      "status": "partial",
+      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md:1095-1096 lists both as gaps"
     },
     {
       "feature": "Memory pressure source",

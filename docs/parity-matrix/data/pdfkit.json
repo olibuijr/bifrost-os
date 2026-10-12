@@ -87,9 +87,9 @@
     {
       "feature": "Write operations (save, write options, permissions)",
       "apple": "PDFDocument write operations, PDFDocumentWriteOption, accessPermissions, password unlock (takePasswordFrom)",
-      "bifrost": "springboard/sdk/src/print.rs (Destination::Pdf copies the source file; no rewrite)",
-      "status": "gap",
-      "note": "Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"
+      "bifrost": "springboard/ui/src/pdf_access.rs",
+      "status": "partial",
+      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"
     },
     {
       "feature": "Printing PDF documents",
@@ -101,9 +101,9 @@
     {
       "feature": "Page overlay and markup mode",
       "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No overlay or markup view"
+      "bifrost": "springboard/ui/src/pdf_overlay.rs",
+      "status": "partial",
+      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No overlay or markup view"
     }
   ],
   "gaps": [
