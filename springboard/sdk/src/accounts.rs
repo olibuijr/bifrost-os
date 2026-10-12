@@ -307,6 +307,51 @@ impl AccountStore {
         let account = self.account(identifier).ok_or(AccountError::NotFound)?;
         account.credential.as_ref().ok_or(AccountError::CredentialNotFound)
     }
+
+    /// `renewCredentials(for:completion:)`: applies the service's answer to a saved account's credential. `Renewed`
+    /// replaces the credential. `Rejected` means the user revoked the app's access, so the account type's access is
+    /// withdrawn and the old credential is kept. `Failed` changes nothing. Checks, in order: the account exists
+    /// (`NotFound`), it has a credential (`CredentialNotFound`), and its type is still granted (`PermissionDenied`).
+    pub fn renew_credentials(&mut self, identifier: &str, outcome: RenewOutcome) -> Result<RenewResult, AccountError> {
+        let index = self.accounts.iter().position(|a| a.identifier == identifier).ok_or(AccountError::NotFound)?;
+        if self.accounts[index].credential.is_none() {
+            return Err(AccountError::CredentialNotFound);
+        }
+        let account_type = self.accounts[index].account_type.clone();
+        if !self.account_type(&account_type).is_some_and(|t| t.access_granted) {
+            return Err(AccountError::PermissionDenied);
+        }
+        match outcome {
+            RenewOutcome::Renewed(credential) => {
+                self.accounts[index].credential = Some(credential);
+                Ok(RenewResult::Renewed)
+            }
+            RenewOutcome::Rejected => {
+                self.set_access(&account_type, false)?;
+                Ok(RenewResult::Rejected)
+            }
+            RenewOutcome::Failed => Ok(RenewResult::Failed),
+        }
+    }
+}
+
+/// The answer to a credential renewal (`ACAccountCredentialRenewResult`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RenewResult {
+    /// The credentials were renewed and are now the account's.
+    Renewed,
+    /// Renewal failed because the user revoked the app's access to the account.
+    Rejected,
+    /// The renewal did not complete for a reason other than the user's refusal.
+    Failed,
+}
+
+/// What the service answered to a renewal request, as the input to [`AccountStore::renew_credentials`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RenewOutcome {
+    Renewed(Credential),
+    Rejected,
+    Failed,
 }
 
 #[cfg(test)]
@@ -434,5 +479,50 @@ mod tests {
         store.register_type("mail.example", "Mail (renamed)");
         assert_eq!(store.account_type("mail.example").map(|t| t.description.as_str()), Some("Mail (renamed)"));
         assert_eq!(store.types.len(), 1);
+    }
+
+    /// A store with one granted type and one saved account whose credential is the OAuth 2 token `old`.
+    fn renewal_store() -> (AccountStore, String) {
+        let mut store = store_with_type();
+        store.set_access("mail.example", true).unwrap();
+        let mut account = Account::new("mail.example", "ann");
+        account.credential = Some(Credential::oauth2("old", "r1", at(1_000)));
+        let id = store.save(account).unwrap();
+        (store, id)
+    }
+
+    #[test]
+    fn renewed_credentials_replace_the_saved_ones() {
+        let (mut store, id) = renewal_store();
+        let fresh = Credential::oauth2("new", "r2", at(9_000));
+        assert_eq!(store.renew_credentials(&id, RenewOutcome::Renewed(fresh.clone())), Ok(RenewResult::Renewed));
+        assert_eq!(store.credential(&id), Ok(&fresh));
+        assert_eq!(store.credential(&id).map(|c| c.oauth_token()), Ok("new"));
+    }
+
+    #[test]
+    fn a_revoked_renewal_withdraws_access_and_keeps_the_old_credential() {
+        let (mut store, id) = renewal_store();
+        assert_eq!(store.renew_credentials(&id, RenewOutcome::Rejected), Ok(RenewResult::Rejected));
+        assert_eq!(store.account_type("mail.example").map(|t| t.access_granted), Some(false));
+        assert_eq!(store.credential(&id).map(|c| c.oauth_token()), Ok("old"));
+    }
+
+    #[test]
+    fn a_failed_renewal_changes_nothing() {
+        let (mut store, id) = renewal_store();
+        assert_eq!(store.renew_credentials(&id, RenewOutcome::Failed), Ok(RenewResult::Failed));
+        assert_eq!(store.account_type("mail.example").map(|t| t.access_granted), Some(true));
+        assert_eq!(store.credential(&id).map(|c| c.oauth_token()), Ok("old"));
+    }
+
+    #[test]
+    fn renewal_checks_the_account_the_credential_and_the_grant_in_that_order() {
+        let (mut store, id) = renewal_store();
+        assert_eq!(store.renew_credentials("missing", RenewOutcome::Failed), Err(AccountError::NotFound));
+        let bare = store.save(Account::new("mail.example", "bob")).unwrap();
+        assert_eq!(store.renew_credentials(&bare, RenewOutcome::Failed), Err(AccountError::CredentialNotFound));
+        store.set_access("mail.example", false).unwrap();
+        assert_eq!(store.renew_credentials(&id, RenewOutcome::Failed), Err(AccountError::PermissionDenied));
     }
 }

@@ -2,19 +2,25 @@
 //! system. Builds the `Authorization` header from a user name and password, parses the first challenge of a
 //! `WWW-Authenticate` value, and keeps credentials per host, port and realm.
 //!
-//! Pure std with its own base64 encoder, no network. `Permanent` credentials are held in memory like session ones:
-//! there is no keychain link, so nothing survives a restart (a gap, see `docs/parity/w3-cfnetwork.md`). Digest and
-//! client-certificate or server-trust credentials are not modelled.
+//! Pure std with its own base64 encoder, no network. An authentication challenge ([`AuthChallenge`]) is answered with
+//! an [`AuthDisposition`], the same four answers the platform's challenge delegate returns. `Permanent` and
+//! `Synchronizable` credentials stay in memory; [`URLCredentialStorage::to_keychain_bytes`] writes them out as bytes
+//! for the caller to store as a keychain item, and [`URLCredentialStorage::from_keychain_bytes`] reads them back after a
+//! restart. Nothing here talks to the keychain or to other devices, so `Synchronizable` is kept on this device only.
+//! Digest and client-certificate or server-trust credentials are not modelled.
 
 use crate::url::URLRequest;
 use crate::url_components::URLComponents;
 
-/// `URLCredential.Persistence`. `None` means the credential is not kept after the request.
+/// `URLCredential.Persistence`. `None` means the credential is not kept after the request. `ForSession` lasts until
+/// the process ends. `Permanent` and `Synchronizable` are kept for the caller to write to the keychain; `Synchronizable`
+/// is also meant for the user's other devices, which this model does not reach.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CredentialPersistence {
     None,
     ForSession,
     Permanent,
+    Synchronizable,
 }
 
 /// `URLCredential` for a user name and password.
@@ -156,6 +162,140 @@ impl URLCredentialStorage {
     }
 }
 
+/// The answer to an authentication challenge (`URLSession.AuthChallengeDisposition`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AuthDisposition {
+    /// `useCredential`: answer the challenge with this credential.
+    UseCredential(URLCredential),
+    /// `performDefaultHandling`: let the platform handle the challenge, which asks the user.
+    PerformDefaultHandling,
+    /// `cancelAuthenticationChallenge`: cancel the whole request.
+    CancelAuthenticationChallenge,
+    /// `rejectProtectionSpace`: refuse this space and offer the next one.
+    RejectProtectionSpace,
+}
+
+/// An authentication challenge from a server (`URLAuthenticationChallenge`): the space it protects, how many earlier
+/// attempts failed, and the credential the system proposes for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AuthChallenge {
+    pub space: URLProtectionSpace,
+    pub previous_failure_count: u32,
+    pub proposed: Option<URLCredential>,
+}
+
+impl AuthChallenge {
+    /// A first challenge for `space`: no failed attempt and no proposed credential.
+    pub fn new(space: URLProtectionSpace) -> Self {
+        AuthChallenge { space, previous_failure_count: 0, proposed: None }
+    }
+
+    /// The answer this model gives. Only a first attempt is answered with a credential: the proposed one wins, then the
+    /// one stored for the space. After a failed attempt, or when there is no credential, the answer is
+    /// `PerformDefaultHandling`, so a password that was refused is not sent again.
+    pub fn disposition(&self, storage: &URLCredentialStorage) -> AuthDisposition {
+        if self.previous_failure_count > 0 {
+            return AuthDisposition::PerformDefaultHandling;
+        }
+        let candidate = self.proposed.clone().or_else(|| storage.credential(&self.space).cloned());
+        match candidate {
+            Some(credential) => AuthDisposition::UseCredential(credential),
+            None => AuthDisposition::PerformDefaultHandling,
+        }
+    }
+}
+
+/// Version byte of the keychain layout written by [`URLCredentialStorage::to_keychain_bytes`].
+const KEYCHAIN_VERSION: u8 = 1;
+const TAG_PERMANENT: u8 = 2;
+const TAG_SYNCHRONIZABLE: u8 = 3;
+
+impl URLCredentialStorage {
+    /// The entries that outlive the process: `Permanent` and `Synchronizable` credentials, in the order they were added.
+    pub fn persistent_entries(&self) -> Vec<(&URLProtectionSpace, &URLCredential)> {
+        self.entries
+            .iter()
+            .filter(|(_, c)| matches!(c.persistence, CredentialPersistence::Permanent | CredentialPersistence::Synchronizable))
+            .map(|(s, c)| (s, c))
+            .collect()
+    }
+
+    /// The persistent entries as bytes for one keychain item: a version byte, the entry count (u32 big-endian), then per
+    /// entry the host (length-prefixed), the port (u16 big-endian), the realm (a flag byte, then length-prefixed when
+    /// set), the user and password (length-prefixed), and a persistence tag.
+    pub fn to_keychain_bytes(&self) -> Vec<u8> {
+        let entries = self.persistent_entries();
+        let mut out = vec![KEYCHAIN_VERSION];
+        out.extend_from_slice(&(entries.len() as u32).to_be_bytes());
+        for (space, credential) in entries {
+            push_text(&mut out, &space.host);
+            out.extend_from_slice(&space.port.to_be_bytes());
+            match &space.realm {
+                Some(realm) => {
+                    out.push(1);
+                    push_text(&mut out, realm);
+                }
+                None => out.push(0),
+            }
+            push_text(&mut out, &credential.user);
+            push_text(&mut out, &credential.password);
+            out.push(match credential.persistence {
+                CredentialPersistence::Synchronizable => TAG_SYNCHRONIZABLE,
+                _ => TAG_PERMANENT,
+            });
+        }
+        out
+    }
+
+    /// Reads bytes written by [`URLCredentialStorage::to_keychain_bytes`]. `None` for an unknown version, a truncated
+    /// entry, a tag that is not a persistent one, or trailing bytes.
+    pub fn from_keychain_bytes(bytes: &[u8]) -> Option<URLCredentialStorage> {
+        let mut rest = bytes;
+        if take_bytes(&mut rest, 1)?[0] != KEYCHAIN_VERSION {
+            return None;
+        }
+        let count = u32::from_be_bytes(take_bytes(&mut rest, 4)?.try_into().ok()?);
+        let mut storage = URLCredentialStorage::new();
+        for _ in 0..count {
+            let host = take_text(&mut rest)?;
+            let port = u16::from_be_bytes(take_bytes(&mut rest, 2)?.try_into().ok()?);
+            let realm = match take_bytes(&mut rest, 1)?[0] {
+                0 => None,
+                1 => Some(take_text(&mut rest)?),
+                _ => return None,
+            };
+            let user = take_text(&mut rest)?;
+            let password = take_text(&mut rest)?;
+            let persistence = match take_bytes(&mut rest, 1)?[0] {
+                TAG_PERMANENT => CredentialPersistence::Permanent,
+                TAG_SYNCHRONIZABLE => CredentialPersistence::Synchronizable,
+                _ => return None,
+            };
+            storage.entries.push((URLProtectionSpace { host, port, realm }, URLCredential { user, password, persistence }));
+        }
+        if rest.is_empty() { Some(storage) } else { None }
+    }
+}
+
+fn push_text(out: &mut Vec<u8>, text: &str) {
+    out.extend_from_slice(&(text.len() as u32).to_be_bytes());
+    out.extend_from_slice(text.as_bytes());
+}
+
+fn take_bytes<'a>(rest: &mut &'a [u8], n: usize) -> Option<&'a [u8]> {
+    if rest.len() < n {
+        return None;
+    }
+    let (head, tail) = rest.split_at(n);
+    *rest = tail;
+    Some(head)
+}
+
+fn take_text(rest: &mut &[u8]) -> Option<String> {
+    let len = u32::from_be_bytes(take_bytes(rest, 4)?.try_into().ok()?) as usize;
+    String::from_utf8(take_bytes(rest, len)?.to_vec()).ok()
+}
+
 const BASE64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Standard base64 (RFC 4648) with `=` padding.
@@ -242,5 +382,82 @@ mod tests {
         assert_eq!(store.credential(&other_realm), None);
         assert!(store.remove_credential(&space));
         assert!(!store.remove_credential(&space));
+    }
+
+    #[test]
+    fn keychain_bytes_match_the_hand_worked_layout() {
+        let space = URLProtectionSpace { host: "a".into(), port: 443, realm: None };
+        let mut store = URLCredentialStorage::new();
+        assert!(store.set_credential(URLCredential::new("u", "p", CredentialPersistence::Permanent), space.clone()));
+        // version 1, count 1, host "a" (len 1), port 443 = 0x01BB, no realm, user "u", password "p", Permanent tag 2.
+        let bytes = store.to_keychain_bytes();
+        assert_eq!(bytes, vec![1, 0, 0, 0, 1, 0, 0, 0, 1, 97, 1, 187, 0, 0, 0, 0, 1, 117, 0, 0, 0, 1, 112, 2]);
+        let restored = URLCredentialStorage::from_keychain_bytes(&bytes).unwrap();
+        assert_eq!(restored.credential(&space), Some(&URLCredential::new("u", "p", CredentialPersistence::Permanent)));
+    }
+
+    #[test]
+    fn only_permanent_and_synchronizable_entries_are_written_to_the_keychain() {
+        let a = URLProtectionSpace { host: "a.example".into(), port: 80, realm: Some("R".into()) };
+        let b = URLProtectionSpace { host: "b.example".into(), port: 8443, realm: None };
+        let c = URLProtectionSpace { host: "c.example".into(), port: 443, realm: None };
+        let mut store = URLCredentialStorage::new();
+        store.set_credential(URLCredential::new("x", "1", CredentialPersistence::ForSession), a.clone());
+        store.set_credential(URLCredential::new("y", "2", CredentialPersistence::Synchronizable), b.clone());
+        store.set_credential(URLCredential::new("z", "3", CredentialPersistence::Permanent), c.clone());
+        assert_eq!(store.persistent_entries().len(), 2);
+        let restored = URLCredentialStorage::from_keychain_bytes(&store.to_keychain_bytes()).unwrap();
+        assert_eq!(restored.len(), 2);
+        assert_eq!(restored.credential(&a), None);
+        assert_eq!(restored.credential(&b).map(|cred| cred.persistence), Some(CredentialPersistence::Synchronizable));
+        assert_eq!(restored.credential(&c).map(|cred| cred.user.as_str()), Some("z"));
+    }
+
+    #[test]
+    fn keychain_bytes_with_a_bad_version_truncation_tag_or_trailing_byte_are_refused() {
+        let space = URLProtectionSpace { host: "a".into(), port: 443, realm: None };
+        let mut store = URLCredentialStorage::new();
+        store.set_credential(URLCredential::new("u", "p", CredentialPersistence::Permanent), space);
+        let good = store.to_keychain_bytes();
+        let mut wrong_version = good.clone();
+        wrong_version[0] = 2;
+        assert!(URLCredentialStorage::from_keychain_bytes(&wrong_version).is_none());
+        assert!(URLCredentialStorage::from_keychain_bytes(&good[..good.len() - 1]).is_none());
+        let mut trailing = good.clone();
+        trailing.push(0);
+        assert!(URLCredentialStorage::from_keychain_bytes(&trailing).is_none());
+        let mut session_tag = good.clone();
+        *session_tag.last_mut().unwrap() = 1;
+        assert!(URLCredentialStorage::from_keychain_bytes(&session_tag).is_none());
+        assert_eq!(URLCredentialStorage::from_keychain_bytes(&[1, 0, 0, 0, 0]).map(|s| s.len()), Some(0));
+    }
+
+    #[test]
+    fn a_first_challenge_uses_the_proposed_credential_then_the_stored_one() {
+        let space = URLProtectionSpace { host: "a".into(), port: 443, realm: Some("R".into()) };
+        let mut store = URLCredentialStorage::new();
+        store.set_credential(URLCredential::new("stored", "s", CredentialPersistence::ForSession), space.clone());
+        let mut challenge = AuthChallenge::new(space.clone());
+        assert_eq!(
+            challenge.disposition(&store),
+            AuthDisposition::UseCredential(URLCredential::new("stored", "s", CredentialPersistence::ForSession))
+        );
+        challenge.proposed = Some(URLCredential::new("proposed", "p", CredentialPersistence::None));
+        assert_eq!(
+            challenge.disposition(&store),
+            AuthDisposition::UseCredential(URLCredential::new("proposed", "p", CredentialPersistence::None))
+        );
+    }
+
+    #[test]
+    fn a_refused_password_is_not_sent_again_and_no_credential_means_default_handling() {
+        let space = URLProtectionSpace { host: "a".into(), port: 443, realm: None };
+        let mut store = URLCredentialStorage::new();
+        store.set_credential(URLCredential::new("stored", "s", CredentialPersistence::ForSession), space.clone());
+        let mut challenge = AuthChallenge::new(space.clone());
+        challenge.previous_failure_count = 1;
+        assert_eq!(challenge.disposition(&store), AuthDisposition::PerformDefaultHandling);
+        let empty = URLCredentialStorage::new();
+        assert_eq!(AuthChallenge::new(space).disposition(&empty), AuthDisposition::PerformDefaultHandling);
     }
 }
