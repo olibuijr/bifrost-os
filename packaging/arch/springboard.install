@@ -3,6 +3,8 @@ bifrost_post_update() {
     install -m755 /usr/bin/bifrost-update-guard /var/lib/bifrost-recovery/engine
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl enable bifrost-update-guard.service >/dev/null 2>&1 || true
+    # per-machine modules, recorded after desktop-ready (docs/boot-architecture.md, "Prepared, not probed")
+    systemctl enable bifrost-modules-record.service >/dev/null 2>&1 || true
     # login round: the socket group must exist before the units start; both units are fail-safe (docs/wayland-desktop.md)
     systemd-sysusers bifrost.conf >/dev/null 2>&1 || getent group bifrost-session >/dev/null || groupadd --system bifrost-session || true
     systemctl enable bifrost-privd.service >/dev/null 2>&1 || true

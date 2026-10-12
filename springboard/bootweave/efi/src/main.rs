@@ -8,6 +8,7 @@ extern crate alloc;
 mod boot_policy;
 
 use alloc::string::String;
+mod uki;
 use alloc::vec::Vec;
 use bootweave_frame::progress::Progress;
 use bootweave_frame::render::{bar_rect, render_bar};
@@ -267,13 +268,20 @@ impl Session {
         for n in dp.node_iter() {
             b = b.push(&n).unwrap();
         }
-        let dir = line
-            .split_whitespace()
-            .find_map(|t| t.strip_prefix("initrd="))
-            .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
-            .unwrap_or("\\arch\\boot\\x86_64");
-        let kernel_path =
-            uefi::CString16::try_from(alloc::format!("{dir}\\vmlinuz-linux").as_str()).unwrap();
+        // A unified image (`uki=`) starts directly with the options after it; otherwise the kernel next to the
+        // initramfs named by `initrd=` (the older install layout) starts with the whole line.
+        let (file, options) = match uki::target(line) {
+            Some(file) => (String::from(file), uki::options(line)),
+            None => {
+                let dir = line
+                    .split_whitespace()
+                    .find_map(|t| t.strip_prefix("initrd="))
+                    .and_then(|p| p.rfind('\\').map(|i| &p[..i]))
+                    .unwrap_or("\\arch\\boot\\x86_64");
+                (alloc::format!("{dir}\\vmlinuz-linux"), String::from(line))
+            }
+        };
+        let kernel_path = uefi::CString16::try_from(file.as_str()).unwrap();
         let full = b
             .push(&FilePath {
                 path_name: &kernel_path,
@@ -290,7 +298,7 @@ impl Session {
         ) else {
             return Status::NOT_FOUND;
         };
-        let mut opts: Vec<u16> = line.encode_utf16().collect();
+        let mut opts: Vec<u16> = options.encode_utf16().collect();
         opts.push(0);
         let Ok(mut kli) = boot::open_protocol_exclusive::<LoadedImage>(k) else {
             return Status::LOAD_ERROR;
@@ -386,7 +394,8 @@ fn main() -> Status {
             .unwrap_or(Status::LOAD_ERROR);
     }
     let status = session.boot_line(&current);
-    if marker.is_some() && status != Status::SUCCESS {
+    // A unified image that will not start falls back to the previous generation even without a pending update.
+    if (marker.is_some() || uki::target(&current).is_some()) && status != Status::SUCCESS {
         return previous
             .as_deref()
             .map(|line| session.boot_line(line))

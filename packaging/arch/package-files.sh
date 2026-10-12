@@ -8,6 +8,9 @@ package_bifrost_files() {
   install -Dm755 "$guard" "$pkgdir/usr/bin/bifrost-update-guard"
   install -Dm644 "$here/recovery/bifrost-update-guard.service" "$pkgdir/usr/lib/systemd/system/bifrost-update-guard.service"
   install -Dm644 "$here/recovery/bifrost-rollback.service" "$pkgdir/usr/lib/systemd/system/bifrost-rollback.service"
+  # unified kernel image after each kernel install (docs/boot-architecture.md, "Prepared, not probed")
+  install -Dm644 "$here/recovery/95-bifrost-uki.hook" "$pkgdir/usr/share/libalpm/hooks/95-bifrost-uki.hook"
+  install -Dm644 "$here/recovery/bifrost-modules-record.service" "$pkgdir/usr/lib/systemd/system/bifrost-modules-record.service"
   install -Dm755 "$binary" "$pkgdir/usr/bin/springboard"
   if [[ -n ${PC_BOOTWEAVE:-} && -x ${PC_BOOTWEAVE} ]]; then
     install -Dm755 "$PC_BOOTWEAVE" "$pkgdir/usr/bin/bifrost-bootweave"
