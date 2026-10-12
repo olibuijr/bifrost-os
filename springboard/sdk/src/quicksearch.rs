@@ -256,6 +256,47 @@ impl CSSearchableIndex {
     }
 }
 
+/// `CSSearchableIndexDelegate`: the app's answers when it reindexes its own content (see
+/// [`CSSearchableIndex::reindex_all_with`] and [`CSSearchableIndex::reindex_identifiers_with`]). Each method has an empty
+/// default, so a delegate implements only what it can answer.
+///
+/// Gaps: the shell never asks an app to reindex (no request message from the shell exists), so the app chooses when to
+/// call these. The data-protection and throttling callbacks are not present.
+pub trait CSSearchableIndexDelegate {
+    /// `searchableIndex(_:reindexAllSearchableItemsWithAcknowledgementHandler:)`: the items to index again after the
+    /// index is cleared.
+    fn reindex_all_searchable_items(&self, _ctx: &Ctx) -> Vec<CSSearchableItem> {
+        Vec::new()
+    }
+
+    /// `searchableItems(forIdentifiers:searchableItemsHandler:)`: the items for `identifiers`. An identifier the app does
+    /// not hold yields nothing.
+    fn searchable_items_for(&self, _ctx: &Ctx, _identifiers: &[&str]) -> Vec<CSSearchableItem> {
+        Vec::new()
+    }
+}
+
+impl CSSearchableIndex {
+    /// `searchableIndex(_:reindexAllSearchableItemsWithAcknowledgementHandler:)`, run by the app: clears the index
+    /// (`deleteAllSearchableItems`) and indexes what the delegate returns. Refused items are reported as in
+    /// [`CSSearchableIndex::index_checked`].
+    pub fn reindex_all_with(&self, ctx: &Ctx, delegate: &dyn CSSearchableIndexDelegate) -> Vec<(usize, IndexError)> {
+        self.delete_all_searchable_items(ctx);
+        let items = delegate.reindex_all_searchable_items(ctx);
+        self.index_checked(ctx, &items)
+    }
+
+    /// `searchableIndex(_:reindexSearchableItemsWithIdentifiers:acknowledgementHandler:)`, run by the app: indexes the
+    /// items the delegate returns for `identifiers`. The other indexed items are kept.
+    pub fn reindex_identifiers_with(&self, ctx: &Ctx, identifiers: &[&str], delegate: &dyn CSSearchableIndexDelegate) -> Vec<(usize, IndexError)> {
+        let items = delegate.searchable_items_for(ctx, identifiers);
+        self.index_checked(ctx, &items)
+    }
+}
+
+/// `CSSearchableIndexDescription` and the protection class of a named index (`bifrost_ui::searchindex`).
+pub use bifrost_ui::searchindex::{IndexDescription, NameError as IndexNameError, ProtectionClass};
+
 /// The query model (`bifrost_ui::searchquery`): a query string, the fields it searches and its context.
 pub use bifrost_ui::searchquery::{Context as SearchQueryContext, Error as SearchQueryError, Field as SearchQueryField, Hit as SearchQueryHit, Query as SearchQuery};
 
@@ -416,6 +457,71 @@ mod tests {
         let (title, keywords) = set.wire_text(&Locale::from_env("en_US", None));
         assert_eq!(title, "Invoice");
         assert_eq!(keywords, ["money", "paid", "Ada Lovelace", "ada@example.test"]);
+    }
+
+    /// A delegate holding items in memory: all of them for a reindex, and those with a matching identifier otherwise.
+    struct Store(Vec<CSSearchableItem>);
+
+    impl CSSearchableIndexDelegate for Store {
+        fn reindex_all_searchable_items(&self, _ctx: &Ctx) -> Vec<CSSearchableItem> {
+            self.0.clone()
+        }
+        fn searchable_items_for(&self, _ctx: &Ctx, identifiers: &[&str]) -> Vec<CSSearchableItem> {
+            self.0.iter().filter(|i| identifiers.contains(&i.unique_identifier.as_str())).cloned().collect()
+        }
+    }
+
+    struct Silent;
+    impl CSSearchableIndexDelegate for Silent {}
+
+    fn batch_ids(m: &ToShell) -> Vec<&str> {
+        let ToShell::QuickSearchIndex(batch) = m else { panic!("not an index message") };
+        batch.iter().map(|i| i.unique_id.as_str()).collect()
+    }
+
+    #[test]
+    fn reindex_all_clears_the_index_then_indexes_the_delegate_items() {
+        let c = ctx();
+        let refused = CSSearchableIndex::default_index().reindex_all_with(&c, &Store(vec![item("a"), item("b")]));
+        assert!(refused.is_empty());
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[0], ToShell::QuickSearchDelete { kind: DELETE_ALL, values: vec![] });
+        assert_eq!(batch_ids(&sent[1]), ["a", "b"]);
+    }
+
+    #[test]
+    fn reindex_identifiers_indexes_only_the_asked_items_and_deletes_nothing() {
+        let c = ctx();
+        let refused = CSSearchableIndex::default_index().reindex_identifiers_with(&c, &["b", "zzz"], &Store(vec![item("a"), item("b")]));
+        assert!(refused.is_empty());
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(batch_ids(&sent[0]), ["b"]);
+    }
+
+    #[test]
+    fn reindex_identifiers_with_no_known_identifier_sends_nothing() {
+        let c = ctx();
+        CSSearchableIndex::default_index().reindex_identifiers_with(&c, &["zzz"], &Store(vec![item("a")]));
+        assert!(c.take_sent().is_empty());
+    }
+
+    #[test]
+    fn the_default_delegate_only_clears_the_index_on_reindex_all() {
+        let c = ctx();
+        CSSearchableIndex::default_index().reindex_all_with(&c, &Silent);
+        assert_eq!(c.take_sent(), [ToShell::QuickSearchDelete { kind: DELETE_ALL, values: vec![] }]);
+    }
+
+    #[test]
+    fn reindex_reports_refused_items_by_position_and_sends_the_rest() {
+        let c = ctx();
+        let refused = CSSearchableIndex::default_index().reindex_all_with(&c, &Store(vec![item(""), item("c")]));
+        assert_eq!(refused, vec![(0, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(batch_ids(&sent[1]), ["c"]);
     }
 
     #[test]
