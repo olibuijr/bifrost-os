@@ -8,11 +8,13 @@ mod model;
 mod quick;
 mod repeat;
 mod store;
+mod system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{dock_tile, notification_schedule, widgets_timeline};
 use bifrost_core::json::Json;
 use std::path::Path;
 use springboard::shell::clock::Wall;
@@ -30,8 +32,16 @@ struct RemindersApp {
     kb: bool,
     alerts: alerts::AlertState,
     wall: Wall,
-    /// The count last sent as the dock badge.
+    /// The count last sent as the dock badge, and the badge request still waiting for its reply (with its label, for
+    /// the fallback to the older badge message).
     badge: Option<usize>,
+    badge_req: Option<(u32, String)>,
+    /// Whether the shell has the `notification-schedule` service: `None` until the probe answers. Alerts wait for it.
+    schedule: Option<bool>,
+    /// The request id of the probe for `notification-schedule`.
+    probe: Option<u32>,
+    /// The store generation the Today widget timeline was last sent for.
+    widget_gen: Option<u32>,
     /// Whether the app is currently opted into sudden termination (it starts disabled, as the count does).
     terminable: bool,
 }
@@ -210,13 +220,29 @@ impl App for RemindersApp {
         let due = a.due_count();
         if self.badge != Some(due) {
             self.badge = Some(due);
-            ctx.set_badge(&model::badge_label(due));
+            // The Dock badge goes through the `dock` service; the reply falls back to the older message.
+            let label = model::badge_label(due);
+            let request = dock_tile::set_badge(ctx, &label);
+            self.badge_req = Some((request, label));
+        }
+        let wall_offset = self.wall.offset;
+        let offset_at = |t: i64| springboard::bare::timezone::offset_at(t).unwrap_or(wall_offset);
+        let now = self.wall.now(t);
+        // The Today widget is sent when the reminders change, and again when the shell asks for a reload.
+        if self.widget_gen != Some(a.generation()) {
+            self.widget_gen = Some(a.generation());
+            system::reload_today(ctx, a.items(), a.today(), now, &offset_at);
+        }
+        if self.schedule.is_none() && self.probe.is_none() {
+            self.probe = Some(notification_schedule::pending(ctx));
         }
         let path = ctx.data_dir.join("reminders.tsv");
-        // Alerts are shell triggers: only the plan changes are sent (see alerts.rs).
-        let change = alerts::step(&mut self.alerts, self.wall.now(t), a.generation(), || store::load(&path).items, &|t| springboard::bare::timezone::offset_at(t).unwrap_or(self.wall.offset));
-        if let Some(change) = change {
-            alerts::apply(ctx, &change);
+        // Alerts are shell triggers: only the plan changes are sent (see alerts.rs). They wait for the probe.
+        if let Some(via_service) = self.schedule {
+            let change = alerts::step(&mut self.alerts, now, a.generation(), || store::load(&path).items, &offset_at);
+            if let Some(change) = change {
+                alerts::apply(ctx, &change, via_service);
+            }
         }
         self.sync_keyboard(ctx);
         redraw
@@ -231,6 +257,39 @@ impl App for RemindersApp {
         }
     }
 
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.probe == Some(request) {
+            self.probe = None;
+            self.schedule = Some(result.is_ok());
+            return true;
+        }
+        if let Some((sent, label)) = self.badge_req.take() {
+            if sent == request {
+                // An older shell has no `dock` service: the badge then goes through the message it has always had.
+                if result.is_err() {
+                    ctx.set_badge(&label);
+                }
+                return true;
+            }
+            self.badge_req = Some((sent, label));
+        }
+        false
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        // The shell asks for a new Today timeline when its reload date passes.
+        let Some(widgets_timeline::Event::Reload { kind }) = widgets_timeline::parse_event(service, event, body) else { return false };
+        if kind != system::WIDGET_KIND {
+            return false;
+        }
+        let Some(a) = &self.app else { return false };
+        let wall_offset = self.wall.offset;
+        let offset_at = |t: i64| springboard::bare::timezone::offset_at(t).unwrap_or(wall_offset);
+        system::reload_today(ctx, a.items(), a.today(), self.wall.unix, &offset_at);
+        self.widget_gen = Some(a.generation());
+        false
+    }
+
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         if let Some(a) = &mut self.app {
             a.draw(s, &ctx.ui, t);
@@ -242,5 +301,5 @@ impl App for RemindersApp {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, terminable: false });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false });
 }
