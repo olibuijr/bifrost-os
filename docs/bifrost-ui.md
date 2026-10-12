@@ -793,9 +793,16 @@ the windows behind the window. Ours, end to end:
   `widgets::visual_effect_request`. Tints per material and scheme are `MATERIAL_*` in `render/src/ui.rs`; the new ones
   (menu, sheet, tool tip, header, content, under-window, under-page, full-screen) are derived from the measured
   neighbours, not yet measured. `isEmphasized` changes the `.selection` tint (full accent); an inactive selection is grey.
-  Decision: the wire (`proto::Material`) still carries kind, rect, uniform radius and state only; emphasis, per-corner
-  radii and alpha masks are drawn app-side (largest corner, bounding rounded rect) until the wire gains them.
-- Not matched yet: alpha-mask and per-corner shapes on the wire, and vibrant fills (`vibrancy-fill` levels) as separate API; the
+  Decision (2026-10-12, reconciliation): there is one model. `visual_effect::{MaterialKind, BlendingMode, MaterialState,
+  Corners, MaterialRequest}` is used by the shell (`ShellSurface::request`, `material_request.rs`, which now only names the
+  16 shell surfaces and their kinds), the wire (`proto` re-exports the same enums; `proto::Material` carries kind, rect,
+  uniform `radius`, state, `blending`, `emphasized` and optional per-corner `corners`, flags byte after the radius: bit 0
+  emphasized, bit 1 within-window, bit 2 four corner f32 follow), the SDK (`widgets::visual_effect_request` declares the
+  full request; the canvas still writes the tint with the largest corner) and the window server (`bifrost-wm`
+  `MaterialKind::from_model`). `SDK_VERSION` is 2: a version-1 app fails `Hello` and shows "This app needs an update".
+  SwiftUI `Material` maps onto kinds plus `MaterialRequest::strength` (see Glass and materials for apps).
+- Not matched yet: alpha masks on the wire (rounded rect only; an alpha mask is sent as its bounding rectangle), `strength`
+  and `glass` (Liquid Glass) on the wire, and vibrant fills (`vibrancy-fill` levels) as separate API; the
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
 
@@ -1716,7 +1723,10 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 ## Glass and materials for apps
 
 Module `springboard/ui/src/material_style.rs`. Views are imperative, so each SwiftUI modifier is a builder that yields
-`MaterialRequest`s (rect, per-corner radii, fill, optional merge group), one per shape, for the window server.
+`StyleRequest`s (rect, per-corner radii, fill, optional merge group), one per shape; `StyleRequest::to_material_request`
+makes the shared `visual_effect::MaterialRequest` the window server consumes. Mapping: ultraThin -> UnderWindowBackground,
+thin -> ContentBackground, regular -> Popover, thick -> Sheet, ultraThick -> HudWindow, bar -> HeaderView, each with
+`strength` = the level 0..4; glass sets `glass` (Regular or Clear), which the window server draws as GlassRegular or GlassClear.
 
 | SwiftUI | Ours |
 |---|---|

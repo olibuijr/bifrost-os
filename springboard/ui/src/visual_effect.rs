@@ -47,11 +47,36 @@ impl MaterialKind {
             _ => MaterialKind::Titlebar,
         }
     }
+    /// The `bifrost_material_v1.kind` value the window server (`bifrost-wm`) knows this kind by. The values are the
+    /// protocol's (`wm/protocol/bifrost-material-v1.xml`), not the declaration order. The exhaustive match means a
+    /// kind added here cannot compile until it has a wire value; `bifrost-wm` has a table test over `ALL`.
+    pub fn window_server_wire(self) -> u32 {
+        match self {
+            MaterialKind::Titlebar => 0,
+            MaterialKind::Menu => 1,
+            MaterialKind::Popover => 2,
+            MaterialKind::Sidebar => 3,
+            MaterialKind::HeaderView => 4,
+            MaterialKind::Sheet => 5,
+            MaterialKind::WindowBackground => 6,
+            MaterialKind::HudWindow => 7,
+            MaterialKind::FullScreenUi => 8,
+            MaterialKind::ToolTip => 9,
+            MaterialKind::ContentBackground => 10,
+            MaterialKind::UnderWindowBackground => 11,
+            MaterialKind::UnderPageBackground => 12,
+            MaterialKind::Selection => 15,
+        }
+    }
     /// Dark-by-nature materials (`.hudWindow`, `.fullScreenUI`): vibrant content on them is always light.
     pub fn is_dark_vibrant(self) -> bool {
         matches!(self, MaterialKind::HudWindow | MaterialKind::FullScreenUi)
     }
 }
+
+/// `bifrost_material_v1.kind` values of the two Liquid Glass recipes, which have no `MaterialKind` (see `GlassKind`).
+pub const WINDOW_SERVER_GLASS_REGULAR: u32 = 13;
+pub const WINDOW_SERVER_GLASS_CLEAR: u32 = 14;
 
 /// `NSVisualEffectView.BlendingMode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
@@ -73,7 +98,22 @@ pub enum MaterialState {
     Inactive,
 }
 
+impl BlendingMode {
+    /// The `bifrost_material_v1.blending` value.
+    pub fn window_server_wire(self) -> u32 {
+        match self { BlendingMode::BehindWindow => 0, BlendingMode::WithinWindow => 1 }
+    }
+}
+
 impl MaterialState {
+    /// The `bifrost_material_v1.state` value.
+    pub fn window_server_wire(self) -> u32 {
+        match self {
+            MaterialState::FollowsWindowActiveState => 0,
+            MaterialState::Active => 1,
+            MaterialState::Inactive => 2,
+        }
+    }
     /// Whether the material is drawn active, given the window's active state.
     pub fn looks_active(self, window_active: bool) -> bool {
         match self {
@@ -177,6 +217,13 @@ impl Mask {
     }
 }
 
+/// SwiftUI `Glass.regular` / `Glass.clear` (Liquid Glass), which the window server draws with its own recipes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GlassKind {
+    Regular,
+    Clear,
+}
+
 /// One `NSVisualEffectView` as the window server consumes it. `rect` is in window points.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterialRequest {
@@ -187,6 +234,12 @@ pub struct MaterialRequest {
     pub emphasized: bool,
     pub rect: Rect,
     pub mask: Mask,
+    /// Blur strength rank 0 (ultra thin) to 4 (ultra thick) from a SwiftUI `Material` (`material_style`); `None` is
+    /// the kind's own strength. Not on the shell/app wire yet.
+    pub strength: Option<u8>,
+    /// Set for Liquid Glass: the window server draws its glass recipe (`GlassRegular`/`GlassClear`) instead of the
+    /// kind's. `kind` is then only the fallback look. Not on the shell/app wire yet.
+    pub glass: Option<GlassKind>,
 }
 
 impl MaterialRequest {
@@ -198,6 +251,8 @@ impl MaterialRequest {
             state: MaterialState::FollowsWindowActiveState,
             emphasized: false,
             rect,
+            strength: None,
+            glass: None,
             mask: if radius > 0.0 { Mask::RoundedRect(Corners::uniform(radius)) } else { Mask::None },
         }
     }
@@ -205,6 +260,8 @@ impl MaterialRequest {
     pub fn state(mut self, s: MaterialState) -> Self { self.state = s; self }
     pub fn emphasized(mut self, e: bool) -> Self { self.emphasized = e; self }
     pub fn mask(mut self, m: Mask) -> Self { self.mask = m; self }
+    pub fn strength(mut self, level: u8) -> Self { self.strength = Some(level.min(4)); self }
+    pub fn glass(mut self, g: GlassKind) -> Self { self.glass = Some(g); self }
     /// Whether the material is drawn active for a window in `window_active` state.
     pub fn looks_active(&self, window_active: bool) -> bool {
         self.state.looks_active(window_active)
@@ -242,6 +299,16 @@ mod tests {
             for b in &MaterialKind::ALL[i + 1..] {
                 assert_ne!(a, b);
             }
+        }
+    }
+
+    #[test]
+    fn window_server_wire_values_are_unique_and_in_the_protocol_range() {
+        let mut seen = std::collections::HashSet::new();
+        for k in MaterialKind::ALL {
+            let v = k.window_server_wire();
+            assert!(v <= 15 && v != WINDOW_SERVER_GLASS_REGULAR && v != WINDOW_SERVER_GLASS_CLEAR, "{k:?}");
+            assert!(seen.insert(v), "{k:?}");
         }
     }
 

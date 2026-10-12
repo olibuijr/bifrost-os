@@ -2,31 +2,10 @@
 //! kind), where, with which corner radius and active state, instead of drawing its own blur and tint.
 //! The renderer maps the request to its glass shape and the named material colours; there are no
 //! per-surface blur or tint numbers. Built-in shell surfaces and app windows use the same kinds.
-//! Minimal on purpose: the visual-effect API branch owns the full request type and this is reconciled with it.
-
-/// The reference material kinds (the same set apps declare through the SDK).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum MaterialKind {
-    Menu,
-    Popover,
-    Sheet,
-    HudWindow,
-    ToolTip,
-    FullScreenUi,
-    Sidebar,
-    Titlebar,
-    HeaderView,
-    UnderWindowBackground,
-}
-
-/// Whether the material follows its window's active state or is pinned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum MaterialState {
-    #[default]
-    FollowsWindowActiveState,
-    Active,
-    Inactive,
-}
+//! The request type is the shared model, `visual_effect::MaterialRequest`; this module only names the shell's own
+//! surfaces and which `visual_effect::MaterialKind` each one is.
+use crate::visual_effect::{MaterialKind, MaterialRequest};
+use crate::Rect;
 
 /// One translucent surface of the shell itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -86,18 +65,12 @@ impl ShellSurface {
     }
 }
 
-/// A material request for one rectangle (logical pixels of the surface that carries it).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MaterialRequest {
-    pub kind: MaterialKind,
-    pub rect: (f32, f32, f32, f32),
-    pub radius: f32,
-    pub state: MaterialState,
-}
-
-impl MaterialRequest {
-    pub fn for_surface(surface: ShellSurface, rect: (f32, f32, f32, f32), radius: f32) -> Self {
-        MaterialRequest { kind: surface.material(), rect, radius, state: MaterialState::FollowsWindowActiveState }
+impl ShellSurface {
+    /// The shared request for this surface over `rect` (logical pixels of the surface that carries it) with a
+    /// uniform corner `radius`: behind-window, follows the active state, not emphasized.
+    pub fn request(self, rect: (f32, f32, f32, f32), radius: f32) -> MaterialRequest {
+        let (x, y, w, h) = rect;
+        MaterialRequest::new(self.material(), Rect { x, y, w, h }, radius)
     }
 }
 
@@ -105,6 +78,7 @@ impl MaterialRequest {
 mod tests {
     use super::*;
     use MaterialKind as M;
+    use crate::visual_effect::MaterialState;
 
     /// Every translucent shell surface maps to one reference material kind.
     #[test]
@@ -136,8 +110,9 @@ mod tests {
 
     #[test]
     fn request_carries_the_surface_material() {
-        let r = MaterialRequest::for_surface(ShellSurface::Spotlight, (1.0, 2.0, 3.0, 4.0), 12.0);
+        let r = ShellSurface::Spotlight.request((1.0, 2.0, 3.0, 4.0), 12.0);
         assert_eq!(r.kind, M::HudWindow);
+        assert_eq!(r.corners().tl, 1.5, "clamped so adjacent corners never overlap");
         assert_eq!(r.state, MaterialState::FollowsWindowActiveState);
     }
 }

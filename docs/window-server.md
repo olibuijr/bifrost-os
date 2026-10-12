@@ -159,10 +159,21 @@ gives a `bifrost_material_surface_v1` (one per surface). Double-buffered, applie
 - `clear()` drops all regions; `destroy` removes them from the next commit.
 - `add_region(region, kind, state, blending, emphasized, radius_tl, radius_tr, radius_br, radius_bl)`: at most 16 per surface.
   `kind`: titlebar, menu, popover, sidebar, header_view, sheet, window_background, hud_window, full_screen_ui, tool_tip,
-  content_background, under_window_background, under_page_background, glass_regular, glass_clear. `state`: follows_window,
+  content_background, under_window_background, under_page_background, glass_regular, glass_clear, selection. `state`: follows_window,
   active, inactive. `blending`: behind_window, within_window.
 - With any material region, the surface's `ext-background-effect-v1` blur region is ignored; without, the blur region
   is a `Plain` material (a white veil at 25 %, never replaced by a plate).
+
+### One model (2026-10-12)
+
+The shared model is `bifrost_ui::visual_effect` (`MaterialKind`, 14 kinds, plus `GlassKind` for Liquid Glass). The protocol
+values are fixed by `MaterialKind::window_server_wire` (ui) and `wm::material_kind::MaterialKind::from_model` (exhaustive
+match; `bifrost-wm` depends on `bifrost-ui`). The 16 protocol values are the 14 model kinds plus `glass_regular` (13) and
+`glass_clear` (14); a table test in `material_kind.rs` fails if a kind exists on one side only. The shell reaches the
+protocol from `src/bare/wayland.rs` (`material_client.rs`): when the compositor offers `bifrost_material_manager_v1` each
+window's regions are sent with `add_region` (kind, state, blending, emphasized, four radii; built-in windows and external
+apps alike, from `glass::Rect::detail`); otherwise it falls back to `ext-background-effect` blur regions. The shell/app wire
+carries the same fields (`proto::Material`, SDK protocol 2).
 
 ### Recipe and rules
 
