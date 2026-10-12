@@ -725,6 +725,7 @@ pub mod chart_marks;
 pub mod chart_content;
 pub mod chart_scroll;
 pub mod chart_vector;
+pub mod chart_surface;
 pub mod compose;
 pub mod file_provider;
 pub mod widget;
