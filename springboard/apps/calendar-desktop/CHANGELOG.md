@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.11.0
+
+- Invitees: an event that came from an imported calendar file now lists who was invited, under the notes in its editor, as "Invitees: Ana Lind (Accepted), bo@example.is (Awaiting reply)". Each person's answer is shown: Accepted, Declined, Maybe, Awaiting reply, Delegated, Completed or In progress. Three names are listed, then "and n more". The row cannot be edited: attendance is what the file recorded.
+- Invitees are kept when the calendar file is saved again, so an import does not lose them.
+- Still open, listed in `docs/parity/wire6-calendar.md`: the calendar list does not group calendars by account (it shows one local calendar), an event has one alert (not several) and the repeat choices are fixed (no every N days or weeks), because the event store holds one alert and one repeat value.
+
 ## 1.10.0
 
 - File > New Event from Text: copy a sentence and choose the command. The editor opens on a new event read from it: "Lunch with Ana next Tuesday at 12:30 at Laugavegur 5" gives the title "Lunch with Ana", the next Tuesday, 12:30 and the location "Laugavegur 5". Also understood: today, tonight (19:00 if no time), tomorrow, weekdays, "on" and "next" before a weekday, dates as 2026-10-20 or 20.10.2026, and times as 9:00, 3pm or noon. Nothing is saved until Save. With nothing copied, it opens a plain New Event.

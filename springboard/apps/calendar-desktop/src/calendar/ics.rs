@@ -1,9 +1,11 @@
 //! iCalendar (RFC 5545) reader and writer for events: line folding, TEXT
 //! escaping, DATE / DATE-TIME (floating, UTC, TZID), DURATION, RRULE, EXDATE,
 //! VALARM triggers and the fixed offsets of VTIMEZONE blocks.
+use super::invitees;
 use super::recur::{self, Rule};
 use super::store::CalendarEvent;
 use super::Date;
+use bifrost_app::controls::calendar_participant::Participant;
 
 const MAX_EVENTS: usize = 5000;
 const MAX_LINE: usize = 75;
@@ -49,6 +51,8 @@ pub struct IcsEvent {
     /// Minutes before the start, one per alert.
     pub alarms: Vec<u32>,
     pub color: Option<String>,
+    /// Invitees and their responses (ATTENDEE lines), read-only.
+    pub attendees: Vec<Participant>,
 }
 
 impl IcsEvent {
@@ -66,6 +70,7 @@ impl IcsEvent {
             exdates: vec![],
             alarms: vec![],
             color: None,
+            attendees: vec![],
         }
     }
 
@@ -275,6 +280,7 @@ struct Builder {
     exdates: Vec<Date>,
     alarms: Vec<u32>,
     color: Option<String>,
+    attendees: Vec<Participant>,
 }
 
 impl Builder {
@@ -303,6 +309,7 @@ impl Builder {
             exdates: self.exdates,
             alarms,
             color: self.color,
+            attendees: self.attendees,
         })
     }
 }
@@ -392,6 +399,12 @@ pub fn parse(text: &str) -> IcsCalendar {
                     "DTEND" => b.end = parse_when(&line.value, line.param("VALUE")).map(|w| w.0),
                     "DURATION" => b.duration = parse_duration(&line.value),
                     "RRULE" => b.rule = recur::parse_rrule(&line.value),
+                    "ATTENDEE" => {
+                        let (cn, role, cutype, partstat) = (line.param("CN"), line.param("ROLE"), line.param("CUTYPE"), line.param("PARTSTAT"));
+                        if let Some(p) = invitees::attendee(&line.value, cn, role, cutype, partstat) {
+                            b.attendees.push(p);
+                        }
+                    }
                     "EXDATE" => {
                         for v in line.value.split(',') {
                             if let Some((l, _, _)) = parse_when(v, line.param("VALUE")) {
@@ -487,6 +500,9 @@ fn write_event(out: &mut String, e: &IcsEvent, stamp: &str) {
     }
     if !e.notes.is_empty() {
         add(format!("DESCRIPTION:{}", escape(&e.notes)));
+    }
+    for p in &e.attendees {
+        add(invitees::attendee_line(p));
     }
     if let Some(r) = &e.rule {
         add(format!("RRULE:{}", recur::to_rrule(r)));
