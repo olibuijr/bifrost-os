@@ -130,6 +130,13 @@ pub use proto::ContextItem;
 /// The audio service client (`audio::Client`): playback state and transport over `bifrost_proto::svc::audio`.
 pub use springboard::svc::audio;
 
+/// Microphone consent, the mute switch and the one recording owner (`microphone::Microphone`). The shell answers the
+/// prompt; an app asks `begin` before it sends `RecordStart` to the audio service.
+pub use bifrost_ui::mic_consent as microphone;
+
+/// Speech model assets: installed locales, downloads and reservations (`speech_models::AssetInventory`).
+pub use bifrost_ui::speech_assets as speech_models;
+
 /// An app. Only `id` and `draw` are required.
 pub trait App {
     /// The reverse-DNS id from the manifest.

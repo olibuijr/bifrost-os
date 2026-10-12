@@ -796,6 +796,8 @@ pub mod geo;
 pub mod record_store;
 pub mod record_sync;
 pub mod record_asset;
+pub mod mic_consent;
+pub mod speech_assets;
 pub mod weather_model;
 pub mod language;
 pub mod segment;
