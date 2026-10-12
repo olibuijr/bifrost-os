@@ -808,3 +808,5 @@ pub mod certificate_trust;
 pub mod vm_state;
 pub mod vm_share;
 pub mod vm_error;
+pub mod smartcard_slot;
+pub mod token_watch;
