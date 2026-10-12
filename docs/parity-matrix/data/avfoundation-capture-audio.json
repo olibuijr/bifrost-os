@@ -73,9 +73,9 @@
     {
       "feature": "Speech synthesis",
       "apple": "AVSpeechSynthesizer, AVSpeechUtterance, AVSpeechSynthesisVoice",
-      "bifrost": "springboard/core/src/meter.rs, springboard/ui/src/speech.rs",
+      "bifrost": "springboard/core/src/meter.rs, springboard/ui/src/speech.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (same Narration model)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text-to-speech engine or SDK API found in the repo; relevant for accessibility (VoiceOver counterpart)"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text-to-speech engine or SDK API found in the repo; relevant for accessibility (VoiceOver counterpart) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Audio settings keys",

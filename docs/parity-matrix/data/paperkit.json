@@ -17,9 +17,9 @@
     {
       "feature": "Freehand drawing tools",
       "apple": "PaperKit drawings on PencilKit (PKDrawing content)",
-      "bifrost": "springboard/src/shell/markup.rs:20 (Tool: Pen, Marker, Pencil, Eraser), :29 (brush widths and opacity); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser)",
+      "bifrost": "springboard/src/shell/markup.rs:20 (Tool: Pen, Marker, Pencil, Eraser), :29 (brush widths and opacity); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (pen only, in the note sketch pad)",
       "status": "partial",
-      "note": "Stroke widths and opacity are fixed per tool. No stylus pressure, tilt or stroke editing."
+      "note": "Stroke widths and opacity are fixed per tool. No stylus pressure, tilt or stroke editing. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Undo for markup edits",

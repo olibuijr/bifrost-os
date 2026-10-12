@@ -38,16 +38,16 @@
     {
       "feature": "Units and Measurement",
       "apple": "Measurement, Unit, UnitLength, UnitMass, UnitTemperature, conversions",
-      "bifrost": "springboard/sdk/src/locale.rs (Measurement, Unit, converted)",
+      "bifrost": "springboard/sdk/src/locale.rs (Measurement, Unit, converted); wired: springboard/apps/calculator-desktop/src/convert.rs (Convert mode, Measurement via bifrost_app::locale); unchanged in this wave",
       "status": "partial",
-      "note": "length, mass and temperature only; no other dimensions, no user-defined units"
+      "note": "length, mass and temperature only; no other dimensions, no user-defined units Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Data Formatting",
       "apple": "NumberFormatter, DateFormatter, RelativeDateTimeFormatter, ByteCountFormatter, MeasurementFormatter, ListFormatter",
-      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters)",
+      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button",
       "status": "partial",
-      "note": "en and is only; no stringsdict plurals, no duration, person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs"
+      "note": "en and is only; no stringsdict plurals, no duration, person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Filters and Sorting",

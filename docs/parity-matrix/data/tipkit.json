@@ -24,9 +24,9 @@
     {
       "feature": "Inline tip view and style",
       "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
-      "bifrost": "springboard/ui/src/tips.rs (TipView, TipViewStyle); wired: springboard/ui/src/tips.rs (TipView, TipViewStyle::Mini) via springboard/apps/freeform-desktop/src/freeform.rs",
+      "bifrost": "springboard/ui/src/tips.rs (TipView, TipViewStyle); wired: springboard/ui/src/tips.rs (TipView, TipViewStyle::Mini) via springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/reminders-desktop/src/app.rs (AlertHint, TipView, TipViewStyle::Mini); view.rs (draw_tip); main.rs (tip_store)",
       "status": "partial",
-      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Popover tip",

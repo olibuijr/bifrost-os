@@ -66,9 +66,9 @@
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",
       "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment)",
-      "bifrost": "springboard/ui/src/preview.rs (PreviewProvider, Registry::preview)",
+      "bifrost": "springboard/ui/src/preview.rs (PreviewProvider, Registry::preview); wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No out-of-process preview extension that returns data, PDF or HTML replies."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No out-of-process preview extension that returns data, PDF or HTML replies. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     }
   ],
   "gaps": [

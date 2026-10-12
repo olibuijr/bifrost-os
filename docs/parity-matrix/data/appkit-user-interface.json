@@ -1,116 +1,116 @@
 {
- "framework": "AppKit (User Interface)",
- "doc": "https://developer.apple.com/documentation/appkit",
- "macos_since": "10.0",
- "status": "partial",
- "bifrost": "bifrost_app::view, bifrost_app::widgets, bifrost_ui (stack, constraint, sheet, panels, gesture, ax), render/appearance",
- "summary": "Layout, appearance, animation, gestures, drag and drop are covered. Controls, window/screen API, dock tiles and accessibility are partial; app-facing sound, speech and haptics are missing.",
- "rea_evidence": "ev_f82ebd8719732e253617f0fa4a235954eb9b61fb56c2c20aeaeb04b009140b94",
- "features": [
-  {
-   "feature": "Views and Controls",
-   "apple": "NSView, NSControl, NSButton, NSTextField, NSSlider, NSTableView, NSCollectionView, NSOutlineView",
-   "bifrost": "springboard/sdk/src/view/controls.rs; springboard/sdk/src/widgets.rs; springboard/ui/src/values.rs; springboard/ui/src/table.rs; springboard/ui/src/collection.rs",
-   "status": "partial",
-   "note": "Core controls, table and collection models exist; many AppKit controls and bezel styles are missing (see docs/bifrost-ui.md)."
-  },
-  {
-   "feature": "View Management",
-   "apple": "NSViewController, NSSplitView, NSTabView, NSScrollView, NSVisualEffectView",
-   "bifrost": "springboard/ui/src/split.rs; springboard/ui/src/nav.rs; springboard/sdk/src/view/scroll.rs; springboard/render/src/glass.rs",
-   "status": "partial",
-   "note": "Split, navigation, scroll and vibrancy exist; no view-controller lifecycle clone."
-  },
-  {
-   "feature": "View Layout",
-   "apple": "NSStackView, NSLayoutConstraint, NSLayoutGuide",
-   "bifrost": "springboard/ui/src/stack.rs; springboard/ui/src/constraint.rs; springboard/sdk/src/view/autolayout.rs; springboard/sdk/src/layout.rs",
-   "status": "parity",
-   "note": "Stack views and a Cassowary constraint solver cover the main layout features."
-  },
-  {
-   "feature": "Appearance Customization",
-   "apple": "NSAppearance, Dark Mode, accent colour, NSColor named colours",
-   "bifrost": "springboard/render/src/appearance.rs; springboard/render/src/ui.rs",
-   "status": "parity",
-   "note": "Light, Dark and Auto with cross-fade, named adaptive colours; external apps follow it via portal."
-  },
-  {
-   "feature": "Animation",
-   "apple": "NSAnimationContext, NSViewAnimation, window animation behavior",
-   "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/anim.rs; springboard/render/src/motion.rs; springboard/src/shell/window_fx.rs",
-   "status": "parity",
-   "note": "Implicit animation with curves and springs; window animation behaviours implemented."
-  },
-  {
-   "feature": "Windows, Panels, and Screens",
-   "apple": "NSWindow, NSPanel, NSScreen, sheets, open/save panels, font and colour panels",
-   "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm",
-   "status": "partial",
-   "note": "Windows, sheets, open/save and font/colour panels exist; NSScreen-style multi-screen API for apps is thin."
-  },
-  {
-   "feature": "Sound, Speech, and Haptics",
-   "apple": "NSSound, NSSpeechSynthesizer, NSHapticFeedbackManager",
-   "bifrost": "springboard/audiod/src/main.rs; springboard/src/shell/audiosvc.rs",
-   "status": "os",
-   "note": "Audio service exists in the system layer; no app-facing sound, speech or haptic API found."
-  },
-  {
-   "feature": "Continuity Camera",
-   "apple": "NSContinuityCamera import from iPhone",
-   "bifrost": "springboard/src/shell/camera/mod.rs",
-   "status": "n/a",
-   "note": "Needs iPhone and Apple Continuity; local camera support exists in the shell."
-  },
-  {
-   "feature": "Mouse, Keyboard, and Trackpad",
-   "apple": "NSEvent, NSResponder, key equivalents, NSTextInputClient",
-   "bifrost": "springboard/ui/src/responder.rs; springboard/ui/src/keys.rs; springboard/ui/src/focus.rs; springboard/src/shell/textinput.rs",
-   "status": "partial",
-   "note": "Responder chain, shortcuts and focus exist; event monitors and full text-input client are partial."
-  },
-  {
-   "feature": "Menus, Cursors, and the Dock",
-   "apple": "NSMenu, NSCursor, NSStatusItem, NSDockTile",
-   "bifrost": "springboard/ui/src/menu.rs; springboard/sdk/src/status_item.rs; springboard/src/shell/desktop_bar.rs; springboard/src/shell/desktop_dock.rs",
-   "status": "partial",
-   "note": "Menus and status items exist; dock tile badges/menus for apps and custom cursors are limited."
-  },
-  {
-   "feature": "Gestures",
-   "apple": "NSGestureRecognizer family, NSMagnificationGestureRecognizer",
-   "bifrost": "springboard/ui/src/gesture.rs; springboard/src/shell/gestures.rs",
-   "status": "parity",
-   "note": "Gesture recognizers model plus shell trackpad gestures."
-  },
-  {
-   "feature": "Touch Bar",
-   "apple": "NSTouchBar and items",
-   "bifrost": "springboard/src/shell/termtouch.rs",
-   "status": "n/a",
-   "note": "Touch Bar hardware is Apple-only; no counterpart planned."
-  },
-  {
-   "feature": "Drag and Drop",
-   "apple": "NSDraggingSource, NSDraggingDestination, NSPasteboard",
-   "bifrost": "springboard/sdk/src/dnd.rs; springboard/sdk/src/pasteboard.rs; springboard/src/shell/dnd.rs",
-   "status": "parity",
-   "note": "DnD and pasteboard APIs for apps."
-  },
-  {
-   "feature": "Accessibility for AppKit",
-   "apple": "NSAccessibility protocols, VoiceOver",
-   "bifrost": "springboard/ui/src/ax.rs; springboard/src/shell/atspi; springboard/src/shell/accessibility; springboard/src/shell/magnifier.rs",
-   "status": "partial",
-   "note": "Accessibility tree bridged over AT-SPI with text, announcements; no full role/rotor coverage."
-  }
- ],
- "gaps": [
-  "App-facing sound, speech synthesis and haptics API",
-  "NSScreen-style multi-display API for apps",
-  "App dock tile badges/menus and custom cursors",
-  "Full accessibility roles and rotors",
-  "Missing control types and bezel styles"
- ]
+  "framework": "AppKit (User Interface)",
+  "doc": "https://developer.apple.com/documentation/appkit",
+  "macos_since": "10.0",
+  "status": "partial",
+  "bifrost": "bifrost_app::view, bifrost_app::widgets, bifrost_ui (stack, constraint, sheet, panels, gesture, ax), render/appearance",
+  "summary": "Layout, appearance, animation, gestures, drag and drop are covered. Controls, window/screen API, dock tiles and accessibility are partial; app-facing sound, speech and haptics are missing.",
+  "rea_evidence": "ev_f82ebd8719732e253617f0fa4a235954eb9b61fb56c2c20aeaeb04b009140b94",
+  "features": [
+    {
+      "feature": "Views and Controls",
+      "apple": "NSView, NSControl, NSButton, NSTextField, NSSlider, NSTableView, NSCollectionView, NSOutlineView",
+      "bifrost": "springboard/sdk/src/view/controls.rs; springboard/sdk/src/widgets.rs; springboard/ui/src/values.rs; springboard/ui/src/table.rs; springboard/ui/src/collection.rs",
+      "status": "partial",
+      "note": "Core controls, table and collection models exist; many AppKit controls and bezel styles are missing (see docs/bifrost-ui.md)."
+    },
+    {
+      "feature": "View Management",
+      "apple": "NSViewController, NSSplitView, NSTabView, NSScrollView, NSVisualEffectView",
+      "bifrost": "springboard/ui/src/split.rs; springboard/ui/src/nav.rs; springboard/sdk/src/view/scroll.rs; springboard/render/src/glass.rs",
+      "status": "partial",
+      "note": "Split, navigation, scroll and vibrancy exist; no view-controller lifecycle clone."
+    },
+    {
+      "feature": "View Layout",
+      "apple": "NSStackView, NSLayoutConstraint, NSLayoutGuide",
+      "bifrost": "springboard/ui/src/stack.rs; springboard/ui/src/constraint.rs; springboard/sdk/src/view/autolayout.rs; springboard/sdk/src/layout.rs",
+      "status": "parity",
+      "note": "Stack views and a Cassowary constraint solver cover the main layout features."
+    },
+    {
+      "feature": "Appearance Customization",
+      "apple": "NSAppearance, Dark Mode, accent colour, NSColor named colours",
+      "bifrost": "springboard/render/src/appearance.rs; springboard/render/src/ui.rs; wired: springboard/render/src/ui.rs (CONTENT_BG) applied in springboard/apps/{assistant,console,daw,games,music,podcasts,shortcuts,voicememos,weather}-desktop/src",
+      "status": "parity",
+      "note": "Light, Dark and Auto with cross-fade, named adaptive colours; external apps follow it via portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+    },
+    {
+      "feature": "Animation",
+      "apple": "NSAnimationContext, NSViewAnimation, window animation behavior",
+      "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/anim.rs; springboard/render/src/motion.rs; springboard/src/shell/window_fx.rs",
+      "status": "parity",
+      "note": "Implicit animation with curves and springs; window animation behaviours implemented."
+    },
+    {
+      "feature": "Windows, Panels, and Screens",
+      "apple": "NSWindow, NSPanel, NSScreen, sheets, open/save panels, font and colour panels",
+      "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm; wired: springboard/src/shell/desk.rs (desk_tile_front, desk_restore_front, edge snap on title-bar drop)",
+      "status": "partial",
+      "note": "Windows, sheets, open/save and font/colour panels exist; NSScreen-style multi-screen API for apps is thin. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+    },
+    {
+      "feature": "Sound, Speech, and Haptics",
+      "apple": "NSSound, NSSpeechSynthesizer, NSHapticFeedbackManager",
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/shell/audiosvc.rs",
+      "status": "os",
+      "note": "Audio service exists in the system layer; no app-facing sound, speech or haptic API found."
+    },
+    {
+      "feature": "Continuity Camera",
+      "apple": "NSContinuityCamera import from iPhone",
+      "bifrost": "springboard/src/shell/camera/mod.rs",
+      "status": "n/a",
+      "note": "Needs iPhone and Apple Continuity; local camera support exists in the shell."
+    },
+    {
+      "feature": "Mouse, Keyboard, and Trackpad",
+      "apple": "NSEvent, NSResponder, key equivalents, NSTextInputClient",
+      "bifrost": "springboard/ui/src/responder.rs; springboard/ui/src/keys.rs; springboard/ui/src/focus.rs; springboard/src/shell/textinput.rs; wired: springboard/src/shell/hwkeys.rs (Shortcut::Tile on Ctrl+Cmd arrows, Shortcut::CycleWindow on Cmd+`)",
+      "status": "partial",
+      "note": "Responder chain, shortcuts and focus exist; event monitors and full text-input client are partial. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+    },
+    {
+      "feature": "Menus, Cursors, and the Dock",
+      "apple": "NSMenu, NSCursor, NSStatusItem, NSDockTile",
+      "bifrost": "springboard/ui/src/menu.rs; springboard/sdk/src/status_item.rs; springboard/src/shell/desktop_bar.rs; springboard/src/shell/desktop_dock.rs; wired: springboard/src/shell/desktop_bar.rs (Window menu tile, restore and Next Window rows)",
+      "status": "partial",
+      "note": "Menus and status items exist; dock tile badges/menus for apps and custom cursors are limited. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+    },
+    {
+      "feature": "Gestures",
+      "apple": "NSGestureRecognizer family, NSMagnificationGestureRecognizer",
+      "bifrost": "springboard/ui/src/gesture.rs; springboard/src/shell/gestures.rs",
+      "status": "parity",
+      "note": "Gesture recognizers model plus shell trackpad gestures."
+    },
+    {
+      "feature": "Touch Bar",
+      "apple": "NSTouchBar and items",
+      "bifrost": "springboard/src/shell/termtouch.rs",
+      "status": "n/a",
+      "note": "Touch Bar hardware is Apple-only; no counterpart planned."
+    },
+    {
+      "feature": "Drag and Drop",
+      "apple": "NSDraggingSource, NSDraggingDestination, NSPasteboard",
+      "bifrost": "springboard/sdk/src/dnd.rs; springboard/sdk/src/pasteboard.rs; springboard/src/shell/dnd.rs",
+      "status": "parity",
+      "note": "DnD and pasteboard APIs for apps."
+    },
+    {
+      "feature": "Accessibility for AppKit",
+      "apple": "NSAccessibility protocols, VoiceOver",
+      "bifrost": "springboard/ui/src/ax.rs; springboard/src/shell/atspi; springboard/src/shell/accessibility; springboard/src/shell/magnifier.rs",
+      "status": "partial",
+      "note": "Accessibility tree bridged over AT-SPI with text, announcements; no full role/rotor coverage."
+    }
+  ],
+  "gaps": [
+    "App-facing sound, speech synthesis and haptics API",
+    "NSScreen-style multi-display API for apps",
+    "App dock tile badges/menus and custom cursors",
+    "Full accessibility roles and rotors",
+    "Missing control types and bezel styles"
+  ]
 }

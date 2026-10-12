@@ -52,9 +52,9 @@
     {
       "feature": "Smart Stacks and relevance (RelevanceConfiguration, TimelineEntryRelevance, WidgetRelevance)",
       "apple": "RelevanceConfiguration, RelevanceEntriesProvider, TimelineEntryRelevance, WidgetRelevanceAttribute, Smart Stacks",
-      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs",
+      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs; wired: springboard/src/shell/services/widgets_timeline.rs (Store::rows orders widgets with relevance::rank)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stack is a manual swipe list of small tiles. It has no relevance scores and no app relevance input."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stack is a manual swipe list of small tiles. It has no relevance scores and no app relevance input. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Dynamic dates and clock content in widgets",

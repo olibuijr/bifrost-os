@@ -17,9 +17,9 @@
     {
       "feature": "Authorization and usage descriptions",
       "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
-      "bifrost": "springboard/ui/src/location_auth.rs; wired: springboard/ui/src/location_auth.rs (shell privacy service: location_status, location_request; Settings > Privacy > App Permissions > LOCATION switch; SDK privacy_permissions::location_status/location_request/decode_location/decode_location_outcome); wired: springboard/apps/weather-desktop/src/insights.rs (location_note) and weather.rs LOCATION, place_rows footer",
+      "bifrost": "springboard/ui/src/location_auth.rs; wired: springboard/ui/src/location_auth.rs (shell privacy service: location_status, location_request; Settings > Privacy > App Permissions > LOCATION switch; SDK privacy_permissions::location_status/location_request/decode_location/decode_location_outcome); wired: springboard/apps/weather-desktop/src/insights.rs (location_note) and weather.rs LOCATION, place_rows footer; wired: springboard/src/shell/services/privacy_permissions.rs (location_request queues the sheet)",
       "status": "partial",
-      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Coordinates and location values",

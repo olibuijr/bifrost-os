@@ -17,9 +17,9 @@
     {
       "feature": "Language identification (NLLanguageRecognizer, NLLanguage)",
       "apple": "NLLanguageRecognizer (dominantLanguage, languageHypotheses, languageHints), NLLanguage",
-      "bifrost": "springboard/ui/src/language.rs (LanguageRecognizer",
+      "bifrost": "springboard/ui/src/language.rs (LanguageRecognizer; wired: springboard/apps/news-desktop/src/wire.rs (translation_plan) over springboard/ui/src/language.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (look_up) + narrate.rs via springboard/ui/src/language.rs dominant_language",
       "status": "partial",
-      "note": "Wave 2 (natural-language, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-language detection anywhere in the SDK or shell; the only language values are the two user-selected Locale languages"
+      "note": "Wave 2 (natural-language, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-language detection anywhere in the SDK or shell; the only language values are the two user-selected Locale languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Script detection (NLScript)",
@@ -45,9 +45,9 @@
     {
       "feature": "Spelling-aware word lookup (companion, not Apple NL)",
       "apple": "NSSpellChecker is in AppKit, not Natural Language; listed here because Apple's NL word units feed it",
-      "bifrost": "springboard/sdk/src/spellcheck.rs:46 (Dictionary trait), :54 (WordList), :166 (check_spelling)",
+      "bifrost": "springboard/sdk/src/spellcheck.rs:46 (Dictionary trait), :54 (WordList), :166 (check_spelling); wired: springboard/core/src/spellcheck.rs (words, WordList, check_spelling); springboard/src/shell/services/text_services.rs",
       "status": "partial",
-      "note": "edit-distance-1 suggestions over a word list; no grammar, no bundled dictionary, no app adopts it yet (docs/bifrost-ui.md:1426-1429)"
+      "note": "edit-distance-1 suggestions over a word list; no grammar, no bundled dictionary, no app adopts it yet (docs/bifrost-ui.md:1426-1429) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Text embedding and similarity (NLEmbedding)",

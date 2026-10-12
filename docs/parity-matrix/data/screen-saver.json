@@ -10,16 +10,16 @@
     {
       "feature": "ScreenSaverView (plug-in view and animation lifecycle)",
       "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)",
-      "bifrost": "springboard/ui/src/screensaver.rs",
+      "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/screensaver.rs (drives bifrost_ui::screensaver::ScreenSaverView start/tick/stop/animate_one_frame); no .saver bundle host",
       "status": "partial",
-      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no .saver bundle loader and no screen saver engine; the shell has no idle-animation host"
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no .saver bundle loader and no screen saver engine; the shell has no idle-animation host Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Preview and configuration sheet",
       "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
-      "bifrost": "springboard/ui/src/screensaver.rs",
+      "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/pages.rs (PageId::ScreenSaver, Preview row) and springboard/src/shell/settings.rs (Pick::ScreenSaverPreview); configuration sheet not wired",
       "status": "partial",
-      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page)"
+      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Preference storage for a screen saver module",
@@ -38,16 +38,16 @@
     {
       "feature": "Random value and rectangle helpers",
       "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect",
-      "bifrost": "springboard/ui/src/screensaver.rs",
+      "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/screensaver.rs (ss_random_point_for_size_within_rect places the Clock saver)",
       "status": "partial",
-      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. these are small utilities; no SDK equivalent was found in springboard/sdk/src/"
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. these are small utilities; no SDK equivalent was found in springboard/sdk/src/ Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Idle detection that starts the saver",
       "apple": "The system starts the saver after user inactivity (screen saver engine)",
-      "bifrost": "springboard/core/src/idle_monitor.rs",
+      "bifrost": "springboard/core/src/idle_monitor.rs; wired: springboard/src/shell/screensaver.rs (IdleMonitor from springboard/core/src/idle_monitor.rs, fed by the shell's last-input time)",
       "status": "partial",
-      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation"
+      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Auto-lock after idle",

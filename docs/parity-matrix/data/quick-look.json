@@ -45,9 +45,9 @@
     {
       "feature": "Data-based and view-controller preview extensions",
       "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply, QLPreviewReplyAttachment, QLPreviewingController (https://developer.apple.com/documentation/quicklook/data-based-preview-extensions)",
-      "bifrost": "springboard/sdk/src/peek.rs, springboard/ui/src/preview.rs",
+      "bifrost": "springboard/sdk/src/peek.rs, springboard/ui/src/preview.rs; wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry, Files::peek)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets a third-party app register a file type and supply its own preview. Apps only get the panel model and thumbnail path."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets a third-party app register a file type and supply its own preview. Apps only get the panel model and thumbnail path. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "PDF multi-page preview context",

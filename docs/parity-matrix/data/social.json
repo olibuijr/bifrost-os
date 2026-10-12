@@ -10,9 +10,9 @@
     {
       "feature": "Compose post sheet",
       "apple": "SLComposeViewController, SLComposeServiceViewController",
-      "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs",
+      "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs; wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target), springboard/ui/src/compose.rs",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The share menu hands items to installed apps. It does not show an editor that posts to a network."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The share menu hands items to installed apps. It does not show an editor that posts to a network. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Service availability check",
@@ -24,16 +24,16 @@
     {
       "feature": "Post contents (initial text, images, URLs)",
       "apple": "setInitialText(_:), add(_:) for images and URLs, removeAllImages(), removeAllURLs()",
-      "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File; at most 8 items)",
+      "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File; at most 8 items); wired: springboard/src/shell/compose_sheet.rs (sheet_for, hand_off_text)",
       "status": "partial",
-      "note": "Items can be passed to the share menu, but no post composer edits or attaches them."
+      "note": "Items can be passed to the share menu, but no post composer edits or attaches them. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Completion result",
       "apple": "completionHandler, SLComposeViewControllerResult",
-      "bifrost": "springboard/sdk/src/share.rs (App::share_done via show_picker); springboard/src/shell/sharing.rs",
+      "bifrost": "springboard/sdk/src/share.rs (App::share_done via show_picker); springboard/src/shell/sharing.rs; wired: springboard/src/shell/compose_sheet.rs (compose_done), springboard/src/shell/sharing.rs (share_finish)",
       "status": "partial",
-      "note": "Reports the chosen app id, 'copy', or None when dismissed. It has no posted, cancelled or done states."
+      "note": "Reports the chosen app id, 'copy', or None when dismissed. It has no posted, cancelled or done states. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "HTTP request assembly for a service",

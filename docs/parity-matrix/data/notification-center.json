@@ -31,9 +31,9 @@
     {
       "feature": "Search view (NCWidgetSearchViewController)",
       "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate",
-      "bifrost": "springboard/ui/src/widget_search.rs",
+      "bifrost": "springboard/ui/src/widget_search.rs; wired: springboard/ui/src/widget_search.rs via services/widgets_timeline.rs search and search_rows methods (no shell UI yet)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/)."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "List view (NCWidgetListViewController)",

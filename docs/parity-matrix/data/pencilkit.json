@@ -10,30 +10,30 @@
     {
       "feature": "Canvas view capturing pen and finger input",
       "apple": "PKCanvasView",
-      "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/apps/freeform-desktop/src/freeform.rs",
+      "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (sketch_touch, draw_sketch)",
       "status": "partial",
-      "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas."
+      "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Drawing model (PKDrawing) and save as data",
       "apple": "PKDrawing, PKDrawing.dataRepresentation",
-      "bifrost": "springboard/ui/src/drawing.rs",
+      "bifrost": "springboard/ui/src/drawing.rs; wired: springboard/apps/notes-desktop/src/notes/sketch.rs (save, load; <id>-<n>.sketch beside the picture)",
       "status": "partial",
-      "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes."
+      "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Stroke and point model (PKStroke, PKStrokePath, PKStrokePoint)",
       "apple": "PKStroke, PKStrokePath, PKStrokePoint",
-      "bifrost": "springboard/src/shell/markup.rs:41 (Stroke { tool, color, pts })",
+      "bifrost": "springboard/src/shell/markup.rs:41 (Stroke { tool, color, pts }); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (Pad, stroke_dabs)",
       "status": "partial",
-      "note": "Points are x,y only, in image pixels. No per-point time, force, altitude or azimuth, and no path parameterisation or interpolation API."
+      "note": "Points are x,y only, in image pixels. No per-point time, force, altitude or azimuth, and no path parameterisation or interpolation API. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Ink type (PKInk: type, colour, width)",
       "apple": "PKInk",
-      "bifrost": "springboard/src/shell/markup.rs:29 (Tool::brush: width and opacity per tool)",
+      "bifrost": "springboard/src/shell/markup.rs:29 (Tool::brush: width and opacity per tool); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (INK_COLOR, pen ink only)",
       "status": "partial",
-      "note": "Width and opacity are fixed per tool. No ink catalogue and no per-stroke ink value, apart from colour from the markup palette."
+      "note": "Width and opacity are fixed per tool. No ink catalogue and no per-stroke ink value, apart from colour from the markup palette. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Tool picker (PKToolPicker)",
@@ -59,9 +59,9 @@
     {
       "feature": "Undo for drawings",
       "apple": "PKCanvasView undoManager (stroke undo)",
-      "bifrost": "springboard/src/shell/markup.rs:215 (undo, rebuilds canvas from base and remaining strokes); springboard/ui/src/undo.rs",
+      "bifrost": "springboard/src/shell/markup.rs:215 (undo, rebuilds canvas from base and remaining strokes); springboard/ui/src/undo.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (Undo zone) to sketch.rs Pad::undo",
       "status": "partial",
-      "note": "Stroke-level undo exists in the shell editor. The UI undo model in springboard/ui/src/undo.rs is not wired to the drawing editors."
+      "note": "Stroke-level undo exists in the shell editor. The UI undo model in springboard/ui/src/undo.rs is not wired to the drawing editors. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Bezier path import (PKStroke from paths)",
@@ -101,9 +101,9 @@
     {
       "feature": "Rendering to an image",
       "apple": "PKDrawing.image(from:scale:)",
-      "bifrost": "springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG)",
+      "bifrost": "springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (render, encode)",
       "status": "partial",
-      "note": "Both editors write PNG files. There is no SDK call that renders a drawing to an image at a chosen scale."
+      "note": "Both editors write PNG files. There is no SDK call that renders a drawing to an image at a chosen scale. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Backward-compatible ink types (PKContentVersion)",

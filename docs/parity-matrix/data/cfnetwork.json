@@ -87,9 +87,9 @@
     {
       "feature": "FTP transfers",
       "apple": "CFReadStreamCreateWithFTPURL, CFWriteStreamCreateWithFTPURL, CFFTPCreateParsedResourceListing (https://developer.apple.com/documentation/cfnetwork/ftp)",
-      "bifrost": "springboard/sdk/src/ftp.rs (bifrost_app::ftp)",
+      "bifrost": "springboard/sdk/src/ftp.rs (bifrost_app::ftp); wired: springboard/apps/files/src/server.rs (fetch, read_reply, Files::open_connect)",
       "status": "partial",
-      "note": "Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. FTP is not implemented in the SDK. Low priority for a desktop with a file portal."
+      "note": "Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. FTP is not implemented in the SDK. Low priority for a desktop with a file portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Error domains and codes",

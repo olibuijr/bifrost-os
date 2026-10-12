@@ -59,9 +59,9 @@
     {
       "feature": "DOM node snapshot",
       "apple": "WKDOMNodeSnapshot",
-      "bifrost": "springboard/ui/src/dom_snapshot.rs",
+      "bifrost": "springboard/ui/src/dom_snapshot.rs; wired: springboard/ui/src/dom_snapshot.rs (consumed by springboard/apps/browser/src/reader.rs)",
       "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no DOM tree snapshot object; dev_eval can read DOM state through script only"
+      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no DOM tree snapshot object; dev_eval can read DOM state through script only Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Contextual menus",

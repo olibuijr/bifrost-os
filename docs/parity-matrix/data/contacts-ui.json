@@ -10,9 +10,9 @@
     {
       "feature": "Contact viewer",
       "apple": "CNContactViewController",
-      "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (draw_detail, open_detail, show_contact)",
+      "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (draw_detail, open_detail, show_contact); wired: springboard/ui/src/contact_card.rs (wired in springboard/apps/contacts-desktop/src/contacts.rs: card_entry, card_rows, value_slot)",
       "status": "partial",
-      "note": "The Contacts app shows a contact card, but only inside that app. No SDK view controller exists for other apps to display a contact."
+      "note": "The Contacts app shows a contact card, but only inside that app. No SDK view controller exists for other apps to display a contact. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Contact editor (new, unknown, existing)",

@@ -59,9 +59,9 @@
     {
       "feature": "MIDI playback (AVMIDIPlayer)",
       "apple": "AVMIDIPlayer with a sound bank",
-      "bifrost": "springboard/core/src/smf.rs; wired: springboard/apps/daw/src/midi_file.rs (import_notes), springboard/core/src/smf.rs; wired: springboard/apps/music-desktop/src/music/library.rs (scan_midi, Song::is_midi) reading springboard/core/src/smf.rs; listed and timed, not played (no sound bank)",
+      "bifrost": "springboard/core/src/smf.rs; wired: springboard/apps/daw/src/midi_file.rs (import_notes), springboard/core/src/smf.rs; wired: springboard/apps/music-desktop/src/music/library.rs (scan_midi, Song::is_midi) reading springboard/core/src/smf.rs; listed and timed, not played (no sound bank); wired: springboard/core/src/midi_synth.rs (Renderer, render); springboard/src/media/audiofile.rs (Midi, is_midi, dispatch in open); springboard/apps/music-desktop/src/music.rs (play_songs no longer filters MIDI)",
       "status": "partial",
-      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b11, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no MIDI sequencing or soundbank playback in the SDK or audiod Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Audio engine graph (AVAudioEngine)",
@@ -73,9 +73,9 @@
     {
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
       "apple": "Speech synthesis voices and utterances",
-      "bifrost": "springboard/ui/src/speech.rs",
+      "bifrost": "springboard/ui/src/speech.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (Narration over springboard/ui/src/speech.rs)",
       "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-speech engine or SDK API found"
+      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-speech engine or SDK API found Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Mixing and volume control",

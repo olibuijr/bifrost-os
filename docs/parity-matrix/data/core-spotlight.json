@@ -10,9 +10,9 @@
     {
       "feature": "Searchable items and attribute sets",
       "apple": "CSSearchableItem, CSSearchableItemAttributeSet",
-      "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new)",
+      "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new); wired: springboard/src/shell/spotindex.rs (kind_of, load_thumbnail, decode_thumbnail); springboard/src/shell/quicksearch.rs (indexed_label, thumbnail cache in search() and draw())",
       "status": "partial",
-      "note": "title, description, keywords, thumbnail path and content URL only; no other Apple attribute keys"
+      "note": "title, description, keywords, thumbnail path and content URL only; no other Apple attribute keys Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Indexing items in an on-device index",
@@ -59,16 +59,16 @@
     {
       "feature": "App-side search queries",
       "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app",
-      "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items)",
+      "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items); wired: springboard/src/shell/services/search_ranking.rs (search reply adds kind); springboard/sdk/src/search_ranking.rs (Hit.kind)",
       "status": "partial",
-      "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK"
+      "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "User query interface and suggestions",
       "apple": "CSUserQuery, CSUserQueryContext, CSSuggestion, Building a search interface for your app",
-      "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row)",
+      "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row); wired: springboard/src/shell/quicksearch.rs (Documents group); springboard/src/shell/spotindex.rs (parse_query, time_phrase, kind_word)",
       "status": "partial",
-      "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index"
+      "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Opening a search result",
