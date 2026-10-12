@@ -4,6 +4,7 @@
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, MAC_TITLE3_PT};
+use crate::celebration::Celebration;
 use crate::phase::{Flow, Phase};
 use crate::solitaire;
 use bifrost_core::random::{RandomSource, Xorshift64};
@@ -46,6 +47,8 @@ const N: usize = 4;
 const MW: usize = 9;
 const MH: usize = 9;
 const MINES: usize = 10;
+/// Frame interval of the win celebration, in milliseconds (about 60 frames a second).
+const CELEBRATION_FRAME_MS: f64 = 16.0;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Game {
@@ -93,6 +96,12 @@ pub struct Games {
     display: Option<(f32, f32)>,
     /// A line from the system (a controller plugged in or out) shown in the message row until the next touch.
     notice: Option<String>,
+    /// The win celebration in progress, if any (see `celebration`).
+    burst: Option<Celebration>,
+    /// Whether each game was won at the last check (2048, Minesweeper, Solitaire), so a win celebrates once.
+    won_seen: [bool; 3],
+    /// Window pixels at the centre of the board, from the last draw: where a celebration starts.
+    board_centre: (f32, f32),
 }
 
 /// A non-zero xorshift seed taken from the wall clock, so every launch deals differently.
@@ -130,6 +139,9 @@ impl Games {
             reduced: false,
             display: None,
             notice: None,
+            burst: None,
+            won_seen: [false; 3],
+            board_centre: (0.0, 0.0),
         };
         g.new_2048();
         g
@@ -497,6 +509,27 @@ impl Games {
         self.sol.height = self.h as f32;
     }
 
+    /// Whether the game on screen is won.
+    fn is_won(&self) -> bool {
+        match self.game {
+            Game::G2048 => self.p2048.phase() == Phase::Won,
+            Game::Mines => self.pm.phase() == Phase::Won,
+            Game::Solitaire => self.sol.won(),
+        }
+    }
+
+    /// Starts the celebration when the game on screen has just been won. A game that stays won does not celebrate
+    /// again; a new game clears its flag, so its own win celebrates.
+    fn note_win(&mut self, t: f64) {
+        let won = self.is_won();
+        let idx = self.game as usize;
+        if won && !self.won_seen[idx] {
+            // The seed comes from the clock, not the game's random source, so the deals do not change.
+            self.burst = Some(Celebration::start(t.to_bits(), self.board_centre, t));
+        }
+        self.won_seen[idx] = won;
+    }
+
     // ---- input ----
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) -> Vec<Effect> {
@@ -563,10 +596,22 @@ impl Games {
             }
             _ => {}
         }
+        self.note_win(t);
         vec![]
     }
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
+        self.note_win(t);
+        let mut live = false;
+        if let Some(b) = self.burst.as_mut() {
+            b.advance(t);
+            live = !b.is_done();
+        }
+        if live {
+            self.dirty = true;
+        } else {
+            self.burst = None;
+        }
         if let (Some(t0), Game::Mines, Phase::Playing) = (self.started, self.game, self.pm.phase()) {
             // the shown time is whole seconds, rounded down to the redraw step; the best time is taken from the exact
             // moment of the winning dig (see `dig`), so a slower redraw never changes a record
@@ -581,10 +626,17 @@ impl Games {
         self.dirty
     }
 
-    pub fn next_wake(&self, _t: f64) -> Option<f64> {
-        let t0 = self.started?;
-        (self.game == Game::Mines && self.pm.phase() == Phase::Playing)
-            .then(|| t0 + (self.elapsed as f64 + self.clock_step() as f64) * 1000.0)
+    pub fn next_wake(&self, t: f64) -> Option<f64> {
+        // a celebration asks for a frame every 16 ms while it lives
+        let frame = self.burst.as_ref().map(|_| t + CELEBRATION_FRAME_MS);
+        let clock = self.started.and_then(|t0| {
+            (self.game == Game::Mines && self.pm.phase() == Phase::Playing)
+                .then(|| t0 + (self.elapsed as f64 + self.clock_step() as f64) * 1000.0)
+        });
+        match (frame, clock) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     pub fn describe(&self) -> String {
@@ -593,7 +645,7 @@ impl Games {
             None => "none".to_string(),
         };
         format!(
-            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\n{}",
+            "games_game={:?}\ngames_score={}\ngames_best_2048={}\ngames_mines_phase={:?}\ngames_best_mines={}\ngames_effects={}\ngames_display_pt={}\ngames_burst={}\n{}",
             self.game,
             self.score,
             self.best_2048,
@@ -601,6 +653,7 @@ impl Games {
             self.best_mines,
             if self.reduced { "reduced" } else { "full" },
             display,
+            self.burst.as_ref().map_or(0, |b| b.live()),
             self.sol.describe()
         )
     }
@@ -610,6 +663,13 @@ impl Games {
     fn text_c(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, w: Weight, color: u32, r: (f32, f32, f32, f32)) {
         let img = self.cache.get(ui, text, pt, w, color);
         s.blit(img, (r.0 + (r.2 - img.w as f32) / 2.0) as i32, (r.1 + (r.3 - img.h as f32) / 2.0) as i32, 255, 255);
+    }
+
+    /// The win celebration's dots, drawn over the board.
+    fn draw_burst(&self, s: &mut Surface, ui: &Ui) {
+        if let Some(b) = &self.burst {
+            b.draw(s, ui);
+        }
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
@@ -623,6 +683,8 @@ impl Games {
             self.cache.clear();
         }
         self.place_sol(ui);
+        let (bx, by, side) = self.board(ui);
+        self.board_centre = (bx + side / 2.0, by + side / 2.0);
         s.fill_rect(0, 0, s.w, s.h, DETAIL_BG.now());
         // Golden Gate full-size window: the sidebar runs to the top under the traffic lights (the shell draws them)
         let sb = self.sidebar_bounds(ui);
@@ -643,6 +705,7 @@ impl Games {
             self.text_c(s, ui, &msg, MAC_SUBHEAD_PT, Weight::Regular, col, r);
             let h = self.h;
             self.sol.draw(s, ui, &mut self.cache, cw as i32, h);
+            self.draw_burst(s, ui);
             return;
         }
         let status = match self.game {
@@ -681,6 +744,7 @@ impl Games {
             Game::Mines => self.draw_mines(s, ui),
             Game::Solitaire => {}
         }
+        self.draw_burst(s, ui);
     }
 
     /// Tile plate and number colour: low tiles on the field grey, higher ones step through the system colours.
@@ -937,6 +1001,45 @@ mod slide_tests {
         g.set_reduced_effects(true);
         g.set_display(Some((1440.0, 816.0)));
         assert!(g.describe().contains("games_effects=reduced\ngames_display_pt=1440x816\n"));
+    }
+
+    #[test]
+    fn a_win_celebrates_once_and_a_new_game_rearms_it() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        g.p2048.go(Phase::Won);
+        g.note_win(1000.0);
+        assert!(g.burst.is_some());
+        g.burst = None;
+        // still won: no second celebration
+        g.note_win(2000.0);
+        assert!(g.burst.is_none());
+        // a new game clears the flag, so it does not celebrate while playing
+        g.new_2048();
+        g.note_win(3000.0);
+        assert!(g.burst.is_none());
+        // and its own win celebrates again
+        g.p2048.go(Phase::Won);
+        g.note_win(4000.0);
+        assert!(g.burst.is_some());
+    }
+
+    #[test]
+    fn a_celebration_asks_for_frames_until_its_dots_die_out() {
+        let ui = test_ui();
+        let mut g = Games::new(&ui, 1200, 780);
+        assert_eq!(g.next_wake(1000.0), None);
+        assert!(g.describe().contains("games_burst=0\n"));
+        g.burst = Some(Celebration::start(7, (600.0, 400.0), 1000.0));
+        assert_eq!(g.next_wake(1000.0), Some(1016.0));
+        // no dots exist until the first step
+        assert!(g.describe().contains("games_burst=0\n"));
+        // a tick every 100 ms, for 3 s: the burst has died out by about 2 s
+        for k in 1..=30 {
+            g.tick(&ui, 1000.0 + k as f64 * 100.0);
+        }
+        assert!(g.burst.is_none());
+        assert_eq!(g.next_wake(4000.0), None);
     }
 }
 

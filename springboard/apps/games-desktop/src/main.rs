@@ -1,6 +1,7 @@
 //! Games (2048, Minesweeper, Solitaire) as an installed BifrOSt app: the former
 //! in-shell Games hosted through the SDK, in a Golden Gate full-size window (source list and unified toolbar).
 
+mod celebration;
 mod games;
 mod phase;
 mod solitaire;
