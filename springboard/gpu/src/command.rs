@@ -129,6 +129,8 @@ pub(crate) enum Keep {
     Sampler(Sampler),
     /// A Vulkan object released when the last holder goes away (after the GPU finished with it).
     Retire(Arc<Retire>),
+    /// A timeline event this buffer waits on or signals: it must outlive the pending submission.
+    Event(SharedEvent),
 }
 
 /// The command pool of one queue, created on first use. Shared by the queue and its buffers.
@@ -408,7 +410,11 @@ impl CommandBuffer {
         if !region_fits(dst.width(), dst.height(), region) {
             return Err(Error::Invalid(format!("upload region {region:?} outside the texture")));
         }
-        let needed = offset + stride * (region.height as usize - 1) + region.width as usize * bpp;
+        let needed = stride
+            .checked_mul((region.height as usize).saturating_sub(1))
+            .and_then(|n| n.checked_add(offset))
+            .and_then(|n| n.checked_add(region.width as usize * bpp))
+            .ok_or_else(|| Error::Invalid("upload range overflows".into()))?;
         if needed > src.len() {
             return Err(Error::Invalid(format!("upload reads {needed} bytes from a {}-byte buffer", src.len())));
         }
@@ -430,6 +436,13 @@ impl CommandBuffer {
         // SAFETY: the destination is in TRANSFER_DST_OPTIMAL (tracked), the source range was checked above.
         unsafe { self.device.inner.device.cmd_copy_buffer_to_image2(self.raw, &info) };
         Ok(())
+    }
+
+    /// Moves `tex` into the sampled layout now, outside any render pass. Call it for every texture a pass samples
+    /// after recording uploads into it: a layout change recorded inside a pass would be invalid.
+    pub fn prepare_sampled(&mut self, tex: &Texture) {
+        self.track(tex, usage_info(Usage::SampledGraphics));
+        self.keep.push(Keep::Texture(tex.clone()));
     }
 
     /// The GPU waits for `event` to reach `value` before running this buffer.
@@ -535,6 +548,9 @@ impl CommandBuffer {
         }
         let mut keep = std::mem::take(&mut self.keep);
         keep.extend(temp.into_iter().map(Keep::Retire));
+        // The submission waits on and signals these timeline semaphores: they must not be destroyed while it is pending.
+        keep.extend(std::mem::take(&mut self.waits).into_iter().map(|(ev, _)| Keep::Event(ev)));
+        keep.extend(std::mem::take(&mut self.signals).into_iter().map(|(ev, _)| Keep::Event(ev)));
         Ok(Submission { device: self.device.clone(), fence, keep, done_sem, sync_file: Mutex::new(None) })
     }
 
@@ -654,6 +670,8 @@ pub(crate) struct Bindings {
     pub(crate) binds: BTreeMap<u32, Bind>,
     /// Set when a binding or the pipeline changed since the last flush.
     pub(crate) dirty: bool,
+    /// Bytes of push constants the bound render pipeline declares (`set_bytes` never pushes more).
+    pub(crate) push_cap: usize,
 }
 
 impl Bindings {
@@ -661,6 +679,11 @@ impl Bindings {
     fn flush(&mut self, cb: &mut CommandBuffer) -> Result<()> {
         let (Some(point), Some(layout), Some(set_layout)) = (self.point, self.layout, self.set_layout) else { return Ok(()) };
         if !self.dirty {
+            return Ok(());
+        }
+        // A pipeline without textures or samplers has no set to push or bind (an empty push is invalid).
+        if self.binds.is_empty() {
+            self.dirty = false;
             return Ok(());
         }
         let infos: Vec<vk::DescriptorImageInfo> = self
@@ -725,6 +748,7 @@ impl RenderEncoder<'_> {
         self.bind.point = Some(vk::PipelineBindPoint::GRAPHICS);
         self.bind.layout = Some(p.layout);
         self.bind.set_layout = Some(p.set_layout);
+        self.bind.push_cap = p.desc.push_constant_bytes as usize;
         self.bind.dirty = true;
     }
 
@@ -745,13 +769,24 @@ impl RenderEncoder<'_> {
     pub fn set_bytes(&mut self, bytes: &[u8]) {
         debug_assert!(bytes.len() <= MAX_PUSH_BYTES, "push constants over {MAX_PUSH_BYTES} bytes");
         let Some(layout) = self.bind.layout else { return };
-        let (data, len) = push_bytes(bytes);
-        // SAFETY: the range covers offset 0 of the bound pipeline layout (pipelines declare ALL_GRAPHICS ranges).
-        unsafe { self.cb.device.inner.device.cmd_push_constants(self.cb.raw, layout, vk::ShaderStageFlags::ALL_GRAPHICS, 0, &data[..len]) };
+        let cap = self.bind.push_cap.min(MAX_PUSH_BYTES);
+        let (data, len) = push_bytes(&bytes[..bytes.len().min(cap)]);
+        let len = len.min(cap);
+        if len == 0 {
+            return;
+        }
+        // SAFETY: the range covers offset 0 of the bound pipeline layout, which declares a VERTEX | FRAGMENT range of
+        // `push_cap` bytes; `len` is capped to it.
+        unsafe { self.cb.device.inner.device.cmd_push_constants(self.cb.raw, layout, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT, 0, &data[..len]) };
     }
 
     /// Binds a vertex (instance) buffer at `binding`.
     pub fn set_vertex_buffer(&mut self, binding: u32, buffer: &Buffer, offset: usize) {
+        // Small buffers are slices of one shared VkBuffer: an offset past this one would read a neighbour's bytes.
+        if crate::memory::check_range(buffer.len(), offset, 0).is_err() {
+            debug_assert!(false, "vertex buffer offset {offset} outside a {}-byte buffer", buffer.len());
+            return;
+        }
         self.cb.keep.push(Keep::Buffer(buffer.clone()));
         // SAFETY: the buffer is live (kept above) and the offset is within it for the draws that follow.
         unsafe { self.cb.device.inner.device.cmd_bind_vertex_buffers(self.cb.raw, binding, &[buffer.inner.buffer], &[buffer.inner.offset + offset as u64]) };

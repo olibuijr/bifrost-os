@@ -10,5 +10,6 @@ pub mod paths;
 pub mod renderer;
 pub mod shapes;
 pub mod text;
+pub mod uploads;
 
 pub use renderer::{FrameStats, Renderer};
