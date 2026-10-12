@@ -25,10 +25,13 @@ pub const BLUETOOTH: &str = "bluetooth";
 pub const SPEAKER: &str = "speaker";
 pub const MICROPHONE: &str = "microphone";
 
-/// How often the capture devices are looked up again (a read of `/proc/asound/pcm`).
-const PROBE_EVERY_S: f64 = 2.0;
-/// While the audio server is not there, a new connection is tried this often only.
-const RECONNECT_EVERY_S: f64 = 10.0;
+/// The shell clock `t` of a service tick is in milliseconds.
+/// How often the capture devices are looked up again.
+const PROBE_EVERY_MS: f64 = 2_000.0;
+/// While the audio server is not there, a new connection is tried after this long, then twice as long after each
+/// failure, up to `RECONNECT_MAX_MS`.
+const RECONNECT_FIRST_MS: f64 = 1_000.0;
+const RECONNECT_MAX_MS: f64 = 30_000.0;
 
 pub struct AudioDevices {
     defaults: Defaults,
@@ -39,6 +42,8 @@ pub struct AudioDevices {
     system: Option<bifrost_audio_hal::System>,
     /// Earliest time of the next connection attempt.
     connect_after: f64,
+    /// The wait after the next failed attempt.
+    backoff: f64,
     /// Connection attempts so far (for the test of the probe cadence).
     attempts: u32,
 }
@@ -53,13 +58,13 @@ struct Seen {
 
 impl AudioDevices {
     pub fn new() -> Self {
-        AudioDevices { defaults: Defaults::new(), microphone: false, probed: f64::NEG_INFINITY, seen: None, system: None, connect_after: f64::NEG_INFINITY, attempts: 0 }
+        AudioDevices { defaults: Defaults::new(), microphone: false, probed: f64::NEG_INFINITY, seen: None, system: None, connect_after: f64::NEG_INFINITY, backoff: RECONNECT_FIRST_MS, attempts: 0 }
     }
 
     /// The devices present now, with the chosen defaults kept. Looks the capture devices up again every
     /// `PROBE_EVERY_S` seconds only.
     fn state(&mut self, shell: &Shell, t: f64) -> Vec<Device> {
-        if t - self.probed >= PROBE_EVERY_S {
+        if t - self.probed >= PROBE_EVERY_MS {
             self.microphone = self.probe_microphone(t);
             self.probed = t;
         }
@@ -69,19 +74,33 @@ impl AudioDevices {
         want
     }
 
-    /// Whether the audio server offers an input, on the kept connection (opened again at most every
-    /// `RECONNECT_EVERY_S` seconds while there is none).
+    /// Whether the audio server offers an input, on the kept connection. The connection stays open while the server
+    /// answers (an unknown input is not a reason to hang up); it is opened again only after a backoff of 1 s,
+    /// doubling to 30 s, while there is none.
     fn probe_microphone(&mut self, t: f64) -> bool {
         if self.system.is_none() && t >= self.connect_after {
-            self.connect_after = t + RECONNECT_EVERY_S;
-            self.system = bifrost_audio_hal::System::connect(crate::media::capture::CLIENT).ok();
             self.attempts += 1;
+            self.system = bifrost_audio_hal::System::connect(crate::media::capture::CLIENT).ok();
+            if self.system.is_some() {
+                self.backoff = RECONNECT_FIRST_MS;
+            } else {
+                self.connect_after = t + self.backoff;
+                self.backoff = (self.backoff * 2.0).min(RECONNECT_MAX_MS);
+            }
         }
-        let found = self.system.as_ref().and_then(crate::media::capture::discover_with);
-        if found.as_ref().map_or(true, |d| d.is_empty()) {
-            self.system = None;
+        let Some(system) = self.system.as_ref() else { return false };
+        match system.default_device(bifrost_audio_hal::Role::Input) {
+            Ok(_) => true,
+            // no input device: the server is there, keep the connection
+            Err(bifrost_audio_types::AudioError::UnknownObject) => false,
+            // the server went away or answers nonsense: reconnect after a backoff
+            Err(_) => {
+                self.system = None;
+                self.connect_after = t + self.backoff;
+                self.backoff = (self.backoff * 2.0).min(RECONNECT_MAX_MS);
+                false
+            }
         }
-        found.is_some_and(|d| !d.is_empty())
     }
 
     fn seen(&mut self, shell: &Shell, t: f64) -> Seen {
