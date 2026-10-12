@@ -52,6 +52,8 @@ impl App for AssistantApp {
                 AppMenuItem::separator(),
                 AppMenuItem::new(view::MENU_COPY, "Copy Answer").key("cmd+shift+c").enabled(c.can_copy()),
                 AppMenuItem::separator(),
+                AppMenuItem::new(view::MENU_DIAGNOSTICS, "Diagnostics...").key("cmd+shift+d"),
+                AppMenuItem::separator(),
                 AppMenuItem::new(view::MENU_SETTINGS, "Assistant Settings...").key("cmd+,"),
             ],
         }]

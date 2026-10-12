@@ -5,6 +5,9 @@
 use crate::api::{self, Event, Running};
 use crate::connect::{self, Link};
 use crate::model::{self, Block, Conversation, Message, Span};
+use crate::safety;
+use bifrost_app::controls::guardrail::Guardrail;
+use bifrost_app::controls::text_classifier::TextClassifier;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -16,9 +19,10 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::{clipboard, colors, Scroller, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::{Ctx, KeyInput, TouchKind};
 use bifrost_core::json::Json;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -58,6 +62,12 @@ pub const MENU_NEW: u32 = 1;
 pub const MENU_DELETE: u32 = 2;
 pub const MENU_SETTINGS: u32 = 3;
 pub const MENU_COPY: u32 = 4;
+pub const MENU_DIAGNOSTICS: u32 = 5;
+/// The Diagnostics sheet: a panel centred on the window, with its lines and two buttons along the bottom.
+const DIAG_W_PT: f32 = 460.0;
+const DIAG_H_PT: f32 = 380.0;
+const DIAG_BUTTON_W_PT: f32 = 120.0;
+const DIAG_BUTTON_H_PT: f32 = 28.0;
 /// evdev V (paste chord)
 const KEY_V: u32 = 47;
 
@@ -209,6 +219,13 @@ struct SheetGeo {
     save: (f32, f32, f32, f32),
 }
 
+/// The Diagnostics sheet: the panel, the Close button and the Run Evaluation button, in pixels.
+struct DiagGeo {
+    panel: (f32, f32, f32, f32),
+    close: (f32, f32, f32, f32),
+    run: (f32, f32, f32, f32),
+}
+
 #[derive(Clone, Copy)]
 struct Geo {
     side: f32,
@@ -267,12 +284,26 @@ pub struct Assistant {
     link: Link,
     /// The pasteboard write of a "Copy Answer", until its reply arrives.
     copy_req: Option<u32>,
+    /// Blocked phrases and the length limit that every answer passes before it is shown or saved.
+    guard: Guardrail,
+    /// Routes a request to a skill (a system prompt).
+    router: Option<TextClassifier>,
+    /// The text of the answer in progress as the model sent it, before the guardrail screens it.
+    stream_raw: String,
+    /// The skill the last request was routed to, `None` for general.
+    last_skill: Option<&'static str>,
+    diag_open: bool,
+    diag_running: bool,
+    diag_lines: Vec<String>,
+    diag_tx: Sender<Vec<String>>,
+    diag_rx: Receiver<Vec<String>>,
 }
 
 impl Assistant {
     pub fn new(ctx: &Ctx) -> Self {
         let dir = ctx.data_dir.clone();
         let (tx, rx) = channel();
+        let (diag_tx, diag_rx) = channel();
         let get_req = Some(keychain::get(ctx, model::KEY_SERVICE, model::KEY_ACCOUNT));
         let link = Link::new(ctx);
         let (wake_rx, wake_tx) = match wake_pair() {
@@ -282,6 +313,15 @@ impl Assistant {
         let mut a = Assistant {
             convs: model::load(&dir),
             model: model::load_model(&dir),
+            guard: safety::load_guardrail(&dir),
+            router: safety::router(),
+            stream_raw: String::new(),
+            last_skill: None,
+            diag_open: false,
+            diag_running: false,
+            diag_lines: Vec::new(),
+            diag_tx,
+            diag_rx,
             dir,
             cur: None,
             w: ctx.cfg.w,
@@ -386,6 +426,9 @@ impl Assistant {
         if text.is_empty() {
             return;
         }
+        // The request goes out with the instructions of its skill, if a skill word is in it.
+        let skill = safety::route(self.router.as_ref(), &text);
+        let system = skill.and_then(safety::skill_prompt).map(str::to_string);
         // Offline: keep the composer text and say why, instead of sending a request that cannot leave the machine.
         if self.link.offline() {
             self.error = Some(connect::OFFLINE.into());
@@ -413,8 +456,10 @@ impl Assistant {
         self.error = None;
         self.follow = true;
         self.gen += 1;
+        self.stream_raw.clear();
+        self.last_skill = skill;
         let wake = self.wake_tx.as_ref().and_then(|w| w.try_clone().ok());
-        self.streaming = Some(api::spawn(self.gen, key, self.model.clone(), history, self.tx.clone(), wake));
+        self.streaming = Some(api::spawn(self.gen, key, self.model.clone(), system, history, self.tx.clone(), wake));
         self.persist();
         self.dirty = true;
     }
@@ -430,7 +475,11 @@ impl Assistant {
     fn finish(&mut self, error: Option<String>) {
         self.streaming = None;
         let id = std::mem::take(&mut self.stream_conv);
+        let shown = safety::screen_final(&self.guard, &std::mem::take(&mut self.stream_raw));
         if let Some(c) = self.convs.iter_mut().find(|c| c.id == id) {
+            if let Some(last) = c.messages.last_mut().filter(|m| !m.user) {
+                last.text = shown;
+            }
             if c.messages.last().is_some_and(|m| !m.user && m.text.trim().is_empty()) {
                 c.messages.pop();
             }
@@ -448,6 +497,11 @@ impl Assistant {
             let mut buf = [0u8; 64];
             while r.read(&mut buf).is_ok_and(|n| n > 0) {}
         }
+        while let Ok(lines) = self.diag_rx.try_recv() {
+            self.diag_lines = lines;
+            self.diag_running = false;
+            self.dirty = true;
+        }
         while let Ok((g, ev)) = self.rx.try_recv() {
             if g != self.gen {
                 continue;
@@ -455,9 +509,12 @@ impl Assistant {
             self.dirty = true;
             match ev {
                 Event::Delta(d) => {
+                    // The answer shows only what the guardrail lets through, so it is screened as it grows.
+                    self.stream_raw.push_str(&d);
+                    let shown = safety::screen_partial(&self.guard, &self.stream_raw);
                     let id = self.stream_conv.clone();
                     if let Some(m) = self.convs.iter_mut().find(|c| c.id == id).and_then(|c| c.messages.last_mut()) {
-                        m.text.push_str(&d);
+                        m.text = shown;
                     }
                 }
                 Event::Done => self.finish(None),
@@ -478,6 +535,7 @@ impl Assistant {
     // settings and the keychain ---------------------------------------------------------------------------------
 
     pub fn open_sheet(&mut self) {
+        self.diag_open = false;
         let model = model::MODELS.iter().position(|(id, _)| *id == self.model).unwrap_or(0);
         self.sheet = Some(Sheet { key: String::new(), model });
         self.dirty = true;
@@ -673,6 +731,7 @@ impl Assistant {
             MENU_NEW => self.new_chat(),
             MENU_DELETE => self.delete_current(),
             MENU_SETTINGS => self.open_sheet(),
+            MENU_DIAGNOSTICS => self.open_diagnostics(),
             MENU_COPY => return self.copy_answer(ctx),
             _ => return false,
         }
@@ -736,6 +795,16 @@ impl Assistant {
         if let Some((key, mods)) = k.as_chord() {
             return key == KEY_V && mods & (CHORD_CTRL | CHORD_META) != 0 && self.paste();
         }
+        // The Diagnostics sheet takes Escape to close and Return to run; other keys do nothing while it is open.
+        if self.diag_open {
+            match k {
+                KeyInput::Code(1) => self.diag_open = false,
+                KeyInput::Code(13) => self.run_diagnostics(),
+                _ => return false,
+            }
+            self.dirty = true;
+            return true;
+        }
         self.dirty = true;
         match k {
             KeyInput::Text(s) => {
@@ -774,7 +843,7 @@ impl Assistant {
         let g = self.geo(ui);
         match kind {
             TouchKind::Down => {
-                let in_scroll = self.sheet.is_none() && x >= g.side && y > g.top && y < g.bottom;
+                let in_scroll = self.sheet.is_none() && !self.diag_open && x >= g.side && y > g.top && y < g.bottom;
                 if in_scroll {
                     self.scroll.down(y, t);
                 }
@@ -812,6 +881,15 @@ impl Assistant {
     fn click(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
         let ui = &ctx.ui;
         self.dirty = true;
+        if self.diag_open {
+            let dg = self.diag_geo(ui);
+            if inside(dg.run, x, y) {
+                self.run_diagnostics();
+            } else if inside(dg.close, x, y) || !inside(dg.panel, x, y) {
+                self.diag_open = false;
+            }
+            return true;
+        }
         if self.sheet.is_some() {
             let sg = self.sheet_geo(ui);
             if inside(sg.save, x, y) {
@@ -885,6 +963,9 @@ impl Assistant {
         self.draw_chrome(s, ui, &g);
         if self.sheet.is_some() {
             self.draw_sheet(s, ui);
+        }
+        if self.diag_open {
+            self.draw_diagnostics(s, ui);
         }
     }
 
@@ -1080,6 +1161,98 @@ impl Assistant {
         let (bx, by, bw, bh) = sg.save;
         s.fill_rrect(bx, by, bw, bh, ui.pt(m::ICON_RADIUS), colors::SYSTEM_BLUE.now());
         put_centred(s, &mut self.labels, ui, "Save", MAC_BODY_PT, Weight::Semibold, ON_ACCENT, bx + bw / 2.0, by + bh / 2.0);
+    }
+
+    // diagnostics -----------------------------------------------------------------------------------------------
+
+    fn open_diagnostics(&mut self) {
+        self.sheet = None;
+        self.diag_open = true;
+        self.dirty = true;
+    }
+
+    /// Scores the answers of the open chat on a background thread; the result arrives on `diag_rx` and wakes the loop.
+    fn run_diagnostics(&mut self) {
+        if self.diag_running {
+            return;
+        }
+        let pairs = self.current().map_or_else(Vec::new, |c| safety::exchanges(&c.messages));
+        self.dirty = true;
+        if pairs.is_empty() {
+            self.diag_lines = vec!["This chat has no answers to evaluate yet.".into()];
+            return;
+        }
+        self.diag_running = true;
+        self.diag_lines = vec!["Running the evaluation. Each answer is scored by the model when a key is set.".into()];
+        let guard = self.guard.clone();
+        let key = self.key.clone();
+        let model = self.model.clone();
+        let tx = self.diag_tx.clone();
+        let wake = self.wake_tx.as_ref().and_then(|w| w.try_clone().ok());
+        DispatchQueue::global(Qos::UserInitiated).async_(move || {
+            let result = safety::run_evaluation(&guard, key.as_deref(), &model, &pairs);
+            let _ = tx.send(safety::report_lines(&result));
+            if let Some(mut w) = wake {
+                let _ = w.write(&[1]);
+            }
+        });
+    }
+
+    /// The sheet's text: what is guarded and how the last request was routed, then the evaluation's report.
+    fn diagnostics_lines(&self) -> Vec<String> {
+        let mut lines = vec![
+            format!("Guardrail: answers are cut at {} characters, and phrases listed in {} are masked.", safety::MAX_ANSWER_CHARS, safety::BLOCKED_FILE),
+            format!("Blocked phrases loaded: {}.", self.guard.phrases().len()),
+            format!("Last request routed to: {}.", self.last_skill.unwrap_or("General")),
+            "Evaluation: the newest answers of this chat, each scored from 0 to 1 by the checks and the model judge.".into(),
+        ];
+        if self.key.is_none() {
+            lines.push("Add an API key in Settings to add the model judge (Helpfulness and Clarity).".into());
+        }
+        lines.extend(self.diag_lines.iter().cloned());
+        lines
+    }
+
+    fn diag_geo(&self, ui: &Ui) -> DiagGeo {
+        let (pw, ph) = (ui.pt(DIAG_W_PT).min(self.w as f32 - ui.pt(SPACE_XXL)), ui.pt(DIAG_H_PT).min(self.h as f32 - ui.pt(SPACE_XXL)));
+        let (px, py) = ((self.w as f32 - pw) / 2.0, (self.h as f32 - ph) / 2.0);
+        let m = ui.pt(SPACE_XL);
+        let (bw, bh) = (ui.pt(DIAG_BUTTON_W_PT), ui.pt(DIAG_BUTTON_H_PT));
+        let by = py + ph - m - bh;
+        let run = (px + pw - m - bw, by, bw, bh);
+        let close = (run.0 - ui.pt(SPACE_S) - bw, by, bw, bh);
+        DiagGeo { panel: (px, py, pw, ph), close, run }
+    }
+
+    fn draw_diagnostics(&mut self, s: &mut Surface, ui: &Ui) {
+        let dg = self.diag_geo(ui);
+        let (px, py, pw, ph) = dg.panel;
+        s.fill_rrect(px - 1.0, py - 1.0, pw + 2.0, ph + 2.0, ui.pt(m::CARD_RADIUS + 1.0), SEPARATOR_C.now());
+        s.fill_rrect(px, py, pw, ph, ui.pt(m::CARD_RADIUS), CARD_BG.now());
+        let inset = ui.pt(SPACE_XL);
+        let label = LABEL.now();
+        put(s, &mut self.labels, ui, "Diagnostics", MAC_TITLE1_PT, Weight::Semibold, label, px + inset, py + ui.pt(SPACE_XL));
+        let lh = ui.pt(MAC_BODY_PT * 1.4);
+        let width = pw - 2.0 * inset;
+        let bottom = dg.run.1 - ui.pt(SPACE_M);
+        let mut y = py + ui.pt(64.0);
+        for line in self.diagnostics_lines() {
+            for row in ui.wrap(&line, MAC_BODY_PT, Weight::Regular, width) {
+                if y + lh > bottom {
+                    break;
+                }
+                put(s, &mut self.labels, ui, &row, MAC_BODY_PT, Weight::Regular, label, px + inset, y);
+                y += lh;
+            }
+            y += ui.pt(SPACE_S);
+        }
+        let (cx, cy, cw, ch) = dg.close;
+        s.fill_rrect(cx, cy, cw, ch, ui.pt(m::ICON_RADIUS), FIELD_BG.now());
+        put_centred(s, &mut self.labels, ui, "Close", MAC_BODY_PT, Weight::Regular, label, cx + cw / 2.0, cy + ch / 2.0);
+        let (bx, by, bw, bh) = dg.run;
+        let (fill, text) = if self.diag_running { (LABEL_3.now(), "Running…") } else { (colors::SYSTEM_BLUE.now(), "Run Evaluation") };
+        s.fill_rrect(bx, by, bw, bh, ui.pt(m::ICON_RADIUS), fill);
+        put_centred(s, &mut self.labels, ui, text, MAC_BODY_PT, Weight::Semibold, ON_ACCENT, bx + bw / 2.0, by + bh / 2.0);
     }
 
     /// The loop wakes on `wake_fd` while a reply streams; polling is only the fallback without the pipe.
