@@ -26,9 +26,8 @@ fn run() -> std::io::Result<()> {
     use springboard::font::Font;
     use springboard::gfx::rotate::{rotate_areas, rotate_damage, Rotation};
     use springboard::gfx::{threads, Image, Surface, View};
-    use springboard::media::mixer::Mixer;
     use springboard::media::route;
-    use springboard::media::volume::{self, Volume};
+    use springboard::media::volume::Volume;
     use springboard::shell::battery;
     use springboard::shell::low_battery;
     use springboard::shell::power_menu::{PowerAction, PowerKey};
@@ -116,14 +115,14 @@ fn run() -> std::io::Result<()> {
     let font = Font::parse(font_data).ok_or_else(|| std::io::Error::other("bad font"))?;
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
-    // the mixer carries the volume's gain only; amplifiers and routes stay as they are
-    let mixer = Mixer::open(volume::CONTROL_DEVICE).map_err(|e| eprintln!("springboard: mixer: {e}")).ok();
+    // the volume is the default output device's volume control on the audio server (connected lazily)
+    let mut out_dev: Option<bifrost_audio_hal::Device> = None;
     // the headset jack: its input device reports plug state as switch events
     let mut headset = input::Device::by_hint(route::JACK_DEVICE_HINTS).and_then(|p| input::Device::open(&p).map_err(|e| eprintln!("springboard: headset {p}: {e}")).ok());
     let mut jack = headset.as_ref().map_or_else(route::Jack::default, |d| route::Jack::from_bits(d.switches()));
     let mut router = route::Router::from_prefs(|k| prefs.get(k).map(String::from), jack.plugged());
     let mut vol = router.volume();
-    apply_volume(vol, mixer.as_ref());
+    apply_volume(vol, &mut out_dev);
     let mut jack_events = Vec::new();
     // a fresh install (no wallpaper chosen yet) starts on a random Icelandic still, kept from then on
     if prefs.get("wallpaper").is_none() {
@@ -701,7 +700,7 @@ fn run() -> std::io::Result<()> {
                     shell.pause_music();
                 }
                 vol = change.volume;
-                apply_volume(vol, mixer.as_ref());
+                apply_volume(vol, &mut out_dev);
                 shell.set_route(change.route, vol.level(), change.hud, t);
                 shell.save_prefs(&change.prefs);
             }
@@ -757,7 +756,7 @@ fn run() -> std::io::Result<()> {
                 }
                 Effect::Volume(v) => {
                     vol = Volume::new(v);
-                    apply_volume(vol, mixer.as_ref());
+                    apply_volume(vol, &mut out_dev);
                     shell.set_volume(v);
                     shell.save_prefs(&router.set_level(v));
                 }
@@ -1282,16 +1281,24 @@ fn wifi_settled(wifi: &springboard::net::wifi::Wifi) -> bool {
     matches!(wifi.status.lock().map(|s| s.state), Ok(State::Connected | State::Off))
 }
 
-/// Sets the gain for `v`: on the mixer when it is there (software gain then only mutes), in the
-/// player's software gain otherwise. Never an amplifier or a route; see media::volume.
+/// Sets the level `v` on the default output device of the audio server (volume and mute controls);
+/// the player's software gain carries it when the server is not there. Connects lazily, so the
+/// shell may start before bifrost-audiod. Never an amplifier or a route.
 #[cfg(target_os = "linux")]
-fn apply_volume(v: springboard::media::volume::Volume, mixer: Option<&springboard::media::mixer::Mixer>) {
-    use springboard::media::volume::software_gain;
+fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_audio_hal::Device>) {
+    use springboard::media::volume::{default_output, software_gain, VolumeTarget};
+    if dev.is_none() {
+        *dev = default_output();
+    }
     let pct = v.level() * 100.0;
-    match v.apply(mixer) {
-        Ok(Some(dg)) => eprintln!("springboard: volume {pct:.0}% -> mixer {dg}"),
-        Ok(None) => eprintln!("springboard: volume {pct:.0}% (no mixer; software gain {:.3})", software_gain()),
-        Err(e) => eprintln!("springboard: volume {pct:.0}%: mixer: {e} (software gain {:.3})", software_gain()),
+    match v.apply(dev.as_ref().map(|d| d as &dyn VolumeTarget)) {
+        Ok(Some(s)) => eprintln!("springboard: volume {pct:.0}% -> device {s:.3}"),
+        Ok(None) => eprintln!("springboard: volume {pct:.0}% (no audio server; software gain {:.3})", software_gain()),
+        Err(e) => {
+            // the connection may be stale (the server restarted): reconnect on the next change
+            *dev = None;
+            eprintln!("springboard: volume {pct:.0}%: {e} (software gain {:.3})", software_gain());
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 //! ALSA without alsa-lib: PCM capture through the kernel's ioctl interface on /dev/snd, plus
-//! the `AudioOut` trait the players write to. Playback goes through libasound (`super::alsalib`);
+//! the `AudioOut` trait the players write to. Playback goes through the audio server (`super::speaker`);
 //! the mixer side (controls) is `super::mixer`. The uapi struct layouts are pinned by tests the
 //! same way kms.rs pins the DRM ones.
 
