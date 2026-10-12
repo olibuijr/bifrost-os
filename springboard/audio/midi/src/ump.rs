@@ -154,32 +154,87 @@ pub fn midi2_to_midi1(p: &Ump) -> Option<MidiEvent> {
     })
 }
 
-/// 7-bit system exclusive payload (without F0 and F7) as type 3 packets, 6 bytes per packet.
+/// A one-word system packet (type 1): system common or real-time. Data bytes are masked to 7 bits.
+pub fn system_packet(group: u8, status: u8, d1: u8, d2: u8) -> Ump {
+    Ump::one(
+        (1u32 << 28)
+            | (((group & 0xF) as u32) << 24)
+            | ((status as u32) << 16)
+            | (((d1 & 0x7F) as u32) << 8)
+            | (d2 & 0x7F) as u32,
+    )
+}
+
+/// One type 3 packet: `status` 0 complete, 1 start, 2 continue, 3 end; at most 6 `bytes`, each masked to 7 bits.
+fn sysex_packet(group: u8, status: u32, bytes: &[u8]) -> Ump {
+    let n = bytes.len().min(6);
+    let mut b = [0u8; 6];
+    for (d, s) in b.iter_mut().zip(&bytes[..n]) {
+        *d = s & 0x7F;
+    }
+    let w0 = (3u32 << 28)
+        | (((group & 0xF) as u32) << 24)
+        | (status << 20)
+        | ((n as u32) << 16)
+        | ((b[0] as u32) << 8)
+        | b[1] as u32;
+    Ump::two(w0, u32::from_be_bytes([b[2], b[3], b[4], b[5]]))
+}
+
+/// The six data bytes of a type 3 packet, before its length nibble is applied.
+fn sysex_packet_bytes(p: &Ump) -> [u8; 6] {
+    [
+        (p.words[0] >> 8) as u8,
+        p.words[0] as u8,
+        (p.words[1] >> 24) as u8,
+        (p.words[1] >> 16) as u8,
+        (p.words[1] >> 8) as u8,
+        p.words[1] as u8,
+    ]
+}
+
+/// Packs a system exclusive payload into type 3 packets as its bytes arrive, so a message never waits for its end
+/// and memory stays at one packet however long a sender runs. The last six bytes are held until the next byte (they
+/// were a start or continue packet) or the end (an end or complete packet) says which kind their packet is.
+#[derive(Clone, Copy, Debug, Default)]
+struct SysexPacker {
+    held: [u8; 6],
+    n: usize,
+    started: bool,
+}
+
+impl SysexPacker {
+    fn push(&mut self, group: u8, byte: u8, out: &mut Vec<Ump>) {
+        if self.n == 6 {
+            out.push(sysex_packet(group, if self.started { 2 } else { 1 }, &self.held));
+            self.started = true;
+            self.n = 0;
+        }
+        self.held[self.n] = byte & 0x7F;
+        self.n += 1;
+    }
+
+    fn finish(&self, group: u8, out: &mut Vec<Ump>) {
+        out.push(sysex_packet(group, if self.started { 3 } else { 0 }, &self.held[..self.n]));
+    }
+}
+
+/// A system exclusive payload (the bytes between F0 and F7) as type 3 packets, 6 bytes per packet. A byte with the
+/// high bit set follows the MIDI 1.0 rule: a real-time byte (F8 to FF) becomes its own type 1 packet where it stands
+/// and the message goes on; F7 ends the message; any other status ends it as truncated. What came before the end is
+/// delivered; the bytes after it belong to no message here and are dropped.
 pub fn sysex_to_ump(group: u8, data: &[u8]) -> Vec<Ump> {
-    let chunks: Vec<&[u8]> = if data.is_empty() { vec![&[][..]] } else { data.chunks(6).collect() };
-    let last = chunks.len() - 1;
-    chunks
-        .iter()
-        .enumerate()
-        .map(|(i, c)| {
-            let status = match (i == 0, i == last) {
-                (true, true) => 0u32,
-                (true, false) => 1,
-                (false, true) => 3,
-                (false, false) => 2,
-            };
-            let mut b = [0u8; 6];
-            b[..c.len()].copy_from_slice(c);
-            let w0 = (3u32 << 28)
-                | (((group & 0xF) as u32) << 24)
-                | (status << 20)
-                | ((c.len() as u32) << 16)
-                | ((b[0] as u32) << 8)
-                | b[1] as u32;
-            let w1 = u32::from_be_bytes([b[2], b[3], b[4], b[5]]);
-            Ump::two(w0, w1)
-        })
-        .collect()
+    let mut out = Vec::new();
+    let mut packer = SysexPacker::default();
+    for &b in data {
+        match b {
+            0x00..=0x7F => packer.push(group, b, &mut out),
+            0xF8..=0xFF => out.push(system_packet(group, b, 0, 0)),
+            _ => break,
+        }
+    }
+    packer.finish(group, &mut out);
+    out
 }
 
 /// Collects type 3 packets into whole system exclusive payloads.
@@ -188,31 +243,33 @@ pub struct SysexAssembler {
     buf: Vec<u8>,
     /// True between a start packet and its end packet.
     active: bool,
+    /// Real-time bytes found inside packets, oldest first, for `take_realtime`.
+    realtime: Vec<u8>,
 }
 
 /// The most payload bytes one assembled message may hold. A longer message is dropped, so a peer that never
 /// sends the end packet cannot grow the buffer without bound.
 pub const SYSEX_MAX_BYTES: usize = 1 << 20;
 
+/// The most real-time bytes the assembler keeps for `take_realtime`; later ones are dropped until those are taken.
+pub const SYSEX_REALTIME_HELD: usize = 64;
+
 impl SysexAssembler {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Feeds one packet; returns the payload when this packet completes a message.
+
+    /// Feeds one packet; returns the payload when this packet completes a message. Data bytes are 7-bit; a byte
+    /// with the high bit set follows the MIDI 1.0 rule: a real-time byte is kept apart for `take_realtime` and the
+    /// message goes on, any other status ends the message as truncated (what arrived before it is returned, and the
+    /// continue and end packets after it belong to nothing).
     pub fn push(&mut self, p: &Ump) -> Option<Vec<u8>> {
         if p.message_type() != 3 {
             return None;
         }
         let status = (p.words[0] >> 20) & 0xF;
         let n = (((p.words[0] >> 16) & 0xF) as usize).min(6);
-        let b = [
-            (p.words[0] >> 8) as u8,
-            p.words[0] as u8,
-            (p.words[1] >> 24) as u8,
-            (p.words[1] >> 16) as u8,
-            (p.words[1] >> 8) as u8,
-            p.words[1] as u8,
-        ];
+        let b = sysex_packet_bytes(p);
         match status {
             0 | 1 => {
                 self.buf.clear();
@@ -229,24 +286,44 @@ impl SysexAssembler {
             self.active = false;
             return None;
         }
-        self.buf.extend_from_slice(&b[..n]);
-        if status == 0 || status == 3 {
+        let mut done = status == 0 || status == 3;
+        for &x in &b[..n] {
+            match x {
+                0x00..=0x7F => self.buf.push(x),
+                0xF8..=0xFF => {
+                    if self.realtime.len() < SYSEX_REALTIME_HELD {
+                        self.realtime.push(x);
+                    }
+                }
+                _ => {
+                    done = true;
+                    break;
+                }
+            }
+        }
+        if done {
             self.active = false;
             Some(std::mem::take(&mut self.buf))
         } else {
             None
         }
     }
+
+    /// The real-time bytes found inside packets since the last call, in order. Each is a message of its own.
+    pub fn take_realtime(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.realtime)
+    }
 }
 
 /// Converts a MIDI 1.0 byte stream (running status, real-time bytes anywhere, system exclusive, system common)
-/// into type 1, 2 and 3 packets in one group.
+/// into type 1, 2 and 3 packets in one group. System exclusive is packed as it arrives (one packet per six bytes),
+/// so an endless message from a device costs no memory.
 pub struct Midi1ToUmp {
     group: u8,
     status: u8,
     data: [u8; 2],
     filled: usize,
-    sysex: Option<Vec<u8>>,
+    sysex: Option<SysexPacker>,
 }
 
 impl Midi1ToUmp {
@@ -254,20 +331,17 @@ impl Midi1ToUmp {
         Midi1ToUmp { group: group & 0xF, status: 0, data: [0; 2], filled: 0, sysex: None }
     }
 
-    fn sys(&self, st: u8, d1: u8, d2: u8) -> Ump {
-        Ump::one((1u32 << 28) | ((self.group as u32) << 24) | ((st as u32) << 16) | ((d1 as u32) << 8) | d2 as u32)
-    }
-
     /// Feeds one byte; completed packets are appended to `out`.
     pub fn push(&mut self, byte: u8, out: &mut Vec<Ump>) {
+        let g = self.group;
         if byte >= 0xF8 {
-            out.push(self.sys(byte, 0, 0));
+            out.push(system_packet(g, byte, 0, 0));
             return;
         }
         if byte >= 0x80 {
             if let Some(s) = self.sysex.take() {
                 // F7 ends the message; any other status truncates it. Either way what arrived is delivered.
-                out.extend(sysex_to_ump(self.group, &s));
+                s.finish(g, out);
                 if byte == 0xF7 {
                     return;
                 }
@@ -276,11 +350,11 @@ impl Midi1ToUmp {
             match byte {
                 0xF0 => {
                     self.status = 0;
-                    self.sysex = Some(Vec::new());
+                    self.sysex = Some(SysexPacker::default());
                 }
                 0xF6 => {
                     self.status = 0;
-                    out.push(self.sys(0xF6, 0, 0));
+                    out.push(system_packet(g, 0xF6, 0, 0));
                 }
                 0xF7 => self.status = 0,
                 _ => self.status = byte,
@@ -288,7 +362,7 @@ impl Midi1ToUmp {
             return;
         }
         if let Some(s) = self.sysex.as_mut() {
-            s.push(byte);
+            s.push(g, byte, out);
             return;
         }
         if self.status == 0 {
@@ -309,39 +383,112 @@ impl Midi1ToUmp {
         self.filled = 0;
         let st = self.status;
         if st >= 0xF0 {
-            out.push(self.sys(st, self.data[0], if need == 2 { self.data[1] } else { 0 }));
+            out.push(system_packet(g, st, self.data[0], if need == 2 { self.data[1] } else { 0 }));
             self.status = 0;
         } else {
             let d2 = if need == 2 { self.data[1] as u32 } else { 0 };
             out.push(Ump::one(
-                (2u32 << 28) | ((self.group as u32) << 24) | ((st as u32) << 16) | ((self.data[0] as u32) << 8) | d2,
+                (2u32 << 28) | ((g as u32) << 24) | ((st as u32) << 16) | ((self.data[0] as u32) << 8) | d2,
             ));
         }
     }
 }
 
-/// Writes a type 1 or type 2 packet as MIDI 1.0 wire bytes. Other types give `None`.
+/// Writes a type 1 or type 2 packet as MIDI 1.0 wire bytes. Other types give `None`, and so does a packet whose
+/// status byte would corrupt the wire: a type 2 status that is not a channel voice status, or a type 1 status that is
+/// not system common (F1, F2, F3, F6) or real-time (F8 to FF). F0, F7, F4 and F5 never travel as type 1.
 pub fn ump_to_bytes(p: &Ump) -> Option<Vec<u8>> {
     let w = p.words[0];
     let st = ((w >> 16) & 0xFF) as u8;
     let d1 = ((w >> 8) & 0x7F) as u8;
     let d2 = (w & 0x7F) as u8;
     match p.message_type() {
-        1 => Some(match st {
-            0xF1 | 0xF3 => vec![st, d1],
-            0xF2 => vec![st, d1, d2],
-            _ => vec![st],
-        }),
-        2 => Some(if matches!(st & 0xF0, 0xC0 | 0xD0) { vec![st, d1] } else { vec![st, d1, d2] }),
+        1 => match st {
+            0xF1 | 0xF3 => Some(vec![st, d1]),
+            0xF2 => Some(vec![st, d1, d2]),
+            0xF6 | 0xF8..=0xFF => Some(vec![st]),
+            _ => None,
+        },
+        2 => match st & 0xF0 {
+            0xC0 | 0xD0 => Some(vec![st, d1]),
+            0x80..=0xE0 => Some(vec![st, d1, d2]),
+            _ => None,
+        },
         _ => None,
     }
 }
 
-/// A system exclusive payload as wire bytes with F0 and F7.
+/// Turns the packets of one group back into a MIDI 1.0 byte stream for a wire port (the playback edge): types 1 and
+/// 2 as their bytes, type 3 as F0 ... F7 written as the packets come. A byte with the high bit set inside a type 3
+/// packet follows the MIDI 1.0 rule: a real-time byte is written where it stands (legal inside system exclusive on
+/// the wire), any other status ends the message as truncated with F7 and the rest of that message is dropped. A
+/// channel or system common message arriving inside a message ends it the same way first; a real-time one does not.
+#[derive(Debug, Default)]
+pub struct UmpToMidi1 {
+    in_sysex: bool,
+}
+
+impl UmpToMidi1 {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feeds one packet; its wire bytes are appended to `out`.
+    pub fn push(&mut self, p: &Ump, out: &mut Vec<u8>) {
+        match p.message_type() {
+            1 | 2 => {
+                let Some(bytes) = ump_to_bytes(p) else { return };
+                if self.in_sysex && bytes[0] < 0xF8 {
+                    out.push(0xF7);
+                    self.in_sysex = false;
+                }
+                out.extend_from_slice(&bytes);
+            }
+            3 => {
+                let status = (p.words[0] >> 20) & 0xF;
+                match status {
+                    0 | 1 => {
+                        // A new start while a message is open truncates the open one.
+                        if self.in_sysex {
+                            out.push(0xF7);
+                        }
+                        out.push(0xF0);
+                        self.in_sysex = true;
+                    }
+                    2 | 3 if self.in_sysex => {}
+                    // An orphaned continue or end, or a reserved status.
+                    _ => return,
+                }
+                let n = (((p.words[0] >> 16) & 0xF) as usize).min(6);
+                for &x in &sysex_packet_bytes(p)[..n] {
+                    if (0x80..0xF8).contains(&x) {
+                        out.push(0xF7);
+                        self.in_sysex = false;
+                        return;
+                    }
+                    out.push(x);
+                }
+                if status == 0 || status == 3 {
+                    out.push(0xF7);
+                    self.in_sysex = false;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// A system exclusive payload as wire bytes with F0 and F7. Real-time bytes inside stay where they are; any other
+/// status byte ends the payload there (truncated), so a payload can never put a status on the wire.
 pub fn sysex_bytes(payload: &[u8]) -> Vec<u8> {
     let mut v = Vec::with_capacity(payload.len() + 2);
     v.push(0xF0);
-    v.extend_from_slice(payload);
+    for &b in payload {
+        if (0x80..0xF8).contains(&b) {
+            break;
+        }
+        v.push(b);
+    }
     v.push(0xF7);
     v
 }
@@ -535,5 +682,111 @@ mod tests {
         assert_eq!(words_for_type(2), 1);
         assert_eq!(words_for_type(4), 2);
         assert_eq!(words_for_type(5), 4);
+    }
+
+    #[test]
+    fn sysex_payload_high_bit_bytes_follow_the_midi1_rule() {
+        // A real-time byte inside the payload is its own packet and the message goes on.
+        assert_eq!(sysex_to_ump(0, &[1, 0xF8, 2]), vec![Ump::one(0x10F8_0000), Ump::two(0x3002_0102, 0)]);
+        // Any other status truncates: what came before is delivered, the rest is dropped.
+        assert_eq!(sysex_to_ump(1, &[1, 2, 0x90, 60, 100]), vec![Ump::two(0x3102_0102, 0)]);
+        // F7 inside ends the message.
+        assert_eq!(sysex_to_ump(0, &[5, 0xF7, 6]), vec![Ump::two(0x3001_0500, 0)]);
+        // A status first leaves an empty message.
+        assert_eq!(sysex_to_ump(0, &[0xF0, 1]), vec![Ump::two(0x3000_0000, 0)]);
+        // A real-time byte after the seventh byte lands between the start and the end packet.
+        assert_eq!(
+            sysex_to_ump(0, &[1, 2, 3, 4, 5, 6, 7, 0xFE, 8]),
+            vec![Ump::two(0x3016_0102, 0x0304_0506), Ump::one(0x10FE_0000), Ump::two(0x3032_0708, 0)]
+        );
+    }
+
+    #[test]
+    fn sysex_assembler_high_bit_bytes() {
+        let mut a = SysexAssembler::new();
+        // A complete packet carrying [01 F8 02]: the real-time byte is kept apart.
+        assert_eq!(a.push(&Ump::two(0x3003_01F8, 0x0200_0000)), Some(vec![1, 2]));
+        assert_eq!(a.take_realtime(), vec![0xF8]);
+        assert!(a.take_realtime().is_empty());
+        // A start packet carrying [01 02 90 04 05 06] is truncated at the status and returned at once ...
+        assert_eq!(a.push(&Ump::two(0x3016_0102, 0x9004_0506)), Some(vec![1, 2]));
+        // ... and its end packet then belongs to nothing.
+        assert_eq!(a.push(&Ump::two(0x3032_0708, 0)), None);
+        // Real-time bytes nobody takes stop at the cap.
+        for _ in 0..70 {
+            assert_eq!(a.push(&Ump::two(0x3001_F800, 0)), Some(Vec::new()));
+        }
+        assert_eq!(a.take_realtime().len(), SYSEX_REALTIME_HELD);
+    }
+
+    #[test]
+    fn byte_stream_sysex_is_packed_as_it_arrives() {
+        let mut c = Midi1ToUmp::new(0);
+        let mut out = Vec::new();
+        for b in [0xF0u8, 1, 2, 3, 4, 5, 6, 7, 0xF8, 8, 0xF7] {
+            c.push(b, &mut out);
+        }
+        // The start packet leaves with the seventh byte, before the real-time byte that follows it.
+        assert_eq!(
+            out,
+            vec![Ump::two(0x3016_0102, 0x0304_0506), Ump::one(0x10F8_0000), Ump::two(0x3032_0708, 0)]
+        );
+        // A message that never ends costs one packet of memory: 600 bytes give 99 packets so far (one each at
+        // bytes 7, 13, ..., 595), the last six are held, and a channel status ends the message as truncated.
+        let mut c = Midi1ToUmp::new(0);
+        let mut out = Vec::new();
+        c.push(0xF0, &mut out);
+        for _ in 0..600 {
+            c.push(0x11, &mut out);
+        }
+        assert_eq!(out.len(), 99);
+        assert_eq!(out[0], Ump::two(0x3016_1111, 0x1111_1111));
+        assert_eq!(out[98], Ump::two(0x3026_1111, 0x1111_1111));
+        for b in [0x90u8, 60, 100] {
+            c.push(b, &mut out);
+        }
+        assert_eq!(out.len(), 101);
+        assert_eq!(out[99], Ump::two(0x3036_1111, 0x1111_1111));
+        assert_eq!(out[100], Ump::one(0x2090_3C64));
+    }
+
+    #[test]
+    fn playback_edge_writes_safe_wire_bytes() {
+        let wire = |pk: &[Ump]| {
+            let mut w = UmpToMidi1::new();
+            let mut out = Vec::new();
+            for p in pk {
+                w.push(p, &mut out);
+            }
+            out
+        };
+        assert_eq!(wire(&sysex_to_ump(0, &[1, 2, 3, 4, 5, 6, 7, 8])), vec![0xF0, 1, 2, 3, 4, 5, 6, 7, 8, 0xF7]);
+        // A real-time byte inside a packet is written where it stands.
+        assert_eq!(
+            wire(&[Ump::two(0x3013_01F8, 0x0200_0000), Ump::two(0x3031_0300, 0)]),
+            vec![0xF0, 1, 0xF8, 2, 3, 0xF7]
+        );
+        // Any other status truncates the message; its end packet is dropped and the next message plays.
+        assert_eq!(
+            wire(&[Ump::two(0x3013_0190, 0x0200_0000), Ump::two(0x3031_0300, 0), Ump::one(0x2090_3C64)]),
+            vec![0xF0, 1, 0xF7, 0x90, 0x3C, 0x64]
+        );
+        // A channel message inside an open message ends it first; a real-time one does not.
+        assert_eq!(
+            wire(&[Ump::two(0x3012_0102, 0), Ump::one(0x10F8_0000), Ump::one(0x2090_3C64)]),
+            vec![0xF0, 1, 2, 0xF8, 0xF7, 0x90, 0x3C, 0x64]
+        );
+        // A new start truncates an open message.
+        assert_eq!(wire(&[Ump::two(0x3011_0100, 0), Ump::two(0x3001_0200, 0)]), vec![0xF0, 1, 0xF7, 0xF0, 2, 0xF7]);
+        // Status bytes that would corrupt the wire are not written.
+        assert_eq!(ump_to_bytes(&Ump::one(0x1090_0000)), None);
+        assert_eq!(ump_to_bytes(&Ump::one(0x10F0_0000)), None);
+        assert_eq!(ump_to_bytes(&Ump::one(0x10F7_0000)), None);
+        assert_eq!(ump_to_bytes(&Ump::one(0x2010_0000)), None);
+        assert_eq!(ump_to_bytes(&Ump::one(0x20F8_0000)), None);
+        assert_eq!(ump_to_bytes(&Ump::one(0x10FE_0000)), Some(vec![0xFE]));
+        assert!(wire(&[Ump::one(0x1090_0000)]).is_empty());
+        // A payload keeps its real-time bytes and stops at any other status.
+        assert_eq!(sysex_bytes(&[1, 0xF8, 2, 0x90, 3]), vec![0xF0, 1, 0xF8, 2, 0xF7]);
     }
 }

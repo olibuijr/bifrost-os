@@ -65,27 +65,36 @@ pub fn scan(dir: &str) -> Vec<RawDevice> {
     out
 }
 
-/// An open rawmidi port.
+/// An open rawmidi port. It owns its descriptor: dropping the port closes it, once.
 pub struct RawPort {
     fd: libc::c_int,
+    readable: bool,
 }
 
 impl RawPort {
-    /// Opens a node non-blocking. Read-write when the device has both directions, else whichever it has.
+    /// Opens a node non-blocking. Read-write when the device has both directions, else whichever it has. When no
+    /// mode opens, the error is the read-write one (busy, permission), not the last fallback's.
     pub fn open(path: &str) -> io::Result<RawPort> {
         let c = CString::new(path).map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+        let mut first: Option<io::Error> = None;
         for mode in [libc::O_RDWR, libc::O_RDONLY, libc::O_WRONLY] {
             // SAFETY: `c` is a valid NUL-terminated path that outlives the call; open has no other requirements.
             let fd = unsafe { libc::open(c.as_ptr(), mode | libc::O_NONBLOCK | libc::O_CLOEXEC) };
             if fd >= 0 {
-                return Ok(RawPort { fd });
+                return Ok(RawPort { fd, readable: mode != libc::O_WRONLY });
             }
+            first.get_or_insert_with(io::Error::last_os_error);
         }
-        Err(io::Error::last_os_error())
+        Err(first.unwrap_or_else(|| io::Error::from(io::ErrorKind::NotFound)))
     }
 
     pub fn fd(&self) -> libc::c_int {
         self.fd
+    }
+
+    /// False for an output-only device (opened write-only): reading it would fail with EBADF, so it is not polled.
+    pub fn readable(&self) -> bool {
+        self.readable
     }
 
     /// The device's description (`SNDRV_RAWMIDI_IOCTL_INFO`).
@@ -103,33 +112,40 @@ impl RawPort {
         }
     }
 
-    /// Reads whatever bytes are waiting. `Ok(0)` when nothing is pending.
+    /// Reads whatever bytes are waiting. `Ok(0)` when nothing is pending; a signal retries. The bytes are a slice
+    /// of the device's stream, so a message may be split across reads: the caller keeps one parser per port for
+    /// the port's whole life, which carries running status and an open system exclusive across reads.
     pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        // SAFETY: `buf` is a valid writable slice of the length passed.
-        let n = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
-        if n >= 0 {
-            return Ok(n as usize);
-        }
-        let e = io::Error::last_os_error();
-        if e.kind() == io::ErrorKind::WouldBlock {
-            Ok(0)
-        } else {
-            Err(e)
+        loop {
+            // SAFETY: `buf` is a valid writable slice of the length passed.
+            let n = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+            if n >= 0 {
+                return Ok(n as usize);
+            }
+            let e = io::Error::last_os_error();
+            match e.kind() {
+                io::ErrorKind::Interrupted => continue,
+                io::ErrorKind::WouldBlock => return Ok(0),
+                _ => return Err(e),
+            }
         }
     }
 
-    /// Writes MIDI bytes. Returns how many the device took.
+    /// Writes MIDI bytes. Returns how many the device took; a signal retries.
+    #[allow(dead_code)]
     pub fn write(&self, data: &[u8]) -> io::Result<usize> {
-        // SAFETY: `data` is a valid readable slice of the length passed.
-        let n = unsafe { libc::write(self.fd, data.as_ptr() as *const libc::c_void, data.len()) };
-        if n >= 0 {
-            return Ok(n as usize);
-        }
-        let e = io::Error::last_os_error();
-        if e.kind() == io::ErrorKind::WouldBlock {
-            Ok(0)
-        } else {
-            Err(e)
+        loop {
+            // SAFETY: `data` is a valid readable slice of the length passed.
+            let n = unsafe { libc::write(self.fd, data.as_ptr() as *const libc::c_void, data.len()) };
+            if n >= 0 {
+                return Ok(n as usize);
+            }
+            let e = io::Error::last_os_error();
+            match e.kind() {
+                io::ErrorKind::Interrupted => continue,
+                io::ErrorKind::WouldBlock => return Ok(0),
+                _ => return Err(e),
+            }
         }
     }
 }
@@ -189,11 +205,20 @@ mod tests {
     }
 
     #[test]
+    fn open_errors_are_the_first_mode_s() {
+        let e = RawPort::open("/nonexistent-bifrost-midid/midiC0D0").err().unwrap();
+        assert_eq!(e.kind(), io::ErrorKind::NotFound);
+        let e = RawPort::open("bad\0path").err().unwrap();
+        assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
     fn read_and_write_on_a_pipe_like_node() {
         // A regular file stands in for the node: write then read back through the same code path.
         let path = std::env::temp_dir().join(format!("bifrost-midid-port-{}", std::process::id()));
         std::fs::write(&path, [0x90, 60, 100]).unwrap();
         let p = RawPort::open(path.to_str().unwrap()).unwrap();
+        assert!(p.readable());
         let mut b = [0u8; 8];
         assert_eq!(p.read(&mut b).unwrap(), 3);
         assert_eq!(&b[..3], &[0x90, 60, 100]);
