@@ -553,6 +553,7 @@ mod tests {
 pub mod scroll;
 pub mod geometry;
 pub mod stack;
+pub mod layout_protocol;
 pub mod split;
 pub mod values;
 pub mod vector_ops;
