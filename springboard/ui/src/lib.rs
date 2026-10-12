@@ -828,3 +828,4 @@ pub mod emitter;
 pub mod physics;
 pub mod tilemap;
 pub mod midi_thru;
+pub mod midi_events;
