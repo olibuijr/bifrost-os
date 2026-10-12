@@ -63,7 +63,7 @@ mod tests {
     use bifrost_core::json::{parse, Json};
 
     const TODAY: i64 = 20_000;
-    const NOON: i64 = 720;
+    const NOON: u16 = 720;
 
     fn at_day(id: u64, title: &str, day: i64, min: u16) -> Reminder {
         let mut r = Reminder::new(id, title);

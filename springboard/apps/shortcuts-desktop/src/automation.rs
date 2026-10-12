@@ -270,7 +270,7 @@ mod tests {
     }
 
     fn app() -> ShortcutsApp {
-        ShortcutsApp { w: None }
+        ShortcutsApp { w: None, reminders: None, asked_login: false }
     }
 
     fn obj(pairs: &[(&str, &str)]) -> Json {

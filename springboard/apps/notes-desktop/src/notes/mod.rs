@@ -2856,6 +2856,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
     fn share_button_in_the_editor_queues_the_open_note() {
         let ui = ui();
         let dir = scratch("share");

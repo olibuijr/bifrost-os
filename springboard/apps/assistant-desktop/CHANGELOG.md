@@ -1,11 +1,13 @@
 # Changelog
+## 1.1.0 — 2026-10-12
+
+- When the machine has no network, a message is not sent: the composer keeps the text and the chat says "You are offline. Connect to a network to send this message." The empty chat says so too. The chat asks the desktop once for its connection state and then follows its changes.
+- Chat > Copy Answer (Cmd+Shift+C) copies the newest answer to the desktop clipboard as formatted text and as plain text, so it pastes with its bold, code and code blocks into rich editors and as plain text everywhere else.
 
 ## 1.0.2
 
 - Networking uses the SDK `URLSession` (`bifrost_app::url`) instead of the shell-internal HTTP client; its own chunked decoder is gone.
 - Conversations are stored with `codable!` (`bifrost_app::coding`); an entry missing a title or date still loads.
-- When the machine has no network, a message is not sent: the composer keeps the text and the chat says "You are offline. Connect to a network to send this message." The empty chat says so too. The chat asks the desktop once for its connection state and then follows its changes.
-- Chat > Copy Answer (Cmd+Shift+C) copies the newest answer to the desktop clipboard as formatted text and as plain text, so it pastes with its bold, code and code blocks into rich editors and as plain text everywhere else.
 
 ## 1.0.1
 

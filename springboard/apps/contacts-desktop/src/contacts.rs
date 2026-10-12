@@ -1692,7 +1692,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         let mut app = Contacts::new(&ui, 1200, 780, path.clone());
         app.import_vcards(&ui);
         assert!(app.error.is_none(), "{:?}", app.error);
-        assert_eq!(app.all_contacts().len(), 2, "Anna is a duplicate by name; Bo is new");
+        assert_eq!(app.all_contacts().map(|all| all.len()), Some(2), "Anna is a duplicate by name; Bo is new");
         assert!(app.status.as_deref().unwrap().contains("Imported 1 contacts"), "{:?}", app.status);
         assert_eq!(store::load(&path).len(), 2);
         app.export_vcards(exchange::Version::V4);
@@ -1725,7 +1725,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         app.fields[4].push_str("ada@example.test");
         app.save_editor(&ui);
         assert!(app.error.is_none(), "{:?}", app.error);
-        assert_eq!(app.all_contacts().len(), 2);
+        assert_eq!(app.all_contacts().map(|all| all.len()), Some(2));
         let saved = store::load(&path);
         assert!(saved.iter().any(|c| c.name == "Ada Lovelace" && c.email == "ada@example.test"));
         let _ = std::fs::remove_dir_all(path.parent().unwrap());

@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-assistant"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -299,14 +299,16 @@ name = "bifrost-calendar"
 version = "1.8.4"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
 [[package]]
 name = "bifrost-clock"
-version = "1.2.3"
+version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "bifrost-proto",
  "springboard",
 ]
@@ -325,6 +327,7 @@ name = "bifrost-contacts"
 version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -337,6 +340,7 @@ name = "bifrost-daw"
 version = "0.2.6"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "serde",
  "serde_json",
  "springboard",
@@ -356,6 +360,7 @@ name = "bifrost-freeform"
 version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -394,6 +399,7 @@ name = "bifrost-music"
 version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -402,6 +408,7 @@ name = "bifrost-news"
 version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -420,6 +427,7 @@ name = "bifrost-podcasts"
 version = "1.4.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -477,6 +485,7 @@ name = "bifrost-voicememos"
 version = "1.3.0"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 
@@ -485,6 +494,7 @@ name = "bifrost-weather"
 version = "1.2.3"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 

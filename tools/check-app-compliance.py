@@ -87,7 +87,7 @@ PERM_USE = {
     'network': r'\b(http|https|TcpStream|TcpListener|UdpSocket|ureq|fetch|download|open_url|webview|WebProcessPool|net)\b',
     'documents': r'\b(open_document|save_document|commit_document|reopen_document|Document|DocumentEvent)\b',
     'audio': r'\b(audio|Audio|pcm|Pcm|play|sound|Sound|alsa|cpal|speaker|microphone|record)\b',
-    'notifications': r'\b(notify|usernotif|set_badge|notification)\b',
+    'notifications': r'\b(notify|usernotif|set_badge|notification|notification_schedule)\b',
     'keychain': r'\bkeychain\b',
     'storage': r'\b(data_dir|std::fs|fs::|File::|UserDefaults|defaults|store)\b',
 }

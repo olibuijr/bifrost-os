@@ -1,4 +1,10 @@
 # Changelog
+## 1.3.0 — 2026-10-12
+
+- Notification Centre shows a World Clock widget: the chosen cities and their local times, one minute at a time for the
+  next hour. It updates when you add, move or remove a city, and the app refreshes it when the hour runs out.
+- The Dock icon shows a progress bar while a timer runs, and bounces once when a timer finishes.
+- Alarms and timers still ring through the shell; this round does not add a second notification for them.
 
 ## 1.2.3 — 2026-10-11
 
@@ -6,10 +12,6 @@
   layout constants, and the city sheet's height bounds are named too. Sizes that depend on the window are unchanged.
 - The app icon's white strokes use the system white token; the sheet dimming scrim is a named constant.
 - Seconds and the hour-hand fraction use named time constants instead of inline literals.
-- Notification Centre shows a World Clock widget: the chosen cities and their local times, one minute at a time for the
-  next hour. It updates when you add, move or remove a city, and the app refreshes it when the hour runs out.
-- The Dock icon shows a progress bar while a timer runs, and bounces once when a timer finishes.
-- Alarms and timers still ring through the shell; this round does not add a second notification for them.
 
 ## 1.2.2 — 2026-10-11
 

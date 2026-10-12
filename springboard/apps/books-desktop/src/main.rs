@@ -50,16 +50,14 @@ impl App for BooksApp {
                 items: vec![AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open && bifrost_app::print::available())],
             },
             AppMenu {
-                title: "Edit".into(),
-                items: vec![AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some())],
-            },
-            AppMenu {
                 title: "Find".into(),
                 items: vec![
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(hits),
                     AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(hits),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_HIGHLIGHT, "Highlight Match").key("cmd+shift+y").enabled(highlight.is_some()).checked(highlight.is_some_and(|(_, saved)| saved)),
+                    // the shell owns Edit; copying the match as a quote sits with the match's other actions
+                    AppMenuItem::new(MENU_COPY_QUOTE, "Copy Quote").key("cmd+shift+c").enabled(highlight.is_some()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_WHOLE_WORDS, "Match Whole Words").enabled(open).checked(whole),
                 ],

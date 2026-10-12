@@ -118,10 +118,12 @@ pub fn fall_back(ctx: &Ctx, copy: &Clip) {
 
 /// The address the Browser shows while the network is down: a page that says so, with a link to try again.
 pub fn offline_url(url: &str) -> String {
+    // compliance-allow: LAY-03 (600 is a CSS font weight, not a screen size)
+    const HEADING: &str = "font-size:20px;font-weight:600";
     let html = format!(
         "<!doctype html><meta charset=utf-8><title>You are offline</title>\
          <body style=\"font:15px -apple-system,sans-serif;text-align:center;padding:18vh 2em;color:#888\">\
-         <h2 style=\"font-size:20px;font-weight:600\">You are offline</h2>\
+         <h2 style=\"{HEADING}\">You are offline</h2>\
          <p>The page loads when the network comes back.</p><p>{}</p>\
          <p><a href=\"{}\">Try again</a></p>",
         esc(url),
@@ -323,8 +325,9 @@ mod tests {
         assert_eq!(dock_progress(&unknown), Dock::Indeterminate);
         let two = [
             downloads::Item::sample("/d/a", State::Active, Some(100), 50),
-            downloads::Item::sample("/d/b", State::Active, Some(100), 150),
+            downloads::Item::sample("/d/b", State::Active, Some(300), 150),
         ];
+        // 50 of 100 and 150 of 300: 200 of 400 bytes
         assert_eq!(dock_progress(&two), Dock::Fraction(0.5));
     }
 

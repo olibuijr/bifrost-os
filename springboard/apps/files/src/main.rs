@@ -289,6 +289,106 @@ impl App for Files {
         self.flush_services(ctx);
         handled
     }
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        self.service_answer(request, result)
+    }
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
+        if !bifrost_app::quick_look::is_quick_look(service) {
+            return false;
+        }
+        match bifrost_app::quick_look::event(event, body) {
+            Some(e) => self.preview_event(e),
+            None => false,
+        }
+    }
+    fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
+        let mut changed = self.poll_search();
+        if self.spring_tick() {
+            changed = true;
+        }
+        // Show in Files: the shell or the helper leaves a folder request in our data folder; the watch wakes the loop
+        let events = self.watch.as_mut().map(|w| w.poll(std::time::Instant::now())).unwrap_or_default();
+        if !events.is_empty() && self.fold_events(events) {
+            changed = true;
+        }
+        if let Some(folder) = handoff::take_request(&ctx.data_dir) {
+            self.navigate(folder, true);
+            changed = true;
+        }
+        if let Some(done) = self.job.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            if done.path == self.path {
+                self.loading = false;
+                self.ancestors = done.ancestors;
+                match done.result {
+                    Ok(rows) => {
+                        // the worker already ordered the rows (and renamed the Trash's)
+                        self.listing = rows;
+                        self.refresh_rows();
+                        self.selection.clear();
+                    }
+                    Err(e) => {
+                        self.listing.clear();
+                        self.refresh_rows();
+                        self.error = Some(e)
+                    }
+                }
+            }
+            self.revision += 1;
+            self.job = None;
+            self.update_controls();
+            changed = true;
+        }
+        let mut finished = None;
+        if let Some(work) = self.work.as_mut() {
+            while let Ok(event) = work.rx.try_recv() {
+                match event {
+                    Event::Progress(p) => {
+                        work.progress = p;
+                        changed = true;
+                    }
+                    Event::Conflict(name) => {
+                        work.conflict = Some(name);
+                        changed = true;
+                    }
+                    Event::Done(report) => {
+                        finished = Some(report);
+                        break;
+                    }
+                }
+            }
+        }
+        self.sys.track_dock(self.work.as_ref());
+        if let Some(report) = finished {
+            self.sys.end_dock();
+            if let Some(work) = self.work.take() {
+                self.ctl_job_done(&report);
+                self.finish_job(work, report);
+            }
+            changed = true;
+        }
+        self.ctl_tick();
+        self.flush_services(ctx);
+        if changed {
+            self.revision += 1;
+        }
+        changed
+    }
+    /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
+        let spring = self.fx.spring.as_ref().map(|_| t + 0.1);
+        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now())).map(|d| t + d.as_secs_f64());
+        match (spring, events) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+    fn wake_fd(&self) -> Option<i32> {
+        self.watch.as_ref().and_then(|w| w.fd())
+    }
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
+        self.render(&ctx.ui,s)
+    }
 }
 impl Files {
     /// Routes one input to its handler. `event` sends the service calls the handler queued.
@@ -506,108 +606,6 @@ impl Files {
         }
         self.update_controls();
         true
-    }
-}
-impl App for Files {
-    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
-        self.service_answer(request, result)
-    }
-    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
-        if !bifrost_app::quick_look::is_quick_look(service) {
-            return false;
-        }
-        match bifrost_app::quick_look::event(event, body) {
-            Some(e) => self.preview_event(e),
-            None => false,
-        }
-    }
-    fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
-        let mut changed = self.poll_search();
-        if self.spring_tick() {
-            changed = true;
-        }
-        // Show in Files: the shell or the helper leaves a folder request in our data folder; the watch wakes the loop
-        let events = self.watch.as_mut().map(|w| w.poll(std::time::Instant::now())).unwrap_or_default();
-        if !events.is_empty() && self.fold_events(events) {
-            changed = true;
-        }
-        if let Some(folder) = handoff::take_request(&ctx.data_dir) {
-            self.navigate(folder, true);
-            changed = true;
-        }
-        if let Some(done) = self.job.as_ref().and_then(|rx| rx.try_recv().ok()) {
-            if done.path == self.path {
-                self.loading = false;
-                self.ancestors = done.ancestors;
-                match done.result {
-                    Ok(rows) => {
-                        // the worker already ordered the rows (and renamed the Trash's)
-                        self.listing = rows;
-                        self.refresh_rows();
-                        self.selection.clear();
-                    }
-                    Err(e) => {
-                        self.listing.clear();
-                        self.refresh_rows();
-                        self.error = Some(e)
-                    }
-                }
-            }
-            self.revision += 1;
-            self.job = None;
-            self.update_controls();
-            changed = true;
-        }
-        let mut finished = None;
-        if let Some(work) = self.work.as_mut() {
-            while let Ok(event) = work.rx.try_recv() {
-                match event {
-                    Event::Progress(p) => {
-                        work.progress = p;
-                        changed = true;
-                    }
-                    Event::Conflict(name) => {
-                        work.conflict = Some(name);
-                        changed = true;
-                    }
-                    Event::Done(report) => {
-                        finished = Some(report);
-                        break;
-                    }
-                }
-            }
-        }
-        self.sys.track_dock(self.work.as_ref());
-        if let Some(report) = finished {
-            self.sys.end_dock();
-            if let Some(work) = self.work.take() {
-                self.ctl_job_done(&report);
-                self.finish_job(work, report);
-            }
-            changed = true;
-        }
-        self.ctl_tick();
-        self.flush_services(ctx);
-        if changed {
-            self.revision += 1;
-        }
-        changed
-    }
-    /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
-        let spring = self.fx.spring.as_ref().map(|_| t + 0.1);
-        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now())).map(|d| t + d.as_secs_f64());
-        match (spring, events) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
-    }
-    fn wake_fd(&self) -> Option<i32> {
-        self.watch.as_ref().and_then(|w| w.fd())
-    }
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
-        self.render(&ctx.ui,s)
     }
 }
 fn local_account() {

@@ -11,7 +11,7 @@
 //! ```
 //! Requests return the request id the reply carries (see [`crate::service`]). Dates are unix seconds.
 use crate::controls::live_activity::Dismissal;
-use crate::controls::timeline::ReloadPolicy;
+pub use crate::controls::timeline::ReloadPolicy;
 use crate::runtime::Ctx;
 use crate::service;
 use bifrost_core::json::Json;

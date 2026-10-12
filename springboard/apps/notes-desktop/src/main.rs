@@ -3,7 +3,7 @@
 //! hosts it through the SDK for the Wayland desktop.
 
 use notes::notes;
-use notes::notes::system;
+use ::notes::notes::system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::widgets_timeline;

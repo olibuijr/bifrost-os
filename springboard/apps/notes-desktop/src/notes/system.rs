@@ -65,7 +65,13 @@ fn line_rtf(line: &str) -> String {
             out.push_str("\\f1 ");
         }
         out.push_str(&escape(&text));
-        out.push_str("\\b0\\i0\\f0 ");
+        // close only what this run opened; the space ends the last control word
+        let close = [(bold, "\\b0"), (span.style == md::Style::Italic, "\\i0"), (span.style == md::Style::Code, "\\f0")];
+        let closers: String = close.iter().filter(|(on, _)| *on).map(|(_, w)| *w).collect();
+        if !closers.is_empty() {
+            out.push_str(&closers);
+            out.push(' ');
+        }
     }
     out
 }

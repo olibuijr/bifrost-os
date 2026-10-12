@@ -1,6 +1,6 @@
 id = "ai.storyteller.effectcraft"
 name = "EffectCraft"
-version = "0.7.1"
+version = "0.8.0"
 exec = "effectcraft"
 icon = "icon.png"
 min_shell = "0.4.97"
