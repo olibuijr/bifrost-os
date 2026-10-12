@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.3 — 2026-10-12
+
+- Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
+
 ## 1.6.2
 
 - The state line used by the tests is compiled only for tests; the app has no describe hook in the SDK.
