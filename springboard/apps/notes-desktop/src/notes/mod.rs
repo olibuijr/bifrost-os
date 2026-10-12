@@ -19,6 +19,7 @@ pub mod rpc;
 mod parity;
 mod picker;
 pub mod store;
+pub mod system;
 
 pub use icon::icon;
 
@@ -1070,6 +1071,19 @@ impl Notes {
     /// True while a note is open in the editor (Edit > Undo and Redo apply).
     pub fn is_editing(&self) -> bool {
         matches!(self.screen, Screen::Editor(_))
+    }
+
+    /// The selected Markdown of the open note (Edit > Copy), or `None` when no note is open or nothing is selected.
+    /// The selection is a char range, as the text area keeps it.
+    pub fn selected_markdown(&self) -> Option<String> {
+        if !self.is_editing() {
+            return None;
+        }
+        let r = self.editor.selection()?;
+        if r.end <= r.start {
+            return None;
+        }
+        Some(self.editor.text().chars().skip(r.start).take(r.end - r.start).collect())
     }
 
     /// Whether Edit > Undo and Redo have something to do in the open note.

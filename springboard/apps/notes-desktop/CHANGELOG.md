@@ -6,6 +6,9 @@
 - Check Spelling and Links (the More menu in the editor) flags the misspelled words of the note, merged with its links, dates and phone numbers. Use the find arrows to step through them. Spelling uses the English or Icelandic word list, chosen from the note's language; other languages get only the links, dates and phone numbers.
 - The date line under the title shows the note's language, detected from its text (for example "Icelandic").
 - Replace and the list styles beyond bullets and numbers are not in this version yet.
+- Copy (Cmd+C) with text selected in a note puts the selection on the pasteboard as rich text (bold, italic, code and the list markers), with the plain text as the fallback for apps that do not read rich text.
+- A widget lists the three newest notes (Recent Notes, or "No notes yet"). It updates when the newest notes change, and when the desktop asks for it.
+- Search finds more of each note: the text of the whole note is indexed (up to 4000 characters), not only its first three lines.
 
 ## 1.9.0 — 2026-10-11
 
