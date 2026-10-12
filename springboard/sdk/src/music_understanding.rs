@@ -1,10 +1,12 @@
 //! `MusicUnderstanding` for apps (see `docs/parity/music-understanding.md`): run analyses over audio the app already
 //! holds and get time-stamped results. The model and the analyses live in `bifrost_ui::music`; decoding files is the
-//! app's job (`springboard::media` decodes FLAC, Ogg Vorbis, WAV and MP3 for the DAW).
+//! app's job (`springboard::media` decodes FLAC, Ogg Vorbis, WAV and MP3 for the DAW). Implemented: rhythm, key over
+//! time and structure (segment boundaries). Loudness, instrument activity and the rest are not yet implemented.
 
 pub use bifrost_ui::music::{
-    analyze_rhythm, AnalysisType, MusicUnderstandingError, MusicUnderstandingSession, RangedValue, RhythmResult,
-    SessionResult, TimedValue,
+    analyze_key, analyze_rhythm, chroma_frames, key_from_chroma, segment_frames, AnalysisType, Key, KeyResult, Mode,
+    MusicUnderstandingError, MusicUnderstandingSession, RangedValue, RhythmResult, SessionResult, StructureResult,
+    TimedValue,
 };
 
 /// One call for interleaved PCM: mix down to mono, then run every supported analysis.
