@@ -39,3 +39,5 @@ pub mod quarantine;
 pub mod dns_settings;
 pub mod content_filter;
 pub mod relay;
+pub mod dns_message;
+pub mod dns_record_set;
