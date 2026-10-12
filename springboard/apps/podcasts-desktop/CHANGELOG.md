@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0 — 2026-10-12
+
+- The Now Playing sheet shows a line about the episode under its show name: the kind of audio, the codec (MP3, AAC,
+  Opus, FLAC or Linear PCM, read from the file name), the length and the release date. The length is the one the
+  audio service reports once it knows it, and the length from the feed until then.
+- Chapter navigation and episode artwork are not in this release. Podcasts does not read chapter lists or per-episode
+  pictures from feeds yet.
+
 ## 1.5.1 — 2026-10-12
 
 - Dark appearance: the main content area fills with the dark content grey instead of pure black, as stock dark content views do; sidebars and cards keep their colours.

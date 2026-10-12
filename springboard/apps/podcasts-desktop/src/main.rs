@@ -3,6 +3,7 @@
 
 mod feed;
 mod icon;
+mod info;
 mod media;
 mod podcasts;
 mod refresh;

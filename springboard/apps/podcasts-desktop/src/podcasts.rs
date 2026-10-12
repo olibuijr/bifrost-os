@@ -7,6 +7,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
+use crate::info;
 use crate::refresh;
 use crate::media::{self, Bar, Shown};
 use crate::transport;
@@ -1058,8 +1059,10 @@ impl Podcasts {
 
     fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         let url = self.playing.clone().unwrap_or_default();
-        let found = self.shows.iter().find_map(|sh| sh.episodes.iter().find(|e| e.url == url).map(|e| (sh.title.clone(), e.title.clone())));
-        let (show, title) = found.unwrap_or_default();
+        let found = self.shows.iter().find_map(|sh| {
+            sh.episodes.iter().find(|e| e.url == url).map(|e| (sh.title.clone(), e.title.clone(), e.date.clone(), e.duration.clone()))
+        });
+        let (show, title, released, feed_length) = found.unwrap_or_default();
         let (x0, cw) = (self.side(ui), self.content_w(ui));
         let m = self.margin(ui);
         // artwork: the Podcasts mark on a rounded plate
@@ -1072,6 +1075,9 @@ impl Podcasts {
         self.centred(s, ui, &title, MAC_TITLE3_PT, LABEL.now(), (x0, a.1 + a.3 + ui.pt(SPACE_S), cw, ui.pt(30.0)));
         let show = ui.fit(&show, MAC_SUBHEAD_PT, cw - 2.0 * m);
         self.centred(s, ui, &show, MAC_SUBHEAD_PT, LABEL_2.now(), (x0, a.1 + a.3 + ui.pt(36.0), cw, ui.pt(SPACE_XXL)));
+        // episode info: type, codec, length and release date, one footnote line above the scrubber
+        let line = ui.fit(&info::summary(&url, self.duration_ms, &feed_length, &released), MAC_FOOTNOTE_PT, cw - 2.0 * m);
+        self.centred(s, ui, &line, MAC_FOOTNOTE_PT, LABEL_2.now(), (x0, a.1 + a.3 + ui.pt(58.0), cw, ui.pt(SPACE_L)));
         // scrubber
         let sc = self.scrub_rect(ui);
         let pos = self.scrubbing.unwrap_or(self.position_ms);
