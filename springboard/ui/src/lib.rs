@@ -866,3 +866,5 @@ pub mod annotation;
 pub mod ecs;
 pub mod rules;
 pub mod decision;
+pub mod surface_use;
+pub mod surface_attach;
