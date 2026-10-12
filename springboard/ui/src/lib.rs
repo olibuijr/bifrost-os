@@ -610,6 +610,7 @@ pub mod search;
 pub mod textfind;
 pub mod textlist;
 pub mod metaquery;
+pub mod column_summary;
 pub mod searchquery;
 pub mod pathbar;
 pub mod peripheral;
