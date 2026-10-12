@@ -755,3 +755,6 @@ pub mod captions;
 pub mod blit;
 pub mod vertex_descriptor;
 pub mod gatt;
+pub mod keychain_save;
+pub mod keychain_settings;
+pub mod certificate_trust;
