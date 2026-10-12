@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+
+- The File menu now has Import vCards, Export vCard 3.0 and Export vCard 4.0, so the vCard files can be reached from the
+  menu bar as well as the toolbar.
+- The View menu has Hide Sidebar (or Show Sidebar) and two name orders: First Name First (the default) and Last Name
+  First. Last name first shows a name as "Lovelace, Ada" in the list and on the card. The list order is still set in
+  Settings. The choice is saved with the sort order.
+
 ## 1.5.0
 
 - A contact's card lists its phone, email and address under the labels you chose (Mobile, Home, Work and so on). Only the

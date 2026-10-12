@@ -20,6 +20,7 @@ use bifrost_app::controls::contact_card::{self, Card, Entry, Field, Kind};
 use bifrost_app::controls::contact_display::{ContactsDefaults, SortOrder};
 use bifrost_app::controls::contact_groups::Groups;
 use bifrost_app::controls::contact_picker::{Choice, Mode, Picker};
+use bifrost_app::{AppMenu, AppMenuItem};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::contactstore as store;
 use springboard::shell::keyboard::Out;
@@ -55,6 +56,13 @@ const BAR_DELETE_GROUP: u32 = 14;
 const BAR_FINISH: u32 = 15;
 /// Opens the Settings screen (sort order of the list).
 const BAR_SETTINGS: u32 = 16;
+/// Ids of the app's main-menu items (File and View; the shell's Edit, Window and Help are not the app's).
+const MENU_IMPORT: u32 = 1;
+const MENU_EXPORT_V3: u32 = 2;
+const MENU_EXPORT_V4: u32 = 3;
+const MENU_SIDEBAR: u32 = 4;
+const MENU_FIRST_LAST: u32 = 5;
+const MENU_LAST_FIRST: u32 = 6;
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
@@ -316,6 +324,8 @@ pub struct Contacts {
     toast_until: Option<f64>,
     labels: TextCache,
     dirty: bool,
+    /// Whether names show given name first or family name first (View menu). Saved with the display settings.
+    name_order: names::NameOrder,
 }
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
@@ -342,7 +352,7 @@ impl Contacts {
             Err(e) => (Groups::new(), Vec::new(), Some(format!("Unable to load groups: {e}"))),
         };
         let groups_failed = groups_error.is_some();
-        let display = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap_or_default();
+        let (display, name_order) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap_or_default();
         contacts.sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
         let history = History::new(&contacts);
         let mut app = Self {
@@ -383,6 +393,7 @@ impl Contacts {
             toast_until: None,
             labels: TextCache::default(),
             dirty: true,
+            name_order,
         };
         app.rebuild(ui);
         app
@@ -1043,10 +1054,63 @@ impl Contacts {
         let current = self.display.sort_order();
         let at = SORT_CHOICES.iter().position(|&c| c == current).unwrap_or(0);
         self.display.set_sort_order(SORT_CHOICES[(at + 1) % SORT_CHOICES.len()]);
-        if let Err(e) = display_file::save(&self.path.with_file_name(DISPLAY_FILE), &self.display) {
+        self.save_display();
+        self.rebuild(ui);
+    }
+
+    /// Saves the sort order and the name order beside the contacts file.
+    fn save_display(&mut self) {
+        if let Err(e) = display_file::save(&self.path.with_file_name(DISPLAY_FILE), &self.display, self.name_order) {
             self.error = Some(format!("Unable to save the settings: {e}"));
         }
-        self.rebuild(ui);
+    }
+
+    /// Shows names first name first or last name first, saves the choice and redraws the list and the card.
+    fn set_name_order(&mut self, order: names::NameOrder) {
+        self.name_order = order;
+        self.save_display();
+        self.dirty = true;
+    }
+
+    /// The app's main menu: File holds the vCard import and export, View the sidebar and the name order. Both titles
+    /// merge into the shell's File and View menus.
+    pub fn main_menu(&self) -> Vec<AppMenu> {
+        let ready = !self.load_failed;
+        let sidebar = if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" };
+        vec![
+            AppMenu {
+                title: "File".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_IMPORT, "Import vCards...").enabled(ready),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_EXPORT_V3, "Export vCard 3.0...").enabled(ready),
+                    AppMenuItem::new(MENU_EXPORT_V4, "Export vCard 4.0...").enabled(ready),
+                ],
+            },
+            AppMenu {
+                title: "View".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_SIDEBAR, sidebar),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_FIRST_LAST, "First Name First").checked(self.name_order == names::NameOrder::FirstLast),
+                    AppMenuItem::new(MENU_LAST_FIRST, "Last Name First").checked(self.name_order == names::NameOrder::LastFirst),
+                ],
+            },
+        ]
+    }
+
+    /// Runs a main-menu item. True when the screen changed and needs a frame.
+    pub fn menu_action(&mut self, ui: &Ui, id: u32) -> bool {
+        match id {
+            MENU_IMPORT => self.import_vcards(ui),
+            MENU_EXPORT_V3 => self.export_vcards(exchange::Version::V3),
+            MENU_EXPORT_V4 => self.export_vcards(exchange::Version::V4),
+            MENU_SIDEBAR => self.bar(ui, BAR_SIDEBAR),
+            MENU_FIRST_LAST => self.set_name_order(names::NameOrder::FirstLast),
+            MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
+            _ => return false,
+        }
+        true
     }
 
     /// Adds the open contact to the group the list shows, or takes it out when it is already a member.
@@ -1737,7 +1801,8 @@ impl Contacts {
                 let room = ui.pt(r.x + r.w - tx - SPACE_S);
                 let (ink, ink2) = if selected { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
                 let sub = if !contact.phone.is_empty() { contact.phone.clone() } else { contact.email.clone() };
-                let name = ui.fit(contact.display_name(), MAC_BODY_PT, room);
+                let shown = names::shown(contact.display_name(), self.name_order);
+                let name = ui.fit(&shown, MAC_BODY_PT, room);
                 if sub.is_empty() {
                     self.text(&mut content, ui, &name, MAC_BODY_PT, Weight::Semibold, ink, tx, r.y + r.h / 2.0);
                 } else {
@@ -1804,7 +1869,8 @@ impl Contacts {
         let l = self.card_layout(ui);
         let (x, cw) = self.column();
         self.avatar(s, ui, l.avatar, &contact.initials(), MAC_LARGE_TITLE_PT);
-        let name = ui.fit(contact.display_name(), MAC_TITLE1_PT, ui.pt(cw));
+        let shown = names::shown(contact.display_name(), self.name_order);
+        let name = ui.fit(&shown, MAC_TITLE1_PT, ui.pt(cw));
         let name_mid = l.name_y + (MAC_TITLE1_PT + SPACE_S) / 2.0;
         self.centre_text(s, ui, &name, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x + cw / 2.0, name_mid);
         if !contact.company.is_empty() && contact.company != contact.display_name() {
@@ -2110,8 +2176,29 @@ mod tests {
         assert_eq!(app.display.sort_order(), SortOrder::FamilyName);
         app.cycle_sort(&ui);
         assert_eq!(app.display.sort_order(), SortOrder::GivenName);
-        let saved = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        let (saved, _) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
         assert_eq!(saved.sort_order(), SortOrder::GivenName);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_file_menu_and_view_menu_are_the_app_menus_and_name_order_is_saved() {
+        let path = file_with("menus", &[contact(1, "Ada Lovelace")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        let menus = app.main_menu();
+        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["File", "View"]);
+        assert_eq!(menus[0].items.iter().filter(|i| !i.separator).count(), 3, "import, export 3.0, export 4.0");
+        assert_eq!(menus[1].items[0].title, "Hide Sidebar", "the sidebar starts shown on a wide window");
+        assert!(menus[1].items[2].checked, "first name first is the default");
+        assert!(app.menu_action(&ui, MENU_LAST_FIRST));
+        assert_eq!(app.name_order, names::NameOrder::LastFirst);
+        let menus = app.main_menu();
+        assert!(!menus[1].items[2].checked);
+        assert!(menus[1].items[3].checked);
+        let (_, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert_eq!(saved, names::NameOrder::LastFirst);
+        assert!(!app.menu_action(&ui, 99), "an unknown id is not handled");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
