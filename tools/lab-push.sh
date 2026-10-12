@@ -14,7 +14,7 @@ BINS="--bin installer --bin shell"
 [ -f out/bifrost-update-guard-lab ] && [ -z "$(find packaging/arch/recovery -name '*.rs' -newer out/bifrost-update-guard-lab)" ] ||
   rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-lab
 install -m755 out/bifrost-update-guard-lab "$SYNC/bifrost-update-guard"
-cp packaging/arch/recovery/splash.efi "$SYNC/splash.efi"
+cp packaging/arch/recovery/bootweave.efi "$SYNC/bootweave.efi"
 cp packaging/arch/recovery/bifrost-update-guard.service "$SYNC/bifrost-update-guard.service"
 install -m755 springboard/target/fast/installer "$SYNC/bifrost-installer"
 install -m755 springboard/target/fast/shell "$SYNC/springboard"
@@ -33,7 +33,7 @@ cp "$D"/video/*.mp4 "$SYNC/" 2>/dev/null || true
 cat > "$SYNC/manifest" <<M
 bifrost-installer /usr/bin/bifrost-installer 755
 springboard /usr/bin/springboard 755
-splash.efi /usr/share/bifrost/splash.efi 644
+bootweave.efi /usr/share/bifrost/bootweave.efi 644
 bifrost-update-guard /usr/bin/bifrost-update-guard 755
 bifrost-update-guard.service /usr/lib/systemd/system/bifrost-update-guard.service 644
 wayland-open-url /usr/bin/bifrost-open-url 755

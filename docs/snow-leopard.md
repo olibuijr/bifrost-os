@@ -25,7 +25,7 @@ before and after on Midget.
 
 ## Findings
 
-1. `bifrost-bootweave` polls its child every 20 ms for the whole session (`src/bin/bootweave.rs`): 50 wakeups/s.
+1. `bifrost-bootweave` polls its child every 20 ms for the whole session (`springboard/bootweave/supervisor.rs`): 50 wakeups/s.
 2. D-Bus about 26 wakeups/s at idle. Measured cause (busctl monitor): the shell's `gather()` ran `timedatectl show`
    twice per call (`net/ntp.rs` `status_text`), a new system-bus connection each time (~3/s), plus
    systemd-timedated GetAll. Fixed in 0.5.8 (cached 15 s). The "Round 1 findings" guess below is superseded.

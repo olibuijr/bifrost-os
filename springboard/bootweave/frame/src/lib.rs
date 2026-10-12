@@ -1,6 +1,6 @@
 //! `bifrost-bootframe`: the single description and renderer of the boot frame (docs/boot-architecture.md, "One
 //! frame"), and the boot timing record behind the progress bar ("The progress bar"). `no_std` plus `alloc`, no
-//! dependencies, so the UEFI loader (`tools/splash-efi`), Bootweave, the installer and the window server all draw the
+//! dependencies, so the UEFI loader (`springboard/bootweave/efi`), Bootweave, the installer and the window server all draw the
 //! same pixels from the same code.
 //!
 //! Owners (boot team): `render` and the screens (task 02), `progress` and `timing` (task 03; task 06 writes records).

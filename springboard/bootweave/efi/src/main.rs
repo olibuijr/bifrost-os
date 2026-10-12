@@ -16,13 +16,11 @@ use uefi::{cstr16, CStr16};
 
 const LOGO: &[u8] = include_bytes!("../logo.bgrx");
 const LOGO_PX: usize = 160;
-// EFI/BIFROST is the installed-system contract. EFI/BOOT and the root-level
-// path remain accepted because removable media and older installs use them.
+// EFI/BIFROST/boot.cfg is the installed-system contract; EFI/BOOT/cmdline.txt
+// is the removable-media (USB) copy.
 const CMDLINE_FILES: &[&CStr16] = &[
     cstr16!("\\EFI\\BIFROST\\boot.cfg"),
-    cstr16!("\\EFI\\BIFROST\\cmdline.txt"),
     cstr16!("\\EFI\\BOOT\\cmdline.txt"),
-    cstr16!("\\bifrost\\cmdline.txt"),
 ];
 const DEFAULT_CMDLINE: &str = "initrd=\\arch\\boot\\x86_64\\initramfs-linux.img quiet splash";
 

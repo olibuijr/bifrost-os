@@ -343,7 +343,7 @@ impl Run<'_> {
 /// installer media are not in the `springboard-shell` update package (it is built without assets), so they come from here.
 /// The shell, its units and session come from the package, which is installed last so it wins any overlap.
 /// They are copied into RAM first: if the medium is a network CD that drops out half way, the install can still finish.
-const LIVE_FILES: &[&str] = &["/usr/share/bifrost/splash.efi"];
+const LIVE_FILES: &[&str] = &["/usr/share/bifrost/bootweave.efi"];
 const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost"];
 const STAGE: &str = "/run/bifrost-stage";
 
@@ -516,7 +516,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         }
 
         r.set(2, 86, "Installing the desktop");
-        // installer media only: splash.efi and wayland/ are owned by the package, and pacman refuses to overwrite files it does not own
+        // installer media only: bootweave.efi and wayland/ are owned by the package, and pacman refuses to overwrite files it does not own
         for (src, dst) in [("/usr/share/springboard/assets", "/usr/share/springboard/"), ("/usr/share/bifrost/installer", "/usr/share/bifrost/"), ("/usr/share/bifrost/video", "/usr/share/bifrost/")] {
             std::fs::create_dir_all(sys(dst)).map_err(|e| e.to_string())?;
             r.cmd(&["cp", "-a", &format!("{STAGE}{src}"), &sys(dst)])?;
@@ -559,15 +559,15 @@ pub fn install(cfg: &Config, progress: &Shared) {
 
         r.set(2, 93, "Setting up the startup screen");
         let uuid = r.cmd(&["blkid", "-s", "UUID", "-o", "value", &root])?.trim().to_string();
-        r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/splash.efi"), &sys("/boot/EFI/BOOT/BOOTx64.efi")]).or_else(|_| {
+        r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/bootweave.efi"), &sys("/boot/EFI/BOOT/BOOTx64.efi")]).or_else(|_| {
             std::fs::create_dir_all(sys("/boot/EFI/BOOT")).map_err(|e| e.to_string())?;
-            r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/splash.efi"), &sys("/boot/EFI/BOOT/BOOTx64.efi")])
+            r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/bootweave.efi"), &sys("/boot/EFI/BOOT/BOOTx64.efi")])
         })?;
         r.write(&sys("/boot/EFI/BOOT/cmdline.txt"), &cmdline_txt(&uuid))?;
         // Stable BifrOSt namespace for the native EFI loader. Keep the BOOT
         // copy above because recovery tooling and older USB media still read it.
         std::fs::create_dir_all(sys("/boot/EFI/BIFROST")).map_err(|e| e.to_string())?;
-        r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/splash.efi"), &sys("/boot/EFI/BIFROST/BOOTx64.efi")])?;
+        r.cmd(&["cp", &format!("{STAGE}/usr/share/bifrost/bootweave.efi"), &sys("/boot/EFI/BIFROST/BOOTx64.efi")])?;
         r.write(&sys("/boot/EFI/BIFROST/boot.cfg"), &cmdline_txt(&uuid))?;
         // The firmware entry names the BifrOSt loader; EFI/BOOT stays as the removable-media fallback.
         let _ = r.cmd(&["efibootmgr", "-c", "-d", dev, "-p", &part_number(&efi), "-L", "BifrOSt", "-l", "\\EFI\\BIFROST\\BOOTx64.efi"]);

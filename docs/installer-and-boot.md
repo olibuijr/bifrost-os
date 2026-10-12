@@ -11,7 +11,7 @@ port, unit or tool changes.
 | Live medium (ISO) | `tools/build-iso.sh` (`--lab`, `--debug`, `--release`) | `out/iso-*` and the iVentoy folder | Rebuild only for boot-path changes |
 | Installer binary `bifrost-installer` | `springboard/src/bin/installer.rs` | live ISO `/usr/bin/bifrost-installer` | `tools/lab-push.sh` (lab hosts fetch it at boot) |
 | Shell `springboard` | `springboard/src/bin/shell.rs` | installed by pacstrap from `springboard-shell` | `tools/pc-publish.py` into the lab repo |
-| Boot loader `splash.efi` | `packaging/arch/recovery/splash.efi` | ESP `\EFI\BOOT\BOOTx64.efi` | copied from the live medium by the installer |
+| Boot loader `bootweave.efi` | `packaging/arch/recovery/bootweave.efi` | ESP `\EFI\BOOT\BOOTx64.efi` | copied from the live medium by the installer |
 | Plymouth theme | `packaging/archiso/airootfs/usr/share/plymouth/themes/bifrost` | installed `/usr/share/plymouth/themes/bifrost` | `springboard-shell` package |
 | Handoff unit and script | `packaging/arch/bifrost-splash-handoff.service`, `packaging/arch/wayland/splash-handoff` | installed `/usr/lib/systemd/system`, `/usr/lib/bifrost` | `springboard-shell` package |
 
@@ -38,7 +38,7 @@ Environment switches (`springboard/src/bin/installer.rs`, `plan.rs`):
 
 Install order (`plan::install`):
 
-1. `stage_live_files`: copy `/usr/share/bifrost/splash.efi`, `/usr/share/springboard/assets` and
+1. `stage_live_files`: copy `/usr/share/bifrost/bootweave.efi`, `/usr/share/springboard/assets` and
    `/usr/share/bifrost` into RAM (`/run/bifrost-stage`). A dropped network medium cannot break an install
    that has started. The stage copy happens before anything is erased.
 2. Partition (`disks::partition_commands`): ESP (512 MiB vfat) and one btrfs root labelled `BifrOSt`.
@@ -57,7 +57,7 @@ Install order (`plan::install`):
 9. Browser: `springboard --install-store-app is.olibuijr.browser.desktop` in the chroot.
 10. Account: `useradd -m -G wheel,audio,video,input,storage`, sudo for wheel, root locked,
     `/var/lib/springboard/account` (read by `session` for the local account name).
-11. Boot: `splash.efi` → `\EFI\BOOT\BOOTx64.efi`, `cmdline.txt` (below), `efibootmgr -c -L BifrOSt`,
+11. Boot: `bootweave.efi` → `\EFI\BOOT\BOOTx64.efi`, `cmdline.txt` (below), `efibootmgr -c -L BifrOSt`,
     mkinitcpio preset `linux`.
 12. Services (chroot): mask `getty@tty1`, `plymouth-quit`, `plymouth-quit-wait`; enable
     `bifrost-update-guard`, `springboard`, `bifrost-splash-handoff`, `NetworkManager`, `sshd`, `seatd`,
@@ -71,7 +71,7 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
 
 ## 3. Boot chain (installed PC)
 
-1. UEFI runs `\EFI\BOOT\BOOTx64.efi` (`splash.efi`). The NVRAM entry is `BifrOSt`.
+1. UEFI runs `\EFI\BOOT\BOOTx64.efi` (`bootweave.efi`). The NVRAM entry is `BifrOSt`.
 2. `cmdline.txt` (`plan::cmdline_txt`):
    `initrd=\initramfs-linux.img root=UUID=<root> rootflags=subvol=@system rw quiet splash loglevel=3 rd.udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`
    (the i915 flags stop Skylake framebuffer-compression stripes).

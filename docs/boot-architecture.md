@@ -21,15 +21,32 @@ Reference names appear only in this document. Code, comments, strings and file n
 | Reveal once | The window server keeps the boot image until the first complete desktop frame (wallpaper, menu bar, Dock) and then fades once. |
 | Symmetric shutdown | Shutdown and restart return to the same image; no text. |
 
+## One project: Bootweave
+
+Everything that boots BifrOSt is one project, `springboard/bootweave/` (owner decision 2026-10-12, "consolidate into
+one and clean up old code"):
+
+| Part | Path | Crate or binary |
+|---|---|---|
+| The UEFI loader | `springboard/bootweave/efi` | `bootweave-efi` (built for `x86_64-unknown-uefi` by `tools/build-efi-boot.sh`; excluded from the host workspace) |
+| The boot frame and the timing record | `springboard/bootweave/frame` | `bootweave-frame` (`no_std`, shared by every stage) |
+| The early-userspace supervisor | `springboard/bootweave/supervisor.rs` | the `bootweave` binary (`/usr/bin/bifrost-bootweave`) |
+
+The loader's artifact is `bootweave.efi` (`/usr/share/bifrost/bootweave.efi`, copied to `EFI/BIFROST/BOOTx64.efi`
+and `EFI/BOOT/BOOTx64.efi`). The old splash code in `springboard/src/bootsplash.rs` (paint, fade, handoff) and the
+loader's `logo.bgrx` are replaced by `bootweave-frame` (task 02) and deleted then; only the boot marks stay in the
+shell. The legacy command-line files `\bifrost\cmdline.txt` and `EFI\BIFROST\cmdline.txt` are gone: installed
+systems read `EFI\BIFROST\boot.cfg`, USB media `EFI\BOOT\cmdline.txt`.
+
 ## Where BifrOSt is (2026-10-12)
 
-- Loader: `tools/splash-efi` (Rust, `no_std`, UEFI). Paints a 160 px logo through GOP, reads `EFI/BIFROST/boot.cfg`,
+- Loader: `springboard/bootweave/efi` (Rust, `no_std`, UEFI). Paints a 160 px logo through GOP, reads `EFI/BIFROST/boot.cfg`,
   picks current or rollback (`boot_policy.rs`), starts the Linux EFI stub with `initrd=... quiet splash`. It sets the
   panel's largest GOP mode: the boot's only modeset.
 - Kernel: inherits the mode (simpledrm, then the GPU driver with fastboot). Initramfs hooks
   `base udev autodetect microcode modconf kms keyboard block filesystems bifrost-mounts`, busybox init.
 - Early userspace: `springboard.service` (no default dependencies) runs `bifrost-bootweave`
-  (`springboard/src/bin/bootweave.rs`), the supervisor of `/usr/lib/bifrost/session`. Boot marks go to
+  (`springboard/bootweave/supervisor.rs`), the supervisor of `/usr/lib/bifrost/session`. Boot marks go to
   `/run/bifrost/boot-marks` (`springboard::bootsplash::mark`: `supervisor-start`, `display-handoff-start`,
   `compositor-ready`, `desktop-first-frame`, `desktop-first-ui`, `desktop-faded`, ...).
 - Display: the first KMS frame redraws the loader's image (`bootsplash::paint`) and fades into the desktop over
@@ -46,7 +63,7 @@ Reference names appear only in this document. Code, comments, strings and file n
 | Stage | Owner | Shows | Hands over |
 |---|---|---|---|
 | S0 firmware | UEFI (not ours) | the firmware's logo, if any | GOP framebuffer at the firmware's mode |
-| S1 loader | `tools/splash-efi` | frame 0 at the native mode: background, logo, progress bar from 0 to the S1 checkpoint | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
+| S1 loader | `springboard/bootweave/efi` | frame 0 at the native mode: background, logo, progress bar from 0 to the S1 checkpoint | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
 | S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0; the bar holds | the inherited CRTC mode; `/run/bifrost/boot-progress` from the loader's record |
 | S3 early userspace | `bifrost-bootweave` | the same frame, redrawn into the inherited KMS framebuffer, the bar continuing | the session and the display to the window server |
 | S4 window server | `bifrost-wm` (`labwc` until the switch) | the same frame until desktop-ready, then one fade | the desktop |
@@ -54,7 +71,7 @@ Reference names appear only in this document. Code, comments, strings and file n
 
 ### One frame
 
-`bootframe` (a new `no_std` crate, `springboard/bootframe`) is the single description and renderer of the boot frame:
+`bootweave-frame` (a `no_std` crate, `springboard/bootweave/frame`) is the single description and renderer of the boot frame:
 background colour, logo (the BifrOSt mark, scaled from the panel size), the progress bar's geometry and style, and the
 failure screens' layout. The loader (GOP blit), Bootweave (KMS dumb buffer), the installer and `bifrost-wm` (first
 scanout) all draw it from the same code, so the pixels are identical at every handover. Light and Dark follow the

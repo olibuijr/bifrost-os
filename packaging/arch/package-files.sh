@@ -4,7 +4,7 @@ package_bifrost_files() {
   install -Dm755 "$here/wayland/open-url" "$pkgdir/usr/bin/bifrost-open-url"
   install -Dm644 "$here/wayland/bifrost-browser.desktop" "$pkgdir/usr/share/applications/bifrost-browser.desktop"
   install -Dm644 "$here/wayland/mimeapps.list" "$pkgdir/etc/xdg/mimeapps.list"
-  install -Dm644 "$here/recovery/splash.efi" "$pkgdir/usr/share/bifrost/splash.efi"
+  install -Dm644 "$here/recovery/bootweave.efi" "$pkgdir/usr/share/bifrost/bootweave.efi"
   install -Dm755 "$guard" "$pkgdir/usr/bin/bifrost-update-guard"
   install -Dm644 "$here/recovery/bifrost-update-guard.service" "$pkgdir/usr/lib/systemd/system/bifrost-update-guard.service"
   install -Dm644 "$here/recovery/bifrost-rollback.service" "$pkgdir/usr/lib/systemd/system/bifrost-rollback.service"

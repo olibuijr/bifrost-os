@@ -9,7 +9,7 @@ component is removed.
 | Stage | Current owner | Native BifrOSt owner | Removal gate |
 |---|---|---|---|
 | Firmware POST and Lenovo logo | Lenovo UEFI | Firmware | Not replaceable by an OS |
-| EFI handoff and USB discovery | Rust `tools/splash-efi` | Rust EFI boot app | EFI fast/release build and USB boot |
+| EFI handoff and USB discovery | Rust `springboard/bootweave/efi` | Rust EFI boot app | EFI fast/release build and USB boot |
 | Kernel and hardware drivers | Linux kernel and firmware | BifrOSt policy around Linux | Hardware bring-up, suspend, USB, graphics |
 | Early splash and handoff | Rust EFI frame plus Bootweave | Rust Bootweave supervisor | No black/text transition on OVMF and hardware |
 | Live installer display | labwc/Wayland session | `bifrost-installer` direct DRM/KMS | Installer owns the card and completes install |

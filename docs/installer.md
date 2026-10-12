@@ -10,7 +10,7 @@ A native Rust installer on the live ISO. It replaces the earlier bash+YAD, web-U
 | The install itself (partition, pacstrap, configure) | `springboard/src/installer/plan.rs` |
 | Main loop on KMS + evdev | `springboard/src/bin/installer.rs` (`bifrost-installer`) |
 | Keyboard layouts | `tools/gen_keymaps.py` → `keymaps_data.rs` (xkeyboard-config via libxkbcommon) |
-| BifrOSt boot application (UEFI) | `tools/splash-efi` (Rust, `x86_64-unknown-uefi`) → `tools/build-efi-boot.sh` → ISO and recovery payloads |
+| BifrOSt boot application (UEFI) | `springboard/bootweave/efi` (Rust, `x86_64-unknown-uefi`) → `tools/build-efi-boot.sh` → ISO and recovery payloads |
 | Plymouth theme | `packaging/archiso/airootfs/usr/share/plymouth/themes/bifrost` |
 | Logo assets | `tools/bifrost_brand.py` |
 | ISO profile overlay | `packaging/archiso/airootfs`, applied by `tools/apply-archiso-profile.py` |

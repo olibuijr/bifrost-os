@@ -65,7 +65,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "splash-efi"
+name = "bootweave-efi"
 version = "0.1.0"
 dependencies = [
  "uefi",

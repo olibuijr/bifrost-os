@@ -1,8 +1,8 @@
-//! The boot frame the EFI loader paints (tools/splash-efi), redrawn pixel for pixel so the first KMS frame of the
+//! The boot frame the EFI loader paints (springboard/bootweave/efi), redrawn pixel for pixel so the first KMS frame of the
 //! installer or desktop matches what simpledrm was still showing, then cross-fades into the UI. Also the shared boot
 //! milestone log: every mark is milliseconds since the kernel started (CLOCK_BOOTTIME), one clock for all steps.
 
-const LOGO: &[u8] = include_bytes!("../../tools/splash-efi/logo.bgrx");
+const LOGO: &[u8] = include_bytes!("../bootweave/efi/logo.bgrx");
 const LOGO_PX: usize = 160;
 /// How long the boot frame takes to fade into the first screen.
 pub const FADE_MS: f64 = 450.0;

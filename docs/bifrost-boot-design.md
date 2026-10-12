@@ -16,10 +16,10 @@ misleading until that replacement exists.
 
 ## Current change
 
-`tools/splash-efi` is now the source of truth for both ISO and installed
+`springboard/bootweave/efi` is now the source of truth for both ISO and installed
 recovery boot binaries. `tools/build-efi-boot.sh` produces the same artifact at
 both destinations. The loader prefers `EFI/BIFROST/boot.cfg`, then accepts
-`EFI/BIFROST/cmdline.txt`, `EFI/BOOT/cmdline.txt`, and the old removable-media
+and `EFI/BOOT/cmdline.txt` on removable media (the legacy `EFI/BIFROST/cmdline.txt` and
 path. This keeps existing USB media bootable while giving installed systems a
 stable BifrOSt namespace.
 
@@ -29,7 +29,7 @@ stable BifrOSt namespace.
   and boot `EFI/BIFROST/boot.cfg`; `EFI/BOOT` is the fallback copy. The ISO is UEFI-only and its El Torito ESP holds
   just the loader, kernel and initramfs (BLS entries remain as data for iVentoy, not a boot loader).
 - Rollback: the loader boots `EFI/BIFROST/rollback.txt` once `pending` is set and unaccepted
-  (`tools/splash-efi/src/boot_policy.rs`, `packaging/arch/recovery/system.rs`).
+  (`springboard/bootweave/efi/src/boot_policy.rs`, `packaging/arch/recovery/system.rs`).
 - Splash: Plymouth is gone; Bootweave supervises the session behind the EFI/simpledrm frame.
 - Still Linux/labwc: the installed compositor remains labwc until the native compositor exists.
 

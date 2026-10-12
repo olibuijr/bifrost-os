@@ -22,7 +22,7 @@ esp=$(ls "$T"/eltorito_img*_uefi.img 2>/dev/null | head -1)
 if [ -z "$esp" ]; then echo "MISSING UEFI boot image"; bad=1
 else
   for p in EFI/BOOT/BOOTx64.efi EFI/BIFROST/BOOTx64.efi; do
-    mcopy -n -i "$esp" "::/$p" "$T/l.efi" 2>/dev/null && cmp -s "$T/l.efi" packaging/archiso/splash.efi || { echo "ESP $p is not the BifrOSt loader"; bad=1; }
+    mcopy -n -i "$esp" "::/$p" "$T/l.efi" 2>/dev/null && cmp -s "$T/l.efi" packaging/archiso/bootweave.efi || { echo "ESP $p is not the BifrOSt loader"; bad=1; }
     rm -f "$T/l.efi"
   done
   mdir -/ -b -i "$esp" :: 2>/dev/null | grep -iE 'systemd|loader\.conf|shell.*\.efi|memtest' && { echo "FOUND foreign boot files in ESP"; bad=1; }

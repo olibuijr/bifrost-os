@@ -11,11 +11,11 @@ cd "$(dirname "$0")/.."
 PROFILE=${1:-release}
 TARGET=x86_64-unknown-uefi
 
-cargo build --offline --manifest-path tools/splash-efi/Cargo.toml \
+cargo build --offline --manifest-path springboard/bootweave/efi/Cargo.toml \
   --target "$TARGET" --profile "$PROFILE"
 
-BOOT="tools/splash-efi/target/$TARGET/$PROFILE/splash-efi.efi"
+BOOT="springboard/bootweave/efi/target/$TARGET/$PROFILE/bootweave-efi.efi"
 test -s "$BOOT" || { echo "missing EFI output: $BOOT" >&2; exit 1; }
-install -m 0755 "$BOOT" packaging/archiso/splash.efi
-install -m 0755 "$BOOT" packaging/arch/recovery/splash.efi
+install -m 0755 "$BOOT" packaging/archiso/bootweave.efi
+install -m 0755 "$BOOT" packaging/arch/recovery/bootweave.efi
 printf 'BifrOSt EFI boot: %s\n' "$BOOT"

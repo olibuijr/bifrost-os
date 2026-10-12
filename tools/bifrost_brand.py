@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the BifrOSt mark (packaging/brand/bifrost-mark.svg) into the assets that carry it:
 the installer logo and the splash loader's embedded pixels.
-usage: bifrost_brand.py   (run from anywhere; writes into packaging/ and tools/splash-efi)
+usage: bifrost_brand.py   (run from anywhere; writes into packaging/ and springboard/bootweave/efi)
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -63,8 +63,8 @@ def main():
     raw = bytearray()
     for r, g, b in on_black.convert("RGB").getdata():
         raw += bytes((b, g, r, 0))
-    (ROOT / "tools/splash-efi/logo.bgrx").write_bytes(raw)
-    print("wrote installer logo and splash-efi/logo.bgrx")
+    (ROOT / "springboard/bootweave/efi/logo.bgrx").write_bytes(raw)
+    print("wrote installer logo and bootweave-efi/logo.bgrx")
 
 
 if __name__ == "__main__":
