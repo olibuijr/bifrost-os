@@ -814,3 +814,8 @@ pub mod smartcard_slot;
 pub mod token_watch;
 pub mod screensaver;
 pub mod disk_image;
+
+// Media analysis: keyframe, highlight and face grouping models (parity wave 3)
+pub mod keyframe_pick;
+pub mod highlight_rank;
+pub mod face_group;
