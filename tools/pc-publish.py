@@ -47,6 +47,9 @@ def main():
     if not a.skip_build:
         run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--bin", "bifrost-privd", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp"], cwd=os.path.join(REPO, "springboard"))
+    # the EFI loader is always built from source (even with --skip-build) and checked against its sources; run() exits on failure
+    run([os.path.join(REPO, "tools/build-efi-boot.sh"), "release"])
+    run([os.path.join(REPO, "tools/verify-efi-loader.sh"), os.path.join(REPO, "packaging/arch/recovery/bootweave.efi")])
     run(["rustc", "--edition", "2021", "-O", "-C", "target-feature=+crt-static", "-C", "strip=symbols", os.path.join(REPO,"packaging/arch/recovery/guard.rs"), "-o", os.path.join(REPO,"out/bifrost-update-guard-publish")])
     built_at = time.time()
     binpath = os.path.join(REPO, f"springboard/target/{prof}/shell")

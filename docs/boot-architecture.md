@@ -38,6 +38,15 @@ loader's `logo.bgrx` are replaced by `bootweave-frame` (task 02) and deleted the
 shell. The legacy command-line files `\bifrost\cmdline.txt` and `EFI\BIFROST\cmdline.txt` are gone: installed
 systems read `EFI\BIFROST\boot.cfg`, USB media `EFI\BOOT\cmdline.txt`.
 
+**The loader is always built from source** (0.6.0 shipped a stale committed `bootweave.efi` that did not understand
+the `uki=` boot line, so the firmware fell through to netboot). The committed `packaging/arch/recovery/bootweave.efi`
+is a build output, not a source of truth. `tools/lab-push.sh`, `bifrost pc publish` (`tools/pc-publish.py`), the
+package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `tools/check-iso-boot.sh` and
+`tools/prepare-mkarchiso.py` all run `tools/build-efi-boot.sh release` first and fail if it fails, then
+`tools/verify-efi-loader.sh` refuses any copy whose mtime is older than the newest file under
+`springboard/bootweave/{efi,frame}/src`. `tools/lead-check.sh` also builds the loader for `x86_64-unknown-uefi`
+(it is outside the cargo workspace) and counts its errors and warnings.
+
 ## Where BifrOSt is (2026-10-12)
 
 - Loader: `springboard/bootweave/efi` (Rust, `no_std`, UEFI). Paints a 160 px logo through GOP, reads `EFI/BIFROST/boot.cfg`,

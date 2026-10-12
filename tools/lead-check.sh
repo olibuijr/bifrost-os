@@ -20,6 +20,8 @@ echo "== cargo check --workspace --all-targets"
 (cd springboard && cargo check --offline --workspace --all-targets --keep-going -j 6 --message-format=short 2>&1 | tee -a "$LOG" | grep -E '^[^ ]+:[0-9]+:[0-9]+: (error|warning)' | tail -n 5)
 echo "== cargo check -p springboard -p bifrost-wm --features springboard/desktop-wayland --tests"
 (cd springboard && cargo check --offline -p springboard -p bifrost-wm --features springboard/desktop-wayland --tests --keep-going -j 6 --message-format=short 2>&1 | tee -a "$LOG" | grep -E '^[^ ]+:[0-9]+:[0-9]+: (error|warning)' | tail -n 5)
+echo "== bootweave-efi (x86_64-unknown-uefi; excluded from the workspace, so it is built here)"
+cargo build --offline --manifest-path springboard/bootweave/efi/Cargo.toml --target x86_64-unknown-uefi --profile release --message-format=short 2>&1 | tee -a "$LOG" | grep -E '^[^ ]+:[0-9]+:[0-9]+: (error|warning)' | tail -n 5
 
 python3 - "$LOG" "$ROOT/out/lab/warn_groups.json" <<'EOF'
 import collections, json, re, sys

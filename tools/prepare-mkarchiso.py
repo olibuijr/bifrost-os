@@ -22,7 +22,7 @@ _make_bootmode_uefi.bifrost() {
     local repo="${BIFROST_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
     # tools/build-efi-boot.sh writes packaging/archiso/bootweave.efi (untracked); the recovery copy is tracked
     local splash="${repo}/packaging/archiso/bootweave.efi"
-    [[ -s "${splash}" ]] || splash="${repo}/packaging/arch/recovery/bootweave.efi"
+    "${repo}/tools/verify-efi-loader.sh" "${splash}" || return 1   # never fall back to the tracked copy
     local extra="quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs"
     # debug builds put their own command line (journal diagnostics with graphical splash) in <profile>/bifrost-cmdline
     [[ -s "${profile}/bifrost-cmdline" ]] && extra="$(cat "${profile}/bifrost-cmdline")"
@@ -48,9 +48,10 @@ _make_bootmode_uefi.bifrost() {
 
 _validate_requirements_bootmode_uefi.bifrost() {
     local repo="${BIFROST_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-    if [[ ! -s "${repo}/packaging/archiso/bootweave.efi" && ! -s "${repo}/packaging/arch/recovery/bootweave.efi" ]]; then
+    # the loader is built from source here, never taken from a leftover binary; a failed build or a stale file fails the ISO
+    if ! "${repo}/tools/build-efi-boot.sh" release || ! "${repo}/tools/verify-efi-loader.sh" "${repo}/packaging/archiso/bootweave.efi"; then
         (( validation_error=validation_error+1 ))
-        _msg_error "packaging/archiso/bootweave.efi and packaging/arch/recovery/bootweave.efi are missing (run tools/build-efi-boot.sh)" 0
+        _msg_error "the EFI loader did not build from source or is older than springboard/bootweave/{efi,frame}/src" 0
     fi
     _validate_common_requirements_bootmode_uefi
 }

@@ -393,6 +393,12 @@ Show in Files: another app or a script asks for a folder to open in Files.
 
 ## Releases and the test machine (2026-10-08)
 
+**Release step 0, the EFI loader (2026-10-12):** the loader is excluded from the cargo workspace, so the workspace
+check never compiles it. `tools/lab-push.sh`, `bifrost pc publish`, the package build and the ISO tools therefore build
+it with `tools/build-efi-boot.sh release` and refuse to continue if the build fails or the binary is older than the
+newest file under `springboard/bootweave/{efi,frame}/src` (`tools/verify-efi-loader.sh`). `tools/lead-check.sh` builds it
+for `x86_64-unknown-uefi` too. See `docs/boot-architecture.md`, "One project: Bootweave".
+
 Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
 1. Full tests on titan: `cd springboard && cargo test --offline --lib -p springboard` (2334 passed)
    and the app crates (`cargo test -p bifrost-files -p bifrost-reminders`), then

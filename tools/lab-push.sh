@@ -14,6 +14,8 @@ BINS="--bin installer --bin shell"
 [ -f out/bifrost-update-guard-lab ] && [ -z "$(find packaging/arch/recovery -name '*.rs' -newer out/bifrost-update-guard-lab)" ] ||
   rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-lab
 install -m755 out/bifrost-update-guard-lab "$SYNC/bifrost-update-guard"
+# the loader is always built from source: the committed binary is only a build output, never trusted (0.6.0 shipped a stale one)
+tools/build-efi-boot.sh release || { echo "lab-push: EFI loader build failed" >&2; exit 1; }
 cp packaging/arch/recovery/bootweave.efi "$SYNC/bootweave.efi"
 cp packaging/arch/recovery/bifrost-update-guard.service "$SYNC/bifrost-update-guard.service"
 install -m755 springboard/target/fast/installer "$SYNC/bifrost-installer"

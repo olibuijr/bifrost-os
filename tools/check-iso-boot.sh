@@ -8,7 +8,9 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 bad=0
 # the loader build the ISO tools use: tools/build-efi-boot.sh writes both copies, the recovery one is tracked
 LOADER=packaging/archiso/bootweave.efi
-[ -s "$LOADER" ] || LOADER=packaging/arch/recovery/bootweave.efi
+# built from source, never a leftover binary: rebuild, then refuse a loader older than its sources
+tools/build-efi-boot.sh release || { echo "EFI loader build failed" >&2; exit 1; }
+tools/verify-efi-loader.sh "$LOADER" || exit 1
 xorriso -indev "$ISO" -report_el_torito plain 2>/dev/null | grep -q 'El Torito boot img : *[0-9]* *BIOS' && { echo "FOUND BIOS El Torito entry"; bad=1; }
 tree=$(xorriso -indev "$ISO" -find / 2>/dev/null)
 for p in /boot/syslinux /boot/memtest86+ /shellx64.efi /EFI/BOOT/BOOTIA32.EFI; do

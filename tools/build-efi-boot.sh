@@ -16,6 +16,8 @@ cargo build --offline --manifest-path springboard/bootweave/efi/Cargo.toml \
 
 BOOT="springboard/bootweave/efi/target/$TARGET/$PROFILE/bootweave-efi.efi"
 test -s "$BOOT" || { echo "missing EFI output: $BOOT" >&2; exit 1; }
-install -m 0755 "$BOOT" packaging/archiso/bootweave.efi
-install -m 0755 "$BOOT" packaging/arch/recovery/bootweave.efi
+install -p -m 0755 "$BOOT" packaging/archiso/bootweave.efi
+install -p -m 0755 "$BOOT" packaging/arch/recovery/bootweave.efi
+# never leave a loader older than its source
+tools/verify-efi-loader.sh "$BOOT" packaging/archiso/bootweave.efi packaging/arch/recovery/bootweave.efi
 printf 'BifrOSt EFI boot: %s\n' "$BOOT"
