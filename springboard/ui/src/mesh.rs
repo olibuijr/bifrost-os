@@ -1,6 +1,7 @@
 //! Mesh layout for 3D content (`NativeMesh`, `NativeMeshBuffer`, `NativeSubmesh`, `NativeMeshBufferAllocator`).
-//! This module holds only the layout: byte ranges inside one allocation, primitive counts and validation.
-//! It owns no GPU memory; a renderer maps each range onto its own buffers.
+//! This module holds the layout: byte ranges inside one allocation, primitive counts and validation. `BufferStore`
+//! adds the CPU-side bytes behind those ranges, with mapping (read and write access to one range) and fill. It owns
+//! no GPU memory; a renderer maps each range onto its own buffers.
 
 /// How consecutive elements form primitives (the OpenGL-style primitive modes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,6 +178,66 @@ impl BufferAllocator {
     }
 }
 
+/// CPU-side bytes for mesh buffers. Ranges come from a `BufferAllocator` over the store's capacity, and each range
+/// is read or written through `map` and `map_mut`, which return the bytes of exactly that range. Mapping an
+/// allocation that runs past the store is refused. The borrow checker allows one mapping at a time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BufferStore {
+    alloc: BufferAllocator,
+    data: Vec<u8>,
+}
+
+impl BufferStore {
+    /// A store of `capacity` zeroed bytes.
+    pub fn new(capacity: usize) -> Self {
+        BufferStore { alloc: BufferAllocator::new(capacity), data: vec![0; capacity] }
+    }
+
+    /// Total bytes in the store.
+    pub fn capacity(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Reserves a range of `length` bytes, or None when it does not fit.
+    pub fn allocate(&mut self, kind: BufferKind, length: usize) -> Option<MeshBuffer> {
+        self.alloc.allocate(kind, length)
+    }
+
+    /// Read access to a buffer's bytes. None when the range runs past the store.
+    pub fn map(&self, buffer: MeshBuffer) -> Option<&[u8]> {
+        let end = buffer.offset.checked_add(buffer.length)?;
+        if end > self.data.len() {
+            return None;
+        }
+        Some(&self.data[buffer.offset..end])
+    }
+
+    /// Write access to a buffer's bytes. None when the range runs past the store.
+    pub fn map_mut(&mut self, buffer: MeshBuffer) -> Option<&mut [u8]> {
+        let end = buffer.offset.checked_add(buffer.length)?;
+        if end > self.data.len() {
+            return None;
+        }
+        Some(&mut self.data[buffer.offset..end])
+    }
+
+    /// Copies `bytes` into the buffer at `offset` within the buffer. False, with nothing written, when the bytes
+    /// would run past the end of the buffer.
+    pub fn fill(&mut self, buffer: MeshBuffer, offset: usize, bytes: &[u8]) -> bool {
+        let end = match offset.checked_add(bytes.len()) {
+            Some(e) if e <= buffer.length => e,
+            _ => return false,
+        };
+        match self.map_mut(buffer) {
+            Some(range) => {
+                range[offset..end].copy_from_slice(bytes);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,5 +329,56 @@ mod tests {
         assert_eq!(IndexType::U8.size(), 1);
         assert_eq!(IndexType::U16.size(), 2);
         assert_eq!(IndexType::U32.size(), 4);
+    }
+
+    #[test]
+    fn fill_then_map_reads_back_the_same_bytes() {
+        let mut store = BufferStore::new(32);
+        let b = store.allocate(BufferKind::Vertex, 8).unwrap();
+        assert!(store.fill(b, 0, &[1, 2, 3, 4, 5, 6, 7, 8]));
+        assert_eq!(store.map(b), Some(&[1u8, 2, 3, 4, 5, 6, 7, 8][..]));
+        assert_eq!(store.capacity(), 32);
+    }
+
+    #[test]
+    fn map_mut_writes_are_seen_by_the_next_map() {
+        let mut store = BufferStore::new(16);
+        let b = store.allocate(BufferKind::Element, 4).unwrap();
+        store.map_mut(b).unwrap()[2] = 9;
+        assert_eq!(store.map(b), Some(&[0u8, 0, 9, 0][..]));
+    }
+
+    #[test]
+    fn mapping_a_range_past_the_store_is_refused() {
+        let mut store = BufferStore::new(16);
+        let past = MeshBuffer { kind: BufferKind::Vertex, offset: 12, length: 8 };
+        assert!(store.map(past).is_none());
+        assert!(store.map_mut(past).is_none());
+        let overflow = MeshBuffer { kind: BufferKind::Vertex, offset: usize::MAX, length: 2 };
+        assert!(store.map(overflow).is_none(), "an offset plus length that overflows is refused");
+        let at_end = MeshBuffer { kind: BufferKind::Vertex, offset: 16, length: 0 };
+        assert_eq!(store.map(at_end), Some(&[0u8; 0][..]), "an empty range at the end is valid");
+    }
+
+    #[test]
+    fn fill_stays_inside_its_buffer() {
+        let mut store = BufferStore::new(16);
+        let b = store.allocate(BufferKind::Vertex, 8).unwrap();
+        assert!(!store.fill(b, 6, &[1, 2, 3]), "6 + 3 runs past the 8-byte buffer");
+        assert_eq!(store.map(b), Some(&[0u8; 8][..]), "a refused fill writes nothing");
+        assert!(store.fill(b, 5, &[1, 2, 3]));
+        assert_eq!(store.map(b), Some(&[0u8, 0, 0, 0, 0, 1, 2, 3][..]));
+    }
+
+    #[test]
+    fn allocations_do_not_alias_each_other() {
+        let mut store = BufferStore::new(16);
+        let a = store.allocate(BufferKind::Vertex, 4).unwrap();
+        let b = store.allocate(BufferKind::Element, 4).unwrap();
+        assert!(store.fill(a, 0, &[1, 1, 1, 1]));
+        assert!(store.fill(b, 0, &[2, 2, 2, 2]));
+        assert_eq!(store.map(a), Some(&[1u8, 1, 1, 1][..]));
+        assert_eq!(store.map(b), Some(&[2u8, 2, 2, 2][..]));
+        assert!(store.allocate(BufferKind::Vertex, 16).is_none(), "the store has no room left");
     }
 }
