@@ -41,6 +41,19 @@ impl ShortcutsApp {
         automation::frontmost(&automation::onscreen_context(&shown))
     }
 
+    /// Runs a declared intent from the action library through the same path the control socket uses, on the shortcut
+    /// in front, and shows its dialog (or the reason it did not run) in the window.
+    fn run_intent(&mut self, data_dir: &Path, id: &str, t: f64) {
+        let list = self.shortcuts(data_dir);
+        let text = match automation::perform(&list, id, &Json::Obj(Vec::new()), self.frontmost(), &self.planner) {
+            Ok(r) => r.dialog.unwrap_or_else(|| "Done.".to_string()),
+            Err(e) => e.message,
+        };
+        if let Some(c) = self.w.as_mut() {
+            c.show_result(&text, t);
+        }
+    }
+
     /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
     /// input or script change.
     fn sync(&mut self, ctx: &Ctx) {
@@ -78,11 +91,15 @@ impl App for ShortcutsApp {
         if !c.take_runs().is_empty() {
             c.show_run_unavailable(t);
         }
+        let requests = c.take_intent_requests();
         let login_request = c.take_login_request();
         if let Some(on) = login_request {
             services::set_login(ctx, on);
         }
         self.sync(ctx);
+        for id in requests {
+            self.run_intent(&ctx.data_dir, &id, t);
+        }
         true
     }
 

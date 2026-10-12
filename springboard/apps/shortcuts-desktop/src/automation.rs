@@ -417,6 +417,27 @@ mod tests {
     }
 
     #[test]
+    fn the_catalog_gives_each_intent_its_title_and_description() {
+        let intents = declared();
+        assert_eq!(intents[0].title, "Run Shortcut");
+        assert_eq!(intents[0].description, "Runs a shortcut's actions. Pass its id, or its name when only one shortcut has it.");
+        assert_eq!(intents[1].title, "Plan Shortcut");
+        assert_eq!(intents[1].description, "Lists the steps a shortcut would run, in order, without running them.");
+    }
+
+    #[test]
+    fn an_intent_from_the_action_library_runs_on_the_shortcut_in_front() {
+        let list = model::defaults();
+        let front = list.iter().position(|s| s.name == "Bedtime");
+        let planner = Planner::new();
+        // the window runs an intent with no parameters, so the shortcut in front is the one used
+        let r = perform(&list, PLAN, &Json::Obj(Vec::new()), front, &planner).unwrap();
+        assert_eq!(r.dialog.as_deref(), Some("Bedtime runs 3 steps."));
+        let err = perform(&list, RUN, &Json::Obj(Vec::new()), front, &planner).unwrap_err();
+        assert_eq!(err.message, "Bedtime cannot run on this device yet");
+    }
+
+    #[test]
     fn plan_of_a_shortcut_without_actions_says_so() {
         let d = dir("empty");
         save(&d, &two_saves());
