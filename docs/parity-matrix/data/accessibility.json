@@ -10,16 +10,16 @@
     {
       "feature": "Screen reader bridge (VoiceOver equivalent)",
       "apple": "Accessibility API, VoiceOver, NSAccessibility element hierarchy",
-      "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs; wired: springboard/src/shell/accessibility/reader.rs (cursor, speech, focus ring); springboard/src/shell/hwkeys.rs (ReaderStep keys); springboard/src/shell/pages.rs (Screen Reader row)",
+      "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs; wired: springboard/src/shell/accessibility/reader.rs (cursor, speech, focus ring); springboard/src/shell/hwkeys.rs (ReaderStep keys); springboard/src/shell/pages.rs (Screen Reader row); wired: springboard/src/shell/accessibility/reader.rs (walk, rotors, activation, focus ring); springboard/src/shell/accessibility/walk.rs; springboard/src/shell/hwkeys.rs (ReaderRotor, ReaderActivate)",
       "status": "partial",
-      "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Element role mapping",
       "apple": "AccessibilityTechnology, NSAccessibility roles",
-      "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role)",
+      "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
       "status": "partial",
-      "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles."
+      "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Element hierarchy (parent, focus, checked state)",
@@ -31,9 +31,9 @@
     {
       "feature": "Labels, titles and help text",
       "apple": "accessibilityLabel, accessibilityTitle, accessibilityHelp",
-      "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs",
+      "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs; wired: springboard/src/shell/accessibility/walk.rs (speech); springboard/src/shell/accessibility/reader.rs",
       "status": "partial",
-      "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist."
+      "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Text attributes and text events",

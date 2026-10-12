@@ -24,9 +24,9 @@
     {
       "feature": "Line and area marks",
       "apple": "LineMark, AreaMark, LinePlot, AreaPlot, InterpolationMethod",
-      "bifrost": "springboard/ui/src/chart_marks.rs (line_path",
+      "bifrost": "springboard/ui/src/chart_marks.rs (line_path; wired: springboard/apps/weather-desktop/src/insights.rs area_columns; src/weather.rs draw_main_with TEMPERATURE card (area fill under the hourly line)",
       "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs)"
+      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs) Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Point, rectangle and rule marks",

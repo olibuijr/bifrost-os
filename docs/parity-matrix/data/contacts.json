@@ -24,16 +24,16 @@
     {
       "feature": "Contact data model (CNContact, CNMutableContact)",
       "apple": "CNContact, CNMutableContact",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact",
+      "bifrost": "springboard/src/shell/contactstore.rs:Contact; wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card_entry, card_rows)",
       "status": "partial",
-      "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. No multi-value lists (one phone, one email, one address), no birthday, dates, relations, social profiles, instant messages, URLs, images or nickname."
+      "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. No multi-value lists (one phone, one email, one address), no birthday, dates, relations, social profiles, instant messages, URLs, images or nickname. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Labeled values and predefined labels",
       "apple": "CNLabeledValue, CNContactProperty, localizedString(for:Label)",
-      "bifrost": "springboard/src/shell/contactstore.rs:LABELS",
+      "bifrost": "springboard/src/shell/contactstore.rs:LABELS; wired: springboard/apps/contacts-desktop/src/extras.rs (ValueKind, labels from contactstore::LABELS); src/exchange.rs (type_of, label mapping)",
       "status": "partial",
-      "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings."
+      "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Fetch with key-based property selection",
@@ -73,9 +73,9 @@
     {
       "feature": "vCard serialization",
       "apple": "CNContactVCardSerialization",
-      "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu",
+      "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses)",
       "status": "partial",
-      "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Predefined display preferences",

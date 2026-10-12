@@ -52,9 +52,9 @@
     {
       "feature": "Audio codec and format conversion (Audio Converter, Audio Format Services)",
       "apple": "AudioConverter, AudioFormat",
-      "bifrost": "springboard/ui/src/pcm_convert.rs",
+      "bifrost": "springboard/ui/src/pcm_convert.rs; wired: springboard/apps/daw/src/export.rs (converted_wav), springboard/apps/daw/src/wav.rs (encode_s16), springboard/ui/src/pcm_convert.rs (Resampler, f32_to_s16)",
       "status": "partial",
-      "note": "Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. AAC-LC decoding and sample conversion run in the system layer. Decoders are pure Rust (symphonia). No general converter API, and no encoder."
+      "note": "Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. AAC-LC decoding and sample conversion run in the system layer. Decoders are pure Rust (symphonia). No general converter API, and no encoder. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Audio session and output route (headphones, speaker)",

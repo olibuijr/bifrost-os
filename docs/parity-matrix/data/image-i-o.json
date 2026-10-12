@@ -10,9 +10,9 @@
     {
       "feature": "Image source: decode from data or file",
       "apple": "CGImageSource",
-      "bifrost": "springboard/sdk/src/image_source.rs",
+      "bifrost": "springboard/sdk/src/image_source.rs; wired: springboard/apps/files/src/views/options.rs (picture_thumb)",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type."
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Image destination: encode and write",
@@ -31,9 +31,9 @@
     {
       "feature": "Downsampled and thumbnail decode",
       "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)",
-      "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs (fit_dims)",
+      "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs (fit_dims); wired: springboard/apps/files/src/views/options.rs (picture_thumb, blit_thumb)",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file."
+      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Decode size limits",
@@ -45,9 +45,9 @@
     {
       "feature": "EXIF metadata read (camera, date, exposure, size)",
       "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)",
-      "bifrost": "springboard/src/shell/photos/exif.rs:113 (EXIF reader for the info sheet)",
+      "bifrost": "springboard/src/shell/photos/exif.rs:113 (EXIF reader for the info sheet); wired: springboard/apps/files/src/info.rs (exif_rows, exif_rows_from), using springboard/src/shell/photos/exif.rs",
       "status": "os",
-      "note": "Photos app only. Not exposed to SDK apps."
+      "note": "Photos app only. Not exposed to SDK apps. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "EXIF orientation applied on decode",

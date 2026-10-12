@@ -59,9 +59,9 @@
     {
       "feature": "Settings page for login items",
       "apple": "SMAppService.openSystemSettingsLoginItems()",
-      "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref)",
+      "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref); wired: springboard/src/shell/login_items_page.rs (order_group); springboard/src/shell/pages.rs (Login Items page); springboard/src/shell/extras.rs (Registry::move_earlier, login.items pref)",
       "status": "partial",
-      "note": "the page exists and lets the user remove items, but apps cannot open it through an SDK call"
+      "note": "the page exists and lets the user remove items, but apps cannot open it through an SDK call Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Legacy login item authorization check",

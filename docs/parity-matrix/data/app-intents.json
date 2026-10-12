@@ -31,16 +31,16 @@
     {
       "feature": "Snippets and result views",
       "apple": "IntentResult.Snippet, result(dialog:view:), SnippetIntent, EmptySnippetIntent",
-      "bifrost": "springboard/sdk/src/intents.rs (Snippet",
+      "bifrost": "springboard/sdk/src/intents.rs (Snippet; wired: springboard/apps/shortcuts-desktop/src/automation.rs perform (Snippet rows); src/main.rs run_intent; src/widget.rs show_snippet, draw_result",
       "status": "partial",
-      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interactive result view for an intent"
+      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interactive result view for an intent Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Follow-on and opens-app results",
       "apple": "OpensAppIntent, result(opensIntent:), result(actionButtonIntent:)",
-      "bifrost": "springboard/sdk/src/intents.rs",
+      "bifrost": "springboard/sdk/src/intents.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs perform (opens run-shortcut with the shortcut id), title_of; src/widget.rs Target::ResultRun, take_intent_requests",
       "status": "partial",
-      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an intent cannot hand off to another intent or open a screen in the app"
+      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an intent cannot hand off to another intent or open a screen in the app Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Execution modes and authentication",

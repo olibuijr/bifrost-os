@@ -10,9 +10,9 @@
     {
       "feature": "Capture setup (devices, sessions, inputs)",
       "apple": "AVCaptureSession, AVCaptureDevice, AVCaptureDeviceInput, discovery",
-      "bifrost": "springboard/src/media/v4l2.rs (probe, Device::open, format enumeration)",
+      "bifrost": "springboard/src/media/v4l2.rs (probe, Device::open, format enumeration); wired: springboard/src/shell/camera/mod.rs; springboard/src/shell/camera/devices.rs (camera_ids)",
       "status": "os",
-      "note": "V4L2 probing exists in the shell only; no session/input/output model and no SDK access for apps"
+      "note": "V4L2 probing exists in the shell only; no session/input/output model and no SDK access for apps Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Photo capture",

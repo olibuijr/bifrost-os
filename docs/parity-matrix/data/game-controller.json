@@ -10,23 +10,23 @@
     {
       "feature": "Controller discovery and hot-plug",
       "apple": "GCController, GCDevice, GCController.controllers(), controllerDidConnectNotification",
-      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs",
+      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs; wired: springboard/src/shell/services/gamepad_service.rs (views, snapshot); springboard/src/shell/game_controllers_page.rs (list page)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel-level hot-plug watch exists, but it only serves the recovery chord. No controller list or connect event reaches apps."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel-level hot-plug watch exists, but it only serves the recovery chord. No controller list or connect event reaches apps. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Input events (polling and callbacks)",
       "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput",
-      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput)",
+      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Button, axis, switch and direction-pad elements",
       "apple": "GCButtonElement, GCAxisElement, GCSwitchElement, GCDirectionPadElement, GCPhysicalInputElementCollection",
-      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs",
+      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs; wired: springboard/apps/games-desktop/src/games.rs (gamepad_slide, gamepad_new_game) fed by springboard/apps/games-desktop/src/system.rs; wired: springboard/src/shell/game_controllers_page.rs (Remap, controller_spec, live_rows)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No element abstraction exists. Standard gamepad element names (BTN_SOUTH, ABS_HAT0X and similar) are not used anywhere in the repo."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No element abstraction exists. Standard gamepad element names (BTN_SOUTH, ABS_HAT0X and similar) are not used anywhere in the repo. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Keyboard and mouse as game input",
@@ -45,9 +45,9 @@
     {
       "feature": "Battery and light on controllers",
       "apple": "GCDeviceBattery, GCDeviceLight",
-      "bifrost": "springboard/ui/src/controller_power.rs (Battery",
+      "bifrost": "springboard/ui/src/controller_power.rs (Battery; wired: springboard/src/shell/services/gamepad_service.rs (read_battery); game_controllers_page.rs (battery_text)",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No controller battery or light query. springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would be the transport for a wireless pad, but it does not read pad profiles."
+      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No controller battery or light query. springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would be the transport for a wireless pad, but it does not read pad profiles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Motion sensing (gyro and accelerometer)",

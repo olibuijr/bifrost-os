@@ -17,9 +17,9 @@
     {
       "feature": "Transport controls and audio mini player",
       "apple": "AVPlayerViewController transport UI, MPRemoteCommandCenter via player",
-      "bifrost": "springboard/sdk/src/widgets.rs:900 (player capsule), springboard/src/shell/music/mod.rs",
+      "bifrost": "springboard/sdk/src/widgets.rs:900 (player capsule), springboard/src/shell/music/mod.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (mini player -15s, play or pause, +30s; sheet with Speed menu and Sleep)",
       "status": "partial",
-      "note": "Floating capsule with skip, play and progress; audio only, no video surface in the capsule."
+      "note": "Floating capsule with skip, play and progress; audio only, no video surface in the capsule. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Picture in Picture",
@@ -45,9 +45,9 @@
     {
       "feature": "Media trimming and export",
       "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
-      "bifrost": "springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (menu, export_selected); src/store.rs (export_copy); trim handles already wired via recording::Trim; wired: springboard/apps/daw/src/export.rs, springboard/apps/daw/src/main.rs (toggle_trim, nudge_trim, export), springboard/ui/src/media_trim.rs",
+      "bifrost": "springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (menu, export_selected); src/store.rs (export_copy); trim handles already wired via recording::Trim; wired: springboard/apps/daw/src/export.rs, springboard/apps/daw/src/main.rs (toggle_trim, nudge_trim, export), springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/store.rs (save_split) and src/voicememos.rs (split_selected, can_split, MENU_SPLIT)",
       "status": "partial",
-      "note": "Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Display management (HDR, refresh mode switching)",

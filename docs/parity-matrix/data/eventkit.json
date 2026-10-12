@@ -24,9 +24,9 @@
     {
       "feature": "Reminders",
       "apple": "EKReminder",
-      "bifrost": "springboard/apps/reminders-desktop/src/model.rs",
+      "bifrost": "springboard/apps/reminders-desktop/src/model.rs; wired: springboard/apps/reminders-desktop/src/model.rs (tags_in, tag_counts, View::Tag); src/chrome.rs (Tags section in lists_source, sidebar_target); src/app.rs (Target::Tag); src/view.rs (list title)",
       "status": "os",
-      "note": "app-internal file store (store.rs); no SDK access"
+      "note": "app-internal file store (store.rs); no SDK access Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Calendars and sources",
@@ -38,9 +38,9 @@
     {
       "feature": "Participants",
       "apple": "EKParticipant",
-      "bifrost": "springboard/ui/src/conference.rs",
+      "bifrost": "springboard/ui/src/conference.rs; wired: springboard/ui/src/calendar_participant.rs; springboard/apps/calendar-desktop/src/calendar/invitees.rs (editor row Target::Invitees in src/calendar.rs)",
       "status": "partial",
-      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no attendee or invitation model found"
+      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no attendee or invitation model found Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Recurrence rules",

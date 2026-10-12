@@ -17,9 +17,9 @@
     {
       "feature": "Parameter resolution, confirmation and disambiguation",
       "apple": "Resolving the Parameters of an Intent, Confirming the Details of an Intent, Resolution Results",
-      "bifrost": "springboard/ui/src/intent_resolve.rs",
+      "bifrost": "springboard/ui/src/intent_resolve.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs resolve (unchanged this round)",
       "status": "partial",
-      "note": "Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records."
+      "note": "Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Common data types (strings, dates, URLs, entities)",

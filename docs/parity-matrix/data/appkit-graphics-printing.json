@@ -45,9 +45,9 @@
     {
       "feature": "Drawing: Bezier paths, gradients, shadows",
       "apple": "NSBezierPath, NSGradient, NSShadow",
-      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs)",
+      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs); wired: springboard/ui/src/layer_style.rs (Shadow::radius) via springboard/apps/freeform-desktop/src/style.rs (blur_taps, paint_with_blur)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); no public path, gradient or shadow objects Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Drawing: materials and vibrancy",

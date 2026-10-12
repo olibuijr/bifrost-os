@@ -10,9 +10,9 @@
     {
       "feature": "PDFView (display and navigation)",
       "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
-      "bifrost": "springboard/ui/src/pdfview.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, goto_page)",
+      "bifrost": "springboard/ui/src/pdfview.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, goto_page); wired: springboard/apps/books-desktop/src/books/mod.rs (set_two_pages, turn, metrics); draw.rs (draw_reader two-page branch); main.rs (View menu)",
       "status": "partial",
-      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "PDFThumbnailView and page thumbnails",
@@ -59,9 +59,9 @@
     {
       "feature": "Annotations",
       "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
-      "bifrost": "springboard/ui/src/annotation.rs (Annotation; wired: springboard/apps/books-desktop/src/books/store.rs (Entry::notes, set_note, note_of, N lines); springboard/apps/books-desktop/src/books/mod.rs (add_note, save_note, notes_list, Panel::Notes)",
+      "bifrost": "springboard/ui/src/annotation.rs (Annotation; wired: springboard/apps/books-desktop/src/books/store.rs (Entry::notes, set_note, note_of, N lines); springboard/apps/books-desktop/src/books/mod.rs (add_note, save_note, notes_list, Panel::Notes); wired: springboard/apps/books-desktop/src/books/mod.rs (pdf_highlights); draw.rs (draw_page annotation pass)",
       "status": "partial",
-      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Widgets and form fields",
@@ -80,9 +80,9 @@
     {
       "feature": "Selection and find",
       "apple": "PDFSelection, PDFDocument selection(from:at:to:at:with:), PDFPage selectionForWord(at:), selectionForLine(at:), PDFDocument find and FoundSelection",
-      "bifrost": "springboard/ui/src/pdfselect.rs",
+      "bifrost": "springboard/ui/src/pdfselect.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (select_page, has_selection, selection_text, page_text); draw.rs (selection tint); main.rs (Find > Select Page, Find > Copy Selection)",
       "status": "partial",
-      "note": "Wave 3 (w3-pdfkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object"
+      "note": "Wave 3 (w3-pdfkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Write operations (save, write options, permissions)",

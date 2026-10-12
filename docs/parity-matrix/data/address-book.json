@@ -17,16 +17,16 @@
     {
       "feature": "Multi-value properties and labels",
       "apple": "ABMultiValue, ABMutableMultiValue, ABMultiValueAdd, ABMultiValueCopyLabelAtIndex, ABCopyLocalizedPropertyOrLabel",
-      "bifrost": "springboard/src/shell/contactstore.rs (Contact.labels, LABELS)",
+      "bifrost": "springboard/src/shell/contactstore.rs (Contact.labels, LABELS); wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card rows for extra values)",
       "status": "partial",
-      "note": "One phone, one email and one address per contact; no primary value and no arbitrary number of entries"
+      "note": "One phone, one email and one address per contact; no primary value and no arbitrary number of entries Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Search",
       "apple": "ABSearchElement, ABCopyArrayOfMatchingRecords, ABSearchElementCreateWithConjunction, ABPersonCreateSearchElement",
-      "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address)",
+      "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address); wired: springboard/apps/contacts-desktop/src/contacts.rs (list_hits, used by rebuild)",
       "status": "partial",
-      "note": "Only a single text query; no property-scoped or compound search elements"
+      "note": "Only a single text query; no property-scoped or compound search elements Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "People picker and person view",
@@ -45,9 +45,9 @@
     {
       "feature": "vCard import and export",
       "apple": "ABPersonCopyVCardRepresentation, ABPersonCreateWithVCardRepresentation",
-      "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export); wired: springboard/apps/contacts-desktop/src/exchange.rs (File menu: Import vCards..., Export vCard 3.0..., Export vCard 4.0...)",
+      "bifrost": "springboard/src/shell/share/mod.rs (Item::from_contact, vcard() export); wired: springboard/apps/contacts-desktop/src/exchange.rs (File menu: Import vCards..., Export vCard 3.0..., Export vCard 4.0...); wired: springboard/apps/contacts-desktop/src/exchange.rs (import keeps extra values; export writes them)",
       "status": "partial",
-      "note": "Export only, for sharing; no vCard import Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Export only, for sharing; no vCard import Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Contact photos",
@@ -66,9 +66,9 @@
     {
       "feature": "Sharing and copying contact values",
       "apple": "Overview: apps share contacts with other apps (Mail, Messages)",
-      "bifrost": "springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs (NativeSharingServicePicker); springboard/sdk/src/pasteboard.rs; springboard/README.md (Contacts section, copy of phone and email)",
+      "bifrost": "springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs (NativeSharingServicePicker); springboard/sdk/src/pasteboard.rs; springboard/README.md (Contacts section, copy of phone and email); wired: springboard/apps/contacts-desktop/src/services.rs (plain_text, contact_item, copy_contact with extra values)",
       "status": "partial",
-      "note": "Contacts can be shared as a vCard and values copied; no SDK call for an app to receive a contact"
+      "note": "Contacts can be shared as a vCard and values copied; no SDK call for an app to receive a contact Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Spotlight and search index",

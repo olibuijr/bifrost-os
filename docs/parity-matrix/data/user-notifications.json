@@ -10,9 +10,9 @@
     {
       "feature": "Asking permission to use notifications",
       "apple": "UNUserNotificationCenter requestAuthorization(options:) (asking-permission-to-use-notifications)",
-      "bifrost": "springboard/src/shell/usernotif.rs:225, springboard/src/bare/app_policy.rs:41",
+      "bifrost": "springboard/src/shell/usernotif.rs:225, springboard/src/bare/app_policy.rs:41; wired: springboard/src/shell/notify/permission.rs; springboard/src/shell/usernotif.rs (usernotif_hold, usernotif_ask_tick, usernotif_answer)",
       "status": "partial",
-      "note": "Permission is a static manifest entry (\"notifications\"); there is no runtime prompt, no authorization options (alert, sound, badge) and no authorization status query. Without the permission every add answers NotPermitted."
+      "note": "Permission is a static manifest entry (\"notifications\"); there is no runtime prompt, no authorization options (alert, sound, badge) and no authorization status query. Without the permission every add answers NotPermitted. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "UNUserNotificationCenter (add, remove, list)",
@@ -66,16 +66,16 @@
     {
       "feature": "Notification display (banners, lock screen, Notification Center)",
       "apple": "System presentation of local and remote notifications (Human Interface Guidelines > Notifications)",
-      "bifrost": "springboard/src/shell/notify/mod.rs (banner, lock screen stack, Notification Center), springboard/src/shell/notify/banner.rs, springboard/src/shell/notify/store.rs",
+      "bifrost": "springboard/src/shell/notify/mod.rs (banner, lock screen stack, Notification Center), springboard/src/shell/notify/banner.rs, springboard/src/shell/notify/store.rs; wired: springboard/src/shell/notify/banner.rs (Banner::persistent); springboard/src/shell/notify/store.rs ([asked] section)",
       "status": "parity",
-      "note": "The shell draws banners that slide down, stacks on the lock screen and in Notification Center, swipe to clear, and tap to open after unlock. Passcode hides the text on the lock screen."
+      "note": "The shell draws banners that slide down, stacks on the lock screen and in Notification Center, swipe to clear, and tap to open after unlock. Passcode hides the text on the lock screen. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Per-app notification settings and Focus",
       "apple": "UNNotificationSettings, Focus status (INFocusStatusCenter)",
-      "bifrost": "springboard/sdk/src/usernotif.rs (settings), springboard/src/shell/usernotif.rs (settings_for), springboard/proto/src/rich.rs (NotifSettings)",
+      "bifrost": "springboard/sdk/src/usernotif.rs (settings), springboard/src/shell/usernotif.rs (settings_for), springboard/proto/src/rich.rs (NotifSettings); wired: springboard/src/shell/notify_page.rs (ALERT_STYLES, AppNotif::style, AppField::Style); springboard/src/shell/notify/mod.rs (notify_id, app_notif)",
       "status": "partial",
-      "note": "Wave 4 (w4-user-notifications, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. Apps get no API to read their authorization settings or the Focus status (UNNotificationSettings is not exposed in the SDK)."
+      "note": "Wave 4 (w4-user-notifications, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. Apps get no API to read their authorization settings or the Focus status (UNNotificationSettings is not exposed in the SDK). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Dock badge from a notification",

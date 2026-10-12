@@ -45,9 +45,9 @@
     {
       "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
       "apple": "PKInkingTool, PKEraserTool",
-      "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser)",
+      "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink)",
       "status": "partial",
-      "note": "Shell has four tools, Freeform has three. Neither has a stroke-level eraser; the eraser paints over with the paper colour in Freeform and repaints from the stroke list in the shell."
+      "note": "Shell has four tools, Freeform has three. Neither has a stroke-level eraser; the eraser paints over with the paper colour in Freeform and repaints from the stroke list in the shell. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Lasso selection and transform (PKLassoTool)",

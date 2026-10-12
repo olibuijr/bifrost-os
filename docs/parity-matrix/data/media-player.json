@@ -66,16 +66,16 @@
     {
       "feature": "Now Playing information",
       "apple": "MPNowPlayingInfoCenter, MPNowPlayingSession",
-      "bifrost": "springboard/sdk/src/widgets.rs:838-900 (PLAYER_PT, Player, player()), springboard/src/shell/audiosvc.rs, springboard/src/shell/music/system.rs",
+      "bifrost": "springboard/sdk/src/widgets.rs:838-900 (PLAYER_PT, Player, player()), springboard/src/shell/audiosvc.rs, springboard/src/shell/music/system.rs; wired: springboard/src/shell/now_playing_menu.rs (panel)",
       "status": "partial",
-      "note": "title, artist and progress come from the audio service Track and Snapshot; apps cannot set arbitrary Now Playing fields; the lock screen and Control Center show the audio service track"
+      "note": "title, artist and progress come from the audio service Track and Snapshot; apps cannot set arbitrary Now Playing fields; the lock screen and Control Center show the audio service track Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Remote command center for apps",
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
-      "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command)",
+      "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command); wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped"
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Track navigation and seeking",
@@ -94,9 +94,9 @@
     {
       "feature": "Playback rate and language options",
       "apple": "MPChangePlaybackRateCommand, MPNowPlayingInfoLanguageOption, MPNowPlayingInfoLanguageOptionGroup",
-      "bifrost": "springboard/ui/src/remote_command.rs (PlaybackRateCommand",
+      "bifrost": "springboard/ui/src/remote_command.rs (PlaybackRateCommand; wired: springboard/apps/podcasts-desktop/src/podcasts.rs speed menu (rate part only)",
       "status": "partial",
-      "note": "Wave 3 (w3-media-player, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no playback rate control and no subtitle or audio language options for Now Playing"
+      "note": "Wave 3 (w3-media-player, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no playback rate control and no subtitle or audio language options for Now Playing Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Feedback and rating",

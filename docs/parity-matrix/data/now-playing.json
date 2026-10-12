@@ -10,9 +10,9 @@
     {
       "feature": "Local sessions: MediaSession and MediaSessionRepresentable",
       "apple": "MediaSession, MediaSessionRepresentable, MediaSessionError",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs (panel_for), springboard/src/shell/services/now_playing.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the shell reads playback; an app cannot register its own session. The audio client (springboard/sdk/src/lib.rs:87) drives playback but does not publish metadata to the system."
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the shell reads playback; an app cannot register its own session. The audio client (springboard/sdk/src/lib.rs:87) drives playback but does not publish metadata to the system. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Publishing media sessions to Lock Screen and Control Center",
@@ -31,9 +31,9 @@
     {
       "feature": "Content types and metadata (MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, GenericContent, MediaType, MediaDuration)",
       "apple": "MediaContentRepresentable, MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, HomeMediaContent, GenericContent, MediaType, MediaDuration",
-      "bifrost": "springboard/ui/src/media_content.rs",
+      "bifrost": "springboard/ui/src/media_content.rs; wired: springboard/src/shell/now_playing_menu.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The service track carries no title, artist, kind or artwork fields, so the card cannot receive typed metadata from an app. Duration is in the snapshot (duration_ms) and live streams have a Live marker."
+      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The service track carries no title, artist, kind or artwork fields, so the card cannot receive typed metadata from an app. Duration is in the snapshot (duration_ms) and live streams have a Live marker. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Artwork (Artwork, ArtworkRepresentation, AnimatedArtwork)",
@@ -45,23 +45,23 @@
     {
       "feature": "Play, pause, stop and toggle commands",
       "apple": "play(_:), pause(_:), stop(_:), togglePlayPause(_:)",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs (Menu::NowPlaying, Action::Media)",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Transport works from the lock card and Control Center. Apps have no command registration, so a remote command from the system cannot be routed to an app's own player."
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Transport works from the lock card and Control Center. Apps have no command registration, so a remote command from the system cannot be routed to an app's own player. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Next and previous track commands",
       "apple": "next(_:), previous(_:)",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs",
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs (Previous and Next rows)",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Works for the service queue. Enablement per command is not published, so the card cannot grey out an unavailable direction."
+      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Works for the service queue. Enablement per command is not published, so the card cannot grey out an unavailable direction. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Skip forward and backward by interval",
       "apple": "skipForward(preferredIntervals:_:), skipBackward(preferredIntervals:_:)",
-      "bifrost": "springboard/ui/src/skip_interval.rs",
+      "bifrost": "springboard/ui/src/skip_interval.rs; wired: springboard/apps/podcasts-desktop/src/transport.rs (skip_target_ms, BACK_SKIP_S 15, FORWARD_SKIP_S 30) used by src/podcasts.rs buttons, keys and remote skip commands",
       "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service."
+      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Seek to position and scrubbing",
@@ -73,9 +73,9 @@
     {
       "feature": "Playback rate",
       "apple": "changePlaybackRate(supported:_:)",
-      "bifrost": "springboard/ui/src/playback_rate.rs",
+      "bifrost": "springboard/ui/src/playback_rate.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (speed menu) and src/transport.rs (RATES, rate_index)",
       "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot."
+      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Repeat and shuffle modes",

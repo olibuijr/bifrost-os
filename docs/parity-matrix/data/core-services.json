@@ -17,9 +17,9 @@
     {
       "feature": "Listing every app that can open an item",
       "apple": "LSCopyApplicationURLsForURL, LSCanURLAcceptURL, LSCopyApplicationURLsForBundleIdentifier",
-      "bifrost": "springboard/ui/src/launch.rs (Registry candidates for an Open With menu); springboard/src/shell/defaultapps.rs (views); wired: springboard/src/shell/services/launch_services.rs (open_with); springboard/sdk/src/launch_services.rs; springboard/ui/src/launch.rs",
+      "bifrost": "springboard/ui/src/launch.rs (Registry candidates for an Open With menu); springboard/src/shell/defaultapps.rs (views); wired: springboard/src/shell/services/launch_services.rs (open_with); springboard/sdk/src/launch_services.rs; springboard/ui/src/launch.rs; wired: springboard/apps/files/src/openwith.rs (OpenWith::lines, paint_open_with); springboard/apps/files/src/system.rs (Waiting::OpenWith)",
       "status": "parity",
-      "note": "Candidate list exists for Open With. No LSCanURLAcceptURL-style acceptance check by bundle id. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Candidate list exists for Open With. No LSCanURLAcceptURL-style acceptance check by bundle id. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Opening items in an app",
@@ -45,9 +45,9 @@
     {
       "feature": "Shared file lists (recent items, favourites)",
       "apple": "LSSharedFileList, LSSharedFileListItem",
-      "bifrost": "springboard/ui/src/shared_list.rs",
+      "bifrost": "springboard/ui/src/shared_list.rs; wired: springboard/src/shell/recent_items.rs; springboard/src/shell/desktop_bar.rs (Menu::System: Recent Items group, Clear Menu)",
       "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart."
+      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Quarantine properties",

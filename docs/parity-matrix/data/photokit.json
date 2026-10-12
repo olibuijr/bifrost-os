@@ -38,16 +38,16 @@
     {
       "feature": "Image and thumbnail loading and caching",
       "apple": "PHImageManager, PHCachingImageManager, PHImageRequestOptions, PHVideoRequestOptions",
-      "bifrost": "springboard/ui/src/photo_caching.rs",
+      "bifrost": "springboard/ui/src/photo_caching.rs; wired: springboard/src/shell/photos/mod.rs (request_thumbs uses bifrost_ui::photo_caching::Manager as the record of the grid window)",
       "status": "partial",
-      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled."
+      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Asset metadata (EXIF and extended attributes)",
       "apple": "PHAssetExtendedMetadata, creation date, location",
-      "bifrost": "springboard/src/shell/photos/exif.rs (JPEG APP1 reader: camera, date, exposure, size, GPS); springboard/src/shell/photos/library.rs (EXIF capture time for .jpg and .jpeg)",
+      "bifrost": "springboard/src/shell/photos/exif.rs (JPEG APP1 reader: camera, date, exposure, size, GPS); springboard/src/shell/photos/library.rs (EXIF capture time for .jpg and .jpeg); wired: springboard/src/shell/photos/exif.rs (Lens row); springboard/src/shell/photos/mod.rs (Info sheet, draw_info)",
       "status": "partial",
-      "note": "JPEG only. No PHAsset-style metadata object for apps. Values are shown in the Photos app."
+      "note": "JPEG only. No PHAsset-style metadata object for apps. Values are shown in the Photos app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Asset resources and creating assets",
@@ -59,9 +59,9 @@
     {
       "feature": "Editing a photo (rotate, crop, brightness, contrast, filters)",
       "apple": "Photos edit pipeline (PHContentEditingInput and output in editing extensions)",
-      "bifrost": "springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness and contrast, colour filters)",
+      "bifrost": "springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness and contrast, colour filters); wired: springboard/src/shell/photos/mod.rs (revert_to_original, edited_original; Revert to Original row in the Info sheet of an edited copy)",
       "status": "partial",
-      "note": "Built-in edit mode only. Matches the common edit operations but has no extension point for third-party editors."
+      "note": "Built-in edit mode only. Matches the common edit operations but has no extension point for third-party editors. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Photo editing extensions",

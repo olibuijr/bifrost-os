@@ -10,9 +10,9 @@
     {
       "feature": "Device browser (discovery and hotplug)",
       "apple": "ICDeviceBrowser, ICDeviceBrowserDelegate, ICDevice",
-      "bifrost": "springboard/ui/src/device_browser.rs",
+      "bifrost": "springboard/ui/src/device_browser.rs; wired: springboard/src/shell/camera/mod.rs (check_devices, refresh_cameras, open_import); springboard/src/shell/camera/devices.rs; springboard/ui/src/device_browser.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to browse cameras or scanners and get add/remove callbacks. capture.rs only lists video nodes and opens nothing."
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to browse cameras or scanners and get add/remove callbacks. capture.rs only lists video nodes and opens nothing. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Camera device control (PTP tethering, capture, clock, battery)",
@@ -24,9 +24,9 @@
     {
       "feature": "Camera file browsing and download (contents, files, folders)",
       "apple": "ICCameraItem, ICCameraFile, ICCameraFolder, requestDownloadFile, requestReadData",
-      "bifrost": "springboard/ui/src/camera_device.rs",
+      "bifrost": "springboard/ui/src/camera_device.rs; wired: springboard/src/shell/camera/import.rs; springboard/src/shell/camera/devices.rs (contents_of, import_files); springboard/ui/src/camera_device.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to list or copy files from a camera's storage. Photos import from a device is not implemented."
+      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to list or copy files from a camera's storage. Photos import from a device is not implemented. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "File metadata and thumbnails (EXIF, GPS, burst, video)",

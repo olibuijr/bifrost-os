@@ -73,9 +73,9 @@
     {
       "feature": "Search",
       "apple": "searchable, search suggestions, search scopes",
-      "bifrost": "springboard/ui/src/search.rs, springboard/sdk/src/widgets.rs",
+      "bifrost": "springboard/ui/src/search.rs, springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
       "status": "partial",
-      "note": "search_field control; no scopes, tokens or suggestions modifier"
+      "note": "search_field control; no scopes, tokens or suggestions modifier Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "App extensions",

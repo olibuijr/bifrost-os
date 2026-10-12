@@ -17,16 +17,16 @@
     {
       "feature": "Implicit animation via transactions (CATransaction, CAMediaTiming, timing functions)",
       "apple": "CATransaction, CAMediaTiming, CAMediaTimingFunction",
-      "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs",
+      "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps)",
       "status": "partial",
-      "note": "Timing::DEFAULT is 0.25 s ease-in-out; any change to frame, opacity or background inside animate() is diffed and interpolated; no beginTime, repeatCount, autoreverses or speed"
+      "note": "Timing::DEFAULT is 0.25 s ease-in-out; any change to frame, opacity or background inside animate() is diffed and interpolated; no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Basic property animation (CABasicAnimation, CAPropertyAnimation)",
       "apple": "CAAnimation, CAPropertyAnimation, CABasicAnimation",
-      "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve })",
+      "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve }); wired: springboard/src/shell/window_fx.rs (close added this wave; open, minimize and restore already present)",
       "status": "partial",
-      "note": "only typed view properties, no key paths; no explicit fromValue or byValue; no additive animations"
+      "note": "only typed view properties, no key paths; no explicit fromValue or byValue; no additive animations Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",

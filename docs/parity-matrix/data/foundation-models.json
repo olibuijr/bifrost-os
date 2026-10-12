@@ -10,9 +10,9 @@
     {
       "feature": "On-device system language model (SystemLanguageModel)",
       "apple": "SystemLanguageModel, LanguageModelError",
-      "bifrost": "none",
+      "bifrost": "none; wired: springboard/apps/assistant-desktop/src/view.rs (banner, draw_banner): network and service availability banner; local model availability remains a gap",
       "status": "gap",
-      "note": "no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id"
+      "note": "no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Sessions and prompts",
@@ -24,9 +24,9 @@
     {
       "feature": "Streaming responses",
       "apple": "LanguageModelSession streamed responses, GeneratedContent deltas",
-      "bifrost": "springboard/sdk/src/url.rs (URLSession::bytes), springboard/apps/assistant-desktop/src/api.rs (SseParser)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::bytes), springboard/apps/assistant-desktop/src/api.rs (SseParser); wired: springboard/apps/assistant-desktop/src/api.rs (SseParser, Event::Delta); src/view.rs (tick)",
       "status": "partial",
-      "note": "HTTP byte streaming exists for the Assistant's SSE; no model-level partial-generation API"
+      "note": "HTTP byte streaming exists for the Assistant's SSE; no model-level partial-generation API Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Guided generation (Generable, Guide, GenerationSchema)",
@@ -38,9 +38,9 @@
     {
       "feature": "Tool calling (Tool)",
       "apple": "Tool protocol, tool calling in sessions",
-      "bifrost": "springboard/ui/src/tool_calls.rs",
+      "bifrost": "springboard/ui/src/tool_calls.rs; wired: springboard/ui/src/model_tool.rs (model); springboard/apps/assistant-desktop/src/tools.rs, src/api.rs (run, run_turn), src/view.rs (tool_blocks, Event::Tool)",
       "status": "partial",
-      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps"
+      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Intent-style actions for system use",

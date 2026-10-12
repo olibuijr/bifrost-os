@@ -17,23 +17,23 @@
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
       "apple": "DiagnosticReport, MetricManager diagnostic delivery (iOS 15+, macOS 12+)",
-      "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs",
+      "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs; wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, DailySource)",
       "status": "os",
-      "note": "The shell writes crash.log (panics and watchdog exits, rotated at 256 KB) and lists entries under Settings > Privacy > Analytics & Diagnostics. Apps are not notified and get no report object."
+      "note": "The shell writes crash.log (panics and watchdog exits, rotated at 256 KB) and lists entries under Settings > Privacy > Analytics & Diagnostics. Apps are not notified and get no report object. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Crash diagnostics (CrashDiagnostic, call stacks)",
       "apple": "CrashDiagnostic, CallStackTree, CallStackThread, CallStackFrame",
-      "bifrost": "springboard/sdk/src/call_stack_tree.rs",
+      "bifrost": "springboard/sdk/src/call_stack_tree.rs; wired: springboard/apps/console-desktop/src/diagnostics.rs (DailySource) over source.rs Coredumps",
       "status": "partial",
-      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app."
+      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Hang diagnostics and UI stall detection (HangDiagnostic, HangTimeMetric)",
       "apple": "HangDiagnostic, HangTimeMetric",
-      "bifrost": "springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5), springboard/src/shell/diag.rs (watchdog line parsing)",
+      "bifrost": "springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5), springboard/src/shell/diag.rs (watchdog line parsing); wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, hang_rows); springboard/src/shell/diag.rs",
       "status": "os",
-      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. It covers the shell loop only, records no hang duration histogram, and reports nothing to an app."
+      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. It covers the shell loop only, records no hang duration histogram, and reports nothing to an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",

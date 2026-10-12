@@ -17,9 +17,9 @@
     {
       "feature": "Analyzer modules and voice activity detection",
       "apple": "SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule, LocaleDependentSpeechModule",
-      "bifrost": "springboard/ui/src/voice_activity.rs",
+      "bifrost": "springboard/ui/src/voice_activity.rs; wired: springboard/ui/src/voice_activity.rs via springboard/apps/voicememos-desktop/src/store.rs (speech_spans, next_speech_ms) and src/voicememos.rs (skip_silence_from, toggle_skip_silence)",
       "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No module protocol or voice activity detection."
+      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No module protocol or voice activity detection. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Audio input for analysis (file and microphone sequence providers, converter)",

@@ -24,9 +24,9 @@
     {
       "feature": "Rhythm (beats, bars, BPM)",
       "apple": "RhythmResult: beats, bars, beatsPerMinute",
-      "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs",
+      "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs; wired: springboard/apps/music-desktop/src/music/tempo.rs (bpm_of, label); springboard/apps/music-desktop/src/music.rs (start_tempo, draw_song_rows)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tempo is only stored and used for playback sync; there is no beat or onset detection on audio"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tempo is only stored and used for playback sync; there is no beat or onset detection on audio Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Key (musical key over time)",

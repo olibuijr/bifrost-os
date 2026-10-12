@@ -24,9 +24,9 @@
     {
       "feature": "Remote device model (name, class, paired, connected)",
       "apple": "IOBluetoothDevice, IOBluetoothDeviceRef, IOBluetoothObject",
-      "bifrost": "springboard/sdk/src/bluetooth_devices.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs; wired: springboard/src/bare/bluetooth.rs (Device.class, type_label); springboard/src/shell/pages.rs (BluetoothDetail Type row)",
       "status": "partial",
-      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A device list exists in the shell's Status. No app API."
+      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A device list exists in the shell's Status. No app API. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Pairing (Just Works, user confirm, timeout)",
@@ -45,9 +45,9 @@
     {
       "feature": "Audio output routing to a headset",
       "apple": "IOBluetoothDevice audio via system audio routing",
-      "bifrost": "springboard/src/media/route.rs:37 (bluetooth_sink)",
+      "bifrost": "springboard/src/media/route.rs:37 (bluetooth_sink); wired: springboard/src/shell/pages.rs (Use for Sound Output); springboard/src/shell/mod.rs (use_bluetooth_output); springboard/src/shell/services/audio_devices.rs",
       "status": "partial",
-      "note": "Now Playing shows the connected audio device as the route. Selecting it as the output is done by the system audio layer, not by an app API."
+      "note": "Now Playing shows the connected audio device as the route. Selecting it as the output is done by the system audio layer, not by an app API. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "L2CAP channels",

@@ -38,23 +38,23 @@
     {
       "feature": "Key binding and text events to the input method",
       "apple": "IMKServerInput inputText(_:client:), didCommand(by:client:), inputText(_:key:modifiers:client:), handle(_:client:)",
-      "bifrost": "springboard/ui/src/input_method.rs (Event",
+      "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Composed, original string and candidate queries",
       "apple": "IMKServerInput composedString, originalString, candidates",
-      "bifrost": "springboard/ui/src/input_method.rs (composed_string",
+      "bifrost": "springboard/ui/src/input_method.rs (composed_string; wired: springboard/src/shell/compose_window.rs (compose_open, compose_finish); springboard/ui/src/imsession.rs (update, set_candidates, select_candidate, commit)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Candidates window",
       "apple": "IMKCandidates",
-      "bifrost": "springboard/ui/src/candidates.rs (Candidates",
+      "bifrost": "springboard/ui/src/candidates.rs (Candidates; wired: springboard/src/shell/compose_window.rs (draw_compose, compose_open); springboard/ui/src/imsession.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No candidate popup is drawn. The placement helper just puts a popup below or above the caret."
+      "note": "Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No candidate popup is drawn. The placement helper just puts a popup below or above the caret. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Candidate panel types, location hints and opacity",

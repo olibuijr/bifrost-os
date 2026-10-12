@@ -10,9 +10,9 @@
     {
       "feature": "Web views and configuration",
       "apple": "WKWebView, WKWebViewConfiguration, WKPreferences, WKWebpagePreferences, WKProcessPool",
-      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewId, WebViewState)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewId, WebViewState); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Zoom In, Zoom Out, Actual Size); springboard/apps/browser/src/session.rs (zoom_by)",
       "status": "partial",
-      "note": "one engine process with many views; no configuration object, no WKPreferences equivalent, no ContentMode or HTTPS upgrade policy"
+      "note": "one engine process with many views; no configuration object, no WKPreferences equivalent, no ContentMode or HTTPS upgrade policy Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Navigation and back-forward list",
@@ -31,9 +31,9 @@
     {
       "feature": "Downloads",
       "apple": "WKDownload, WKDownloadDelegate",
-      "bifrost": "springboard/ui/src/download.rs, springboard/ui/src/nav_policy.rs",
+      "bifrost": "springboard/ui/src/download.rs, springboard/ui/src/nav_policy.rs; wired: springboard/apps/browser/src/main.rs (menus, menu_action: File > Show Downloads, Clear Finished Downloads); springboard/apps/browser/src/downloads.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no download event or delegate; the engine does not report downloads"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no download event or delegate; the engine does not report downloads Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Page content, scripts and messaging",
@@ -45,9 +45,9 @@
     {
       "feature": "Page-level search",
       "apple": "WKFindConfiguration, WKFindResult",
-      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::find, find_clear, WebViewState::find_matches)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::find, find_clear, WebViewState::find_matches); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Find in Page, Find Next, Find Previous); springboard/apps/browser/src/findbar.rs",
       "status": "partial",
-      "note": "injected script count only; no highlight, no match index, no case or whole-word options"
+      "note": "injected script count only; no highlight, no match index, no case or whole-word options Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Snapshots and PDF output",

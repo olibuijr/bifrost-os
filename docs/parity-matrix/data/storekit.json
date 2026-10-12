@@ -17,16 +17,16 @@
     {
       "feature": "Purchase flow",
       "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
-      "bifrost": "springboard/ui/src/purchase.rs; wired: springboard/src/shell/store/mod.rs (press_button refuses paid apps)",
+      "bifrost": "springboard/ui/src/purchase.rs; wired: springboard/src/shell/store/mod.rs (press_button refuses paid apps); wired: springboard/src/shell/store/sheet.rs; springboard/src/shell/store/mod.rs (open_sheet, finish_purchase)",
       "status": "partial",
-      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Transactions and entitlements",
       "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
-      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs; wired: springboard/src/shell/store/mod.rs (AppStore::purchased), springboard/ui/src/entitlement.rs",
+      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs; wired: springboard/src/shell/store/mod.rs (AppStore::purchased), springboard/ui/src/entitlement.rs; wired: springboard/src/shell/store/mod.rs (finish_purchase, purchased, restore_purchases); springboard/ui/src/entitlement.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Signed transaction verification (JWS)",

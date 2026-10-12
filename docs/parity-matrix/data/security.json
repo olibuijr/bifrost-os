@@ -10,9 +10,9 @@
     {
       "feature": "Keychain services (generic passwords)",
       "apple": "SecItemAdd, SecItemCopyMatching, SecItemUpdate, SecItemDelete, kSecClassGenericPassword",
-      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/src/keychain.rs; springboard/proto/src/lib.rs (KeychainOp, KeychainStatus)",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/src/keychain.rs; springboard/proto/src/lib.rs (KeychainOp, KeychainStatus); wired: springboard/src/keychain.rs (Store::list, per-item modified time); springboard/sdk/src/passwords.rs; Settings > Passwords in springboard/src/shell/passwords_page.rs",
       "status": "partial",
-      "note": "Only generic passwords, keyed by (service, account). Errors mirror OSStatus codes. No internet-password, certificate, key or identity classes, no access groups, no iCloud sync. Calls are asynchronous, unlike Apple's synchronous calls (docs/bifrost-ui.md, Keychain section)."
+      "note": "Only generic passwords, keyed by (service, account). Errors mirror OSStatus codes. No internet-password, certificate, key or identity classes, no access groups, no iCloud sync. Calls are asynchronous, unlike Apple's synchronous calls (docs/bifrost-ui.md, Keychain section). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Keychain at-rest protection",
