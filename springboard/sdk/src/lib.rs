@@ -153,6 +153,8 @@ pub mod network_browser;
 pub mod http_cookies;
 pub mod passkey_client_data;
 pub mod credential_exchange;
+pub mod safari_extension;
+pub mod safari_auth;
 pub mod http_auth;
 pub mod host_addressing;
 pub mod ftp;
