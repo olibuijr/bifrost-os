@@ -70,6 +70,21 @@ impl Stopwatch {
         laps.reverse();
         laps
     }
+
+    /// The lap table as plain text for the pasteboard: a header line, then one line per lap, oldest first, with the
+    /// lap number, the split and the total as `format` writes them (tab separated). `None` before the watch has started.
+    pub fn export_text(&self, t: f64) -> Option<String> {
+        let mut laps = self.laps(t);
+        if laps.is_empty() {
+            return None;
+        }
+        laps.reverse();
+        let mut out = String::from("Lap\tSplit\tTotal\n");
+        for lap in laps {
+            out += &format!("{}\t{}\t{}\n", lap.number, format(lap.split), format(lap.total));
+        }
+        Some(out)
+    }
 }
 
 /// The (best, worst) lap numbers by split time among the finished laps
@@ -172,6 +187,16 @@ mod tests {
         sw.lap_or_reset(6000.0);
         assert_eq!(sw, Stopwatch::default());
         assert!(sw.laps(6000.0).is_empty());
+    }
+
+    #[test]
+    fn export_lists_laps_oldest_first_under_a_header() {
+        let mut sw = Stopwatch::default();
+        assert_eq!(sw.export_text(0.0), None, "nothing to copy before a start");
+        sw.toggle(0.0);
+        sw.lap_or_reset(3610.0);
+        // lap 1 ends at 3610 ms (00:03,61); lap 2 is 1430 ms (00:01,43) and the total is 5040 ms (00:05,04)
+        assert_eq!(sw.export_text(5040.0).unwrap(), "Lap\tSplit\tTotal\n1\t00:03,61\t00:03,61\n2\t00:01,43\t00:05,04\n");
     }
 
     #[test]

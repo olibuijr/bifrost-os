@@ -1,4 +1,10 @@
 # Changelog
+## 1.4.0 — 2026-10-12
+
+- Stopwatch: a Copy Laps button in the toolbar puts the lap table on the clipboard as plain text (a header line, then
+  each lap's number, split and total, oldest lap first). It is greyed out until the stopwatch has started.
+- The window background in Dark is the content grey, not the pure black of the detail background.
+
 ## 1.3.0 — 2026-10-12
 
 - Notification Centre shows a World Clock widget: the chosen cities and their local times, one minute at a time for the
