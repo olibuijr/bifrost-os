@@ -110,6 +110,12 @@ impl Board {
         self.send(ctx, "can_read", vec![("types", Json::Arr(types.iter().map(|t| Json::Str(t.to_string())).collect()))])
     }
 
+    /// Type negotiation: the first of `prefs` (in order) that the board holds exactly, as `availableType(from:)`.
+    /// Reply: [`decode_best`].
+    pub fn best(&self, ctx: &Ctx, prefs: &[&str]) -> u32 {
+        self.send(ctx, "best", vec![("types", Json::Arr(prefs.iter().map(|t| Json::Str(t.to_string())).collect()))])
+    }
+
     /// Releases a named board (the general board cannot be released). Reply: [`decode_bool`].
     pub fn release(&self, ctx: &Ctx) -> u32 {
         self.send(ctx, "release", Vec::new())
@@ -183,6 +189,11 @@ pub fn decode_bool(r: &Result<Json, String>) -> Option<bool> {
         Json::Bool(b) => Some(*b),
         _ => None,
     }
+}
+
+/// The negotiated type from a reply to [`Board::best`]; `None` when the board holds none of the preferences.
+pub fn decode_best(r: &Result<Json, String>) -> Option<String> {
+    r.as_ref().ok()?.as_str().map(str::to_string)
 }
 
 /// The board names from a reply to [`boards`].
