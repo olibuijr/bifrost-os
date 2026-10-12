@@ -463,10 +463,11 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 w.surface.attach(Some(&s.buffer),0,0);
                 for a in &areas {w.surface.damage_buffer(a.x0 as i32,a.y0 as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
                 w.surface.commit();s.busy=true;
+                mark_chrome_frame(id);
             }
             return Ok(());
         }
-        for w in self.state.chrome.values_mut() {
+        for (&id, w) in self.state.chrome.iter_mut() {
             if !w.configured {continue;}
             let width=w.frame.width;let height=w.frame.height;let len=width*height*4;
             let wanted=window_buffer_count(w.slots.len(),w.slots.iter().any(|s|!s.busy),w.slots.iter().any(|s|!s.damage.is_empty()));
@@ -480,6 +481,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             copy_damage(&w.frame.pixels,&mut slot.map,width,&slot.damage);w.surface.attach(Some(&slot.buffer),0,0);
             for a in slot.damage.areas(){w.surface.damage_buffer(a.x0 as i32,a.y0 as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
             slot.damage.clear();w.surface.commit();slot.busy=true;
+            mark_chrome_frame(id);
         }Ok(())
     }
     pub fn foreign_action(&mut self,id:u32,minimize:bool)->io::Result<()> {
@@ -592,12 +594,25 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         transient(self.conn.flush())
     }
 }
-/// Writes `$XDG_RUNTIME_DIR/shell-ready` once, after the first desktop frame is committed.
-/// The boot splash handoff waits for this file so the splash never gives way to an empty desktop.
+/// Writes the menu bar's or the Dock's mark (`bootreveal::chrome_part`) the first time that chrome surface commits a
+/// frame. The marks file is read once per part at most: a bit per chrome id, set on the first write.
+fn mark_chrome_frame(id: u32) {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SEEN: AtomicU32 = AtomicU32::new(0);
+    let Some(part) = crate::bootreveal::chrome_part(id) else { return };
+    let bit = 1u32 << id;
+    if SEEN.fetch_or(bit, Ordering::Relaxed) & bit == 0 {
+        crate::bootsplash::mark(part);
+    }
+}
+/// Writes `$XDG_RUNTIME_DIR/shell-ready` once, after the first desktop frame is committed, and the wallpaper's mark
+/// (`bootreveal::DESKTOP_PARTS`): the wallpaper is drawn into the desktop surface. The boot frame's reveal waits for
+/// all three parts so it never gives way to a partial desktop.
 fn mark_first_frame() {
     use std::sync::atomic::{AtomicBool, Ordering};
     static DONE: AtomicBool = AtomicBool::new(false);
     if DONE.swap(true, Ordering::Relaxed) { return; }
+    crate::bootsplash::mark(crate::bootreveal::DESKTOP_PARTS[0]);
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::write(std::path::Path::new(&dir).join("shell-ready"), b"1\n");
     }

@@ -61,8 +61,10 @@ struct Drm {
 
 struct Boot {
     splash: MemoryRenderBuffer,
-    /// When the shell's first desktop frame arrived (`$XDG_RUNTIME_DIR/shell-ready`).
-    ready_at: Option<std::time::Instant>,
+    /// Holds the boot frame until the desktop is ready (`bootreveal::Reveal`: the three desktop-part marks, 4 s ceiling).
+    reveal: crate::boot::Reveal,
+    /// The gate's clock: milliseconds are counted from here.
+    started: std::time::Instant,
 }
 
 impl Boot {
@@ -70,19 +72,22 @@ impl Boot {
         let mut px = vec![0u32; (w * h) as usize];
         bootweave_frame::render(&bootweave_frame::Frame::boot(w as u32, h as u32), &mut px, w as usize, bootweave_frame::PixelOrder::Bgrx);
         let bytes: Vec<u8> = px.iter().flat_map(|p| p.to_le_bytes()).collect();
-        Boot { splash: MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None), ready_at: None }
+        Boot {
+            splash: MemoryRenderBuffer::from_slice(&bytes, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None),
+            reveal: crate::boot::Reveal::new(0.0),
+            started: std::time::Instant::now(),
+        }
     }
 
-    /// The splash opacity for this frame, None once the fade is done.
+    /// The splash opacity for this frame: 1 while held, then the one fade; None once the fade is done.
     fn alpha(&mut self) -> Option<f32> {
-        if self.ready_at.is_none() {
-            let dir = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_default();
-            if dir.join("shell-ready").exists() {
-                self.ready_at = Some(std::time::Instant::now());
-                crate::boot::mark("desktop-first-ui");
-            }
+        let now = self.started.elapsed().as_secs_f64() * 1000.0;
+        let was_ready = self.reveal.ready_at().is_some();
+        let ready_at = self.reveal.poll(now, crate::boot::read_marks_file);
+        if ready_at.is_some() && !was_ready {
+            crate::boot::mark("desktop-ready");
         }
-        let a = crate::boot::splash_alpha(self.ready_at.map(|t| t.elapsed().as_secs_f64() * 1000.0));
+        let a = crate::boot::splash_alpha(ready_at.map(|t| now - t));
         if a.is_none() {
             crate::boot::mark("desktop-faded");
         }

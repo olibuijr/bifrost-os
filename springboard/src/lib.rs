@@ -1,6 +1,7 @@
 //! BifrOSt OS shell. Shared rendering and infrastructure live in independent
 //! bifrost-render, bifrost-ui and bifrost-core crates.
 
+pub mod bootreveal;
 pub mod bootsplash;
 pub mod catalog;
 pub mod cff;

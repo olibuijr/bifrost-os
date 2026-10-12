@@ -132,6 +132,14 @@ impl Handoff {
         self.start.is_some()
     }
 
+    /// Writes the boot frame with the bar at its hand-off fill: what the screen shows while the desktop is not ready
+    /// yet (reveal once). Does not start the hand-off.
+    pub fn hold(&self, out: &mut Vec<u32>, boot_ms: f32) {
+        out.clear();
+        out.extend_from_slice(&self.splash);
+        render_bar(self.w, self.h, first_fill(boot_ms), self.appearance, out.as_mut_slice(), self.w as usize, self.order);
+    }
+
     /// Writes into `out` what to show at `now` (ms) over the screen `ui`, `boot_ms` the boot clock at the first call.
     /// Returns false once the hand-off is over: show `ui` as it is.
     pub fn compose(&mut self, ui: &[u32], out: &mut Vec<u32>, now: f32, boot_ms: f32) -> bool {
@@ -160,6 +168,19 @@ impl Handoff {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn hold_shows_the_boot_frame_without_starting_the_handoff() {
+        let (w, h) = (320u32, 180u32);
+        let hand = Handoff::new(w, h, Appearance::Dark, PixelOrder::Bgrx);
+        let mut held = Vec::new();
+        hand.hold(&mut held, 1700.0);
+        assert_eq!(held.len(), (w * h) as usize);
+        assert!(!hand.started());
+        let mut expect = hand.splash.clone();
+        render_bar(w, h, first_fill(1700.0), Appearance::Dark, expect.as_mut_slice(), w as usize, PixelOrder::Bgrx);
+        assert_eq!(held, expect);
+    }
 
     #[test]
     fn first_fill_follows_the_boot_so_far() {
