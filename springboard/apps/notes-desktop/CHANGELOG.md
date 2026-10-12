@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.0 — 2026-10-12
+
+- Replace (Replace in Note in the More menu of an open note) changes the text you searched for. Type the replacement in the card at the top of the note: Replace changes the selected match and moves on to the next one, Replace All changes every match in one step (one Undo takes it back). Enter does Replace All, Escape closes the card. The card needs find text first: type it in the search field, then choose Replace.
+- Replace matches the find options: Match Whole Word in Find applies to Replace too.
+- Smart Folders in the sidebar: Pinned, Edited This Week (changed in the last seven days), Checklists (notes with a checkbox line) and Photos (notes with an attached picture). Each shows its count. The list menu lists them too. A smart folder only shows notes; nothing is moved or written, and notes in Recently Deleted never appear.
+- Not in this version: the find bar has no replace field of its own (Replace opens the card instead), replacement is not offered while a spelling check is shown, and smart folders cannot be made or edited by the user.
+
 ## 1.12.0 — 2026-10-12
 
 - Insert Sketch (the More menu in the editor) opens a sketch pad over the window. Drag with the mouse or a pen to draw black lines. The header has Cancel (closes without saving), Undo (removes the newest line) and Done (saves the sketch and puts its picture at the caret, where it shows inline like a photo).

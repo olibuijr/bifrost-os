@@ -6,6 +6,7 @@
 use super::*;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use super::smart::Smart;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
@@ -40,6 +41,8 @@ pub(super) const B_SEARCH: u32 = 12;
 const ROW_ALL: u32 = 100;
 const ROW_BIN: u32 = 101;
 const FOLDER_ROW: u32 = 200;
+/// The smart folder rows (`smart::Smart::ALL` in order), above any folder row.
+const SMART_ROW: u32 = 900;
 
 /// The pixel rect of a kit rect.
 pub(super) fn px(ui: &Ui, r: Rect) -> (f32, f32, f32, f32) {
@@ -211,13 +214,16 @@ impl Notes {
         Rect { x: 0.0, y: 0.0, w: self.side_pt(ui), h: self.h as f32 / ui.pt(1.0) }
     }
 
-    fn count_in(&self, view: &View) -> u32 {
+    /// The notes a view shows (the count beside its name in the sidebar and the list menu).
+    pub(super) fn count_in(&self, view: &View) -> u32 {
+        let cutoff = self.smart_cutoff();
         self.notes.iter().filter(|n| {
             let loc = self.loc_of(&n.id);
             match view {
                 View::All => loc != folders::TRASH,
                 View::Trash => loc == folders::TRASH,
                 View::Folder(f) => loc == f,
+                View::Smart(s) => loc != folders::TRASH && s.matches(n, self.is_pinned(&n.id), cutoff),
             }
         }).count() as u32
     }
@@ -229,11 +235,16 @@ impl Notes {
             items.push(SidebarItem::row(FOLDER_ROW + i as u32, f).with_symbol("folder").with_count(self.count_in(&View::Folder(f.clone()))));
         }
         items.push(SidebarItem::row(ROW_BIN, "Recently Deleted").with_symbol("trash").with_count(self.count_in(&View::Trash)));
+        items.push(SidebarItem::header("Smart Folders"));
+        for (i, s) in Smart::ALL.into_iter().enumerate() {
+            items.push(SidebarItem::row(SMART_ROW + i as u32, s.label()).with_symbol(s.symbol()).with_count(self.count_in(&View::Smart(s))));
+        }
         let mut list = SourceList::new(items, SIDE_ROW_PT, SIDE_HEADER_PT);
         list.set_selected(Some(match &self.view {
             View::All => ROW_ALL,
             View::Trash => ROW_BIN,
             View::Folder(f) => self.folders.iter().position(|x| x == f).map_or(ROW_ALL, |i| FOLDER_ROW + i as u32),
+            View::Smart(s) => SMART_ROW + Smart::ALL.iter().position(|x| x == s).unwrap_or(0) as u32,
         }));
         list
     }
@@ -251,6 +262,7 @@ impl Notes {
         match id {
             ROW_ALL => Some(View::All),
             ROW_BIN => Some(View::Trash),
+            id if (SMART_ROW..SMART_ROW + Smart::ALL.len() as u32).contains(&id) => Smart::ALL.get((id - SMART_ROW) as usize).map(|s| View::Smart(*s)),
             id => self.folders.get(id.checked_sub(FOLDER_ROW)? as usize).map(|f| View::Folder(f.clone())),
         }
     }
