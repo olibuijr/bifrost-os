@@ -170,6 +170,7 @@ pub mod nearby_service;
 pub mod restoration;
 pub mod image_source;
 pub mod image_blur;
+pub mod image_filter;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
