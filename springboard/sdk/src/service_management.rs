@@ -112,6 +112,44 @@ fn send(ctx: &Ctx, op: LoginOp) -> u32 {
     request
 }
 
+/// A login item an earlier release of the desktop registered with a property list, as the shell's list holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LegacyLoginItem {
+    pub plist_path: String,
+    pub enabled: bool,
+}
+
+/// `statusForLegacyPlist(at:)`: the status of a login item that an earlier release registered with a property list at
+/// `path`. The path must be absolute, end in `.plist` and hold no `..` component; any other path is `NotFound`, as is a
+/// path the shell does not list. An enabled entry is `Enabled`, a disabled one `NotRegistered`. There is no approval
+/// step, so `RequiresApproval` is never returned.
+pub fn status_for_legacy_plist(path: &str, known: &[LegacyLoginItem]) -> Status {
+    if !valid_legacy_path(path) {
+        return Status::NotFound;
+    }
+    match known.iter().find(|item| item.plist_path == path) {
+        Some(item) if item.enabled => Status::Enabled,
+        Some(_) => Status::NotRegistered,
+        None => Status::NotFound,
+    }
+}
+
+fn valid_legacy_path(path: &str) -> bool {
+    path.starts_with('/') && path.ends_with(".plist") && path.len() > ".plist".len() + 1 && !path.split('/').any(|c| c == "..")
+}
+
+/// The deprecated enable-by-identifier call. It toggles a helper login item by identifier, and the helper lives in the
+/// app bundle. No helper bundles ship, so the identifier names no item: the call fails with `JobNotFound`, exactly as
+/// `SMAppService::login_item(identifier)` does, and nothing is sent to the shell. Apps should use `SMAppService`.
+pub fn set_login_item_enabled(ctx: &Ctx, identifier: &str, enabled: bool) -> Result<u32, ServiceError> {
+    let handle = SMAppService::login_item(identifier);
+    if enabled {
+        handle.try_register(ctx)
+    } else {
+        handle.try_unregister(ctx)
+    }
+}
+
 pub(crate) fn mirror(status: Status) {
     LAST.store(status as u8, Ordering::Relaxed);
 }
@@ -315,6 +353,35 @@ mod tests {
     fn refresh_for_other_kinds_sends_nothing() {
         let ctx = crate::runtime::test_ctx();
         assert_eq!(SMAppService::daemon("x.plist").refresh(&ctx), 0);
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn legacy_plist_status_needs_an_absolute_plist_path_the_shell_lists() {
+        let known = vec![
+            LegacyLoginItem { plist_path: "/Library/Launch/helper.plist".into(), enabled: true },
+            LegacyLoginItem { plist_path: "/Library/Launch/old.plist".into(), enabled: false },
+        ];
+        assert_eq!(status_for_legacy_plist("/Library/Launch/helper.plist", &known), Status::Enabled);
+        assert_eq!(status_for_legacy_plist("/Library/Launch/old.plist", &known), Status::NotRegistered);
+        assert_eq!(status_for_legacy_plist("/Library/Launch/gone.plist", &known), Status::NotFound);
+        assert_eq!(status_for_legacy_plist("/Library/Launch/helper.plist", &[]), Status::NotFound);
+    }
+
+    #[test]
+    fn legacy_plist_paths_that_are_not_plist_paths_are_not_found() {
+        let known = vec![LegacyLoginItem { plist_path: "helper.plist".into(), enabled: true }];
+        assert_eq!(status_for_legacy_plist("helper.plist", &known), Status::NotFound, "relative path");
+        assert_eq!(status_for_legacy_plist("/a/../b.plist", &known), Status::NotFound, "parent component");
+        assert_eq!(status_for_legacy_plist("/a/helper.txt", &known), Status::NotFound, "wrong suffix");
+        assert_eq!(status_for_legacy_plist("/.plist", &known), Status::NotFound, "no name before the suffix");
+    }
+
+    #[test]
+    fn the_deprecated_enable_call_fails_with_job_not_found_and_sends_nothing() {
+        let ctx = crate::runtime::test_ctx();
+        assert_eq!(set_login_item_enabled(&ctx, "com.example.helper", true), Err(ServiceError::JobNotFound));
+        assert_eq!(set_login_item_enabled(&ctx, "com.example.helper", false), Err(ServiceError::JobNotFound));
         assert!(ctx.take_sent().is_empty());
     }
 
