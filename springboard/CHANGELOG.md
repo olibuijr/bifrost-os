@@ -1,5 +1,30 @@
 # BifrOSt changelog
 
+## 0.5.44 — 2026-10-12
+
+Parity wiring, wave 6 (30 agents).
+
+- Screen reader: the cursor now walks the menu bar, an open menu and the front window (Settings rows or an app's
+  elements), speaks the role before the name, Ctrl+Alt+Up and Down pick a rotor (Controls, Lists, Text ...), and
+  Ctrl+Alt+Space presses the current element.
+- Input: a built-in compose method (apostrophe, then a letter) opens a candidate window of accented and Icelandic
+  letters; digits pick one.
+- Menu bar: a Now Playing item appears while an app plays, with title, position and transport controls; the leading
+  system menu lists Recent Items with Clear Menu.
+- Notifications: the first notification from an app asks to Allow or Don't Allow.
+- Settings: Game Controllers (battery, live button and stick test, button remapping), Passwords (reveal after the
+  passcode, copy, edit, delete), Login Items start order, Bluetooth device type and Use for Sound Output.
+- Window motion: closing a window fades and shrinks it, and the Dock icon bounces until the launched app's window maps.
+- Photos: Lens in the Info sheet and Revert to Original for edited copies. App Store: a purchase sheet for paid apps.
+  Camera: pick among connected cameras.
+- Apps: Assistant 1.4 (tool calls shown inline), Books 1.6 (single and two-page views, select and copy a page),
+  Browser 0.13 (Find, Zoom and Downloads in the menu bar), Calendar 1.11 (invitees and their responses), Console 1.4
+  (hang diagnostics, daily summary), Contacts 1.7 (several phones, emails and addresses per contact), DAW 0.5 (Export CD
+  as a 16-bit WAV), Files 1.21 (picture thumbnails, EXIF in Get Info, Open With), Freeform 1.6 (Pencil tool, soft
+  shadows), Games 1.6 (Tic-Tac-Toe against the computer), Music 1.6 (BPM column), News 1.6 (article search), Podcasts
+  1.7 (speed menu, 15 s back skips), Reminders 1.13 (#tags), Shortcuts 1.6 (result panel with a follow-on run), Voice
+  Memos 1.6 (Split at Playhead, Skip Silence), Weather 1.5 (area fill under the hourly chart).
+
 ## 0.5.43 — 2026-10-12
 
 Parity wiring, wave 5.
