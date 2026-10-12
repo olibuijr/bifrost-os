@@ -1,6 +1,11 @@
 //! Contacts as an installed BifrOSt app in the Golden Gate full-size window: sidebar, list and card under a unified toolbar.
 
 mod contacts;
+mod dupes;
+mod exchange;
+mod group_file;
+mod history;
+mod names;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;

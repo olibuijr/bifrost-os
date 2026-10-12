@@ -16,11 +16,18 @@ use bifrost_app::kit::ui::{
 use bifrost_app::kit::{Event, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
+use bifrost_app::controls::contact_groups::Groups;
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::contactstore as store;
 use springboard::shell::keyboard::Out;
 use springboard::shell::textarea::TextArea;
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use crate::dupes;
+use crate::exchange;
+use crate::group_file;
+use crate::history::History;
+use crate::names;
 pub use store::Contact;
 
 /// Toolbar items and control ids.
@@ -30,9 +37,63 @@ pub const BAR_EDIT: u32 = 3;
 pub const BAR_CANCEL: u32 = 4;
 pub const BAR_DONE: u32 = 5;
 pub const SEARCH_ID: u32 = 6;
+/// Import and export of vCards, a new group, and add or remove from the group the list shows.
+const BAR_IMPORT: u32 = 7;
+const BAR_EXPORT: u32 = 8;
+const BAR_EXPORT_V4: u32 = 9;
+const BAR_NEW_GROUP: u32 = 10;
+const BAR_GROUP: u32 = 11;
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
+const LIST_RECENT: u32 = 102;
+const LIST_DUPLICATES: u32 = 103;
+/// Group `n` is the sidebar row `LIST_GROUP + n`; groups number from 1 and there are at most 1000 of them.
+const LIST_GROUP: u32 = 1000;
+const GROUPS_FILE: &str = "groups.txt";
+
+/// What the list shows. Every filter but `All` narrows the list to a set of contact identifiers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Filter {
+    All,
+    Favorites,
+    /// Contacts added or changed since the app started.
+    Recent,
+    /// Contacts that have a possible duplicate in the list.
+    Duplicates,
+    Group(u64),
+}
+
+impl Filter {
+    /// The sidebar row that shows this filter.
+    fn sidebar_id(self) -> u32 {
+        match self {
+            Filter::All => LIST_ALL,
+            Filter::Favorites => LIST_FAVORITES,
+            Filter::Recent => LIST_RECENT,
+            Filter::Duplicates => LIST_DUPLICATES,
+            Filter::Group(g) => LIST_GROUP + g as u32,
+        }
+    }
+
+    /// The filter a sidebar row shows.
+    fn from_sidebar_id(id: u32) -> Filter {
+        match id {
+            LIST_FAVORITES => Filter::Favorites,
+            LIST_RECENT => Filter::Recent,
+            LIST_DUPLICATES => Filter::Duplicates,
+            id if id > LIST_GROUP => Filter::Group((id - LIST_GROUP) as u64),
+            _ => Filter::All,
+        }
+    }
+}
+
+/// Whether a control identifier names a sidebar row. The group rows sit in their own range below the list rows.
+fn sidebar_node(id: u64) -> bool {
+    (LIST_ALL as u64..=LIST_DUPLICATES as u64).contains(&id)
+        || (LIST_GROUP as u64 + 1..=LIST_GROUP as u64 + 1000).contains(&id)
+}
+
 /// Accessibility ids of the rows and card or form controls (see `controls`). Bar and sidebar ids stay below 200.
 const NODE_FAVORITE: u64 = 200;
 const NODE_SHARE: u64 = 201;
@@ -43,8 +104,6 @@ const NODE_FIELD: u64 = 220;
 const NODE_LABEL: u64 = 230;
 const NODE_ADD: u64 = 240;
 const ROW_NODE: u64 = 10_000;
-const LIST_ALL_NODE: u64 = LIST_ALL as u64;
-const LIST_FAVORITES_NODE: u64 = LIST_FAVORITES as u64;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
 const SIDEBAR_AUTO_PT: f32 = 600.0;
@@ -132,7 +191,15 @@ pub struct Contacts {
     list_height: f32,
     screen: Screen,
     sidebar_shown: bool,
-    favorites_only: bool,
+    filter: Filter,
+    /// Edits made this session, for the Recently Changed list.
+    history: History,
+    /// Contact groups, saved beside the contacts file.
+    groups: Groups,
+    /// The groups file could not be read; the group commands are off so it is not overwritten.
+    groups_failed: bool,
+    /// A line of feedback about the last import or export, shown in place of nothing when there is no error.
+    status: Option<String>,
     query: TextField,
     /// first, last, company, phone, email, address.
     fields: [TextField; 6],
@@ -169,10 +236,18 @@ impl Contacts {
     }
 
     pub fn new(ui: &Ui, w: i32, h: i32, path: PathBuf) -> Self {
-        let (contacts, error) = match store::load_checked(&path) {
+        let (mut contacts, error) = match store::load_checked(&path) {
             Ok(contacts) => (contacts, None),
             Err(e) => (vec![], Some(format!("Unable to load contacts: {e}"))),
         };
+        let load_failed = error.is_some();
+        let (groups, groups_error) = match group_file::load(&path.with_file_name(GROUPS_FILE)) {
+            Ok(groups) => (groups, None),
+            Err(e) => (Groups::new(), Some(format!("Unable to load groups: {e}"))),
+        };
+        let groups_failed = groups_error.is_some();
+        contacts.sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
+        let history = History::new(&contacts);
         let mut app = Self {
             w: w as f32 / ui.s,
             h: h as f32 / ui.s,
@@ -182,7 +257,11 @@ impl Contacts {
             list_height: 0.0,
             screen: Screen::List,
             sidebar_shown: w as f32 / ui.s >= SIDEBAR_AUTO_PT,
-            favorites_only: false,
+            filter: Filter::All,
+            history,
+            groups,
+            groups_failed,
+            status: None,
             query: TextField::new(),
             fields: Default::default(),
             shown: [false; 3],
@@ -196,8 +275,8 @@ impl Contacts {
             scroll_list: None,
             share_req: None,
             confirm_delete: false,
-            load_failed: error.is_some(),
-            error,
+            load_failed,
+            error: error.or(groups_error),
             toast_until: None,
             labels: TextCache::default(),
             dirty: true,
@@ -289,6 +368,10 @@ impl Contacts {
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_SIDEBAR, if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" }, "sidebar.left"),
             ToolbarItem::flexible_space(),
+            ToolbarItem::button(BAR_IMPORT, "Import").enabled(!self.load_failed),
+            ToolbarItem::button(BAR_EXPORT, "Export 3.0").enabled(!self.load_failed),
+            ToolbarItem::button(BAR_EXPORT_V4, "Export 4.0").enabled(!self.load_failed),
+            ToolbarItem::button(BAR_NEW_GROUP, "New Group").enabled(!self.load_failed && !self.groups_failed),
             ToolbarItem::icon(BAR_ADD, "New Contact", "plus").enabled(!self.load_failed),
         ])
     }
@@ -301,7 +384,14 @@ impl Contacts {
         let mut items = vec![ToolbarItem::flexible_space()];
         match self.screen {
             Screen::List => {}
-            Screen::Detail(_) => items.push(ToolbarItem::button(BAR_EDIT, "Edit").enabled(!self.load_failed)),
+            Screen::Detail(id) => {
+                if let Filter::Group(group) = self.filter {
+                    let member = self.groups.groups_of(id).contains(&group);
+                    let label = if member { "Remove from Group" } else { "Add to Group" };
+                    items.push(ToolbarItem::button(BAR_GROUP, label).enabled(!self.load_failed && !self.groups_failed));
+                }
+                items.push(ToolbarItem::button(BAR_EDIT, "Edit").enabled(!self.load_failed));
+            }
             Screen::Editor(_) => {
                 items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
                 items.push(ToolbarItem::button(BAR_DONE, "Done"));
@@ -327,17 +417,37 @@ impl Contacts {
             self.detail_bar().layout_with(self.detail_bar_bounds(), width, widgets::CAPSULE_PT, widgets::TOOLBAR_GAP_PT),
         ]
     }
+    /// The sidebar from top to bottom as (row identifier, label, symbol). A header has identifier 0.
+    fn sidebar_rows(&self) -> Vec<(u32, String, &'static str)> {
+        let mut rows = vec![
+            (0, "Lists".to_string(), ""),
+            (LIST_ALL, "All Contacts".to_string(), "list.bullet"),
+            (LIST_FAVORITES, "Favorites".to_string(), "tag"),
+            (LIST_RECENT, "Recently Changed".to_string(), "arrow.clockwise"),
+            (LIST_DUPLICATES, "Possible Duplicates".to_string(), "doc"),
+            (0, "Groups".to_string(), ""),
+        ];
+        for id in 1..=self.groups.len() as u64 {
+            if let Some(group) = self.groups.get(id) {
+                rows.push((LIST_GROUP + id as u32, group.name.clone(), "square.grid.2x2"));
+            }
+        }
+        rows
+    }
     fn sidebar(&self) -> SourceList {
-        let mut list = SourceList::new(
-            vec![
-                SidebarItem::header("Lists"),
-                SidebarItem::row(LIST_ALL, "All Contacts").with_symbol("list.bullet"),
-                SidebarItem::row(LIST_FAVORITES, "Favorites").with_symbol("tag"),
-            ],
-            m::SIDEBAR_ROW_PITCH,
-            m::SIDEBAR_ROW_H,
-        );
-        list.set_selected(Some(if self.favorites_only { LIST_FAVORITES } else { LIST_ALL }));
+        let items: Vec<SidebarItem> = self
+            .sidebar_rows()
+            .into_iter()
+            .map(|(id, label, symbol)| {
+                if id == 0 {
+                    SidebarItem::header(&label)
+                } else {
+                    SidebarItem::row(id, &label).with_symbol(symbol)
+                }
+            })
+            .collect();
+        let mut list = SourceList::new(items, m::SIDEBAR_ROW_PITCH, m::SIDEBAR_ROW_H);
+        list.set_selected(Some(self.filter.sidebar_id()));
         list
     }
     fn sidebar_bounds(&self) -> Rect {
@@ -445,17 +555,39 @@ impl Contacts {
 
     // ---- model ----
 
+    /// The folder beside the contacts file that holds `name` (Import or Export).
+    fn folder(&self, name: &str) -> PathBuf {
+        self.path.parent().unwrap_or(Path::new("")).join(name)
+    }
+
+    /// The contact identifiers the list shows, or `None` for every contact.
+    fn filter_ids(&self) -> Option<BTreeSet<u64>> {
+        match self.filter {
+            Filter::All => None,
+            Filter::Favorites => Some(self.contacts.iter().filter(|c| c.favorite).map(|c| c.id).collect()),
+            Filter::Recent => Some(self.history.changed_this_session()),
+            Filter::Duplicates => Some(dupes::duplicate_ids(&self.contacts)),
+            Filter::Group(group) => Some(
+                self.groups
+                    .members(group, false)
+                    .map(|members| members.into_iter().collect::<BTreeSet<u64>>())
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
     fn rebuild(&mut self, ui: &Ui) {
-        store::sort(&mut self.contacts);
+        self.contacts
+            .sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
         self.rows.clear();
         let mut top = 0.0;
         let mut previous = None;
+        let shown = self.filter_ids();
         for i in store::search(&self.contacts, &self.query) {
-            if self.favorites_only && !self.contacts[i].favorite {
+            if shown.as_ref().is_some_and(|ids| !ids.contains(&self.contacts[i].id)) {
                 continue;
             }
-            let first = self.contacts[i].display_name().chars().next().unwrap_or('#');
-            let letter = first.to_uppercase().next().filter(|c| c.is_alphabetic()).unwrap_or('#');
+            let letter = names::section(self.contacts[i].display_name());
             let section = (previous != Some(letter)).then_some(letter);
             if section.is_some() {
                 top += HEADER;
@@ -475,6 +607,7 @@ impl Contacts {
             self.notes.set_text(ui, &contact.notes);
         }
         self.screen = Screen::Detail(id);
+        self.status = None;
         self.focus = None;
         self.notes.focused = false;
         self.confirm_delete = false;
@@ -503,7 +636,7 @@ impl Contacts {
         }
         let contact = id.and_then(|id| self.contacts.iter().find(|c| c.id == id)).cloned().unwrap_or_default();
         let name = contact.name.trim();
-        let (first, last) = name.rsplit_once(char::is_whitespace).unwrap_or((name, ""));
+        let (first, last) = names::split(name);
         for (field, text) in self.fields.iter_mut().zip([
             first.trim(),
             last.trim(),
@@ -569,7 +702,8 @@ impl Contacts {
         }
         match store::save(&self.path, &updated) {
             Ok(()) => {
-                self.contacts = updated;
+                let before = std::mem::replace(&mut self.contacts, updated);
+                self.record(&before);
                 self.error = None;
                 self.rebuild(ui);
                 self.open_detail(ui, id);
@@ -591,8 +725,12 @@ impl Contacts {
         let updated: Vec<_> = self.contacts.iter().filter(|c| c.id != id).cloned().collect();
         match store::save(&self.path, &updated) {
             Ok(()) => {
-                self.contacts = updated;
+                let before = std::mem::replace(&mut self.contacts, updated);
+                self.record(&before);
                 self.error = None;
+                if self.groups.forget_contact(id) > 0 {
+                    self.save_groups();
+                }
                 self.close_detail(ui);
                 self.rebuild(ui);
             }
@@ -611,11 +749,158 @@ impl Contacts {
         }
         match store::save(&self.path, &updated) {
             Ok(()) => {
-                self.contacts = updated;
+                let before = std::mem::replace(&mut self.contacts, updated);
+                self.record(&before);
                 self.rebuild(ui);
             }
             Err(e) => self.error = Some(format!("Unable to save: {e}")),
         }
+    }
+
+    /// Records a saved change in the session history. The file is already written, so a history error is not shown.
+    fn record(&mut self, before: &[Contact]) {
+        let _ = self.history.record(before, &self.contacts);
+    }
+
+    fn save_groups(&mut self) {
+        if let Err(e) = group_file::save(&self.path.with_file_name(GROUPS_FILE), &self.groups) {
+            self.error = Some(format!("Unable to save groups: {e}"));
+        }
+    }
+
+    /// Makes a group named "Group n" and shows it.
+    fn new_group(&mut self, ui: &Ui) {
+        if self.load_failed || self.groups_failed {
+            return;
+        }
+        let name = format!("Group {}", self.groups.len() + 1);
+        match self.groups.add(&name, None) {
+            Ok(id) => {
+                self.error = None;
+                self.filter = Filter::Group(id);
+                self.list_scroll.jump_top();
+                self.save_groups();
+                self.rebuild(ui);
+            }
+            Err(e) => self.error = Some(format!("Unable to add a group: {e:?}")),
+        }
+    }
+
+    /// Adds the open contact to the group the list shows, or takes it out when it is already a member.
+    fn toggle_group(&mut self, ui: &Ui) {
+        let (Screen::Detail(id), Filter::Group(group)) = (self.screen, self.filter) else {
+            return;
+        };
+        if self.load_failed || self.groups_failed {
+            return;
+        }
+        let member = self.groups.groups_of(id).contains(&group);
+        let changed = if member { self.groups.remove_member(group, id) } else { self.groups.add_member(group, id) };
+        if changed.is_err() {
+            self.error = Some("That group no longer exists".into());
+            return;
+        }
+        self.error = None;
+        self.save_groups();
+        self.rebuild(ui);
+    }
+
+    /// Reads every `.vcf` file in the Import folder. A card that matches a contact already in the list is skipped.
+    fn import_vcards(&mut self, ui: &Ui) {
+        if self.load_failed {
+            return;
+        }
+        let folder = self.folder("Import");
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&folder)
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                    .filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("vcf")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        if files.is_empty() {
+            self.error = None;
+            self.status = Some("Put vCard (.vcf) files in the Contacts Import folder, then choose Import".into());
+            self.dirty = true;
+            return;
+        }
+        let mut updated = self.contacts.clone();
+        let (mut added, mut skipped, mut invalid, mut extra, mut unreadable) = (0usize, 0usize, 0usize, 0usize, 0usize);
+        for file in files {
+            let read = std::fs::read(&file)
+                .ok()
+                .and_then(|bytes| exchange::import(&String::from_utf8_lossy(&bytes)).ok());
+            let Some(read) = read else {
+                unreadable += 1;
+                continue;
+            };
+            invalid += read.invalid;
+            extra += read.extra_values;
+            for contact in read.contacts {
+                if dupes::has_duplicate(&updated, &contact) {
+                    skipped += 1;
+                    continue;
+                }
+                let Some(id) = store::new_id(&updated) else {
+                    self.error = Some("Contact limit reached".into());
+                    break;
+                };
+                updated.push(Contact { id, ..contact });
+                added += 1;
+            }
+        }
+        let mut parts = vec![format!("Imported {added} contacts")];
+        if skipped > 0 {
+            parts.push(format!("skipped {skipped} duplicates"));
+        }
+        if invalid > 0 {
+            parts.push(format!("{invalid} cards could not be kept"));
+        }
+        if extra > 0 {
+            parts.push(format!("{extra} extra phone numbers or emails were not kept"));
+        }
+        if unreadable > 0 {
+            parts.push(format!("{unreadable} files could not be read"));
+        }
+        let summary = parts.join(", ") + ".";
+        if added == 0 {
+            self.status = Some(summary);
+            self.dirty = true;
+            return;
+        }
+        match store::save(&self.path, &updated) {
+            Ok(()) => {
+                let before = std::mem::replace(&mut self.contacts, updated);
+                self.record(&before);
+                self.error = None;
+                self.status = Some(summary);
+                self.rebuild(ui);
+            }
+            Err(e) => self.error = Some(format!("Unable to import: {e}")),
+        }
+    }
+
+    /// Writes every contact to `Export/contacts-3.0.vcf` or `Export/contacts-4.0.vcf` beside the contacts file.
+    fn export_vcards(&mut self, version: exchange::Version) {
+        if self.load_failed {
+            return;
+        }
+        let (file, label) = match version {
+            exchange::Version::V3 => ("contacts-3.0.vcf", "3.0"),
+            exchange::Version::V4 => ("contacts-4.0.vcf", "4.0"),
+        };
+        let folder = self.folder("Export");
+        let text = exchange::export(&self.contacts, version);
+        match std::fs::create_dir_all(&folder).and_then(|()| std::fs::write(folder.join(file), text)) {
+            Ok(()) => {
+                self.error = None;
+                self.status = Some(format!("Exported {} contacts as vCard {label} to the Contacts Export folder", self.contacts.len()));
+            }
+            Err(e) => self.error = Some(format!("Unable to export: {e}")),
+        }
+        self.dirty = true;
     }
 
     // ---- input ----
@@ -708,6 +993,11 @@ impl Contacts {
             }
             BAR_CANCEL => self.cancel_editor(ui),
             BAR_DONE => self.save_editor(ui),
+            BAR_IMPORT => self.import_vcards(ui),
+            BAR_EXPORT => self.export_vcards(exchange::Version::V3),
+            BAR_EXPORT_V4 => self.export_vcards(exchange::Version::V4),
+            BAR_NEW_GROUP => self.new_group(ui),
+            BAR_GROUP => self.toggle_group(ui),
             SEARCH_ID => self.focus_field(SEARCH),
             _ => {}
         }
@@ -717,7 +1007,7 @@ impl Contacts {
     pub fn activate_control(&mut self, ui: &Ui, id: u64) -> bool {
         let Some(node) = self.controls(ui).into_iter().find(|n| n.id == id && n.enabled) else { return false };
         let target = match id {
-            LIST_ALL_NODE | LIST_FAVORITES_NODE => Target::Sidebar(id as u32),
+            _ if sidebar_node(id) => Target::Sidebar(id as u32),
             0..=199 => {
                 self.bar(ui, id as u32);
                 self.dirty = true;
@@ -748,7 +1038,8 @@ impl Contacts {
         match target {
             Target::Bar(id) => self.bar(ui, id),
             Target::Sidebar(id) => {
-                self.favorites_only = id == LIST_FAVORITES;
+                self.filter = Filter::from_sidebar_id(id);
+                self.status = None;
                 self.list_scroll.jump_top();
                 self.rebuild(ui);
             }
@@ -922,9 +1213,12 @@ impl Contacts {
         if self.sidebar_shown {
             let list = self.sidebar();
             let bounds = self.sidebar_bounds();
-            for (id, index, label) in [(LIST_ALL, 1, "All Contacts"), (LIST_FAVORITES, 2, "Favorites")] {
+            for (index, (id, label, _)) in self.sidebar_rows().into_iter().enumerate() {
+                if id == 0 {
+                    continue;
+                }
                 let value = if list.selected() == Some(id) { "selected" } else { "" };
-                nodes.push(Node { id: id as u64, role: Role::Row, label: label.into(), value: value.into(), bounds: list.item_rect(index, bounds, 0.0), enabled: true });
+                nodes.push(Node { id: id as u64, role: Role::Row, label, value: value.into(), bounds: list.item_rect(index, bounds, 0.0), enabled: true });
             }
         }
         for i in 0..self.rows.len() {
@@ -1255,6 +1549,10 @@ impl Contacts {
             let error = ui.fit(&error, MAC_FOOTNOTE_PT, ui.pt(self.w - self.detail_x() - 2.0 * SPACE_XL));
             let cx = self.detail_x() + (self.w - self.detail_x()) / 2.0;
             self.centre_text(s, ui, &error, MAC_FOOTNOTE_PT, Weight::Regular, DESTRUCTIVE, cx, UNIFIED_BAR_PT + SPACE_S);
+        } else if let Some(status) = self.status.clone() {
+            let status = ui.fit(&status, MAC_FOOTNOTE_PT, ui.pt(self.w - self.detail_x() - 2.0 * SPACE_XL));
+            let cx = self.detail_x() + (self.w - self.detail_x()) / 2.0;
+            self.centre_text(s, ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), cx, UNIFIED_BAR_PT + SPACE_S);
         }
         if self.toast_until.is_some_and(|until| t < until) {
             let cx = self.detail_x() + (self.w - self.detail_x()) / 2.0;
@@ -1298,9 +1596,9 @@ mod tests {
         let ui = test_ui();
         let app = Contacts::new(&ui, 1200, 780, path.clone());
         let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
-        assert_eq!(names, ["Anders Ek", "Anna As", "Bo Berg"]);
+        assert_eq!(names, ["Anna As", "Bo Berg", "Anders Ek"], "sorted by family name");
         let sections: String = app.rows.iter().filter_map(|r| r.section).collect();
-        assert_eq!(sections, "AB");
+        assert_eq!(sections, "ABE");
         assert!(app.describe().contains("contacts_count=3\n"));
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
@@ -1311,10 +1609,68 @@ mod tests {
         let path = file_with("favorites", &[contact(1, "Anna As"), starred]);
         let ui = test_ui();
         let mut app = Contacts::new(&ui, 1200, 780, path.clone());
-        app.favorites_only = true;
+        app.filter = Filter::Favorites;
         app.rebuild(&ui);
         let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["Cara Cole"]);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_group_is_made_filled_from_the_open_contact_and_saved_to_its_file() {
+        let path = file_with("groups", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.open_detail(&ui, 1);
+        app.new_group(&ui);
+        assert_eq!(app.filter, Filter::Group(1));
+        assert!(app.listed().is_empty(), "the new group has no members yet");
+        app.open_detail(&ui, 1);
+        app.toggle_group(&ui);
+        let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["Anna As"]);
+        let saved = group_file::load(&path.with_file_name(GROUPS_FILE)).unwrap();
+        assert_eq!(saved.members(1, false).unwrap(), vec![1]);
+        app.open_detail(&ui, 1);
+        app.toggle_group(&ui);
+        assert!(app.listed().is_empty(), "a second press takes the contact out again");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_vcard_import_folder_adds_new_people_and_skips_duplicates() {
+        let path = file_with("import", &[contact(1, "Anna As")]);
+        let folder = path.parent().unwrap().join("Import");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("people.vcf"),
+            "BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Anna As\r\nEMAIL;TYPE=\"home\":anna@example.test\r\nEND:VCARD\r\n\
+BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
+        )
+        .unwrap();
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.import_vcards(&ui);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        assert_eq!(app.all_contacts().len(), 2, "Anna is a duplicate by name; Bo is new");
+        assert!(app.status.as_deref().unwrap().contains("Imported 1 contacts"), "{:?}", app.status);
+        assert_eq!(store::load(&path).len(), 2);
+        app.export_vcards(exchange::Version::V4);
+        let exported = std::fs::read_to_string(path.parent().unwrap().join("Export/contacts-4.0.vcf")).unwrap();
+        assert!(exported.starts_with("BEGIN:VCARD\r\nVERSION:4.0\r\n"), "{exported}");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_duplicates_filter_lists_only_contacts_with_a_twin() {
+        let twin = Contact { email: "anna@x.is".into(), ..contact(2, "A. As") };
+        let path = file_with("dupes", &[Contact { email: "anna@x.is".into(), ..contact(1, "Anna As") }, twin, contact(3, "Cara Cole")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.filter = Filter::Duplicates;
+        app.rebuild(&ui);
+        let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["A. As", "Anna As"]);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
