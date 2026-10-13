@@ -54,7 +54,7 @@
       "apple": "ITLibMediaItemVideoInfo",
       "bifrost": "springboard/ui/src/video_info.rs",
       "status": "partial",
-      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label, aspect ratio and duration text. Host unit tests (5). Built on parity/team-a-03; not yet verified on Midget. No library holds video items yet."
+      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label, aspect ratio and duration text. Host unit tests (6). It has no caller yet. Built on parity/team-a-03; not yet verified on Midget. No library holds video items yet."
     },
     {
       "feature": "Access rules (code signing, read-only, iTunes version gate)",

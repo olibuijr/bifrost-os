@@ -15,5 +15,9 @@ model with no drawing, in the `bifrost_ui` crate.
 - `cancel()` and `choose_fallback()` end the prompt. The fallback choice is refused unless the prompt offered it.
 - Every action after the prompt has finished returns `PromptError::NotPrompting`.
 
-Six host unit tests cover the attempt count, lockout, cancel, fallback and input checks. The shell does not draw a
+The default limit is 5, the same as `MAX_FAILURES` in `springboard/src/shell/services/local_auth.rs`. That service still
+checks the password and keeps the per-app lockout; the prompt only tracks what one sheet shows, and nothing calls it yet.
+`springboard/ui/src/auth_view.rs` is the model of the biometric icon view and is separate.
+
+Nine host unit tests cover the attempt count, lockout, cancel, fallback and input checks. The shell does not draw a
 reusable sheet yet, and the row is not verified on Midget.

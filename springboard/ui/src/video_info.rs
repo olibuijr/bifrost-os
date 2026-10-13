@@ -128,6 +128,21 @@ mod tests {
     }
 
     #[test]
+    fn label_boundaries_and_duration_rollover() {
+        let just_below = VideoInfo::new(3840, 2159, 1.0, 24.0, "hevc").unwrap();
+        assert_eq!(just_below.resolution_label(), "2159p");
+        let qhd = VideoInfo::new(2560, 1440, 3599.9, 24.0, "hevc").unwrap();
+        assert_eq!(qhd.resolution_label(), "1440p");
+        assert!(qhd.is_hd());
+        assert_eq!(qhd.duration_text(), "59:59");
+        let edge = VideoInfo::new(1280, 719, 3600.0, 24.0, "h264").unwrap();
+        assert!(!edge.is_hd());
+        assert_eq!(edge.duration_text(), "1:00:00");
+        let hd = VideoInfo::new(1280, 720, 1.0, 24.0, "h264").unwrap();
+        assert!(hd.is_hd());
+    }
+
+    #[test]
     fn aspect_ratio_is_width_over_height() {
         let wide = VideoInfo::new(1920, 1080, 1.0, 24.0, "h264").unwrap();
         assert!((wide.aspect_ratio() - 16.0 / 9.0).abs() < 1e-9);
@@ -139,6 +154,10 @@ mod tests {
         assert_eq!(VideoInfo::new(1920, 1080, -1.0, 24.0, "h264"), Err(VideoInfoError::BadDuration));
         assert_eq!(VideoInfo::new(1920, 1080, f64::INFINITY, 24.0, "h264"), Err(VideoInfoError::BadDuration));
         assert_eq!(VideoInfo::new(1920, 1080, 1.0, 0.0, "h264"), Err(VideoInfoError::BadFrameRate));
+        assert_eq!(VideoInfo::new(1920, 0, 1.0, 24.0, "h264"), Err(VideoInfoError::BadFrameSize));
+        assert_eq!(VideoInfo::new(1920, 1080, f64::NAN, 24.0, "h264"), Err(VideoInfoError::BadDuration));
+        assert_eq!(VideoInfo::new(1920, 1080, 1.0, f64::NAN, "h264"), Err(VideoInfoError::BadFrameRate));
+        assert_eq!(VideoInfo::new(1920, 1080, 1.0, -24.0, "h264"), Err(VideoInfoError::BadFrameRate));
         assert_eq!(VideoInfo::new(1920, 1080, 1.0, 24.0, "  "), Err(VideoInfoError::EmptyCodec));
     }
 

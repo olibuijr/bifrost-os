@@ -2,8 +2,10 @@
 //! account password). The shell draws the sheet and collects the password; this module decides what each attempt does:
 //! how many attempts remain, when the prompt locks out, and whether the fallback choice is offered.
 
-/// Attempts allowed before the prompt refuses further input.
-pub const DEFAULT_MAX_ATTEMPTS: u32 = 3;
+/// Attempts a sheet allows by default. It equals `MAX_FAILURES` of the shell's local authentication service
+/// (`springboard/src/shell/services/local_auth.rs`), which stays the authority: it checks the password and keeps the
+/// per-app lockout. This model only tracks what one sheet shows.
+pub const DEFAULT_MAX_ATTEMPTS: u32 = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PromptError {
@@ -167,6 +169,34 @@ mod tests {
         assert_eq!(AuthPrompt::new("   ", false, 3), Err(PromptError::EmptyReason));
         assert_eq!(AuthPrompt::new("", false, 3), Err(PromptError::EmptyReason));
         assert_eq!(AuthPrompt::new(" Sign in ", false, 3).unwrap().reason(), "Sign in");
+    }
+
+    #[test]
+    fn success_after_failures_keeps_the_count_and_ends_the_prompt() {
+        let mut p = AuthPrompt::new("Unlock", true, 3).unwrap();
+        p.submit(false).unwrap();
+        assert_eq!(p.submit(true), Ok(&PromptPhase::Succeeded));
+        assert_eq!(p.attempts_left(), 2);
+        assert_eq!(p.submit(false), Err(PromptError::NotPrompting));
+        assert_eq!(p.choose_fallback(), Err(PromptError::NotPrompting));
+        assert_eq!(p.attempts_left(), 2);
+    }
+
+    #[test]
+    fn single_attempt_locks_out_on_the_first_wrong_password() {
+        let mut p = AuthPrompt::new("Unlock", true, 1).unwrap();
+        assert_eq!(p.submit(false), Ok(&PromptPhase::LockedOut));
+        assert_eq!(p.attempts_left(), 0);
+        assert_eq!(p.choose_fallback(), Err(PromptError::NotPrompting));
+        assert_eq!(p.cancel(), Err(PromptError::NotPrompting));
+    }
+
+    #[test]
+    fn fallback_ends_the_prompt_for_later_input() {
+        let mut p = AuthPrompt::new("Unlock", true, 3).unwrap();
+        p.choose_fallback().unwrap();
+        assert_eq!(p.submit(true), Err(PromptError::NotPrompting));
+        assert_eq!(p.phase(), &PromptPhase::FallbackChosen);
     }
 
     #[test]

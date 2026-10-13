@@ -26,7 +26,7 @@
       "apple": "LocalAuthenticationView (SwiftUI)",
       "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)",
       "status": "partial",
-      "note": "Pure prompt model: attempts left, lockout after the limit, cancel and fallback choice (fallback only when offered). Host unit tests (6). Built on parity/team-a-03; not yet verified on Midget. The shell does not draw a reusable sheet yet."
+      "note": "Pure state model of a password sheet: attempts left, lockout after the limit (default 5, the same as the local_auth service, which stays the authority), cancel and fallback choice (fallback only when offered). It has no caller yet and is not LocalAuthenticationView itself; that view's biometric icon model is springboard/ui/src/auth_view.rs. Host unit tests (9). Built on parity/team-a-03; not yet verified on Midget. The shell does not draw a reusable sheet yet."
     },
     {
       "feature": "Keychain items protected by user presence or biometrics",
