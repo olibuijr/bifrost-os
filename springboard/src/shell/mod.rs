@@ -952,6 +952,10 @@ impl Shell {
         self.data_dir = PathBuf::from(dir);
         self.st_load();
         self.prefs = Prefs::load(format!("{dir}/settings.ini"));
+        // the Setup Assistant's choices reach settings.ini once, before the look is read below
+        if let Err(e) = crate::setup::apply_pending(Path::new(dir), &mut self.prefs) {
+            eprintln!("springboard: setup choices: {e}");
+        }
         if let Some(v) = self.prefs.get_parsed::<f32>(settings::LIQUID_GLASS_PREF) { bifrost_render::glass::set_clarity(v); }
         // start in the saved scheme with no fade
         {
@@ -976,6 +980,12 @@ impl Shell {
         let data = PathBuf::from(dir).join("appdata").join(clock::APP_ID);
         apphost::migrate_legacy(Path::new(dir), clock::APP_ID, &data);
         let _ = std::fs::create_dir_all(&data);
+        // first run: the Setup Assistant opens over the desktop until its state file says the run finished
+        if crate::setup::needs_window(Path::new(dir)) {
+            if let Some(slot) = apphost::slot_of(crate::setup::APP_ID) {
+                self.open(AppId::External(slot as u8), t);
+            }
+        }
         let mut fx = self.clock.load(&data.join("clock.ini").to_string_lossy(), t);
         fx.push(Effect::AutoLock(self.idle_off_ms as u32));
         fx
