@@ -420,6 +420,146 @@ pub fn take_frame() -> Vec<Node> {
     FRAME.with(|f| std::mem::take(&mut *f.borrow_mut()))
 }
 
+/// parity: `NSAccessibility.Notification`, the ones a default handler posts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Notification {
+    /// `.valueChanged`
+    ValueChanged,
+    /// `.focusedUIElementChanged`
+    FocusedUIElementChanged,
+}
+
+/// What a screen reader asks of one control: `setAccessibilityValue(_:)`, `setAccessibilityFocused(_:)`,
+/// `accessibilityPerformIncrement()` and `accessibilityPerformDecrement()`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Request {
+    SetValue(String),
+    SetFocused(bool),
+    Increment,
+    Decrement,
+}
+
+/// The settable state of one control, keyed on its role: the default `NSAccessibilityProtocol` behaviour for kit sliders
+/// (`.slider`) and text fields (`.textField`). Other roles are left unchanged.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settable {
+    pub role: Role,
+    pub text: String,
+    pub value: f64,
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+    /// `isAccessibilityFocused`
+    pub focused: bool,
+}
+
+impl Settable {
+    pub fn slider(value: f64, min: f64, max: f64, step: f64) -> Self {
+        Settable { role: Role::Slider, text: String::new(), value: value.clamp(min, max), min, max, step, focused: false }
+    }
+
+    pub fn text_field(text: &str) -> Self {
+        Settable { role: Role::TextField, text: text.into(), value: 0., min: 0., max: 0., step: 0., focused: false }
+    }
+
+    /// `accessibilityValue` as the reader hears it.
+    pub fn accessibility_value(&self) -> String {
+        match self.role {
+            Role::Slider => format!("{}", self.value),
+            _ => self.text.clone(),
+        }
+    }
+
+    fn set_number(&mut self, v: f64) -> Vec<Notification> {
+        let v = v.clamp(self.min, self.max);
+        if v == self.value {
+            return Vec::new();
+        }
+        self.value = v;
+        vec![Notification::ValueChanged]
+    }
+
+    /// Applies `request`; the notifications to post, empty when nothing changed or the role takes no such request.
+    pub fn perform(&mut self, request: &Request) -> Vec<Notification> {
+        match (request, self.role) {
+            (Request::SetFocused(f), Role::Slider | Role::TextField) => {
+                if self.focused == *f {
+                    return Vec::new();
+                }
+                self.focused = *f;
+                if *f { vec![Notification::FocusedUIElementChanged] } else { Vec::new() }
+            }
+            (Request::SetValue(v), Role::Slider) => match v.trim().parse::<f64>() {
+                Ok(n) if n.is_finite() => self.set_number(n),
+                _ => Vec::new(),
+            },
+            (Request::SetValue(v), Role::TextField) => {
+                if self.text == *v {
+                    return Vec::new();
+                }
+                self.text = v.clone();
+                vec![Notification::ValueChanged]
+            }
+            (Request::Increment, Role::Slider) => self.set_number(self.value + self.step),
+            (Request::Decrement, Role::Slider) => self.set_number(self.value - self.step),
+            _ => Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod settable_tests {
+    use super::*;
+
+    #[test]
+    fn set_value_on_a_slider_clamps_and_notifies() {
+        let mut s = Settable::slider(5., 0., 10., 1.);
+        assert_eq!(s.perform(&Request::SetValue("99".into())), vec![Notification::ValueChanged]);
+        assert_eq!(s.value, 10.);
+        assert!(s.perform(&Request::SetValue("99".into())).is_empty(), "no change, no notification");
+        s.perform(&Request::SetValue("-4".into()));
+        assert_eq!(s.accessibility_value(), "0");
+        assert!(s.perform(&Request::SetValue("loud".into())).is_empty());
+        assert_eq!(s.value, 0.);
+    }
+
+    #[test]
+    fn increment_and_decrement_step_and_stop_at_the_ends() {
+        let mut s = Settable::slider(9.5, 0., 10., 1.);
+        assert_eq!(s.perform(&Request::Increment), vec![Notification::ValueChanged]);
+        assert_eq!(s.value, 10.);
+        assert!(s.perform(&Request::Increment).is_empty());
+        s.perform(&Request::Decrement);
+        assert_eq!(s.value, 9.);
+    }
+
+    #[test]
+    fn set_value_on_a_text_field_replaces_the_text() {
+        let mut t = Settable::text_field("old");
+        assert_eq!(t.perform(&Request::SetValue("Ada".into())), vec![Notification::ValueChanged]);
+        assert_eq!(t.accessibility_value(), "Ada");
+        assert!(t.perform(&Request::Increment).is_empty());
+    }
+
+    #[test]
+    fn focus_sets_the_flag_and_notifies_once() {
+        let mut t = Settable::text_field("");
+        assert_eq!(t.perform(&Request::SetFocused(true)), vec![Notification::FocusedUIElementChanged]);
+        assert!(t.focused);
+        assert!(t.perform(&Request::SetFocused(true)).is_empty());
+        assert!(t.perform(&Request::SetFocused(false)).is_empty());
+        assert!(!t.focused);
+    }
+
+    #[test]
+    fn other_roles_are_unchanged() {
+        let mut b = Settable { role: Role::Button, ..Settable::text_field("Save") };
+        assert!(b.perform(&Request::SetValue("x".into())).is_empty());
+        assert!(b.perform(&Request::SetFocused(true)).is_empty());
+        assert_eq!(b, Settable { role: Role::Button, ..Settable::text_field("Save") });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
