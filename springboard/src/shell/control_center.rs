@@ -1539,7 +1539,7 @@ mod shell_material_tests {
             (ShellSurface::SettingsSidebar, Kind::Sidebar),
             (ShellSurface::SettingsToolbar, Kind::Titlebar),
             (ShellSurface::Dock, Kind::Chrome),
-            (ShellSurface::Spotlight, Kind::Chrome),
+            (ShellSurface::Search, Kind::Chrome),
             (ShellSurface::MenuBarMenu, Kind::Chrome),
         ] {
             let r = shell_glass_rect(&surface.request((0.0, 0.0, 10.0, 10.0), 4.0));

@@ -1,9 +1,9 @@
-//! `GraphicsContext`: the SwiftUI `Canvas` drawing surface for apps (fill, stroke, images, text, transforms, clip,
+//! `GraphicsContext`: the declarative UI `Canvas` drawing surface for apps (fill, stroke, images, text, transforms, clip,
 //! opacity, blend mode, layers, shadow). CPU, anti-aliased by 4x4 supersampling. Built on
 //! `bifrost_render::effects` (planes, layers, shadows) and `bifrost_render::blend`.
 //!
 //! `Canvas::new(w, h).draw(|ctx| { ... })` mirrors `Canvas { context, size in ... }`.
-//! Gaps against SwiftUI: no symbols/resolved views, no filters beyond `add_shadow`, strokes use round joins and caps
+//! Gaps against declarative UI: no symbols/resolved views, no filters beyond `add_shadow`, strokes use round joins and caps
 //! only, dashes are not implemented.
 
 use bifrost_render::blend::Mode;
@@ -385,7 +385,7 @@ fn premul_scale(color: u32, opacity: f32) -> u32 {
     (color & 0x00ff_ffff) | (a << 24)
 }
 
-/// SwiftUI `Canvas { context, size in ... }`.
+/// declarative UI `Canvas { context, size in ... }`.
 pub struct Canvas {
     pub w: usize,
     pub h: usize,

@@ -1,4 +1,4 @@
-//! Safari-style web extensions as a pure model: the identity a web extension or content blocker declares, the host
+//! Browser-style web extensions as a pure model: the identity a web extension or content blocker declares, the host
 //! permissions the user grants it, its enabled state, and the registry that decides which pages it may touch. The
 //! shell keeps the records and the user's choices; nothing here runs extension code or opens a page.
 //!

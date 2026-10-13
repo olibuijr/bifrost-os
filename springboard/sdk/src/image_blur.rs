@@ -1,4 +1,4 @@
-//! Blur filters for app images (Core Image's blur category) and the SwiftUI `.blur(radius:opaque:)`
+//! Blur filters for app images (the image filter's blur category) and the declarative UI `.blur(radius:opaque:)`
 //! effect. A [`BlurFilter`] names the filter and its parameters; `apply` runs it on a decoded
 //! `Image`, for example the one from `ImageSource::decode` or `thumbnail`. [`ViewBlur`] is the
 //! view-level effect value: radius in points, the `opaque` flag, and the display scale that turns

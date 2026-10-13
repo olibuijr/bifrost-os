@@ -2,7 +2,7 @@
 //!
 //! An app asks what the device has ([`Availability`]), sets how often it wants samples (an update interval per
 //! sensor, in seconds), starts a sensor with a handler, and reads the latest sample. The model is the one an
-//! Apple Core Motion app expects (`CMMotionManager`: `isAccelerometerAvailable`, `accelerometerUpdateInterval`,
+//! motion app expects (a motion manager: `isAccelerometerAvailable`, `accelerometerUpdateInterval`,
 //! `startAccelerometerUpdatesToQueue`-style handlers, `accelerometerData`, and the gyroscope pair).
 //!
 //! Units follow the sensors: accelerometer readings in g, gyroscope rates in radians per second, times in seconds on

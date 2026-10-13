@@ -18,20 +18,20 @@ pub const BACKGROUND_OFF_KEY: &str = "login.background.off";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtensionKind {
     Share,
-    QuickLook,
+    Preview,
     FileProvider,
     Widget,
 }
 
 impl ExtensionKind {
     /// Every kind, in the order the page lists them.
-    pub const ALL: [ExtensionKind; 4] = [ExtensionKind::Share, ExtensionKind::QuickLook, ExtensionKind::FileProvider, ExtensionKind::Widget];
+    pub const ALL: [ExtensionKind; 4] = [ExtensionKind::Share, ExtensionKind::Preview, ExtensionKind::FileProvider, ExtensionKind::Widget];
 
     /// The manifest spelling of the kind (`kind = "..."`).
     pub fn parse(text: &str) -> Option<ExtensionKind> {
         match text.trim() {
             "share" => Some(ExtensionKind::Share),
-            "quick-look" => Some(ExtensionKind::QuickLook),
+            "quick-look" => Some(ExtensionKind::Preview),
             "file-provider" => Some(ExtensionKind::FileProvider),
             "widget" => Some(ExtensionKind::Widget),
             _ => None,
@@ -42,7 +42,7 @@ impl ExtensionKind {
     pub fn label(self) -> &'static str {
         match self {
             ExtensionKind::Share => "SHARE",
-            ExtensionKind::QuickLook => "QUICK LOOK",
+            ExtensionKind::Preview => "PREVIEW",
             ExtensionKind::FileProvider => "FILE PROVIDER",
             ExtensionKind::Widget => "WIDGETS",
         }
@@ -201,7 +201,7 @@ pub fn background_group(ext: &LoginExtensions) -> Option<Group> {
 /// With no extensions at all, a single group says so.
 pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
     if ext.extensions.is_empty() {
-        return vec![Group::new(vec![Item::new("No extensions")]).header("EXTENSIONS").footer("Apps add extensions to the share menu, Quick Look, file providers and widgets in their manifest.")];
+        return vec![Group::new(vec![Item::new("No extensions")]).header("EXTENSIONS").footer("Apps add extensions to the share menu, Preview, file providers and widgets in their manifest.")];
     }
     ExtensionKind::ALL
         .into_iter()
@@ -283,7 +283,7 @@ mod tests {
     fn extension_groups_follow_the_kind_order_and_say_when_there_are_none() {
         let ext = from_manifests([("is.photos", "Photos", PHOTOS), ("is.notes", "Notes", NOTES)]);
         let headers: Vec<String> = extension_groups(&ext).iter().filter_map(|g| g.header.clone()).collect();
-        assert_eq!(headers, ["SHARE", "QUICK LOOK", "WIDGETS"]);
+        assert_eq!(headers, ["SHARE", "PREVIEW", "WIDGETS"]);
         let none = extension_groups(&NO_EXTENSIONS);
         assert_eq!(none.len(), 1);
         assert_eq!(none[0].items[0].label, "No extensions");

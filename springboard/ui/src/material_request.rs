@@ -10,7 +10,7 @@ use crate::Rect;
 /// One translucent surface of the shell itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ShellSurface {
-    Spotlight,
+    Search,
     MenuBar,
     MenuBarMenu,
     ContextMenu,
@@ -30,7 +30,7 @@ pub enum ShellSurface {
 
 impl ShellSurface {
     pub const ALL: [ShellSurface; 16] = [
-        ShellSurface::Spotlight,
+        ShellSurface::Search,
         ShellSurface::MenuBar,
         ShellSurface::MenuBarMenu,
         ShellSurface::ContextMenu,
@@ -52,7 +52,7 @@ impl ShellSurface {
     pub fn material(self) -> MaterialKind {
         use MaterialKind as M;
         match self {
-            ShellSurface::Spotlight | ShellSurface::ControlCentre | ShellSurface::NotificationPanel | ShellSurface::OverviewPill => M::HudWindow,
+            ShellSurface::Search | ShellSurface::ControlCentre | ShellSurface::NotificationPanel | ShellSurface::OverviewPill => M::HudWindow,
             ShellSurface::MenuBar | ShellSurface::SettingsToolbar => M::HeaderView,
             ShellSurface::MenuBarMenu | ShellSurface::ContextMenu => M::Menu,
             ShellSurface::Dock => M::UnderWindowBackground,
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn every_shell_surface_maps_to_a_reference_material() {
         let table = [
-            (ShellSurface::Spotlight, M::HudWindow),
+            (ShellSurface::Search, M::HudWindow),
             (ShellSurface::MenuBar, M::HeaderView),
             (ShellSurface::MenuBarMenu, M::Menu),
             (ShellSurface::ContextMenu, M::Menu),
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn request_carries_the_surface_material() {
-        let r = ShellSurface::Spotlight.request((1.0, 2.0, 3.0, 4.0), 12.0);
+        let r = ShellSurface::Search.request((1.0, 2.0, 3.0, 4.0), 12.0);
         assert_eq!(r.kind, M::HudWindow);
         assert_eq!(r.corners().tl, 1.5, "clamped so adjacent corners never overlap");
         assert_eq!(r.state, MaterialState::FollowsWindowActiveState);

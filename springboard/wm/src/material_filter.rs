@@ -1,7 +1,7 @@
 //! The colour filter stages of a material, as pure math (host-testable): the saturation matrix, the brightness
 //! offset and the luminance mapping. The compose shader (`gpu/shaders/compose.frag`) and the GLES glass path
 //! (`glass.rs`) implement the same arithmetic; the tests here are the hand-computed reference both are held to.
-//! Measured values and the evidence: `docs/reference/materials-macos27.md`.
+//! Measured values and the evidence: `docs/reference/materials-recipes.md`.
 //!
 //! Order of the stages on a blurred backdrop pixel (straight RGB, 0..=1), each stage clamped to 0..=1:
 //! 1. saturation: `mix(luma, rgb, s)` with the Rec.709 luma weights (the weights are confirmed by the glass colour

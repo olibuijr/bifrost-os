@@ -651,6 +651,7 @@ pub mod tests {
         encode::encode_png(w as usize, h as usize, &px, &encode::PngOptions::default()).unwrap()
     }
 
+    #[cfg(test)]
     fn sample_image(w: usize, h: usize) -> CgImage {
         let px: Vec<u8> = (0..h).flat_map(|y| (0..w).flat_map(move |x| [(x * 40) as u8, (y * 60) as u8, 90, 255])).collect();
         CgImage::from_rgba8(w, h, px).unwrap()

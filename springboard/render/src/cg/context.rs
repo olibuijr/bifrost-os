@@ -133,7 +133,6 @@ pub struct Shadow {
     pub color: Color,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 struct GState {
     ctm: Affine,
@@ -153,10 +152,6 @@ struct GState {
     interp: Interpolation,
     antialias: bool,
     allows_antialias: bool,
-    font_smoothing: bool,
-    allows_font_smoothing: bool,
-    subpixel_positioning: bool,
-    subpixel_quantization: bool,
     font_size: f32,
     char_spacing: f32,
     text_mode: TextDrawing,
@@ -182,10 +177,6 @@ impl GState {
             interp: Interpolation::Default,
             antialias: true,
             allows_antialias: true,
-            font_smoothing: true,
-            allows_font_smoothing: true,
-            subpixel_positioning: false,
-            subpixel_quantization: true,
             font_size: 12.0,
             char_spacing: 0.0,
             text_mode: TextDrawing::Fill,
@@ -737,22 +728,6 @@ impl<'a> DrawContext<'a> {
 
     pub fn set_allows_antialiasing(&mut self, on: bool) {
         self.gs.allows_antialias = on;
-    }
-
-    pub fn set_should_smooth_fonts(&mut self, on: bool) {
-        self.gs.font_smoothing = on;
-    }
-
-    pub fn set_allows_font_smoothing(&mut self, on: bool) {
-        self.gs.allows_font_smoothing = on;
-    }
-
-    pub fn set_should_subpixel_position_fonts(&mut self, on: bool) {
-        self.gs.subpixel_positioning = on;
-    }
-
-    pub fn set_should_subpixel_quantize_fonts(&mut self, on: bool) {
-        self.gs.subpixel_quantization = on;
     }
 
     /// Edges are anti-aliased only when both the state flag and the context permission allow it.

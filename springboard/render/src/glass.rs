@@ -69,8 +69,8 @@ pub struct Style {
     pub follows_active: bool,
 }
 
-/// The measured filter of one material in one appearance (macOS 27 material recipes,
-/// `docs/reference/materials-macos27.md`); the window server holds the same numbers in `wm/src/material_kind.rs`.
+/// The measured filter of one material in one appearance (reference OS 27 material recipes,
+/// `docs/reference/materials-recipes.md`); the window server holds the same numbers in `wm/src/material_kind.rs`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Look {
     pub saturation: f32,

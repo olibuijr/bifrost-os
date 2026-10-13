@@ -58,7 +58,7 @@ impl<S: Read + Write> Session<S> {
         self.run(&imap::select(mailbox)).map(|_| ())
     }
 
-    /// The UIDs of every message in the selected mailbox, in the server's order (ascending for most servers).
+    /// The UID values of every message in the selected mailbox, in the server's order (ascending for most servers).
     pub fn uids(&mut self) -> Result<Vec<u32>, String> {
         let untagged = self.run(&imap::uid_search_all())?;
         Ok(untagged.iter().find_map(|line| imap::parse_search(line)).unwrap_or_default())

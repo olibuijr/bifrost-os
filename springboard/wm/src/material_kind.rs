@@ -4,7 +4,7 @@
 //! The kinds mirror the reference platform's visual-effect materials (titlebar, menu, popover, sidebar, header view,
 //! sheet, window background, HUD, full-screen UI, tooltip, content background, under-window and under-page
 //! background) plus the two Liquid Glass variants. The numbers (blur, saturation, brightness, luminance mapping) are
-//! measured from the platform's material recipes (`docs/reference/materials-macos27.md`); the opaque plates equal the
+//! measured from the platform's material recipes (`docs/reference/materials-recipes.md`); the opaque plates equal the
 //! flat colours of the shell's `MATERIAL_*` pairs (`render/src/ui.rs`) so a client region and a shell window of one
 //! kind look the same.
 //!
@@ -174,7 +174,7 @@ pub type Rgba = [f32; 4];
 
 /// The recipe of one kind: blur, saturation and tone for Dark and Light, a tint, and the opaque inactive plate.
 ///
-/// The numbers of the measured kinds come from the macOS 27 material recipes (`docs/reference/materials-macos27.md`);
+/// The numbers of the measured kinds come from the reference OS 27 material recipes (`docs/reference/materials-recipes.md`);
 /// kinds without a recipe (clear glass, selection, the plain blur) keep their designed values and are marked below.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Recipe {
@@ -279,7 +279,7 @@ fn designed(blur: f32, saturation: f32, tint_dark: Rgba, tint_light: Rgba, plate
 const TITLEBAR_PLATE: (Rgba, Rgba) = (c(28, 28, 30, 255), c(246, 246, 246, 255));
 const WINDOW_PLATE: (Rgba, Rgba) = (c(30, 30, 32, 255), c(240, 240, 240, 255));
 
-/// The recipe of `kind` (pure). Which platform recipe each kind takes is in `docs/reference/materials-macos27.md`.
+/// The recipe of `kind` (pure). Which platform recipe each kind takes is in `docs/reference/materials-recipes.md`.
 pub fn recipe(kind: MaterialKind) -> Recipe {
     use MaterialKind::*;
     match kind {
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(rc.plate_dark[3], 1.0, "the inactive plate is opaque");
     }
 
-    /// The recipe table against the documented values (`docs/reference/materials-macos27.md`, section "Recipes per
+    /// The recipe table against the documented values (`docs/reference/materials-recipes.md`, section "Recipes per
     /// material kind"): blur, saturation Dark/Light, tone Dark/Light.
     #[test]
     fn the_recipe_table_matches_the_document() {
