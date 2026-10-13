@@ -30,6 +30,13 @@ Sources: Apple Support, "Choose an app to open a file on Mac"; AppKit `NSWorkspa
   difference; the per-type model underneath is the same, so Get Info > Open with can use it unchanged.
 - Storage: one preference, `default.apps` (`type public.png <app>;scheme https <app>`); choices for an app that is not
   installed are kept and apply again if it returns.
-- Not done yet: opening a file from Files or a link from the shell through `Shell::default_app_for_file` (the registry
-  is ready; Files still opens its own previews), the Open With context menu, Get Info > Open with in Files, `open-url`
-  routing by scheme, and an SDK request for apps to ask the shell to open a path.
+- Shell service: `launch` (`shell/services/launch_services.rs`, SDK `bifrost_app::launch_services`) answers
+  `default_for_file`, the Open With candidates (default first, `Shell::open_with_choices`) and the URL-scheme lookups
+  (`default_app_for_scheme`, `apps_for_scheme`). Apps reach it without touching the registry.
+- Links: `open-url` on the control port (and `bifrost-open-url`) goes through `Shell::desktop_open_link`: web links to the
+  browser, any other declared scheme (`mailto:`, `bifrost-app:`) to the app the registry names; local and script schemes
+  are refused.
+- Files: the Open With panel (`springboard/apps/files/src/openwith.rs`) lists the candidates with the default marked.
+  It is read-only: no shell call opens a file in a chosen app yet, so a row cannot open the file.
+- Not done yet: opening a file in a chosen app (the missing shell call), Get Info > Open with in Files, and Open With in the
+  context menu.
