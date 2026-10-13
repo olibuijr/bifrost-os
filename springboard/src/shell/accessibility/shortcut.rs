@@ -1,10 +1,11 @@
-//! The Accessibility Shortcut (Option+Cmd+F5). One key switches the chosen accessibility features on, or off again when
-//! they are all on already. The choice is the `a11y_shortcut` pref: a comma list of feature keys (`screen_reader`,
-//! `zoom`, ...). With nothing chosen the key does nothing. The panel that lets the user pick them is not built yet.
+//! The Accessibility Shortcut (Option+Cmd+F5). The key opens the Accessibility Shortcut panel (`shortcut_panel.rs`), which
+//! lists the chosen features with a checkbox each; a tap switches one feature. The choice is the `a11y_shortcut` pref: a
+//! comma list of feature keys (`screen_reader`, `zoom`, ...). `toggle` switches a set of features all on or all off.
 //!
-//! The toggle works on the same `AccessibilitySettings` the Settings window edits, so an open Settings page shows the
+//! The panel works on the same `AccessibilitySettings` the Settings window edits, so an open Settings page shows the
 //! switches moving and the choice is saved like any other setting.
 
+use super::shortcut_panel::ShortcutPanel;
 use super::{AccessibilitySettings, ZOOMS};
 use crate::shell::prefs::Prefs;
 use crate::shell::Shell;
@@ -120,20 +121,17 @@ pub fn toggle(a: &mut AccessibilitySettings, features: &[Feature]) -> bool {
 }
 
 impl Shell {
-    /// Option+Cmd+F5: switches the chosen features, updating the open Settings window's copy and saving the result.
+    /// Option+Cmd+F5: shows the panel with the chosen features, or hides it when it is up. The panel lists the features
+    /// even when none is chosen, with a hint that says where to choose them.
     pub(in crate::shell) fn accessibility_shortcut(&mut self) {
-        let features = chosen(&self.prefs);
-        if features.is_empty() {
+        if self.a11y_panel.is_some() {
+            self.a11y_panel = None;
+            self.a11y_panel_changed();
             return;
         }
-        let mut a = self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone());
-        toggle(&mut a, &features);
-        a.save(&mut self.prefs);
-        if let Some(st) = &mut self.settings {
-            st.set_accessibility(a.clone());
-        }
-        a.publish();
-        self.dirty = true;
+        let a = self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone());
+        self.a11y_panel = Some(ShortcutPanel::new(a));
+        self.a11y_panel_changed();
     }
 }
 
