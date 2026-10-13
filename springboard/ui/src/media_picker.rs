@@ -80,18 +80,17 @@ impl MediaPicker {
         self.kinds.is_empty() || self.kinds.contains(&kind)
     }
 
-    /// The ids the list shows: every item sorted by title, or the matches for the query, best match first.
+    /// The ids the list shows: the items of an accepted kind sorted by title, or the matches for the query, best
+    /// match first. Items of other kinds are not listed.
     pub fn visible(&self) -> Vec<u64> {
+        let shown: Vec<&PickItem> = self.items.iter().filter(|i| self.accepts(i.kind)).collect();
         if self.query.is_empty() {
-            let mut all: Vec<&PickItem> = self.items.iter().collect();
+            let mut all = shown;
             all.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()).then(a.id.cmp(&b.id)));
             return all.iter().map(|i| i.id).collect();
         }
-        let texts: Vec<String> = self.items.iter().map(|i| format!("{} {} {}", i.title, i.artist, i.album)).collect();
-        fuzzy::rank(&self.query, texts.iter().map(|s| s.as_str()))
-            .into_iter()
-            .map(|(i, _)| self.items[i].id)
-            .collect()
+        let texts: Vec<String> = shown.iter().map(|i| format!("{} {} {}", i.title, i.artist, i.album)).collect();
+        fuzzy::rank(&self.query, texts.iter().map(|s| s.as_str())).into_iter().map(|(i, _)| shown[i].id).collect()
     }
 
     /// Chooses `id` if it is not chosen, or drops it if it is. Returns true when the item is now chosen.
@@ -156,9 +155,27 @@ mod tests {
     fn a_query_keeps_only_the_matches() {
         let mut p = MediaPicker::new(library(), vec![], Selection::One);
         p.set_query("rad");
-        let shown = p.visible();
-        assert!(shown.contains(&3), "{shown:?}");
-        assert!(!shown.contains(&2), "{shown:?}");
+        assert_eq!(p.visible(), vec![3]);
+        p.set_query("   ");
+        assert_eq!(p.visible().len(), 4, "a blank query lists everything again");
+    }
+
+    #[test]
+    fn a_query_ranks_the_closer_match_first() {
+        let mut items = library();
+        items.push(PickItem { artist: "Rad".into(), ..item(5, Kind::Song, "Other", true) });
+        let mut p = MediaPicker::new(items, vec![], Selection::One);
+        p.set_query("rad");
+        // "Radio Days" starts with the query; "Other" only matches through its artist.
+        assert_eq!(p.visible(), vec![3, 5]);
+    }
+
+    #[test]
+    fn the_list_hides_kinds_the_app_did_not_ask_for() {
+        let mut p = MediaPicker::new(library(), vec![Kind::Song], Selection::One);
+        assert_eq!(p.visible(), vec![2, 4, 1]);
+        p.set_query("rad");
+        assert!(p.visible().is_empty());
     }
 
     #[test]

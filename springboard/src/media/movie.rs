@@ -83,15 +83,21 @@ mod tests {
     fn the_movie_duration_is_positive_when_declared() {
         let m = movie(BASELINE);
         let duration = m.duration_ms.expect("duration");
-        assert!(duration > 0.0, "{duration}");
+        assert!((duration - 1000.0).abs() < 50.0, "{duration}");
         let video = m.track(Kind::Video).unwrap();
-        assert!(video.duration_ms.unwrap() > 0.0);
+        let video_ms = video.duration_ms.expect("video duration");
+        assert!((video_ms - 1000.0).abs() < 50.0, "{video_ms}");
+        let audio_ms = m.track(Kind::Audio).unwrap().duration_ms.expect("audio duration");
+        assert!(audio_ms > 900.0 && audio_ms < 1100.0, "{audio_ms}");
     }
 
     #[test]
     fn an_audio_file_is_audio_only() {
         let m = movie(TONE_M4A);
         assert!(m.is_audio_only());
+        assert_eq!(m.tracks.len(), 1);
+        assert!(m.track(Kind::Video).is_none());
         assert_eq!(m.track(Kind::Audio).unwrap().codec, "aac");
+        assert!(m.duration_ms.unwrap() > 0.0);
     }
 }
