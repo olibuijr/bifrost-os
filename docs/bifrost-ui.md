@@ -3136,6 +3136,23 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
   they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
   so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).
 
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
+the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+app runs on a touch tablet.
+
+Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
+desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
+attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
+`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
+desktop.
+
+Not wired yet: nothing calls `Shell::set_hardware_keyboard` (the evdev discovery must), and the windowed desktop UI
+(`draw_desk`, `desk_event`) neither draws the keyboard nor routes touches to it, so on a tablet in that UI the policy
+allows a keyboard that is not yet visible. The Bifrost presentation draws and routes it as before.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the

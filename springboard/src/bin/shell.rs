@@ -310,8 +310,9 @@ fn run() -> std::io::Result<()> {
     };
     springboard::bare::timezone::persist_to_system(true);
     springboard::shell::keyboard::set_predictive_default(true);
-    // the PC has a hardware keyboard: no on-screen keyboard in the shell or in apps
-    springboard::shell::keyboard::set_disabled(true);
+    // a desktop has a hardware keyboard: no on-screen keyboard in the shell or in apps. A tablet keeps it; the shell
+    // then raises it for text fields unless a hardware keyboard is attached (`Shell::set_hardware_keyboard`)
+    springboard::shell::keyboard::set_disabled(bifrost_ui::form_factor::FormFactor::current().keyboard_disabled_globally());
     // the first frame's wallpaper is the cache's cover-fitted copy when it was built for this panel and this still (boot-08)
     let wallpaper_file = springboard::first_frame_cache::wallpaper_path(&dir, &current_wallpaper).unwrap_or_default();
     springboard::first_frame_cache::activate((w as u32, h as u32), &dir, &wallpaper_file);

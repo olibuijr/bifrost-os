@@ -36,6 +36,8 @@
         if !desktop {
             sh.desk = None;
         }
+        // tests do not depend on BIFROST_FORM or /etc/bifrost/form of the machine they run on
+        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
         sh
     }
 
@@ -81,6 +83,43 @@
         sh.desk=Some(desk::Desk::new());
         sh.set_keyboard(true,1200.);
         assert!(!sh.keyboard.shown(),"a desktop has a hardware keyboard");
+    }
+
+    #[test]
+    fn a_tablet_raises_the_on_screen_keyboard_even_with_the_desktop_ui_up() {
+        let mut sh=shell();
+        sh.form=bifrost_ui::form_factor::FormFactor::Tablet;
+        sh.desk=Some(desk::Desk::new());
+        sh.set_keyboard(true,1000.);
+        assert!(sh.keyboard.shown(),"a tablet has no physical keys");
+        sh.set_keyboard(false,1100.);
+        assert!(!sh.keyboard.shown(),"tapping outside still dismisses it");
+    }
+
+    #[test]
+    fn an_attached_hardware_keyboard_hides_the_tablet_keyboard_and_keeps_it_down() {
+        let mut sh=shell();
+        sh.form=bifrost_ui::form_factor::FormFactor::Tablet;
+        sh.desk=Some(desk::Desk::new());
+        sh.set_keyboard(true,1000.);
+        assert!(sh.keyboard.shown());
+        sh.set_hardware_keyboard(true,1100.);
+        assert!(!sh.keyboard.shown(),"attaching a keyboard hides the on-screen one");
+        sh.set_keyboard(true,1200.);
+        assert!(!sh.keyboard.shown(),"and a text field cannot raise it while it is attached");
+        sh.set_hardware_keyboard(false,1300.);
+        sh.set_keyboard(true,1400.);
+        assert!(sh.keyboard.shown(),"detaching it brings the on-screen keyboard back");
+    }
+
+    #[test]
+    fn a_desktop_ignores_the_hardware_keyboard_state() {
+        let mut sh=shell();
+        sh.desk=Some(desk::Desk::new());
+        sh.set_hardware_keyboard(false,1000.);
+        sh.set_keyboard(true,1100.);
+        assert!(!sh.keyboard.shown(),"the desktop form never raises it");
+        assert_eq!(sh.form(),bifrost_ui::form_factor::FormFactor::Desktop);
     }
 
     #[cfg(feature="desktop-wayland")]

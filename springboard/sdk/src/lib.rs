@@ -305,6 +305,14 @@ pub mod gpu_layer;
 pub mod offscreen;
 /// Frame-rate ranges and transitions, shared with the shell.
 pub use bifrost_ui::{frame_rate, transition};
+/// The form factor the app runs on (desktop or touch tablet), shared with the shell through `bifrost_ui`.
+pub use bifrost_ui::form_factor;
+pub use bifrost_ui::form_factor::FormFactor;
+
+/// Whether this app runs on a touch tablet: touch is the primary input and the on-screen keyboard can appear.
+pub fn is_touch_tablet() -> bool {
+    FormFactor::current().is_tablet()
+}
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};
 /// `NativeCache` parity (see `docs/bifrost-ui.md`, "Cache").
