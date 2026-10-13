@@ -152,6 +152,7 @@ enum Act {
     ShareMd,
     ShareText,
     SharePdf,
+    InsertTable,
     /// move the open note to a folder ("" is no folder)
     MoveTo(String),
     Style(md::Block),
@@ -1475,6 +1476,7 @@ impl Notes {
             ("Photo from Library".to_string(), Act::ChoosePhoto, false),
             ("Attach Latest Photo".to_string(), Act::AttachPhoto, false),
             ("Insert Sketch".to_string(), Act::InsertSketch, false),
+            ("Insert Table".to_string(), Act::InsertTable, false),
             ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
             ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
             ("Replace in Note".to_string(), Act::Replace, false),
@@ -1752,6 +1754,7 @@ impl Notes {
             }
             Act::AttachPhoto => self.attach_latest_photo(ui, t),
             Act::InsertSketch => self.open_sketch(),
+            Act::InsertTable => self.insert_table(ui, t),
             Act::TogglePin => self.activate(ui, Target::EditorPin, 0.0, 0.0, t),
             Act::ToggleWholeWord => {
                 self.whole_word = !self.whole_word;
@@ -1825,6 +1828,18 @@ impl Notes {
         let caret = self.editor.caret();
         self.editor.replace_range(ui, caret..caret, &line, t, false);
         self.load_images(ui);
+        self.changed(ui, t);
+    }
+
+    /// Insert Table (editor menu): a header row, its rule and one empty row, as a Markdown pipe table, on
+    /// their own paragraph at the caret. Cells are typed in place; the table is saved as plain text.
+    fn insert_table(&mut self, ui: &Ui, t: f64) {
+        let para = self.editor.paragraph_of(self.editor.caret());
+        let at_start = self.editor.caret() == para.start;
+        let table = "| Column | Column |\n| --- | --- |\n|  |  |\n";
+        let line = format!("{}{}\n", if at_start { "" } else { "\n" }, table);
+        let caret = self.editor.caret();
+        self.editor.replace_range(ui, caret..caret, &line, t, false);
         self.changed(ui, t);
     }
 
@@ -3756,6 +3771,20 @@ mod tests {
         let bytes = std::fs::read(&pdf_path).unwrap();
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(String::from_utf8_lossy(&bytes).contains("([x] milk) Tj"), "checklist lines keep their plain text");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn insert_table_puts_a_pipe_table_on_its_own_paragraph() {
+        let ui = ui();
+        let dir = scratch("table");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Before");
+        n.run(&ui, Act::InsertTable, 1900.0);
+        let text = n.editor.text().to_string();
+        assert!(text.starts_with("Before\n| Column | Column |\n| --- | --- |\n|  |  |\n"), "{text:?}");
+        let pdf = pdf::render("Before", &md::to_plain(&text));
+        assert!(String::from_utf8_lossy(&pdf).contains("Column   |   Column"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
