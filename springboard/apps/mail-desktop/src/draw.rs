@@ -137,7 +137,7 @@ pub struct SheetLayout {
 
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
     let form = match sheet {
-        Sheet::Setup(form) => form,
+        Sheet::Setup(form) | Sheet::Search(form) => form,
         Sheet::Compose(compose) => &compose.form,
     };
     let pad = ui.pt(SHEET_PAD_PT);
@@ -302,8 +302,9 @@ impl MailWindow {
         if x < side + list {
             let row = ui.pt(ROW_PT);
             let index = ((y - top + self.list_scroll.offset()) / row).floor();
-            if index >= 0.0 && (index as usize) < self.mail.rows.len() {
-                return Hit::Message(self.mail.rows[index as usize].uid);
+            let rows = self.mail.visible_rows();
+            if index >= 0.0 && (index as usize) < rows.len() {
+                return Hit::Message(rows[index as usize].uid);
             }
         }
         Hit::None
@@ -372,13 +373,14 @@ impl MailWindow {
         let inset = ui.pt(SPACE_S);
         let dot = ui.pt(DOT_PT);
         let area = (h - top).max(0.0);
-        self.list_scroll.set_max((self.mail.rows.len() as f32 * row - area).max(0.0));
+        let rows = self.mail.visible_rows();
+        self.list_scroll.set_max((rows.len() as f32 * row - area).max(0.0));
         let offset = self.list_scroll.offset();
         s.fill_rect(px(x0), px(top), px(width), px(area), CONTENT_BG.now());
         let text_x = x0 + pad + dot;
         let right = x0 + width - pad;
         let open = self.mail.open;
-        for (i, r) in self.mail.rows.iter().enumerate() {
+        for (i, r) in rows.iter().enumerate() {
             let y = top + i as f32 * row - offset;
             if y + row < top || y > h {
                 continue;
@@ -407,9 +409,11 @@ impl MailWindow {
         let footer = ui.pt(FOOT_LINE_PT) + 2.0 * pad;
         let footer_top = top + area - footer;
         let centre_x = x0 + width / 2.0;
-        if self.mail.rows.is_empty() {
+        if rows.is_empty() {
             let message = if self.mail.accounts.is_empty() {
                 "Add an account to start"
+            } else if !self.mail.search.is_empty() && !self.mail.rows.is_empty() {
+                "No matching messages"
             } else if self.busy() {
                 "Loading..."
             } else {
@@ -509,6 +513,7 @@ impl MailWindow {
         s.fill_rrect(px_, py, pw, ph, radius, CARD_BG.now());
 
         let (title, action, form) = match sheet {
+            Sheet::Search(form) => ("Find", "Search", form),
             Sheet::Setup(form) => ("Add Account", "Add Account", form),
             Sheet::Compose(compose) => (if compose.in_reply_to.is_some() { "Reply" } else { "New Message" }, "Send", &compose.form),
         };

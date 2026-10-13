@@ -32,6 +32,8 @@ pub const MENU_FLAG: u32 = 6;
 pub const MENU_UNREAD: u32 = 7;
 pub const MENU_ARCHIVE: u32 = 8;
 pub const MENU_TRASH: u32 = 9;
+pub const MENU_FIND: u32 = 10;
+pub const MENU_SHOW_ALL: u32 = 11;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
@@ -328,7 +330,14 @@ impl MailWindow {
             },
             AppMenu {
                 title: "Mailbox".into(),
-                items: vec![AppMenuItem::new(MENU_REFRESH, "Refresh").key("cmd+r"), AppMenuItem::separator(), AppMenuItem::new(MENU_ADD, "Add Account...")],
+                items: vec![
+                    AppMenuItem::new(MENU_REFRESH, "Refresh").key("cmd+r"),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
+                    AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!self.mail.search.is_empty()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ADD, "Add Account..."),
+                ],
             },
         ]
     }
@@ -344,6 +353,8 @@ impl MailWindow {
             MENU_UNREAD => self.toggle_flag(Flag::Seen),
             MENU_ARCHIVE => self.move_open(&ARCHIVE_NAMES, "Archive"),
             MENU_TRASH => self.move_open(&TRASH_NAMES, "Trash"),
+            MENU_FIND => self.mail.open_search(),
+            MENU_SHOW_ALL => self.mail.apply_search(""),
             _ => return false,
         }
         self.dirty = true;
@@ -539,6 +550,11 @@ impl MailWindow {
                 }
             }
             Some(Sheet::Compose(compose)) => self.send(&compose),
+            Some(Sheet::Search(form)) => {
+                let text = form.value("Search").to_string();
+                self.mail.apply_search(&text);
+                self.mail.close_sheet();
+            }
             None => {}
         }
     }
@@ -589,7 +605,7 @@ impl MailWindow {
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
         match self.mail.sheet.as_mut()? {
-            Sheet::Setup(form) => Some(form),
+            Sheet::Setup(form) | Sheet::Search(form) => Some(form),
             Sheet::Compose(compose) => Some(&mut compose.form),
         }
     }

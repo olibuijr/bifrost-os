@@ -4,6 +4,7 @@
 
 use crate::flags::{Flag, Flags};
 use crate::message::{self, Draft, Summary};
+use crate::search::{Doc, Query};
 use crate::session::Listed;
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use std::collections::HashMap;
@@ -94,6 +95,8 @@ pub struct Compose {
 pub enum Sheet {
     Setup(Form),
     Compose(Compose),
+    /// The Find sheet: one field, the search text.
+    Search(Form),
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -132,6 +135,8 @@ pub struct Mail {
     pub baseline: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
     pub status: String,
+    /// The search text as applied. Empty shows every message.
+    pub search: String,
 }
 
 impl Mail {
@@ -148,6 +153,7 @@ impl Mail {
             baseline: HashMap::new(),
             sheet: None,
             status: String::new(),
+            search: String::new(),
         }
     }
 
@@ -279,6 +285,37 @@ impl Mail {
         ]);
         form.focus_on(if draft.to.is_empty() { 0 } else { 2 });
         self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references }));
+    }
+
+    /// The Find sheet, with the search applied so far.
+    pub fn open_search(&mut self) {
+        let text = self.search.clone();
+        self.sheet = Some(Sheet::Search(Form::new(vec![Field::new("Search", "from:ana subject:fundur \"exact phrase\"", &text)])));
+    }
+
+    /// Applies a search text. Empty (or blank) shows every message again.
+    pub fn apply_search(&mut self, text: &str) {
+        self.search = text.trim().to_string();
+    }
+
+    /// The rows the list shows: the loaded rows that match the search, newest first. Bodies are searched when they are
+    /// loaded; a message whose body is not loaded matches on its headers only.
+    pub fn visible_rows(&self) -> Vec<Row> {
+        let query = Query::parse(&self.search);
+        self.rows
+            .iter()
+            .filter(|row| {
+                let body = self.bodies.get(&row.uid).map_or("", String::as_str);
+                let doc = Doc {
+                    from: row.summary.from.as_str(),
+                    to: row.summary.to.as_str(),
+                    subject: row.summary.subject.as_str(),
+                    body,
+                };
+                query.matches(&doc)
+            })
+            .cloned()
+            .collect()
     }
 
     pub fn close_sheet(&mut self) {
@@ -467,6 +504,32 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn the_search_filters_the_rows_and_an_empty_search_shows_all() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Fundur"), listed(4, "Reikningur")]);
+        assert_eq!(mail.visible_rows().len(), 2);
+        mail.apply_search("  subject:fundur ");
+        assert_eq!(mail.search, "subject:fundur");
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![3]);
+        mail.body_arrived("work", INBOX, 4, "Fundur um reikninginn".into());
+        mail.apply_search("body:fundur");
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
+        mail.apply_search("");
+        assert_eq!(mail.visible_rows().len(), 2);
+    }
+
+    #[test]
+    fn the_find_sheet_starts_from_the_applied_search() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_search("bo");
+        mail.open_search();
+        match &mail.sheet {
+            Some(Sheet::Search(form)) => assert_eq!(form.value("Search"), "bo"),
+            other => panic!("expected the Find sheet, got {other:?}"),
+        }
     }
 
     #[test]
