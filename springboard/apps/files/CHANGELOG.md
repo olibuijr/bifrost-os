@@ -1,3 +1,7 @@
+## 1.25.0 — 2026-10-13
+
+- Double-clicking an .iso or .img attaches it read-only through `hdiutil attach` and opens the volume's folder in Files. Get Info still reads the image's own descriptor.
+
 ## 1.24.0 — 2026-10-13
 
 - Icon view, gallery and the preview column draw pictures from the system thumbnails service: any file the service can draw (pictures, text pages, fonts, Office documents, audio and video covers, contacts, calendar events) shows its picture, and the rest keep their type icon. Files no longer decodes pictures itself, so the view does not read files on the paint path.

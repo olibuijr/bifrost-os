@@ -1,6 +1,6 @@
 id = "is.olibuijr.files.desktop"
 name = "Files"
-version = "1.24.0"
+version = "1.25.0"
 exec = "bifrost-files"
 icon = "icon.png"
 min_shell = "0.4.84"

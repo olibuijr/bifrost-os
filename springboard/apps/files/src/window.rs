@@ -136,6 +136,21 @@ impl Files {
             // opening an archive expands it next to itself
             let dest = e.path.parent().map(Path::to_path_buf).unwrap_or_else(|| self.path.clone());
             self.start_job("Expanding", JobKind::Extract, vec![e.path], dest);
+        } else if Self::is_disk_image(&e) {
+            // a disk image mounts read-only (`hdiutil attach` prints the loop device and the folder), then the folder opens here
+            let path = e.path;
+            DispatchQueue::global(Qos::Utility).async_(move || {
+                let Ok(out) = std::process::Command::new("hdiutil").arg("attach").arg(&path).output() else {
+                    return;
+                };
+                if !out.status.success() {
+                    return;
+                }
+                let text = String::from_utf8_lossy(&out.stdout).into_owned();
+                if let Some((_, point)) = text.trim().split_once(' ') {
+                    let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg("--open").arg(point).status();
+                }
+            });
         } else {
             let path = e.path;
             DispatchQueue::global(Qos::Utility).async_(move || {
