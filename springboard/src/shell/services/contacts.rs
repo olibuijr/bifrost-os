@@ -182,6 +182,13 @@ fn value_of(record: &Record, key: Key) -> Result<String, String> {
             [one] => Ok(one.trim().to_string()),
             _ => Err(format!("{} takes one value per contact", key.name())),
         },
+        Some(Value::Labeled(items)) => match items.as_slice() {
+            [] => Ok(String::new()),
+            [one] => Ok(one.value.trim().to_string()),
+            _ => Err(format!("{} takes one value per contact", key.name())),
+        },
+        // birthday and dates live in the contacts sidecar, which `save` does not write yet
+        Some(Value::Date(_) | Value::Dates(_)) => Err(format!("{} cannot be saved yet", key.name())),
     }
 }
 

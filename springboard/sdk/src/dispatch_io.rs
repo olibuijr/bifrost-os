@@ -135,7 +135,7 @@ impl DispatchIO {
             let bytes = data.to_vec();
             let mut done = 0usize;
             loop {
-                let remaining = || {
+                let remaining = |done: usize| {
                     if done < bytes.len() {
                         Some(DispatchData::from_slice(&bytes[done..]))
                     } else {
@@ -143,7 +143,7 @@ impl DispatchIO {
                     }
                 };
                 if io.closed.load(Ordering::SeqCst) {
-                    handler(true, remaining(), ECANCELED);
+                    handler(true, remaining(done), ECANCELED);
                     return;
                 }
                 if done >= bytes.len() {
@@ -160,12 +160,12 @@ impl DispatchIO {
                     Ok(n) => {
                         done += n;
                         if done < bytes.len() {
-                            handler(false, remaining(), 0);
+                            handler(false, remaining(done), 0);
                         }
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                     Err(e) => {
-                        handler(true, remaining(), e.raw_os_error().unwrap_or(5));
+                        handler(true, remaining(done), e.raw_os_error().unwrap_or(5));
                         return;
                     }
                 }
@@ -177,7 +177,6 @@ impl DispatchIO {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write as _;
     use std::os::fd::FromRawFd;
     use std::sync::mpsc;
     use std::time::Duration;
