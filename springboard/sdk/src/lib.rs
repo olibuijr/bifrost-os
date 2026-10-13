@@ -543,3 +543,5 @@ pub mod definitions;
 
 pub mod encryption_preference;
 pub mod graphics_context;
+pub mod graphics_stroke;
+pub mod graphics_gradient;
