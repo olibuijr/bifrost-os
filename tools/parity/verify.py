@@ -23,7 +23,10 @@ import parity
 SRC_ROOT = parity.ROOT
 WORKSPACE = os.path.join(SRC_ROOT, "springboard")
 REMOTE_DIR = "/var/tmp/parity-verify"
-MIDGET = "midget"
+# The lab machine over the lab network with the lab key (tools/midget.py); MIDGET_HOST overrides the address.
+_KEY = os.path.join(parity.ROOT, "out/lab/id_ed25519")
+SSH = ["ssh", "-i", _KEY, "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes",
+       "-o", "ConnectTimeout=5", "-o", "LogLevel=ERROR", "root@" + os.environ.get("MIDGET_HOST", "10.99.0.200")]
 HARDWARE = ("audio", "alsa", "drm", "kms", "evdev", "input", "bluetooth", "camera", "usb", "gpu", "sensor", "display",
             "pcm", "midi", "haptic", "printer", "scanner", "wayland", "libinput", "v4l")
 UI = ("draw", "render", "paint", "canvas", "window", "wm", "view", "layer", "gfx", "shell", "widget", "chrome", "scene",
@@ -198,11 +201,14 @@ def parse_results(stdout):
 
 def run_on_midget(exe, names, remote_name):
     """Copy `exe` to Midget and run exactly `names` with 4 threads; {name: passed}."""
-    if sh(["ssh", MIDGET, f"mkdir -p {REMOTE_DIR}"]).returncode or \
-            sh(["scp", "-q", exe, f"{MIDGET}:{REMOTE_DIR}/{remote_name}"]).returncode:
-        raise SystemExit("cannot reach midget over ssh/scp")
+    # ssh + cat, not scp: Midget has no sftp server
+    with open(exe, "rb") as f:
+        copied = subprocess.run(SSH + [f"mkdir -p {REMOTE_DIR} && cat > {REMOTE_DIR}/{remote_name} && chmod +x {REMOTE_DIR}/{remote_name}"],
+                                stdin=f, capture_output=True)
+    if copied.returncode:
+        raise SystemExit("cannot reach midget over ssh")
     quoted = " ".join("'%s'" % n for n in names)
-    return parse_results(sh(["ssh", MIDGET, f"cd {REMOTE_DIR} && ./{remote_name} --exact --test-threads 4 {quoted}"]).stdout)
+    return parse_results(sh(SSH + [f"cd {REMOTE_DIR} && ./{remote_name} --exact --test-threads 4 {quoted}"]).stdout)
 
 
 def row_result(row, outcome):
@@ -226,7 +232,7 @@ def run_crate(crate, rows):
         listed = [l[:-len(": test")] for l in out.splitlines() if l.endswith(": test")]
         resolved = {n: resolve(n, listed) for n in names}
         to_run = sorted(v for v in resolved.values() if v)
-        print(f"    {target}: {len(to_run)}/{len(names)} tests found, running on {MIDGET}", flush=True)
+        print(f"    {target}: {len(to_run)}/{len(names)} tests found, running on Midget", flush=True)
         ran = run_on_midget(exe, to_run, f"{crate}-{target}") if to_run else {}
         outcome.update({(target, n): ran.get(v) if v else None for n, v in resolved.items()})
     return outcome
