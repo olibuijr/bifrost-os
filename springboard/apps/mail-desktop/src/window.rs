@@ -27,6 +27,7 @@ pub const MENU_REPLY: u32 = 2;
 pub const MENU_SEND: u32 = 3;
 pub const MENU_REFRESH: u32 = 4;
 pub const MENU_ADD: u32 = 5;
+pub const MENU_PRINT: u32 = 6;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
@@ -316,6 +317,8 @@ impl MailWindow {
                     AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(self.mail.open.is_some()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(self.mail.open.is_some()),
                 ],
             },
             AppMenu {
@@ -332,6 +335,7 @@ impl MailWindow {
             MENU_SEND => self.submit(ctx),
             MENU_REFRESH => self.refresh_selected(),
             MENU_ADD => self.mail.open_setup(),
+            MENU_PRINT => self.print_open(),
             _ => return false,
         }
         self.dirty = true;
@@ -457,6 +461,23 @@ impl MailWindow {
         } else {
             self.mail.open_compose(None);
         }
+    }
+
+    /// Message > Print (Cmd+P): the open message's headers and decoded body as plain text. The job goes to CUPS on its own
+    /// thread; nothing prints until the body has arrived.
+    fn print_open(&self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(row) = self.mail.rows.iter().find(|r| r.uid == uid) else { return };
+        let Some(raw) = self.mail.bodies.get(&uid) else { return };
+        let s = &row.summary;
+        let text = format!("From: {}\nTo: {}\nDate: {}\nSubject: {}\n\n{}", s.from, s.to, s.date, s.subject, crate::body::readable(raw));
+        let title = if s.subject.is_empty() { "Message".to_string() } else { s.subject.clone() };
+        let job = bifrost_app::print::PrintOperation::text(title, text);
+        std::thread::spawn(move || {
+            if let Err(e) = job.run() {
+                eprintln!("Mail print: {e:?}");
+            }
+        });
     }
 
     fn reply(&mut self) {

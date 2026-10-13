@@ -1,4 +1,10 @@
 # Changelog
+
+## 0.4.0
+
+- Message > Print... (Cmd+P) prints the open message's headers and decoded body as plain text, through the shared print
+  operation. The job is submitted on its own thread.
+
 ## 0.3.0 — 2026-10-13
 
 - Live Mail: account setup sheet (password in the keychain), IMAP over TLS or STARTTLS for mailboxes, the newest
