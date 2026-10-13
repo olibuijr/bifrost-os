@@ -2036,6 +2036,13 @@ mod tests {
         let mut image = crate::gfx::Image::new(sh.w as usize, sh.h as usize);
         sh.draw(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t);
         std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/quicksearch-contacts.png"), super::super::screenshot::encode(&image)).unwrap();
+        // contacts are read on a worker (`refresh_sources`): let the read land, as the frames would
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !matches!(sh.quicksearch.top_hit(), Some(Hit::Contact { .. })) && std::time::Instant::now() < end {
+            let h = sh.h as i32;
+            sh.quicksearch.tick(&sh.ui, h, t);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
         let hit = sh.quicksearch.top_hit().unwrap();
         assert!(matches!(hit, Hit::Contact { id: 42, .. }));
         sh.quicksearch_act(hit, t + 50.0);

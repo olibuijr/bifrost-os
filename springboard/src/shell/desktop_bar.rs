@@ -118,6 +118,9 @@ impl Shell {
     pub(super) fn metrics_wanted(&self)->bool {false}
     #[cfg(not(feature="desktop-wayland"))]
     pub(super) fn metrics_menu_open(&self)->bool {false}
+    /// Without the desktop's chrome text cache, a label is fitted by the shared text measure.
+    #[cfg(not(feature="desktop-wayland"))]
+    pub(super) fn fit_chrome(&self,text:&str,pt:f32,max_px:f32)->String {self.ui.fit(text,pt,max_px)}
 }
 #[cfg(feature="desktop-wayland")]
 impl Shell {

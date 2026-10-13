@@ -363,6 +363,8 @@ impl super::Shell {
                         taken = true;
                     }
                 }
+                // file grants need the document broker, which only the desktop has
+                #[cfg(feature = "desktop-wayland")]
                 if !grants.is_empty() {
                     let request = self.app_share.next_inbound();
                     self.inbound_files(&sess.source_app, &key, to, request, &grants);
@@ -388,6 +390,12 @@ impl super::Shell {
     /// The copy runs on its own thread, so the shell keeps drawing: a folder is copied with everything in it (`batch`), and
     /// a name already there gets a number. The copy reads the paths, so the grants are not needed after this. True when the
     /// copy was started.
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn dnd_copy_to_desktop(&mut self, _source_app: &str, _grants: &[GrantId]) -> bool {
+        false
+    }
+
+    #[cfg(feature = "desktop-wayland")]
     fn dnd_copy_to_desktop(&mut self, source_app: &str, grants: &[GrantId]) -> bool {
         let Some(b) = self.doc_broker() else { return false };
         let home = b.opener.home().to_path_buf();
@@ -406,6 +414,10 @@ impl super::Shell {
     }
 
     /// The grants a drag made for its file items go when the drag ends. The destinations' own grants stay.
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn dnd_release_sources(&mut self, _sess: &Session) {}
+
+    #[cfg(feature = "desktop-wayland")]
     fn dnd_release_sources(&mut self, sess: &Session) {
         let source = sess.source_app.clone();
         let Some(b) = self.doc_broker() else { return };
