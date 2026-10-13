@@ -101,8 +101,10 @@ pub enum PageId {
     Shortcuts,
     /// Overview (desktop): how windows are grouped and when desktops switch
     Overview,
-    /// Sharing (desktop): the hub for Nearby Share and AirPlay & Handoff
+    /// Sharing (desktop): the computer name, the sharing services, Nearby Share and AirPlay & Handoff
     Sharing,
+    /// Print & Scan (desktop): the printers the printing service knows, the default one, and adding one (`print_scan_page`)
+    PrintScan,
     /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
     LockScreen,
     /// Settings > Trackpad (desktop): tracking speed, tap to click, secondary click, natural scrolling and gestures
@@ -284,6 +286,8 @@ pub enum Command {
     DeleteCrashLogs,
     /// Users & Groups: delete an account or a group
     Account(super::users_page::Danger),
+    /// a failed change, shown as an alert with OK (its text is the reason)
+    Notice(String),
 }
 
 /// The Reduce Transparency switch: Increase Contrast turns it on and locks it (the reference desktop's
@@ -341,6 +345,10 @@ pub enum Action {
     Font(FontRole, Option<String>),
     /// Users & Groups: add, promote, set a password, edit a group (see `users_page`)
     Users(super::users_page::Edit),
+    /// Sharing: change the computer name or switch a sharing service (see `sharing_page`)
+    Sharing(super::sharing_page::Edit),
+    /// Print & Scan: make a printer the default, or add one (see `print_scan_page`)
+    PrintScan(super::print_scan_page::Edit),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -549,6 +557,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
                     Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
                     Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
+                    Item::new("Print & Scan").icon(Icon::General).link(PageId::PrintScan),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
                     Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
                     Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
@@ -751,15 +760,16 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![Group::new(NEARBY_CHOICES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
         ),
-        PageId::Sharing => page(
-            "Sharing",
-            false,
-            vec![Group::new(vec![
+        PageId::Sharing => {
+            let mut groups = super::sharing_page::groups(&super::sharing_page::View::load());
+            groups.push(Group::new(vec![
                 Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
                 Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
             ])
-            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it.")],
-        ),
+            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
+            page("Sharing", false, groups)
+        }
+        PageId::PrintScan => super::print_scan_page::spec(&super::print_scan_page::View::load()),
         PageId::LockScreen => page(
             "Lock Screen",
             false,
@@ -1514,12 +1524,12 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
-        assert_eq!(s.groups[2].items[12].value, "Lake Day");
-        assert_eq!(s.groups[2].items[13].value, "Never", "the screen saver is off by default");
-        assert_eq!(s.groups[2].items[14].value, "63%");
+        assert_eq!(s.groups[2].items[13].value, "Lake Day");
+        assert_eq!(s.groups[2].items[14].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[2].items[15].value, "63%");
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
@@ -1627,12 +1637,14 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::Sharing)), "Sharing is in the root list");
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
+        // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
         let sharing = spec(PageId::Sharing, &model(&info, &opts));
-        assert_eq!(sharing.groups[0].items[0].action, Action::Push(PageId::Nearby));
-        assert_eq!(sharing.groups[0].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
-        assert_eq!(sharing.groups[0].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
+        assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::sharing_page::Edit::ComputerName));
+        assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
+        assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
+        assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
         opts.handoff = true;
-        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[0].items[1].value, "Handoff On");
+        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[2].items[1].value, "Handoff On");
 
         let lock = spec(PageId::LockScreen, &model(&info, &opts));
         assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));

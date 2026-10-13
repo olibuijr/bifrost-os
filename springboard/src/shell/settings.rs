@@ -136,6 +136,7 @@ impl Alert {
             Command::DeleteCrashLogs => ("Delete All Crash Logs?", "Every crash log on this computer is removed.".to_string(), "Delete", true),
             Command::InstallUpdate => ("Restart to Install?", "BifrOSt restarts into the new version. If it fails within a minute, the previous version comes back.".to_string(), "Restart", false),
             Command::RollbackSystem => ("Roll Back to Previous System?", "The system returns to the version before the last update. Your data is kept. The shell restarts.".to_string(), "Roll Back", true),
+            Command::Notice(reason) => ("Could Not Make the Change", reason.clone(), "OK", false),
         };
         let buttons = vec![ui.text("Cancel", 17.0, Weight::Regular, BLUE), ui.text(confirm, 17.0, Weight::Semibold, if destructive { RED } else { BLUE })];
         Alert { card: AlertCard::new(ui, title, &message, buttons), command, title: title.to_string(), message: message.clone(), confirm: confirm.to_string() }
@@ -1487,7 +1488,7 @@ impl Settings {
                 if pressed.is_some() && pressed == hit {
                     match hit {
                         Some(SheetHit::Cancel) => self.sheet = None,
-                        Some(SheetHit::Join) => return self.join(),
+                        Some(SheetHit::Join) => return self.join(ui, t),
                         Some(SheetHit::Field) => sh.press(ui, w, h, x, y, t),
                         _ => {}
                     }
@@ -1526,16 +1527,37 @@ impl Settings {
         }
         let submit = self.sheet.as_mut().is_some_and(|sh| sh.edit(ui, out, t));
         if submit {
-            self.join()
+            self.join(ui, t)
         } else {
             vec![]
         }
     }
 
-    fn join(&mut self) -> Vec<Effect> {
+    fn join(&mut self, ui: &Ui, t: f64) -> Vec<Effect> {
+        // a one-field prompt (`forms`) finishes its flow here: the next prompt, a change through privd, or an alert
+        if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
+            self.sheet = None;
+            let r = match purpose {
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
+                super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
+                _ => super::users_page::finish(&purpose, &text),
+            };
+            self.edit_result(ui, t, r);
+            return vec![];
+        }
         match self.sheet.take_if(|sh| sh.can_join()) {
             Some(sh) => vec![Effect::Wifi(sh.action())],
             None => vec![],
+        }
+    }
+
+    /// Shows what a page edit asked for: the next prompt on a sheet, the page rebuilt, or an alert with the reason
+    /// the change did not happen.
+    fn edit_result(&mut self, ui: &Ui, t: f64, r: Result<Option<super::forms::Prompt>, String>) {
+        match r {
+            Ok(Some(p)) => self.sheet = Some(Sheet::form(ui, self.w, t, p)),
+            Ok(None) => self.rebuild_visible(ui),
+            Err(e) => self.alert = Some(Alert::new(ui, Command::Notice(e))),
         }
     }
 
@@ -1979,6 +2001,21 @@ impl Settings {
                     }
                 }
             }
+            Action::Users(edit) => {
+                let r = super::users_page::apply(&edit, &super::users_page::View::load());
+                self.edit_result(ui, t, r);
+                vec![]
+            }
+            Action::Sharing(edit) => {
+                let r = super::sharing_page::apply(&edit, &super::sharing_page::View::load());
+                self.edit_result(ui, t, r);
+                vec![]
+            }
+            Action::PrintScan(edit) => {
+                let r = super::print_scan_page::apply(&edit);
+                self.edit_result(ui, t, r);
+                vec![]
+            }
             Action::Notify(edit) => {
                 self.notify_edit(ui, edit, g, i, t);
                 vec![]
@@ -2270,6 +2307,7 @@ impl Settings {
                 self.rebuild(ui);
                 vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true)]
             }
+            Command::Notice(_) => vec![],
             Command::Restart => vec![Effect::Restart],
             Command::ShutDown => vec![Effect::Power(PowerAction::Off)],
             Command::Reboot => vec![Effect::Power(PowerAction::Restart)],
@@ -2744,6 +2782,7 @@ mod tests {
             (vec!["Home Screen & Dock", "Hot Corners"], PageId::HotCorners),
             (vec!["Overview"], PageId::Overview),
             (vec!["Sharing"], PageId::Sharing),
+            (vec!["Print & Scan"], PageId::PrintScan),
             (vec!["Sharing", "Nearby Share"], PageId::Nearby),
             (vec!["Sharing", "AirPlay & Handoff"], PageId::AirPlayHandoff),
             (vec!["Lock Screen"], PageId::LockScreen),
