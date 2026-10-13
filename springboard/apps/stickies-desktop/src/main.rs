@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 
 const MENU_NEW: u32 = 1;
 const MENU_DELETE: u32 = 2;
+const MENU_DUPLICATE: u32 = 23;
 const MENU_COLLAPSE: u32 = 3;
 const MENU_BOLD: u32 = 4;
 const MENU_ITALIC: u32 = 5;
@@ -155,6 +156,14 @@ impl StickiesApp {
     }
 
     fn key(&mut self, key: &KeyInput) -> bool {
+        // Escape leaves the note: no note takes typing until one is pressed again
+        if let KeyInput::Code(27) = key {
+            let Some(board) = &mut self.board else { return false };
+            if board.focus.take().is_none() {
+                return false;
+            }
+            return self.changed();
+        }
         let Some(board) = &mut self.board else { return false };
         let now = Self::now();
         let Some(note) = board.focused_mut() else { return false };
@@ -197,6 +206,11 @@ impl StickiesApp {
                 let Some(focus) = board.focus else { return false };
                 board.remove(focus);
                 self.changed()
+            }
+            MENU_DUPLICATE => {
+                let Some(board) = &mut self.board else { return false };
+                let Some(focus) = board.focus else { return false };
+                board.duplicate(focus, Self::now()).is_some() && self.changed()
             }
             MENU_COLLAPSE => {
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
@@ -283,6 +297,7 @@ impl App for StickiesApp {
         let colour = focus.map(|n| n.colour);
         let mut items = vec![
             AppMenuItem::new(MENU_NEW, "New Sticky Note").key("cmd+n"),
+            AppMenuItem::new(MENU_DUPLICATE, "Duplicate Sticky Note").key("cmd+d").enabled(has_focus),
             AppMenuItem::new(MENU_DELETE, "Delete Sticky Note").key("cmd+shift+backspace").enabled(has_focus),
             AppMenuItem::new(MENU_COLLAPSE, if collapsed { "Expand Sticky Note" } else { "Collapse Sticky Note" }).enabled(has_focus),
             AppMenuItem::separator(),

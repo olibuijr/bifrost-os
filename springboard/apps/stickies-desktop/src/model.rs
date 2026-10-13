@@ -19,6 +19,8 @@ pub const DEFAULT_H: f32 = 200.0;
 pub const EXPORT_SEPARATOR: &str = "\n\n---\n\n";
 /// Largest file the app reads on import (bytes).
 pub const IMPORT_MAX: u64 = 1 << 20;
+/// How far a duplicated note sits from the note it copies, in points, so the copy shows on top of it.
+pub const DUPLICATE_OFFSET_PT: f32 = 24.0;
 
 /// The six sticky colours, in menu order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,7 +68,7 @@ impl Colour {
     }
 }
 
-/// Text size of a note's body. The drawing maps each to a macOS text style token.
+/// Text size of a note's body. The drawing maps each to a system text style token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextSize {
     Small,
@@ -241,6 +243,25 @@ impl Board {
         self.notes.push(Note::new(id, x, y, now));
         self.focus = Some(id);
         id
+    }
+
+    /// Copies note `id` into a new note in front, offset from the original, and focuses the copy. `None` when
+    /// there is no note `id`.
+    pub fn duplicate(&mut self, id: u64, now: u64) -> Option<u64> {
+        let original = self.find(id)?.clone();
+        self.next_id += 1;
+        let copy = Note {
+            id: self.next_id,
+            x: original.x + DUPLICATE_OFFSET_PT,
+            y: original.y + DUPLICATE_OFFSET_PT,
+            created: now,
+            modified: now,
+            ..original
+        };
+        let new_id = copy.id;
+        self.notes.push(copy);
+        self.focus = Some(new_id);
+        Some(new_id)
     }
 
     /// Adds a note holding `text`, placed at `(x, y)`.
@@ -447,6 +468,22 @@ mod tests {
         assert!(!b.remove(c));
         assert!(b.remove(a));
         assert_eq!(b.focus, None);
+    }
+
+    #[test]
+    fn duplicate_copies_the_note_offset_and_focuses_the_copy() {
+        let mut b = Board::default();
+        let id = b.add_text("hello", 40.0, 50.0, 1);
+        b.find_mut(id).unwrap().colour = Colour::Teal;
+        let copy = b.duplicate(id, 9).unwrap();
+        assert_ne!(copy, id);
+        assert_eq!(b.focus, Some(copy));
+        assert_eq!(b.notes.len(), 2);
+        let n = b.find(copy).unwrap();
+        assert_eq!((n.x, n.y), (40.0 + DUPLICATE_OFFSET_PT, 50.0 + DUPLICATE_OFFSET_PT));
+        assert_eq!((n.text.as_str(), n.colour, n.created, n.modified), ("hello", Colour::Teal, 9, 9));
+        assert!(b.duplicate(999, 9).is_none());
+        assert_eq!(b.notes.len(), 2);
     }
 
     #[test]
