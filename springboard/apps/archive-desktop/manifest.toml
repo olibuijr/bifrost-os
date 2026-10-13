@@ -1,0 +1,12 @@
+id = "is.olibuijr.archive.desktop"
+name = "Archive"
+version = "0.1.0"
+exec = "bifrost-archive"
+icon = "icon.png"
+min_shell = "0.6.5"
+summary = "Expands zip, tar and gzipped tar archives, and compresses folders to zip, with progress."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"
+handles = ["public.zip-archive:default", "public.tar-archive:default", "org.gnu.gnu-zip-archive:default"]
