@@ -97,7 +97,8 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
 
     let jobs = p.model.jobs.clone();
     if jobs.is_empty() {
-        text_mid(&mut p.labels, s, ui, "No jobs in the queue", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0 + 8.0, p.job_row_top() + 20.0, w);
+        let top = p.job_row_top() + 20.0;
+        text_mid(&mut p.labels, s, ui, "No jobs in the queue", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0 + 8.0, top, w);
         return;
     }
     let selected_job = p.model.selected_job;

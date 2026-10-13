@@ -27,6 +27,13 @@ pub fn mix(dst: u32, src: u32, a: u32) -> u32 {
 /// line width in pixels, `dash` the on and off lengths in pixels (solid when `None`), `color` the opaque canvas pixel
 /// and `alpha` (0..=1) the most it covers of each pixel. A single point, or points that all coincide, paints a disc.
 #[allow(clippy::too_many_arguments)]
+/// A packed premultiplied pixel colour as a drawing colour (straight alpha).
+fn color_of(c: u32) -> Color {
+    let [r, g, b, a] = c.to_le_bytes();
+    let un = |v: u8| if a == 0 { 0 } else { ((v as u32 * 255 + a as u32 / 2) / a as u32).min(255) as u8 };
+    Color::from_rgba8(un(r), un(g), un(b), a)
+}
+
 pub fn stroke_polyline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], width: f32, dash: Option<[f32; 2]>, color: u32, alpha: f32) {
     let Some(&(x0, y0)) = pts.first() else { return };
     if cw == 0 || ch == 0 {
@@ -34,7 +41,7 @@ pub fn stroke_polyline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)],
     }
     let mut cx = DrawContext::over_pixels(cw, ch, cw, px, 0);
     cx.set_alpha(alpha.clamp(0.0, 1.0));
-    let paint = Color::from_packed(color);
+    let paint = color_of(color);
     if pts.iter().all(|&p| p == (x0, y0)) {
         let r = width / 2.0;
         cx.set_fill_color(paint);
@@ -49,9 +56,9 @@ pub fn stroke_polyline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)],
         cx.set_line_dash(0.0, &d);
     }
     let mut path = CgPath::new();
-    path.move_to(x0, y0);
+    path.move_to((x0, y0));
     for &(x, y) in &pts[1..] {
-        path.line_to(x, y);
+        path.line_to((x, y));
     }
     cx.stroke(&path);
 }

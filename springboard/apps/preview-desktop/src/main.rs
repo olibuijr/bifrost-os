@@ -346,6 +346,7 @@ impl App for Viewer {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let open = self.doc.is_some();
+        let picture = self.doc.as_ref().is_some_and(|d| d.picture(self.view.page).is_some());
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         let tool_items: Vec<AppMenuItem> = [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded]
             .into_iter()
