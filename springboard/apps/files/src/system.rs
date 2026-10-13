@@ -134,7 +134,7 @@ impl SystemState {
     /// Queues the Dock progress for a running copy or move. Only a change of at least `DOCK_STEP` is sent.
     pub(crate) fn track_dock(&mut self, work: Option<&Work>) {
         let Some(work) = work else { return };
-        if !matches!(work.kind, JobKind::Transfer(_) | JobKind::Duplicate) {
+        if !matches!(work.kind, JobKind::Transfer(_) | JobKind::Duplicate | JobKind::Receive) {
             return;
         }
         let p = &work.progress;

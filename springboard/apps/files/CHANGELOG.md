@@ -1,3 +1,8 @@
+## 1.28.0 — 2026-10-13
+
+- A Files drag shows a drag image: the icon of the first item, with a count badge when the drag carries more than one item.
+- A file dropped on a Files window from another app is copied as a background job with progress and can be cancelled, instead of copying on the UI thread. The copy streams in chunks, so a large file no longer stalls the window.
+
 ## 1.27.0 — 2026-10-13
 
 - Drag and drop with other windows and apps: a drag of items starts a session with read grants for them, so a file dropped on another window or app arrives there as a copy. Files is a drop target too: files from other apps are copied into the folder under the pointer (or the folder shown), a folder hovered during a drag opens after the spring-loaded delay, and a drag inside Files still moves the items (Option copies).

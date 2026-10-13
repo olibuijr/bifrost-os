@@ -28,6 +28,8 @@ pub(crate) enum JobKind {
     Empty,
     Compress(archive::Format),
     Extract,
+    /// Files another app dropped on a window: copied in from the open files, streamed, one after another.
+    Receive,
 }
 
 /// The sending end of a worker's channel. Each send also wakes the app loop through the main queue, so the loop runs
@@ -133,6 +135,82 @@ pub(crate) fn transfer_now(op: Op, sources: &[PathBuf], dest: &Path, cancel: &At
     }
 }
 
+/// Copies one file another app handed over into `dir` under `name` (a taken name gets a number), in chunks. `tick` gets the
+/// bytes copied so far and returns false to cancel. A copy that fails or is cancelled leaves nothing behind.
+pub(crate) fn write_copy(dir: &Path, name: &str, src: &mut std::fs::File, tick: &mut dyn FnMut(u64) -> bool) -> std::io::Result<PathBuf> {
+    let base = Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if base.is_empty() {
+        return Err(std::io::Error::other("the file has no name"));
+    }
+    let target = springboard::files::fs::unique_name(dir, &base);
+    let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(&target)?;
+    if let Err(e) = copy_chunks(src, &mut out, tick) {
+        let _ = std::fs::remove_file(&target);
+        return Err(e);
+    }
+    Ok(target)
+}
+
+/// Streams `src` into `out` in 256 KB chunks, asking `tick` after each one; a `false` answer is an `Interrupted` error.
+fn copy_chunks(src: &mut std::fs::File, out: &mut std::fs::File, tick: &mut dyn FnMut(u64) -> bool) -> std::io::Result<()> {
+    use std::io::{Read, Write};
+    let mut buf = vec![0u8; 256 * 1024];
+    let mut done = 0u64;
+    loop {
+        let n = match src.read(&mut buf) {
+            Ok(0) => return Ok(()),
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        };
+        out.write_all(&buf[..n])?;
+        done += n as u64;
+        if !tick(done) {
+            return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+        }
+    }
+}
+
+/// Copies the files another app dropped into `dest` on this thread, one after another, reporting bytes as they go. A file
+/// that cannot be copied is reported and the rest go on; a cancel stops the batch.
+pub(crate) fn receive_now(files: Vec<(String, std::fs::File)>, dest: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
+    let mut report = Report::default();
+    let sizes: Vec<u64> = files.iter().map(|(_, f)| f.metadata().map(|m| m.len()).unwrap_or(0)).collect();
+    let mut progress = Progress { items_total: files.len(), bytes_total: sizes.iter().sum(), ..Default::default() };
+    let mut last = Instant::now();
+    for (n, (name, mut file)) in files.into_iter().enumerate() {
+        if cancel.load(Ordering::Relaxed) {
+            report.cancelled = true;
+            break;
+        }
+        progress.items_done = n;
+        progress.current = name.clone();
+        let before = progress.bytes_done;
+        let mut tick = |copied: u64| {
+            if last.elapsed() >= Duration::from_millis(100) {
+                last = Instant::now();
+                let _ = tx.send(Event::Progress(Progress { bytes_done: before + copied, ..progress.clone() }));
+            }
+            !cancel.load(Ordering::Relaxed)
+        };
+        match write_copy(dest, &name, &mut file, &mut tick) {
+            Ok(made) => {
+                report.done.push(made);
+                progress.bytes_done = before + sizes[n];
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                report.cancelled = true;
+                break;
+            }
+            Err(e) => {
+                progress.bytes_done = before + sizes[n];
+                report.failed.push((PathBuf::from(&name), batch::friendly(&e)));
+            }
+        }
+    }
+    report
+}
+
 /// Writes an archive of `sources` in `format` into `dest` on this thread.
 pub(crate) fn compress_now(sources: &[PathBuf], dest: &Path, format: archive::Format, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
     let mut report = Report::default();
@@ -234,24 +312,40 @@ impl Files {
         }
     }
     pub(crate) fn start_job(&mut self, title: &str, kind: JobKind, sources: Vec<PathBuf>, dest: PathBuf) {
+        let (s, d, bin) = (sources.clone(), dest.clone(), self.bin());
+        self.spawn_work(title, kind, sources, dest, move |flag, tx, answers| match kind {
+            JobKind::Transfer(op) => transfer_now(op, &s, &d, flag, tx, Some(answers)),
+            JobKind::Duplicate => transfer_now(Op::Copy, &s, &d, flag, tx, None),
+            JobKind::Trash => trash_now(&s, &bin, flag, tx),
+            JobKind::Empty => empty_now(&s, &bin, flag, tx),
+            JobKind::Compress(format) => compress_now(&s, &d, format, flag, tx),
+            JobKind::Extract => extract_now(&s[0], &d, flag, tx),
+            JobKind::Receive => Report::default(),
+        });
+    }
+
+    /// Copies the files another app dropped into `dest` as a job. False (and nothing copied) when another job is running.
+    pub(crate) fn start_receive(&mut self, title: &str, files: Vec<(String, std::fs::File)>, dest: PathBuf) -> bool {
+        let names = files.iter().map(|(name, _)| PathBuf::from(name)).collect();
+        self.spawn_work(title, JobKind::Receive, names, dest.clone(), move |flag, tx, _| receive_now(files, &dest, flag, tx))
+    }
+
+    /// Runs `run` on a utility thread as the folder's job, with the progress and the answers of a name conflict. False when a
+    /// job is already running (the notice says so).
+    fn spawn_work<F>(&mut self, title: &str, kind: JobKind, sources: Vec<PathBuf>, dest: PathBuf, run: F) -> bool
+    where
+        F: FnOnce(&AtomicBool, &Feed<Event>, &Receiver<Answer>) -> Report + Send + 'static,
+    {
         if self.work.is_some() {
             self.notice = Some("Wait for the current job to finish".into());
-            return;
+            return false;
         }
         let (tx, rx) = feed();
         let (answers, answer_rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = cancel.clone();
-        let (s, d, bin) = (sources.clone(), dest.clone(), self.bin());
         DispatchQueue::global(Qos::Utility).async_(move || {
-            let report = match kind {
-                JobKind::Transfer(op) => transfer_now(op, &s, &d, &flag, &tx, Some(&answer_rx)),
-                JobKind::Duplicate => transfer_now(Op::Copy, &s, &d, &flag, &tx, None),
-                JobKind::Trash => trash_now(&s, &bin, &flag, &tx),
-                JobKind::Empty => empty_now(&s, &bin, &flag, &tx),
-                JobKind::Compress(format) => compress_now(&s, &d, format, &flag, &tx),
-                JobKind::Extract => extract_now(&s[0], &d, &flag, &tx),
-            };
+            let report = run(&flag, &tx, &answer_rx);
             let _ = tx.send(Event::Done(report));
         });
         self.work = Some(Work {
@@ -266,6 +360,7 @@ impl Files {
             apply_all: false,
             answers,
         });
+        true
     }
     /// Called on the UI thread when a job reports done.
     pub(crate) fn finish_job(&mut self, work: Work, report: Report) {
@@ -280,6 +375,7 @@ impl Files {
             JobKind::Empty => "deleted",
             JobKind::Compress(_) => "compressed",
             JobKind::Extract => "extracted",
+            JobKind::Receive => "copied",
         };
         let notice = if report.stopped {
             let name = report.failed.first().and_then(|(p, _)| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -501,5 +597,85 @@ impl Files {
             text(s, ui, if all { "Apply to all: On" } else { "Apply to all: Off" }, 13., LINK, PROMPT_ALL_X, PROMPT_TOP, 130.);
             text(s, ui, "k, r, s choose; capitals apply to all. Esc cancels.", 11., LABEL_2.now(), x + 20., y + 134., w - x - 56.);
         }
+    }
+}
+
+#[cfg(test)]
+mod receive_tests {
+    use super::*;
+
+    fn dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("files-receive-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn source(path: &Path, bytes: &[u8]) -> std::fs::File {
+        std::fs::write(path, bytes).unwrap();
+        std::fs::File::open(path).unwrap()
+    }
+
+    #[test]
+    fn a_copy_takes_a_free_name_and_leaves_nothing_on_failure() {
+        let d = dir("name");
+        std::fs::write(d.join("a.txt"), b"old").unwrap();
+        let mut src = source(&d.join("source.bin"), b"new bytes");
+        let made = write_copy(&d, "a.txt", &mut src, &mut |_| true).unwrap();
+        assert_ne!(made, d.join("a.txt"), "the existing file is kept");
+        assert_eq!(std::fs::read(&made).unwrap(), b"new bytes");
+        assert_eq!(std::fs::read(d.join("a.txt")).unwrap(), b"old");
+        assert!(write_copy(&d, "", &mut src, &mut |_| true).is_err(), "a nameless file is refused");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_cancelled_copy_removes_its_partial_file() {
+        let d = dir("cancel");
+        let big = vec![7u8; 600 * 1024];
+        let mut src = source(&d.join("source.bin"), &big);
+        let mut calls = 0;
+        let mut stop_after_first = |_: u64| {
+            calls += 1;
+            calls < 2
+        };
+        let err = write_copy(&d, "big.bin", &mut src, &mut stop_after_first).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::Interrupted);
+        assert!(!d.join("big.bin").exists(), "the partial copy is removed");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_batch_copies_each_file_in_order() {
+        let d = dir("batch");
+        let out = d.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let files = vec![
+            ("one.txt".to_string(), source(&d.join("s1"), b"hello")),
+            ("two.txt".to_string(), source(&d.join("s2"), b"world!!")),
+        ];
+        let (tx, rx) = feed();
+        let cancel = AtomicBool::new(false);
+        let report = receive_now(files, &out, &cancel, &tx);
+        assert_eq!(report.done, vec![out.join("one.txt"), out.join("two.txt")]);
+        assert!(report.failed.is_empty() && !report.cancelled);
+        assert_eq!(std::fs::read(out.join("two.txt")).unwrap(), b"world!!");
+        drop(rx);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_cancelled_batch_stops_before_the_next_file() {
+        let d = dir("stop");
+        let out = d.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let files = vec![("one.txt".to_string(), source(&d.join("s1"), b"hello"))];
+        let (tx, _rx) = feed();
+        let cancel = AtomicBool::new(true);
+        let report = receive_now(files, &out, &cancel, &tx);
+        assert!(report.cancelled);
+        assert!(report.done.is_empty());
+        assert!(!out.join("one.txt").exists());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

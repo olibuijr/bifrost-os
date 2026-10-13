@@ -4,11 +4,10 @@
 //! other apps drop on it: the files arrive as grants, are held until the drop is performed, then are copied into the folder.
 //! Until the grants arrive the drag is this window's own and ends in the in-window drop, as before.
 use crate::*;
+use crate::dragpreview::drag_preview;
 use bifrost_app::dnd::{self, DragItem, DragPhase, DragPreview, Payload};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Document, DocumentEvent};
-use std::io;
-use std::path::Path;
 
 /// The cross-window drag state of one window.
 #[derive(Default)]
@@ -27,21 +26,8 @@ pub(crate) struct DragOut {
     pub(crate) foreign_items: usize,
     /// files another app dropped here, held until the drop is performed: (session, name, file)
     held: Vec<(u32, String, std::fs::File)>,
-}
-
-/// Copies `src` into `dir` under `name` (a taken name gets a number). A failed copy leaves nothing behind.
-fn write_copy(dir: &Path, name: &str, src: &mut std::fs::File) -> io::Result<PathBuf> {
-    let base = Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if base.is_empty() {
-        return Err(io::Error::other("the file has no name"));
-    }
-    let target = springboard::files::fs::unique_name(dir, &base);
-    let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(&target)?;
-    if let Err(e) = io::copy(src, &mut out) {
-        let _ = std::fs::remove_file(&target);
-        return Err(e);
-    }
-    Ok(target)
+    /// the drag image of the drag being asked for, given to the session when it begins
+    preview: DragPreview,
 }
 
 impl Files {
@@ -50,6 +36,13 @@ impl Files {
         self.dnd.asking = self.fx.drag_paths.iter().map(|p| ctx.grant_path(&p.to_string_lossy())).collect();
         self.dnd.granted.clear();
         self.dnd.failed = false;
+        self.dnd.preview = match self.fx.drag_paths.first() {
+            Some(first) => {
+                let name = first.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                drag_preview(springboard::files::fs::kind_of(&name, first.is_dir()), self.fx.drag_paths.len())
+            }
+            None => DragPreview::default(),
+        };
     }
 
     /// Begins the session once every item of the drag is granted, if the drag is still going.
@@ -68,7 +61,7 @@ impl Files {
         }
         let grants: Vec<GrantId> = granted.iter().map(|(g, _)| *g).collect();
         let items: Vec<DragItem> = granted.into_iter().map(|(grant, name)| DragItem::new(Payload::File { grant, name })).collect();
-        let session = dnd::begin(ctx, dnd::dragop::COPY | dnd::dragop::MOVE, items, DragPreview::default());
+        let session = dnd::begin(ctx, dnd::dragop::COPY | dnd::dragop::MOVE, items, std::mem::take(&mut self.dnd.preview));
         self.dnd.session = Some(session);
         self.dnd.session_grants = grants;
     }
@@ -120,9 +113,7 @@ impl Files {
             return;
         }
         let dir = self.path.clone();
-        for (name, mut file) in files {
-            let _ = write_copy(&dir, &name, &mut file);
-        }
+        self.start_receive("Copying", files, dir);
         self.revision += 1;
     }
 
@@ -178,13 +169,12 @@ impl Files {
                     let all = std::mem::take(&mut self.dnd.held);
                     let (mine, rest): (Vec<_>, Vec<_>) = all.into_iter().partition(|(r, ..)| *r == session);
                     self.dnd.held = rest;
-                    let mut copied = false;
-                    if let Some(dir) = dest.filter(|d| d.is_dir()) {
-                        for (_, name, mut file) in mine {
-                            copied |= write_copy(&dir, &name, &mut file).is_ok();
-                        }
-                    }
-                    dnd::performed(ctx, session, copied);
+                    // the copy runs as a job with progress; the drop is accepted once the job is started
+                    let accepted = match dest.filter(|d| d.is_dir()) {
+                        Some(dir) => self.start_receive("Copying", mine.into_iter().map(|(_, name, file)| (name, file)).collect(), dir),
+                        None => false,
+                    };
+                    dnd::performed(ctx, session, accepted);
                     self.drag_out_foreign_over(session);
                 }
                 self.revision += 1;
@@ -227,27 +217,5 @@ impl Files {
             return true;
         }
         false
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_copy_takes_a_free_name_and_leaves_nothing_on_failure() {
-        let dir = std::env::temp_dir().join(format!("files-dragout-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("a.txt"), b"old").unwrap();
-        let src_path = dir.join("source.bin");
-        std::fs::write(&src_path, b"new bytes").unwrap();
-        let mut src = std::fs::File::open(&src_path).unwrap();
-        let made = write_copy(&dir, "a.txt", &mut src).unwrap();
-        assert_ne!(made, dir.join("a.txt"), "the existing file is kept");
-        assert_eq!(std::fs::read(&made).unwrap(), b"new bytes");
-        assert_eq!(std::fs::read(dir.join("a.txt")).unwrap(), b"old");
-        assert!(write_copy(&dir, "", &mut src).is_err(), "a nameless file is refused");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
