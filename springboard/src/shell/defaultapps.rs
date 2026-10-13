@@ -150,6 +150,17 @@ impl super::Shell {
         self.defaults.as_ref().and_then(|(_, r, _)| r.default_for_scheme(scheme)).map(str::to_string)
     }
 
+    /// Every app declaring a URL scheme (`CFBundleURLTypes`), the default first.
+    pub(super) fn apps_for_scheme(&mut self, scheme: &str) -> Vec<String> {
+        self.ensure_defaults();
+        let Some((_, r, _)) = self.defaults.as_ref() else { return vec![] };
+        let mut apps: Vec<String> = r.apps_for_scheme(scheme).into_iter().map(str::to_string).collect();
+        if let Some(d) = r.default_for_scheme(scheme) {
+            apps.sort_by_key(|a| a != d);
+        }
+        apps
+    }
+
     /// Opens a link from the control socket (`open-url`, `bifrost-open-url`): web links go to the browser, any other
     /// scheme to the app the registry names for it (`mailto:`, `bifrost-app:`). Local and script schemes are refused.
     pub fn desktop_open_link(&mut self, url: &str, t: f64) -> std::io::Result<()> {

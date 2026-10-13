@@ -2066,3 +2066,9 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Bundle Resources: URL types (`bifrost_app::bundle_resources`, the `launch` service)
+
+- `URLType::parse_all(&Json)` reads `CFBundleURLTypes` into `URLType { url_name, url_schemes, type_role: BundleTypeRole, handler_rank: HandlerRank }`. Entries without schemes are dropped and schemes are lowercased.
+- `url_scheme(url)` gives the scheme of `myapp://x`.
+- The `launch` service method `application_for_url {url}` answers `{app, apps}`: `urlForApplication(toOpen:)` (the user's default, else the first declaring app) and every declaring app, default first. Web schemes still go to the browser. No universal links.
