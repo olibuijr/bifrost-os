@@ -52,8 +52,8 @@
    "area": "menu",
    "apple": "Message > Reply All",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:reply_all_draft",
-   "note": "Menu item only (Message > Reply All); no toolbar button yet.",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1647",
+   "note": "Message > Reply All and a toolbar button.",
    "wire": ""
   },
   {
@@ -61,8 +61,8 @@
    "area": "menu",
    "apple": "Message > Forward, Forward as Attachment, Redirect",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:forward_draft",
-   "note": "Forward quotes the text under Fwd:. Forward as Attachment and Redirect are not done; the original files are not re-attached.",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1282",
+   "note": "Forward quotes the text; Forward as Attachment sends the message whole as message/rfc822 (message.rs forward_attachment_draft). Remaining: Redirect, and re-attaching the original files on a plain Forward.",
    "wire": ""
   },
   {
@@ -78,9 +78,9 @@
    "feature": "Attach files to message",
    "area": "menu",
    "apple": "File > Attach Files",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Attachments can be saved but not sent",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1171",
+   "note": "Message > Attach Files opens the file panel (several files); the compose sheet lists them; Draft::render sends multipart/mixed with base64 parts. Remaining: no drag and drop, no inline images, no per-file removal (Remove Attached Files clears all).",
    "wire": "Pick files with the SDK open panel, list them in the compose sheet, and build multipart/mixed in submit.rs"
   },
   {
@@ -88,17 +88,17 @@
    "area": "menu",
    "apple": "File > Save Attachments",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:428",
-   "note": "Saves every attachment into the app data dir; no save panel and no per-file choice",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1147",
+   "note": "Message > Save Attachments opens a save panel per file, one after the other; a click on a file name in the reader saves that one. Remaining: no folder choice for all files at once.",
    "wire": "Ask for the destination with the SDK save panel; make each attachment in the view (draw.rs:489) clickable to save it alone"
   },
   {
    "feature": "Open or preview an attachment from the message",
    "area": "panel",
    "apple": "ViewAttachmentContextMenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Attachments are listed as text only",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:draw_reader",
+   "note": "File names in the reader are hit targets that open the save panel. Remaining: opening or previewing the file in another app is not done.",
    "wire": "Make attachment names hit targets in draw.rs:489 and open them through the shell's open-file service"
   },
   {
@@ -115,8 +115,8 @@
    "area": "menu",
    "apple": "File > Export as PDF, Save As",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/export.rs:save_eml",
-   "note": "File > Save As writes the raw .eml into the app data dir (saved/). No save panel yet and Export as PDF is not done.",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1015",
+   "note": "File > Save As writes the raw .eml through the save panel. Remaining: Export as PDF.",
    "wire": "Render the message to PDF through the print path into a save panel; Save As writes the raw .eml"
   },
   {
@@ -186,9 +186,9 @@
    "feature": "Remind Me, follow-up, Send Later",
    "area": "menu",
    "apple": "Message > Remind Me; View > Sort by Send Later",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1330",
+   "note": "Message > Remind Me (1 hour, tomorrow, 3 days, next week) hides the message until due, then marks it unread and notifies (reminders.rs, keyed by Message-ID). Remaining: custom time, Send Later queue, follow-up on no reply.",
    "wire": "Keep a local reminder store keyed by Message-ID and a check in tick() that brings the row back; add a Send Later queue in front of submit"
   },
   {
@@ -222,18 +222,18 @@
    "feature": "Add sender to contacts",
    "area": "menu",
    "apple": "Message > Add Sender to Contacts",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1262",
+   "note": "Message > Add Sender to Contacts saves the given and family name and the address through the contacts service (message.rs contact_parts). Needs full contacts access; no check for an existing contact.",
    "wire": "Send the sender's name and address from the open Summary to the Contacts service"
   },
   {
    "feature": "Rules and Apply Rules",
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs",
+   "note": "Message > New Rule, Apply Rules and Remove Rule; one condition (from, to, subject, any) and one action (move, archive, trash, junk, read, flag); rules also run on new inbox mail. Remaining: a Rules settings pane, several conditions or actions, body conditions, editing a rule.",
    "wire": "Add a rule model (criteria and actions) saved in the data dir, run it after apply_listing, and add a Rules settings pane"
   },
   {
@@ -276,9 +276,9 @@
    "feature": "Find in the message body",
    "area": "menu",
    "apple": "Edit > Find > Find, Find Next/Previous",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Find searches the list, not the open message",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1377",
+   "note": "Edit > Find in Message, Find Next and Find Previous highlight matches in the reader and scroll to them. Remaining: a find bar in the pane instead of a sheet, replace, whole-word options.",
    "wire": "Add a find bar in the view pane that highlights matches in the drawn body"
   },
   {
@@ -321,9 +321,9 @@
    "feature": "Smart mailboxes",
    "area": "panel",
    "apple": "Mailbox > New Smart Mailbox; NewSmartMailbox",
-   "status": "gap",
-   "bifrost": "",
-   "note": "search.rs Query could back it",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/smart.rs",
+   "note": "Mailbox > New Smart Mailbox saves a search; it shows in the sidebar under the mailboxes and applies to the shown mailbox. Remaining: criteria builder, searching every mailbox, counts.",
    "wire": "Show saved queries in the sidebar, matched with search::Query::matches"
   },
   {
@@ -348,9 +348,9 @@
    "feature": "Import and export mailboxes (mbox)",
    "area": "menu",
    "apple": "File > Import Mailboxes; Mailbox > Export",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1178",
+   "note": "Mailbox > Export Mailbox reads all messages and writes an mboxrd file through the save panel (mbox.rs). Remaining: import needs IMAP APPEND, which the session does not have yet (mbox::read is ready).",
    "wire": "Add an mbox reader and writer; export the selected mailbox to a path from the save panel"
   },
   {
@@ -384,9 +384,9 @@
    "feature": "Signatures",
    "area": "settings",
    "apple": "SignaturePreferences",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/signatures.rs",
+   "note": "Mailbox > Edit Signature keeps one per account and appends it after a -- line when the message is sent. Remaining: several signatures per account, a signature picker in the compose sheet, a settings pane.",
    "wire": "Store a signature per account and append it in open_compose"
   },
   {
@@ -474,9 +474,9 @@
    "feature": "Categories (primary, transactions, updates, promotions)",
    "area": "view",
    "apple": "View > Categories",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/category.rs",
+   "note": "View > Category filters the list by a classifier over List-Id, List-Unsubscribe, Precedence, Auto-Submitted, sender and subject. Remaining: category tabs or sidebar entries, moving a message between categories.",
    "wire": "Add a header-based classifier and a category filter in the sidebar or list"
   },
   {
