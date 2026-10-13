@@ -228,7 +228,8 @@ impl WmState {
         }
         let first = self.contacts.is_empty();
         let under = self.surface_under(pos);
-        let has_touch = under.as_ref().is_some_and(|(surface, _)| self.client_has_touch(surface));
+        // only the first contact can start pointer emulation, so later fingers skip the object scan
+        let has_touch = !first || under.as_ref().is_some_and(|(surface, _)| self.client_has_touch(surface));
         let emulate = wants_pointer_emulation(first, has_touch);
         self.contacts.down(slot, (pos.x, pos.y), emulate);
 
