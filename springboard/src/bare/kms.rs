@@ -549,6 +549,8 @@ pub struct Display {
     use_flip: bool,
     /// handle of the 64x64 hardware cursor buffer, once one is set
     cursor: Option<u32>,
+    /// the hardware cursor is on the plane (shown, not hidden)
+    cursor_on: bool,
 }
 
 fn arr<T: Default + Clone>(n: u32) -> Vec<T> {
@@ -684,7 +686,7 @@ impl Display {
         };
         let bufs = [make()?, make()?];
         let owed = Owed::new(w as usize, h as usize);
-        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None };
+        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None, cursor_on: false };
         disp.set_crtc(0)?;
         Ok(disp)
     }
@@ -720,6 +722,24 @@ impl Display {
         }
         let mut c = CursorCmd { flags: 2, crtc_id: self.crtc, x, y, ..Default::default() };
         unsafe { ioctl_ptr(self.fd, iowr::<CursorCmd>(b'd', 0xa3), &mut c) }.is_ok()
+    }
+
+    /// Shows the hardware cursor with its top-left corner at (x, y); false when there is none.
+    pub fn show_cursor(&mut self, x: i32, y: i32) -> bool {
+        let Some(handle) = self.cursor else { return false };
+        let mut c = CursorCmd { flags: 1 | 2, crtc_id: self.crtc, x, y, width: 64, height: 64, handle };
+        self.cursor_on = unsafe { ioctl_ptr(self.fd, iowr::<CursorCmd>(b'd', 0xa3), &mut c) }.is_ok();
+        self.cursor_on
+    }
+
+    /// Hides the hardware cursor; its buffer stays for the next `show_cursor`.
+    pub fn hide_cursor(&mut self) {
+        if !self.cursor_on {
+            return;
+        }
+        let mut c = CursorCmd { flags: 1, crtc_id: self.crtc, ..Default::default() };
+        let _ = unsafe { ioctl_ptr(self.fd, iowr::<CursorCmd>(b'd', 0xa3), &mut c) };
+        self.cursor_on = false;
     }
 
     #[cfg(feature = "desktop-wayland")]
@@ -806,7 +826,7 @@ impl Display {
     pub fn virtual_panel(w: usize, h: usize, hz: u32) -> Self {
         let mode = ModeInfo { hdisplay: w as u16, vdisplay: h as u16, vrefresh: hz.max(1), ..Default::default() };
         let none = || Buffer { fb: 0, pitch: 0, map: std::ptr::null_mut() };
-        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, mode, bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
+        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, cursor_on: false, mode, bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
     }
 
     /// The panel's physical size in mm, when the connector reported one (never for a virtual panel).

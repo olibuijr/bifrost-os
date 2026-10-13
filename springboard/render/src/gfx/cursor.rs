@@ -111,9 +111,98 @@ impl Cursor {
     }
 }
 
+/// Side of the cursor plane's sprite, in px (the display's cursor size on every panel that has one).
+pub const SPRITE: i32 = 64;
+
+/// The pointer as a plane sprite: the same grey dot as `stamp`, drawn centred in a SPRITE square with
+/// premultiplied alpha (the plane's default blend), so the display moves it without a frame.
+pub fn sprite() -> Vec<u32> {
+    let mut v = vec![0u32; (SPRITE * SPRITE) as usize];
+    let r = SIZE as f32 / 2.0;
+    let c = SPRITE as f32 / 2.0;
+    for y in 0..SPRITE {
+        for x in 0..SPRITE {
+            let (dx, dy) = (x as f32 + 0.5 - c, y as f32 + 0.5 - c);
+            let d = (dx * dx + dy * dy).sqrt();
+            let (grey, alpha) = if d <= r - 1.0 {
+                FILL
+            } else if d <= r {
+                RING
+            } else {
+                continue;
+            };
+            let a = alpha;
+            let g = grey * a / 255;
+            v[(y * SPRITE + x) as usize] = a << 24 | g << 16 | g << 8 | g;
+        }
+    }
+    v
+}
+
+/// What the display's cursor plane must do for the pointer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaneCmd {
+    /// show the sprite with its top-left corner at (x, y)
+    Show(i32, i32),
+    Move(i32, i32),
+    Hide,
+}
+
+/// The cursor plane's state: where the sprite was last sent. Decides only what to send.
+#[derive(Default)]
+pub struct Plane {
+    at: Option<(i32, i32)>,
+}
+
+impl Plane {
+    /// The command that brings the plane to `want` (the sprite's centre is the pointer), or None when it
+    /// already shows it there.
+    pub fn command(&mut self, want: Option<Spot>) -> Option<PlaneCmd> {
+        let to = want.map(|s| (s.x - SPRITE / 2, s.y - SPRITE / 2));
+        let cmd = match (self.at, to) {
+            (None, None) => return None,
+            (Some(_), None) => PlaneCmd::Hide,
+            (None, Some((x, y))) => PlaneCmd::Show(x, y),
+            (Some(a), Some(b)) if a == b => return None,
+            (Some(_), Some((x, y))) => PlaneCmd::Move(x, y),
+        };
+        self.at = to;
+        Some(cmd)
+    }
+
+    /// The plane shows the pointer (it needs a hide when the pointer times out).
+    pub fn is_shown(&self) -> bool {
+        self.at.is_some()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sprite_is_a_centred_dot_with_a_clear_corner() {
+        let s = sprite();
+        assert_eq!(s.len(), (SPRITE * SPRITE) as usize);
+        let centre = s[(SPRITE / 2 * SPRITE + SPRITE / 2) as usize];
+        assert_eq!(centre >> 24, FILL.1, "the fill is translucent, not opaque");
+        assert_eq!(s[0], 0, "the corner is clear");
+        assert!(s.iter().all(|&p| p >> 24 <= 255 && (p >> 16 & 0xff) <= (p >> 24)), "premultiplied: colour never above alpha");
+    }
+
+    #[test]
+    fn plane_shows_moves_and_hides_only_on_change() {
+        let mut p = Plane::default();
+        let at = |x: f32, y: f32| Spot::want((x, y), false, true, true, 0.0, 0.0);
+        assert_eq!(p.command(None), None);
+        assert_eq!(p.command(at(100.0, 50.0)), Some(PlaneCmd::Show(100 - SPRITE / 2, 50 - SPRITE / 2)));
+        assert!(p.is_shown());
+        assert_eq!(p.command(at(100.0, 50.0)), None, "same spot: nothing to send");
+        assert_eq!(p.command(at(101.0, 50.0)), Some(PlaneCmd::Move(101 - SPRITE / 2, 50 - SPRITE / 2)));
+        assert_eq!(p.command(None), Some(PlaneCmd::Hide));
+        assert!(!p.is_shown());
+        assert_eq!(p.command(None), None, "already hidden");
+    }
 
     #[test]
     fn hides_without_a_pointer_screen_or_after_three_seconds() {

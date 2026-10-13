@@ -368,6 +368,10 @@ fn run() -> std::io::Result<()> {
     let mut cursor_dim = (w, h);
     let mut last_motion = f64::NEG_INFINITY;
     let mut last_pointer = ((0.0f32, 0.0f32), false);
+    // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
+    // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
+    let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite());
+    let mut plane = springboard::gfx::cursor::Plane::default();
     // the last frame on the panel came from the CPU path, so `frame` is what the panel shows
     let mut cpu_shown = false;
     let mut halting = false;
@@ -459,7 +463,7 @@ fn run() -> std::io::Result<()> {
         inputs.rescan_if_due(now);
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
         // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
-        let hide_cursor = (inputs.has_pointer() && cursor.is_shown()).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
+        let hide_cursor = (inputs.has_pointer() && (cursor.is_shown() || plane.is_shown())).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
         for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
@@ -528,6 +532,22 @@ fn run() -> std::io::Result<()> {
         if pointer_now != last_pointer {
             last_pointer = pointer_now;
             last_motion = t;
+        }
+        if hw_cursor {
+            // a rotated screen takes the pointer off the plane (its frames show no cursor, as before)
+            let on_plane = shell.orientation().rotation() == Rotation::None;
+            let want = springboard::gfx::cursor::Spot::want(inputs.pointer(), inputs.is_down(), inputs.has_pointer(), shell.screen_on(), t, last_motion);
+            use springboard::gfx::cursor::PlaneCmd;
+            match plane.command(if on_plane { want } else { None }) {
+                Some(PlaneCmd::Show(x, y)) => {
+                    disp.show_cursor(x, y);
+                }
+                Some(PlaneCmd::Move(x, y)) => {
+                    disp.move_cursor(x, y);
+                }
+                Some(PlaneCmd::Hide) => disp.hide_cursor(),
+                None => {}
+            }
         }
         if !events.is_empty() {
             // the first frames of the response to a touch already need full clocks
@@ -1249,7 +1269,7 @@ fn run() -> std::io::Result<()> {
                     // back to portrait: the rotated panel copy is no longer needed
                     panel = Vec::new();
                 }
-                let pointing = rot == Rotation::None && inputs.has_pointer();
+                let pointing = rot == Rotation::None && inputs.has_pointer() && !hw_cursor;
                 if pointing {
                     if cursor_dim != (fw, fh) {
                         cursor_damage = springboard::gfx::Damage::new(fw, fh);
@@ -1336,7 +1356,7 @@ fn run() -> std::io::Result<()> {
                 disp.scanout_free(bufs);
                 eprintln!("springboard: zero-copy scanout flip failed: back on the copy path ({n} buffers freed)");
             }
-        } else if cpu_shown && !shell.needs_frame() && night_mult.is_none() && inputs.has_pointer() && shell.orientation().rotation() == Rotation::None && frame.len() == fw * fh {
+        } else if cpu_shown && !shell.needs_frame() && night_mult.is_none() && inputs.has_pointer() && !hw_cursor && shell.orientation().rotation() == Rotation::None && frame.len() == fw * fh {
             // the pointer moved (or its cursor timed out) and the shell has nothing to draw: present
             // just the cursor's old and new rectangles over the frame the panel already shows
             let want = springboard::gfx::cursor::Spot::want(inputs.pointer(), inputs.is_down(), true, shell.screen_on(), t, last_motion);
