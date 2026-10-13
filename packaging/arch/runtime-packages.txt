@@ -63,10 +63,13 @@ libxml2
 libxslt
 lsof
 man-db
+mandoc
 mg
 nano
 ncompress
+net-snmp
 nethogs
+nfs-utils
 openbsd-netcat
 patch
 perl
