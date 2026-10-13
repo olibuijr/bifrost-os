@@ -164,7 +164,7 @@ fn run() -> std::io::Result<()> {
     let mut events = vec![];
     let mut ready = vec![];
     let mut dirty = true;
-    let hw_cursor = disp.set_cursor(&springboard::installer::app::cursor_argb());
+    let hw_cursor = disp.set_cursor(&springboard::installer::app::cursor_argb(), 1.0);
     let mut installing = false;
     loop {
         let now = sys::now_ms();

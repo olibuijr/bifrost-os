@@ -709,7 +709,7 @@ mod tests {
     use super::*;
     fn fixture(rows: Vec<Entry>) -> Files {
         Files {
-            home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
+            dnd: Default::default(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,

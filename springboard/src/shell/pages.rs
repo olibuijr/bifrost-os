@@ -1622,8 +1622,11 @@ mod tests {
         assert_eq!(mono.groups[0].items[0].action, Action::Font(FontRole::Mono, None), "Default clears the override");
     }
 
+    // a static: the settings hold a Vec, so a const would be a temporary here
+    static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
+
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
     }
 
     #[test]

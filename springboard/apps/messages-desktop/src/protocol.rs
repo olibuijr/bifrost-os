@@ -516,9 +516,9 @@ mod tests {
         );
         assert_eq!(parse_sync(&named).unwrap().rooms[0].name.as_deref(), Some("Family"));
         let alias = parse(
-            r#"{"next_batch":"x","rooms":{"join":{"!r:x":{
+            r##"{"next_batch":"x","rooms":{"join":{"!r:x":{
                 "state":{"events":[{"type":"m.room.canonical_alias","content":{"alias":"#dev:x"}}]},
-                "timeline":{"events":[]}}}}}"#,
+                "timeline":{"events":[]}}}}}"##,
         );
         assert_eq!(parse_sync(&alias).unwrap().rooms[0].name.as_deref(), Some("#dev:x"));
     }

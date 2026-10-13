@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -660,15 +660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bifrost-messages"
-version = "0.1.0"
-dependencies = [
- "bifrost-app",
- "bifrost-core",
- "springboard",
-]
-
-[[package]]
 name = "bifrost-mcp"
 version = "0.5.0"
 dependencies = [
@@ -679,6 +670,15 @@ dependencies = [
  "wayland-protocols",
  "wayland-protocols-misc",
  "wayland-protocols-wlr",
+]
+
+[[package]]
+name = "bifrost-messages"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+ "springboard",
 ]
 
 [[package]]
@@ -872,8 +872,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-videoplayer"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "springboard",
+]
+
+[[package]]
 name = "bifrost-viewer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bifrost-app",
  "springboard",
