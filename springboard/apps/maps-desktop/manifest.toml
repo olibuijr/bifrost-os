@@ -1,0 +1,14 @@
+id = "is.olibuijr.maps.desktop"
+name = "Maps"
+version = "0.2.0"
+exec = "bifrost-maps"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Maps with search, directions, saved places, offline areas and GPX files."
+category = "Travel"
+architecture = "x86_64-linux"
+permissions = ["storage", "network", "documents"]
+window = "full-size"
+schemes = ["maps", "geo"]
+handles = ["com.topografix.gpx:default"]
+
