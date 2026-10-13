@@ -37,6 +37,23 @@ pub enum Refusal {
     NoDisk(String),
 }
 
+impl Refusal {
+    /// A sentence for the refusal, shown to the user in a footer or printed on a command line.
+    pub fn sentence(&self) -> String {
+        match self {
+            Refusal::InvalidDevice(name) => format!("\u{201c}{name}\u{201d} is not a device name this app can use."),
+            Refusal::InvalidOption(option) => format!("The file system option \u{201c}{option}\u{201d} is not valid."),
+            Refusal::InvalidLabel(label) => format!("The label \u{201c}{label}\u{201d} is not valid for this file system."),
+            Refusal::Claimed { device, owner } => format!("{device} is in use by {owner}."),
+            Refusal::Vetoed(reason) => reason.clone(),
+            Refusal::Mounted(point) => format!("The volume is mounted at {point}. Unmount it first."),
+            Refusal::NotMounted => "The volume is not mounted.".to_string(),
+            Refusal::ReadOnly => "The volume is read-only.".to_string(),
+            Refusal::NoDisk(name) => format!("{name} is no longer connected."),
+        }
+    }
+}
+
 /// Options for a mount request.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MountOptions {

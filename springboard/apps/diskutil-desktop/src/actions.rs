@@ -84,21 +84,6 @@ fn run(plan: &[Command]) -> Result<(), String> {
     Ok(())
 }
 
-/// A sentence for a refusal, shown in the window's footer.
-pub fn refusal_text(refusal: &Refusal) -> String {
-    match refusal {
-        Refusal::InvalidDevice(name) => format!("\u{201c}{name}\u{201d} is not a device name this app can use."),
-        Refusal::InvalidOption(option) => format!("The file system option \u{201c}{option}\u{201d} is not valid."),
-        Refusal::InvalidLabel(label) => format!("The label \u{201c}{label}\u{201d} is not valid for this file system."),
-        Refusal::Claimed { device, owner } => format!("{device} is in use by {owner}."),
-        Refusal::Vetoed(reason) => reason.clone(),
-        Refusal::Mounted(point) => format!("The volume is mounted at {point}. Unmount it first."),
-        Refusal::NotMounted => "The volume is not mounted.".to_string(),
-        Refusal::ReadOnly => "The volume is read-only.".to_string(),
-        Refusal::NoDisk(name) => format!("{name} is no longer connected."),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,7 +140,7 @@ mod tests {
 
     #[test]
     fn every_refusal_has_a_sentence() {
-        assert!(refusal_text(&Refusal::Mounted("/mnt".into())).contains("/mnt"));
-        assert!(refusal_text(&Refusal::NoDisk("sdq".into())).contains("sdq"));
+        assert!(Refusal::Mounted("/mnt".into()).sentence().contains("/mnt"));
+        assert!(Refusal::NoDisk("sdq".into()).sentence().contains("sdq"));
     }
 }

@@ -6,6 +6,10 @@ pub mod caffeinate;
 pub mod control;
 pub mod network;
 pub mod networksetup;
+pub mod diskutil;
+pub mod launchctl;
+pub mod mdfind;
+pub mod mdutil;
 pub mod open;
 pub mod plutil;
 pub mod pasteboard;
@@ -15,6 +19,7 @@ pub mod screencapture;
 pub mod profile;
 pub mod scutil;
 pub mod sw_vers;
+pub mod softwareupdate;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {

@@ -162,7 +162,7 @@ impl DiskUtility {
                 self.error = None;
                 self.job = Some(Job { action, name, rx: actions::spawn(plan) });
             }
-            Err(refusal) => self.error = Some(actions::refusal_text(&refusal)),
+            Err(refusal) => self.error = Some(refusal.sentence()),
         }
         true
     }
