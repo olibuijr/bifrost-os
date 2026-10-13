@@ -384,6 +384,13 @@ mod tests {
     }
 
     #[test]
+    fn an_oversized_literal_marker_is_an_error_not_a_hang() {
+        let mut s = session("* 1 FETCH (UID 1 BODY[] {999999999999}\r\n");
+        let err = s.message(1).unwrap_err();
+        assert_eq!(err, "server literal too large");
+    }
+
+    #[test]
     fn literal_markers_are_found_at_the_end_only() {
         assert_eq!(literal_marker("* 1 FETCH (BODY[] {12}"), Some((18, 12)));
         assert_eq!(literal_marker("a {x}"), None);

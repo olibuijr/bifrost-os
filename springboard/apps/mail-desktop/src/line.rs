@@ -6,6 +6,10 @@ use std::io::{self, Read, Write};
 /// Longest line a server may send before the dialogue is treated as broken (headers and bodies are read as literals).
 pub const MAX_LINE: usize = 64 * 1024;
 
+/// Largest literal a server may send (a message body or header block read as `{n}` bytes). Anything bigger is refused
+/// before a byte of it is buffered, so a broken or hostile server cannot make the app grow its buffer without bound.
+pub const MAX_LITERAL: usize = 64 * 1024 * 1024;
+
 pub struct Lines<S: Read + Write> {
     io: S,
     buf: Vec<u8>,
@@ -34,8 +38,9 @@ impl<S: Read + Write> Lines<S> {
         }
     }
 
-    /// Exactly `n` bytes, from the read-ahead first.
+    /// Exactly `n` bytes, from the read-ahead first. A count over [`MAX_LITERAL`] is an error and nothing is read.
     pub fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+        check_literal(n)?;
         while self.buf.len() < n {
             self.fill()?;
         }
@@ -63,6 +68,14 @@ impl<S: Read + Write> Lines<S> {
         self.buf.extend_from_slice(&chunk[..n]);
         Ok(())
     }
+}
+
+/// Refuses a literal count over [`MAX_LITERAL`].
+fn check_literal(n: usize) -> io::Result<()> {
+    if n > MAX_LITERAL {
+        return Err(io::Error::other("server literal too large"));
+    }
+    Ok(())
 }
 
 /// A scripted connection for the protocol tests: reads come from `input`, writes are kept in `output`.
@@ -122,6 +135,38 @@ mod tests {
         assert_eq!(lines.read_line().unwrap(), "* 1 FETCH {5}");
         assert_eq!(lines.read_bytes(5).unwrap(), b"hello");
         assert_eq!(lines.read_line().unwrap(), ") done");
+    }
+
+    /// A connection that fails the test if anything reads from it.
+    struct NoReads;
+
+    impl Read for NoReads {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            panic!("an oversized literal must be refused before any read");
+        }
+    }
+
+    impl Write for NoReads {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_literal_over_the_limit_is_refused_without_reading() {
+        let mut lines = Lines::new(NoReads);
+        let err = lines.read_bytes(MAX_LITERAL + 1).unwrap_err();
+        assert_eq!(err.to_string(), "server literal too large");
+    }
+
+    #[test]
+    fn a_literal_at_the_limit_is_accepted() {
+        assert!(check_literal(MAX_LITERAL).is_ok());
+        assert!(check_literal(MAX_LITERAL + 1).is_err());
+        assert!(check_literal(usize::MAX).is_err());
     }
 
     #[test]
