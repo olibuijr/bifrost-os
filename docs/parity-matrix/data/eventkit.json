@@ -4,15 +4,15 @@
   "macos_since": "10.8",
   "status": "os",
   "bifrost": "springboard/src/shell/calendar/store.rs, springboard/apps/calendar-desktop/src/calendar/, springboard/apps/reminders-desktop/src/",
-  "summary": "Events, recurrence, alarms, ICS import/export and reminders exist inside the shell and the Calendar and Reminders apps. No app-facing SDK API (no calendar module in springboard/sdk/src), so third-party apps cannot read or write calendar data.",
+  "summary": "Events, recurrence, alarms, ICS import/export and reminders exist inside the shell and the Calendar and Reminders apps. Apps with the calendars permission can read events in a date range through the calendar service (springboard/sdk/src/calendar.rs); there is no write API, no recurrence expansion and no access prompt yet.",
   "rea_evidence": "ev_4bf4ac268a018a5e377584d729b63b1d10e6682cc1f1ee35fc153d3727099360",
   "features": [
     {
       "feature": "Event store and access",
       "apple": "EKEventStore, access requests",
-      "bifrost": "springboard/ui/src/calendar_access.rs",
+      "bifrost": "springboard/ui/src/calendar_access.rs; springboard/src/shell/services/calendar.rs; springboard/sdk/src/calendar.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-eventkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"
+      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), recurrence expansion in the service, change notifications, and Midget testing (host unit tests only)"
     },
     {
       "feature": "Events",
@@ -107,8 +107,9 @@
     }
   ],
   "gaps": [
-    "No SDK calendar/reminder API for apps",
-    "No permission model for calendar access",
+    "No SDK calendar write API or reminder API for apps",
+    "No calendar access prompt; the calendars manifest permission is the only grant",
+    "Calendar service returns base events only; recurring events are not expanded per date",
     "No attendees, invitations or account sources",
     "No location-based alarms",
     "No app-facing change notification",

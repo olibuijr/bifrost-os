@@ -1,0 +1,143 @@
+//! Calendar events for apps (the read side of EventKit): ask for the access status, then fetch the events that overlap a
+//! range of local civil times.
+//!
+//! ```ignore
+//! let id = calendar::events(ctx, "2026-10-13T00:00", "2026-10-14T00:00");
+//! // in App::service_reply, once the reply for `id` arrives:
+//! //   let today = calendar::decode_events(&reply);   // Vec<Event>, sorted by start
+//! ```
+//! An app reads events only when its manifest declares the `calendars` permission; without it `events` is an error.
+//! Times are floating local times written `YYYY-MM-DDTHH:MM`. Recurring events appear once, at their base date. The
+//! service is `springboard/src/shell/services/calendar.rs`.
+use crate::runtime::Ctx;
+use crate::service;
+use bifrost_core::json::Json;
+
+/// The service name the shell registers.
+pub const SERVICE: &str = "calendar";
+
+/// The access status an app holds: `Authorized` when its manifest declares `calendars`, else `Denied`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    Authorized,
+    Denied,
+}
+
+/// One event in a range. `start` and `end` are local civil times (`YYYY-MM-DDTHH:MM`); an all-day event starts at
+/// midnight and ends at the next midnight.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Event {
+    pub id: u64,
+    pub title: String,
+    pub start: String,
+    pub end: String,
+    pub all_day: bool,
+    pub location: String,
+}
+
+/// Asks for the access status. The reply decodes with [`decode_status`].
+pub fn access(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "access", &Json::Null)
+}
+
+/// Fetches the events overlapping `[start, end)`, sorted by start. Both bounds are `YYYY-MM-DDTHH:MM` and `end` must be
+/// after `start`. The reply decodes with [`decode_events`].
+pub fn events(ctx: &Ctx, start: &str, end: &str) -> u32 {
+    let params = Json::Obj(vec![("start".into(), Json::Str(start.into())), ("end".into(), Json::Str(end.into()))]);
+    service::call(ctx, SERVICE, "events", &params)
+}
+
+/// The status in an `access` reply, or `None` for a reply of another shape.
+pub fn decode_status(reply: &Json) -> Option<Status> {
+    match reply.get("status").and_then(Json::as_str)? {
+        "authorized" => Some(Status::Authorized),
+        "denied" => Some(Status::Denied),
+        _ => None,
+    }
+}
+
+/// The events in an `events` reply. A row of another shape is skipped; a reply without an event list is empty.
+pub fn decode_events(reply: &Json) -> Vec<Event> {
+    let rows = reply.get("events").and_then(Json::as_array).unwrap_or(&[]);
+    rows.iter().filter_map(decode_event).collect()
+}
+
+fn decode_event(v: &Json) -> Option<Event> {
+    Some(Event {
+        id: v.get("id")?.as_u64()?,
+        title: v.get("title")?.as_str()?.to_string(),
+        start: v.get("start")?.as_str()?.to_string(),
+        end: v.get("end")?.as_str()?.to_string(),
+        all_day: matches!(v.get("all_day"), Some(Json::Bool(true))),
+        location: v.get("location").and_then(Json::as_str).unwrap_or("").to_string(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(id: u64, title: &str) -> Json {
+        Json::Obj(vec![
+            ("id".into(), Json::Num(id as f64)),
+            ("title".into(), Json::Str(title.into())),
+            ("start".into(), Json::Str("2026-10-13T09:00".into())),
+            ("end".into(), Json::Str("2026-10-13T10:00".into())),
+            ("all_day".into(), Json::Bool(false)),
+            ("location".into(), Json::Str("Hall".into())),
+        ])
+    }
+
+    fn reply(rows: Vec<Json>) -> Json {
+        Json::Obj(vec![("events".into(), Json::Arr(rows))])
+    }
+
+    #[test]
+    fn a_status_reply_decodes_to_its_status() {
+        let granted = Json::Obj(vec![("status".into(), Json::Str("authorized".into()))]);
+        assert_eq!(decode_status(&granted), Some(Status::Authorized));
+        let refused = Json::Obj(vec![("status".into(), Json::Str("denied".into()))]);
+        assert_eq!(decode_status(&refused), Some(Status::Denied));
+        assert_eq!(decode_status(&Json::Obj(vec![("status".into(), Json::Str("all".into()))])), None);
+        assert_eq!(decode_status(&Json::Null), None);
+    }
+
+    #[test]
+    fn an_events_reply_decodes_to_its_events_in_order() {
+        let events = decode_events(&reply(vec![row(4, "Coffee"), row(9, "Standup")]));
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].id, 4);
+        assert_eq!(events[0].title, "Coffee");
+        assert_eq!(events[0].start, "2026-10-13T09:00");
+        assert_eq!(events[0].end, "2026-10-13T10:00");
+        assert!(!events[0].all_day);
+        assert_eq!(events[1].location, "Hall");
+    }
+
+    #[test]
+    fn a_malformed_row_is_skipped_and_the_rest_decode() {
+        let broken = Json::Obj(vec![("title".into(), Json::Str("No id".into()))]);
+        let events = decode_events(&reply(vec![broken, row(2, "Kept")]));
+        assert_eq!(events.iter().map(|e| e.id).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn a_reply_of_another_shape_or_an_empty_range_has_no_events() {
+        assert!(decode_events(&Json::Null).is_empty());
+        assert!(decode_events(&reply(vec![])).is_empty());
+    }
+
+    #[test]
+    fn an_all_day_flag_and_a_missing_location_decode() {
+        let holiday = Json::Obj(vec![
+            ("id".into(), Json::Num(3.0)),
+            ("title".into(), Json::Str("Holiday".into())),
+            ("start".into(), Json::Str("2026-10-13T00:00".into())),
+            ("end".into(), Json::Str("2026-10-14T00:00".into())),
+            ("all_day".into(), Json::Bool(true)),
+        ]);
+        let events = decode_events(&reply(vec![holiday]));
+        assert!(events[0].all_day);
+        assert_eq!(events[0].location, "");
+    }
+}

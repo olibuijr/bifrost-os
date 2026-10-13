@@ -2,7 +2,7 @@
 //! the read side of EventKit (`EKEventStore` events in a date range); the store is the shared calendar file the
 //! Calendar app writes, `shell::calendar::store`.
 //!
-//! Times are local, floating civil times written `YYYY-MM-DDTHH:MM` (no time zone, like `NSDateComponents`).
+//! Times are local, floating civil times written `YYYY-MM-DDTHH:MM` (no time zone).
 //!
 //! Methods (params are a JSON object):
 //! - `access {}` returns `{status}`: `authorized` when the app declares `calendars`, else `denied`. An app cannot
