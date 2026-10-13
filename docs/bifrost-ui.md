@@ -2223,3 +2223,17 @@ tone removal (`z` or `0`), repeated keys revert, backspace replays the remaining
 Gaps: not wired into `kb_input.rs` (follow-up: look a controller up by source id and route keys), ranges count
 characters rather than UTF-16 units, no candidates window, no Hanja conversion, no ancient jamo, no Simple Telex
 or VIQR, no modifier/command events. Host tests only; parity rows stay partial until a Midget check.
+
+## Cursors (`NSCursor`, `ui::cursor`, `ui::cursor_art`)
+
+`Kind` now covers the AppKit set: `ResizeNorthEastSouthWest`, `ResizeNorthWestSouthEast`, `ColumnResize`, `RowResize`,
+`Move`, `Rotate`, `ScreenshotWindow` next to the existing shapes (service names `resize_north_east_south_west`, `move`, ...).
+Constructors mirror AppKit: `Kind::frame_resize(FrameResizePosition, FrameResizeDirections)` (`NSCursor.frameResize(position:directions:)`;
+one-way edges give the one-sided arrow, corners the diagonal shape), `Kind::column_resize(ColumnResizeDirections)` and
+`Kind::row_resize(RowResizeDirections)`. `ZoomIn`, `ZoomOut`, `DisappearingItem` and `OperationNotAllowed` already existed.
+
+`cursor_art::art(kind, scale)` draws each shape from vector paths into two non-overlapping alpha masks (`fill`, `outline`) at 1x or 2x,
+with the hotspot in pixels. `CursorArt::compose(outline_rgba, fill_rgba)` recolours the layers separately, which the pointer colour
+setting (Accessibility > Display > Pointer) needs; `PointerColors::default()` is a white outline over a black fill.
+Not matched yet: the original PDF art (ours is code-drawn), per-corner rotate variants, vertical I-beam, and wiring the art into the compositor.
+Parity rows stay `partial` until checked on Midget.

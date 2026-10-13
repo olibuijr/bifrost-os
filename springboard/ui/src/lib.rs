@@ -619,6 +619,7 @@ pub mod collection;
 pub mod dockdrag;
 pub mod dock_tile;
 pub mod cursor;
+pub mod cursor_art;
 pub mod screen;
 pub mod menu;
 pub mod menu_extras;
