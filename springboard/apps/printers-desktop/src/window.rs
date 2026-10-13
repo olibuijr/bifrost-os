@@ -2,7 +2,8 @@
 //! printer on the right, and the footer. Layout is in points and derives from the window size; the drawing and the taps
 //! read the same rectangles. The scheduler is reached through `worker.rs`; the rules are in `model.rs`.
 
-use crate::model::{self, Action, Model, Reply};
+use crate::discover::{self, Discover, Found};
+use crate::model::{self, Action, Model, Pane, Reply};
 use crate::worker::{Link, Request};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Rect, TextField};
@@ -10,6 +11,7 @@ use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::proto::ContextItem;
 use bifrost_app::{widgets, AppMenu, AppMenuItem, Command, TouchKind};
+use bifrost_core::json::Json;
 use std::io::Read;
 
 /// The printer list's width (points).
@@ -28,8 +30,13 @@ pub const JOB_ROW_PT: f32 = 30.0;
 pub const FOOT_PT: f32 = 30.0;
 /// Padding inside the queue pane (points).
 pub const PAD_PT: f32 = 20.0;
-/// How often the printers are listed again while the window is in the foreground (milliseconds).
-pub const POLL_MS: f64 = 5000.0;
+/// How often the printers are listed again while the window is in the foreground and nothing is queued (milliseconds).
+/// While a job waits or prints the listing comes sooner, see `model::poll_interval_ms`.
+pub const POLL_MS: f64 = model::IDLE_POLL_MS;
+/// How soon the loop comes back while the Add Printer pane listens for replies (milliseconds).
+const DISCOVER_WAKE_MS: f64 = 250.0;
+/// One printer found on the network (points).
+pub const FOUND_ROW_PT: f32 = 44.0;
 /// How soon the loop comes back while a request is in flight (milliseconds).
 const BUSY_WAKE_MS: f64 = 50.0;
 
@@ -48,6 +55,10 @@ pub const B_SELECT_ALL: u32 = 11;
 pub const B_PRINT_FILE: u32 = 12;
 /// Info pane: saves the description and location.
 pub const B_SAVE: u32 = 13;
+/// Add Printer pane and menu: adds the printer whose address is on the clipboard.
+pub const B_ADD_CLIPBOARD: u32 = 14;
+/// Menu only: shows the help topics.
+pub const B_HELP: u32 = 15;
 
 /// A text field of the info pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +83,10 @@ pub enum Target {
     Field(Field),
     /// The Save button of the info pane.
     Save,
+    /// The printer found on the network at this index of the Add Printer pane.
+    Found(usize),
+    /// The Add Printer pane's button for the address on the clipboard.
+    Clipboard,
 }
 
 pub struct PrintCenter {
@@ -100,6 +115,14 @@ pub struct PrintCenter {
     pub focus: Option<Field>,
     /// The printer the fields were filled from, so a listing never overwrites what is being typed.
     loaded_for: Option<String>,
+    /// The printers the network announces, while the Add Printer pane is open.
+    pub discover: Discover,
+    /// The widget text last sent to the shell, so only a change is sent.
+    widget_sent: Option<(String, String)>,
+    /// The widget request whose reply has not come back.
+    widget_request: Option<u32>,
+    /// The shell has no widget service (an older shell): the window stops sending to it.
+    widget_off: bool,
 }
 
 impl PrintCenter {
@@ -124,6 +147,10 @@ impl PrintCenter {
             location: TextField::new(),
             focus: None,
             loaded_for: None,
+            discover: Discover::new(),
+            widget_sent: None,
+            widget_request: None,
+            widget_off: false,
         }
     }
 
@@ -257,24 +284,41 @@ impl PrintCenter {
             self.model.status = "Choose a printer, then print the document".into();
             return;
         };
+        if let Err(message) = self.print_reader_on(printer, name, reader) {
+            self.model.status = message;
+        }
+    }
+
+    /// Sends a document to the named printer. The error says why it could not be sent.
+    pub fn print_reader_on(&mut self, printer: String, name: &str, reader: &mut dyn Read) -> Result<(), String> {
         let mut data = Vec::new();
         match reader.take(MAX_DOCUMENT + 1).read_to_end(&mut data) {
-            Ok(_) if data.len() as u64 > MAX_DOCUMENT => self.model.status = format!("\"{name}\" is too large to print from here"),
-            Ok(0) => self.model.status = format!("\"{name}\" is empty"),
+            Ok(_) if data.len() as u64 > MAX_DOCUMENT => Err(format!("\"{name}\" is too large to print from here")),
+            Ok(0) => Err(format!("\"{name}\" is empty")),
             Ok(_) => {
                 self.model.status = format!("Printing \"{name}\"…");
                 self.send(Request::Print { printer, name: name.to_string(), mime: model::mime_for(name).to_string(), data });
+                Ok(())
             }
-            Err(e) => self.model.status = format!("Could not read \"{name}\": {e}"),
+            Err(e) => Err(format!("Could not read \"{name}\": {e}")),
         }
+    }
+
+    /// Prints the file at `path` on the named printer. The error says why it could not be sent.
+    pub fn print_path_on(&mut self, printer: &str, path: &str) -> Result<(), String> {
+        let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+        let mut file = std::fs::File::open(path).map_err(|e| format!("Could not open \"{name}\": {e}"))?;
+        self.print_reader_on(printer.to_string(), &name, &mut file)
     }
 
     /// Prints the file at `path` (a drop on the window or the Dock icon).
     pub fn print_path(&mut self, path: &str) {
-        let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
-        match std::fs::File::open(path) {
-            Ok(mut file) => self.print_reader(&name, &mut file),
-            Err(e) => self.model.status = format!("Could not open \"{name}\": {e}"),
+        let Some(printer) = self.model.selected.clone() else {
+            self.model.status = "Choose a printer, then print the document".into();
+            return;
+        };
+        if let Err(message) = self.print_path_on(&printer, path) {
+            self.model.status = message;
         }
     }
 
@@ -306,10 +350,86 @@ impl PrintCenter {
         match model::device_from_clipboard(text.as_deref()) {
             Ok(device) => {
                 self.model.status = "Adding printer…".into();
-                self.send(Request::Add { device });
+                self.send(Request::Add { device, label: String::new(), info: String::new(), location: String::new() });
             }
             Err(message) => self.model.status = message.into(),
         }
+    }
+
+    /// Shows `pane` in the detail area. The Add Printer pane listens for printers while it is open and starts a fresh
+    /// browse each time it opens; the info pane fills its fields from the selected printer.
+    fn show_pane(&mut self, pane: Pane) {
+        if self.model.pane() != pane {
+            self.model.toggle_pane(pane);
+        }
+        self.apply_pane();
+    }
+
+    /// Shows `pane`, or the queue when it is the one showing (the toolbar button and menu item both toggle).
+    fn toggle_pane(&mut self, pane: Pane) {
+        self.model.toggle_pane(pane);
+        self.apply_pane();
+    }
+
+    /// What follows from the pane now showing: the discovery socket runs only for the Add Printer pane.
+    fn apply_pane(&mut self) {
+        match self.model.pane() {
+            Pane::Discover => self.discover.restart(),
+            Pane::Info => self.load_fields(),
+            Pane::Queue | Pane::Help => {}
+        }
+        if self.model.pane() != Pane::Discover {
+            self.discover.stop();
+        }
+        self.focus = None;
+    }
+
+    /// Adds a printer the network announced, under its own name with its description and location. The footer says
+    /// when it is set up already.
+    fn add_found(&mut self, found: &Found) {
+        if discover::is_added(found, &self.model.printers) {
+            self.model.status = format!("\"{}\" is already set up", found.name);
+            return;
+        }
+        let (label, info, location) = discover::queue_details(found);
+        self.model.status = format!("Adding \"{}\"…", found.name);
+        self.send(Request::Add { device: found.device_uri.clone(), label, info, location });
+    }
+
+    /// The widget text to send to the shell now: `None` when nothing changed since the last send, before the first
+    /// listing, or when the shell has no widget service.
+    pub fn widget_change(&mut self) -> Option<(String, String)> {
+        if self.widget_off || !self.model.listed {
+            return None;
+        }
+        let text = model::widget_text(&self.model.printers, &self.model.offline);
+        if self.widget_sent.as_ref() == Some(&text) {
+            return None;
+        }
+        self.widget_sent = Some(text.clone());
+        Some(text)
+    }
+
+    /// Notes the request that carries the widget text, to recognise its reply.
+    pub fn widget_requested(&mut self, request: u32) {
+        self.widget_request = Some(request);
+    }
+
+    /// The shell asked for the widget text again: it is sent at the next turn of the loop.
+    pub fn widget_reload(&mut self) {
+        self.widget_sent = None;
+    }
+
+    /// A service reply. True when it was the widget's; a shell with no such service stops the window sending to it.
+    pub fn widget_reply(&mut self, request: u32, result: &Result<Json, String>) -> bool {
+        if self.widget_request != Some(request) {
+            return false;
+        }
+        self.widget_request = None;
+        if matches!(result, Err(e) if e.starts_with("no service")) {
+            self.widget_off = true;
+        }
+        true
     }
 
     /// Delete Printer takes two requests: the first asks the person to press again, the second removes the queue.
@@ -336,7 +456,11 @@ impl PrintCenter {
         self.refresh_clock();
         for reply in replies {
             let done = matches!(reply, Reply::Done(_) | Reply::Added(_) | Reply::Printed(_));
+            let added = matches!(reply, Reply::Added(_));
             self.model.apply(reply);
+            if added && self.model.pane() == Pane::Discover {
+                self.show_pane(Pane::Queue);
+            }
             if done {
                 self.list();
             }
@@ -348,20 +472,24 @@ impl PrintCenter {
     /// One loop turn in the foreground: takes the replies and lists the printers every `POLL_MS`. True when a frame is
     /// needed.
     pub fn step(&mut self, t: f64) -> bool {
-        let changed = self.poll();
+        let mut changed = self.poll();
         if t >= self.next_poll {
-            self.next_poll = t + POLL_MS;
+            self.next_poll = t + model::poll_interval_ms(&self.model.printers);
             self.list();
+        }
+        if self.model.pane() == Pane::Discover && self.discover.poll(t) {
+            changed = true;
         }
         changed
     }
 
     /// When the loop should come back: soon while a request is in flight, else at the next listing.
     pub fn wake_at(&self, t: f64) -> f64 {
-        if self.in_flight > 0 {
-            t + BUSY_WAKE_MS
+        let next = if self.in_flight > 0 { t + BUSY_WAKE_MS } else { self.next_poll.max(t + BUSY_WAKE_MS) };
+        if self.model.pane() == Pane::Discover {
+            next.min(t + DISCOVER_WAKE_MS)
         } else {
-            self.next_poll.max(t + BUSY_WAKE_MS)
+            next
         }
     }
 
@@ -405,6 +533,18 @@ impl PrintCenter {
     pub fn job_row(&self, i: usize) -> Rect {
         let d = self.detail_rect();
         Rect { x: d.x + 8.0, y: self.job_row_top() + i as f32 * JOB_ROW_PT, w: (d.w - 16.0).max(0.0), h: JOB_ROW_PT }
+    }
+
+    /// The Add Printer pane's button for the address on the clipboard.
+    pub fn clipboard_rect(&self) -> Rect {
+        let d = self.detail_rect();
+        Rect { x: d.x + PAD_PT, y: self.queue_top() + 4.0, w: (d.w - 2.0 * PAD_PT).clamp(0.0, 260.0), h: 26.0 }
+    }
+
+    /// The row of the printer found at index `i` in the Add Printer pane.
+    pub fn found_row(&self, i: usize) -> Rect {
+        let d = self.detail_rect();
+        Rect { x: d.x + 8.0, y: self.queue_top() + 48.0 + i as f32 * FOUND_ROW_PT, w: (d.w - 16.0).max(0.0), h: FOUND_ROW_PT }
     }
 
     /// The left edge of the info pane's values (points).
@@ -498,6 +638,13 @@ impl PrintCenter {
             }
             return Target::Nothing;
         }
+        if self.model.pane() == Pane::Discover {
+            if self.clipboard_rect().contains(x, y) {
+                return Target::Clipboard;
+            }
+            let found = self.discover.found.len();
+            return (0..found).find(|i| self.found_row(*i).contains(x, y)).map_or(Target::Nothing, Target::Found);
+        }
         if self.fields_shown() {
             for field in [Field::Description, Field::Location] {
                 if self.field_rect(field).contains(x, y) {
@@ -508,7 +655,7 @@ impl PrintCenter {
                 return Target::Save;
             }
         }
-        if y >= self.job_row_top() && !self.model.show_info {
+        if y >= self.job_row_top() && self.model.pane() == Pane::Queue {
             let i = ((y - self.job_row_top()) / JOB_ROW_PT) as usize;
             if i < self.model.jobs.len() {
                 return Target::Job(i);
@@ -576,8 +723,20 @@ impl PrintCenter {
             Target::Printer(i) => {
                 let Some(name) = self.model.printers.get(i).map(|p| p.name.clone()) else { return false };
                 self.model.select_printer(name);
+                if matches!(self.model.pane(), Pane::Discover | Pane::Help) {
+                    self.show_pane(Pane::Queue);
+                }
                 self.sync_fields();
                 self.list();
+                true
+            }
+            Target::Found(i) => {
+                let Some(found) = self.discover.found.get(i).cloned() else { return false };
+                self.add_found(&found);
+                true
+            }
+            Target::Clipboard => {
+                self.add_from_clipboard();
                 true
             }
             Target::Field(f) => {
@@ -630,15 +789,11 @@ impl PrintCenter {
                 self.act_jobs(ids, Action::CancelJob);
             }
             B_REFRESH => self.list(),
-            B_ADD => self.add_from_clipboard(),
+            B_ADD => self.toggle_pane(Pane::Discover),
+            B_ADD_CLIPBOARD => self.add_from_clipboard(),
+            B_HELP => self.toggle_pane(Pane::Help),
             B_DELETE => self.delete_selected(),
-            B_INFO => {
-                self.model.show_info = !self.model.show_info;
-                if self.model.show_info {
-                    self.load_fields();
-                }
-                self.focus = None;
-            }
+            B_INFO => self.toggle_pane(Pane::Info),
             B_SAVE => self.save_details(),
             B_SHARE => {
                 let shared = self.model.selected_printer().filter(|p| !p.is_class).map(|p| !p.shared);
@@ -689,7 +844,7 @@ impl PrintCenter {
                 items.push(item(B_DELETE, if pool { "Remove Printer Pool…" } else { "Remove Printer…" }, true));
                 items
             }
-            Target::Toolbar(_) | Target::Nothing | Target::Field(_) | Target::Save => Vec::new(),
+            Target::Toolbar(_) | Target::Nothing | Target::Field(_) | Target::Save | Target::Found(_) | Target::Clipboard => Vec::new(),
         }
     }
 
@@ -704,7 +859,8 @@ impl PrintCenter {
             AppMenu {
                 title: "Printer".into(),
                 items: vec![
-                    AppMenuItem::new(B_ADD, "Add Printer from Clipboard").key("cmd+n"),
+                    AppMenuItem::new(B_ADD, "Add Printer…").key("cmd+n").checked(self.model.show_discover),
+                    AppMenuItem::new(B_ADD_CLIPBOARD, "Add Printer from Clipboard"),
                     AppMenuItem::new(B_PRINT_FILE, "Print Document…").key("cmd+p").enabled(printer.is_some()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(B_PAUSE, if resume { "Resume Printer" } else { "Pause Printer" }).enabled(printer.is_some()),
@@ -727,6 +883,7 @@ impl PrintCenter {
                     AppMenuItem::new(B_SELECT_ALL, "Select All Jobs").key("cmd+a").enabled(!self.model.jobs.is_empty()),
                 ],
             },
+            AppMenu { title: "Help".into(), items: vec![AppMenuItem::new(B_HELP, "Print Center Help").checked(self.model.show_help)] },
         ]
     }
 }
@@ -854,7 +1011,7 @@ mod tests {
     #[test]
     fn add_printer_without_an_address_on_the_clipboard_says_how() {
         let mut w = window();
-        w.toolbar_action(B_ADD);
+        w.toolbar_action(B_ADD_CLIPBOARD);
         assert_eq!(w.in_flight, 0);
         assert!(w.model.status.starts_with("Copy a printer address"));
     }
@@ -920,7 +1077,7 @@ mod tests {
         w.model.jobs = vec![job(1, JobState::Pending), job(2, JobState::Pending)];
         let find = |menus: &[AppMenu], id: u32| menus.iter().flat_map(|m| m.items.iter()).find(|i| i.id == id).cloned();
         let menus = w.menus();
-        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), vec!["Printer", "Jobs"]);
+        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), vec!["Printer", "Jobs", "Help"]);
         assert_eq!(find(&menus, B_HOLD).map(|i| (i.title, i.enabled)), Some(("Pause Selected Job".to_string(), false)));
         w.model.select_all_jobs();
         let menus = w.menus();
@@ -1049,6 +1206,125 @@ mod tests {
         assert!(w.description.to_string().ends_with('!'), "a listing does not overwrite the edit");
         w.activate(Target::Printer(1));
         assert_eq!(w.description.to_string(), "Lab printer");
+    }
+
+    fn found(name: &str, uri: &str) -> Found {
+        Found { name: name.into(), device_uri: uri.into(), model: "Acme Laser".into(), location: "Floor 2".into() }
+    }
+
+    #[test]
+    fn add_printer_opens_a_pane_of_the_printers_found_and_a_second_press_closes_it() {
+        let mut w = window();
+        w.toolbar_action(B_ADD);
+        assert_eq!(w.model.pane(), Pane::Discover);
+        assert_eq!(w.in_flight, 0, "opening the pane sends nothing");
+        assert!(find_item(&w.menus(), B_ADD).is_some_and(|i| i.checked));
+        w.toolbar_action(B_ADD);
+        assert_eq!(w.model.pane(), Pane::Queue);
+    }
+
+    fn find_item(menus: &[AppMenu], id: u32) -> Option<AppMenuItem> {
+        menus.iter().flat_map(|m| m.items.iter()).find(|i| i.id == id).cloned()
+    }
+
+    #[test]
+    fn the_found_rows_and_the_clipboard_button_are_hit_where_they_are_drawn() {
+        let mut w = window();
+        w.toolbar_action(B_ADD);
+        w.discover.found = vec![found("Den", "ipp://10.0.0.7:631/ipp/print"), found("Lab", "ipp://10.0.0.8:631/ipp/print")];
+        let c = w.clipboard_rect();
+        assert_eq!(w.hit_body(c.x + 4.0, c.y + 4.0), Target::Clipboard);
+        let r = w.found_row(1);
+        assert_eq!(w.hit_body(r.x + 4.0, r.y + 4.0), Target::Found(1));
+        assert!(c.y + c.h < w.found_row(0).y, "the button sits above the first row");
+        let j = w.job_row(0);
+        assert_eq!(w.hit_body(j.x + 4.0, j.y + 4.0), Target::Nothing, "the queue's rows are not under the pane");
+    }
+
+    #[test]
+    fn choosing_a_found_printer_adds_it_once() {
+        let mut w = window();
+        w.toolbar_action(B_ADD);
+        w.discover.found = vec![found("Den", "ipp://10.0.0.7:631/ipp/print")];
+        assert!(w.activate(Target::Found(0)));
+        assert_eq!(w.in_flight, 1);
+        assert_eq!(w.model.status, "Adding \"Den\"…");
+        w.model.printers[0].device_uri = "ipp://10.0.0.7:631/ipp/print".into();
+        assert!(w.activate(Target::Found(0)));
+        assert_eq!(w.in_flight, 1, "a printer with a queue already is not added again");
+        assert_eq!(w.model.status, "\"Den\" is already set up");
+        assert!(!w.activate(Target::Found(5)));
+    }
+
+    #[test]
+    fn choosing_a_printer_in_the_list_leaves_the_add_and_help_panes() {
+        let mut w = window();
+        w.toolbar_action(B_ADD);
+        assert!(w.activate(Target::Printer(1)));
+        assert_eq!(w.model.pane(), Pane::Queue);
+        w.toolbar_action(B_HELP);
+        assert_eq!(w.model.pane(), Pane::Help);
+        assert!(find_item(&w.menus(), B_HELP).is_some_and(|i| i.checked));
+        assert!(w.activate(Target::Printer(0)));
+        assert_eq!(w.model.pane(), Pane::Queue);
+        w.toolbar_action(B_INFO);
+        assert!(w.activate(Target::Printer(1)));
+        assert_eq!(w.model.pane(), Pane::Info, "the info pane follows the printer");
+    }
+
+    #[test]
+    fn the_loop_listens_often_while_the_add_pane_is_open_and_lists_sooner_while_jobs_wait() {
+        let mut w = window();
+        w.next_poll = 10_000.0;
+        assert_eq!(w.wake_at(0.0), 10_000.0);
+        w.toolbar_action(B_ADD);
+        assert_eq!(w.wake_at(0.0), DISCOVER_WAKE_MS);
+        w.toolbar_action(B_ADD);
+        w.next_poll = 0.0;
+        w.model.printers[0].queued_jobs = 1;
+        w.step(0.0);
+        assert_eq!(w.next_poll, model::ACTIVE_POLL_MS, "a waiting job brings the next listing within a second");
+        w.model.printers[0].queued_jobs = 0;
+        w.step(model::ACTIVE_POLL_MS);
+        assert_eq!(w.next_poll, model::ACTIVE_POLL_MS + POLL_MS);
+    }
+
+    #[test]
+    fn the_widget_text_is_sent_after_the_first_listing_and_only_when_it_changes() {
+        let mut w = PrintCenter::with_link(Link::detached());
+        assert_eq!(w.widget_change(), None, "nothing is sent before the scheduler has answered");
+        w.model.apply(Reply::Listed { printers: vec![printer("Office", true)], printer: None, jobs: vec![], offline: vec![] });
+        assert_eq!(w.widget_change(), Some(("Printers".to_string(), "Office is ready".to_string())));
+        assert_eq!(w.widget_change(), None);
+        w.model.printers[0].queued_jobs = 2;
+        assert_eq!(w.widget_change().map(|t| t.1), Some("2 jobs waiting".to_string()));
+        w.widget_reload();
+        assert!(w.widget_change().is_some(), "the shell asked again");
+    }
+
+    #[test]
+    fn a_shell_without_the_widget_service_stops_the_window_sending_to_it() {
+        let mut w = window();
+        w.model.listed = true;
+        w.widget_requested(7);
+        assert!(!w.widget_reply(8, &Err("no service".into())), "another request's reply is not ours");
+        assert!(w.widget_reply(7, &Ok(Json::Null)));
+        assert!(w.widget_change().is_some(), "an accepted reload keeps the widget on");
+        w.widget_requested(9);
+        w.widget_reload();
+        assert!(w.widget_reply(9, &Err("no service widgets_timeline".into())));
+        assert_eq!(w.widget_change(), None);
+    }
+
+    #[test]
+    fn a_document_can_be_sent_to_a_named_printer_without_selecting_it() {
+        let mut w = window();
+        assert_eq!(w.print_reader_on("Lab".into(), "a.pdf", &mut std::io::Cursor::new(b"%PDF".to_vec())), Ok(()));
+        assert_eq!(w.in_flight, 1);
+        assert_eq!(w.model.selected.as_deref(), Some("Office"), "the selection stays");
+        assert_eq!(w.print_reader_on("Lab".into(), "b.pdf", &mut std::io::Cursor::new(Vec::new())), Err("\"b.pdf\" is empty".to_string()));
+        assert!(w.print_path_on("Lab", "/no/such/file.pdf").unwrap_err().starts_with("Could not open \"file.pdf\""));
+        assert_eq!(w.in_flight, 1);
     }
 
     #[test]
