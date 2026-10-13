@@ -3,7 +3,7 @@
 //! where the surface is drawn.
 
 use crate::inspect::{self, Inspection};
-use crate::model::{self, Column, Filter, History, Sort, SortKey, Tab};
+use crate::model::{self, Column, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
 use crate::sample::{ProcSample, Sampler, Snapshot};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sheet;
@@ -33,7 +33,7 @@ pub const FOOT_PT: f32 = 24.0;
 pub const SIDE_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 /// The toolbar's search field width (points).
 pub const SEARCH_PT: f32 = 220.0;
-/// Readings are taken once a second.
+/// Readings are taken once a second unless View > Update Frequency says otherwise.
 pub const SAMPLE_MS: f64 = 1000.0;
 
 /// Toolbar item ids (also the published control ids).
@@ -45,11 +45,21 @@ pub const B_INSPECT: u32 = 4;
 const ROW_ALL: u32 = 1;
 const ROW_MINE: u32 = 2;
 const ROW_OTHER: u32 = 3;
+const ROW_SYSTEM: u32 = 4;
+const ROW_ACTIVE: u32 = 5;
+const ROW_INACTIVE: u32 = 6;
 /// Menu item ids for the app's own menu.
 pub const MENU_QUIT: u32 = 1;
 pub const MENU_FIND: u32 = 2;
 pub const MENU_FORCE: u32 = 3;
 pub const MENU_INSPECT: u32 = 4;
+pub const MENU_COPY: u32 = 5;
+/// Update Frequency radio items: MENU_FREQ + index into `UpdateFrequency::ALL`.
+pub const MENU_FREQ: u32 = 20;
+/// Send Signal items: MENU_SIGNAL + index into `model::SIGNALS`.
+pub const MENU_SIGNAL: u32 = 40;
+/// Filter items of the View menu: MENU_FILTER + index into `Filter::ALL`.
+pub const MENU_FILTER: u32 = 60;
 
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,6 +108,7 @@ pub struct Monitor {
     pub press: Press,
     /// The process being inspected (its pid and the last reading), shown in place of the graph.
     pub inspector: Option<(u32, Inspection)>,
+    pub frequency: UpdateFrequency,
 }
 
 impl Monitor {
@@ -121,6 +132,7 @@ impl Monitor {
             labels: TextCache::default(),
             press: Press::None,
             inspector: None,
+            frequency: UpdateFrequency::VeryOften,
         }
     }
 
@@ -132,7 +144,7 @@ impl Monitor {
     /// Reads the machine when a second has passed. True when the window needs a new frame.
     pub fn tick(&mut self, t: f64) -> bool {
         let moving = self.scroll.tick(t);
-        let due = self.last_sample.map_or(true, |last| t - last >= SAMPLE_MS);
+        let due = self.last_sample.map_or(true, |last| t - last >= self.frequency.millis());
         if !due {
             return moving;
         }
@@ -159,7 +171,7 @@ impl Monitor {
 
     /// The time of the next reading, so the app wakes for it.
     pub fn next_wake(&self, t: f64) -> f64 {
-        self.last_sample.map_or(t, |last| last + SAMPLE_MS).max(t)
+        self.last_sample.map_or(t, |last| last + self.frequency.millis()).max(t)
     }
 
     /// Recomputes the table rows from the last reading and the filter, search and sort.
@@ -212,6 +224,21 @@ impl Monitor {
     /// Sends SIGKILL to the selected process. Same ownership rule as Quit: a process that cannot be quit cannot be forced.
     pub fn force_quit_selected(&mut self) {
         self.signal_selected(SIGKILL, "force quit");
+    }
+
+    /// Process > Send Signal: any of the listed signals, same ownership rule as Quit.
+    pub fn send_signal(&mut self, sig: Signal) {
+        self.signal_selected(sig.number, &format!("signal {}", sig.name));
+    }
+
+    /// Changes how often the machine is read; the next reading is due at once.
+    pub fn set_frequency(&mut self, f: UpdateFrequency) {
+        self.frequency = f;
+    }
+
+    /// The selected row as tab-separated text, for Edit > Copy.
+    pub fn copy_text(&self) -> Option<String> {
+        self.selected_proc().map(|p| model::row_text(p, self.tab))
     }
 
     fn signal_selected(&mut self, sig: i32, verb: &str) {
@@ -328,15 +355,21 @@ impl Monitor {
     pub fn sidebar(&self) -> SourceList {
         let items = vec![
             SidebarItem::header("Processes"),
-            SidebarItem::row(ROW_ALL, "All Processes").with_symbol("list.bullet"),
-            SidebarItem::row(ROW_MINE, "My Processes").with_symbol("person"),
-            SidebarItem::row(ROW_OTHER, "Other Users").with_symbol("person.2"),
+            SidebarItem::row(ROW_ALL, Filter::All.label()).with_symbol("list.bullet"),
+            SidebarItem::row(ROW_MINE, Filter::Mine.label()).with_symbol("person"),
+            SidebarItem::row(ROW_OTHER, Filter::Others.label()).with_symbol("person.2"),
+            SidebarItem::row(ROW_SYSTEM, Filter::System.label()).with_symbol("gearshape"),
+            SidebarItem::row(ROW_ACTIVE, Filter::Active.label()).with_symbol("bolt"),
+            SidebarItem::row(ROW_INACTIVE, Filter::Inactive.label()).with_symbol("moon"),
         ];
         let mut list = SourceList::new(items, 28.0, 26.0);
         list.set_selected(Some(match self.filter {
             Filter::All => ROW_ALL,
             Filter::Mine => ROW_MINE,
             Filter::Others => ROW_OTHER,
+            Filter::System => ROW_SYSTEM,
+            Filter::Active => ROW_ACTIVE,
+            Filter::Inactive => ROW_INACTIVE,
         }));
         list
     }
@@ -353,6 +386,9 @@ impl Monitor {
         let filter = match id {
             ROW_MINE => Filter::Mine,
             ROW_OTHER => Filter::Others,
+            ROW_SYSTEM => Filter::System,
+            ROW_ACTIVE => Filter::Active,
+            ROW_INACTIVE => Filter::Inactive,
             _ => Filter::All,
         };
         self.set_filter(filter);
@@ -579,6 +615,31 @@ mod tests {
         assert!(!data.exe.is_empty());
         m.toggle_inspector();
         assert!(m.inspector.is_none());
+    }
+
+    #[test]
+    fn copy_text_follows_the_selection_and_tab() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert_eq!(m.copy_text(), None);
+        m.rows = vec![crate::sample::ProcSample { pid: 7, name: "sh".into(), user: "me".into(), uid: 1, cpu: 1.0, rss: 0, threads: 2, read_bps: 0.0, write_bps: 0.0 }];
+        m.selected = Some(7);
+        assert_eq!(m.copy_text().as_deref(), Some("sh\tme\t1.0%\t2\t7"));
+    }
+
+    #[test]
+    fn a_slower_update_frequency_delays_the_next_reading() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.last_sample = Some(1000.0);
+        assert_eq!(m.next_wake(1500.0), 2000.0);
+        m.set_frequency(UpdateFrequency::Normally);
+        assert_eq!(m.next_wake(1500.0), 6000.0);
+    }
+
+    #[test]
+    fn signals_need_a_signalable_selection() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.send_signal(model::SIGNALS[0]);
+        assert!(m.status.is_empty());
     }
 
     #[test]

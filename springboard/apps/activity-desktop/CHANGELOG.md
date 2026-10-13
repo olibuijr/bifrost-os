@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- The sidebar and View > Filter Processes add System, Active and Inactive processes.
+- Process > Send Signal to Process sends HUP, INT, KILL, TERM, USR1, USR2, STOP or CONT to a process of your own user.
+- View > Update Frequency reads the machine every 1, 2 or 5 seconds, and remembers the choice.
+- Edit > Copy (cmd+C) puts the selected row on the pasteboard as tab-separated text.
+
 ## 0.2.0
 
 - Inspect (toolbar and Process menu) opens the process inspector in place of the graph: the command, executable, working folder, open files and sockets, and threads with their state, refreshed each second. It closes when the process exits.
