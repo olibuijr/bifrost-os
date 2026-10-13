@@ -69,7 +69,7 @@ def du(path):
     return int(subprocess.run(['du', '-sb', path], capture_output=True, text=True).stdout.split()[0])
 mem = dict(l.split(':', 1) for l in pathlib.Path('/proc/meminfo').read_text().splitlines())
 kb = lambda k: int(mem[k].split()[0])
-print(json.dumps(dict(threads_springboard=threads('springboard'), threads_labwc=threads('labwc'),
+print(json.dumps(dict(threads_springboard=threads('springboard'), threads_bifrost_wm=threads('bifrost-wm'),
                       springboard_bytes=os.path.getsize('/usr/bin/springboard'),
                       bifrost_bytes=du('/usr/lib/bifrost') + du('/var/lib/springboard/apps'),
                       ram_used_kb=kb('MemTotal') - kb('MemAvailable'))))
@@ -89,9 +89,9 @@ def midget_footprint():
     data = json.loads(idle.stdout)
     cpu, wake = data["cpu_percent_one_core"], data["wakeups_per_s"]
     res["midget_idle_cpu_total"] = data["cpu_total_percent"]
-    for key, name in (("springboard", "springboard"), ("labwc", "labwc"), ("dbus_broker", "dbus-broker")):
+    for key, name in (("springboard", "springboard"), ("bifrost_wm", "bifrost-wm"), ("dbus_broker", "dbus-broker")):
         res[f"midget_idle_cpu_{key}"] = cpu.get(name, 0.0)
-    for key, name in (("springboard", "springboard"), ("labwc", "labwc"), ("dbus_broker", "dbus-broker"), ("bootweave", "bifrost-bootweave")):
+    for key, name in (("springboard", "springboard"), ("bifrost_wm", "bifrost-wm"), ("dbus_broker", "dbus-broker"), ("bootweave", "bifrost-bootweave")):
         res[f"midget_idle_wakeups_{key}"] = wake.get(name, 0.0)
     res["midget_idle_wakeups_userspace"] = data["wakeups_userspace_per_s"]
 
@@ -132,7 +132,7 @@ def midget_footprint():
         sys.exit(1)
     d = json.loads(probe.stdout.strip().splitlines()[-1])
     res["midget_threads_springboard"] = float(d["threads_springboard"])
-    res["midget_threads_labwc"] = float(d["threads_labwc"])
+    res["midget_threads_bifrost_wm"] = float(d["threads_bifrost_wm"])
     res["midget_size_springboard_mib"] = d["springboard_bytes"] / 2 ** 20
     res["midget_size_bifrost_total_mib"] = d["bifrost_bytes"] / 2 ** 20
     res["midget_ram_used_mib"] = d["ram_used_kb"] / 1024

@@ -13,7 +13,7 @@ Path("out/render-performance").mkdir(parents=True,exist_ok=True)
 hz=int(subprocess.check_output(['ssh','midget','getconf CLK_TCK'],text=True))
 def ssh(command): return subprocess.check_output(['ssh','midget',command],text=True)
 def cpu():
-    return json.loads(ssh("python3 - <<'REMOTE'\nimport glob,json,os\nr={}\nfor p in glob.glob('/proc/[0-9]*/stat'):\n try:\n  s=open(p).read(); n=s[s.index('(')+1:s.rindex(')')]; v=s[s.rindex(')')+2:].split()\n  if n in ('shell','springboard','labwc','bifrost-files'):r[p.split('/')[2]]=[n,int(v[11])+int(v[12])]\n except: pass\nprint(json.dumps(r))\nREMOTE"))
+    return json.loads(ssh("python3 - <<'REMOTE'\nimport glob,json,os\nr={}\nfor p in glob.glob('/proc/[0-9]*/stat'):\n try:\n  s=open(p).read(); n=s[s.index('(')+1:s.rindex(')')]; v=s[s.rindex(')')+2:].split()\n  if n in ('shell','springboard','bifrost-wm','bifrost-files'):r[p.split('/')[2]]=[n,int(v[11])+int(v[12])]\n except: pass\nprint(json.dumps(r))\nREMOTE"))
 def pct(a,b,seconds):
  r={}
  for pid,(name,ticks) in b.items():

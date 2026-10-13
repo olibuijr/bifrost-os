@@ -676,7 +676,7 @@ fn shutdown() {
     // the shutdown milestone first, whichever window server runs (tools/boot-bench.py reads it on the next boot)
     mark("shutdown-start");
     let conf = fs::read_to_string(COMPOSITOR_CONF).unwrap_or_default();
-    // the session falls back to labwc when the binary is missing, so no fade is coming either
+    // without the window server binary there is no fade coming either
     if shutdown_plan(&conf) == ShutdownPlan::Skip || !Path::new(WINDOW_SERVER).exists() {
         return;
     }
@@ -976,7 +976,6 @@ mod progress_tests {
     fn only_the_window_server_that_draws_the_boot_frame_fades_at_shutdown() {
         assert_eq!(shutdown_plan("bifrost-wm\n"), ShutdownPlan::Fade);
         assert_eq!(shutdown_plan("bifrost-wm"), ShutdownPlan::Fade);
-        assert_eq!(shutdown_plan("labwc\n"), ShutdownPlan::Skip);
         assert_eq!(shutdown_plan(""), ShutdownPlan::Skip);
         assert_eq!(shutdown_plan("bifrost-wm; rm -rf /"), ShutdownPlan::Skip);
     }

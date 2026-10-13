@@ -157,7 +157,7 @@ def main():
     ap.add_argument("--no-desktop", action="store_true")
     ap.add_argument("--ui", action="store_true", help="drive the on-screen installer by keyboard instead of the unattended preset")
     ap.add_argument("--reuse", action="store_true", help="no reinstall: boot the installed VM disk and run the checks after the install")
-    ap.add_argument("--compositor", choices=["labwc", "bifrost-wm"], default="labwc",
+    ap.add_argument("--compositor", choices=["bifrost-wm"], default="bifrost-wm",
                     help="bifrost-wm: after the stock checks, install the window server from this tree and check again under it")
     ap.add_argument("--label", default="")
     a = ap.parse_args()

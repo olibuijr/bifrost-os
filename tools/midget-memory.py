@@ -42,6 +42,6 @@ def report(name, ids):
 
 
 report('BifrOSt shell', {p for p, (_, comm, _) in rows.items() if comm == 'springboard'})
-report('Wayland compositor', {p for p, (_, comm, _) in rows.items() if comm == 'labwc'})
+report('Wayland compositor', {p for p, (_, comm, _) in rows.items() if comm == 'bifrost-wm'})
 report('Firefox including children', descendants({p for p, (_, comm, _) in rows.items() if comm == 'firefox'}))
 report('BifrOSt Browser including children', descendants({p for p, (_, _, exe) in rows.items() if '/bifrost-browser/' in exe and exe.endswith('/servoshell')}))

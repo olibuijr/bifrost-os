@@ -333,7 +333,7 @@ pub fn dev(a: &Value) -> Result<Value, String> {
         "restart" => {
             let target = s(a, "target").ok_or("target is required: shell | compositor | app:<id> | mcp")?;
             match target {
-                // labwc is started with the shell's session, so both come back with the springboard unit
+                // bifrost-wm is started with the shell's session, so both come back with the springboard unit
                 "shell" | "compositor" => restart_shell(wait).map(text),
                 "mcp" => {
                     run("systemd-run --on-active=1 --unit=bifrost-mcp-restart systemctl restart bifrost-mcp", 10)?;
