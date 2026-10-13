@@ -140,7 +140,7 @@ impl Draft {
         if !self.cc.is_empty() {
             out.push_str(&format!("Cc: {}\r\n", self.cc.join(", ")));
         }
-        out.push_str(&format!("Subject: {}\r\n", encode_word(&self.subject)));
+        out.push_str(&format!("Subject: {}\r\n", encode_subject(&self.subject)));
         out.push_str(&format!("Message-ID: {message_id}\r\n"));
         if let Some(parent) = &self.in_reply_to {
             out.push_str(&format!("In-Reply-To: {parent}\r\n"));
@@ -196,6 +196,17 @@ pub fn reply_draft(original: &Summary, from: &str) -> Draft {
     }
 }
 
+/// The Subject value: leading plain-ASCII words stay readable ("Re: "), the rest from the first word that needs it is
+/// one RFC 2047 encoded word.
+fn encode_subject(subject: &str) -> String {
+    let split = subject.split(' ').scan(0usize, |at, w| { let start = *at; *at += w.len() + 1; Some((start, w)) })
+        .find(|(_, w)| !w.is_ascii()).map(|(start, _)| start);
+    match split {
+        Some(0) | None => encode_word(subject),
+        Some(at) => format!("{}{}", &subject[..at], encode_word(&subject[at..])),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,7 +251,8 @@ mod tests {
         draft.body = "Já\n.dot line".into();
         let text = draft.render("<new@example.com>", 0).unwrap();
         assert!(text.contains("To: ana@example.com\r\n"));
-        assert!(text.contains("Subject: Re: =?UTF-8?B?"));
+        // the plain words stay readable; the encoded word starts at the first word that needs it
+        assert!(text.contains("Subject: Re: Fundur =?UTF-8?B?"), "{text}");
         assert!(text.contains("In-Reply-To: <abc@mail.example>\r\n"));
         assert!(text.contains("References: <root@mail.example> <mid@x> <abc@mail.example>\r\n"));
         assert!(text.ends_with("\r\n\r\nJá\r\n.dot line\r\n"));

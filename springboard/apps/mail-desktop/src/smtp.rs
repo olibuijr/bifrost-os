@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(parse_reply_line("250-SIZE 100"), Some(ReplyLine { code: 250, more: true, text: "SIZE 100".into() }));
         assert_eq!(parse_reply_line("250 OK"), Some(ReplyLine { code: 250, more: false, text: "OK".into() }));
         assert_eq!(parse_reply_line("250"), Some(ReplyLine { code: 250, more: false, text: String::new() }));
-        assert_eq!(parse_reply_line("250 x"), None);
+        assert_eq!(parse_reply_line("250 x"), Some(ReplyLine { code: 250, more: false, text: "x".into() }), "code, space, text is a reply");
         assert_eq!(parse_reply_line("250x"), None);
         let (code, texts) = collect_reply(&["250-mail.example", "250-SIZE 10", "250 AUTH PLAIN"]).unwrap();
         assert_eq!(code, 250);

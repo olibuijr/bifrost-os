@@ -80,8 +80,9 @@ pub fn tiles_in_view(cx: f64, cy: f64, width: f64, height: f64, zoom: f64) -> Ve
     let left = cx - width / 2.0;
     let top = cy - height / 2.0;
     let n = 1i64 << z;
-    let (x0, x1) = ((left / tile_px).floor() as i64, ((left + width) / tile_px).floor() as i64);
-    let (y0, y1) = ((top / tile_px).floor() as i64, ((top + height) / tile_px).floor() as i64);
+    // the right and bottom edges are exclusive: a view exactly one tile wide needs one tile, not a wrapped second
+    let (x0, x1) = ((left / tile_px).floor() as i64, ((left + width) / tile_px).ceil() as i64 - 1);
+    let (y0, y1) = ((top / tile_px).floor() as i64, ((top + height) / tile_px).ceil() as i64 - 1);
     let mut out = Vec::new();
     for ty in y0.max(0)..=y1.min(n - 1) {
         for tx in x0..=x1 {
