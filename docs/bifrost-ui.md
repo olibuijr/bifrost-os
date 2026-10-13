@@ -433,6 +433,10 @@ Apple parity for the three most-used system services an app reaches for. All are
   The format is one `kind<TAB>key<TAB>value` line per key, with escapes. Decision: a synchronous write, because the
   store is small and an app that quits right after a change must keep it. Round trip checked with a scratch test
   (escaped keys and values, all five types, removal); no test file is kept in the repo.
+- **Property lists** (`UserDefaults` with `Plist`): `ctx.defaults().plist(key)` returns `Option<Plist>` for any stored value,
+  arrays and dictionaries included, and `ctx.defaults_mut().set_plist(key, plist)` stores one. Scalars still go through the typed
+  getters. A key that holds `data` reads back through `data(key)` (hex in the file). Plist values are stored in `defaults.txt` in the
+  same one-line format as the scalars.
 - **Pasteboard** (`NSPasteboard.general` strings): `ctx.pasteboard_string()` and `ctx.set_pasteboard_string(text)`. The
   shell's protocol already carried the clipboard text; this exposes it. Decision: only plain text, because the protocol
   sends text (`SetClipboard`). Gap: pasteboard types, images, the change count, and private named pasteboards.
@@ -482,6 +486,27 @@ biometric or user-presence access control (`SecAccessControl`, Touch ID), no `kS
 available whenever the shell runs), only `kSecClassGenericPassword` (no internet passwords, keys or certificates), no
 attributes beyond service and account (labels, comments, dates), no `kSecMatchLimitAll` listing, no iCloud sync, and
 `update` replaces the value only (no attribute update).
+
+## Website logins and secure notes (`bifrost_app::passwords`, credential exchange)
+
+Website logins, secure notes and certificates that an app saves once and reads later. Every item is one entry of the shared
+passwords group (`passwords::GROUP`, `is.bifrost.passwords`), which the Settings Passwords page and the Passwords app both list.
+The item model lives in the shell's `credentials` module, shared with the SDK.
+
+- **Calls**: `passwords::save(ctx, site, account, password)`, `update`, `fill(ctx, site, account)`, `remove`, `list(ctx)`,
+  `save_note(ctx, title, body)` and `save_certificate(ctx, label, pem)`. Each returns a request id. The answer arrives in
+  `App::service_reply`. `decode_password(result)` gives the password for `fill`, and `decode_list(result)` gives the rows for `list`.
+- **Identity**: a login's service is the site and its account is the user name, so a form filler reads back what a browser saved.
+  Notes and certificates are kept under a kind prefix. `kind_of` and `name_of` tell them apart in a listing.
+- **Duplicates**: `save` answers `Error::DuplicateItem` when the login exists. Call `update` instead.
+- **Permission**: the manifest lists `is.bifrost.passwords` under `keychain_groups` and asks for the `keychain` permission. Without
+  both, every call answers `NotPermitted`.
+- **Credential exchange**: `bifrost_app::credential_exchange` re-exports the import and export model from `bifrost_ui`:
+  `export`, `import`, `PasswordRecord`, `ImportReport`, `ExchangeError`, `escape`, `unescape` and `HEADER`. The format is defined once,
+  so the shell and apps read the same file.
+
+Gaps: the Passwords app shows a password without the passcode that Settings asks for (the shell has no app-side passcode prompt).
+Creating a secure note from an app needs a text editor and is still missing. Midget check: save, fill and remove one login from a test app.
 
 ## User notifications (`UNUserNotificationCenter`, roadmap item 5a)
 
@@ -706,6 +731,30 @@ Gaps, decided:
   (underline styles) and `selectedRange` inside the field's surrounding window beyond 4000 bytes are not carried.
 - Not matched: `NSTextInputContext` input source switching, `characterIndexForPoint:`, `UITextInteraction` handles,
   dictation, `UITextInputDelegate` (`selectionWillChange`) and bidirectional caret movement (movement is logical).
+
+## Compose method (apostrophe accents, Icelandic letters, kana, `bifrost_ui::compose_method`)
+
+The built-in input method that every text input runs with no provider process. Round 75 (2026-10-13) moved the flow out of the
+shell's Search field into this module, so the shell and every SDK text field share one implementation.
+
+- **Keys**: a typed apostrophe arms the method. The next letter that has accented forms opens the candidate list for it (`'a` offers
+  a, a-acute, a-grave, ...). Digits 1 to 9 pick a candidate (`MAX_SHOWN` is 9). Any other key ends the composition and keeps the
+  letter. The table includes the Icelandic letters (acute vowels, o-umlaut, ae, eth, thorn).
+- **Japanese (Romaji) source**: `compose_method::set_japanese_source(on)`. The runtime sets it when the shell sends
+  `ToApp::InputSource { japanese }`, so every SDK app follows the shell's input source. Romaji becomes marked hiragana as it is typed,
+  Space opens the hiragana and katakana list, and a digit picks from it.
+- **State**: `Composer` is what one text input keeps (the armed apostrophe, the kana being composed, the open list). It exposes
+  `is_armed`, `is_composing`, `is_open` and `candidates()`.
+- **Flow**: `type_text(c, target, text)`, `type_text_as(.., japanese)`, `backspace`, `end_for_control` and `accent_hold(c, target, letter)`
+  run over a `ComposeTarget` (the field's marked text, commit and plain insert). The model draws nothing. The caller paints the list
+  (`widgets::candidate_list`).
+- **SDK fields**: `bifrost_ui::text::TextEditor` owns a `Composer`. Its `type_text` is the typed-key entry point, so an app's own
+  field composes apostrophe lists, kana and the candidate list. A key hold sends `ToApp::AccentHold { letter }`, and `apply_text_input`
+  hands the letter to `TextEditor::accent_hold`.
+
+Gaps: the shell cannot see an app's compose state, so a hold while an app has an apostrophe armed is ignored by the app and the letter
+repeats. `RichTextView` (`sdk/src/attributed.rs`) has no marked-text model, so accent hold is not wired there. Text replacements and
+the spelling underline in SDK fields are not wired. Midget checks: kana in an app field, and accent hold on a key hold.
 
 ## Native apps follow the appearance (`NSApp.effectiveAppearance`, freedesktop Settings portal)
 
@@ -1398,21 +1447,43 @@ multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes
 
 ## Printing (NSPrintInfo / NSPrintOperation parity)
 
-`bifrost_app::print` (`springboard/ui/src/print.rs`): `PrintInfo` (paper size, orientation, margins, copies, page range;
-`paper_size()` and `imageable()` as `paperSize` and `imageablePageBounds`), `printers()` (CUPS via `lpstat -p -d`),
-`available()`, and `PrintOperation::new(file).with_info(..).to(Destination::Printer(name) | Destination::Pdf(path)).run()`,
-which submits with `lp` (info mapped to `-n`, `media=`, `landscape`, `page-*`, `-P`) or, for Save as PDF, copies the
-document. Contract tests are unit tests in the module (argument mapping, lpstat parsing, PDF copy); no call goes to the
-shell, so there is no `take_sent` test and no proto tag was used.
+`bifrost_app::print` (`springboard/ui/src/print.rs`, re-exported by the SDK as `pub use bifrost_ui::print`). Updated in round 75
+(2026-10-13): submission moved to CUPS IPP and plug-in panels were added.
+
+- **`PrintInfo`**: paper size, orientation, margins, copies and page range. `paper_size()` and `imageable()` are `paperSize` and
+  `imageablePageBounds`. `attributes()` gives the job-template pairs (`media`, `orientation-requested`, `copies`, `page-ranges`).
+- **`PrintOperation`** has three sources: `PrintOperation::new(file)` (a PDF, or an image the scheduler converts),
+  `PrintOperation::pages(job_name, pages, fonts)` (pages the app built, written as a PDF when the job runs) and
+  `PrintOperation::text(job_name, text)` (text laid out to the imageable area by `text_pages`).
+- **Chain**: `.with_info(PrintInfo)`, `.with_options(Vec<(key, value)>)` (plug-in panel values, below), `.to(Destination::Printer(name))`
+  or `.to(Destination::Pdf(path))`, then `.run()`. `Printer(None)` is the scheduler's default printer. `run` returns the job as
+  `printer-id`, or a `PrintError`. `document()` gives the format and bytes without submitting.
+- **Submission**: `cups::Client::print_document_with` over IPP (not `lp`). Copies, media, orientation and page range are
+  job-template attributes. Margins are not, because the document is already laid out inside them. `Destination::Pdf` is Save as PDF
+  and works without a scheduler.
+- **Errors**: `PrintError::NoCups` (the scheduler cannot be reached, any I/O or HTTP failure), `NoPrinter` (no name and no default),
+  `Failed(String)`. `print::available()` is a 200 ms connect to the local scheduler port.
+- **Printers**: `bifrost_app::cups` (`Client::printers()`, with the default flagged). The old `print::printers()` (`lpstat`) is gone.
+
+**Plug-in panels** (`bifrost_app::print_panel`, the accessory views of the print and page setup dialogs):
+
+- `PlugIn::new(id, name).panel(PrintPanel::new(id, title, Placement::PrintDialog | Placement::PageLayout).option(..))`. Options are
+  `PanelOption::choice(key, label, choices, default)`, `toggle(key, label, default)` and `number(key, label, min, max, default)`.
+- `PlugIns::new()` then `register(plugin)`. Registration refuses duplicate panel ids and option keys, keys outside `a-z A-Z 0-9 - _`,
+  and the `RESERVED_KEYS` that `PrintInfo` already writes (`media`, `orientation-requested`, `copies`, `page-ranges`).
+- Read and write values by key with `get` and `set(key, Value)`, list panels with `panels(placement)`, and send `job_options()` with
+  `PrintOperation::with_options`.
+- The shell does not draw either dialog yet. The app draws the panels with its own kit controls.
 
 Decisions and gaps:
-- No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay
-  reserved for it). Apps choose printer and options with their own controls and call `run`.
-- Only file documents (PDF or what `lp` accepts); there is no `NSView` pagination (`knowsPageRange`, `draw(page)`) yet.
-- If CUPS is absent from the image, `printers()` is empty, `available()` is false, `run` returns `PrintError::NoCups`, and
-  Save as PDF still works. Whether the Midget image ships CUPS is unchecked.
-- Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and
-  pdfcraft are upstream packages with no source here, so they are not wired.
+- No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay reserved for
+  it). Apps choose printer and options with their own controls and call `run`.
+- Print Center's Add Printer reads the clipboard, because the SDK has no text prompt sheet yet.
+- The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set.
+- Only file, pages and text documents. There is no `NSView` pagination (`knowsPageRange`, `draw(page)`).
+- Without a scheduler, `available()` is false and `run` returns `PrintError::NoCups`. Whether the Midget image ships CUPS is unchecked.
+- Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and pdfcraft are
+  upstream packages with no source here, so they are not wired.
 
 ## Locale and localization (Foundation parity)
 
