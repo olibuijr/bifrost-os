@@ -5,6 +5,7 @@
 //! the common forms other writers produce (hex escapes, `\uN` with its fallback character, `\plain`, `\pard`), and
 //! skips the destinations it does not use (colour and style tables, info, pictures, `\*` extensions).
 
+use crate::links;
 use crate::properties::Properties;
 use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
 
@@ -17,7 +18,7 @@ pub fn is_rtf(bytes: &[u8]) -> bool {
 const SKIPPED_DESTINATIONS: &[&str] = &[
     "stylesheet", "info", "pict", "header", "headerl", "headerr", "footer", "footerl", "footerr", "footnote",
     "generator", "listtable", "listoverridetable", "rsidtbl", "xmlnstbl", "latentstyles", "themedata",
-    "colorschememapping", "datastore", "fldinst", "object", "mmathPr", "filetbl", "revtbl",
+    "colorschememapping", "datastore", "object", "mmathPr", "filetbl", "revtbl",
 ];
 
 /// Writes the cells as RTF with the default tab stops.
@@ -47,6 +48,8 @@ pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> 
     out += "\n";
     let mut para_start = true;
     let mut last: Option<Style> = None;
+    // the link whose field is open: a run of linked characters is one hyperlink field
+    let mut open_link = 0u16;
     for c in cells {
         if para_start {
             out += &format!("\\pard\\q{} ", align_code(c.style.align));
@@ -54,15 +57,36 @@ pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> 
             para_start = false;
         }
         if c.ch == '\n' {
+            if open_link != 0 {
+                out += "}}";
+                open_link = 0;
+                last = None;
+            }
             out += "\\par\n";
             para_start = true;
             continue;
+        }
+        if c.style.link != open_link {
+            if open_link != 0 {
+                out += "}}";
+                open_link = 0;
+                last = None;
+            }
+            if let Some(url) = links::url(c.style.link) {
+                let address: String = url.chars().map(escape).collect();
+                out += &format!("{{\\field{{\\*\\fldinst HYPERLINK \"{address}\"}}{{\\fldrslt ");
+                open_link = c.style.link;
+                last = None;
+            }
         }
         if !last.is_some_and(|l| l.same_run(&c.style)) {
             out += &character_words(&c.style);
             last = Some(c.style);
         }
         out += &escape(c.ch);
+    }
+    if open_link != 0 {
+        out += "}}";
     }
     out += "}";
     out.into_bytes()
@@ -362,6 +386,11 @@ struct Reader {
     rgb: [i64; 3],
     /// the distance between tab stops, from `\deftab`
     tab: f32,
+    /// the depth of a field instruction group, while it is read, and its text so far
+    inst: Option<usize>,
+    inst_text: String,
+    /// the link a field instruction named, which the field's result takes
+    pending_link: u16,
 }
 
 impl Reader {
@@ -391,6 +420,10 @@ impl Reader {
                     }
                     if self.ctable == Some(closing) {
                         self.ctable = None;
+                    }
+                    if self.inst == Some(closing) {
+                        self.inst = None;
+                        self.finish_instruction();
                     }
                     self.group_start = false;
                 }
@@ -473,7 +506,8 @@ impl Reader {
             i += 1;
             match c {
                 b'*' => {
-                    if self.take_group_start() {
+                    // an extension destination is skipped, except the field instruction a hyperlink is read from
+                    if self.take_group_start() && !bytes[i..].starts_with(b"\\fldinst") {
                         self.skip = Some(self.depth);
                     }
                 }
@@ -574,6 +608,12 @@ impl Reader {
                     self.cur.spacing = nearest_spacing(twips as f32 / 240.0);
                 }
             }
+            "field" => self.pending_link = 0,
+            "fldinst" => {
+                self.inst = Some(self.depth);
+                self.inst_text.clear();
+            }
+            "fldrslt" => self.cur.link = self.pending_link,
             "pnlvlblt" => self.cur.list = ListKind::Bullet,
             "pnlvlbody" => self.cur.list = ListKind::Numbered,
             "deftab" => {
@@ -630,7 +670,19 @@ impl Reader {
     }
 
     fn push(&mut self, ch: char) {
+        if self.inst.is_some() {
+            self.inst_text.push(ch);
+            return;
+        }
         self.cells.push(Cell { ch, style: self.cur });
+    }
+
+    /// The end of a field instruction: a hyperlink names the link its result is read with.
+    fn finish_instruction(&mut self) {
+        let text = std::mem::take(&mut self.inst_text);
+        if let Some(url) = links::from_field_instruction(&text) {
+            self.pending_link = links::intern(&url);
+        }
     }
 
     /// Text inside the font table: `\fN Name;` entries.
@@ -850,6 +902,45 @@ mod tests {
         assert_eq!(write_plain(&cells), b"one\ntwo".to_vec());
         assert!(!is_rtf(b"one"));
         assert!(is_rtf(b"{\\rtf1 x}"));
+    }
+
+    #[test]
+    fn a_link_is_written_as_a_hyperlink_field_and_read_back() {
+        let id = links::intern("https://example.com/a?b=1");
+        let plain = Style::default();
+        let linked = Style { link: id, bold: true, ..Style::default() };
+        let mut cells: Vec<Cell> = "see ".chars().map(|ch| Cell { ch, style: plain }).collect();
+        cells.extend("the docs".chars().map(|ch| Cell { ch, style: linked }));
+        cells.extend(" now\nnext ".chars().map(|ch| Cell { ch, style: plain }));
+        cells.extend("one".chars().map(|ch| Cell { ch, style: linked }));
+        let bytes = write(&cells);
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("{\\field{\\*\\fldinst HYPERLINK \"https://example.com/a?b=1\"}{\\fldrslt "), "{text}");
+        assert_eq!(read(&bytes), cells);
+        assert_eq!(text.matches("\\fldinst").count(), 2, "one field for each run of linked text");
+    }
+
+    #[test]
+    fn a_link_ending_a_paragraph_closes_its_field_before_the_break() {
+        let id = links::intern("https://example.com/end");
+        let linked = Style { link: id, ..Style::default() };
+        let cells: Vec<Cell> = "ab\ncd".chars().map(|ch| Cell { ch, style: if ch == '\n' { Style::default() } else { linked } }).collect();
+        assert_eq!(read(&write(&cells)), cells);
+    }
+
+    #[test]
+    fn foreign_hyperlink_fields_are_read_and_other_fields_are_plain_text() {
+        let src = b"{\\rtf1{\\field{\\*\\fldinst{HYPERLINK \"https://example.org/x\"}}{\\fldrslt{\\ul docs}}} and {\\field{\\*\\fldinst PAGE}{\\fldrslt 3}}}";
+        let cells = read(src);
+        assert_eq!(text_of(&cells), "docs and 3");
+        let url = links::url(cells[0].style.link);
+        assert_eq!(url.as_deref(), Some("https://example.org/x"));
+        assert!(cells[0].style.underline);
+        assert!(cells[4..].iter().all(|c| c.style.link == 0), "text after the field is not linked");
+        // a code-running address is not a link
+        let bad = read(b"{\\rtf1{\\field{\\*\\fldinst HYPERLINK \"javascript:alert(1)\"}{\\fldrslt x}}}");
+        assert_eq!(text_of(&bad), "x");
+        assert_eq!(bad[0].style.link, 0);
     }
 
     #[test]

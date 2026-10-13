@@ -98,7 +98,7 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
                     let sy = y + s.size * 0.3;
                     out.extend(format!("{w} w {:.2} {:.2} m {:.2} {:.2} l S\n", left + origin + start, sy, left + origin + end, sy).bytes());
                 }
-                if s.underline {
+                if s.underline || s.link != 0 {
                     let w = (s.size / 24.0).max(0.4);
                     let uy = y - s.size * 0.12;
                     out.extend(format!("{w} w {:.2} {:.2} m {:.2} {:.2} l S\n", left + origin + start, uy, left + origin + end, uy).bytes());
@@ -139,8 +139,14 @@ fn show(out: &mut Vec<u8>, s: &crate::text::Style, text: &str, x: f32, y: f32) {
         -1 => (s.size * crate::view::SCRIPT_SCALE, -s.size * 0.12),
         _ => (s.size, 0.0),
     };
-    // text on a highlight is black, as on screen
-    let color = if s.highlight > 0 && s.color == 0 { "0 0 0 rg 0 0 0 RG".to_string() } else { color_words(s.color) };
+    // text on a highlight is black, as on screen; a link is blue
+    let color = if s.link != 0 {
+        "0 0.478 1 rg 0 0.478 1 RG".to_string()
+    } else if s.highlight > 0 && s.color == 0 {
+        "0 0 0 rg 0 0 0 RG".to_string()
+    } else {
+        color_words(s.color)
+    };
     out.extend(format!("BT /F{face} {size} Tf {rise:.2} Ts {} {:.2} {:.2} Td ", color, x, y).bytes());
     text_literal(text, out);
     out.extend(b" Tj ET\n");

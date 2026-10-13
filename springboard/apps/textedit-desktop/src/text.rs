@@ -108,6 +108,8 @@ pub struct Style {
     pub strike: bool,
     pub script: i8,
     pub highlight: u8,
+    /// The link the character belongs to: a number from `links::intern`, 0 for none.
+    pub link: u16,
 }
 
 impl Default for Style {
@@ -125,6 +127,7 @@ impl Default for Style {
             strike: false,
             script: 0,
             highlight: 0,
+            link: 0,
         }
     }
 }
@@ -141,6 +144,7 @@ impl Style {
             && self.strike == other.strike
             && self.script == other.script
             && self.highlight == other.highlight
+            && self.link == other.link
     }
 }
 
@@ -321,6 +325,12 @@ impl Text {
             self.cells.first().map(|c| c.style)
         };
         self.typing = style.unwrap_or_default();
+        // typing continues a link only from inside it, not from its end
+        let before = if at > 0 { self.cells[at - 1].style.link } else { 0 };
+        let after = self.cells.get(at).map_or(0, |c| c.style.link);
+        if before != after {
+            self.typing.link = 0;
+        }
         let para = self.paragraph_style_at(at);
         self.typing.align = para.align;
         self.typing.spacing = para.spacing;
@@ -542,6 +552,51 @@ impl Text {
     pub fn set_highlight(&mut self, color: u8) {
         let color = color.min(COLORS.len() as u8 - 1);
         self.restyle(|s| s.highlight = color);
+    }
+
+    /// The link number of the character at `pos` (0 for none, or past the end).
+    pub fn link_at(&self, pos: usize) -> u16 {
+        self.cells.get(pos).map_or(0, |c| c.style.link)
+    }
+
+    /// The link number at a caret or click: the character after `pos`, else the one before it.
+    pub fn link_near(&self, pos: usize) -> u16 {
+        match self.link_at(pos) {
+            0 => pos.checked_sub(1).map_or(0, |p| self.link_at(p)),
+            id => id,
+        }
+    }
+
+    /// The whole link at `pos` (see `link_near`): the neighbouring characters with the same number.
+    pub fn link_range(&self, pos: usize) -> Option<Range<usize>> {
+        let at = if self.link_at(pos) != 0 { pos } else { pos.checked_sub(1).filter(|&p| self.link_at(p) != 0)? };
+        let id = self.link_at(at);
+        let mut start = at;
+        while start > 0 && self.link_at(start - 1) == id {
+            start -= 1;
+        }
+        let mut end = at + 1;
+        while end < self.len() && self.link_at(end) == id {
+            end += 1;
+        }
+        Some(start..end)
+    }
+
+    /// Points the characters of `range` at link `id` (0 removes the link) as one undo entry. Paragraph breaks are left
+    /// out, so a link never spans two paragraphs. Returns whether anything changed.
+    pub fn set_link(&mut self, range: Range<usize>, id: u16) -> bool {
+        let range = range.start.min(self.len())..range.end.min(self.len());
+        if self.cells[range.clone()].iter().all(|c| c.ch == '\n' || c.style.link == id) {
+            return false;
+        }
+        self.record(Kind::Formatting);
+        for c in &mut self.cells[range] {
+            if c.ch != '\n' {
+                c.style.link = id;
+            }
+        }
+        self.sync_typing();
+        true
     }
 
     /// Copy Style: the character formatting at the selection or caret.
@@ -1141,6 +1196,77 @@ mod tests {
         for (i, name) in FAMILY_NAMES.iter().enumerate() {
             assert_eq!(family_for_name(name) as usize, i);
         }
+    }
+
+    #[test]
+    fn a_range_can_be_linked_unlinked_and_the_change_undone() {
+        let mut t = plain("see the docs here");
+        assert!(t.set_link(4..12, 7));
+        assert_eq!(t.link_at(3), 0);
+        assert_eq!(t.link_at(4), 7);
+        assert_eq!(t.link_at(11), 7);
+        assert_eq!(t.link_at(12), 0);
+        assert!(!t.set_link(4..12, 7), "the same link again changes nothing");
+        assert!(t.set_link(4..8, 0));
+        assert_eq!(t.link_range(9), Some(8..12));
+        assert!(t.undo());
+        assert_eq!(t.link_range(9), Some(4..12));
+        assert!(t.undo());
+        assert_eq!(t.link_range(9), None);
+        assert!(!t.set_link(20..30, 3), "outside the text there is nothing to link");
+    }
+
+    #[test]
+    fn a_link_finds_its_whole_run_from_inside_or_just_after_it() {
+        let mut t = plain("a link b");
+        t.set_link(2..6, 3);
+        assert_eq!(t.link_range(2), Some(2..6));
+        assert_eq!(t.link_range(5), Some(2..6));
+        assert_eq!(t.link_range(6), Some(2..6), "the caret just after the link is still at it");
+        assert_eq!(t.link_range(7), None);
+        assert_eq!(t.link_near(6), 3);
+        assert_eq!(t.link_near(1), 0);
+        // two different links side by side are two runs
+        t.set_link(6..8, 9);
+        assert_eq!(t.link_range(3), Some(2..6));
+        assert_eq!(t.link_range(7), Some(6..8));
+    }
+
+    #[test]
+    fn a_link_never_takes_a_paragraph_break() {
+        let mut t = plain("one\ntwo");
+        assert!(t.set_link(0..7, 5));
+        assert_eq!(t.link_at(3), 0);
+        assert_eq!(t.link_range(1), Some(0..3));
+        assert_eq!(t.link_range(5), Some(4..7));
+    }
+
+    #[test]
+    fn typing_continues_a_link_only_from_inside_it() {
+        let mut t = plain("a link b");
+        t.set_link(2..6, 3);
+        t.select(4, 4);
+        t.type_text("X");
+        assert_eq!(t.link_at(4), 3, "typed inside the link");
+        t.select(7, 7);
+        t.type_text("Y");
+        assert_eq!(t.link_at(7), 0, "typed after the link, outside it");
+        t.select(0, 0);
+        t.type_text("Z");
+        assert_eq!(t.link_at(0), 0);
+        let end = t.len();
+        t.select(end, end);
+        assert_eq!(t.style().link, 0);
+    }
+
+    #[test]
+    fn formatting_a_link_keeps_it_a_link() {
+        let mut t = plain("link");
+        t.set_link(0..4, 2);
+        t.select_all();
+        t.toggle_bold();
+        assert!(t.cells().iter().all(|c| c.style.bold && c.style.link == 2));
+        assert!(!Style { link: 1, ..Style::default() }.same_run(&Style::default()), "a link breaks a run");
     }
 
     #[test]

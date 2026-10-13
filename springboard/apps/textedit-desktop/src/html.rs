@@ -7,6 +7,7 @@
 //! alignment or lists, which would lose a document's formatting on the first save, so the editor's codec works on the
 //! editor's own cells and carries all of it.
 
+use crate::links;
 use crate::rtf::{nearest_color, nearest_spacing};
 use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_TAB, FAMILIES, MAX_SIZE, MAX_TAB, MIN_SIZE, MIN_TAB, SPACINGS};
 
@@ -82,6 +83,13 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
                 span += &format!(";color:#{r:02x}{g:02x}{b:02x}");
             }
             out += &format!("<span style=\"{span}\">");
+            // a link is an anchor inside the span
+            let anchor = links::url(s.link);
+            if let Some(url) = &anchor {
+                out += "<a href=\"";
+                url.chars().for_each(|ch| escape(ch, &mut out));
+                out += "\">";
+            }
             let (b, it, u) = (s.bold, s.italic, s.underline);
             if s.strike {
                 out += "<s>";
@@ -123,6 +131,9 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
             }
             if s.strike {
                 out += "</s>";
+            }
+            if anchor.is_some() {
+                out += "</a>";
             }
             out += "</span>";
             i = j;
@@ -297,6 +308,11 @@ impl Reader {
             "br" => {
                 self.end_paragraph();
                 return;
+            }
+            "a" => {
+                if let Some(url) = attribute(attrs, "href").and_then(|href| links::normalize(&decode(&href))) {
+                    self.cur.link = links::intern(&url);
+                }
             }
             "b" | "strong" => self.cur.bold = true,
             "i" | "em" => self.cur.italic = true,
@@ -604,6 +620,30 @@ mod tests {
         let a = cells.iter().rposition(|c| c.ch == 'a').unwrap();
         assert_eq!(cells[a].style.list, ListKind::Bullet);
         assert_eq!(cells[0].style.list, ListKind::None);
+    }
+
+    #[test]
+    fn links_are_anchors_and_round_trip() {
+        let id = links::intern("https://example.com/a?x=1&y=2");
+        let linked = Style { link: id, ..Style::default() };
+        let mut cells: Vec<Cell> = "go ".chars().map(|ch| cell(ch, Style::default())).collect();
+        cells.extend("there".chars().map(|ch| cell(ch, linked)));
+        cells.extend(" now".chars().map(|ch| cell(ch, Style::default())));
+        let html = String::from_utf8(write(&cells, 36.0)).unwrap();
+        assert!(html.contains("<a href=\"https://example.com/a?x=1&amp;y=2\">there</a>"), "{html}");
+        let (back, _) = read(html.as_bytes());
+        assert_eq!(back, cells);
+    }
+
+    #[test]
+    fn foreign_anchors_are_read_and_unsafe_ones_are_plain_text() {
+        let (cells, _) = read(b"<p>see <a href=\"https://example.org/x\">the <b>docs</b></a> and <a href=\"javascript:alert(1)\">this</a> or <a name=\"top\">that</a></p>");
+        assert_eq!(text_of(&cells), "see the docs and this or that");
+        let linked: String = cells.iter().filter(|c| c.style.link != 0).map(|c| c.ch).collect();
+        assert_eq!(linked, "the docs", "an unsafe address and an anchor without one are not links");
+        let first = cells.iter().find(|c| c.style.link != 0).unwrap();
+        assert_eq!(links::url(first.style.link).as_deref(), Some("https://example.org/x"));
+        assert!(cells.iter().filter(|c| c.style.bold).all(|c| c.style.link != 0), "the bold text inside the anchor keeps the link");
     }
 
     #[test]

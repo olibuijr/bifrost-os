@@ -156,17 +156,24 @@ const MAX_W: f32 = 440.0;
 /// The gap between the page's top edge (where the panel hangs from) and the panel.
 const TOP_GAP: f32 = 12.0;
 
-/// The panel for a window `width` points wide whose page starts at `body_top`: centred, never wider than the window.
+/// The properties panel for a window `width` points wide whose page starts at `body_top`: centred, never wider than the
+/// window.
 pub fn layout(width: f32, body_top: f32) -> PanelLayout {
+    layout_rows(width, body_top, LABELS.len())
+}
+
+/// A panel with `rows` labelled fields (at most five), laid out like the properties panel: the link panel has one.
+pub fn layout_rows(width: f32, body_top: f32, rows: usize) -> PanelLayout {
+    let rows = rows.min(5);
     let w = (width - 2.0 * PAD).clamp(0.0, MAX_W);
     let x = ((width - w) / 2.0).max(0.0);
     let y = body_top + TOP_GAP;
-    let h = PAD + TITLE_H + ROW_H * LABELS.len() as f32 + BUTTONS_H;
+    let h = PAD + TITLE_H + ROW_H * rows as f32 + BUTTONS_H;
     let field_x = x + PAD + LABEL_W;
     let field_w = (w - 2.0 * PAD - LABEL_W).max(0.0);
     let first = y + PAD + TITLE_H;
     let mut fields = [Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 }; 5];
-    for (i, f) in fields.iter_mut().enumerate() {
+    for (i, f) in fields.iter_mut().enumerate().take(rows) {
         *f = Rect { x: field_x, y: first + ROW_H * i as f32 + (ROW_H - FIELD_H) / 2.0, w: field_w, h: FIELD_H };
     }
     PanelLayout {
@@ -174,7 +181,7 @@ pub fn layout(width: f32, body_top: f32) -> PanelLayout {
         title_y: y + PAD,
         labels_x: x + PAD,
         fields,
-        buttons_y: first + ROW_H * LABELS.len() as f32 + (BUTTONS_H - FIELD_H) / 2.0,
+        buttons_y: first + ROW_H * rows as f32 + (BUTTONS_H - FIELD_H) / 2.0,
         right: x + w - PAD,
     }
 }
@@ -259,6 +266,19 @@ mod tests {
         }
         assert!(wide.fields[0].y > wide.title_y, "the first field is under the title");
         assert!(wide.buttons_y > wide.fields[4].y + FIELD_H);
+    }
+
+    #[test]
+    fn a_panel_with_one_field_is_shorter_and_only_that_field_is_touchable() {
+        let one = layout_rows(800.0, 80.0, 1);
+        let five = layout(800.0, 80.0);
+        assert!(one.frame.h < five.frame.h);
+        assert_eq!(one.frame.y, five.frame.y);
+        assert_eq!(one.fields[0], five.fields[0]);
+        assert_eq!(field_at(&one, one.fields[0].x + 2.0, one.fields[0].y + 2.0), Some(0));
+        assert_eq!(field_at(&one, one.fields[1].x + 2.0, one.fields[1].y + 2.0), None, "unused rows have no field");
+        assert!(one.buttons_y < five.buttons_y);
+        assert!(one.buttons_y + FIELD_H <= one.frame.y + one.frame.h);
     }
 
     #[test]

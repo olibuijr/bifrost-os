@@ -4,6 +4,7 @@
 //! paragraph's alignment, line spacing and list; spaces, tabs and line breaks follow the format's whitespace rules.
 //! The writer emits the same subset, so a document survives a round trip.
 
+use crate::links;
 use crate::properties::{self, Properties};
 use crate::rtf;
 use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, FAMILY_NAMES, SPACINGS};
@@ -37,6 +38,8 @@ struct Props {
     font: Option<u8>,
     align: Option<Align>,
     spacing: Option<u8>,
+    /// the link of an anchor, set by `text:a` and carried like a span's properties
+    link: Option<u16>,
 }
 
 impl Props {
@@ -58,6 +61,7 @@ impl Props {
         pick(&mut self.font, &over.font);
         pick(&mut self.align, &over.align);
         pick(&mut self.spacing, &over.spacing);
+        pick(&mut self.link, &over.link);
     }
 
     /// The character properties onto a style.
@@ -88,6 +92,9 @@ impl Props {
         }
         if let Some(v) = self.font {
             style.font = v;
+        }
+        if let Some(v) = self.link {
+            style.link = v;
         }
     }
 }
@@ -350,6 +357,13 @@ fn parse(content: &str, defs: &HashMap<String, StyleDef>, lists: &HashMap<String
                             spans.push(props);
                         }
                     }
+                    "text:a" => {
+                        // an anchor is a span that carries a link; one with no usable address is a plain span
+                        let link = xml::attr(&attrs, "xlink:href").and_then(links::normalize).map(|url| links::intern(&url));
+                        if !empty {
+                            spans.push(Props { link, ..Props::default() });
+                        }
+                    }
                     "text:list" => {
                         let kind = xml::attr(&attrs, "text:style-name")
                             .and_then(|n| lists.get(n).copied())
@@ -385,7 +399,7 @@ fn parse(content: &str, defs: &HashMap<String, StyleDef>, lists: &HashMap<String
                 }
                 match name.as_str() {
                     "text:p" | "text:h" => in_paragraph = false,
-                    "text:span" => {
+                    "text:span" | "text:a" => {
                         spans.pop();
                     }
                     "text:list" => {
@@ -557,6 +571,10 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
                 }
                 let run = &para[i].style;
                 let plain = text_style_attrs(run).is_empty();
+                let anchor = links::url(run.link);
+                if let Some(url) = &anchor {
+                    body.push_str(&format!("<text:a xlink:type=\"simple\" xlink:href=\"{}\">", xml::escape(url)));
+                }
                 if plain {
                     run_text(&para[i..j], &mut prev_space, &mut body);
                 } else {
@@ -567,6 +585,9 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
                     body.push_str(&format!("<text:span text:style-name=\"T{}\">", at + 1));
                     run_text(&para[i..j], &mut prev_space, &mut body);
                     body.push_str("</text:span>");
+                }
+                if anchor.is_some() {
+                    body.push_str("</text:a>");
                 }
                 i = j;
             }
@@ -605,7 +626,8 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
 xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
 xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
 xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
-xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" office:version=\"1.2\">\
+xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
+xmlns:xlink=\"http://www.w3.org/1999/xlink\" office:version=\"1.2\">\
 <office:automatic-styles>{styles}</office:automatic-styles><office:body><office:text>{body}</office:text></office:body></office:document-content>"
     );
     let has_meta = (0..4).any(|i| !props.get(i).is_empty());
@@ -666,6 +688,21 @@ mod tests {
         cells.extend(styled("b", bullet));
         let package = write(&cells);
         assert!(is_odt(&package));
+        assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn links_are_anchors_around_spans_and_round_trip() {
+        let id = links::intern("https://example.com/a?x=1&y=2");
+        let other = links::intern("mailto:ada@example.com");
+        let bold = Style { bold: true, link: id, ..Style::default() };
+        let mut cells = styled("go ", Style::default());
+        cells.extend(styled("there", bold));
+        cells.extend(styled(" or ", Style::default()));
+        cells.extend(styled("mail", Style { link: other, ..Style::default() }));
+        let package = write(&cells);
+        let content = String::from_utf8(zipdoc::read_entry(&package, "content.xml").unwrap()).unwrap();
+        assert!(content.contains("xlink:href=\"https://example.com/a?x=1&amp;y=2\""), "{content}");
         assert_eq!(read(&package), Some(cells));
     }
 

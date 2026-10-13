@@ -110,6 +110,13 @@ pub enum Action {
     InsertPage,
     InsertLine,
     InsertParagraph,
+    /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
+    AddLink,
+    OpenLink,
+    RemoveLink,
+    LinkDone,
+    LinkCancel,
+    LinkRemove,
     /// File > Show Properties, and the panel's two buttons
     ShowProperties,
     PropsDone,
@@ -198,6 +205,12 @@ impl Action {
             Action::InsertPage => MENU_BASE + 0x98,
             Action::InsertLine => MENU_BASE + 0x99,
             Action::InsertParagraph => MENU_BASE + 0x9a,
+            Action::AddLink => MENU_BASE + 0x9b,
+            Action::OpenLink => MENU_BASE + 0x9c,
+            Action::RemoveLink => MENU_BASE + 0x9d,
+            Action::LinkDone => MENU_BASE + 0x9e,
+            Action::LinkCancel => MENU_BASE + 0x9f,
+            Action::LinkRemove => MENU_BASE + 0xb7,
             Action::ShowProperties => MENU_BASE + 0x8c,
             Action::PropsDone => MENU_BASE + 0x8d,
             Action::PropsCancel => MENU_BASE + 0x8e,
@@ -280,6 +293,12 @@ impl Action {
             0x98 => Action::InsertPage,
             0x99 => Action::InsertLine,
             0x9a => Action::InsertParagraph,
+            0x9b => Action::AddLink,
+            0x9c => Action::OpenLink,
+            0x9d => Action::RemoveLink,
+            0x9e => Action::LinkDone,
+            0x9f => Action::LinkCancel,
+            0xb7 => Action::LinkRemove,
             0x8c => Action::ShowProperties,
             0x8d => Action::PropsDone,
             0x8e => Action::PropsCancel,
@@ -682,41 +701,74 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button
     }
 }
 
-/// The document properties panel's buttons, right-aligned on its bottom row.
-pub fn properties_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
-    let mut buttons = vec![
-        label_button(ui, "Cancel", Some(Action::PropsCancel), Weight::Regular),
-        label_button(ui, "Done", Some(Action::PropsDone), Weight::Bold),
-    ];
-    buttons[1].active = true;
-    let total = buttons.iter().map(|b| b.rect.w).sum::<f32>() + ITEM_GAP;
-    place_row(&mut buttons, &[2], l.right - total, l.buttons_y);
+/// The buttons of a panel, right-aligned on its bottom row: a label, what it does, and whether it is the default.
+pub fn sheet_buttons(ui: &Ui, l: &PanelLayout, specs: &[(&str, Action, bool)]) -> Vec<Button> {
+    let mut buttons: Vec<Button> = specs
+        .iter()
+        .map(|(label, action, default)| {
+            let mut b = label_button(ui, label, Some(*action), if *default { Weight::Bold } else { Weight::Regular });
+            b.active = *default;
+            b
+        })
+        .collect();
+    let total = buttons.iter().map(|b| b.rect.w).sum::<f32>() + ITEM_GAP * buttons.len().saturating_sub(1) as f32;
+    place_row(&mut buttons, &[specs.len()], l.right - total, l.buttons_y);
     buttons
 }
 
-/// Draws the document properties panel over the page: its title, the five labelled fields (the focused one outlined)
-/// and its buttons.
-pub fn draw_properties(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, panel: &properties::Panel, buttons: &[Button]) {
+/// The document properties panel's buttons.
+pub fn properties_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::PropsCancel, false), ("Done", Action::PropsDone, true)])
+}
+
+/// The link panel's buttons; Remove Link is offered when the text already links somewhere.
+pub fn link_buttons(ui: &Ui, l: &PanelLayout, can_remove: bool) -> Vec<Button> {
+    let mut specs = vec![("Cancel", Action::LinkCancel, false)];
+    if can_remove {
+        specs.push(("Remove Link", Action::LinkRemove, false));
+    }
+    specs.push(("Done", Action::LinkDone, true));
+    sheet_buttons(ui, l, &specs)
+}
+
+/// Draws a panel over the page: its title, its labelled fields (the focused one outlined) and its buttons.
+pub fn draw_sheet(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, fields: &[(&str, &str)], focus: usize, buttons: &[Button]) {
     let frame = to_px(ui, l.frame);
     c.fill_rrect(frame, ui.pt(CONTROL_RADIUS), DETAIL_BG.now());
     c.stroke_rrect(frame, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
-    text_at(c, ui, "Document Properties", MAC_BODY_PT, Weight::Bold, LABEL.now(), l.labels_x, l.title_y);
-    for (i, (label, rect)) in properties::LABELS.iter().zip(l.fields.iter()).enumerate() {
+    text_at(c, ui, title, MAC_BODY_PT, Weight::Bold, LABEL.now(), l.labels_x, l.title_y);
+    for (i, ((label, value), rect)) in fields.iter().zip(l.fields.iter()).enumerate() {
         let r = to_px(ui, *rect);
         c.fill_rrect(r, ui.pt(CONTROL_RADIUS), FIELD_BG.now());
-        if panel.focus == i {
+        if focus == i {
             c.stroke_rrect(r, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), LINK);
         }
         let name = ui.text(label, MAC_BODY_PT, Weight::Regular, LABEL_3.now());
         blit(c, &name, ui.pt(l.labels_x), r.y + (r.h - name.h as f32) / 2.0);
-        let inner = ui.pt(rect.w) - 2.0 * ui.pt(BUTTON_PAD);
-        let fitted = ui.fit(panel.draft.get(i), MAC_BODY_PT, inner.max(0.0));
-        let value = ui.text(&fitted, MAC_BODY_PT, Weight::Regular, LABEL.now());
-        blit(c, &value, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - value.h as f32) / 2.0);
+        // the end of a long value is the part being typed, so it is the part shown
+        let inner = (ui.pt(rect.w) - 2.0 * ui.pt(BUTTON_PAD)).max(0.0);
+        let shown = tail_that_fits(ui, value, inner);
+        let img = ui.text(&shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
+        blit(c, &img, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - img.h as f32) / 2.0);
     }
     for b in buttons {
         draw_button(c, ui, b);
     }
+}
+
+/// The longest end of `text` that fits in `max_px`.
+fn tail_that_fits(ui: &Ui, text: &str, max_px: f32) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut start = 0;
+    while start < chars.len() {
+        let tail: String = chars[start..].iter().collect();
+        if ui.measure(&tail, MAC_BODY_PT, Weight::Regular) <= max_px {
+            return tail;
+        }
+        // drop a chunk at a time so a very long address stays cheap
+        start += ((chars.len() - start) / 8).max(1);
+    }
+    String::new()
 }
 
 /// The page: its background and a clip to the body so text never draws over the bars.
@@ -841,8 +893,14 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
     if shown.is_empty() {
         return x;
     }
-    // text on a highlight is dark whatever the appearance, as the plate is light
-    let color = if style.highlight > 0 && style.color == 0 { pack(0, 0, 0, 255) } else { text_color(style.color) };
+    // text on a highlight is dark whatever the appearance, as the plate is light; a link is the link colour
+    let color = if style.link != 0 {
+        LINK
+    } else if style.highlight > 0 && style.color == 0 {
+        pack(0, 0, 0, 255)
+    } else {
+        text_color(style.color)
+    };
     let size = drawn_size(style);
     let shift = match style.script {
         1 => 0.0,
@@ -855,7 +913,7 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
         c.fill_rect(to_px(ui, plate), highlight_color(style.highlight));
     }
     text_at(c, ui, &shown, size, weight_of(style), color, x, y + shift);
-    if style.underline {
+    if style.underline || style.link != 0 {
         let rule = Rect { x, y: y + line_height.min(style.size * 1.25) - 2.0, w: width, h: 1.0 };
         c.fill_rect(to_px(ui, rule), color);
     }
@@ -995,6 +1053,12 @@ mod tests {
             Action::InsertPage,
             Action::InsertLine,
             Action::InsertParagraph,
+            Action::AddLink,
+            Action::OpenLink,
+            Action::RemoveLink,
+            Action::LinkDone,
+            Action::LinkCancel,
+            Action::LinkRemove,
             Action::ShowProperties,
             Action::PropsDone,
             Action::PropsCancel,

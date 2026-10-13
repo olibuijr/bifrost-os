@@ -11,6 +11,7 @@ mod document;
 mod encoding;
 mod html;
 mod layout;
+mod links;
 mod odt;
 mod prefs;
 mod print;
@@ -83,6 +84,17 @@ struct TextEditApp {
     export_request: Option<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
+    /// Edit > Add Link: the address being typed for a range of text, while the panel is open
+    link: Option<LinkSheet>,
+}
+
+/// The link panel: which text it links, the address typed so far, and whether that text already links somewhere (the
+/// panel then offers to remove the link).
+struct LinkSheet {
+    doc: DocId,
+    range: Range<usize>,
+    url: String,
+    had_link: bool,
 }
 
 /// A completion in progress: the typed prefix, the cells of the word as completed, and which candidate it shows.
@@ -189,6 +201,7 @@ impl TextEditApp {
             completion: None,
             export_request: None,
             props: None,
+            link: None,
         }
     }
 
@@ -290,6 +303,11 @@ impl TextEditApp {
 
     /// Runs a text command on the active document. Returns whether the window needs a frame.
     fn perform(&mut self, ctx: &Ctx, action: Action) -> bool {
+        // a panel takes a paste as typing (the first line of the clipboard)
+        if matches!(action, Action::Paste | Action::PasteMatch) && (self.link.is_some() || self.props.is_some()) {
+            let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
+            return self.type_into(&line);
+        }
         match action {
             Action::Document(id) => {
                 let Some(notices) = self.docs.menu_action(ctx, id) else { return false };
@@ -324,6 +342,12 @@ impl TextEditApp {
                 };
                 return self.insert_raw(&s.to_string());
             }
+            Action::AddLink => return self.open_link_sheet(),
+            Action::LinkDone => return self.finish_link(true),
+            Action::LinkRemove => return self.finish_link(false),
+            Action::LinkCancel => return self.link.take().is_some(),
+            Action::RemoveLink => return self.remove_link_here(),
+            Action::OpenLink => return self.open_link(ctx),
             Action::ShowProperties => return self.open_properties(),
             Action::PropsDone => return self.close_properties(true),
             Action::PropsCancel => return self.close_properties(false),
@@ -675,6 +699,101 @@ impl TextEditApp {
         let Some(id) = self.docs.active() else { return false };
         let Some(doc) = self.docs.get(id) else { return false };
         self.props = Some((id, properties::Panel::new(&doc.properties)));
+        self.link = None;
+        true
+    }
+
+    /// The text a link command acts on: the selection, or the link around the caret.
+    fn link_target(&self) -> Option<Range<usize>> {
+        let doc = active_doc(&self.docs)?;
+        if doc.text.has_selection() {
+            Some(doc.text.selection())
+        } else {
+            doc.text.link_range(doc.text.head())
+        }
+    }
+
+    /// Edit > Add Link: opens the panel on the selected text (or the link around the caret) with its address.
+    fn open_link_sheet(&mut self) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let Some(id) = self.docs.active() else { return false };
+        let Some(range) = self.link_target() else {
+            self.note = Some("Select the text to link first".into());
+            return true;
+        };
+        let Some(doc) = self.docs.get(id) else { return false };
+        if !doc.rich {
+            self.note = Some("Links need rich text. Choose Format > Make Rich Text first.".into());
+            return true;
+        }
+        let current = links::url(doc.text.link_at(range.start)).unwrap_or_default();
+        let had_link = doc.text.cells()[range.clone()].iter().any(|c| c.style.link != 0);
+        self.link = Some(LinkSheet { doc: id, range, url: current, had_link });
+        self.props = None;
+        true
+    }
+
+    /// Done in the link panel (`apply`) links the text to the typed address, or removes the link when the address is
+    /// empty; Remove Link takes the link off. An address that is not one stays in the panel with a note.
+    fn finish_link(&mut self, apply: bool) -> bool {
+        let Some(sheet) = self.link.take() else { return false };
+        let mut link = 0;
+        let typed = sheet.url.trim().to_string();
+        if apply && !typed.is_empty() {
+            link = links::normalize(&typed).map_or(0, |url| links::intern(&url));
+            if link == 0 {
+                self.note = Some(format!("\"{typed}\" is not an address Text Editor can link to"));
+                self.link = Some(sheet);
+                return true;
+            }
+        }
+        let Some(doc) = self.docs.get_mut(sheet.doc) else { return true };
+        if doc.text.set_link(sheet.range, link) {
+            self.edited();
+            let note = if link == 0 { "Link removed" } else { "Link added" };
+            self.note = Some(note.into());
+        }
+        true
+    }
+
+    /// Edit > Remove Link: takes the link off the selection or the link around the caret.
+    fn remove_link_here(&mut self) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let Some(range) = self.link_target() else { return false };
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        if doc.text.set_link(range, 0) {
+            self.edited();
+            return true;
+        }
+        false
+    }
+
+    /// Edit > Open Link: the address of the link at the caret (or the start of the selection) goes to the system.
+    fn open_link(&mut self, ctx: &Ctx) -> bool {
+        let Some(doc) = active_doc(&self.docs) else { return false };
+        let at = if doc.text.has_selection() { doc.text.selection().start } else { doc.text.head() };
+        let Some(url) = links::url(doc.text.link_near(at)) else { return false };
+        ctx.open_url(&url);
+        self.note = Some(format!("Opening {url}"));
+        true
+    }
+
+    /// A press while the link panel is open: a button, or nothing (the page behind it is not reachable).
+    fn touch_link(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+        let can_remove = self.link.as_ref().is_some_and(|s| s.had_link);
+        let buttons = view::link_buttons(&ctx.ui, &layout, can_remove);
+        if let Some(b) = buttons.iter().find(|b| b.rect.contains(px, py)) {
+            return match b.action {
+                Some(action) => self.perform(ctx, action),
+                None => false,
+            };
+        }
         true
     }
 
@@ -925,6 +1044,14 @@ impl TextEditApp {
             panel.type_text(&printable);
             return true;
         }
+        if let Some(sheet) = self.link.as_mut() {
+            for ch in printable.chars().filter(|c| !c.is_whitespace()) {
+                if sheet.url.chars().count() < links::MAX_LEN {
+                    sheet.url.push(ch);
+                }
+            }
+            return true;
+        }
         if self.find_open && self.focus != Focus::Body {
             match self.focus {
                 Focus::Find => self.find.push_str(&printable),
@@ -978,6 +1105,10 @@ impl TextEditApp {
             panel.backspace();
             return true;
         }
+        if let Some(sheet) = self.link.as_mut() {
+            sheet.url.pop();
+            return true;
+        }
         if self.find_open && self.focus != Focus::Body {
             let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
             return field.pop().is_some();
@@ -1025,6 +1156,9 @@ impl TextEditApp {
                 if self.props.is_some() {
                     return self.touch_properties(ctx, px, py);
                 }
+                if self.link.is_some() {
+                    return self.touch_link(ctx, px, py);
+                }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
                 let (bar, find) = self.buttons(&ctx.ui, &geom);
                 let all: Vec<Button> = bar.into_iter().chain(find).collect();
@@ -1061,6 +1195,14 @@ impl TextEditApp {
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
                 let Some(cache) = self.cache.as_ref() else { return false };
                 let index = cache.layout.index_at(&cache.cells, at, scroll_y, &measure);
+                // in a document that cannot be edited a press on a link follows it
+                if doc.read_only {
+                    if let Some(url) = links::url(doc.text.link_near(index)) {
+                        ctx.open_url(&url);
+                        self.note = Some(format!("Opening {url}"));
+                        return true;
+                    }
+                }
                 doc.text.select(index, index);
                 self.drag = true;
                 self.follow = true;
@@ -1103,6 +1245,8 @@ impl TextEditApp {
         };
         let has_find = !self.find.is_empty();
         let enabled = doc.is_some();
+        let rich = doc.is_some_and(|d| d.rich);
+        let linked = doc.is_some_and(|d| d.text.link_near(if d.text.has_selection() { d.text.selection().start } else { d.text.head() }) != 0);
         let items = vec![
             menu_item(Action::Undo, &undo, "cmd+z", can_undo),
             menu_item(Action::Redo, &redo, "cmd+shift+z", can_redo),
@@ -1122,6 +1266,10 @@ impl TextEditApp {
             menu_item(Action::SelectLine, "Select Line\u{2026}", "cmd+l", enabled),
             menu_item(Action::Replace, "Replace", "", self.find_open && has_find),
             menu_item(Action::ReplaceAll, "Replace All", "", self.find_open && has_find),
+            AppMenuItem::separator(),
+            menu_item(Action::AddLink, "Add Link\u{2026}", "cmd+k", enabled && rich),
+            menu_item(Action::OpenLink, "Open Link", "", linked),
+            menu_item(Action::RemoveLink, "Remove Link", "", linked && rich),
             AppMenuItem::separator(),
             AppMenuItem::submenu("Spelling and Grammar"),
             menu_item(Action::SpellNext, "Check Document Now", "cmd+;", enabled).depth(1),
@@ -1335,6 +1483,14 @@ impl App for TextEditApp {
                         _ => false,
                     };
                 }
+                if self.link.is_some() {
+                    return match code {
+                        8 => self.backspace(),
+                        13 => self.perform(ctx, Action::LinkDone),
+                        27 => self.perform(ctx, Action::LinkCancel),
+                        _ => false,
+                    };
+                }
                 match code {
                     8 => self.backspace(),
                     13 => {
@@ -1503,7 +1659,13 @@ impl App for TextEditApp {
         if let Some((_, panel)) = &self.props {
             let layout = properties::layout(geom.width, geom.body_top);
             let buttons = view::properties_buttons(ui, &layout);
-            view::draw_properties(canvas, ui, &layout, panel, &buttons);
+            let rows: Vec<(&str, &str)> = properties::LABELS.iter().enumerate().map(|(i, label)| (*label, panel.draft.get(i))).collect();
+            view::draw_sheet(canvas, ui, &layout, "Document Properties", &rows, panel.focus, &buttons);
+        }
+        if let Some(sheet) = &self.link {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+            let buttons = view::link_buttons(ui, &layout, sheet.had_link);
+            view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
         }
         let (words, chars) = active_doc(&self.docs).map_or((0, 0), |d| (d.text.word_count(), d.text.char_count()));
         view::draw_status(canvas, ui, &geom, words, chars, self.note.as_deref());
@@ -1666,6 +1828,86 @@ mod tests {
         app.props.as_mut().unwrap().1.type_text("Title");
         app.close_properties(true);
         assert!(active_doc(&app.docs).unwrap().properties.is_empty());
+    }
+
+    fn app_with_text(s: &str, select: Range<usize>) -> TextEditApp {
+        let mut app = TextEditApp::new();
+        let id = app.docs.new_document();
+        let doc = app.docs.get_mut(id).unwrap();
+        doc.text.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
+        doc.text.select(select.start, select.end);
+        app
+    }
+
+    #[test]
+    fn adding_a_link_links_the_selection_and_remove_link_takes_it_off() {
+        let mut app = app_with_text("see the docs", 4..12);
+        let id = app.docs.active().unwrap();
+        assert!(app.open_link_sheet());
+        assert!(!app.link.as_ref().unwrap().had_link);
+        app.link.as_mut().unwrap().url = "example.com/docs".into();
+        assert!(app.finish_link(true));
+        assert!(app.link.is_none());
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(links::url(doc.text.link_at(5)).as_deref(), Some("https://example.com/docs"));
+        assert_eq!(doc.text.link_at(3), 0);
+        assert!(app.docs.is_edited(id));
+
+        // with the caret inside the link the panel opens on it, with its address
+        active_doc_mut(&mut app.docs).unwrap().text.select(6, 6);
+        assert!(app.open_link_sheet());
+        let sheet = app.link.as_ref().unwrap();
+        assert_eq!((sheet.url.as_str(), sheet.had_link, sheet.range.clone()), ("https://example.com/docs", true, 4..12));
+        assert!(app.finish_link(false));
+        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(5), 0);
+    }
+
+    #[test]
+    fn an_empty_address_removes_the_link_and_a_bad_one_stays_in_the_panel() {
+        let mut app = app_with_text("a link here", 2..6);
+        app.open_link_sheet();
+        app.link.as_mut().unwrap().url = "two words".into();
+        assert!(app.finish_link(true));
+        assert!(app.link.is_some(), "the panel stays open for another try");
+        assert!(app.note.as_deref().is_some_and(|n| n.contains("not an address")));
+        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(3), 0);
+        app.link.as_mut().unwrap().url = "https://example.org".into();
+        assert!(app.finish_link(true));
+        assert_ne!(active_doc(&app.docs).unwrap().text.link_at(3), 0);
+        app.open_link_sheet();
+        app.link.as_mut().unwrap().url.clear();
+        assert!(app.finish_link(true));
+        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(3), 0, "Done with no address removes the link");
+    }
+
+    #[test]
+    fn links_need_a_selection_rich_text_and_an_editable_document() {
+        let mut none = app_with_text("text", 2..2);
+        assert!(none.open_link_sheet());
+        assert!(none.link.is_none());
+        assert!(none.note.as_deref().is_some_and(|n| n.contains("Select the text")));
+
+        let mut plain = app_with_text("text", 0..4);
+        active_doc_mut(&mut plain.docs).unwrap().rich = false;
+        assert!(plain.open_link_sheet());
+        assert!(plain.link.is_none());
+        assert!(plain.note.as_deref().is_some_and(|n| n.contains("rich text")));
+
+        let mut locked = app_with_text("text", 0..4);
+        active_doc_mut(&mut locked.docs).unwrap().read_only = true;
+        assert!(locked.open_link_sheet());
+        assert!(locked.link.is_none());
+    }
+
+    #[test]
+    fn typing_into_the_link_panel_takes_an_address_without_blanks() {
+        let mut app = app_with_text("text", 0..4);
+        app.open_link_sheet();
+        assert!(app.type_into("https://exa mple.com"));
+        assert_eq!(app.link.as_ref().unwrap().url, "https://example.com");
+        assert!(app.backspace());
+        assert_eq!(app.link.as_ref().unwrap().url, "https://example.co");
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "text", "the page is untouched");
     }
 
     #[test]
