@@ -588,3 +588,5 @@ pub mod graphics_gradient;
 pub mod graphics_color;
 pub mod graphics_pdf;
 pub mod graphics_imageio;
+pub mod color_list;
+pub mod image_object;

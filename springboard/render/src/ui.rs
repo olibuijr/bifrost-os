@@ -760,6 +760,13 @@ pub mod system {
     pub const SYSTEM_PINK: Pair = Pair::new(pack(255, 55, 95, 255), pack(255, 45, 85, 255));
     pub const SYSTEM_BROWN: Pair = Pair::new(pack(172, 142, 104, 255), pack(162, 132, 94, 255));
     pub const SYSTEM_GRAY: Pair = Pair::new(pack(142, 142, 147, 255), pack(142, 142, 147, 255));
+    /// `windowFrameColor`: the frame around a focused window (the same pair as the title area).
+    pub const WINDOW_FRAME: Pair = super::WINDOW_FRAME_FOCUSED;
+    /// `findHighlightColor`: the highlight behind find-in-page matches. Translucent yellow; the values are a design
+    /// approximation to confirm on Midget.
+    pub const FIND_HIGHLIGHT: Pair = Pair::new(pack(255, 214, 10, 180), pack(255, 204, 0, 180));
+    /// `shadowColor`: the default colour of a drop shadow, black at one third opacity in both appearances.
+    pub const SHADOW: Pair = Pair::new(pack(0, 0, 0, 85), pack(0, 0, 0, 85));
 }
 
 // ---- Settings > Appearance preferences that every app can read ----
