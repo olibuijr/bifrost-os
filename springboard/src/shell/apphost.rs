@@ -489,6 +489,14 @@ impl AppHost {
         self.status == Status::Running
     }
 
+    /// The exit status once the app has gone (`128 + signal` when a signal ended it); None while it runs.
+    pub fn exit_code(&self) -> Option<i32> {
+        match self.status {
+            Status::Exited(code) => Some(code),
+            Status::Running => None,
+        }
+    }
+
     /// Tells the app the system appearance settings when they differ from what it last got (and on first contact).
     pub fn sync_appearance(&mut self, flags: u32) {
         if self.appearance_sent != flags {
@@ -1495,6 +1503,8 @@ impl Shell {
             self.doc_keep_shown();
         }
         for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
+        // a failed exit gets the "quit unexpectedly" alert (read before the host is dropped); the shell keeps running
+        for &slot in &died { self.app_crashed(slot as usize); }
         // a window whose app has exited must not keep its last frame on screen
         for slot in died { self.desk_close_app(super::AppId::External(slot)); }
         for slot in failed { self.launch_failed(slot); }
