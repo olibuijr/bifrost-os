@@ -20,6 +20,7 @@ pub mod power;
 pub mod scanout;
 pub mod sleep;
 pub mod sys;
+pub mod sys_watch;
 pub mod takeover;
 pub mod timezone;
 pub mod vibrator;

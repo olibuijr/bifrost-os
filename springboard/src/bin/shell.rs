@@ -112,6 +112,7 @@ fn run() -> std::io::Result<()> {
     springboard::bare::heartbeat::init(&dir);
     springboard::bare::heartbeat::watch(&dir);
     springboard::bare::chord_recovery::spawn(&dir);
+    springboard::bare::sys_watch::start();
     springboard::shell::apphost::register(std::path::Path::new(&dir));
     // Settings > Fonts overrides apply from the next start
     let font_data = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::System)?;
