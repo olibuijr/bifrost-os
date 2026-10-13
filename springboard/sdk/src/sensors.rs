@@ -12,6 +12,7 @@
 //! ```
 
 pub use bifrost_core::{altitude, magnetometer, motion, motion_activity, pedometer};
+pub use bifrost_core::device_motion::DeviceMotionManager;
 pub use bifrost_core::motion::{Attitude, DeviceMotion, MotionEstimator, Vec3};
 
 #[cfg(test)]

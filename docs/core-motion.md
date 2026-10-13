@@ -41,7 +41,10 @@ Reference: Apple Core Motion (`CMMotionManager`, `CMAccelerometerData`, `CMGyroD
 
 ## Not done
 
-- Device motion (attitude) is still the `motion.rs` estimator, not yet fed by the manager.
+- Device motion: `springboard/core/src/device_motion.rs` (`DeviceMotionManager`) runs the `motion.rs` estimator on
+  the accelerometer and gyroscope readings, with the same start, stop, interval and handler rules as the raw manager.
+  SDK: `bifrost_app::sensors::DeviceMotionManager`. Every tick feeds the estimator; the handler runs at the interval.
+  The shell does not read it yet, and the attitude frame has no magnetometer correction.
 - Pedometer, altitude, magnetometer and motion activity are separate models (`core/src/{pedometer,altitude,magnetometer,motion_activity}.rs`, SDK `sensors.rs`) with their own rows. Sensor recording does not exist.
 - Nothing is tested on the VM or on Midget yet. Host unit tests exist in both modules but were not run in this
   round, so the rows stay `partial` until a device test passes.

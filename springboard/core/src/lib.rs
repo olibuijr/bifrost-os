@@ -39,6 +39,7 @@ pub mod sensor_log;
 pub mod magnetometer;
 pub mod altitude;
 pub mod motion_manager;
+pub mod device_motion;
 pub mod inertial_sensors;
 pub mod pedometer;
 pub mod permission_request;
