@@ -2,6 +2,7 @@
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
 mod chrome;
+pub mod clipboard;
 pub mod connect;
 pub mod exchange;
 pub mod ics;
@@ -136,7 +137,25 @@ enum Target {
     AllDay,
     /// show or hide the calendar list
     Sidebar,
+    /// Go to Date sheet: one step of the year, month or day row
+    GoStep(GoUnit, i32),
+    /// Go to Date sheet: show the chosen date
+    GoConfirm,
+    GoCancel,
 }
+
+/// The rows of the Go to Date sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GoUnit {
+    Year,
+    Month,
+    Day,
+}
+
+/// The Go to Date sheet: its width, its top and the height of a row (points).
+const GOTO_W: f32 = 320.0;
+const GOTO_TOP: f32 = 196.0;
+const GOTO_ROW: f32 = 44.0;
 
 /// Which of the Starts / Ends rows has its picker expanded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,6 +179,10 @@ pub struct Calendar {
     full_w: i32,
     /// View > Hide Calendar List
     side_hidden: bool,
+    /// The open Go to Date sheet and the date it shows.
+    goto: Option<Date>,
+    /// The Day and Week views' hour row height in points (View > Zoom In / Zoom Out).
+    hour_h: f32,
     h: i32,
     path: PathBuf,
     wall: Wall,
@@ -242,6 +265,8 @@ impl Calendar {
             x0: 0.0,
             full_w: w,
             side_hidden: false,
+            goto: None,
+            hour_h: timeview::HOUR_H,
             h,
             path,
             wall,
@@ -443,6 +468,9 @@ impl Calendar {
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        if self.goto.is_some() {
+            return self.hit_goto(ui, x, y);
+        }
         if let Some(t) = self.bar_target(ui, x + self.x0, y) {
             return Some(t);
         }
@@ -583,6 +611,66 @@ impl Calendar {
         }
     }
 
+    /// Event > Copy Event: puts the saved event being edited on the pasteboard as .ics (the app writes it, `take_copied`).
+    pub fn copy_event(&mut self) -> bool {
+        let stamp = ics::stamp(self.wall.unix);
+        let Some(text) = self
+            .editor
+            .as_ref()
+            .filter(|d| d.existing)
+            .and_then(|d| self.events.iter().find(|e| e.id == d.event.id))
+            .map(|e| clipboard::to_text(e, &stamp))
+        else {
+            return false;
+        };
+        self.copied = Some(text);
+        self.notice = Some("Copied event".into());
+        self.dirty = true;
+        true
+    }
+
+    /// Event > Paste Event: adds the event in pasteboard `text` to the selected day and saves it.
+    pub fn paste_event(&mut self, text: &str) -> Result<(), String> {
+        if self.storage_blocked {
+            return Err("Saved events could not be read. Paste is unavailable.".into());
+        }
+        if self.events.len() >= store::MAX_EVENTS {
+            return Err("Calendar is full".into());
+        }
+        let id = store::next_id(&self.events);
+        let event = clipboard::from_text(text, self.selected, id).ok_or("The pasteboard holds no event")?;
+        let mut events = self.events.clone();
+        events.push(event);
+        store::sort(&mut events);
+        store::save(&self.path, &events).map_err(|e| e.to_string())?;
+        self.events = events;
+        self.changes.post();
+        self.error = None;
+        self.notice = Some("Pasted event".into());
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Shows `message` in the header as an error.
+    pub fn show_error(&mut self, message: String) {
+        self.error = Some(message);
+        self.notice = None;
+        self.dirty = true;
+    }
+
+    /// File > Import...: imports the .ics file `name` with contents `text` and says what came of it in the header.
+    pub fn import_report(&mut self, name: &str, text: &str) {
+        self.notice = None;
+        self.error = None;
+        match self.import_ics(text) {
+            Ok(0) => self.notice = Some(format!("No new events in {name}")),
+            Ok(1) => self.notice = Some(format!("Imported 1 event from {name}")),
+            Ok(n) => self.notice = Some(format!("Imported {n} events from {name}")),
+            Err(e) => self.error = Some(e),
+        }
+        self.dirty = true;
+    }
+
     /// The phone number the editor last asked to copy, once (the app writes it to the pasteboard).
     pub fn take_copied(&mut self) -> Option<String> {
         self.copied.take()
@@ -633,6 +721,77 @@ impl Calendar {
     }
 
     /// Writes the whole calendar as Calendar.ics, the same folder as event exports.
+    /// The Go to Date sheet's card: left edge and width in points.
+    fn goto_card(&self, ui: &Ui) -> (f32, f32) {
+        let wp = self.w as f32 / ui.s;
+        let w = GOTO_W.min(wp - 16.0).max(0.0);
+        ((wp - w) / 2.0, w)
+    }
+
+    /// The sheet's rows as (target, top pt, height pt): year, month and day steppers, then Go and Cancel.
+    fn goto_rows() -> [(Target, f32, f32); 5] {
+        let row = |t, i: f32| (t, GOTO_TOP + GOTO_ROW * (i + 1.0), GOTO_ROW);
+        [
+            row(Target::GoStep(GoUnit::Year, 0), 0.0),
+            row(Target::GoStep(GoUnit::Month, 0), 1.0),
+            row(Target::GoStep(GoUnit::Day, 0), 2.0),
+            row(Target::GoConfirm, 3.0),
+            row(Target::GoCancel, 4.0),
+        ]
+    }
+
+    /// The sheet is modal: a press on a stepper's left or right third steps it, on Go or Cancel acts, elsewhere does nothing.
+    fn hit_goto(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        let (xp, yp) = (x / ui.s, y / ui.s);
+        let (left, w) = self.goto_card(ui);
+        if xp < left || xp > left + w {
+            return None;
+        }
+        let (target, ..) = Self::goto_rows().into_iter().find(|(_, top, h)| (*top..*top + *h).contains(&yp))?;
+        match target {
+            Target::GoStep(unit, _) => {
+                let rel = (xp - left) / w.max(1.0);
+                if rel < 0.3 {
+                    Some(Target::GoStep(unit, -1))
+                } else if rel > 0.7 {
+                    Some(Target::GoStep(unit, 1))
+                } else {
+                    None
+                }
+            }
+            other => Some(other),
+        }
+    }
+
+    fn draw_goto(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some(d) = self.goto else { return };
+        let (left, w) = self.goto_card(ui);
+        let rows = Self::goto_rows();
+        let (top, bottom) = (GOTO_TOP, rows[4].1 + rows[4].2);
+        s.fill_rrect(ui.pt(left), ui.pt(top), ui.pt(w), ui.pt(bottom - top), ui.pt(CARD_R), CARD_BG.now());
+        s.stroke_rrect(ui.pt(left), ui.pt(top), ui.pt(w), ui.pt(bottom - top), ui.pt(CARD_R), 1.0, SEPARATOR_C.now());
+        let cx = ui.pt(left + w / 2.0);
+        self.centre(s, ui, "Go to Date", MAC_BODY_PT, Weight::Semibold, LABEL.now(), cx, ui.pt(top + GOTO_ROW / 2.0));
+        for (target, row_top, h) in rows {
+            let mid = ui.pt(row_top + h / 2.0);
+            s.fill_rrect(ui.pt(left + SPACE_L), ui.pt(row_top), ui.pt(w - 2.0 * SPACE_L), ui.pt(0.5).max(1.0), 0.0, SEPARATOR_C.now());
+            match target {
+                Target::GoStep(unit, _) => {
+                    let value = match unit {
+                        GoUnit::Year => d.year.to_string(),
+                        GoUnit::Month => MONTHS[(d.month - 1) as usize].to_string(),
+                        GoUnit::Day => format!("{} {}", &WEEKDAYS[d.weekday()][..3], d.day),
+                    };
+                    self.centre(s, ui, "\u{2212}", MAC_TITLE2_PT, Weight::Regular, accent(), ui.pt(left + w * 0.15), mid);
+                    self.centre(s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), cx, mid);
+                    self.centre(s, ui, "+", MAC_TITLE2_PT, Weight::Regular, accent(), ui.pt(left + w * 0.85), mid);
+                }
+                Target::GoConfirm => self.centre(s, ui, "Go to Date", MAC_BODY_PT, Weight::Semibold, accent(), cx, mid),
+                _ => self.centre(s, ui, "Cancel", MAC_BODY_PT, Weight::Regular, accent(), cx, mid),
+            }
+        }
+    }
+
     /// The Undo bar: a flat strip above the home zone, like Reminders and Notes.
     fn undo_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         (ui.pt(SPACE_XL), self.bottom(ui) - ui.pt(56.0), self.w as f32 - ui.pt(SPACE_HUGE), ui.pt(44.0))
@@ -750,7 +909,7 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.goto.is_some() {
             return false;
         }
         let target = match key {
@@ -772,6 +931,10 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.goto.is_some() {
+            self.activate(ui, Target::GoCancel, t);
+            return true;
+        }
         if self.editor.is_none() {
             return false;
         }
@@ -874,6 +1037,22 @@ impl Calendar {
                 }
             }
             Target::Agenda => {}
+            Target::GoStep(unit, n) => {
+                if let Some(d) = self.goto {
+                    self.goto = Some(match unit {
+                        GoUnit::Year => d.shift_months(12 * n),
+                        GoUnit::Month => d.shift_months(n),
+                        GoUnit::Day => d.shift_days(n),
+                    });
+                }
+            }
+            Target::GoConfirm => {
+                if let Some(d) = self.goto.take() {
+                    self.selected = d;
+                    self.scroll.jump_top();
+                }
+            }
+            Target::GoCancel => self.goto = None,
             Target::Sidebar => {
                 self.side_hidden = !self.side_hidden;
                 self.layout_columns(ui);
@@ -883,6 +1062,20 @@ impl Calendar {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        if let Some(d) = self.goto {
+            // the sheet takes the keyboard: arrows move the date (Left/Right a day, Up/Down a week), Return shows it
+            let step = match out {
+                Out::Enter => return self.activate(ui, Target::GoConfirm, t),
+                Out::Named("Left") => -1,
+                Out::Named("Right") => 1,
+                Out::Named("Up") => -7,
+                Out::Named("Down") => 7,
+                _ => return,
+            };
+            self.goto = Some(d.shift_days(step));
+            self.dirty = true;
+            return;
+        }
         if self.editor.is_none() {
             if out == Out::Enter {
                 self.open(ui, None);
@@ -1070,6 +1263,7 @@ impl Calendar {
                     _ => self.draw_time(&mut c, ui, t),
                 }
                 self.draw_undo(&mut c, ui);
+                self.draw_goto(&mut c, ui);
             }
         }
         self.draw_chrome(s, ui);
@@ -1310,10 +1504,21 @@ pub enum Command {
     CalendarList,
     /// File > New Event from Text (the app reads the pasteboard, see `Calendar::new_event_from_text`).
     NewEventFromText,
+    /// File > Import...: the app shows the open panel and gives the chosen file to `Calendar::import_report`.
+    ImportCalendar,
+    /// Event > Copy Event: the saved event being edited goes to the pasteboard as .ics (`Calendar::take_copied`).
+    CopyEvent,
+    /// Event > Paste Event: the app reads the pasteboard and calls `Calendar::paste_event`.
+    PasteEvent,
+    /// Go > Go to Date...: the date sheet.
+    GoToDate,
+    /// Go > Zoom In / Zoom Out: the hour height of the Day and Week views.
+    ZoomIn,
+    ZoomOut,
 }
 
 impl Command {
-    pub const ALL: [Command; 16] = [
+    pub const ALL: [Command; 22] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1330,6 +1535,12 @@ impl Command {
         Command::WeekNumbers,
         Command::CalendarList,
         Command::NewEventFromText,
+        Command::ImportCalendar,
+        Command::CopyEvent,
+        Command::PasteEvent,
+        Command::GoToDate,
+        Command::ZoomIn,
+        Command::ZoomOut,
     ];
 
     pub fn id(self) -> u32 {
@@ -1358,6 +1569,12 @@ impl Command {
             Command::WeekNumbers => "Week Numbers",
             Command::CalendarList => "Calendar List",
             Command::NewEventFromText => "New Event from Text",
+            Command::ImportCalendar => "Import...",
+            Command::CopyEvent => "Copy Event",
+            Command::PasteEvent => "Paste Event",
+            Command::GoToDate => "Go to Date...",
+            Command::ZoomIn => "Zoom In",
+            Command::ZoomOut => "Zoom Out",
         }
     }
 
@@ -1371,6 +1588,11 @@ impl Command {
             Command::ShowWeek => "cmd+2",
             Command::ShowMonth => "cmd+3",
             Command::ShowYear => "cmd+4",
+            Command::CopyEvent => "cmd+shift+c",
+            Command::PasteEvent => "cmd+shift+v",
+            Command::GoToDate => "cmd+shift+t",
+            Command::ZoomIn => "cmd+=",
+            Command::ZoomOut => "cmd+-",
             _ => "",
         }
     }
@@ -1381,7 +1603,13 @@ impl Calendar {
     pub fn enabled(&self, cmd: Command) -> bool {
         let editing = self.editor.is_some();
         let saved = self.editor.as_ref().is_some_and(|d| d.existing);
+        if self.goto.is_some() {
+            return false;
+        }
         match cmd {
+            Command::CopyEvent => editing && saved,
+            Command::ZoomIn => !editing && self.can_zoom(1),
+            Command::ZoomOut => !editing && self.can_zoom(-1),
             Command::Save | Command::Duplicate => editing,
             Command::ExportEvent => editing && saved && self.file_export,
             Command::Delete => editing && saved,
@@ -1417,6 +1645,22 @@ impl Calendar {
         if !self.enabled(cmd) {
             return false;
         }
+        match cmd {
+            Command::CopyEvent => return self.copy_event(),
+            Command::GoToDate => {
+                self.goto = Some(self.selected);
+                self.dirty = true;
+                return true;
+            }
+            Command::ZoomIn | Command::ZoomOut => {
+                self.zoom(ui, if cmd == Command::ZoomIn { 1 } else { -1 });
+                self.dirty = true;
+                return true;
+            }
+            // these need the open panel or the pasteboard, which the app owns: it calls `import_report` / `paste_event`
+            Command::ImportCalendar | Command::PasteEvent => return false,
+            _ => {}
+        }
         let target = match cmd {
             Command::NewEvent => Target::Add,
             Command::Save => Target::Save,
@@ -1435,6 +1679,7 @@ impl Calendar {
             Command::CalendarList => Target::Sidebar,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
+            Command::ImportCalendar | Command::PasteEvent | Command::CopyEvent | Command::GoToDate | Command::ZoomIn | Command::ZoomOut => return false,
         };
         self.activate(ui, target, t);
         true

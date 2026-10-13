@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0 — 2026-10-13
+
+- Go > Go to Date... (Shift-Command-T): a sheet with year, month and day steppers; Return shows the date, Escape cancels.
+- Go > Zoom In / Zoom Out (Command-= / Command--): changes the hour height of the Day and Week views, between 24 and 96 points.
+- Event > Copy Event / Paste Event (Shift-Command-C / V): the saved event being edited goes to the pasteboard as a calendar
+  file with its location and notes; Paste adds the pasteboard's event to the selected day.
+- File > Import...: reads a calendar file (.ics, .vcs) chosen in the open panel and says how many events were added.
+
 ## 1.12.0 — 2026-10-13
 
 - Internet Accounts: the CalDAV accounts switched on for Calendars are read in the background (discovery, then the events

@@ -649,3 +649,114 @@ fn new_event_from_an_empty_pasteboard_is_a_plain_new_event() {
     assert_eq!(draft.event.minute, 9 * 60, "the editor's default start");
     assert!(draft.event.title.is_empty());
 }
+
+#[test]
+fn go_to_date_steps_the_sheet_and_shows_the_date_on_go() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.enabled(Command::GoToDate));
+    assert!(c.perform(&ui, Command::GoToDate, 0.0));
+    assert_eq!(c.goto, Some(date(2026, 10, 4)));
+    assert!(!c.enabled(Command::NewEvent), "the sheet is modal");
+    c.activate(&ui, Target::GoStep(GoUnit::Year, 1), 0.0);
+    c.activate(&ui, Target::GoStep(GoUnit::Month, -1), 0.0);
+    c.activate(&ui, Target::GoStep(GoUnit::Day, 3), 0.0);
+    assert_eq!(c.goto, Some(date(2027, 9, 7)));
+    assert_eq!(c.selected, date(2026, 10, 4), "nothing moves until Go");
+    c.activate(&ui, Target::GoConfirm, 0.0);
+    assert_eq!((c.goto, c.selected), (None, date(2027, 9, 7)));
+}
+
+#[test]
+fn go_to_date_cancels_with_escape_and_takes_the_arrow_keys() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.key(&ui, Out::Named("Down"), 0.0);
+    c.key(&ui, Out::Named("Left"), 0.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 10)));
+    assert!(c.escape(&ui, 0.0));
+    assert_eq!((c.goto, c.selected), (None, date(2026, 10, 4)));
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.key(&ui, Out::Enter, 0.0);
+    assert_eq!(c.selected, date(2026, 10, 4));
+    assert!(c.goto.is_none());
+}
+
+#[test]
+fn go_to_date_hits_steppers_and_buttons() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    let (left, w) = c.goto_card(&ui);
+    let rows = Calendar::goto_rows();
+    let mid = |i: usize| ui.pt(rows[i].1 + rows[i].2 / 2.0);
+    assert_eq!(c.hit(&ui, ui.pt(left + 4.0), mid(1)), Some(Target::GoStep(GoUnit::Month, -1)));
+    assert_eq!(c.hit(&ui, ui.pt(left + w - 4.0), mid(2)), Some(Target::GoStep(GoUnit::Day, 1)));
+    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(1)), None);
+    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(3)), Some(Target::GoConfirm));
+    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(4)), Some(Target::GoCancel));
+}
+
+#[test]
+fn zoom_changes_the_hour_height_within_limits_in_time_views() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.enabled(Command::ZoomIn), "the month grid has no hours");
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    assert!(c.perform(&ui, Command::ZoomIn, 0.0));
+    assert_eq!(c.hour_h, timeview::HOUR_H + 12.0);
+    for _ in 0..10 {
+        c.perform(&ui, Command::ZoomIn, 0.0);
+    }
+    assert_eq!(c.hour_h, 96.0);
+    assert!(!c.enabled(Command::ZoomIn), "dimmed at the largest size");
+    for _ in 0..10 {
+        c.perform(&ui, Command::ZoomOut, 0.0);
+    }
+    assert_eq!(c.hour_h, 24.0);
+    assert!(!c.enabled(Command::ZoomOut));
+}
+
+#[test]
+fn copy_event_puts_ics_on_the_pasteboard_and_paste_adds_it_to_the_selected_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut e = event(1, "Dentist");
+    e.location = "Main St 4".into();
+    store::save(&temp.file(), &[e]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.enabled(Command::CopyEvent), "needs an open saved event");
+    c.open(&ui, Some(1));
+    assert!(c.perform(&ui, Command::CopyEvent, 0.0));
+    let text = c.take_copied().expect("ics text");
+    c.close();
+    assert!(!c.enabled(Command::CopyEvent));
+    c.selected = date(2026, 10, 9);
+    c.paste_event(&text).expect("pasted");
+    assert_eq!(c.events.len(), 2);
+    let pasted = c.events.iter().find(|e| e.id != 1).unwrap();
+    assert_eq!((pasted.date, pasted.minute, pasted.title.as_str(), pasted.location.as_str()), (date(2026, 10, 9), 540, "Dentist", "Main St 4"));
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 2, "saved");
+    assert!(c.paste_event("not an event").is_err());
+}
+
+#[test]
+fn import_report_says_how_many_events_were_added() {
+    let temp = Temp::new();
+    fs::create_dir_all(&temp.0).unwrap();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    let one = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261006T090000\r\nDTEND:20261006T100000\r\nSUMMARY:Standup\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    c.import_report("team.ics", one);
+    assert_eq!(c.notice.as_deref(), Some("Imported 1 event from team.ics"));
+    c.import_report("team.ics", one);
+    assert_eq!(c.notice.as_deref(), Some("No new events in team.ics"));
+    c.import_report("empty.ics", "nothing");
+    assert!(c.error.is_some());
+    assert!(c.enabled(Command::ImportCalendar));
+}
