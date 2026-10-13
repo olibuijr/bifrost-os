@@ -4,15 +4,15 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "bifrost_app::defaults, coding, file_coordination, fswatch, workspace, quicksearch, document; docbroker file grants",
-  "summary": "Settings, JSON and plist coding, file coordination, change events and Spotlight-style indexing have SDK APIs. There is no FileManager-style API, no keyed archiver or binary plist, and no iCloud.",
+  "summary": "Settings, JSON and plist coding, file coordination, change events and Spotlight-style indexing have SDK APIs. FileManager has an SDK type for item operations, atomic writes, replaceItemAt, standard user directories and option-driven enumeration. There is no FileWrapper, no keyed archiver or binary plist, and no iCloud.",
   "rea_evidence": "ev_177296a326822b32e03af061d208f36da74e7e78f5ede1bf1a127a910c832240",
   "features": [
     {
       "feature": "File System (create, read, write, examine files)",
       "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
-      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
+      "bifrost": "springboard/sdk/src/file_manager.rs (NativeFileManager: item operations, write_atomically, replace_item_at, url_for, enumerator); springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
       "status": "partial",
-      "note": "Apps use Rust std fs in their data dir; user files go through the file portal grants and document grants. No FileManager-like SDK type, no FileWrapper. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "FileManager item operations, Data-style atomic write, replaceItemAt with backup, standard directories and enumerator options are host unit-tested; no FileWrapper, and user files still go through the file portal grants. Not yet wired into apps; verify on Midget for parity."
     },
     {
       "feature": "File coordination and presenters",
@@ -93,7 +93,7 @@
     }
   ],
   "gaps": [
-    "FileManager-style SDK API (copy, move, attributes, enumerators)",
+    "FileManager gaps: FileWrapper, bookmarks, replaceItemAt metadata-only and backup-deletion options, enumerator resource keys",
     "Keyed archiver and binary plist",
     "Metadata query over files",
     "iCloud / cloud-synced documents and key-value store",
