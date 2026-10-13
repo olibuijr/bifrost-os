@@ -110,9 +110,13 @@ fn transport_label(s: &ScannerInfo) -> &'static str {
     }
 }
 
-/// The whole Print & Scan page.
-pub fn spec(v: &View) -> Spec {
-    Spec { id: PageId::PrintScan, title: "Print & Scan".into(), large: false, groups: groups(v) }
+/// The whole Print & Scan page; `None` while the printers and scanners are read (a placeholder row).
+pub fn spec(v: Option<&View>) -> Spec {
+    let groups = match v {
+        Some(v) => groups(v),
+        None => vec![Group::new(vec![Item::new("Printers").value("Loading…").tint(Tint::Dim)])],
+    };
+    Spec { id: PageId::PrintScan, title: "Print & Scan".into(), large: false, groups }
 }
 
 /// Applies a Print & Scan edit: the default printer changes now (`None`), the address prompt opens (`Some`).

@@ -583,7 +583,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, sound: &self.sound, sharing: &self.loads.sharing.value, printers: &self.loads.printers.value, users: &self.loads.users.value }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -614,7 +614,9 @@ impl Settings {
                 s.groups.push(notify_page::schedule_group(&NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() }));
                 s
             }
-            PageId::Graphics => super::gpu_page::spec(&self.loads.gpus.value),
+            PageId::Graphics => super::gpu_page::spec(self.loads.gpus.get().map(Vec::as_slice)),
+            PageId::Sharing => super::pages::sharing_spec(&self.opts, self.loads.sharing.get()),
+            PageId::PrintScan => super::print_scan_page::spec(self.loads.printers.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
@@ -675,7 +677,7 @@ impl Settings {
             Act::Delete { site, account } => {
                 let _ = crate::credentials::remove(&super::apphost::root(), &site, &account);
                 let root = super::apphost::root();
-                self.loads.logins.start(move || crate::credentials::logins(&root));
+                self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
                 if self.pw_revealed.as_ref().is_some_and(|(s, a, _)| *s == site && *a == account) {
                     self.pw_revealed = None;
                 }
@@ -708,7 +710,7 @@ impl Settings {
                 };
             }
         }
-        self.loads.accounts.start(ia::load);
+        self.loads.accounts.start("accounts-read", ia::load);
         self.rebuild_visible(ui);
         vec![]
     }
@@ -839,7 +841,7 @@ impl Settings {
     /// parsed from the files; the page fills in on a later tick.
     fn load_fonts(&mut self) {
         let dir = self.data_dir.to_string_lossy().into_owned();
-        self.loads.fonts.start(move || {
+        self.loads.fonts.start("fonts-read", move || {
             use bifrost_render::fontprefs::{family, font_override, installed, library, FontRole};
             super::pages::FontsView {
                 defaults: FontRole::ALL.map(|r| family(&format!("{dir}/{}", r.file())).unwrap_or_default()),
@@ -856,20 +858,20 @@ impl Settings {
         let dir = self.data_dir.clone();
         match id {
             PageId::Fonts | PageId::FontPick(_) => self.load_fonts(),
-            PageId::Graphics => self.loads.gpus.start(super::gpu_page::read_system),
-            PageId::Diagnostics => self.loads.crashes.start(move || diag::load(&dir)),
-            PageId::Backup | PageId::SoftwareUpdate => self.loads.latest_backup.start(move || backup::latest(&dir).map(|(_, t)| t)),
+            PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
+            PageId::Diagnostics => self.loads.crashes.start("diag-read", move || diag::load(&dir)),
+            PageId::Backup | PageId::SoftwareUpdate => self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t)),
             PageId::Passwords => {
                 let root = super::apphost::root();
-                self.loads.logins.start(move || crate::credentials::logins(&root));
+                self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
             }
-            PageId::InternetAccounts => self.loads.accounts.start(super::internet_accounts_page::load),
-            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => self.loads.users.start(super::users_page::View::load),
-            PageId::Sharing => self.loads.sharing.start(super::sharing_page::View::load),
-            PageId::PrintScan => self.loads.printers.start(super::print_scan_page::View::load),
+            PageId::InternetAccounts => self.loads.accounts.start("accounts-read", super::internet_accounts_page::load),
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => self.loads.users.start("users-read", super::users_page::View::load),
+            PageId::Sharing => self.loads.sharing.start("sharing-read", super::sharing_page::View::load),
+            PageId::PrintScan => self.loads.printers.start("print-scan-read", super::print_scan_page::View::load),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => {
                 let (unix, off) = crate::bare::sys::wall_time();
-                self.loads.screentime.start(move || {
+                self.loads.screentime.start("screentime-read", move || {
                     let cfg = StConfig::load(&dir.join("screentime.ini"));
                     let days = st_usage::history(&dir.join("screentime"), st_usage::day_of(unix, off), 7);
                     (cfg, days)
@@ -1245,7 +1247,7 @@ impl Settings {
                 Err(e) => format!("Backup failed: {e}"),
             };
             let dir = self.data_dir.clone();
-            self.loads.latest_backup.start(move || backup::latest(&dir).map(|(_, t)| t));
+            self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t));
             self.rebuild(ui);
             frame = true;
         }
@@ -1718,8 +1720,16 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
-                super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                    let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
+                    self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
+                    r
+                }
+                super::forms::Purpose::PrinterAddress => {
+                    let r = super::print_scan_page::finish(&purpose, &text).map(|_| None);
+                    self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
+                    r
+                }
                 _ => return self.form_done(ui, &purpose, &text, t),
             };
             self.edit_result(ui, t, r);
@@ -1762,7 +1772,7 @@ impl Settings {
             Ok(None) => self.users_note.clear(),
             Err(e) => self.users_note = e,
         }
-        self.loads.users.start(super::users_page::View::load);
+        self.loads.users.start("users-read", super::users_page::View::load);
         self.rebuild_visible(ui);
         vec![]
     }
@@ -2326,19 +2336,22 @@ impl Settings {
             }
             Action::Users(edit) => {
                 let r = super::users_page::apply(&edit, &super::users_page::View::load());
-                self.loads.users.start(super::users_page::View::load);
+                self.loads.users.start("users-read", super::users_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::Sharing(edit) => {
-                let r = super::sharing_page::apply(&edit, &super::sharing_page::View::load());
-                self.loads.sharing.start(super::sharing_page::View::load);
+                // the view the page last showed; the services are read again on a worker below
+                let view = self.loads.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);
+                let r = super::sharing_page::apply(&edit, &view);
+                // the page keeps the last answer until the new read lands
+                self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::PrintScan(edit) => {
                 let r = super::print_scan_page::apply(&edit);
-                self.loads.printers.start(super::print_scan_page::View::load);
+                self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
@@ -2729,7 +2742,7 @@ impl Settings {
             Command::DeleteCrashLogs => {
                 let n = diag::delete_all(&self.data_dir);
                 let dir = self.data_dir.clone();
-                self.loads.crashes.start(move || diag::load(&dir));
+                self.loads.crashes.start("diag-read", move || diag::load(&dir));
                 self.diag_note = format!("Deleted {n} crash log file{}.", if n == 1 { "" } else { "s" });
                 self.rebuild(ui);
                 vec![]
@@ -3035,6 +3048,16 @@ mod tests {
         (dir, lib.to_string_lossy().into_owned())
     }
 
+    /// Lets the Fonts read on its worker land, as the frames would.
+    fn settle_fonts(st: &mut Settings, ui: &Ui) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while st.fonts.busy() && std::time::Instant::now() < end {
+            st.tick(ui, 0.0);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        st.tick(ui, 0.0);
+    }
+
     #[test]
     fn a_deep_link_from_another_app_opens_its_pane() {
         let ui = super::super::tests::ui();
@@ -3056,9 +3079,11 @@ mod tests {
         let (dir, lib) = font_dir("pick");
         st.set_data_dir(&dir);
         let name = family(&lib).expect("the library font has a family name");
-        for label in ["General", "Fonts", "System Font"] {
+        for label in ["General", "Fonts"] {
             tap_row(&mut st, &ui, &mut prefs, label);
         }
+        settle_fonts(&mut st, &ui);
+        tap_row(&mut st, &ui, &mut prefs, "System Font");
         assert_eq!(st.page(), PageId::FontPick(FontRole::System));
         tap_row(&mut st, &ui, &mut prefs, &name);
         assert_eq!(prefs.get(FontRole::System.pref()), Some(lib.as_str()), "saved under the key the shell reads at start");

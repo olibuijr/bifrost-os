@@ -436,17 +436,17 @@ pub struct Model<'a> {
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
     /// the Sharing page: the computer name and the service states (read off the UI thread, see `settings_load`)
-    pub sharing: &'a super::sharing_page::View,
+    /// Sharing: None until the worker's read lands (the page shows a placeholder)
+    pub sharing: Option<&'a super::sharing_page::View>,
     /// the Print & Scan page: the printers and scanners
-    pub printers: &'a super::print_scan_page::View,
+    /// Print & Scan: None until the worker's read lands
+    pub printers: Option<&'a super::print_scan_page::View>,
     /// the Users & Groups pages: the accounts and groups
     pub users: &'a super::users_page::View,
 }
 
 /// The Sharing page before its first read lands.
-pub static NO_SHARING: super::sharing_page::View = super::sharing_page::View { computer: String::new(), services: Vec::new() };
 /// The Print & Scan page before its first read lands.
-pub static NO_PRINTERS: super::print_scan_page::View = super::print_scan_page::View { printers: Vec::new(), error: None, scanners: Vec::new(), scanner_error: None };
 /// The Users & Groups pages before their first read lands.
 pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new() };
 
@@ -653,6 +653,20 @@ const KEYWORDS: &[(&str, &str)] = &[
 pub fn keywords(label: &str) -> &'static str {
     let key = label.trim().to_lowercase();
     KEYWORDS.iter().find(|(k, _)| *k == key).map_or("", |(_, words)| words)
+}
+
+/// Settings > Sharing: the computer name and services (`None` while they are read), then Nearby Share and AirPlay & Handoff.
+pub fn sharing_spec(o: &Options, view: Option<&super::sharing_page::View>) -> Spec {
+    let mut groups = match view {
+        Some(v) => super::sharing_page::groups(v),
+        None => vec![Group::new(vec![Item::new("Computer Name").value("Loading…").tint(Tint::Dim)])],
+    };
+    groups.push(Group::new(vec![
+        Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
+        Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
+    ])
+    .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
+    Spec { id: PageId::Sharing, title: "Sharing".into(), large: false, groups }
 }
 
 /// The page `id` as the model shows it now.
@@ -890,15 +904,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![Group::new(NEARBY_CHOICES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
         ),
-        PageId::Sharing => {
-            let mut groups = super::sharing_page::groups(m.sharing);
-            groups.push(Group::new(vec![
-                Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
-                Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
-            ])
-            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
-            page("Sharing", false, groups)
-        }
+        // the Settings pane reads the computer name and services on a worker and passes them in (`settings.rs`)
+        PageId::Sharing => sharing_spec(o, m.sharing),
+        // the Settings pane reads the printers on a worker and passes them in (`settings.rs`)
         PageId::PrintScan => super::print_scan_page::spec(m.printers),
         PageId::LockScreen => page(
             "Lock Screen",
@@ -1711,7 +1719,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: &NO_SHARING, printers: &NO_PRINTERS, users: &NO_USERS }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
     }
 
     #[test]
@@ -1894,13 +1902,15 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
-        let sharing = spec(PageId::Sharing, &model(&info, &opts));
+        let view = super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
+        let sharing = sharing_spec(&opts, Some(&view));
         assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
         assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
         assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
         assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
         opts.handoff = true;
-        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, Some(&view)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, None).groups[0].items[0].value, "Loading…", "the page shows a placeholder until the read lands");
 
         let lock = spec(PageId::LockScreen, &model(&info, &opts));
         assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));
