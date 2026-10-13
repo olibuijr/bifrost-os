@@ -11,10 +11,10 @@
  "summary": {
   "features": 37,
   "parity": 10,
-  "partial": 13,
-  "gap": 13,
+  "partial": 21,
+  "gap": 5,
   "n/a": 1,
-  "coverage_pct": 45.8
+  "coverage_pct": 56.9
  },
  "features": [
   {
@@ -48,19 +48,19 @@
    "feature": "Reorder tabs and move a tab to a new window",
    "area": "window",
    "apple": "Window > Move Tab to New Window, Move Tab Left/Right, drag tabs",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tabs keep creation order.",
-   "wire": "Drag-reorder in layout.rs hit testing plus tab move/detach once multiple windows exist (see New window)."
+   "status": "partial",
+   "bifrost": "springboard/src/term/sessions.rs:110",
+   "note": "More > Move tab left and Move tab right reorder the tab bar (the active tab and a split pair follow their sessions). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Drag-reorder in layout.rs hit testing, and Move Tab to New Window once multiple windows exist (see New window)."
   },
   {
    "feature": "Close tab, close other tabs, reopen closed",
    "area": "window",
    "apple": "Shell > Close Tab, Close Other Tabs",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:153",
-   "note": "Close tab (cmd+W confirms while a job runs) and Reopen Closed Tab in the More menu; no Close Other Tabs.",
-   "wire": "Add Close Other Tabs to the More menu list (view.rs MENU) and terminal_menu_action."
+   "bifrost": "springboard/src/shell/terminal/tabs.rs:26",
+   "note": "Close tab (cmd+W confirms while a job runs), Reopen Closed Tab and Close other tabs (names running programs first, a second choice closes). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add Close Other Tabs to the desktop File menu."
   },
   {
    "feature": "Prompt before closing a running process",
@@ -93,28 +93,28 @@
    "feature": "ssh and telnet URL schemes",
    "area": "shell",
    "apple": "CFBundleURLTypes ssh://, telnet://",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The Terminal is not registered for URL schemes.",
-   "wire": "Register ssh and telnet schemes with the shell URL router (app_links.rs) and open a tab running ssh with the parsed user, host and port."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/launch.rs:6",
+   "note": "The Terminal declares ssh and telnet (shell/defaultapps.rs:39); a link opens a new tab with ssh [-p port] [user@]host or telnet host [port] typed in, from validated words (no option injection). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Open ssh and telnet links tapped in terminal output in the Terminal, and offer the server browser (see New Remote Connection)."
   },
   {
    "feature": "x-man-page URL and man page services",
    "area": "shell",
    "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No man page entry points.",
-   "wire": "Add Open man Page (selection) and the x-man-page scheme: spawn man in a new tab; wire to a selection context item."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/launch.rs:114",
+   "note": "The x-man-page scheme and More > Open man page for selection open a new tab with man [section] name for the first word of the selection (name(1) form understood). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add Search man Page Index (man -k) for the selection and the Services entries."
   },
   {
    "feature": "New Terminal at Folder service",
    "area": "shell",
    "apple": "Services: New Terminal / New Tab at Folder, Files Open in Terminal",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Files cannot open a folder in the Terminal.",
-   "wire": "Add a Files context item Open in Terminal that calls new_terminal_tab(Some(dir)) (terminal/tabs.rs) through the app link API."
+   "status": "partial",
+   "bifrost": "springboard/src/files/mod.rs:1072",
+   "note": "Found already built: Files' Open in Terminal context item (files/menu.rs OpenInTerminal) sends Request::OpenTerminal and shell::open_terminal_at opens the Terminal in that folder. The row was stale; it needs a check on Midget. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Check Open in Terminal from a file and a folder on Midget; add the same item to the desktop Services menu."
   },
   {
    "feature": "Open a .command or executable file in Terminal",
@@ -183,28 +183,28 @@
    "feature": "Default login shell and startup",
    "area": "settings",
    "apple": "Settings > General: shell, new windows open with profile, startup window group",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Always spawns the account's login shell.",
-   "wire": "Add a General settings panel: shell path, default profile, open window group at launch."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/startup.rs:11",
+   "note": "More > Login shell sets the program new tabs run (a full path, checked to be executable; empty keeps the account shell) and More > Open window group at launch opens the saved group when the Terminal starts. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add a default profile choice and a command to run at startup to the same panel."
   },
   {
    "feature": "Find in scrollback",
    "area": "edit",
    "apple": "Edit > Find (panel with Ignore Case, Wrap Around, Not found), Find Next/Previous, Use Selection for Find",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/find.rs:5",
-   "note": "Find bar with match count, No matches, next and previous; no case toggle, no wrap toggle, no Use Selection for Find.",
-   "wire": "Add Ignore Case and Wrap Around toggles to the Find panel (search.rs find options) and cmd+E to use the selection."
+   "bifrost": "springboard/src/shell/terminal/find.rs:12",
+   "note": "Find bar with match count, No matches, next and previous; Cmd+E (Edit menu, More menu) uses the selection for find. No case toggle, no wrap toggle. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add Ignore Case and Wrap Around toggles to the Find panel (the iosterm search takes no options yet)."
   },
   {
    "feature": "Copy, paste and select all",
    "area": "edit",
    "apple": "Edit > Copy, Paste, Select All; paste selection, paste escaped text",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/input.rs:19",
-   "note": "Copy, Paste and Select All; paste turns newlines to spaces in panels only. No Paste Escaped or Paste Selection.",
-   "wire": "Add Paste Escaped Text and Paste Selection to the More menu and the edit shortcuts."
+   "bifrost": "springboard/src/shell/terminal/selection.rs:10",
+   "note": "Copy, Paste and Select All; More > Paste escaped text (backslash before spaces and shell symbols) and Paste selection. Paste turns newlines to spaces in panels only. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add Paste Escaped Text and Paste Selection to the desktop Edit menu and give them key equivalents."
   },
   {
    "feature": "Copy Special: plain text and without background colour",
@@ -229,9 +229,9 @@
    "area": "edit",
    "apple": "View > Allow Mouse Reporting",
    "status": "partial",
-   "bifrost": "springboard/src/shell/termtouch.rs",
-   "note": "The core encodes SGR and legacy mouse; the menu has no toggle to turn reporting off.",
-   "wire": "Add Allow Mouse Reporting to the More menu (state in TerminalUi) that disables mouse encoding when off."
+   "bifrost": "springboard/src/term/mod.rs:596",
+   "note": "The core encodes SGR and legacy mouse; a tap is a click (press and release) for a program that asked for the mouse (shell/termtouch.rs:118), the wheel is reported, and More > Allow mouse reporting turns it all off for every tab. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Report drags (mode 1002/1003) from touch and pointer movement."
   },
   {
    "feature": "Secure Keyboard Entry",
@@ -246,10 +246,10 @@
    "feature": "Marks and bookmarks",
    "area": "view",
    "apple": "Edit > Mark as Bookmark, Insert Bookmark, Jump to Previous/Next Mark, Marks menu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The prompt marker parser (osc133_prompts) exists but no mark UI uses it.",
-   "wire": "Draw prompt marks from osc133_prompts in the gutter, add Jump to Previous/Next Mark (cmd+up/down) and a Mark as Bookmark action; list marks in the More menu."
+   "status": "partial",
+   "bifrost": "springboard/src/term/mod.rs:637",
+   "note": "Prompt starts reported by the shell (OSC 133;A) and lines marked with Cmd+U get a green tick in the margin; Cmd+Up and Cmd+Down (Edit menu, More menu) scroll to the previous and next mark. Marks are kept until the scrollback is full. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Keep marks across a full scrollback (the iosterm core needs to report how many lines it dropped), name bookmarks and list them in a panel."
   },
   {
    "feature": "Scrollback buffer",
@@ -265,9 +265,9 @@
    "area": "file",
    "apple": "Shell > Export Text As…, Save Selected Text As…",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:186",
-   "note": "Writes the transcript to a fixed Files/terminal-scrollback.txt; no name or location panel and no selection export.",
-   "wire": "Use the SDK save panel for Export Text As and add Save Selected Text As."
+   "bifrost": "springboard/src/shell/terminal/selection.rs:86",
+   "note": "More > Save scrollback to Files and Save selection to Files write terminal-scrollback.txt and terminal-selection.txt, numbered (name 2.txt) so an earlier export is never overwritten; no name or location panel. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Use the SDK save panel for Export Text As and Save Selected Text As."
   },
   {
    "feature": "Split pane",
@@ -291,19 +291,19 @@
    "feature": "Edit Title and tab title",
    "area": "window",
    "apple": "Shell > Edit Title",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tab title follows the program title only.",
-   "wire": "Add Edit Title to the More menu that overrides the tab title (term.title in layout.rs)."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/title.rs:6",
+   "note": "More > Edit tab title names the active tab; an empty title gives the automatic one back. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Offer the title field in the Processes panel (Inspector) too."
   },
   {
    "feature": "Open URL / links",
    "area": "view",
    "apple": "Edit > Open URL, Look Up, Search the Web; command-click links",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/links.rs:5",
-   "note": "Opens the first link of the selection in the browser from the More menu; no command-click, no Look Up or Search the Web.",
-   "wire": "Add Cmd+click on detect_urls hits in termtouch.rs and Look Up / Search the Web items to the selection menu."
+   "bifrost": "springboard/src/shell/terminal/selection.rs:73",
+   "note": "Opens the first link of the selection in the browser from the More menu, a tap on a link opens it, and More > Search the web for selection opens a search in the browser; no Look Up. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add Look Up for the selection (needs the dictionary service) and Cmd+click."
   },
   {
    "feature": "Full screen and window chrome",
@@ -328,18 +328,18 @@
    "area": "menu",
    "apple": "Shell, Edit, View, Window, Help menus",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:5",
-   "note": "One More menu list; the app publishes no menu bar of its own.",
-   "wire": "Publish the Shell, Edit, View and Window menus through the shell menu bar API and keep More as the touch fallback."
+   "bifrost": "springboard/src/shell/desktop_bar.rs:269",
+   "note": "The desktop menu bar has Terminal's File (New Tab, Close Tab), Edit (Find, Use Selection for Find, Mark, Previous and Next Mark, Clear Scrollback) and View (text size) items; More stays as the touch fallback. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Publish the Shell and Window menus (New Command, Window 1-9, Close Other Tabs) and the rest of More through the menu bar API."
   },
   {
    "feature": "Terminal help",
    "area": "menu",
    "apple": "Help > Terminal Help",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No help.",
-   "wire": "Add a Help menu item that opens a short Terminal help page."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/help.rs:27",
+   "note": "More > Terminal help opens a scrolling page of the keys, gestures and menu items (a test keeps the key table in step with the Cmd chords). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Open the help page from a Help menu item in the desktop menu bar as well as from More."
   },
   {
    "feature": "Low memory notice",
