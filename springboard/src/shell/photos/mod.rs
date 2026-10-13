@@ -11,8 +11,10 @@ pub mod albums;
 pub mod edit;
 pub mod exif;
 pub mod grid;
+pub mod import;
 pub mod library;
 pub mod models;
+pub mod recipe;
 pub mod slideshow;
 pub mod thumbs;
 pub mod viewer;
@@ -288,8 +290,6 @@ enum Done {
     ThumbSkipped { key: String },
     Full { key: String, image: Option<Image> },
     Wallpaper { id: String, ok: bool },
-    /// an edit saved as a copy; `copy` is None when the copy could not be written
-    Edited { original: PathBuf, copy: Option<PathBuf> },
 }
 
 pub struct Photos {
@@ -339,8 +339,8 @@ pub struct Photos {
     /// the thumbnail preparations started for the grid's window (bifrost_ui photo_caching)
     preheat: PreheatCache,
     preheat_keys: Vec<PreKey>,
-    /// the original of the edited copy shown in the Info sheet, when the sheet offers Revert to Original
-    info_revert: Option<PathBuf>,
+    /// the Info sheet offers Revert to Original: the open photo has a saved edit
+    info_revert: bool,
     /// thumbnails resampled to the grid's cell size, so drawing is a plain copy
     cells: MemCache,
     cell_px: usize,
@@ -426,7 +426,7 @@ impl Photos {
             thumb_scroll: 0.0,
             preheat: PreheatCache::new(),
             preheat_keys: Vec::new(),
-            info_revert: None,
+            info_revert: false,
             cells: MemCache::new(thumbs::MEM_BUDGET),
             cell_px: 0,
             fav_paths: HashSet::new(),
@@ -834,6 +834,7 @@ impl Photos {
                 continue;
             }
             self.thumb_pending.insert(key.clone());
+            let recipe = self.recipe(&photo);
             let (disk, still_wanted) = (self.disk.clone(), self.thumb_wanted.clone());
             let failed = key.clone();
             self.pool.spawn_or(
@@ -842,7 +843,7 @@ impl Photos {
                         return Done::ThumbSkipped { key };
                     }
                     let image = disk.read(&key).or_else(|| {
-                        let img = decode_upright(&std::fs::read(&photo.path).ok()?)?;
+                        let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
                         let thumb = imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE);
                         disk.write(&key, &thumb);
                         Some(thumb)
@@ -868,11 +869,12 @@ impl Photos {
                 continue;
             }
             self.full_pending.insert(key.clone());
+            let recipe = self.recipe(&photo);
             let failed = key.clone();
             // the picture on screen jumps the queue of grid thumbnails
             self.pool.spawn_front_or(
                 move || {
-                    let image = std::fs::read(&photo.path).ok().and_then(|b| decode_upright(&b)).map(|img| imgdec::contain(&img, w, h));
+                    let image = std::fs::read(&photo.path).ok().and_then(|b| decode_edited(&b, recipe)).map(|img| imgdec::contain(&img, w, h));
                     Done::Full { key, image }
                 },
                 move || Done::Full { key: failed, image: None },
@@ -894,9 +896,10 @@ impl Photos {
         let dir = self.data.join("wallpapers");
         let (w, h, path, n) = (self.w as usize, self.h as usize, photo.path.clone(), id.trim_start_matches(CUSTOM_PREFIX).to_string());
         let job_id = id.clone();
+        let recipe = self.recipe(photo);
         self.pool.spawn(move || {
             let ok = (|| {
-                let img = decode_upright(&std::fs::read(&path).ok()?)?;
+                let img = decode_edited(&std::fs::read(&path).ok()?, recipe)?;
                 let full = imgdec::cover(&img, w, h);
                 std::fs::create_dir_all(&dir).ok()?;
                 let write = |name: &str, bytes: Vec<u8>| {
@@ -960,14 +963,6 @@ impl Photos {
                         self.full.insert(&key, img);
                     }
                 }
-                Done::Edited { original, copy } => match copy {
-                    Some(copy) => {
-                        // the link lets the copy's Info sheet offer Revert to Original
-                        self.pref_set(&format!("edited:{}", copy.display()), &original.display().to_string());
-                        self.rescan();
-                    }
-                    None => eprintln!("photos: edited copy not written"),
-                },
                 Done::Wallpaper { id, ok } => {
                     if ok {
                         self.effects.push(Effect::Wallpaper(id));
@@ -1137,7 +1132,7 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
-                if self.info_revert.is_some() {
+                if self.info_revert {
                     let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
                     let row = ui.pt(INFO_ROW_PT);
                     if within(x, y, (sx, sy + row * (self.info.len() + 1) as f32, sw, row)) {
@@ -1279,22 +1274,32 @@ impl Photos {
                 if let Some(p) = self.viewing().cloned() {
                     let head = read_head(&p.path);
                     self.info = exif::describe(&p.name(), p.size, p.mtime, self.offset, &head);
-                    self.info_revert = self.edited_original(&p);
+                    // Recently Deleted photos have no revert: their edit left with them
+                    self.info_revert = self.album != Album::Trash && self.recipe(&p).is_some();
                     self.sheet = Some(Sheet::Info);
                 }
             }
             Target::InfoRevert => {
-                let original = self.info_revert.take();
+                self.info_revert = false;
                 self.sheet = None;
-                if let (Some(original), Some(edited)) = (original, self.viewing().cloned()) {
-                    self.revert_to_original(ui, &edited, &original);
+                if let Some(p) = self.viewing().cloned() {
+                    self.set_recipe(&p, Edit::default());
+                    self.invalidate(&p);
                 }
             }
             Target::Edit => {
+                // the shown picture already has its edit applied, so the editor decodes the original
                 if let Some(p) = self.viewing().cloned() {
-                    if let Some(src) = self.full.get(&p.key()).cloned() {
-                        self.sheet = None;
-                        self.editor = Some(Editor { photo: p, preview: src.clone(), src, edit: Edit::default(), pane: EditPane::Adjust });
+                    if self.full.contains(&p.key()) {
+                        let (w, h) = (self.w as usize, self.h as usize);
+                        let src = std::fs::read(&p.path).ok().and_then(|b| decode_upright(&b)).map(|img| imgdec::contain(&img, w, h));
+                        if let Some(src) = src {
+                            self.sheet = None;
+                            let edit = self.recipe(&p).unwrap_or_default();
+                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust };
+                            ed.refresh();
+                            self.editor = Some(ed);
+                        }
                     }
                 }
             }
@@ -1330,17 +1335,9 @@ impl Photos {
             }
             Target::EditSave => {
                 if let Some(ed) = self.editor.take() {
-                    if !ed.edit.is_identity() {
-                        let (path, e) = (ed.photo.path.clone(), ed.edit);
-                        let original = path.clone();
-                        self.pool.spawn(move || {
-                            let copy = (|| {
-                                let img = decode_upright(&std::fs::read(&path).ok()?)?;
-                                edit::save_copy(&path, &e.apply(&img)).ok()
-                            })();
-                            Done::Edited { original, copy }
-                        });
-                    }
+                    self.set_recipe(&ed.photo, ed.edit);
+                    self.invalidate(&ed.photo);
+                    self.dirty = true;
                 }
             }
             Target::Slide(_) => {}
@@ -1646,30 +1643,29 @@ impl Photos {
     // --- info sheet ---
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
-        let revert = usize::from(self.info_revert.is_some());
+        let revert = usize::from(self.info_revert);
         (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + revert) as f32)
     }
 
-    /// The original of `p` when `p` is an edited copy whose original is still in the library folder.
-    /// Recently Deleted copies have no revert: their edit is already gone with them.
-    fn edited_original(&self, p: &Photo) -> Option<PathBuf> {
-        if self.album == Album::Trash {
-            return None;
-        }
-        let original = PathBuf::from(self.prefs.get(&format!("edited:{}", p.path.display()))?);
-        original.exists().then_some(original)
+    /// The saved edit of `p`, when it has one (an unedited photo has none).
+    fn recipe(&self, p: &Photo) -> Option<Edit> {
+        self.prefs.get(&format!("edit:{}", p.path.display())).and_then(recipe::decode).filter(|e| !e.is_identity())
     }
 
-    /// Revert to Original: the edited copy goes to Recently Deleted (where it can still be recovered) and the
-    /// original opens. The original file is never changed.
-    fn revert_to_original(&mut self, ui: &Ui, edited: &Photo, original: &Path) {
-        if !self.remove_one(edited) {
-            eprintln!("photos: could not revert {}", edited.path.display());
-            return;
-        }
-        self.after_removal(ui);
-        self.rescan();
-        let _ = self.show(ui, original);
+    /// Keeps `edit` as the recipe of `p`; an unedited photo stores an empty value, which reads as no edit.
+    fn set_recipe(&mut self, p: &Photo, edit: Edit) {
+        let value = if edit.is_identity() { String::new() } else { recipe::encode(&edit) };
+        let _ = self.pref_set(&format!("edit:{}", p.path.display()), &value);
+    }
+
+    /// Drops the cached pictures of `p` so the next request decodes it with its current edit.
+    fn invalidate(&mut self, p: &Photo) {
+        let key = p.key();
+        self.thumbs.remove(&key);
+        self.cells.remove(&key);
+        self.full.remove(&key);
+        self.thumb_failed.remove(&key);
+        let _ = std::fs::remove_file(self.disk.path(&key));
     }
 
     /// "12 days left" for a photo in Recently Deleted.
@@ -2027,7 +2023,7 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
-        if self.info_revert.is_some() {
+        if self.info_revert {
             let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
@@ -2103,7 +2099,8 @@ impl Photos {
     /// Share › Copy: the open picture goes on the shared clipboard.
     fn copy_current(&mut self) {
         let Some(p) = self.viewing().cloned() else { return };
-        let img = self.full.get(&p.key()).cloned().or_else(|| std::fs::read(&p.path).ok().and_then(|b| decode_upright(&b)));
+        let recipe = self.recipe(&p);
+        let img = self.full.get(&p.key()).cloned().or_else(|| std::fs::read(&p.path).ok().and_then(|b| decode_edited(&b, recipe)));
         if let (Some(img), Some(c)) = (img, super::clipboard::global().as_mut()) {
             c.set_image(img);
         }
@@ -2277,6 +2274,15 @@ fn decode_upright(bytes: &[u8]) -> Option<Image> {
     crate::cg::imageio::decode(bytes).map(|img| edit::orient(img, exif::orientation(bytes)))
 }
 
+/// Decodes a picture upright and applies its saved edit, when it has one.
+fn decode_edited(bytes: &[u8], recipe: Option<Edit>) -> Option<Image> {
+    let img = decode_upright(bytes)?;
+    Some(match recipe {
+        Some(edit) => edit.apply(&img),
+        None => img,
+    })
+}
+
 /// The first bytes of a file (where a JPEG keeps its EXIF).
 fn read_head(path: &Path) -> Vec<u8> {
     use std::io::Read;
@@ -2391,27 +2397,26 @@ mod tests {
     }
 
     #[test]
-    fn revert_to_original_moves_the_edit_to_recently_deleted_and_opens_the_original() {
-        let (mut p, dir, ui) = photos("revert", 2);
-        let pics = dir.join("Pictures");
-        let (original, edited) = (pics.join("IMG_0000.png"), pics.join("IMG_0001.png"));
-        // IMG_0001 is the edited copy of IMG_0000 (the editor records this link when it saves a copy)
-        p.pref_set(&format!("edited:{}", edited.display()), &original.display().to_string());
-        p.open_viewer(1);
+    fn revert_to_original_drops_the_saved_edit_and_never_touches_the_file() {
+        let (mut p, dir, ui) = photos("revert", 1);
+        let original = dir.join("Pictures/IMG_0000.png");
+        p.open_viewer(0);
         frame(&mut p, &ui);
+        let photo = p.photos()[0].clone();
+        p.set_recipe(&photo, Edit { turns: 1, ..Edit::default() });
+        assert!(p.recipe(&photo).is_some());
         let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
-        assert_eq!(p.info_revert.as_deref(), Some(original.as_path()));
+        assert!(p.info_revert, "an edited photo offers Revert to Original");
         // the Revert row sits under the detail rows
         let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
         let row = ui.pt(INFO_ROW_PT);
         let y = sy + row * (p.info.len() + 1) as f32 + row / 2.0;
         tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
-        assert!(!edited.exists(), "the edited copy leaves the library");
+        assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
         assert!(original.exists(), "the original is never changed");
-        assert_eq!(p.trash.len(), 1, "the copy stays recoverable in Recently Deleted");
-        assert_eq!(p.viewing().map(|v| v.path.clone()), Some(original.clone()));
+        assert_eq!(p.photos().len(), 1, "nothing leaves the library");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2727,7 +2732,7 @@ mod tests {
     }
 
     #[test]
-    fn the_editor_previews_edits_and_saves_a_copy() {
+    fn the_editor_previews_edits_and_saves_a_recipe() {
         let (mut p, dir, ui) = photos("editor", 1);
         p.open_viewer(0);
         p.tick(&ui, 1000.0);
@@ -2758,9 +2763,10 @@ mod tests {
         // Save
         tap(&mut p, &ui, 1100.0, ui.pt(STATUS_PT) + 5.0, 2400.0);
         assert!(p.editor.is_none());
-        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
-        assert!(dir.join("Pictures/IMG_0000 edited.png").exists());
+        let photo = p.photos()[0].clone();
+        assert!(p.recipe(&photo).is_some_and(|e| e.turns == 1 && e.aspect == Aspect::R16x9), "the edit is saved as a recipe");
         assert!(dir.join("Pictures/IMG_0000.png").exists(), "the original stays");
+        assert_eq!(p.all.len(), 1, "no copy is written");
         // Cancel leaves nothing behind
         p.open_viewer(0);
         p.tick(&ui, 3000.0);
