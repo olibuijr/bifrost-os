@@ -11,10 +11,10 @@
  "summary": {
   "features": 33,
   "parity": 5,
-  "partial": 21,
-  "gap": 6,
+  "partial": 24,
+  "gap": 3,
   "n/a": 1,
-  "coverage_pct": 48.4
+  "coverage_pct": 53.1
  },
  "features": [
   {
@@ -112,9 +112,9 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Find submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:436",
-   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes (ASCII case-insensitive), Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Replace is not done.",
-   "wire": "Add Edit > Find… (Cmd+F) with the SDK find bar; search all notes, raise and focus the match note; Cmd+G next."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:517",
+   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes (ASCII case-insensitive), Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Replace: Tab in the bar moves to a replace field, Return (or Edit > Replace) replaces the selected match and steps on, Edit > Replace All replaces in every note; one undo step each. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Verify Replace and Replace All on Midget; Find still uses the in-app bar rather than the SDK find bar."
   },
   {
    "feature": "Spelling and Grammar / Substitutions / Transformations",
@@ -129,10 +129,10 @@
    "feature": "Speech (start/stop speaking)",
    "area": "menu",
    "apple": "MainMenu: Edit > Speech",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the SDK has no text-to-speech service.",
-   "wire": "Add Edit > Speech > Start/Stop Speaking calling the SDK speech service, if present, with the focused note text."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/speech.rs:47",
+   "note": "Edit > Speech > Start Speaking reads the selection, or the whole note, through the system speech engine (espeak-ng, else espeak) on a child process; Stop Speaking ends it, and quitting does too. Notifies when no engine is installed. No voice choice or highlight of the spoken word. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Route through an SDK speech service with audio output once one exists; add a voice choice."
   },
   {
    "feature": "Bold / Italic",
@@ -192,10 +192,10 @@
    "feature": "Custom note colour",
    "area": "menu",
    "apple": "Localizable: Customize Color…, Customized Color",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the SDK has no colour panel.",
-   "wire": "Add \"Custom Colour…\" under the colours, open the SDK colour panel, store an rgb in Note (model.rs) and encode it in the JSON."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:547",
+   "note": "Colour > Custom Colour... opens an in-app bar for a #RRGGBB value with a live swatch; Return applies it as one undo step. The colour is saved with the note (model.rs rgb field, JSON \"rgb\"), carried to new notes by Use as Default and checked in the menu. There is no hue wheel or slider panel: the SDK has no colour panel. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Add a hue wheel or slider panel when the SDK gets a colour panel (ui panels.rs ColorPanel has the model); until then the hex bar is the entry."
   },
   {
    "feature": "Use as Default (colour/font for new notes)",
@@ -238,9 +238,9 @@
    "area": "menu",
    "apple": "MainMenu: Window > Arrange By; Localizable: Undo Arrange",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:633",
-   "note": "Window > Arrange By Colour, Content, Date Created, Date Modified sorts and lays the notes out in rows (model.rs:612), undoable. Location is not done.",
-   "wire": "Add Window > Arrange By submenu; sort board.notes by colour/text/modified/position and lay them out in a cascade grid; push undo snapshot."
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:635",
+   "note": "Window > Arrange By Colour, Content, Date Created, Date Modified and Location sorts and lays the notes out in rows (model.rs), undoable; Location reads the notes in rows from the top, left to right. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Verify the five orders and the undo step on Midget."
   },
   {
    "feature": "Zoom / Minimise / Bring All to Front",
@@ -291,10 +291,10 @@
    "feature": "Make Sticky service (selection to new note)",
    "area": "integration",
    "apple": "Info.plist NSServices: Make Sticky (Cmd+Shift+Y)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: apps cannot register text services yet.",
-   "wire": "Register a text service in the app manifest that calls Board::add_text (model.rs:268) with the received text; needs SDK services support."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1037",
+   "note": "The shell's Services menu routes Make New Sticky Note to a create-sticky intent, which the app now declares (manifest.toml) and performs: a note holding the text is added in front as one undo step, or written to the saved board when the app has not loaded it yet. No Cmd+Shift+Y key is registered. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Register the Cmd+Shift+Y key for the service in the shell Services menu; the intent is in place."
   },
   {
    "feature": "Rich text body with images (RTFD notes)",
