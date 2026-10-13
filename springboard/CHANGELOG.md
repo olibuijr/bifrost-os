@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.3 — 2026-10-13
+
+- Smoothness: an outline's rows near its top and bottom edges also skip the empty stretch between the corner squares (still bit for bit). Host benches at 2560x1440: focus switch 19.9 to 16.3 ms, Settings repaint 9.2 to 7.8 ms (`bench_focus_switch`, `bench_settings_window_draw`).
+
 ## 0.7.2 — 2026-10-13
 
 - Smoothness: a rounded-rectangle outline (window and card borders) only walks its edge bands instead of every pixel of its area; same pixels, bit for bit (test `stroke_rrect_matches_the_per_pixel_reference`). A Settings repaint at 2560x1440 went from 47 to 21 ms on the CPU path in the host bench `bench_settings_window_draw`.

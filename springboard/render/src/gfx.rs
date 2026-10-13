@@ -937,14 +937,20 @@ impl Surface<'_> {
             // longer costs a full per-pixel pass over its area (window and card borders were most of a Settings
             // frame on the lab PC, round 75).
             let inset = r.max(t) + 1.0;
+            // centres strictly between x + m and x + w - m
+            let span = |m: f32| {
+                let a = ((x + m - 0.5).floor() as isize + 1).max(ix0 as isize) as usize;
+                let b = ((x + w - m - 0.5).ceil() as isize).max(a as isize) as usize;
+                (a.min(ix1), b.min(ix1))
+            };
             for py in iy0..iy1 {
                 let ly = py as f32 + 0.5 - y;
-                let hollow = ly > inset && ly < h - inset;
-                let (skip0, skip1) = if hollow {
-                    // centres strictly between x + t + 1 and x + w - t - 1
-                    let a = ((x + t + 1.0 - 0.5).floor() as isize + 1).max(ix0 as isize) as usize;
-                    let b = ((x + w - t - 1.0 - 0.5).ceil() as isize).max(a as isize) as usize;
-                    (a.min(ix1), b.min(ix1))
+                // below the top band and above the bottom one, the stretch between the corner squares is empty too
+                // (both coverages 1 there), so a row near the top or bottom also walks only its two corners
+                let (skip0, skip1) = if ly > inset && ly < h - inset {
+                    span(t + 1.0)
+                } else if ly > t + 1.0 && ly < h - t - 1.0 {
+                    span(inset)
                 } else {
                     (ix1, ix1)
                 };

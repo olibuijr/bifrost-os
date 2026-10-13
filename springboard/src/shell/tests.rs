@@ -1791,3 +1791,17 @@
         for k in 0..n {let t=1000.+k as f64*16.;sh.last_input=t;sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t);}
         eprintln!("settings window repaint: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
     }
+
+    /// Focus switch between two built-in windows at the lab panel's size (`--ignored bench_focus_switch --nocapture`):
+    /// each frame brings the other window to the front, as Cmd-Tab and a click on a back window do.
+    #[test]
+    #[ignore]
+    fn bench_focus_switch() {
+        let mut sh=shell_sized(2560,1440);sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,10.);
+        let (w,h)=(sh.w as usize,sh.h as usize);let mut img=Image::new(w,h);
+        for k in 0..5 {sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},100.+k as f64*20.);}
+        let n=100;let start=std::time::Instant::now();
+        for k in 0..n {let t=1000.+k as f64*16.;let app=if k%2==0 {AppId::Settings} else {AppId::Files};sh.desk_open(app,t);sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t+8.);}
+        eprintln!("focus switch: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
+    }
