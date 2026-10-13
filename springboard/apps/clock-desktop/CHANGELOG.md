@@ -1,4 +1,11 @@
 # Changelog
+
+## 1.5.0 — 2026-10-13
+
+- An alarm that fires while the Clock is closed now shows in Notification Centre under Clock. The shell filed these
+  notifications under the app's package id, which matched no installed app, so they were dropped. They are now filed
+  under the app's manifest id.
+- The app's summary no longer says background alarms are unsupported on PC: the shell's Clock service rings them.
 ## 1.4.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

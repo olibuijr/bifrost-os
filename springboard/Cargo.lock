@@ -486,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.4.1"
+version = "1.5.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
