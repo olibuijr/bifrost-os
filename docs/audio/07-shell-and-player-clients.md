@@ -1,6 +1,6 @@
 # 07 Shell, media player and SDK clients
 
-Task: `tasks/audio/07-shell-and-player-clients.md`. Contract: `docs/audio-architecture.md`.
+Task: `docs/audio/07-shell-and-player-clients.md`. Contract: `docs/audio-architecture.md`.
 
 ## Implemented
 
@@ -37,8 +37,8 @@ Task: `tasks/audio/07-shell-and-player-clients.md`. Contract: `docs/audio-archit
 - Subscribe the shell to `VOLUME_SCALAR` with `System::listen` so changes from other clients move the HUD and
   slider (`Volume::from_device` is ready).
 - Rename the crate, socket and manifest to `is.olibuijr.mediaplayer` once the apps' service lookup changes.
-- This compiles against skeleton `todo!("audio-01")` and `todo!("audio-06")` bodies (`BufferList::frames`, the HAL
-  calls); the unit tests that touch `BufferList` pass only after those merge.
+- Written against skeleton `todo!("audio-01")` and `todo!("audio-06")` bodies; those are implemented now, so the
+  `BufferList` tests run.
 
 ## Midget verification (lead)
 

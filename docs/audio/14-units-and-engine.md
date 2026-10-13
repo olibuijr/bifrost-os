@@ -1,7 +1,7 @@
 # Task 14: bifrost-audio-units and bifrost-audio-engine
 
 Branch `audio/14-units-and-engine`. Contract: `docs/audio-architecture.md` (components and AVFAudio rows of the crate
-table). Task: `tasks/audio/14-units-and-engine.md`.
+table). Task: `docs/audio/14-units-and-engine.md`.
 
 ## What is implemented
 

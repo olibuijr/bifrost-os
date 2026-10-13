@@ -1,6 +1,6 @@
 # Audio task 05: server core (bifrost-audiod, null and loopback drivers)
 
-Contract: `docs/audio-architecture.md`. Task: `tasks/audio/05-server-core.md`.
+Contract: `docs/audio-architecture.md`. Task: `docs/audio/05-server-core.md`.
 
 ## What is implemented
 
@@ -34,7 +34,7 @@ Contract: `docs/audio-architecture.md`. Task: `tasks/audio/05-server-core.md`.
 
 ## Left (todo_left)
 
-- Wire task 02's object tree into `ObjectApi` and `ServerCore::device_id`. (`AlsaDriver` is wired into `main.rs` since task 24, `docs/audio/24-server-driver-wiring.md`.)
+- Wire task 02's object tree into `ObjectApi` and `ServerCore::device_id`; `main.rs` still passes `NoObjects` (2026-10-13). `AlsaDriver` is wired into `main.rs` since task 24 (`docs/audio/24-server-driver-wiring.md`).
 - The eventfd of each IO proc is created and sent but not signalled (a write is a syscall other than the futex, which the real-time rule forbids). Epoll-style clients need a design decision (a non-RT helper thread that mirrors `wake`).
 - Hot-plug events are read on the 250 ms tick and on socket activity only; the ALSA driver should expose a pollable fd for them.
 - `PromoteThread` checks the tid against `/proc/<peer pid>/task/` instead of the pidfd; the pidfd arrives and is closed.
@@ -44,7 +44,7 @@ Contract: `docs/audio-architecture.md`. Task: `tasks/audio/05-server-core.md`.
 
 ## Lead: verification
 
-Host (after merging tasks 01 to 04 so the `todo!()` bodies exist):
+Host:
 
 ```
 cd springboard

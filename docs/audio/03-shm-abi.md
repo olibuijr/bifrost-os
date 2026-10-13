@@ -1,6 +1,6 @@
 # audio-03: shared memory ABI (`bifrost-audio-shm`)
 
-Implemented in `springboard/audio/shm/src/lib.rs` (all `todo!("audio-03")` replaced):
+Implemented in `springboard/audio/shm/src/lib.rs` (the `todo!("audio-03")` bodies are replaced):
 
 - `Activation` (64 bytes, offsets pinned by test), `ZeroStamp` seqlock (`publish` / wait-free-ish `read`),
   `RingHeader` + `Ring` (SPSC f32 planes, wrap-safe, header clamped against a hostile peer), `ring_bytes`, `layout`.

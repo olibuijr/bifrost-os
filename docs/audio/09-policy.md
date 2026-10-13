@@ -18,7 +18,7 @@ Shell: `src/shell/sound_page.rs` builds the OUTPUT and INPUT groups (with the in
 `audio_default_output` / `audio_default_input` in prefs; `desktop_bar.rs` draws an orange dot on the Control Center
 glyph while `sound_page::input_active()` is set.
 
-`ui/src/audio_session.rs`, `default_device.rs` and `media/route.rs` were already complete and are unchanged; the
+`sdk/src/audio_session.rs`, `default_device.rs` and `media/route.rs` were already complete and are unchanged; the
 policy library re-implements their logic against UIDs so the process does not depend on the UI crate.
 
 ## Left (todo_left)

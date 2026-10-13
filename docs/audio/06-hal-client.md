@@ -1,6 +1,6 @@
 # audio-06: bifrost-audio-hal (client library)
 
-Contract: `docs/audio-architecture.md` ("Client IO", "Real-time threads"). Task: `tasks/audio/06-hal-client.md`.
+Contract: `docs/audio-architecture.md` ("Client IO", "Real-time threads"). Task: `docs/audio/06-hal-client.md`.
 
 ## What is implemented (`springboard/audio/hal/`)
 
@@ -38,11 +38,11 @@ Contract: `docs/audio-architecture.md` ("Client IO", "Real-time threads"). Task:
 The per-client buffer size (k cycles) is the server's job (it accumulates and wakes the client every k cycles);
 the client always handles `frames` per wake. `add_io_proc` rejects `frames > layout.ring_frames`.
 
-## ui models (`ui/src/audio_hardware.rs`, `hardware_clock.rs`, `process_tap.rs`)
+## ui models (`audio_hardware.rs`, `hardware_clock.rs`, `process_tap.rs`, since removed from `ui/src`)
 
 Not changed. They are in-memory models with kit tests, `bifrost-ui` does not depend on `bifrost-audio-hal`, and
 making it do so (or the reverse) is a decision for the lead; the HAL crate has no dependency on the ui crate, so
-there is no cycle and no conversion code yet. The `todo!("audio-06")` markers were only in `hal/src/lib.rs`.
+there is no cycle and no conversion code yet. (The `todo!("audio-06")` markers that were in `hal/src/lib.rs` are gone.)
 
 ## Assumptions about other tasks (check at merge)
 

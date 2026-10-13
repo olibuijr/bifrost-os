@@ -1,13 +1,13 @@
 # 15: MIDI server (bifrost-midi, bifrost-midid)
 
-Contract: `docs/audio-architecture.md` (Core MIDI row). Task: `tasks/audio/15-midi-server.md`.
+Contract: `docs/audio-architecture.md` (Core MIDI row). Task: `docs/audio/15-midi-server.md`.
 
 ## Implemented
 
 `springboard/audio/midi` (`bifrost-midi`, pure, no unsafe):
 
 - `endpoints.rs`: the registry of clients, devices, entities, sources and destinations (absorbed by copy from
-  `core/src/midi_endpoints.rs`).
+  the former `core/src/midi_endpoints.rs`, now removed).
 - `events.rs`, `thru.rs`, `ble.rs`: MIDI 1.0 parser/encoder/note tracker, thru connections, BLE MIDI packet
   codec (copied from `ui/src/midi_{events,thru,ble}.rs`; the GATT UUID helper was dropped).
 - `ump.rs`: UMP words inside. MIDI 1.0 (type 2) and MIDI 2.0 (type 4) channel voice, 7/16/32-bit min-centre-max

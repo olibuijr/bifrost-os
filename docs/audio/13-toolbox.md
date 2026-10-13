@@ -1,6 +1,6 @@
 # Audio 13: bifrost-audio-toolbox
 
-Crate `springboard/audio/toolbox` (contract: `docs/audio-architecture.md`, task `tasks/audio/13-toolbox.md`).
+Crate `springboard/audio/toolbox` (contract: `docs/audio-architecture.md`, task `docs/audio/13-toolbox.md`).
 Dependencies: `bifrost-audio-types` only. No `unsafe`.
 
 ## Implemented
@@ -17,7 +17,7 @@ Errors: malformed file bytes `Protocol`, unsupported but valid `BadValue`, file 
 
 ## Contract
 
-No contract changes. Skeleton `StreamFormat::float32/integer` are still `todo!("audio-01")` in this branch, so nothing here calls them; `SampleFormat::stream_format` builds the struct literally.
+No contract changes. `StreamFormat::float32/integer` were `todo!("audio-01")` when this was written and are implemented now; the toolbox still `SampleFormat::stream_format` builds the struct literally.
 
 ## Left (todo_left)
 

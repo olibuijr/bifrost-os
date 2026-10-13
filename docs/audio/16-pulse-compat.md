@@ -55,8 +55,8 @@ None.
 - No sinks' ports, no monitor sources (taps are task 17), no card info, no module or sample cache commands, no
   ALAW/ULAW formats, no passthrough, no stream moves.
 - `HalBackend` reads `STREAMS`, `DEVICE_UID`, `NAME`, `NOMINAL_RATE`, `LATENCY` and writes `VOLUME_SCALAR`/`MUTE`;
-  channel count is fixed at 2 until the layout property is used. The HAL bodies are `todo!("audio-06")` in this
-  branch, so only the host tests run until the lead merges.
+  channel count is fixed at 2 until the layout property is used. (The HAL bodies this note once called
+  `todo!` are implemented now.)
 - Per-app volume policy (the policy process) is not consulted; stream volume is applied in the stream's own IO
   procedure.
 - Sample rate conversion is linear interpolation; a better filter can replace `Resampler` without API change.
