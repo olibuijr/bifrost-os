@@ -4,7 +4,7 @@
 
 use crate::accounts;
 use crate::attachments;
-use crate::flags::Flag;
+use crate::flags::{Flag, FlagColor};
 use crate::message::{self, Priority};
 use crate::migrate;
 use crate::search::Query;
@@ -59,12 +59,19 @@ pub const MENU_PASTE_QUOTE: u32 = 29;
 pub const MENU_SHOW_CC: u32 = 30;
 pub const MENU_SHOW_BCC: u32 = 31;
 pub const MENU_SHOW_REPLY_TO: u32 = 32;
+pub const MENU_MUTE: u32 = 33;
+pub const MENU_SHOW_SIDEBAR: u32 = 34;
+pub const MENU_RAW_SOURCE: u32 = 35;
+pub const MENU_SAVE_AS: u32 = 36;
+pub const MENU_QUICKLY: u32 = 37;
+pub const MENU_CLEAR_FLAG: u32 = 38;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
 pub const MENU_SORT_BASE: u32 = 300;
 pub const MENU_FILTER_BASE: u32 = 400;
 pub const MENU_PRIORITY_BASE: u32 = 500;
+pub const MENU_COLOR_BASE: u32 = 600;
 /// Most mailboxes a Move To or Copy To submenu lists (and the room each id range has).
 pub const MENU_TARGET_LIMIT: usize = 99;
 
@@ -149,6 +156,8 @@ pub struct MailWindow {
     pub h: u32,
     pub list_scroll: Scroller,
     pub reader_scroll: Scroller,
+    /// Where the muted conversations are kept (see [`crate::mute`]).
+    muted_path: std::path::PathBuf,
     press: Option<Press>,
     pub labels: TextCache,
     /// The wrapped text of the open message, for the width it was laid out at.
@@ -187,6 +196,8 @@ impl MailWindow {
             None => (None, None),
         };
         let mut mail = Mail::new(mail_accounts);
+        let muted_path = ctx.data_dir.join(crate::mute::FILE);
+        mail.muted = crate::mute::load(&muted_path);
         if let Some(e) = load_error.or(import_error) {
             mail.status = e;
         }
@@ -209,6 +220,7 @@ impl MailWindow {
             h: 0,
             list_scroll: Scroller::new(),
             reader_scroll: Scroller::new(),
+            muted_path,
             press: None,
             labels: TextCache::default(),
             laid: None,
@@ -464,7 +476,17 @@ impl MailWindow {
         message.extend([
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FLAG, "Flag").key("cmd+shift+l").enabled(open),
+            AppMenuItem::submenu("Flag Color").enabled(open),
+        ]);
+        let flagged = mail.open.and_then(|uid| mail.flags_of(uid)).and_then(|f| f.color());
+        for (i, color) in FlagColor::ALL.into_iter().enumerate() {
+            message.push(AppMenuItem::new(MENU_COLOR_BASE + i as u32, color.label()).depth(1).checked(flagged == Some(color)).enabled(open));
+        }
+        message.push(AppMenuItem::new(MENU_CLEAR_FLAG, "Clear Flag").depth(1).enabled(open && flagged.is_some()));
+        let muted = mail.open.is_some_and(|uid| mail.is_muted(uid));
+        message.extend([
             AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
+            AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
             AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
             AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
             AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
@@ -482,7 +504,8 @@ impl MailWindow {
         message.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
         message.extend([
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+shift+s").enabled(self.open_has_files()),
+            AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(self.open_has_files()),
+            AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(open && self.open_body_loaded()),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
         ]);
@@ -494,6 +517,8 @@ impl MailWindow {
             AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
             AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!mail.search.is_empty()),
             AppMenuItem::separator(),
+            AppMenuItem::new(MENU_QUICKLY, "Open Quickly...").key("cmd+shift+o").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::separator(),
             AppMenuItem::new(MENU_NEW_MAILBOX, "New Mailbox...").enabled(!mail.accounts.is_empty()),
             AppMenuItem::new(MENU_RENAME_MAILBOX, "Rename Mailbox...").enabled(editable),
             AppMenuItem::new(MENU_DELETE_MAILBOX, "Delete Mailbox").enabled(editable),
@@ -504,7 +529,12 @@ impl MailWindow {
             AppMenuItem::new(MENU_ADD, "Add Account..."),
         ];
 
-        let mut view = vec![AppMenuItem::submenu("Sort By")];
+        let mut view = vec![
+            AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
+            AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Sort By"),
+        ];
         for (i, key) in SortKey::ALL.into_iter().enumerate() {
             view.push(AppMenuItem::new(MENU_SORT_BASE + i as u32, key.label()).depth(1).checked(mail.sort == key));
         }
@@ -584,6 +614,16 @@ impl MailWindow {
             MENU_SHOW_BCC => self.mail.set_address_field("Bcc", !self.mail.show_bcc),
             MENU_SHOW_REPLY_TO => self.mail.set_address_field("Reply-To", !self.mail.show_reply_to),
             MENU_PASTE_QUOTE => return self.paste_quoted(),
+            MENU_MUTE => self.toggle_mute(),
+            MENU_SHOW_SIDEBAR => self.mail.show_sidebar = !self.mail.show_sidebar,
+            MENU_RAW_SOURCE => {
+                self.mail.show_raw = !self.mail.show_raw;
+                self.laid = None;
+                self.reader_scroll = Scroller::new();
+            }
+            MENU_SAVE_AS => self.save_open_as(ctx),
+            MENU_QUICKLY => self.mail.open_quickly(),
+            MENU_CLEAR_FLAG => self.set_color_open(None),
             _ => {
                 if let Some(i) = menu_index(id, MENU_MOVE_BASE) {
                     let target = self.mail.move_targets().get(i).cloned();
@@ -605,6 +645,11 @@ impl MailWindow {
                 } else if let Some(i) = menu_index(id, MENU_FILTER_BASE) {
                     match Filter::ALL.get(i) {
                         Some(filter) => self.mail.filter = *filter,
+                        None => return false,
+                    }
+                } else if let Some(i) = menu_index(id, MENU_COLOR_BASE) {
+                    match FlagColor::ALL.get(i) {
+                        Some(color) => self.set_color_open(Some(*color)),
                         None => return false,
                     }
                 } else if let Some(i) = menu_index(id, MENU_PRIORITY_BASE) {
@@ -759,7 +804,42 @@ impl MailWindow {
         let Some(flags) = self.mail.flags_of(uid) else { return };
         let on = !flags.contains(flag);
         self.mail.set_flag_locally(uid, flag, on);
-        self.change_message(uid, Change::Flag { flag, on });
+        if flag == Flag::Flagged && !on {
+            // clearing the flag also clears its colour keywords on the server
+            self.change_message(uid, Change::Color { color: None });
+        } else {
+            self.change_message(uid, Change::Flag { flag, on });
+        }
+    }
+
+    /// Message > Flag Color and Clear Flag: the open message is flagged in `color` (or loses its flag). The row changes
+    /// at once; the server is told in the background.
+    fn set_color_open(&mut self, color: Option<FlagColor>) {
+        let Some(uid) = self.mail.open else { return };
+        self.mail.set_color_locally(uid, color);
+        self.change_message(uid, Change::Color { color });
+    }
+
+    /// Message > Mute: the open message's conversation stops raising notifications, or starts again.
+    fn toggle_mute(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(muted) = self.mail.toggle_mute(uid) else { return };
+        self.mail.status = match crate::mute::save(&self.muted_path, &self.mail.muted) {
+            Ok(()) if muted => "Conversation muted".into(),
+            Ok(()) => "Conversation unmuted".into(),
+            Err(e) => format!("The muted conversations could not be saved: {e}"),
+        };
+    }
+
+    /// File > Save As: the raw source of the open message is written as an `.eml` file in the app's data directory.
+    fn save_open_as(&mut self, ctx: &Ctx) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(raw) = self.mail.bodies.get(&uid) else { return };
+        let subject = self.mail.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
+        self.mail.status = match crate::export::save_eml(&ctx.data_dir.join("saved"), &subject, raw) {
+            Ok(path) => format!("Saved {}", path.display()),
+            Err(e) => format!("The message could not be saved: {e}"),
+        };
     }
 
     /// Moves the open message to the account's Archive or Trash mailbox. The message leaves the list at once.
@@ -979,6 +1059,15 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = e,
             },
+            Some(Sheet::Quickly(form)) => match self.mail.quickly_matches(form.value("Go to mailbox")).into_iter().next() {
+                Some(name) => {
+                    self.mail.close_sheet();
+                    self.mail.show_mailbox(&name);
+                    self.list_scroll = Scroller::new();
+                    self.refresh_selected();
+                }
+                None => self.mail.status = "No mailbox matches".into(),
+            },
             Some(Sheet::Search(form)) => {
                 let text = form.value("Search").to_string();
                 self.mail.apply_search(&text);
@@ -1048,7 +1137,7 @@ impl MailWindow {
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
         match self.mail.sheet.as_mut()? {
-            Sheet::Setup(form) | Sheet::Search(form) => Some(form),
+            Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => Some(form),
             Sheet::Compose(compose) => Some(&mut compose.form),
             Sheet::Mailbox(sheet) => Some(&mut sheet.form),
         }
@@ -1059,7 +1148,7 @@ impl MailWindow {
         if self.mail.sheet.is_some() {
             return Region::Chrome;
         }
-        crate::draw::pane_at(crate::draw::columns(ui, self.w as f32), ui.pt(crate::draw::TOOLBAR_PT), x, y)
+        crate::draw::pane_at(crate::draw::columns(ui, self.w as f32, self.mail.show_sidebar), ui.pt(crate::draw::TOOLBAR_PT), x, y)
     }
 
     fn scroller(&mut self, region: Region) -> Option<&mut Scroller> {

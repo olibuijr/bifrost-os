@@ -3,7 +3,7 @@
 //! layout functions here are shared by the painter and the hit test, so a tap lands on what is drawn.
 
 use crate::attachments;
-use crate::flags::Flag;
+use crate::flags::{Flag, FlagColor};
 use crate::layout;
 use crate::state::{Mail, Sheet};
 use crate::window::{MailWindow, Region};
@@ -42,9 +42,9 @@ pub fn inside(r: Rect, x: f32, y: f32) -> bool {
 }
 
 /// The widths of the sidebar, the message list and the reader, in pixels. They fill the width of the window.
-pub fn columns(ui: &Ui, w: f32) -> [f32; 3] {
+pub fn columns(ui: &Ui, w: f32, sidebar_shown: bool) -> [f32; 3] {
     let pt = ui.pt(1.0);
-    let [a, b, c] = layout::panes(w / pt);
+    let [a, b, c] = layout::panes_for(w / pt, sidebar_shown);
     [a * pt, b * pt, c * pt]
 }
 
@@ -142,7 +142,7 @@ pub struct SheetLayout {
 
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
     let form = match sheet {
-        Sheet::Setup(form) | Sheet::Search(form) => form,
+        Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
         Sheet::Compose(compose) => &compose.form,
         Sheet::Mailbox(sheet) => &sheet.form,
     };
@@ -218,6 +218,26 @@ fn fit(ui: &Ui, text: &str, pt: f32, weight: Weight, max: f32) -> String {
 }
 
 /// The name in a `Name <address>` value, or the address when there is no name.
+/// The colour a flag is drawn in.
+fn flag_rgb(color: FlagColor) -> u32 {
+    let pair = match color {
+        FlagColor::Red => colors::SYSTEM_RED,
+        FlagColor::Orange => colors::SYSTEM_ORANGE,
+        FlagColor::Yellow => colors::SYSTEM_YELLOW,
+        FlagColor::Green => colors::SYSTEM_GREEN,
+        FlagColor::Blue => colors::SYSTEM_BLUE,
+        FlagColor::Purple => colors::SYSTEM_PURPLE,
+        FlagColor::Gray => colors::SYSTEM_GRAY,
+    };
+    pair.now()
+}
+
+/// The message as the server holds it (View > Raw Source), for the reader: every header and the undecoded body, with
+/// plain line ends and no control characters other than tabs.
+pub fn raw_text(raw: &str) -> String {
+    raw.replace("\r\n", "\n").chars().filter(|c| *c == '\n' || *c == '\t' || !c.is_control()).collect()
+}
+
 fn display_name(from: &str) -> &str {
     let name = from.split('<').next().unwrap_or("").trim().trim_matches('"').trim();
     if name.is_empty() {
@@ -301,7 +321,7 @@ impl MailWindow {
             let open = self.mail.open.is_some();
             return toolbar_items(ui, w, open).into_iter().find(|(_, _, r)| inside(*r, x, y)).map_or(Hit::None, |(b, _, _)| Hit::Button(b));
         }
-        let [side, list, _] = columns(ui, w);
+        let [side, list, _] = columns(ui, w, self.mail.show_sidebar);
         if x < side {
             return side_items(&self.mail, ui, side, top).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(s, _)| Hit::Side(s));
         }
@@ -319,12 +339,14 @@ impl MailWindow {
     /// Paints the window: the sidebar, the message list, the reader, the toolbar, and any sheet on top.
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui) {
         let (w, h) = (s.w as f32, s.h as f32);
-        let [side, list, view] = columns(ui, w);
+        let [side, list, view] = columns(ui, w, self.mail.show_sidebar);
         let top = ui.pt(TOOLBAR_PT);
         let rule = (ui.pt(1.0) as usize).max(1);
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         s.fill_rect(0, px(top), px(side), px(h - top), CARD_BG.now());
-        self.draw_sidebar(s, ui, side, top);
+        if side > 0.0 {
+            self.draw_sidebar(s, ui, side, top);
+        }
         self.draw_list(s, ui, side, list, top, h);
         self.draw_reader(s, ui, side + list, view, top, h);
         s.fill_rect(px(side), px(top), rule, px(h - top), SEPARATOR_C.now());
@@ -407,7 +429,11 @@ impl MailWindow {
             put(s, &mut self.labels, ui, &date, MAC_FOOTNOTE_PT, Weight::Regular, c_date, right - date_w, y + row * 0.16);
             let base = if r.summary.subject.is_empty() { "(no subject)" } else { r.summary.subject.as_str() };
             let label = if line.thread > 1 { format!("({}) {base}", line.thread) } else { base.to_string() };
-            let subject = fit(ui, &label, MAC_BODY_PT, Weight::Regular, (right - text_x).max(0.0));
+            let flag_room = if r.flags.color().is_some() { dot + inset } else { 0.0 };
+            let subject = fit(ui, &label, MAC_BODY_PT, Weight::Regular, (right - text_x - flag_room).max(0.0));
+            if let Some(color) = r.flags.color() {
+                s.fill_rrect(right - dot, y + row * 0.64 - dot / 2.0, dot, dot, dot / 2.0, flag_rgb(color));
+            }
             put(s, &mut self.labels, ui, &subject, MAC_BODY_PT, Weight::Regular, c_sub, text_x, y + row * 0.5);
             if !selected {
                 s.fill_rect(px(text_x), px(y + row - 1.0), px(right - text_x), 1, SEPARATOR_C.now());
@@ -521,7 +547,7 @@ impl MailWindow {
             return;
         }
         let Some(raw) = self.mail.bodies.get(&uid) else { return };
-        let text = crate::body::readable(raw);
+        let text = if self.mail.show_raw { raw_text(raw) } else { crate::body::readable(raw) };
         let lines = wrap(ui, &text, width, MAC_BODY_PT, Weight::Regular);
         self.laid = Some(Laid { uid, width, lines });
     }
@@ -536,6 +562,7 @@ impl MailWindow {
 
         let (title, action, form) = match sheet {
             Sheet::Search(form) => ("Find", "Search", form),
+            Sheet::Quickly(form) => ("Open Quickly", "Go", form),
             Sheet::Setup(form) => ("Add Account", "Add Account", form),
             Sheet::Compose(compose) => (if compose.in_reply_to.is_some() { "Reply" } else { "New Message" }, "Send", &compose.form),
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => ("Rename Mailbox", "Rename", &sheet.form),
@@ -627,6 +654,11 @@ mod tests {
         assert_eq!(display_name("bo@example.com"), "bo@example.com");
         assert_eq!(short_date("Tue, 13 Oct 2026 09:30:00 +0000"), "13 Oct");
         assert_eq!(short_date("13 Oct"), "13 Oct");
+    }
+
+    #[test]
+    fn raw_source_keeps_the_headers_and_drops_carriage_returns() {
+        assert_eq!(raw_text("Subject: x\r\nX-A:\t1\r\n\r\nbody\u{7}"), "Subject: x\nX-A:\t1\n\nbody");
     }
 
     #[test]

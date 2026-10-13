@@ -7,6 +7,8 @@ pub mod attachments;
 pub mod body;
 pub mod codec;
 pub mod draw;
+pub mod export;
+pub mod mute;
 pub mod flags;
 pub mod html;
 pub mod imap;

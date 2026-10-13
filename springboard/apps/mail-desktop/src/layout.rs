@@ -24,6 +24,22 @@ pub fn panes(width: f32) -> [f32; 3] {
     [sidebar, list, view]
 }
 
+/// Like [`panes`], with the sidebar shown or hidden (View > Show Sidebar). Hidden, the sidebar is 0 wide and the list
+/// and the view share the window.
+pub fn panes_for(width: f32, sidebar_shown: bool) -> [f32; 3] {
+    if sidebar_shown {
+        return panes(width);
+    }
+    let width = width.max(0.0);
+    let mut list = (width * 0.34).clamp(LIST_MIN, LIST_MAX).min(width);
+    let mut view = width - list;
+    if view < VIEW_MIN {
+        list = (list - (VIEW_MIN - view)).max(LIST_MIN.min(list));
+        view = width - list;
+    }
+    [0.0, list, view]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -35,6 +51,19 @@ mod tests {
             assert!(a >= 0.0 && b >= 0.0 && c >= 0.0, "width {width}");
             assert!((a + b + c - width).abs() < 0.01, "width {width}");
         }
+    }
+
+    #[test]
+    fn a_hidden_sidebar_gives_its_room_to_the_list_and_the_view() {
+        for width in [0.0, 100.0, 600.0, 900.0, 1200.0, 3840.0] {
+            let [a, b, c] = panes_for(width, false);
+            assert_eq!(a, 0.0, "width {width}");
+            assert!(b >= 0.0 && c >= 0.0, "width {width}");
+            assert!((a + b + c - width).abs() < 0.01, "width {width}");
+        }
+        assert_eq!(panes_for(1200.0, true), panes(1200.0));
+        let [_, list, view] = panes_for(1200.0, false);
+        assert!(list >= LIST_MIN && view >= VIEW_MIN);
     }
 
     #[test]

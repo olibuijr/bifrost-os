@@ -2,7 +2,7 @@
 //! back. A byte written to the wake pipe tells the window's loop to read the channel, so nothing waits on a network call.
 
 use crate::accounts;
-use crate::flags::Flag;
+use crate::flags::{Flag, FlagColor};
 use crate::message::Draft;
 use crate::state::INBOX;
 use bifrost_app::controls::internet_accounts::Account;
@@ -27,6 +27,8 @@ pub struct Listing {
 pub enum Change {
     /// Sets or clears one flag (Seen, Flagged, ...).
     Flag { flag: Flag, on: bool },
+    /// Flags the message in a colour, or clears its flag and colour (Message > Flag).
+    Color { color: Option<FlagColor> },
     /// Moves the message to another mailbox of the account (Archive, Trash, Junk, Move To).
     Move { to: String },
     /// Copies the message to another mailbox of the account (Copy To).
@@ -130,6 +132,7 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
             session.select(mailbox)?;
             match action {
                 Change::Flag { flag, on } => session.set_flag(uid, *flag, *on)?,
+                Change::Color { color } => session.set_color(uid, *color)?,
                 Change::Move { to } => session.move_to(uid, to)?,
                 Change::Copy { to } => session.copy_to(uid, to)?,
                 Change::EraseAll => session.erase_all()?,
