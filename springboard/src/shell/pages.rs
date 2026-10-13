@@ -225,6 +225,8 @@ pub enum Pick {
     ScrollBars(usize),
     /// Settings > Screen Saver: the index into `screensaver::SAVERS`
     ScreenSaverModule(usize),
+    /// Settings > Sound > Alert Sound: the n-th `options::ALERT_SOUNDS` entry
+    AlertSound(usize),
     /// Settings > Screen Saver > Start After: the index into `screensaver::START_AFTER`
     ScreenSaverStart(usize),
     /// Settings > Screen Saver > Preview: the saver starts full screen (the shell does it, see `Settings::take_screensaver_preview`)
@@ -701,6 +703,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             {
                 let mut groups = vec![
                     Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
+                    Group::new(super::options::ALERT_SOUNDS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.alert_sound, Action::Pick(Pick::AlertSound(i)))).collect())
+                        .header("ALERT SOUND")
+                        .footer("The sound that plays when an alert arrives."),
                     Group::new(sound_switches(o, m.haptics)),
                 ];
                 groups.extend(super::sound_page::groups(m.sound));

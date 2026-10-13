@@ -20,6 +20,8 @@ pub const SPEED_MIN: f32 = 0.25;
 pub const SPEED_MAX: f32 = 3.0;
 /// Trackpad › Secondary Click choices, as `Options::trackpad_secondary` indexes them.
 pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Click with Two Fingers"];
+/// Settings › Sound › Alert Sound choices, as `Options::alert_sound` indexes them.
+pub const ALERT_SOUNDS: [&str; 4] = ["Bell", "Chime", "Pulse", "Tick"];
 
 /// The slider's 0..1 position for a speed multiplier.
 pub fn speed_slider(speed: f32) -> f32 {
@@ -59,6 +61,8 @@ pub struct Options {
     pub clock_24h: bool,
     pub keyboard_clicks: bool,
     pub lock_sound: bool,
+    /// Settings › Sound › Alert Sound: index into `ALERT_SOUNDS`
+    pub alert_sound: usize,
     /// Keyboard Haptics; only offered when the device has a vibrator
     pub keyboard_haptics: bool,
     /// Silence notification banners and screen wakes; alarms still ring.
@@ -117,11 +121,11 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
     }
 }
 
-const KEYS: [&str; 40] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
+const KEYS: [&str; 41] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -140,6 +144,7 @@ impl Options {
             clock_24h: flag("clock_24h", d.clock_24h),
             keyboard_clicks: flag("keyboard_clicks", d.keyboard_clicks),
             lock_sound: flag("lock_sound", d.lock_sound),
+            alert_sound: p.get_parsed("alert_sound").filter(|&i: &usize| i < ALERT_SOUNDS.len()).unwrap_or(d.alert_sound),
             keyboard_haptics: flag("keyboard_haptics", d.keyboard_haptics),
             dnd: flag("dnd", d.dnd),
             assistive_touch: flag("assistive_touch", d.assistive_touch),
@@ -187,6 +192,7 @@ impl Options {
             flag(self.clock_24h).into(),
             flag(self.keyboard_clicks).into(),
             flag(self.lock_sound).into(),
+            self.alert_sound.to_string(),
             flag(self.keyboard_haptics).into(),
             flag(self.dnd).into(),
             flag(self.assistive_touch).into(),
@@ -264,7 +270,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
         o.save(&mut p);
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
         assert_eq!(p.get("mouse_scroll_speed"), Some("0.50"));
@@ -273,6 +279,7 @@ mod tests {
         assert_eq!(p.get("text_scale"), Some("1.20"));
         assert_eq!(p.get("bold_text"), Some("1"));
         assert_eq!(p.get("keyboard_clicks"), Some("0"));
+        assert_eq!(p.get("alert_sound"), Some("2"));
         assert_eq!(p.get("keyboard_haptics"), Some("0"));
         assert_eq!(p.get("volume"), Some("0.25"));
         assert_eq!(p.get("low_power"), Some("1"));
@@ -306,6 +313,8 @@ mod tests {
         assert_eq!(o.mouse_speed, Options::default().mouse_speed);
         assert_eq!(o.trackpad_speed, SPEED_MAX);
         assert_eq!(o.trackpad_secondary, Options::default().trackpad_secondary);
+        p.set("alert_sound", "99").unwrap();
+        assert_eq!(Options::load(&p).alert_sound, Options::default().alert_sound);
     }
 
     #[test]

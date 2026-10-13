@@ -1881,6 +1881,11 @@ impl Settings {
                         self.opts.save(prefs);
                         vec![]
                     }
+                    Pick::AlertSound(k) => {
+                        self.opts.alert_sound = k.min(super::options::ALERT_SOUNDS.len() - 1);
+                        self.opts.save(prefs);
+                        vec![]
+                    }
                     Pick::ScreenSaverStart(k) => {
                         self.opts.screensaver_minutes = super::screensaver::START_AFTER[k.min(super::screensaver::START_AFTER.len() - 1)].1;
                         self.opts.save(prefs);
@@ -3085,6 +3090,9 @@ mod tests {
         assert_eq!(prefs.get("keyboard_clicks"), Some("0"));
         tap_row(&mut st, &ui, &mut prefs, "Lock Sound");
         assert_eq!(prefs.get("lock_sound"), Some("0"));
+        assert!(tap_row(&mut st, &ui, &mut prefs, "Chime").is_empty());
+        assert_eq!(prefs.get("alert_sound"), Some("1"));
+        assert_eq!(st.options().alert_sound, 1);
         back(&mut st, &ui, &mut prefs);
         tap_row(&mut st, &ui, &mut prefs, "General");
         tap_row(&mut st, &ui, &mut prefs, "Date & Time");
