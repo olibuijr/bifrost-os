@@ -14,7 +14,7 @@ Reference names appear only in this document. Code, comments, strings and file n
 |---|---|
 | One picture | Firmware or the boot loader draws the logo at the panel's native mode. The kernel's display driver and then the window server adopt that mode and that framebuffer's contents. No modeset, no blank frame, no brightness change. |
 | No text | No firmware menu, no kernel console, no service log. Verbose mode and the boot picker are opt-in (a held key). |
-| An honest progress bar | The bar advances against the duration of the previous boot, so it moves smoothly instead of in jumps. |
+| An honest progress bar | The bar advances against the duration of the previous boot, so it moves smoothly instead of in jumps. (BifrOSt dropped the drawn bar on 2026-10-12; the position is still computed.) |
 | Nothing discovered at boot | A prelinked kernel collection (kernel plus exactly this machine's drivers), shared library caches, and a sealed, signed system volume are prepared at install and update time. Boot loads, it does not probe. |
 | Services on demand | launchd starts daemons in parallel and most only when first messaged. Nothing waits on a dependency chain. |
 | Unlock is login | With full-disk encryption the password is typed before the OS loads, and the user is then logged straight in. |
@@ -47,10 +47,10 @@ package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `too
 `springboard/bootweave/{efi,frame}/src`. `tools/lead-check.sh` also builds the loader for `x86_64-unknown-uefi`
 (it is outside the cargo workspace) and counts its errors and warnings.
 
-## Where BifrOSt is (2026-10-12)
+## Where BifrOSt is (2026-10-13, shell 0.7.25)
 
-- Loader: `springboard/bootweave/efi` (Rust, `no_std`, UEFI). Paints a 160 px logo through GOP, reads `EFI/BIFROST/boot.cfg`,
-  picks current or rollback (`boot_policy.rs`), starts the Linux EFI stub with `initrd=... quiet splash`. It sets the
+- Loader: `springboard/bootweave/efi` (Rust, `no_std`, UEFI). Paints the boot frame (the mark alone, `bootweave-frame`) through GOP, reads `EFI/BIFROST/boot.cfg`,
+  picks current or rollback (`boot_policy.rs`), starts the unified kernel image (`uki.rs`, `EFI/BIFROST/bifrost.efi`) or the Linux EFI stub, with `quiet` and no `splash`. With an encrypted root it can show the unlock screen (`unlock.rs`, `luks/`, `crypto/`). It sets the
   panel's largest GOP mode: the boot's only modeset.
 - Kernel: inherits the mode (simpledrm, then the GPU driver with fastboot). Initramfs hooks
   `base udev autodetect microcode modconf kms keyboard block filesystems bifrost-mounts`, busybox init.
@@ -59,12 +59,17 @@ package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `too
   `/run/bifrost/boot-marks` (`springboard::bootsplash::mark`: `bootweave-start`, `display-handoff-start`,
   `compositor-ready`, `desktop-first-frame`, `desktop-ready`, `desktop-first-ui`, `desktop-faded`, `shutdown-start`
   (the list is `springboard::bootsplash::CONTRACT_MARKS`); `tools/boot-bench.py` reads them).
-- Display: the first KMS frame redraws the loader's image (`bootsplash::paint`) and fades into the desktop over
-  450 ms (`BIFROST_BOOT_FADE`). `bifrost-wm` keeps the loader's mode and fades on `shell-ready`.
-- Shutdown: `ExecStopPost` parks the console on VT 12 so no text shows.
-- Missing: a progress bar, timing from the previous boot, precomputed boot images and caches, on-demand services,
-  pre-boot unlock, hold-until-ready, graphical failure screens, measured budgets. `docs/perf-history.jsonl` has no
-  boot timings yet.
+- Display: `bifrost-wm` (the only window server; labwc is removed) keeps the loader's mode, shows the same frame from its first
+  scanout (`wm/src/boot.rs`) and fades into the desktop once over 450 ms when the desktop is ready
+  (`BIFROST_BOOT_FADE`). The shell no longer fades itself under the window server.
+- Shutdown: `bifrost-bootweave shutdown` (`ExecStop=` of `springboard.service`) asks the window server to fade the desktop back to the boot
+  frame; `TimeoutStopSec=2s`. The VT 12 parking is gone.
+- Done from the original gap list (docs/boot/01 to 12): one frame in every stage, the progress logic and the boot-timing
+  record, UKI and a per-machine minimal initramfs, text-free kernel line, reveal once, failure screens, pre-boot unlock,
+  symmetric shutdown, `bifrost-after-desktop.target`. `docs/perf-history.jsonl` carries boot timings from `tools/boot-bench.py`.
+- Open: the Recovery button of the start-failed screen has no target yet (`supervisor.rs`, `TODO(boot-11)`: it needs
+  the recovery environment), the first-frame caches and socket-activated `bifrostd` services are only partly done, and
+  several results are unverified on hardware (image size, stage times, `fbcon=map:9`). Budgets are not all met.
 
 ## The architecture
 
@@ -73,9 +78,9 @@ package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `too
 | Stage | Owner | Shows | Hands over |
 |---|---|---|---|
 | S0 firmware | UEFI (not ours) | the firmware's logo, if any | GOP framebuffer at the firmware's mode |
-| S1 loader | `springboard/bootweave/efi` | frame 0 at the native mode: background, logo, progress bar from 0 to the S1 checkpoint | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
-| S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0; the bar holds | the inherited CRTC mode; the `BifrostBootProgress` EFI variable (efivarfs) from the loader; the supervisor republishes the bar at `/run/bifrost/bootweave/progress` |
-| S3 early userspace | `bifrost-bootweave` | the same frame, redrawn into the inherited KMS framebuffer, the bar continuing | the session and the display to the window server |
+| S1 loader | `springboard/bootweave/efi` | frame 0 at the native mode: background and the mark (no bar) | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
+| S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0 | the inherited CRTC mode; the `BifrostBootProgress` EFI variable (efivarfs) from the loader; the supervisor republishes the bar at `/run/bifrost/bootweave/progress` |
+| S3 early userspace | `bifrost-bootweave` | the same frame, redrawn into the inherited KMS framebuffer | the session and the display to the window server |
 | S4 window server | `bifrost-wm` (the only window server) | the same frame until desktop-ready, then one fade | the desktop |
 | S5 session | the shell and the chrome clients | the desktop | |
 
@@ -215,12 +220,12 @@ Owner report: boot blinked and was not smooth. Midget's journal (2560x1440 DP mo
 
 - 4.35 s `fbcon: Taking over console` right after `Deferring console take-over`. Deferred take-over only ends when something writes to the console. The writer is not visible in the code (the cmdline is already `quiet loglevel=3`, getty@tty1 is masked, no script writes to tty1; `springboard.service` only attaches tty1 as stdin with `TTYReset`/`TTYVHangup`, which run after this point). So the cmdline now adds `fbcon=map:9`: fbcon maps to a framebuffer that does not exist and never binds to the display, whoever writes. The cost is that tty1 shows nothing on a recovery boot; use ssh or serial, or drop the token from the boot line. Unverified on hardware.
 - 5.5 s Bootweave chose the fastest refresh (165 Hz) and modeset away from the firmware's 60 Hz mode. `select_mode` now picks the preferred mode (the firmware's), so `keeps_inherited` keeps it and no modeset happens. `refresh=max` in `/etc/bifrost/display.conf` restores the fastest refresh (the session script reads the same switch). Inherited and selected modes count as equal when their timings match, since `vrefresh` rounds 59.951 to 60.
-- 6.9 s the compositor (then labwc/wlroots, now removed) took the connector's preferred mode. Bootweave now ends on that same mode, so the compositor's first commit is not a modeset. wlroots has no setting to keep the current mode; it always applies the preferred one unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
+- 6.9 s the compositor (then labwc/wlroots) took the connector's preferred mode. Bootweave ends on that same mode, so the compositor's first commit is not a modeset. `bifrost-wm` keeps whatever mode the CRTC already shows (`docs/window-server.md`, "Boot"), so the two stages no longer have to agree by luck. (History: wlroots always applied the preferred one.) unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
 
 ### Symmetric shutdown
 
-Shutdown and restart fade the desktop back to the boot frame, stop services under a 2 s budget, and leave the frame
-on screen until power-off. The VT 12 parking in `springboard.service` goes away.
+Done (docs/boot/12). Shutdown and restart fade the desktop back to the boot frame, stop services under a 2 s budget, and
+leave the frame on screen until power-off. The VT 12 parking in `springboard.service` is removed.
 
 ## Budgets (Midget, measured with `tools/boot-bench.py` on the real machine)
 
@@ -228,7 +233,7 @@ on screen until power-off. The VT 12 parking in `springboard.service` goes away.
 |---|---|
 | Modesets after the loader | 0 |
 | Frames that are not the boot frame or the desktop (text, black, partial desktop) | 0 |
-| Progress bar | monotonic; no stall longer than 0.5 s while the boot is still running |
+| Progress position (not drawn) | monotonic; no stall longer than 0.5 s while the boot is still running |
 | Loader start to kernel start | under 0.3 s |
 | Kernel start to Bootweave start | under 1.5 s |
 | Bootweave start to desktop-ready | under 2.0 s |
@@ -250,7 +255,7 @@ from it.
 | Phase | Outcome | Tasks |
 |---|---|---|
 | 1 | Baseline and continuity checks; one boot frame in every stage | 01, 02, 05 |
-| 2 | The progress bar from the previous boot | 03, 06 |
+| 2 | The progress position from the previous boot (drawn bar dropped later) | 03, 06 |
 | 3 | Prepared boot: UKI, minimal initramfs, caches; services on demand | 04, 07, 08 |
 | 4 | Reveal once in the window server; failure screens; symmetric shutdown | 09, 11, 12 |
 | 5 | Unlock is login | 10 |
@@ -258,7 +263,7 @@ from it.
 ## Session restart after a shell stall (0.6.2 incident)
 
 After the shell stalled (heartbeat exit 5) four times in a row, every new session ended about a second after the window server's
-autostart (labwc at the time), with no shell error in the journal, and only a reboot recovered. The chain:
+autostart (labwc at the time; the compositor is `bifrost-wm` now), with no shell error in the journal, and only a reboot recovered. The chain:
 
 1. Each shell start adds one to `/var/lib/springboard/boot_attempts` (`bare/takeover.rs`) and clears it after 60 s
    healthy. A stall exits after 20 s, so four stalls in a row left the counter at 3.
