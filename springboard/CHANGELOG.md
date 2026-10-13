@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Screen recording: the screenshot toolbar (Shift-Cmd-5) has Record Selection and Record Screen buttons. A recording is
+  made of the frames the shell draws at 10 frames a second, encoded by the system `ffmpeg` (H.264 in a `.mov`) when it is
+  on the PATH, else by a built-in Motion JPEG AVI writer. It is saved to a dated file on the Desktop. The menu bar shows a
+  red stop item beside Control Center while it runs, with Stop Recording. The control port takes `rec start [screen|x,y,w,h]
+  [file]`, `rec stop` and `rec status`, and `screencapture -v` records until stopped (or `-V seconds` for a set length).
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.
