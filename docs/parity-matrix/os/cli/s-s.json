@@ -124,10 +124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SMC/firmware/NVMe/Thunderbolt/USB-C/display component for Apple hardware; BifrOSt runs on PC hardware and uses fwupd/udev",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sample",
@@ -145,10 +145,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: perf not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sampleproc",
@@ -166,10 +166,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: perf not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sandbox-exec",
@@ -186,11 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bwrap",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: bwrap --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/say",
@@ -209,9 +209,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: say not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sc_usage",
@@ -229,10 +229,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/scandeps.pl",
@@ -250,10 +250,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/scp",
@@ -292,10 +292,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: screen not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/script",
@@ -355,10 +355,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/security",
@@ -375,11 +375,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/secret-tool",
+   "status": "partial",
+   "note": "Midget 0.7.25: secret-tool installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sed",
@@ -418,10 +418,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/seq",
@@ -460,10 +460,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/setuids.d",
@@ -481,10 +481,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sfltool",
@@ -502,10 +502,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sftp",
@@ -544,10 +544,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: shar not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/shasum",
@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/core_perl/shasum",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: shasum --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/shazam",
@@ -586,10 +586,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/shlock",
@@ -606,11 +606,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/flock",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: flock --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/shortcuts",
@@ -628,10 +628,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: shortcuts not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/showmount",
@@ -649,10 +649,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: showmount not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sigdist.d",
@@ -670,10 +670,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sips",
@@ -691,10 +691,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: magick not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/smbutil",
@@ -712,10 +712,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: smbclient not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmp-bridge-mib",
@@ -733,10 +733,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmp-bridge-mib not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpbulkget",
@@ -754,10 +754,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpbulkget not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpbulkwalk",
@@ -775,10 +775,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpbulkwalk not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpconf",
@@ -796,10 +796,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpconf not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpdelta",
@@ -817,10 +817,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpdelta not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpdf",
@@ -838,10 +838,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpdf not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpget",
@@ -859,10 +859,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpget not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpgetnext",
@@ -880,10 +880,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpgetnext not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpnetstat",
@@ -901,10 +901,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpnetstat not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpset",
@@ -922,10 +922,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpset not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpstatus",
@@ -943,10 +943,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpstatus not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmptable",
@@ -964,10 +964,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmptable not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmptest",
@@ -985,10 +985,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmptest not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmptranslate",
@@ -1006,10 +1006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmptranslate not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmptrap",
@@ -1027,10 +1027,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmptrap not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpusm",
@@ -1048,10 +1048,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpusm not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpvacm",
@@ -1069,10 +1069,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpvacm not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/snmpwalk",
@@ -1090,10 +1090,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpwalk not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sntp",
@@ -1111,10 +1111,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: chronyc not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/soelim",
@@ -1132,10 +1132,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: soelim not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sort",
@@ -1174,10 +1174,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/spfquery",
@@ -1195,10 +1195,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/splain",
@@ -1215,11 +1215,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/core_perl/splain",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: splain --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/split",
@@ -1425,11 +1425,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/core_perl/streamzip",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: streamzip --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/stringdups",
@@ -1447,10 +1447,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/stz",
@@ -1468,10 +1468,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/su",
@@ -1532,9 +1532,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: sw_vers not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/swift-inspect",
@@ -1552,10 +1552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SDK/Xcode/profiling or internal developer tool with no BifrOSt role; BifrOSt builds with cargo and profiles with perf",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/symbols",
@@ -1573,10 +1573,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/symbolscache",
@@ -1594,10 +1594,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/syscallbypid.d",
@@ -1615,10 +1615,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/syscallbyproc.d",
@@ -1636,10 +1636,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/syscallbysysc.d",
@@ -1657,10 +1657,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/sysdiagnose",
@@ -1678,10 +1678,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/syslog",
@@ -1698,11 +1698,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/journalctl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: journalctl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/syspolicy_check",
@@ -1720,10 +1720,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/system-override",
@@ -1741,10 +1741,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SDK/Xcode/profiling or internal developer tool with no BifrOSt role; BifrOSt builds with cargo and profiles with perf",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/systemextensionsctl",
@@ -1762,10 +1762,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/SidecarDisplayAgent",
@@ -1783,10 +1783,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/SidecarRelay",
@@ -1804,10 +1804,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/StorageDEHelper",
@@ -1825,10 +1825,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sandboxd",
@@ -1846,10 +1846,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/scsid",
@@ -1867,10 +1867,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/searchpartyd",
@@ -1888,10 +1888,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/searchpartyuseragent",
@@ -1909,10 +1909,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/secd",
@@ -1930,10 +1930,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/secinitd",
@@ -1951,10 +1951,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/security-checksystem",
@@ -1972,10 +1972,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/security-sysdiagnose",
@@ -1993,10 +1993,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/security_authtrampoline",
@@ -2014,10 +2014,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/securityd_system",
@@ -2035,10 +2035,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/securityuploadd",
@@ -2056,10 +2056,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon, agent or helper under /usr/libexec; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/seld",
@@ -2077,10 +2077,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon, agent or helper under /usr/libexec; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sensingpredictd",
@@ -2098,10 +2098,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/seputil",
@@ -2119,10 +2119,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/seserviced",
@@ -2140,10 +2140,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sftp-server",
@@ -2161,10 +2161,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sharereportingd",
@@ -2182,10 +2182,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sharingd",
@@ -2203,10 +2203,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/signpost_reporter",
@@ -2224,10 +2224,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/siriknowledged",
@@ -2245,10 +2245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/slapconfig-keygen",
@@ -2266,10 +2266,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/slapd",
@@ -2287,10 +2287,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: slapd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/smb-migrate-preferences",
@@ -2308,10 +2308,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/smb-sync-preferences",
@@ -2329,10 +2329,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/smcDiagnose",
@@ -2350,10 +2350,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SMC/firmware/NVMe/Thunderbolt/USB-C/display component for Apple hardware; BifrOSt runs on PC hardware and uses fwupd/udev",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/smcupdater",
@@ -2371,10 +2371,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SMC/firmware/NVMe/Thunderbolt/USB-C/display component for Apple hardware; BifrOSt runs on PC hardware and uses fwupd/udev",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/smd",
@@ -2392,10 +2392,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon, agent or helper under /usr/libexec; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/snmpd",
@@ -2413,10 +2413,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spatialpreviewd",
@@ -2434,10 +2434,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spinandd",
@@ -2455,10 +2455,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spindump_agent",
@@ -2476,10 +2476,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal crash and panic reporter; BifrOSt's equivalent is systemd-coredump (coredumpctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sportsd",
@@ -2497,10 +2497,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spotlightknowledged.graph",
@@ -2518,10 +2518,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spotlightknowledged.importer",
@@ -2539,10 +2539,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/spotlightknowledged.updater",
@@ -2560,10 +2560,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/srp-mdns-proxy",
@@ -2581,10 +2581,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/ssh-apple-pkcs11",
@@ -2602,10 +2602,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/ssh-keysign",
@@ -2623,10 +2623,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/ssh-pkcs11-helper",
@@ -2644,10 +2644,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/ssh-sk-helper",
@@ -2665,10 +2665,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sshd-auth",
@@ -2686,10 +2686,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sshd-keygen-wrapper",
@@ -2707,10 +2707,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sshd-session",
@@ -2728,10 +2728,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "OpenSSH internal helper that Arch installs under /usr/lib/ssh, not on PATH; the OpenSSH client and sshd themselves are mapped separately",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/startupdiskhelper",
@@ -2749,10 +2749,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/storagekitd",
@@ -2770,10 +2770,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/studentd",
@@ -2791,10 +2791,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/swcd",
@@ -2812,10 +2812,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/swiftuitraced",
@@ -2833,10 +2833,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/swtransparency-sysdiagnose",
@@ -2854,10 +2854,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/swtransparencyd",
@@ -2875,10 +2875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/symptomsd",
@@ -2896,10 +2896,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/symptomsd-diag",
@@ -2917,10 +2917,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/symptomsd-distributed",
@@ -2938,10 +2938,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sysdiagnose_helper",
@@ -2959,10 +2959,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sysdiagnosed",
@@ -2980,10 +2980,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sysmond",
@@ -3001,10 +3001,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/syspolicyd",
@@ -3022,10 +3022,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/sysstatuscheck",
@@ -3043,10 +3043,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS launchd/XPC bootstrap or asset component; BifrOSt's equivalent is systemd (system and user units)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/systemstats_boot",
@@ -3064,10 +3064,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sa",
@@ -3085,10 +3085,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "no BifrOSt or Linux equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sc_auth",
@@ -3106,10 +3106,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/screencapture",
@@ -3128,9 +3128,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: screencapture not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/scselect",
@@ -3148,10 +3148,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/scutil",
@@ -3170,9 +3170,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: scutil not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/securityd",
@@ -3190,10 +3190,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sendmail",
@@ -3211,10 +3211,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: sendmail not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/setkey",
@@ -3232,10 +3232,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/setquota",
@@ -3253,10 +3253,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: setquota not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sharing",
@@ -3274,10 +3274,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/skywalkctl",
@@ -3295,10 +3295,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/slapconfig",
@@ -3316,10 +3316,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/smbd",
@@ -3337,10 +3337,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: smbd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/smbdiagnose",
@@ -3358,10 +3358,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SDK/Xcode/profiling or internal developer tool with no BifrOSt role; BifrOSt builds with cargo and profiles with perf",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/snmpd",
@@ -3379,10 +3379,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmpd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/snmptrapd",
@@ -3400,10 +3400,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: snmptrapd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sntpd",
@@ -3421,10 +3421,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: chronyd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/softwareupdate",
@@ -3443,9 +3443,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: softwareupdate not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/spctl",
@@ -3463,10 +3463,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "no BifrOSt or Linux equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/spindump",
@@ -3484,10 +3484,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: perf not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/spray",
@@ -3505,10 +3505,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS network configuration daemon; BifrOSt's equivalent is its netd service (and the networksetup command)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sshd",
@@ -3547,10 +3547,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sysadminctl",
@@ -3568,10 +3568,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/sysctl",
@@ -3610,10 +3610,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/system_profiler",
@@ -3632,9 +3632,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: system_profiler not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/systemkeychain",
@@ -3652,10 +3652,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/systemsetup",
@@ -3673,10 +3673,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS time/timezone/locale daemon; BifrOSt's equivalent is systemd-timedated and systemd-timesyncd (or chrony)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/systemsoundserverd",
@@ -3694,10 +3694,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS audio/media/camera daemon; BifrOSt's equivalent is bifrost-audiod (springboard audiod) and its ALSA/PulseAudio-compatible stack",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/systemstats",
@@ -3715,10 +3715,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

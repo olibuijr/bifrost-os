@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ksh not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/launchctl",
@@ -62,9 +62,9 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: Apple-specific tool",
+   "note": "checked on Midget 0.7.25: launchctl not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/link",
@@ -124,10 +124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/kextunload",
@@ -145,10 +145,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/launchd",
@@ -166,10 +166,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS launchd/XPC bootstrap or asset component; BifrOSt's equivalent is systemd (system and user units)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/jar",
@@ -187,10 +187,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: jar not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/join",
@@ -228,11 +228,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/seq",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: seq --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/jq",
@@ -250,10 +250,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: jq not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/json_pp",
@@ -270,11 +270,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/core_perl/json_pp",
+   "status": "partial",
+   "note": "Midget 0.7.25: json_pp installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/json_xs",
@@ -292,10 +292,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/kcc",
@@ -312,11 +312,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/klist",
+   "status": "partial",
+   "note": "Midget 0.7.25: klist installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/kdestroy",
@@ -355,10 +355,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/keychain-access",
@@ -376,10 +376,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/kgetcred",
@@ -396,11 +396,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/kvno",
+   "status": "partial",
+   "note": "Midget 0.7.25: kvno installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/kill.d",
@@ -418,10 +418,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/killall",
@@ -481,10 +481,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/kpasswd",
@@ -544,10 +544,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lam",
@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/paste",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: paste --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/last",
@@ -607,10 +607,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "no BifrOSt or Linux equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lastwords",
@@ -628,10 +628,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/latency",
@@ -649,10 +649,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/layerutil",
@@ -670,10 +670,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapcompare",
@@ -691,10 +691,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapcompare not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapdelete",
@@ -712,10 +712,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapdelete not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapexop",
@@ -733,10 +733,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapexop not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapmodify",
@@ -754,10 +754,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapmodify not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapmodrdn",
@@ -775,10 +775,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapmodrdn not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldappasswd",
@@ -796,10 +796,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldappasswd not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapsearch",
@@ -817,10 +817,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapsearch not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapurl",
@@ -838,10 +838,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapurl not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ldapwhoami",
@@ -859,10 +859,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: ldapwhoami not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/leaks",
@@ -880,10 +880,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: valgrind not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/leave",
@@ -901,10 +901,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "no BifrOSt or Linux equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/less",
@@ -922,10 +922,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: less not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lessecho",
@@ -943,10 +943,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lessecho not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lesskey",
@@ -964,10 +964,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lesskey not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/libnetcfg",
@@ -984,11 +984,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/core_perl/libnetcfg",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: libnetcfg --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/loads.d",
@@ -1006,10 +1006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with strace, perf and bpftrace",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/locale",
@@ -1069,10 +1069,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: locate not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lockf",
@@ -1089,11 +1089,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/flock",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: flock --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lockstat",
@@ -1111,10 +1111,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/log",
@@ -1131,11 +1131,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/journalctl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: journalctl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/logger",
@@ -1237,10 +1237,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lp not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lpoptions",
@@ -1258,10 +1258,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpoptions not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lpq",
@@ -1279,10 +1279,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpq not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lpr",
@@ -1300,10 +1300,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpr not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lprm",
@@ -1321,10 +1321,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lprm not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lpstat",
@@ -1342,10 +1342,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpstat not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lsappinfo",
@@ -1363,10 +1363,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lsbom",
@@ -1384,10 +1384,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS software-update/installer/packaging tool; BifrOSt's equivalent is its updated service (Settings > Software Update) and pacman packages",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lskq",
@@ -1405,10 +1405,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lsm",
@@ -1426,10 +1426,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lsmp",
@@ -1447,10 +1447,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lsvfs",
@@ -1468,10 +1468,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS disk-arbitration/APFS/FSKit/CoreStorage service; BifrOSt mounts volumes through udev and its diskutil command, and uses Linux filesystems (ext4/btrfs)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lwp-download",
@@ -1489,10 +1489,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lwp-dump",
@@ -1510,10 +1510,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lwp-mirror",
@@ -1531,10 +1531,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/lwp-request",
@@ -1552,10 +1552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Script shipped by a CPAN module in Apple's system Perl (not Perl core); on Linux the module is installed on demand from pacman or CPAN, it is not a base tool",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/KeychainStasher",
@@ -1573,10 +1573,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/jetsam_priority",
@@ -1594,10 +1594,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS launchd/XPC bootstrap or asset component; BifrOSt's equivalent is systemd (system and user units)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kcgend",
@@ -1615,10 +1615,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kcproxy",
@@ -1636,10 +1636,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kdumpd",
@@ -1657,10 +1657,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal crash and panic reporter; BifrOSt's equivalent is systemd-coredump (coredumpctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kernelmanager_helper",
@@ -1678,10 +1678,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kernelmanagerd",
@@ -1699,10 +1699,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/keybagd",
@@ -1720,10 +1720,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/keyboardservicesd",
@@ -1741,10 +1741,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/keychainsharingmessagingd",
@@ -1762,10 +1762,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple code-signing, keychain, Gatekeeper or sandbox-policy component; BifrOSt has no code-signing enforcement, it sandboxes with bubblewrap and stores secrets via libsecret",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/knowledge-agent",
@@ -1783,10 +1783,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/kuncd",
@@ -1804,10 +1804,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon, agent or helper under /usr/libexec; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/languageassetd",
@@ -1825,10 +1825,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple on-device intelligence/ML or Spotlight-knowledge service (Core ML, Neural Engine); no BifrOSt equivalent",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/lightsoutmanagementd",
@@ -1846,10 +1846,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS power/thermal daemon; BifrOSt's equivalent is power-profiles-daemon and logind, driven by its pmset command",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/linkd",
@@ -1867,10 +1867,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple application-framework or GUI service (Dock, Finder, Launch Services, Game Center, Sidecar); BifrOSt's springboard shell provides the role through its own APIs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locate.bigram",
@@ -1888,10 +1888,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "BSD locate database builder internals; BifrOSt uses plocate (updatedb) with no separate stages",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locate.code",
@@ -1909,10 +1909,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "BSD locate database builder internals; BifrOSt uses plocate (updatedb) with no separate stages",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locate.concatdb",
@@ -1930,10 +1930,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "BSD locate database builder internals; BifrOSt uses plocate (updatedb) with no separate stages",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locate.mklocatedb",
@@ -1951,10 +1951,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "BSD locate database builder internals; BifrOSt uses plocate (updatedb) with no separate stages",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locate.updatedb",
@@ -1972,10 +1972,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: updatedb not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locationaccessstored",
@@ -1993,10 +1993,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/locationd",
@@ -2014,10 +2014,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple iCloud/Find My/Siri/App Store service daemon; no BifrOSt equivalent (BifrOSt Cloud is a separate account service)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/logd",
@@ -2035,10 +2035,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/logd_helper",
@@ -2056,10 +2056,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/logd_reporter",
@@ -2077,10 +2077,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal unified-logging or diagnostics daemon/tool; BifrOSt's equivalent is bifrost-log and systemd-journald (journalctl)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/loginitemregisterd",
@@ -2098,10 +2098,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon, agent or helper under /usr/libexec; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/logkextloadsd",
@@ -2119,10 +2119,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/lsd",
@@ -2140,10 +2140,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS launchd/XPC bootstrap or asset component; BifrOSt's equivalent is systemd (system and user units)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/KernelEventAgent",
@@ -2161,10 +2161,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS-internal daemon or manager under /usr/sbin; Apple-only service with no Linux counterpart, BifrOSt springboard services cover whatever role applies",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kadmin",
@@ -2224,10 +2224,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple SDK/Xcode/profiling or internal developer tool with no BifrOSt role; BifrOSt builds with cargo and profiles with perf",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kdcsetup",
@@ -2245,10 +2245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kextcache",
@@ -2266,10 +2266,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kextfind",
@@ -2287,10 +2287,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kextlibs",
@@ -2308,10 +2308,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Mach/XNU-specific introspection, tracing or kext tool; Linux equivalents are strace, perf, bpftrace, /proc and kmod (lsmod/modprobe)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/kextstat",
@@ -2329,10 +2329,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/klist_cdhashes",
@@ -2350,10 +2350,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/krbservicesetup",
@@ -2371,10 +2371,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "Open Directory/MDM/local-KDC component; BifrOSt uses local passwd/shadow with PAM, there is no directory or MDM service",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/ktutil",
@@ -2413,10 +2413,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS time/timezone/locale daemon; BifrOSt's equivalent is systemd-timedated and systemd-timesyncd (or chrony)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/localemanager",
@@ -2434,10 +2434,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "n/a",
+   "note": "macOS time/timezone/locale daemon; BifrOSt's equivalent is systemd-timedated and systemd-timesyncd (or chrony)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/logresolve",
@@ -2455,10 +2455,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: logresolve not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/lpadmin",
@@ -2476,10 +2476,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpadmin not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/lpc",
@@ -2497,10 +2497,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpc not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/lpinfo",
@@ -2518,10 +2518,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpinfo not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/lpmove",
@@ -2539,10 +2539,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lpmove not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/lsof",
@@ -2560,10 +2560,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "status": "gap",
+   "note": "checked on Midget 0.7.25: lsof not installed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

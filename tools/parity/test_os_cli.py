@@ -26,7 +26,7 @@ class MapTests(unittest.TestCase):
     def test_shipped_map_loads(self):
         m = oc.load_map()
         self.assertIn("commands", m)
-        self.assertIsNone(oc.command_for("afplay", m))
+        self.assertEqual(oc.command_for("afplay", m), "aplay")
 
     def test_command_rename_default_and_null(self):
         self.assertEqual(oc.command_for("bsdtar", M), "tar")

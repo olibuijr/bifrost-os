@@ -207,8 +207,12 @@ def run_on_midget(exe, names, remote_name):
                                 stdin=f, capture_output=True)
     if copied.returncode:
         raise SystemExit("cannot reach midget over ssh")
-    quoted = " ".join("'%s'" % n for n in names)
-    return parse_results(sh(SSH + [f"cd {REMOTE_DIR} && ./{remote_name} --exact --test-threads 4 {quoted}"]).stdout)
+    # batches keep the remote command under the argument-length limit
+    results = {}
+    for i in range(0, len(names), 200):
+        quoted = " ".join("'%s'" % n for n in names[i:i + 200])
+        results.update(parse_results(sh(SSH + [f"cd {REMOTE_DIR} && ./{remote_name} --exact --test-threads 4 {quoted}"]).stdout))
+    return results
 
 
 def row_result(row, outcome):
