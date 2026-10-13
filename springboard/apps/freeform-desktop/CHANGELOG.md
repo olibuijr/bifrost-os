@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0 — 2026-10-13
+
+- Insert menu: Line, Arrow, Triangle and Star shapes. Selection handles resize and rotate. Group, Ungroup, Lock and Unlock; align and distribute.
+- Several boards: New, Duplicate, Delete, next and previous, and a Boards menu.
+- View menu: dot grid and snap to grid. File: Export as PDF and Print.
+
 ## 1.7.0 — 2026-10-13
 
 - Edit menu: Undo (Cmd+Z), Redo (Cmd+Shift+Z), Copy, Paste, Duplicate and Delete; Paste reads the strokes Copy left on the pasteboard.
