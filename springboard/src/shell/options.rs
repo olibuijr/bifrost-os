@@ -59,6 +59,10 @@ pub struct Options {
     /// Keyboard: "." Shortcut, double space types a period
     pub period_shortcut: bool,
     pub clock_24h: bool,
+    /// Date & Time › Show Date: the menu bar clock shows the date beside the time
+    pub clock_date: bool,
+    /// Date & Time › Show Day of the Week: the date in the menu bar clock starts with the weekday
+    pub clock_day: bool,
     pub keyboard_clicks: bool,
     pub lock_sound: bool,
     /// Settings › Sound › Alert Sound: index into `ALERT_SOUNDS`
@@ -121,11 +125,11 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
     }
 }
 
-const KEYS: [&str; 41] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
+const KEYS: [&str; 43] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -142,6 +146,8 @@ impl Options {
             enable_caps_lock: flag("enable_caps_lock", d.enable_caps_lock),
             period_shortcut: flag("period_shortcut", d.period_shortcut),
             clock_24h: flag("clock_24h", d.clock_24h),
+            clock_date: flag("clock_date", d.clock_date),
+            clock_day: flag("clock_day", d.clock_day),
             keyboard_clicks: flag("keyboard_clicks", d.keyboard_clicks),
             lock_sound: flag("lock_sound", d.lock_sound),
             alert_sound: p.get_parsed("alert_sound").filter(|&i: &usize| i < ALERT_SOUNDS.len()).unwrap_or(d.alert_sound),
@@ -190,6 +196,8 @@ impl Options {
             flag(self.enable_caps_lock).into(),
             flag(self.period_shortcut).into(),
             flag(self.clock_24h).into(),
+            flag(self.clock_date).into(),
+            flag(self.clock_day).into(),
             flag(self.keyboard_clicks).into(),
             flag(self.lock_sound).into(),
             self.alert_sound.to_string(),
@@ -253,6 +261,11 @@ impl Options {
         AUTO_LOCK.iter().find(|(_, ms)| *ms == self.auto_lock_ms).map_or("Never", |(l, _)| l)
     }
 
+    /// The menu bar clock's options as the clock draws them.
+    pub fn clock_style(&self) -> bifrost_ui::menu_extras::ClockStyle {
+        bifrost_ui::menu_extras::ClockStyle { show_date: self.clock_date, show_day: self.clock_day, use_24h: self.clock_24h, ..Default::default() }
+    }
+
     /// The Text Size notch (0..TEXT_SIZES.len()) nearest the current scale.
     pub fn text_size_step(&self) -> usize {
         TEXT_SIZES.iter().enumerate().min_by(|a, b| (a.1 - self.text_scale).abs().total_cmp(&(b.1 - self.text_scale).abs())).map_or(3, |(i, _)| i)
@@ -270,7 +283,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, clock_date: false, clock_day: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
         o.save(&mut p);
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
         assert_eq!(p.get("mouse_scroll_speed"), Some("0.50"));

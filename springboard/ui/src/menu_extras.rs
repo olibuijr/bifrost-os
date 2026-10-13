@@ -141,9 +141,9 @@ pub struct ClockStyle {
     pub show_day: bool,
     /// 24-hour time instead of 12-hour with an AM/PM marker
     pub use_24h: bool,
-    /// show seconds
+    /// show seconds (not drawn by the shell yet: the status info carries no seconds)
     pub show_seconds: bool,
-    /// flash the colon between hour and minute
+    /// flash the colon between hour and minute (not drawn by the shell yet)
     pub flash_separator: bool,
 }
 
@@ -171,6 +171,27 @@ impl ClockStyle {
             (false, _) => None,
             (true, true) => Some("EEE d MMM"),
             (true, false) => Some("d MMM"),
+        }
+    }
+    /// The menu bar clock text for a broken-down local time: `wday` 0 = Sunday, `mon` 0 = January. Date and time are
+    /// separated by two spaces, as the bar has always drawn them; the date is left out when hidden.
+    pub fn text(&self, wday: i32, mday: i32, mon: i32, hour: i32, min: i32) -> String {
+        const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        let time = if self.use_24h {
+            format!("{hour:02}:{min:02}")
+        } else {
+            let h = match hour % 12 {
+                0 => 12,
+                h => h,
+            };
+            format!("{h}:{min:02} {}", if hour < 12 { "AM" } else { "PM" })
+        };
+        let month = MONTHS[mon.rem_euclid(12) as usize];
+        match (self.show_date, self.show_day) {
+            (false, _) => time,
+            (true, true) => format!("{} {mday} {month}  {time}", DAYS[wday.rem_euclid(7) as usize]),
+            (true, false) => format!("{mday} {month}  {time}"),
         }
     }
 }
@@ -226,5 +247,19 @@ mod tests {
         assert_eq!(twelve.date_pattern(), Some("d MMM"));
         let hidden = ClockStyle { show_date: false, ..d };
         assert_eq!(hidden.date_pattern(), None);
+    }
+
+    #[test]
+    fn clock_text_follows_the_options() {
+        let d = ClockStyle::default();
+        // Mon 13 Oct, 14:05
+        assert_eq!(d.text(1, 13, 9, 14, 5), "Mon 13 Oct  14:05");
+        let no_day = ClockStyle { show_day: false, ..d };
+        assert_eq!(no_day.text(1, 13, 9, 14, 5), "13 Oct  14:05");
+        let twelve = ClockStyle { use_24h: false, ..d };
+        assert_eq!(twelve.text(1, 13, 9, 14, 5), "Mon 13 Oct  2:05 PM");
+        assert_eq!(twelve.text(1, 13, 9, 0, 30), "Mon 13 Oct  12:30 AM");
+        let time_only = ClockStyle { show_date: false, ..d };
+        assert_eq!(time_only.text(1, 13, 9, 9, 7), "09:07");
     }
 }
