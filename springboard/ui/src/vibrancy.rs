@@ -1,4 +1,4 @@
-//! Vibrancy model (`NSVisualEffectView.allowsVibrancy`, `NSAppearance.vibrantLight/vibrantDark`, SwiftUI
+//! Vibrancy model (`MaterialView.allowsVibrancy`, `Appearance.vibrantLight/vibrantDark`, declarative UI
 //! `foregroundStyle(.primary/.secondary/.tertiary/.quaternary)` on a material).
 //!
 //! Content placed on a material is not painted over the blurred backdrop: it is blended into it. In a dark
@@ -18,7 +18,7 @@ pub enum Blend {
 }
 
 /// The hierarchy: `labelColor` .. `quaternaryLabelColor`, and the matching `fillColor` .. `quaternarySystemFill`
-/// (SwiftUI `.primary` .. `.quaternary` hierarchical styles).
+/// (declarative UI `.primary` .. `.quaternary` hierarchical styles).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Level {
     Primary,
@@ -37,7 +37,7 @@ pub enum Role {
 impl Level {
     pub const ALL: [Level; 4] = [Level::Primary, Level::Secondary, Level::Tertiary, Level::Quaternary];
 
-    /// SwiftUI hierarchical style index (`.primary` = 0).
+    /// declarative UI hierarchical style index (`.primary` = 0).
     pub fn hierarchy(self) -> usize {
         self as usize
     }
@@ -45,7 +45,7 @@ impl Level {
 
 /// How much light the element adds (Dark) or removes (Light), 0..1. Labels follow the label colours' alphas
 /// (0.85 / 0.55 / 0.25 / 0.10 in Dark; 0.85 / 0.50 / 0.26 / 0.10 in Light); fills follow the system fill alphas
-/// (0.36 / 0.32 / 0.24 / 0.18 Dark, 0.20 / 0.16 / 0.12 / 0.08 Light). Apple's exact vibrant values are private.
+/// (0.36 / 0.32 / 0.24 / 0.18 Dark, 0.20 / 0.16 / 0.12 / 0.08 Light). The platform's exact vibrant values are private.
 pub fn strength(role: Role, level: Level, light: bool) -> f32 {
     let i = level.hierarchy();
     match (role, light) {

@@ -298,7 +298,7 @@ pub fn masked_variable_blur(img: &Image, mask: &Image, radius: f32, edge: Edge) 
     pack(img.w, img.h, &out)
 }
 
-/// SwiftUI `.blur(radius:opaque:)`: a gaussian of `radius` points (times `scale` for pixels).
+/// declarative UI `.blur(radius:opaque:)`: a gaussian of `radius` points (times `scale` for pixels).
 /// With `opaque` the edge is clamped and the result is composited over black so it is fully
 /// opaque, as the reference does for a view that must not show what is behind it; otherwise the
 /// edge is transparent and the border fades.

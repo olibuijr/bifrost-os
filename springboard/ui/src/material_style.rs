@@ -2,7 +2,7 @@
 //! `glassEffect(_:in:)`, `GlassEffectContainer`, `glassEffectID`, `glassEffectUnion`,
 //! `backgroundExtensionEffect`, `.glass` and `.glassProminent` button styles).
 //!
-//! Mapping onto the shared model (`StyleRequest::to_material_request`): a SwiftUI `Material` becomes a
+//! Mapping onto the shared model (`StyleRequest::to_material_request`): a declarative UI `Material` becomes a
 //! `visual_effect::MaterialKind` plus `strength` (its `level`): ultraThin -> UnderWindowBackground, thin ->
 //! ContentBackground, regular -> Popover, thick -> Sheet, ultraThick -> HudWindow, bar -> HeaderView. Glass becomes
 //! kind Popover with `glass` set (the window server draws GlassRegular/GlassClear). The mask is a rounded rectangle
@@ -17,7 +17,7 @@ use crate::visual_effect::{Corners, GlassKind, Mask, MaterialKind, MaterialReque
 use crate::Rect;
 use std::collections::HashMap;
 
-/// SwiftUI `Material`.
+/// declarative UI `Material`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Material {
     UltraThin,

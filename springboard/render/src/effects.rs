@@ -1,6 +1,6 @@
 //! View effects for apps: Gaussian shadows, continuous-corner (squircle) shapes, alpha masks, group opacity
-//! and blend modes on CPU layers. Pure std. Parity targets: SwiftUI `shadow(color:radius:x:y:)`,
-//! `mask(alignment:_:)`, `clipShape`, `compositingGroup()`, `opacity`, `blendMode`; Core Animation `shadowPath`,
+//! and blend modes on CPU layers. Pure std. Parity targets: declarative UI `shadow(color:radius:x:y:)`,
+//! `mask(alignment:_:)`, `clipShape`, `compositingGroup()`, `opacity`, `blendMode`; layer `shadowPath`,
 //! `shadowOpacity`, `shadowRadius`, `cornerCurve = .continuous`.
 //!
 //! Pixels are premultiplied RGBA8 packed like `gfx::pack` (red in the low byte, alpha in the top byte).
@@ -38,7 +38,7 @@ impl Plane {
     }
 }
 
-/// How a corner is drawn. `Continuous` is the Apple squircle (`cornerCurve = .continuous`).
+/// How a corner is drawn. `Continuous` is the continuous squircle (`cornerCurve = .continuous`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CornerCurve {
     Circular,
@@ -193,7 +193,7 @@ impl Layer {
         }
     }
 
-    /// SwiftUI `mask` / `clipShape`: multiplies every pixel by the mask coverage.
+    /// declarative UI `mask` / `clipShape`: multiplies every pixel by the mask coverage.
     pub fn mask(&mut self, m: &Plane) {
         for i in 0..self.px.len() {
             let c = if i < m.a.len() { m.a[i] } else { 0.0 };
@@ -231,7 +231,7 @@ impl Layer {
     }
 }
 
-/// Shadow parameters. `radius` follows SwiftUI: the blur radius, Gaussian sigma = radius / 2.
+/// Shadow parameters. `radius` follows declarative UI: the blur radius, Gaussian sigma = radius / 2.
 #[derive(Clone, Copy, Debug)]
 pub struct Shadow {
     pub color: u32,

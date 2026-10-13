@@ -1,9 +1,9 @@
-//! `NSVisualEffectView` model: the material catalogue, blending, state, emphasis, mask and interior background
+//! `MaterialView` model: the material catalogue, blending, state, emphasis, mask and interior background
 //! style, and the per-view `MaterialRequest` the window server consumes. Renderer-independent: the shell and the SDK
 //! (`bifrost_app::widgets`) share it. Tints live in `bifrost_render::ui` (`MATERIAL_*`), not here.
 use crate::Rect;
 
-/// `NSVisualEffectView.Material` (the current, non-deprecated cases).
+/// `MaterialView.Material` (the current, non-deprecated cases).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MaterialKind {
     Sidebar,
@@ -78,7 +78,7 @@ impl MaterialKind {
 pub const WINDOW_SERVER_GLASS_REGULAR: u32 = 13;
 pub const WINDOW_SERVER_GLASS_CLEAR: u32 = 14;
 
-/// `NSVisualEffectView.BlendingMode`.
+/// `MaterialView.BlendingMode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub enum BlendingMode {
     /// The desktop and the windows behind the window.
@@ -88,7 +88,7 @@ pub enum BlendingMode {
     WithinWindow,
 }
 
-/// `NSVisualEffectView.State`.
+/// `MaterialView.State`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub enum MaterialState {
     /// Looks active while the window is key or main, inactive (opaque plate) otherwise.
@@ -124,7 +124,7 @@ impl MaterialState {
     }
 }
 
-/// `NSBackgroundStyle`, as reported by `interiorBackgroundStyle`: how content on the material should draw.
+/// `BackgroundStyle`, as reported by `interiorBackgroundStyle`: how content on the material should draw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub enum BackgroundStyle {
     #[default]
@@ -217,14 +217,14 @@ impl Mask {
     }
 }
 
-/// SwiftUI `Glass.regular` / `Glass.clear` (Liquid Glass), which the window server draws with its own recipes.
+/// declarative UI `Glass.regular` / `Glass.clear` (Liquid Glass), which the window server draws with its own recipes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GlassKind {
     Regular,
     Clear,
 }
 
-/// One `NSVisualEffectView` as the window server consumes it. `rect` is in window points.
+/// One `MaterialView` as the window server consumes it. `rect` is in window points.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterialRequest {
     pub kind: MaterialKind,
@@ -234,7 +234,7 @@ pub struct MaterialRequest {
     pub emphasized: bool,
     pub rect: Rect,
     pub mask: Mask,
-    /// Blur strength rank 0 (ultra thin) to 4 (ultra thick) from a SwiftUI `Material` (`material_style`); `None` is
+    /// Blur strength rank 0 (ultra thin) to 4 (ultra thick) from a declarative UI `Material` (`material_style`); `None` is
     /// the kind's own strength. Not on the shell/app wire yet.
     pub strength: Option<u8>,
     /// Set for Liquid Glass: the window server draws its glass recipe (`GlassRegular`/`GlassClear`) instead of the

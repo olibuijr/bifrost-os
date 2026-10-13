@@ -30,10 +30,10 @@ pub fn publish(a: Appearance) {
     }
 }
 
-// ---- Accessibility display options (NSWorkspace) --------------------------------------------------------------------
+// ---- Accessibility display options (Workspace) --------------------------------------------------------------------
 //
-// `NSWorkspace.accessibilityDisplayShouldReduceTransparency`, `...ShouldIncreaseContrast` and
-// `...ShouldDifferentiateWithoutColor`, with `accessibilityDisplayOptionsDidChangeNotification`. SwiftUI's
+// `Workspace.accessibilityDisplayShouldReduceTransparency`, `...ShouldIncreaseContrast` and
+// `...ShouldDifferentiateWithoutColor`, with `accessibilityDisplayOptionsDidChangeNotification`. declarative UI's
 // `accessibilityReduceTransparency` and `colorSchemeContrast` read the same two values.
 
 /// The display options an app reads, as one value.
@@ -47,7 +47,7 @@ pub struct DisplayOptions {
     pub differentiate_without_color: bool,
 }
 
-/// SwiftUI `ColorSchemeContrast`.
+/// declarative UI `ColorSchemeContrast`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColorSchemeContrast {
     Standard,
@@ -57,11 +57,11 @@ pub enum ColorSchemeContrast {
 pub fn display_options() -> DisplayOptions {
     DisplayOptions { reduce_transparency: reduce_transparency(), increase_contrast: increase_contrast(), differentiate_without_color: button_shapes() }
 }
-/// `NSWorkspace.accessibilityDisplayShouldDifferentiateWithoutColor`.
+/// `Workspace.accessibilityDisplayShouldDifferentiateWithoutColor`.
 pub fn differentiate_without_color() -> bool {
     button_shapes()
 }
-/// SwiftUI `@Environment(\.colorSchemeContrast)`.
+/// declarative UI `@Environment(\.colorSchemeContrast)`.
 pub fn color_scheme_contrast() -> ColorSchemeContrast {
     if increase_contrast() { ColorSchemeContrast::Increased } else { ColorSchemeContrast::Standard }
 }

@@ -87,8 +87,8 @@ pub const MATERIAL_HUD: Pair = Pair::new(pack(37, 37, 37, 170), pack(37, 37, 37,
 pub const MATERIAL_WINDOW: Pair = Pair::new(pack(37, 37, 37, 228), pack(247, 247, 247, 228));
 /// `.selection`: the accent at material strength (straight alpha, as the other `MATERIAL_*`).
 pub const MATERIAL_SELECTION: Pair = Pair::new(pack(14, 100, 196, 200), pack(0, 112, 245, 200));
-/// Remaining `NSVisualEffectView.Material` tints (straight alpha). Measured: each grey is the material's recipe (blur,
-/// saturation, brightness, luminance mapping; `docs/reference/materials-macos27.md`) applied to a neutral backdrop of
+/// Remaining `MaterialView.Material` tints (straight alpha). Measured: each grey is the material's recipe (blur,
+/// saturation, brightness, luminance mapping; `docs/reference/materials-recipes.md`) applied to a neutral backdrop of
 /// luma 0.15 in Dark and 0.85 in Light, the flat stand-in for the live blur where the shell cannot sample one. The
 /// alpha keeps the earlier designed strength. Which recipe each material takes is in the document (some mappings are
 /// inferred from the recipe names).
@@ -805,7 +805,7 @@ mod appearance_guard {
     }
 }
 
-/// Vibrant strengths over a material (`NSAppearance` vibrant dark / light; SwiftUI hierarchical `.primary` ..
+/// Vibrant strengths over a material (`Appearance` vibrant dark / light; declarative UI hierarchical `.primary` ..
 /// `.quaternary`): [Dark, Light] x [primary, secondary, tertiary, quaternary]. Labels follow the label colours'
 /// alphas. Mirrors `bifrost_ui::vibrancy::strength` (`Role::Label`).
 pub const VIBRANT_LABEL: [[f32; 4]; 2] = [[0.85, 0.55, 0.25, 0.10], [0.85, 0.50, 0.26, 0.10]];

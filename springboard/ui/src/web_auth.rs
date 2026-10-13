@@ -1,8 +1,8 @@
-//! Shared-login authentication session, shaped like the Safari Services session API (`SFAuthenticationSession`): an
+//! Shared-login authentication session, shaped like the system web-session API: an
 //! app gives a start URL and a callback URL scheme, starts the session, and receives exactly one completion with either
 //! the callback URL the page handed back or an error. The state machine lives in [`crate::webauth_session`]; this module
-//! is the Safari-shaped surface over it and the single-completion rule. Pure: the shell opens the page and reports the
-//! redirect. The Apple session is deprecated in favour of the web authentication session, so this model exists for apps
+//! is the web-session-shaped surface over it and the single-completion rule. Pure: the shell opens the page and reports the
+//! redirect. The older system session is deprecated in favour of the web authentication session, so this model exists for apps
 //! that still call the older name.
 
 use crate::webauth_session::{scheme_of, Callback, Failure, State, WebAuthSession};

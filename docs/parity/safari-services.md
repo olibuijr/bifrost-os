@@ -44,12 +44,12 @@ The matrix row's previous evidence id, `ev_db48755bdd049ac960cdd61e81535120a7dc9
 
 ## Round: web extension model and Safari-shaped authentication session (parity-safari)
 
-- `springboard/ui/src/safari_extension.rs` (SDK: `bifrost_app::safari_extension`): the identity (lowercase reverse-DNS bundle
+- `springboard/ui/src/web_extension.rs` (SDK: `bifrost_app::web_extension`): the identity (lowercase reverse-DNS bundle
   id), kind (content blocker or web extension), host permissions (`https://*.example.com`, `*://*`), a new extension starts
   disabled, and a registry answers `allowed_for(url)` only for enabled extensions whose patterns match. Messages are a name
   and a string dictionary, with plain-token names. Decision: this is the model shape only. Nothing runs extension code, and
   there are no page, tab or window proxies yet. The Browser app does not consult the registry.
-- `springboard/ui/src/safari_auth.rs` (SDK: `bifrost_app::safari_auth`): an `SFAuthenticationSession`-shaped surface over
+- `springboard/ui/src/web_auth.rs` (SDK: `bifrost_app::web_auth`): an `SFAuthenticationSession`-shaped surface over
   `webauth_session`. It gives the start URL and callback scheme, one completion (callback URL, canceled login, or presentation
   failure) reported once. Decision: Apple deprecated this API for the web authentication session, so the model is kept
   only for the older name. Its numeric error codes are not mirrored; the Rust enum names the cases. Shared cookies between

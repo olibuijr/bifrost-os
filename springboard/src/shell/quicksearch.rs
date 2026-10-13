@@ -1971,7 +1971,7 @@ mod tests {
 /// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
 fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
     use bifrost_ui::material_request::ShellSurface;
-    let req = ShellSurface::Spotlight.request((x, y, w, h), r);
+    let req = ShellSurface::Search.request((x, y, w, h), r);
     let fill = if alpha == 255 {
         super::control_center::request_shell_material(req)
     } else if bifrost_render::appearance::reduce_transparency() {
