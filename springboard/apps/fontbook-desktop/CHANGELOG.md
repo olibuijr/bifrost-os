@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 — 2026-10-13
+
+- Libraries: Font > Library switches the list between Computer (every font), User (your installs) and your own
+  libraries. Add Library Folder turns a folder chosen in the folder panel into a library named after it; a folder with
+  the name of an existing library joins it. Remove Library forgets a library and leaves its fonts on disk. The choice
+  and the libraries are saved in the app's data dir.
+- Export Font (Cmd+E): the save panel writes a copy of the selected font file.
+- Print Sample Sheet (Cmd+P): sends the family, its details, the sample line and the character set to the default
+  printer as plain text.
+- Show in Files: reveals the selected font's file. Only fonts inside your home folder can be shown.
+- Validation has a warning level: a font that installs but lacks a name, OS/2 or post table, has no outline table or
+  does not cover Basic Latin passes with warnings, listed in the Validate Font view and the install preview.
+- Still missing: Type 1 and font collections, per-style listing, a Validate File command, export of several fonts.
+
 ## 0.3.0 — 2026-10-13
 
 - Font menu in the menu bar: Add Fonts (Cmd+O, open panel), New Collection, New Smart Collection (fixed width, variable,

@@ -82,10 +82,10 @@
       "feature": "Libraries (separate font sets)",
       "area": "menu",
       "apple": "File > New Library",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not done: needs named folder sets and a library switcher; left for a later round",
-      "wire": "Add named libraries as folder sets in model::scan_dirs"
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/model.rs:650",
+      "note": "Libraries are named folder sets (Computer, User, and folders added with Add Library Folder) chosen in Font > Library and saved in libraries.tsv; built on parity/team-d-font-book; not yet verified on Midget. A library's folder path is read from the open panel's descriptor link, which needs a lab check",
+      "wire": "Create an empty library from a name and install into the chosen library; a library switcher in the sidebar"
     },
     {
       "feature": "Search fonts",
@@ -119,9 +119,9 @@
       "area": "menu",
       "apple": "File > Validate Font, Validate File",
       "status": "partial",
-      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:draw_validation",
-      "note": "Font > Validate Font shows pass or fail with each problem; no warn level and no Validate File for arbitrary files",
-      "wire": "Add a Validate Font menu item and sheet listing Report issues with pass/warn/fail"
+      "bifrost": "springboard/apps/fontbook-desktop/src/validate.rs:100",
+      "note": "Font > Validate Font shows pass, pass with warnings (missing name, OS/2 or post table, no outlines, no Basic Latin) or fail with each problem; built on parity/team-d-font-book; not yet verified on Midget. No Validate File for arbitrary files",
+      "wire": "Add Validate File for a file chosen in a panel, without installing it"
     },
     {
       "feature": "Resolve duplicates",
@@ -136,19 +136,19 @@
       "feature": "Export / print font samples",
       "area": "menu",
       "apple": "File > Export Fonts, Print",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not done: export needs a folder grant from a panel and printing needs the print service wiring; left for a later round",
-      "wire": "Copy selected font files to a chosen folder; print a sample sheet through the print service"
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:248",
+      "note": "Export Font (Cmd+E) saves a copy of the selected font through the save panel; Print Sample Sheet (Cmd+P) sends the font details and sample line as plain text to the print service; built on parity/team-d-font-book; not yet verified on Midget. No multi-font or folder export, and the sheet is not set in the font itself (the print service lays out text in its own typeface)",
+      "wire": "Export several fonts or a collection to a folder; print the sample drawn in the font through PrintOperation::pages with the font embedded"
     },
     {
       "feature": "Show font file in the file manager",
       "area": "menu",
       "apple": "File > Show in file manager",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not done: the workspace reveal call needs a document grant for the file, which the app does not hold for system and library fonts",
-      "wire": "Reveal the font file through the shell's file-manager intent"
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:226",
+      "note": "Font > Show in Files asks the shell for a grant on the font file and reveals it through the workspace; only fonts inside the home folder (the user's installs and libraries there) can be granted, system and shell-library fonts cannot; built on parity/team-d-font-book; not yet verified on Midget",
+      "wire": "Reveal fonts outside the home folder once the shell can grant a read-only path outside the account's home"
     },
     {
       "feature": "Downloadable system fonts",

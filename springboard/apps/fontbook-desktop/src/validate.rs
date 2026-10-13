@@ -56,11 +56,31 @@ pub struct Report {
     pub characters: u32,
     /// Names of the Unicode blocks with at least one covered character, in block order.
     pub blocks: Vec<String>,
+    /// Things that do not stop an install but may surprise: a missing optional table, no Basic Latin coverage.
+    pub warnings: Vec<String>,
+}
+
+/// The outcome of a validation: pass, pass with warnings, or fail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Pass,
+    Warn,
+    Fail,
 }
 
 impl Report {
     pub fn is_valid(&self) -> bool {
         self.problems.is_empty()
+    }
+
+    pub fn verdict(&self) -> Verdict {
+        if !self.problems.is_empty() {
+            Verdict::Fail
+        } else if !self.warnings.is_empty() {
+            Verdict::Warn
+        } else {
+            Verdict::Pass
+        }
     }
 }
 
@@ -127,6 +147,22 @@ pub fn check(bytes: &[u8]) -> Report {
             }
             None => r.problems.push("The font has no character map the desktop can read.".to_string()),
         }
+    }
+    let optional: [(&[u8; 4], &str); 3] = [
+        (b"name", "The name table is missing, so the family name cannot be read."),
+        (b"OS/2", "The OS/2 table is missing, so the weight and width are unknown."),
+        (b"post", "The post table is missing, so glyph names are unavailable."),
+    ];
+    for (tag, why) in optional {
+        if find(tag).is_none() {
+            r.warnings.push(why.to_string());
+        }
+    }
+    if [b"glyf", b"CFF ", b"CFF2"].iter().all(|tag| find(*tag).is_none()) {
+        r.warnings.push("The font has no outline table (glyf or CFF), so it may draw nothing.".to_string());
+    }
+    if r.characters > 0 && !r.blocks.iter().any(|b| b == "Basic Latin") {
+        r.warnings.push("The font does not cover Basic Latin, so ordinary text falls back to another font.".to_string());
     }
     r
 }
@@ -331,6 +367,36 @@ mod tests {
         assert!(r.is_valid(), "{:?}", r.problems);
         assert_eq!(r.characters, 3);
         assert_eq!(r.blocks, ["CJK Unified Ideographs"]);
+    }
+
+    #[test]
+    fn missing_optional_tables_and_coverage_gaps_warn_without_failing() {
+        let r = check(&good_font(cmap(3, 1, format4_basic())));
+        assert_eq!(r.verdict(), Verdict::Warn);
+        assert!(r.warnings.iter().any(|w| w.starts_with("The name table is missing")), "{:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.starts_with("The OS/2 table is missing")));
+        assert!(r.warnings.iter().any(|w| w.starts_with("The post table is missing")));
+        assert!(r.warnings.iter().any(|w| w.starts_with("The font has no outline table")));
+        assert!(!r.warnings.iter().any(|w| w.contains("Basic Latin")), "this font covers Basic Latin");
+        let cjk = check(&good_font(cmap(3, 10, format12_cjk())));
+        assert!(cjk.warnings.iter().any(|w| w.contains("does not cover Basic Latin")), "{:?}", cjk.warnings);
+        assert!(cjk.is_valid());
+    }
+
+    #[test]
+    fn a_font_with_every_table_passes_clean_and_a_broken_one_fails() {
+        let full = sfnt(&[
+            (b"cmap", cmap(3, 1, format4_basic())),
+            (b"head", vec![0; 54]),
+            (b"maxp", maxp(8)),
+            (b"name", vec![0; 6]),
+            (b"OS/2", vec![0; 8]),
+            (b"post", vec![0; 8]),
+            (b"glyf", vec![0; 4]),
+        ]);
+        let r = check(&full);
+        assert_eq!(r.verdict(), Verdict::Pass, "{:?} {:?}", r.problems, r.warnings);
+        assert_eq!(check(b"hello world").verdict(), Verdict::Fail);
     }
 
     #[test]
