@@ -683,7 +683,8 @@ mod tests {
         assert_eq!(&bytes[0..4], b"RIFF");
         assert_eq!(u32_at(4) as usize, bytes.len() - 8, "the RIFF size");
         assert_eq!(&bytes[8..12], b"AVI ");
-        assert_eq!(&bytes[32..36], b"avih");
+        // the `avih` chunk header is at 24; its fields start at 32 (the frame rate is at 32, the frame count at 48)
+        assert_eq!(&bytes[24..28], b"avih");
         assert_eq!(u32_at(48), 2, "total frames");
         assert_eq!(&bytes[100..104], b"strh");
         assert_eq!(u32_at(140), 2, "stream length");
@@ -721,7 +722,8 @@ mod tests {
     fn the_frame_rate_follows_the_display_only_on_the_gpu_path() {
         assert_eq!(frame_rate(60, true), 60, "the display's rate while the GPU path is up");
         assert_eq!(frame_rate(144, true), MAX_FPS, "capped at the fastest recording");
-        assert_eq!(frame_rate(24, true), FPS, "never below the software rate");
+        // a display slower than the software rate is recorded at the software rate, not below it
+        assert_eq!(frame_rate(5, true), FPS, "never below the software rate");
         assert_eq!(frame_rate(60, false), FPS, "the software path records at 10 frames a second");
     }
 
@@ -735,12 +737,14 @@ mod tests {
         let img = Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] };
         // due at 0, 16.7 and 33.3 ms; the frame at 10 ms is too early
         for t in [0.0, 10.0, 17.0, 34.0] {
+            // a full queue skips a frame, and these pushes come faster than the encoder thread drains it, so pace them
+            std::thread::sleep(std::time::Duration::from_millis(20));
             s.push(&img, t);
         }
         s.finish().unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(u32::from_le_bytes(bytes[48..52].try_into().unwrap()), 3, "three frames were due");
-        assert_eq!(u32::from_le_bytes(bytes[32 + 8..32 + 12].try_into().unwrap()), 1_000_000 / 60, "the header says 60 a second");
+        assert_eq!(u32::from_le_bytes(bytes[32..36].try_into().unwrap()), 1_000_000 / 60, "the header says 60 a second");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

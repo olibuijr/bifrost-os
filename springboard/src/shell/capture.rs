@@ -287,7 +287,11 @@ impl Session {
         self.at = (x, y);
         let min = (MIN_SIDE_PT * s).round().max(1.0) as i32;
         match self.pick {
-            Pick::Region => self.drag.finish(w, h, min),
+            Pick::Region => {
+                // the release point is the drag's last corner, even when no move came in before it
+                self.drag.move_to(x, y);
+                self.drag.finish(w, h, min)
+            }
             Pick::Window => window_at(frames, x, y).map(|r| with_shadow(r, s, w, h)),
             Pick::Screen => Some(Rect { x: 0, y: 0, w, h }),
         }
