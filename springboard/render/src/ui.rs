@@ -324,6 +324,19 @@ impl Ui {
         self.font.render_var(text, &Style { px: self.pt(pt), embolden: 0.0, color, shadow }, &vars(pt, weight))
     }
 
+    /// Text with user font feature settings (small caps, old-style figures, stylistic sets, kerning off, ...).
+    pub fn text_features(&self, text: &str, pt: f32, weight: Weight, color: u32, features: &crate::shape_ot::Features) -> Image {
+        let (pt, weight) = (self.scaled(pt), self.weight(weight));
+        let color = crate::appearance::contrast(color);
+        self.font.render_feat(text, &Style { px: self.pt(pt), embolden: 0.0, color, shadow: false }, &vars(pt, weight), features)
+    }
+
+    /// Width in px of `text` drawn with `text_features`.
+    pub fn measure_features(&self, text: &str, pt: f32, weight: Weight, features: &crate::shape_ot::Features) -> f32 {
+        let (pt, weight) = (self.scaled(pt), self.weight(weight));
+        self.font.measure_feat(text, self.pt(pt), &vars(pt, weight), features)
+    }
+
     /// System chrome text (status bar, lock screen clock): never scaled by
     /// Dynamic Type, as on bifrost.
     pub fn chrome(&self, text: &str, pt: f32, weight: Weight, color: u32) -> Image {

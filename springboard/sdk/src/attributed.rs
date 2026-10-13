@@ -122,6 +122,9 @@ impl ColorToken {
     }
 }
 
+/// Font feature settings of a run (`liga`, `kern`, `smcp`, `ss01`, ...).
+pub type FontFeatures = bifrost_render::shape_ot::Features;
+
 /// The attributes of one run. `color: None` means the default text colour.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Attrs {
@@ -132,6 +135,8 @@ pub struct Attrs {
     pub underline: bool,
     pub strikethrough: bool,
     pub link: Option<String>,
+    /// Font feature settings (ligatures and kerning are on by default; this overrides them).
+    pub features: FontFeatures,
 }
 
 /// One attribute and its value (`NativeAttributedString.Key` plus value).
@@ -144,6 +149,7 @@ pub enum Attribute {
     Underline(bool),
     Strikethrough(bool),
     Link(Option<String>),
+    Features(FontFeatures),
 }
 
 /// Which attribute to enumerate (`enumerateAttribute(_:in:)`).
@@ -156,6 +162,7 @@ pub enum AttributeKey {
     Underline,
     Strikethrough,
     Link,
+    Features,
 }
 
 impl Attrs {
@@ -168,6 +175,7 @@ impl Attrs {
             Attribute::Underline(v) => self.underline = v,
             Attribute::Strikethrough(v) => self.strikethrough = v,
             Attribute::Link(v) => self.link = v,
+            Attribute::Features(v) => self.features = v,
         }
     }
     pub fn get(&self, k: AttributeKey) -> Attribute {
@@ -179,6 +187,7 @@ impl Attrs {
             AttributeKey::Underline => Attribute::Underline(self.underline),
             AttributeKey::Strikethrough => Attribute::Strikethrough(self.strikethrough),
             AttributeKey::Link => Attribute::Link(self.link.clone()),
+            AttributeKey::Features => Attribute::Features(self.features.clone()),
         }
     }
 }
@@ -934,7 +943,7 @@ impl RichTextView {
                     line_h = 0;
                     continue;
                 }
-                let img = ui.text(word, pt, weight, color);
+                let img = if a.features.is_empty() { ui.text(word, pt, weight, color) } else { ui.text_features(word, pt, weight, color, &a.features) };
                 let (w, h) = (img.w as i32, img.h as i32);
                 if cx > 0 && cx + w > width {
                     cy += line_h;
@@ -1132,5 +1141,19 @@ mod tests {
         assert_eq!(s.ax_runs().len(), 1);
         assert_eq!(s.ax_runs()[0].utf16_len, 3);
         assert!(AttributedString::new().ax_runs().is_empty());
+    }
+
+    #[test]
+    fn font_feature_attribute_is_set_enumerated_and_split() {
+        let mut s = AttributedString::plain("office hours");
+        let mut f = FontFeatures::new();
+        f.off("liga");
+        s.add_attribute(Attribute::Features(f.clone()), 0..6);
+        assert_eq!(s.runs().count(), 2);
+        assert_eq!(s.attributes_at(2).features, f);
+        assert!(s.attributes_at(8).features.is_empty());
+        let mut seen = Vec::new();
+        s.enumerate_attribute(AttributeKey::Features, 0..12, |r, v| seen.push((r, v)));
+        assert_eq!(seen[0], (0..6, Attribute::Features(f)));
     }
 }

@@ -20,6 +20,7 @@ pub mod assets;
 pub mod fontprefs;
 pub mod fontregistry;
 pub mod kern;
+pub mod shape_ot;
 pub mod filter;
 pub mod integral;
 pub mod mesh;
