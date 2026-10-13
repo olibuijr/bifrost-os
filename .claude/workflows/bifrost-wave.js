@@ -4,7 +4,7 @@ export const meta = {
   whenToUse: 'Each iteration of the BifrOSt daily-driver loop; the lead merges, tests and releases afterwards',
   phases: [
     { title: 'Scout', detail: '4 lenses pick concrete tasks' },
-    { title: 'Code', detail: 'one Haiku coder per task, own worktree, commit only', model: 'haiku' },
+    { title: 'Code', detail: 'one Sonnet coder per task, own worktree, commit only', model: 'sonnet' },
     { title: 'Review', detail: 'skeptic per branch' },
   ],
 }
@@ -69,7 +69,7 @@ const VERDICT = {
 const results = await pipeline(picked,
   (t, _, i) => agent(
     `${RULES}\n\nImplement this task. Owner rule: agents only code and commit; do NOT run tests, builds, publish or Midget commands (a hook blocks them). First link the gitignored assets if missing (never commit them): ln -s ~/Projects/bifrost-os/springboard/assets springboard/assets; ln -s ~/Projects/bifrost-os/bifrost-ref bifrost-ref. Create branch wave${WAVE}/${i}-<slug>, write the test first, then the fix, keep it minimal, update docs/parity-matrix/data rows if ${t.parityRows || 'parity is affected'}, and commit with a conventional message.\n\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan: ${t.plan}`,
-    { label: `code:${t.title.slice(0, 40)}`, phase: 'Code', model: 'haiku', isolation: 'worktree', schema: DONE }),
+    { label: `code:${t.title.slice(0, 40)}`, phase: 'Code', model: 'sonnet', isolation: 'worktree', schema: DONE }),
   (d, t) => d && agent(
     `${RULES}\n\nAdversarially review branch ${d.branch} (git diff main...${d.branch}) for task "${t.title}". Try to find: logic errors, missing test, behaviour that diverges from the Apple API it mirrors, product names in code, unsafe without SAFETY, scope creep. Default merge=false if unsure. Read only.`,
     { label: `review:${d.branch}`, phase: 'Review', schema: VERDICT }).then(v => ({ task: t.title, ...d, verdict: v })),
