@@ -10,23 +10,23 @@
     {
       "feature": "Web views and configuration",
       "apple": "WKWebView, WKWebViewConfiguration, WKPreferences, WKWebpagePreferences, WKProcessPool",
-      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewId, WebViewState); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Zoom In, Zoom Out, Actual Size); springboard/apps/browser/src/session.rs (zoom_by)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool, WebViewId, WebViewState); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Zoom In, Zoom Out, Actual Size); springboard/apps/browser/src/session.rs (zoom_by); springboard/sdk/src/web_config.rs (WebViewConfiguration, WebPreferences)",
       "status": "partial",
-      "note": "one engine process with many views; no configuration object, no WKPreferences equivalent, no ContentMode or HTTPS upgrade policy Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "configuration object with preferences, custom user agent and content controller exists as host-tested state; engine start does not read it yet, no ContentMode or HTTPS upgrade policy; verify on Midget for parity."
     },
     {
       "feature": "Navigation and back-forward list",
       "apple": "WKNavigationDelegate, WKBackForwardList, WKNavigationAction/Response, WKFormInfo",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent: LoadStarted, LoadCommitted, LoadFinished, HistoryChanged; go_back, go_forward, reload); wired: springboard/apps/browser/src/tabdiscard.rs (history_menu, jump_to, jump_step); springboard/apps/browser/src/main.rs (menus, menu_action)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent: LoadStarted, LoadCommitted, LoadFinished, HistoryChanged; go_back, go_forward, reload); wired: springboard/apps/browser/src/tabdiscard.rs (history_menu, jump_to, jump_step); springboard/apps/browser/src/main.rs (menus, menu_action); springboard/sdk/src/web_nav.rs (NavigationDelegate, PolicyBroker, BackForwardList)",
       "status": "partial",
-      "note": "no navigation policy callback (decide allow or cancel per request); no back-forward list object; stop_loading is a no-op because Servo 0.7.0 cannot cancel a load Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "policy callbacks with a timeout that defaults to allow, and a back-forward list (backItem, forwardItem, item(at:), go(to:)) exist as host-tested state; not yet wired to engine navigation events; stop_loading is a no-op because Servo 0.7.0 cannot cancel a load; verify on Midget for parity."
     },
     {
       "feature": "Web data management (cookies, website data, URL scheme handling)",
       "apple": "WKWebsiteDataStore, WKHTTPCookieStore, WKURLSchemeHandler, WKURLSchemeTask, readAccessURL",
-      "bifrost": "springboard/sdk/src/webview.rs (profile directory passed to WebProcessPool::spawn)",
+      "bifrost": "springboard/sdk/src/webview.rs (profile directory passed to WebProcessPool::spawn); springboard/sdk/src/web_data.rs (CookieStore, WebsiteDataStore)",
       "status": "partial",
-      "note": "cookies and storage persist in a profile directory; no API to inspect, delete or set cookies or site data; no custom URL scheme handler"
+      "note": "getAllCookies, setCookie, delete, fetchDataRecords and removeData work over a profile directory file store and are host-tested; the engine keeps its own cookie jar, so the two are not yet synchronised; no custom URL scheme handler."
     },
     {
       "feature": "Downloads",
@@ -38,16 +38,16 @@
     {
       "feature": "Page content, scripts and messaging",
       "apple": "WKUserContentController, WKUserScript, WKContentWorld, WKJSHandle, WKContentRuleListStore, WKFrameInfo",
-      "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_collector as document-start script)",
+      "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_collector as document-start script); springboard/sdk/src/web_config.rs (UserContentController, UserScript, ScriptMessageHandler, ScriptMessage)",
       "status": "partial",
-      "note": "evaluate_javaScript with token-matched result exists; no message handler from page to app, no content rule lists, no per-world isolation, promises are not awaited"
+      "note": "add(_:name:) routes a page message to its handler by name and a bootstrap script defines the page-side poster, host-tested; the engine does not forward page posts yet; no content rule lists, no per-world isolation."
     },
     {
       "feature": "Page-level search",
       "apple": "WKFindConfiguration, WKFindResult",
-      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::find, find_clear, WebViewState::find_matches); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Find in Page, Find Next, Find Previous); springboard/apps/browser/src/findbar.rs",
+      "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool::find, find_clear, WebViewState::find_matches); wired: springboard/apps/browser/src/main.rs (menus, menu_action: View > Find in Page, Find Next, Find Previous); springboard/apps/browser/src/findbar.rs; springboard/sdk/src/web_config.rs (FindConfiguration, FindResult, FindSession, find_matches)",
       "status": "partial",
-      "note": "injected script count only; no highlight, no match index, no case or whole-word options Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "injected script count only; no highlight, no match index, no case or whole-word options Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Case-sensitive and backwards options, match index and wrap are modelled and host-tested; the engine find script does not use them yet."
     },
     {
       "feature": "Snapshots and PDF output",
@@ -73,9 +73,9 @@
     {
       "feature": "Web UI delegate (alerts, file panels, new windows, window features)",
       "apple": "WKUIDelegate, WKWindowFeatures, WKOpenPanelParameters",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::CreateWebView, Closed)",
+      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::CreateWebView, Closed); springboard/sdk/src/web_config.rs (UiDelegate, OpenPanelParameters, answer_script_dialog)",
       "status": "partial",
-      "note": "new window requests are reported as events; no alert, confirm, prompt or file-chooser delegate; select elements are not supported"
+      "note": "alert, confirm, prompt and open panel callbacks map to dialog_reply, host-tested; the open panel has no engine event yet; select elements are not supported."
     },
     {
       "feature": "Input and appearance",
@@ -87,9 +87,9 @@
     {
       "feature": "Custom user agent",
       "apple": "WKWebView.customUserAgent",
-      "bifrost": "springboard/sdk/src/webview.rs (set_user_agent)",
+      "bifrost": "springboard/sdk/src/webview.rs (set_user_agent); springboard/sdk/src/web_config.rs (WebViewConfiguration::effective_user_agent)",
       "status": "partial",
-      "note": "set_user_agent exists but Servo reads the user agent at start-up only, so it is not applied"
+      "note": "the configuration computes the user agent for engine start; Servo reads it at start-up only, so a change on a running view is not applied."
     },
     {
       "feature": "Web extensions",

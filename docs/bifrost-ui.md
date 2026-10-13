@@ -1057,6 +1057,25 @@ snapshots. The engine renders in software (llvmpipe) because SDK apps get no `/d
 - `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine injects script (`innerText` count plus `window.find`, case-insensitive, wrapping). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
 - Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL).
 
+### Configuration, policy, data store, messages and panels (`web_config`, `web_nav`, `web_data`)
+
+Host-tested state for embedding apps. The engine glue that feeds it is not wired yet, so these rows stay partial until checked on Midget.
+
+| Apple | BifrOSt |
+|---|---|
+| `WebViewConfiguration`, `Preferences` | `WebViewConfiguration`, `WebPreferences` (`javascript_enabled`, `minimum_font_size`, ...) |
+| `customUserAgent`, `applicationNameForUserAgent` | `WebViewConfiguration::effective_user_agent(default)`, applied when the engine starts |
+| `UserContentController`, `UserScript` | `UserContentController`, `UserScript`, `InjectionTime` |
+| `add(_:name:)`, `ScriptMessageHandler`, `ScriptMessage` | `UserContentController::add(handler, name)`, `ScriptMessageHandler`, `ScriptMessage`; pages post with `window.bifrost.messageHandlers.<name>.postMessage(body)` |
+| `decidePolicyFor navigationAction` / `navigationResponse` | `NavigationDelegate`, `NavigationActionPolicy` (Allow, Cancel, Download); `PolicyBroker` resolves an unanswered decision to Allow after `DECISION_TIMEOUT_MS` |
+| `BackForwardList` (`backItem`, `forwardItem`, `item(at:)`, `go(to:)`) | `BackForwardList` (`back_item`, `forward_item`, `item_at(offset)`, `go_to(offset)`) |
+| `HTTPCookieStore` (`getAllCookies`, `setCookie`, `delete`) | `CookieStore` (`get_all_cookies`, `set_cookie`, `delete`), persistent cookies saved to `cookies.tsv` |
+| `WebsiteDataStore` (`fetchDataRecords`, `removeData`) | `WebsiteDataStore` over the profile directory (`fetch_data_records`, `remove_data`, `remove_all`) |
+| `WebUIDelegate` alert, confirm, text input, `runOpenPanelWith` | `UiDelegate`; `answer_script_dialog` returns the `(ok, text)` that `dialog_reply` takes |
+| `FindConfiguration`, `FindResult` | `FindConfiguration` (`backwards`, `case_sensitive`, `wraps`), `FindResult`, `FindSession`, `find_matches` |
+
+Gaps: the engine keeps its own cookie jar, so `CookieStore` and the engine are not synchronised; page posts and the open panel have no engine event; a user agent change on a running view is not applied (Servo reads it at start-up).
+
 ### Downloads (`web_download`)
 
 - `navigation_response_policy(content_disposition, mime)` is `WKNavigationResponsePolicy.download` for attachments and MIME types the view cannot render; `WebViewEvent::DownloadStarted` is `didBecome download`.
