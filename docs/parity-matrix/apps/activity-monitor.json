@@ -104,9 +104,9 @@
    "feature": "Columns submenu (choose visible columns)",
    "area": "menu",
    "apple": "View > Columns",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Columns are fixed per tab (model.rs:54).",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:visible_columns",
+   "note": "View > Columns toggles User, Threads, PID, persisted. Other reference columns (Ports, Kind, Real Mem, Purgeable, CPU Time, Idle Wake Ups) remain.",
    "wire": "Add View > Columns with checkable items per tab (Threads, PID, User, Ports, Kind, Real Mem, Private Mem, Purgeable, Compressed, CPU Time, Idle Wake Ups, Bytes Read/Written...) persisted in app prefs; model::Tab::columns filters by the set."
   },
   {
@@ -150,8 +150,8 @@
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:119",
-   "note": "Pressure parsed from PSI; footer shows used/total; no wired/compressed/cache breakdown rows.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:166",
+   "note": "Pressure from PSI; detail line shows cached, shared, buffers, compressed (zswap) and swap. No separate breakdown rows or pressure graph.",
    "wire": "Extend sample.rs parse_meminfo to Shmem, Buffers, SwapCached and Zswap, and show the breakdown rows in the Memory graph card (draw.rs graph())."
   },
   {

@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bifrost-app",
 ]
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.5.0"
+version = "0.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.8.0"
+version = "1.7.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.8.0"
+version = "0.7.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.2.0"
+version = "0.1.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -885,7 +885,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.7.0"
+version = "0.6.0"
 dependencies = [
  "bifrost-app",
  "springboard",

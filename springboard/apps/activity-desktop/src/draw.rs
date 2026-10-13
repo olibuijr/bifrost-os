@@ -160,7 +160,7 @@ impl Monitor {
                 Graph {
                     title: "Memory Used",
                     value: format!("{} of {}", bytes(m.used()), bytes(m.total)),
-                    detail: format!("Cached Files {}   Swap Used {}", bytes(m.cached), bytes(m.swap_used())),
+                    detail: format!("Cached Files {}   Shared {}   Buffers {}   Compressed {}   Swap Used {}", bytes(m.cached), bytes(m.shared), bytes(m.buffers), bytes(m.zswap), bytes(m.swap_used())),
                     plots: vec![(h.memory.values().collect(), SYSTEM_PURPLE.now())],
                     scale: 100.0,
                 }

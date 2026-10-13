@@ -17,10 +17,12 @@ use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use model::{Filter, UpdateFrequency, SIGNALS};
-use window::{Monitor, MENU_COPY, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SIGNAL};
+use window::{Monitor, MENU_COLUMN, MENU_COPY, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SIGNAL};
 
 /// The preference holding View > Update Frequency, in seconds.
 const PREF_FREQUENCY: &str = "updateSeconds";
+/// The preference holding View > Columns, as a mask of hidden columns.
+const PREF_COLUMNS: &str = "hiddenColumns";
 
 struct ActivityApp {
     monitor: Option<Monitor>,
@@ -39,6 +41,7 @@ impl App for ActivityApp {
             None => {
                 let mut m = Monitor::new(w, h);
                 m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
+                m.hidden_columns = ctx.defaults().int(PREF_COLUMNS);
                 self.monitor = Some(m);
             }
         }
@@ -100,6 +103,10 @@ impl App for ActivityApp {
         for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
             view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
         }
+        view.push(AppMenuItem::submenu("Columns"));
+        for (i, (_, title)) in model::OPTIONAL_COLUMNS.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_COLUMN + i as u32, title).checked(m.column_shown(i)).depth(1));
+        }
         vec![
             AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
             AppMenu { title: "View".into(), items: view },
@@ -135,6 +142,11 @@ impl App for ActivityApp {
             }
             n if (MENU_SIGNAL..MENU_SIGNAL + SIGNALS.len() as u32).contains(&n) => {
                 m.send_signal(SIGNALS[(n - MENU_SIGNAL) as usize]);
+                true
+            }
+            n if (MENU_COLUMN..MENU_COLUMN + model::OPTIONAL_COLUMNS.len() as u32).contains(&n) => {
+                m.toggle_column((n - MENU_COLUMN) as usize);
+                ctx.defaults_mut().set_int(PREF_COLUMNS, m.hidden_columns);
                 true
             }
             n if (MENU_FILTER..MENU_FILTER + Filter::ALL.len() as u32).contains(&n) => {

@@ -77,6 +77,18 @@ impl Tab {
     }
 }
 
+/// Columns the View > Columns menu can hide, with the bit each takes in the stored mask.
+pub const OPTIONAL_COLUMNS: [(SortKey, &str); 3] = [(SortKey::User, "User"), (SortKey::Threads, "Threads"), (SortKey::Pid, "PID")];
+
+/// The columns of a tab without the ones whose bit is set in `hidden` (bit i = `OPTIONAL_COLUMNS[i]`). The name and
+/// figure columns always stay.
+pub fn visible_columns(tab: Tab, hidden: i64) -> Vec<Column> {
+    tab.columns()
+        .into_iter()
+        .filter(|c| !OPTIONAL_COLUMNS.iter().enumerate().any(|(i, (k, _))| hidden & (1 << i) != 0 && c.key == Some(*k)))
+        .collect()
+}
+
 /// A table column: its sort key (None when the column does not sort), its title and its width in points.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Column {
@@ -362,6 +374,24 @@ mod tests {
 
     fn proc(pid: u32, name: &str, uid: u32, cpu: f32, rss: u64) -> ProcSample {
         ProcSample { pid, name: name.into(), user: if uid == 0 { "root".into() } else { "olibuijr".into() }, uid, cpu, rss, threads: 1, read_bps: 0.0, write_bps: 0.0 }
+    }
+
+    #[test]
+    fn hidden_columns_drop_out_but_name_and_figure_stay() {
+        assert_eq!(visible_columns(Tab::Cpu, 0).len(), 5);
+        let titles: Vec<&str> = visible_columns(Tab::Cpu, 0b110).iter().map(|c| c.title).collect();
+        assert_eq!(titles, vec!["Process", "User", "% CPU"]);
+        assert_eq!(visible_columns(Tab::Cpu, 0b111).len(), 2);
+        assert_eq!(visible_columns(Tab::Network, 0b111).len(), 5);
+    }
+
+    #[test]
+    fn hidden_columns_drop_out_but_name_and_figure_stay() {
+        assert_eq!(visible_columns(Tab::Cpu, 0).len(), 5);
+        let titles: Vec<&str> = visible_columns(Tab::Cpu, 0b110).iter().map(|c| c.title).collect();
+        assert_eq!(titles, vec!["Process", "User", "% CPU"]);
+        assert_eq!(visible_columns(Tab::Cpu, 0b111).len(), 2);
+        assert_eq!(visible_columns(Tab::Network, 0b111).len(), 5);
     }
 
     #[test]
