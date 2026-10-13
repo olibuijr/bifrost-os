@@ -301,16 +301,22 @@ struct Action(Obj);
 impl Action {
     #[zbus(property)]
     fn n_actions(&self) -> i32 {
-        1
+        self.names().len() as i32
     }
     fn do_action(&self, index: i32) -> bool {
-        index == 0 && self.0.info().is_some_and(|i| i.actionable) && self.0.act(AxAction::Press)
+        let act = match self.names().get(index.max(0) as usize).copied() {
+            Some("press") if index == 0 && self.0.info().is_some_and(|i| i.actionable) => AxAction::Press,
+            Some("increment") => AxAction::Increment,
+            Some("decrement") => AxAction::Decrement,
+            _ => return false,
+        };
+        self.0.act(act)
     }
     fn get_name(&self, index: i32) -> String {
-        if index == 0 { "press".into() } else { String::new() }
+        self.names().get(index.max(0) as usize).map_or_else(String::new, |n| n.to_string())
     }
     fn get_localized_name(&self, index: i32) -> String {
-        if index == 0 { "press".into() } else { String::new() }
+        self.get_name(index)
     }
     fn get_description(&self, _index: i32) -> String {
         String::new()
@@ -319,7 +325,14 @@ impl Action {
         String::new()
     }
     fn get_actions(&self) -> Vec<(String, String, String)> {
-        vec![("press".into(), String::new(), String::new())]
+        self.names().into_iter().map(|n| (n.into(), String::new(), String::new())).collect()
+    }
+}
+
+impl Action {
+    /// `press`, plus `increment` and `decrement` on a numeric element (`accessibilityPerformIncrement/Decrement`).
+    fn names(&self) -> Vec<&'static str> {
+        action_names(self.0.info().is_some_and(|i| i.numeric))
     }
 }
 

@@ -327,6 +327,20 @@ fn ax_set_presses_writes_values_and_focuses() {
 }
 
 #[test]
+fn ax_increment_and_decrement_step_a_slider() {
+    let ui = ui();
+    let sl = Slider::new("S", values::Slider::new(0.0, 10.0, 5.0, Some(1.0)), "s");
+    let id = sl.id();
+    let mut app = ViewApp::new(Stack::vstack(4.0, vec![Box::new(sl)]), Model::default());
+    app.window.layout(&ui, rect(0.0, 0.0, 200.0, 40.0));
+    app.ax_set(id, crate::proto::AxAction::Increment);
+    assert!(app.window.view::<Slider>(id).unwrap().value() > 5.0);
+    app.ax_set(id, crate::proto::AxAction::Decrement);
+    app.ax_set(id, crate::proto::AxAction::Decrement);
+    assert!(app.window.view::<Slider>(id).unwrap().value() < 5.0);
+}
+
+#[test]
 fn text_field_reports_caret_selection_and_title_help() {
     let ui = ui();
     let tf = TextField::new("Name", "name").with_ax_title("Full name").with_ax_help("Your name as on the card");

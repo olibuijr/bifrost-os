@@ -1,133 +1,129 @@
 {
-  "framework": "Accessibility",
-  "doc": "https://developer.apple.com/documentation/accessibility",
-  "macos_since": "11.0",
-  "status": "partial",
-  "bifrost": "springboard/src/shell/atspi/ (AT-SPI2 bridge), springboard/ui/src/ax.rs, springboard/sdk/src/lib.rs (controls_tree, ax_set), springboard/proto/src/lib.rs (Configure, reduce_motion, text_scale), springboard/src/shell/accessibility/mod.rs, springboard/src/shell/magnifier.rs, springboard/src/shell/assistive_touch.rs",
-  "summary": "BifrOSt covers a Linux AT-SPI2 screen-reader bridge (roles, states, text attributes, text events, announcements, secure fields) and system display settings (zoom, reduce motion, increase contrast, reduce transparency, larger and bold text) that apps can read. The hierarchy API exists in the SDK but no app uses it yet, and there is no Accessibility Inspector, Switch Control, Voice Control, Braille, or audio-graph support.",
-  "rea_evidence": "ev_2a505504e4634c45494730263b3e9dd7da9a8a53b707a6c6c2a02409b4820b58",
-  "features": [
-    {
-      "feature": "Screen reader bridge (VoiceOver equivalent)",
-      "apple": "Accessibility API, VoiceOver, NSAccessibility element hierarchy",
-      "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs; wired: springboard/src/shell/accessibility/reader.rs (cursor, speech, focus ring); springboard/src/shell/hwkeys.rs (ReaderStep keys); springboard/src/shell/pages.rs (Screen Reader row); wired: springboard/src/shell/accessibility/reader.rs (walk, rotors, activation, focus ring); springboard/src/shell/accessibility/walk.rs; springboard/src/shell/hwkeys.rs (ReaderRotor, ReaderActivate)",
-      "status": "partial",
-      "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Element role mapping",
-      "apple": "AccessibilityTechnology, NSAccessibility roles",
-      "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
-      "status": "partial",
-      "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Element hierarchy (parent, focus, checked state)",
-      "apple": "NSAccessibility accessibilityChildren and accessibilityParent",
-      "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt); wired: springboard/src/shell/accessibility/tree.rs; springboard/src/shell/axmap.rs (ax_state); springboard/src/bare/control.rs (ax list); wired: springboard/src/shell/accessibility/reader.rs (focus ring on the cursor row); springboard/src/shell/axmap.rs (item_role shared with the element map)",
-      "status": "partial",
-      "note": "The SDK exposes controls_tree and View::controls_tree, but no app in springboard/apps overrides it yet, so every app reads as a flat list under its window. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Labels, titles and help text",
-      "apple": "accessibilityLabel, accessibilityTitle, accessibilityHelp",
-      "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs; wired: springboard/src/shell/accessibility/walk.rs (speech); springboard/src/shell/accessibility/reader.rs",
-      "status": "partial",
-      "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Text attributes and text events",
-      "apple": "AXSelectedText, AXSelectedTextRange, AXVisibleCharacterRange, text change notifications",
-      "bifrost": "springboard/ui/src/ax.rs (AxText), springboard/src/shell/atspi/bridge.rs",
-      "status": "partial",
-      "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields."
-    },
-    {
-      "feature": "Secure text fields",
-      "apple": "isSecureTextEntry fields",
-      "bifrost": "springboard/ui/src/ax.rs (secure flag), springboard/src/shell/atspi/model.rs (build_ax)",
-      "status": "partial",
-      "note": "Value is masked and selected text is always empty; only the length crosses the wire."
-    },
-    {
-      "feature": "Accessibility announcements",
-      "apple": "AccessibilityNotification, announcement requested (low, medium, high priority)",
-      "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK; wired: springboard/src/shell/accessibility/banner.rs; springboard/src/shell/apphost.rs (announce_banner); springboard/src/shell/mod.rs (tick, draw); wired: springboard/src/shell/accessibility/reader.rs (speech queued on each move via Banner::post); springboard/src/shell/accessibility/banner.rs",
-      "status": "partial",
-      "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Custom actions and value setting",
-      "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
-      "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
-      "status": "partial",
-      "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "System accessibility settings readable by apps",
-      "apple": "AccessibilitySettings (reduce motion, increase contrast, reduce transparency, larger text)",
-      "bifrost": "springboard/proto/src/lib.rs:44 (Configure: reduce_motion, text_scale), springboard/render/src/appearance.rs (reduce_motion, increase_contrast, reduce_transparency), springboard/src/shell/accessibility/mod.rs",
-      "status": "partial",
-      "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct."
-    },
-    {
-      "feature": "Display Zoom and magnification",
-      "apple": "Zoom, Display Zoom setting",
-      "bifrost": "springboard/src/shell/accessibility/mod.rs (ZOOMS: Standard, Larger), springboard/src/shell/magnifier.rs",
-      "status": "partial",
-      "note": "Display Zoom is a 1.0 or 1.15 geometry factor, not a system-wide zoom. Magnifier is a camera loupe with digital zoom and filters, not a screen magnifier. No screen-wide zoom."
-    },
-    {
-      "feature": "Pointer and touch accommodations",
-      "apple": "AssistiveTouch, Touch Accommodations (hold duration)",
-      "bifrost": "springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/mod.rs (HOLD_MS)",
-      "status": "partial",
-      "note": "A floating Home button with six system shortcuts, plus hold-duration settings from 0.5 s to 2 s. No pointer-based keys or dwell control."
-    },
-    {
-      "feature": "Switch Control",
-      "apple": "Switch Control (AccessibilityTechnology.switchControl)",
-      "bifrost": "springboard/ui/src/switch_scan.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing). round 75, host only: scan model (Scanner), not yet wired to the shell."
-    },
-    {
-      "feature": "Voice Control",
-      "apple": "Voice Control (AccessibilityTechnology.voiceControl)",
-      "bifrost": "springboard/ui/src/voice_commands.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No voice command code found in springboard/."
-    },
-    {
-      "feature": "Accessibility Inspector",
-      "apple": "Accessibility Inspector developer tool",
-      "bifrost": "springboard/ui/src/ax_audit.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only. round 75, host only: audit checks (Audit::run), pure model."
-    },
-    {
-      "feature": "Braille displays and Braille translation",
-      "apple": "Braille displays, AXBrailleTranslator",
-      "bifrost": "springboard/ui/src/braille.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Braille source code found; the only hits are generated build output under springboard/target."
-    },
-    {
-      "feature": "Audio graphs and hearing device support",
-      "apple": "Audio graphs, hearing device support",
-      "bifrost": "springboard/ui/src/chart_ax.rs (ChartDescriptor::audio_graph)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No audio graph or hearing aid API found in this pass."
-    }
-  ],
-  "gaps": [
-    "No app emits controls_tree, so the parent and hierarchy API is unused and every app is a flat list to screen readers.",
-    "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping.",
-    "Shell chrome (menu bar, dock, Spotlight, Settings pages) is missing from the AT-SPI tree.",
-    "ax_set ignores SetValue and Focus unless an app overrides it; the shared kit's sliders and text fields do not.",
-    "No Accessibility Inspector for developers to see an app's accessibility tree.",
-    "No Switch Control, Voice Control, Braille, or audio graph support.",
-    "Display Zoom is a 1.15 geometry factor, not a system-wide zoom, and the Magnifier is a camera loupe, not a screen magnifier.",
-    "Doc drift: docs/bifrost-ui.md lines 211-223 still list announcements, caret and secure fields as missing in the parity gaps, while the Closed-in-the-text-round section and ax.rs describe them as implemented. Reconcile the doc."
-  ]
+ "framework": "Accessibility",
+ "doc": "https://developer.apple.com/documentation/accessibility",
+ "macos_since": "11.0",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/atspi/ (AT-SPI2 bridge), springboard/ui/src/ax.rs, springboard/sdk/src/lib.rs (controls_tree, ax_set), springboard/proto/src/lib.rs (Configure, reduce_motion, text_scale), springboard/src/shell/accessibility/mod.rs, springboard/src/shell/magnifier.rs, springboard/src/shell/assistive_touch.rs",
+ "summary": "BifrOSt covers a Linux AT-SPI2 screen-reader bridge (roles, states, text attributes, text events, announcements, secure fields) and system display settings (zoom, reduce motion, increase contrast, reduce transparency, larger and bold text) that apps can read. The hierarchy API exists in the SDK but no app uses it yet, and there is no Accessibility Inspector, Switch Control, Voice Control, Braille, or audio-graph support.",
+ "rea_evidence": "ev_2a505504e4634c45494730263b3e9dd7da9a8a53b707a6c6c2a02409b4820b58",
+ "features": [
+  {
+   "feature": "Screen reader bridge (VoiceOver equivalent)",
+   "apple": "Accessibility API, VoiceOver, NSAccessibility element hierarchy",
+   "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs; wired: springboard/src/shell/accessibility/reader.rs (cursor, speech, focus ring); springboard/src/shell/hwkeys.rs (ReaderStep keys); springboard/src/shell/pages.rs (Screen Reader row); wired: springboard/src/shell/accessibility/reader.rs (walk, rotors, activation, focus ring); springboard/src/shell/accessibility/walk.rs; springboard/src/shell/hwkeys.rs (ReaderRotor, ReaderActivate)",
+   "status": "partial",
+   "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Element role mapping",
+   "apple": "AccessibilityTechnology, NSAccessibility roles",
+   "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
+   "status": "partial",
+   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Element hierarchy (parent, focus, checked state)",
+   "apple": "NSAccessibility accessibilityChildren and accessibilityParent",
+   "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt); wired: springboard/src/shell/accessibility/tree.rs; springboard/src/shell/axmap.rs (ax_state); springboard/src/bare/control.rs (ax list); wired: springboard/src/shell/accessibility/reader.rs (focus ring on the cursor row); springboard/src/shell/axmap.rs (item_role shared with the element map); springboard/ui/src/ax.rs (begin_group, end_group, take_links, AxElement, AccessibilityElement, AxRole, AxSubrole, AxNotification, post, AxCustomContent); springboard/sdk/src/runtime.rs (merge_tree); springboard/sdk/src/widgets.rs (source_list group); springboard/src/shell/atspi/model.rs (chrome_snap)",
+   "status": "partial",
+   "note": "Kit draw helpers now record parent links (ax::begin_group/end_group) and the runtime sends them as ControlsTree entries, so the sidebar list nests its rows without app changes; ViewApp already sent the view tree. The menu bar, its menus, the dock apps and Spotlight are published as a \"BifrOSt Shell\" application on the AT-SPI bus. Chrome is read-only (press is not routed yet) and Spotlight is a placeholder entry without live text. Only the sidebar draws groups so far; other immediate-mode helpers stay flat. Needs a Midget check with Orca for parity."
+  },
+  {
+   "feature": "Labels, titles and help text",
+   "apple": "accessibilityLabel, accessibilityTitle, accessibilityHelp",
+   "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs; wired: springboard/src/shell/accessibility/walk.rs (speech); springboard/src/shell/accessibility/reader.rs",
+   "status": "partial",
+   "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Text attributes and text events",
+   "apple": "AXSelectedText, AXSelectedTextRange, AXVisibleCharacterRange, text change notifications",
+   "bifrost": "springboard/ui/src/ax.rs (AxText), springboard/src/shell/atspi/bridge.rs",
+   "status": "partial",
+   "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields."
+  },
+  {
+   "feature": "Secure text fields",
+   "apple": "isSecureTextEntry fields",
+   "bifrost": "springboard/ui/src/ax.rs (secure flag), springboard/src/shell/atspi/model.rs (build_ax)",
+   "status": "partial",
+   "note": "Value is masked and selected text is always empty; only the length crosses the wire."
+  },
+  {
+   "feature": "Accessibility announcements",
+   "apple": "AccessibilityNotification, announcement requested (low, medium, high priority)",
+   "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK; wired: springboard/src/shell/accessibility/banner.rs; springboard/src/shell/apphost.rs (announce_banner); springboard/src/shell/mod.rs (tick, draw); wired: springboard/src/shell/accessibility/reader.rs (speech queued on each move via Banner::post); springboard/src/shell/accessibility/banner.rs",
+   "status": "partial",
+   "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "Custom actions and value setting",
+   "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
+   "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
+   "status": "partial",
+   "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "System accessibility settings readable by apps",
+   "apple": "AccessibilitySettings (reduce motion, increase contrast, reduce transparency, larger text)",
+   "bifrost": "springboard/proto/src/lib.rs:44 (Configure: reduce_motion, text_scale), springboard/render/src/appearance.rs (reduce_motion, increase_contrast, reduce_transparency), springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct."
+  },
+  {
+   "feature": "Display Zoom and magnification",
+   "apple": "Zoom, Display Zoom setting",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs (ZOOMS: Standard, Larger), springboard/src/shell/magnifier.rs",
+   "status": "partial",
+   "note": "Display Zoom is a 1.0 or 1.15 geometry factor, not a system-wide zoom. Magnifier is a camera loupe with digital zoom and filters, not a screen magnifier. No screen-wide zoom."
+  },
+  {
+   "feature": "Pointer and touch accommodations",
+   "apple": "AssistiveTouch, Touch Accommodations (hold duration)",
+   "bifrost": "springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/mod.rs (HOLD_MS)",
+   "status": "partial",
+   "note": "A floating Home button with six system shortcuts, plus hold-duration settings from 0.5 s to 2 s. No pointer-based keys or dwell control."
+  },
+  {
+   "feature": "Switch Control",
+   "apple": "Switch Control (AccessibilityTechnology.switchControl)",
+   "bifrost": "springboard/ui/src/switch_scan.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing). round 75, host only: scan model (Scanner), not yet wired to the shell."
+  },
+  {
+   "feature": "Voice Control",
+   "apple": "Voice Control (AccessibilityTechnology.voiceControl)",
+   "bifrost": "springboard/ui/src/voice_commands.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No voice command code found in springboard/."
+  },
+  {
+   "feature": "Accessibility Inspector",
+   "apple": "Accessibility Inspector developer tool",
+   "bifrost": "springboard/ui/src/ax_audit.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only. round 75, host only: audit checks (Audit::run), pure model."
+  },
+  {
+   "feature": "Braille displays and Braille translation",
+   "apple": "Braille displays, AXBrailleTranslator",
+   "bifrost": "springboard/ui/src/braille.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Braille source code found; the only hits are generated build output under springboard/target."
+  },
+  {
+   "feature": "Audio graphs and hearing device support",
+   "apple": "Audio graphs, hearing device support",
+   "bifrost": "springboard/ui/src/chart_ax.rs (ChartDescriptor::audio_graph)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No audio graph or hearing aid API found in this pass."
+  }
+ ],
+ "gaps": [
+  "Only the sidebar list draws an accessibility group; the other immediate-mode kit helpers and non-view apps still publish flat lists.",
+  "Shell chrome is in the AT-SPI tree but read-only (press is not routed back) and Spotlight has no live text.",
+  "ax::post queues notifications but the runtime does not yet forward them as AT-SPI signals.",
+  "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping."
+ ]
 }

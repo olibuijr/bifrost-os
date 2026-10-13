@@ -278,6 +278,39 @@ pub fn key_path(k: Key) -> String {
     }
 }
 
+/// The slot of the pseudo-application that holds the shell's own chrome (menu bar, dock, Spotlight). Apps use slots below it.
+pub const CHROME_SLOT: u8 = 250;
+
+/// The shell chrome as an application snapshot, so a screen reader reads the menu bar, the dock and Spotlight like any app.
+/// `menus` is (menu title, [(row title, enabled)]); `dock` is (app name, open). Ids are positional and stable while the lists
+/// keep their order: the menu bar is 1, a menu 100 + 100 * index, its rows follow it; the dock is 2, its apps 1000 + index;
+/// Spotlight is 3. Menus nest their rows (`parent`), the bar nests the menus.
+pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, bool)]) -> AppSnap {
+    let bounds = Rect { x: 0., y: 0., w: 0., h: 0. };
+    let node = |id: u64, parent: Option<u64>, role: Role, name: &str, value: &str, enabled: bool| SNode {
+        id, parent, role, name: name.into(), value: value.into(), bounds, enabled, focused: false, checked: None, title: String::new(), help: String::new(), text: None,
+    };
+    let mut nodes = vec![node(1, None, Role::List, "Menu Bar", "", true)];
+    for (m, (title, rows)) in menus.iter().enumerate() {
+        let mid = 100 + 100 * m as u64;
+        nodes.push(node(mid, Some(1), Role::MenuItem, title, "", true));
+        for (i, (row, enabled)) in rows.iter().enumerate().take(98) {
+            nodes.push(node(mid + 1 + i as u64, Some(mid), Role::MenuItem, row, "", *enabled));
+        }
+    }
+    nodes.push(node(2, None, Role::List, "Dock", "", true));
+    for (i, (name, open)) in dock.iter().enumerate() {
+        nodes.push(node(1000 + i as u64, Some(2), Role::Button, name, if *open { "open" } else { "" }, true));
+    }
+    nodes.push(node(3, None, Role::TextField, "Spotlight", "", true));
+    AppSnap { slot: CHROME_SLOT, app_id: "shell".into(), name: "BifrOSt Shell".into(), nodes }
+}
+
+/// The AT-SPI `Action` names of an element: `press`, and for a numeric one `increment` and `decrement`.
+pub fn action_names(numeric: bool) -> Vec<&'static str> {
+    if numeric { vec!["press", "increment", "decrement"] } else { vec!["press"] }
+}
+
 /// A numeric value read from the node's value text: "0.4" is 0.4 of 1.0, "40%" is 40 of 100, and "3/10"
 /// (`NativeAccessibilityValue` with an explicit `maxValue`) is 3 of 10.
 pub fn numeric(value: &str) -> Option<(f64, f64)> {
@@ -373,6 +406,29 @@ mod tests {
         }
         assert_eq!(parse_path("/org/a11y/atspi/accessible/rootx"), None);
         assert_eq!(parse_path("/org/a11y/atspi/accessible/root/app1/x2"), None);
+    }
+
+    #[test]
+    fn shell_chrome_is_a_tree_under_its_own_application() {
+        let menus = vec![("File".to_string(), vec![("New".to_string(), true), ("Close".to_string(), false)]), ("Edit".to_string(), vec![])];
+        let dock = vec![("Notes".to_string(), true), ("Files".to_string(), false)];
+        let s = chrome_snap(&menus, &dock);
+        assert_eq!((s.slot, s.name.as_str()), (CHROME_SLOT, "BifrOSt Shell"));
+        assert_eq!(children(&s.nodes, None), vec![1, 2, 3], "menu bar, dock and Spotlight sit under the application");
+        assert_eq!(children(&s.nodes, Some(1)), vec![100, 200], "the bar holds its menus");
+        assert_eq!(children(&s.nodes, Some(100)), vec![101, 102], "a menu holds its rows");
+        let close = s.nodes.iter().find(|n| n.id == 102).unwrap();
+        assert!(!close.enabled && close.name == "Close");
+        assert_eq!(children(&s.nodes, Some(2)), vec![1000, 1001]);
+        let notes = s.nodes.iter().find(|n| n.id == 1000).unwrap();
+        assert_eq!((notes.role, notes.value.as_str()), (Role::Button, "open"));
+        assert_eq!(s.nodes.iter().find(|n| n.id == 3).unwrap().role, Role::TextField);
+    }
+
+    #[test]
+    fn numeric_elements_list_increment_and_decrement() {
+        assert_eq!(action_names(false), vec!["press"]);
+        assert_eq!(action_names(true), vec!["press", "increment", "decrement"]);
     }
 
     #[test]

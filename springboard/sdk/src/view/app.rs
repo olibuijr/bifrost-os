@@ -260,6 +260,8 @@ impl<S: Responder + 'static> ViewApp<S> {
             AxAction::Press => self.window.ax_press(id, &mut self.state),
             AxAction::SetValue(v) => self.window.ax_set_value(id, &v, &mut self.state),
             AxAction::Focus => self.window.make_first_responder(Some(id)),
+            AxAction::Increment => self.window.ax_adjust(id, true, &mut self.state),
+            AxAction::Decrement => self.window.ax_adjust(id, false, &mut self.state),
         };
         done && self.window.needs_display()
     }

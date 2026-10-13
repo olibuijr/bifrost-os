@@ -522,6 +522,7 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
         s.fill_rect(RectF::new((bx) as f32, (by) as f32, (bw) as f32, (bh) as f32), SIDEBAR_BG.now());
     }
     // labels on the material blend vibrantly; a selected or pressed row's plate is opaque, so its text is plain
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Sidebar", bounds);
     let vibrant = vibrant_text();
     let inset = SPACE_S + SPACE_XS / 2.0;
     for (i, item) in list.items.iter().enumerate() {
@@ -602,6 +603,7 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
             }
         }
     }
+    bifrost_ui::ax::end_group();
 }
 
 /// A search field (`NativeSearchField`): a capsule with a leading magnifier, the placeholder or text, a clear button

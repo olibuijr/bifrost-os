@@ -15,6 +15,20 @@ pub(crate) fn merge_controls(mut app: Vec<crate::controls::Node>, drawn: &[crate
     app
 }
 
+/// The app's own `controls_tree` plus the parents the kit's draw helpers recorded (`ax::begin_group`). An entry the app sent
+/// wins; a drawn node it did not mention gets one with its recorded parent. Capped at the packet limit.
+pub(crate) fn merge_tree(mut app: Vec<crate::proto::NodeExt>, links: &[bifrost_ui::ax::AxLink]) -> Vec<crate::proto::NodeExt> {
+    for l in links {
+        if app.len() >= crate::proto::MAX_NODE_EXT {
+            break;
+        }
+        if !app.iter().any(|e| e.id == l.id) {
+            app.push(crate::proto::NodeExt { id: l.id, parent: Some(l.parent), focused: false, checked: None });
+        }
+    }
+    app
+}
+
 /// What the shell sends the app besides configuration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
@@ -497,6 +511,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut ax_meta_seen: Vec<bifrost_ui::ax::AxMeta> = Vec::new();
     // what the kit's draw helpers recorded in the last frame: the element map of an app that declares no controls itself
     let mut drawn_nodes: Vec<bifrost_ui::Node> = Vec::new();
+    let mut drawn_links: Vec<bifrost_ui::ax::AxLink> = Vec::new();
     // the behind-window materials the shell last got (`ToShell::Materials`)
     let mut materials_seen: Vec<crate::proto::Material> = Vec::new();
     let mut materials: Vec<crate::proto::Material> = Vec::new();
@@ -836,6 +851,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                     if sent {
                         busy = true;
+                        drawn_links = bifrost_ui::ax::take_links();
                         drawn_nodes = bifrost_ui::ax::take_frame();
                         first_frame = false;
                         repaint_suspended = false;
@@ -848,7 +864,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if busy || first_turn {
         let controls=merge_controls(app.controls(c),&drawn_nodes);
         if controls!=controls_seen {let _=chan.send(&ToShell::Controls(controls.clone()).encode(),&[]);controls_seen=controls;}
-        let tree=app.controls_tree(c);
+        let tree=merge_tree(app.controls_tree(c),&drawn_links);
         if tree!=tree_seen {let _=chan.send(&ToShell::ControlsTree(tree.clone()).encode(),&[]);tree_seen=tree;}
         let ax_text=app.ax_text(c);
         if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
@@ -1366,5 +1382,28 @@ mod audit_fix_tests {
         assert!(ctx.ui.bold, "Bold Text survives a resize");
         assert_eq!((ctx.cfg.w, ctx.cfg.h, ctx.ui.s, ctx.ui.text_scale), (200, 150, 2.0, 1.5));
         assert_eq!(ctx.take_sent(), [ToShell::OpenUrl { url: "https://example.com".into() }], "the queue is not dropped");
+    }
+}
+
+#[cfg(test)]
+mod tree_merge_tests {
+    use super::merge_tree;
+    use crate::proto::NodeExt;
+    use bifrost_ui::ax::AxLink;
+
+    #[test]
+    fn drawn_parents_fill_in_and_the_apps_own_entries_win() {
+        let own = vec![NodeExt { id: 2, parent: None, focused: true, checked: None }];
+        let links = [AxLink { id: 2, parent: 1 }, AxLink { id: 3, parent: 1 }];
+        let t = merge_tree(own, &links);
+        assert_eq!(t.len(), 2);
+        assert_eq!((t[0].id, t[0].parent, t[0].focused), (2, None, true), "the app's entry is kept");
+        assert_eq!((t[1].id, t[1].parent), (3, Some(1)));
+    }
+
+    #[test]
+    fn the_merged_tree_stays_within_the_packet_limit() {
+        let links: Vec<AxLink> = (0..300).map(|i| AxLink { id: i, parent: 999 }).collect();
+        assert_eq!(merge_tree(Vec::new(), &links).len(), crate::proto::MAX_NODE_EXT);
     }
 }
