@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-cmd"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line tools for BifrOSt (one binary per tool in src/bin/, shared helpers in src/lib.rs)."
+
+[dependencies]
+bifrost-core = { path = "../core" }
+bifrost-ui = { path = "../ui" }
