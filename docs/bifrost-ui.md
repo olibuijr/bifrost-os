@@ -2058,11 +2058,15 @@ apps draw and capture touch.
   ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
   Midget test passes.
 
-## Contacts access and fetch (`bifrost_app::contacts`, the `contacts` service)
+## Contacts access, fetch and save (`bifrost_app::contacts`, the `contacts` service)
 
-Apps read the person's contacts only after the person allows it. `access` and `request` report the status (`not_determined`,
-`restricted`, `denied`, `authorized`, `limited`); `fetch` returns the named fields (`given_name`, `family_name`,
-`organization`, `phones`, `emails`, `address`, `note`) of each readable contact, sorted by name, with an optional text
-query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
-shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
-restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+Apps read and write the person's contacts only after the person allows it. `access` and `request` report the status
+(`not_determined`, `restricted`, `denied`, `authorized`, `limited`); `fetch` returns the named fields (`given_name`,
+`family_name`, `organization`, `phones`, `emails`, `address`, `note`) of each readable contact, sorted by name, with an
+optional text query. `save` takes `add`, `update` and `delete` lists and applies them as one call: the reply lists the
+ids the new contacts got, and a failing item changes nothing. Only full access writes; a limited grant is read-only.
+The SDK side is `springboard/sdk/src/contacts.rs` (`SaveRequest`, `save`, `decode_saved`). The access model is
+`bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the shell side is
+`springboard/src/shell/services/contacts.rs` (`apply_save` is pure; the service stores the book only on success).
+Gaps: no access sheet or Settings row yet, grants reset on restart, no contact picker for apps, and one phone, one
+email and one address per contact (a list of more is refused). See `docs/parity/sdk-app-services.md`.
