@@ -8,6 +8,8 @@
 //! // in App::service_event, for service "audio-devices":
 //! //   if let Some(change) = audio_devices::decode_event(event, body) { ... }
 //! ```
+//! The shell reports a level or mute change as [`Change::Volume`], a route or default change as [`Change::Route`] and
+//! a device list change as [`Change::Devices`].
 //! The calls return the request id; the reply comes back through `App::service_reply` (or `service::take_reply`).
 use crate::runtime::Ctx;
 use crate::service;
@@ -46,12 +48,14 @@ pub struct Volume {
 }
 
 /// A change the shell reports to every app.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Change {
     /// The output route or the default output changed. `output` is None when no device can take the output role.
     Route { route: String, output: Option<String> },
     /// The device list changed; the ids of the devices now present.
     Devices(Vec<String>),
+    /// The output level or mute changed; the new level, mute state and the gain that plays.
+    Volume(Volume),
 }
 
 /// Lists the devices and the defaults.
@@ -129,6 +133,7 @@ pub fn decode_event(event: &str, body: &Json) -> Option<Change> {
             let ids = body.get("devices")?.as_array()?.iter().filter_map(|d| d.as_str().map(str::to_string)).collect();
             Some(Change::Devices(ids))
         }
+        "volume_changed" => decode_volume(body).ok().map(Change::Volume),
         _ => None,
     }
 }
@@ -193,6 +198,13 @@ mod tests {
             Some(Change::Devices(vec!["speaker".into(), "microphone".into()]))
         );
         assert_eq!(decode_event("something_else", &devices), None);
+    }
+
+    #[test]
+    fn a_volume_event_decodes_to_the_new_level_and_mute() {
+        let body = parsed(r#"{"level":0.4,"muted":false,"gain":0.4}"#);
+        assert_eq!(decode_event("volume_changed", &body), Some(Change::Volume(Volume { level: 0.4, muted: false, gain: 0.4 })));
+        assert_eq!(decode_event("volume_changed", &parsed(r#"{"muted":true}"#)), None);
     }
 
     #[test]

@@ -117,7 +117,7 @@ impl System {
                     self.list_request = Some(audio_devices::list(ctx));
                     Event::Ignored
                 }
-                None => Event::Ignored,
+                _ => Event::Ignored,
             };
         }
         if service == power_service::SERVICE {

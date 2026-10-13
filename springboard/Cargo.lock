@@ -537,7 +537,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

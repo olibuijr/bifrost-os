@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4
+
+- Device changes: the match on `audio_devices::decode_event` ignores the new `volume_changed` event (the SDK's `Change::Volume`).
+
 ## 0.5.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
