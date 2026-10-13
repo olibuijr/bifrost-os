@@ -93,7 +93,7 @@ pub mod dispatch_data;
 pub mod dispatch_io;
 pub mod predicate_validating;
 pub mod cf_bundle;
-pub mod apple_events;
+pub mod app_events;
 pub mod dispatch_time;
 pub mod timer_source;
 pub mod keyed_archive;

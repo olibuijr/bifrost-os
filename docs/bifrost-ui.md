@@ -2538,7 +2538,7 @@ text detection exists). `CIRenderDestination` and depth effects stay gaps (need 
 Perspective and triangle tiles, displacement, circle splash and torus lens are not built. Falloffs are linear
 in the distance from the centre, which may differ from the reference curve; check on Midget before promoting.
 
-## Foundation and Core Foundation small gaps (`predicate_validating`, `cf_bundle`, `dispatch_io`, `apple_events`)
+## Foundation and Core Foundation small gaps (`predicate_validating`, `cf_bundle`, `dispatch_io`, `app_events`)
 
 - **Foundation: `bifrost_app::predicate_validating`** (`NSPredicateValidating`). `Predicate` (comparison, `And`, `Or`, `Not`),
   `PredicateVisitor`, `ValidationPolicy::new().allow("title", &[Operator::Contains]).allow_key("date")` and the
@@ -2553,10 +2553,10 @@ in the distance from the centre, which may differ from the reference curve; chec
   over a file or pipe end. `read(offset, length, queue, handler)` calls `handler(done, data, error)` per chunk, then once
   with `done == true`; `write(offset, data, queue, handler)` hands back the unwritten remainder. `set_limit` is the
   high-water chunk size, `set_low_water` batches chunks, `close` ends operations with `ECANCELED` (125).
-- **Core Services: `bifrost_app::apple_events`** (`AEDesc`, `AESendMessage`, `AEInstallEventHandler`). `AppleEvent::new(class,
+- **Core Services: `bifrost_app::app_events`** (`AEDesc`, `AESendMessage`, `AEInstallEventHandler`). `AppEvent::new(class,
   id, record)` travels as the control-socket method `ae.<class>.<id>`; `send_message(socket, &event, timeout)` returns an
-  `AppleEventReply` (`error_number` 0 on success, `-1708` not handled, `-1712` timeout, `-609` unreachable).
-  `AppleEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
+  `AppEventReply` (`error_number` 0 on success, `-1708` not handled, `-1712` timeout, `-609` unreachable).
+  `AppEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
 
 All four are host-tested only; rows stay `partial` until checked on Midget.
 
