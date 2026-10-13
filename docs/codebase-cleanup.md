@@ -1,5 +1,13 @@
 # BifrOSt codebase cleanup — 2026-10-08
 
+> Status 2026-10-13 (shell 0.7.25): this is the record of the 2026-10-08 cleanup. Since then:
+> `tools/tab.py` is gone, so use `tools/bifrost.py` (`bifrost` on the PATH) only. The `out/cleanup-*.log` evidence files
+> and the `springboard-shell 0.4.30` release no longer exist in the tree. The workspace now has many more members
+> (44 apps, 16 audio crates, `wm`, `gpu`, `layers`, `gfx2d`, `chrome`, `rfb`, `mcp`; see `springboard/Cargo.toml`), and
+> the boot code lives in `springboard/bootweave`. The compositor is `bifrost-wm`. The skills are `bifrost`,
+> `bifrost-dev`, `bifrost-boot` and `bifrost-audio`, under `~/.codex/skills`, plus the repo-level skills named in
+> `AGENTS.md`. Open structural items listed at the end are tracked in `docs/handoff-backlog.md`.
+
 The shared foundations now have explicit ownership:
 
 - `springboard/core` (`bifrost-core`): JSON, SHA-256 and atomic persistence.

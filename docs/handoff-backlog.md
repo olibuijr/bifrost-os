@@ -1,5 +1,8 @@
 # HANDOFF backlog (triage of 2026-10-11)
 
+> Status 2026-10-13: re-checked against `integration` (shell 0.7.25). Changes since the triage are marked
+> "(2026-10-13)". Unmarked items were not re-checked and stay as triaged.
+
 Every unfinished item in `HANDOFF.md` (rounds 1-60, 1638 lines), checked against `main` by five read-only triage passes.
 Items found done or stale (tablet-only, superseded, already fixed) are dropped here. `OPEN` = confirmed in code;
 `CHECK` = needs a Midget run or a test run before it can be closed. Owner rule: work every item to done, then clear
@@ -17,13 +20,13 @@ HANDOFF.md. Tick items here as they land (commit hash).
 - [x] Unattended install shows the progress page (black screen): 5b1ebb9e
 - [x] Lab reinstall speed (mirror skip, store over lab link, 1 s menu, installer-only push): 35502706, 1ec2ce70
 - [x] Look step (appearance, accent, wallpaper): 41b24132
-- [ ] OPEN Partition editing beyond Erase/Free space (`installer/disks.rs` Mode) — L
+- [ ] OPEN Installer partition editing beyond Erase/Free space (`installer/disks.rs` `Mode`) — L. Disk Utility now runs erase, partition and first-aid plans through privd (`core` plan runner, 0.4.0), which the installer could reuse (2026-10-13)
 - [ ] OPEN Release-ISO hardening review (`tools/check-iso-hardening.sh`, no record)
 - [ ] CHECK Kernel/root corruption fallback; hard-limit OOM recovery; direct pacman bypassing the update guard
 
 ## Shell and desktop
-- [ ] OPEN `window_fx` not wired to window open/close/minimize (hook `desktop_bar.rs` desk close/minimize)
-- [ ] OPEN Settings readers missing: minimize effect, hot corners, Overview prefs
+- [ ] OPEN `window_fx` wired for the minimize target only: `src/shell/desk.rs` calls `minimize_target` and reads the minimize effect pref, but the effect value is unused (`_effect`); open and close have no effect (2026-10-13)
+- [ ] OPEN Settings readers missing: hot corners, Overview prefs (the minimize effect pref exists in `DeskPrefs`, 2026-10-13)
 - [ ] OPEN Control Center Now Playing: plate click acts as transport; height not clamped on short screens
 - [ ] OPEN Sheet default button / focus ring (and Overview selection) use TINT instead of CONTROL_ACCENT (`sdk/src/widgets.rs:554,709`)
 - [ ] OPEN Quit has no confirmation for apps with unsaved work (`desktop_bar.rs` Quit = Close)
@@ -54,7 +57,7 @@ HANDOFF.md. Tick items here as they land (commit hash).
 ## Apps
 - [ ] OPEN Term: Settings window, Cmd+N, Cmd+I, prompt jumping, Cmd+click URLs, visual bell (profile_table not wired)
 - [ ] OPEN Files: undo does not restore tag colours; disk-full copy leaves a partial tree
-- [ ] OPEN Browser: orphan `src/recover.rs`; Servo Resource Timing sizes; console line 0 for inline scripts; Private Window untested
+- [ ] OPEN Browser: `recover.rs` is now a module of `session.rs` (not orphan, 2026-10-13); Servo Resource Timing sizes; console line 0 for inline scripts; Private Window untested
 - [ ] OPEN Notes has no ax nodes (export unverified)
 - [ ] OPEN Apps still on fixed dark colour constants (per-app Pair port); SDK adoption batch 2
 - [ ] OPEN Console not preinstalled on existing systems
@@ -62,7 +65,7 @@ HANDOFF.md. Tick items here as they land (commit hash).
 
 ## Tools and docs
 - [ ] OPEN `tools/_util.py` `changelog_newest` unused; `springboard/tools/aap.py` targets aarch64-linux-android
-- [ ] OPEN `tools/boot.sh` referenced by old tests, not in the tree
+- [ ] OPEN `tools/boot.sh` referenced by old tests, still not in the tree (2026-10-13)
 - [ ] OPEN MCP: `logs app=` filters MESSAGE not SYSLOG_IDENTIFIER; `parse_predicate` quotes; `logs`/`wait` hold the lock
-- [ ] OPEN README/CHANGELOG still say iOSTerm (code is clean)
+- [x] DONE README and `springboard/CHANGELOG.md` say Term; the app id `is.olibuijr.iosterm` stays for installed copies (2026-10-13)
 - [ ] CHECK flaky `media::player` tests under parallel load (pass alone)
