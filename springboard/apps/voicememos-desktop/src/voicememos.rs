@@ -78,6 +78,8 @@ pub const MENU_RENAME: u32 = 3;
 pub const MENU_EXPORT: u32 = 4;
 pub const MENU_SPLIT: u32 = 5;
 pub const MENU_SKIP: u32 = 6;
+/// Enhance Recording: saves a noise-gated copy of the selected take.
+pub const MENU_ENHANCE: u32 = 7;
 /// Line height of the notes text (points), about 1.3 times the body size.
 const NOTES_LINE_PT: f32 = 17.0;
 /// Corner radius of the rename field card (prefs layout card radius, points).
@@ -719,7 +721,7 @@ impl VoiceMemos {
 
     /// Runs a "Recording" menu item. False for an id this app does not declare.
     pub fn menu(&mut self, ui: &Ui, id: u32) -> bool {
-        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT | MENU_SPLIT | MENU_SKIP) {
+        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT | MENU_SPLIT | MENU_SKIP | MENU_ENHANCE) {
             return false;
         }
         if id == MENU_SKIP {
@@ -730,6 +732,7 @@ impl VoiceMemos {
                 MENU_NOTES => self.begin_notes(ui),
                 MENU_RENAME => self.begin_rename(ui),
                 MENU_SPLIT => self.split_selected(),
+                MENU_ENHANCE => self.enhance_selected(),
                 _ => self.export_selected(),
             }
         }
@@ -757,6 +760,27 @@ impl VoiceMemos {
             Err(e) => {
                 self.reload();
                 self.error = format!("Cannot split: {e}");
+            }
+        }
+    }
+
+    /// Saves a noise-gated copy of the selected recording as `<title> enhanced` and selects it. Playback stops, as the
+    /// list changes. The original stays.
+    fn enhance_selected(&mut self) {
+        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
+        self.stop_playback();
+        match store::save_enhanced(&memo) {
+            Ok(path) => {
+                self.error.clear();
+                self.reload();
+                self.selected = self.memos.iter().position(|m| m.path == path);
+                self.position_ms = 0.0;
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.notice = format!("Enhanced copy saved as {name}");
+            }
+            Err(e) => {
+                self.reload();
+                self.error = format!("Cannot enhance: {e}");
             }
         }
     }
@@ -1690,6 +1714,23 @@ mod tests {
         let kept = &app.memos[app.selected.unwrap()];
         assert_eq!(kept.duration_ms, 250);
         assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn enhance_saves_a_gated_copy_and_selects_it() {
+        let (mut app, ui) = app("enhance");
+        let samples: Vec<i16> = (0..8000).map(|i| if i < 4000 { 40 } else { 12000 }).collect();
+        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &samples), 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+        assert!(app.menu(&ui, MENU_ENHANCE));
+        assert_eq!(app.memos.len(), 2, "the original and the enhanced copy");
+        let copy = &app.memos[app.selected.unwrap()];
+        assert!(copy.title.ends_with(" enhanced"), "{}", copy.title);
+        assert_eq!(copy.duration_ms, 1000, "the length is kept");
+        assert!(app.error.is_empty());
+        assert!(app.notice.starts_with("Enhanced copy saved as"), "{}", app.notice);
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 

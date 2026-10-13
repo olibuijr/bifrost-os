@@ -2,6 +2,7 @@
 //! Recording and playback go through the audio service (`bifrost_app::audio`). The system services are glue in
 //! `services`: the microphone permission (`privacy`), the audio devices (`audio-devices`) and Now Playing.
 
+mod enhance;
 mod services;
 mod store;
 mod voicememos;
@@ -144,6 +145,7 @@ impl App for VoiceMemosApp {
             items: vec![
                 AppMenuItem::new(voicememos::MENU_TRIM, "Trim\u{2026}").key("cmd+t").enabled(on),
                 AppMenuItem::new(voicememos::MENU_SPLIT, "Split at Playhead").enabled(split),
+                AppMenuItem::new(voicememos::MENU_ENHANCE, "Enhance Recording").enabled(on),
                 AppMenuItem::new(voicememos::MENU_NOTES, "Notes\u{2026}").key("cmd+shift+n").enabled(on),
                 AppMenuItem::separator(),
                 AppMenuItem::new(voicememos::MENU_RENAME, "Rename\u{2026}").enabled(on),

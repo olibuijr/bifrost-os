@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- Enhance Recording (Recording menu): saves a noise-gated copy of the selected take as "<title> enhanced". Quiet
+  passages (hiss, room noise, the gaps between words) are turned down by 18 dB, not muted, and loud speech passes
+  unchanged. The length is kept, the original is left as it was, and the copy is selected.
+- Playback speed and recording quality are still not in this version (the audio service takes neither).
+
 ## 1.6.4 — 2026-10-13
 
 - Takes are described by the shared stream format (`StreamFormat`, from `springboard::media::capture::pcm16`) instead of a loose rate and channel count; the WAV header of every save, trim and split is written from it.

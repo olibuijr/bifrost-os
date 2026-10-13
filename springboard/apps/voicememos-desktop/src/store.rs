@@ -226,6 +226,27 @@ pub fn next_speech_ms(spans: &[(f64, f64)], pos_ms: f64) -> Option<f64> {
     spans.iter().map(|&(start, _)| start).find(|&start| start > pos_ms)
 }
 
+/// The whole of a 16-bit PCM WAV with the noise gate applied (see `enhance`), as a new WAV of the same format and
+/// length. `None` when the file is not 16-bit PCM.
+pub fn enhanced_wav(path: &Path) -> Option<Vec<u8>> {
+    let bytes = std::fs::read(path).ok()?;
+    let (rate, channels) = pcm16_format(&bytes)?;
+    let data = bytes.get(44..)?;
+    let mut samples: Vec<i16> = data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+    crate::enhance::gate_samples(&mut samples, rate, channels as usize);
+    Some(wav_bytes(&pcm16(rate, channels as u32), &samples))
+}
+
+/// Writes an enhanced copy of `memo` as a new memo named `<title> enhanced` (numbered when taken). The original is
+/// kept as it was.
+pub fn save_enhanced(memo: &Memo) -> std::io::Result<PathBuf> {
+    let wav = enhanced_wav(&memo.path).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "not a 16-bit WAV"))?;
+    let dir = memo.path.parent().unwrap_or(Path::new("."));
+    let path = free_path(dir, &format!("{} enhanced", memo.title), None);
+    springboard::shell::fsutil::write_atomic(&path, &wav)?;
+    Ok(path)
+}
+
 /// Writes the trimmed part of `memo` as a new memo named `<title> trimmed` (numbered when taken).
 /// The original recording is kept as it was.
 pub fn save_trim(memo: &Memo, trim: Trim) -> std::io::Result<PathBuf> {
@@ -328,6 +349,25 @@ mod tests {
         assert_eq!(format_title(44100, 2), "44.1 kHz stereo");
         assert_eq!(format_title(48000, 6), "48 kHz 6 channels");
         assert_eq!(format_title(0, 1), "", "unknown format is left out");
+    }
+
+    #[test]
+    fn enhanced_copy_keeps_the_length_and_the_original() {
+        let dir = temp("enhance");
+        let mut samples = vec![40i16; 8000];
+        samples.extend((0..8000).map(|i| (((i as f32) * 0.2).sin() * 12000.0) as i16));
+        let path = dir.join("Lecture.wav");
+        std::fs::write(&path, wav_bytes(&pcm16(8000, 1), &samples)).unwrap();
+        let memo = scan(&dir).into_iter().next().unwrap();
+        let out = enhanced_wav(&memo.path).unwrap();
+        let back: Vec<i16> = out[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+        assert_eq!(back.len(), samples.len());
+        assert!(back[..4000].iter().all(|s| s.abs() < 40), "the hiss is turned down");
+        let copy = save_enhanced(&memo).unwrap();
+        assert_eq!(copy.file_name().unwrap(), "Lecture enhanced.wav");
+        assert_eq!(scan(&dir).len(), 2);
+        assert_eq!(std::fs::read(&memo.path).unwrap(), wav_bytes(&pcm16(8000, 1), &samples), "the original is untouched");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
