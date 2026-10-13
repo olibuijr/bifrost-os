@@ -44,6 +44,10 @@ pub struct Memory {
     pub cached: u64,
     pub swap_total: u64,
     pub swap_free: u64,
+    pub shared: u64,
+    pub buffers: u64,
+    pub swap_cached: u64,
+    pub zswap: u64,
 }
 
 impl Memory {
@@ -161,6 +165,10 @@ pub fn parse_meminfo(text: &str) -> Memory {
             "Cached" => m.cached = bytes,
             "SwapTotal" => m.swap_total = bytes,
             "SwapFree" => m.swap_free = bytes,
+            "Shmem" => m.shared = bytes,
+            "Buffers" => m.buffers = bytes,
+            "SwapCached" => m.swap_cached = bytes,
+            "Zswap" => m.zswap = bytes,
             _ => {}
         }
     }
@@ -405,6 +413,12 @@ mod tests {
         assert_eq!(m.used(), 12_000 * 1024);
         assert_eq!(m.swap_used(), 750 * 1024);
         assert!((m.used_percent() - 75.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn meminfo_reads_the_breakdown_rows() {
+        let m = parse_meminfo("Shmem: 10 kB\nBuffers: 20 kB\nSwapCached: 30 kB\nZswap: 40 kB\n");
+        assert_eq!((m.shared, m.buffers, m.swap_cached, m.zswap), (10 * 1024, 20 * 1024, 30 * 1024, 40 * 1024));
     }
 
     #[test]

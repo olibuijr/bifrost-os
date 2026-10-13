@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- View > Columns shows or hides the User, Threads and PID columns, and remembers the choice.
+- The Memory graph's detail line adds shared, buffer and compressed memory beside cached files and swap.
+
 ## 0.3.0
 
 - The sidebar and View > Filter Processes add System, Active and Inactive processes.

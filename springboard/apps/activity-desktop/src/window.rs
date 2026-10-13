@@ -60,6 +60,8 @@ pub const MENU_FREQ: u32 = 20;
 pub const MENU_SIGNAL: u32 = 40;
 /// Filter items of the View menu: MENU_FILTER + index into `Filter::ALL`.
 pub const MENU_FILTER: u32 = 60;
+/// Column items of the View menu: MENU_COLUMN + index into `model::OPTIONAL_COLUMNS`.
+pub const MENU_COLUMN: u32 = 80;
 
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,6 +111,8 @@ pub struct Monitor {
     /// The process being inspected (its pid and the last reading), shown in place of the graph.
     pub inspector: Option<(u32, Inspection)>,
     pub frequency: UpdateFrequency,
+    /// View > Columns: bit i set hides `model::OPTIONAL_COLUMNS[i]`.
+    pub hidden_columns: i64,
 }
 
 impl Monitor {
@@ -133,6 +137,7 @@ impl Monitor {
             press: Press::None,
             inspector: None,
             frequency: UpdateFrequency::VeryOften,
+            hidden_columns: 0,
         }
     }
 
@@ -236,6 +241,18 @@ impl Monitor {
         self.frequency = f;
     }
 
+    /// View > Columns: shows or hides one optional column.
+    pub fn toggle_column(&mut self, index: usize) {
+        if index < model::OPTIONAL_COLUMNS.len() {
+            self.hidden_columns ^= 1 << index;
+        }
+    }
+
+    /// Whether optional column `index` is shown.
+    pub fn column_shown(&self, index: usize) -> bool {
+        self.hidden_columns & (1 << index) == 0
+    }
+
     /// The selected row as tab-separated text, for Edit > Copy.
     pub fn copy_text(&self) -> Option<String> {
         self.selected_proc().map(|p| model::row_text(p, self.tab))
@@ -306,7 +323,7 @@ impl Monitor {
     /// The table's columns with their x positions and widths in points, the fill column taking the rest.
     pub fn col_frames(&self, ui: &Ui) -> Vec<(Column, f32, f32)> {
         let g = self.geo(ui);
-        let cols = self.tab.columns();
+        let cols = model::visible_columns(self.tab, self.hidden_columns);
         let fixed: f32 = cols.iter().map(|c| c.width).sum();
         let fill = (g.content_w - fixed).max(80.0);
         let mut x = g.content_x;
@@ -633,6 +650,18 @@ mod tests {
         assert_eq!(m.next_wake(1500.0), 2000.0);
         m.set_frequency(UpdateFrequency::Normally);
         assert_eq!(m.next_wake(1500.0), 6000.0);
+    }
+
+    #[test]
+    fn toggling_a_column_hides_and_shows_it() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert!(m.column_shown(1));
+        m.toggle_column(1);
+        assert!(!m.column_shown(1));
+        m.toggle_column(1);
+        assert!(m.column_shown(1));
+        m.toggle_column(9);
+        assert_eq!(m.hidden_columns, 0);
     }
 
     #[test]
