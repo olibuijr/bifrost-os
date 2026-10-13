@@ -144,6 +144,7 @@ pub fn command(
     policy: Policy,
     native: bool,
 ) -> io::Result<Command> {
+    let form = bifrost_ui::form_factor::FormFactor::current();
     let account = Account::installed()?;
     prepare_data(data, &account)?;
     let exec = fs::canonicalize(exec)?;
@@ -242,11 +243,15 @@ pub fn command(
         .env("LOGNAME", &account.name)
         .env("LANG", "en_US.UTF-8")
         .env("BIFROST_APP_ID", id)
-        .env("BIFROST_HARDWARE_KEYBOARD", "1")
+        .env(bifrost_ui::form_factor::ENV, form.as_str())
         .env("BIFROST_DATA", data)
         .env("BIFROST_SHELL_DIR", "/usr/share/springboard/assets");
     if policy.log_store {
         c.env("BIFROST_ENTITLEMENTS", bifrost_core::log::ENTITLEMENT);
+    }
+    // a desktop has physical keys; a tablet raises the on-screen keyboard for the app's text fields
+    if form.is_desktop() {
+        c.env("BIFROST_HARDWARE_KEYBOARD", "1");
     }
     if native {
         c.args(["--ro-bind", "/sys", "/sys", "--ro-bind-try", "/run/udev", "/run/udev"]);
