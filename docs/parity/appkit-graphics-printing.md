@@ -50,3 +50,40 @@ NSShadow (`shadowOffset`, `shadowBlurRadius`, `shadowColor`, `set()`).
 - Painting paths and gradients onto `Surface`, and an SDK entry point in `springboard/sdk/src/` for apps.
 - Print sheet and page layout panel, colour spaces and colour lists, NSImage-style representations, PDF
   rendering outside the Books engine (unchanged from the matrix).
+
+## Round: colour lists, image objects, system colour names
+
+Built on parity/team-k-appkit-graphics-printing; not yet verified on Midget. Host unit tests were written but not run
+in this round; the lead runs them in the build stage.
+
+- `springboard/sdk/src/color_list.rs` (`ColorList`, `ColorLists`): mirrors `NSColorList`. A list is named and keeps its
+  keys in the order they were first set; setting an existing key replaces the colour in place; empty keys are refused.
+  `ColorLists` is the registry an app keeps (`availableColorLists`): it refuses a second list with the same name and
+  looks lists up by name. Colours are `graphics_color::Color`, so a list can hold any colour space.
+- `springboard/sdk/src/image_object.rs` (`ImageObject`, `ImageRep`, `CapInsets`, `Slice`): mirrors `NSImage` as an
+  object. Representations are bitmap (pixel grid and point size; 72 dpi by default) or vector (drawn at any size).
+  `best_rep(target, scale)` prefers a vector representation, then the smallest bitmap with enough pixels for the target
+  at the given scale, then the largest bitmap. The size is the explicit size, else the first representation's size.
+  `template` is a flag. `resizable_slices(target)` gives the nine-slice layout for cap insets and returns `None` when the
+  target is smaller than the caps. `from_encoded` reads the pixel size from the header of PNG, JPEG and the other codecs
+  the imageio module reads (`graphics_imageio::pixel_size`).
+- `springboard/render/src/ui.rs` (`system`): `WINDOW_FRAME` (windowFrameColor), `FIND_HIGHLIGHT` (findHighlightColor,
+  a design approximation) and `SHADOW` (shadowColor).
+
+### Row status
+
+- "Color: colour spaces and lists": still `partial`. Colour spaces and conversions were already in `graphics_color`;
+  the colour lists are new. No colour well or picker uses the lists yet.
+- "Images and PDF: image objects and representations": still `partial`. The object model is new. Not used by the kit
+  image widgets, and no per-codec representation classes or template tinting when drawn.
+- "Color: semantic system colours": still `partial`. Three names added; user accent and the remaining names are open.
+- Print sheet and page layout panel: unchanged. These need a shell-drawn sheet (the shell has no `run_modal`), so
+  they are left as they are.
+- Symbol catalogue, PDF rendering outside the Books engine, and the GPU rows: unchanged, as in the matrix.
+
+### Remaining gaps
+
+- Shell-drawn print sheet and page layout panel.
+- Image drawing in the kit, per-codec representation classes, and template tinting.
+- Colour well and picker modes that use colour lists; eyedropper.
+- User accent colour feeding `controlAccentColor`.
