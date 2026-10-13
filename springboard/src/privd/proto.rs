@@ -34,6 +34,7 @@ pub const M_STORE_INSTALL: &str = "store.install";
 pub const M_STORE_UNINSTALL: &str = "store.uninstall";
 pub const M_TIME_SET_TIMEZONE: &str = "time.set_timezone";
 pub const M_TIME_SET_NTP: &str = "time.set_ntp";
+pub const M_LOCALE_SET: &str = "locale.set";
 pub const M_NET_PREFIX: &str = "net.";
 pub const M_BOOT_ATTEMPT: &str = "system.boot_attempt";
 pub const M_BACKUP_RESTORE_APPLY: &str = "backup.restore_apply";
