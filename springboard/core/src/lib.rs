@@ -53,6 +53,7 @@ pub mod disk_claim;
 pub mod disk_claims;
 pub mod disk_commands;
 pub mod disk_session;
+pub mod disk_wire;
 pub mod disk_format;
 pub mod disk_run;
 pub mod disk_scan;

@@ -17,23 +17,23 @@
     {
       "feature": "Session and run loop or dispatch queue scheduling (DASession)",
       "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue",
-      "bifrost": "springboard/sdk/src/workspace.rs (NotificationCenter-based workspace events, no disk events)",
-      "status": "gap",
-      "note": "No disk session. Workspace events cover apps, sleep and wake only."
+      "bifrost": "springboard/sdk/src/disk_arbitration.rs (DiskSession), springboard/src/shell/services/disks.rs",
+      "status": "partial",
+      "note": "Sprint 3: DiskSession::create, set_dispatch_queue and schedule_with_run_loop (main queue); callbacks run on that queue. Host unit tests only; needs a Midget check with a real USB disk. No run loop object, no peek callback."
     },
     {
       "feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)",
       "apple": "DADiskMount, DADiskMountWithArguments, DADiskUnmount, DADiskEject, DADiskRename",
       "bifrost": "springboard/core/src/disk_commands.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer unmounts its own target; no app or shell API to mount, eject or rename a volume."
+      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer unmounts its own target; no app or shell API to mount, eject or rename a volume. Sprint 3: the shell service plan_unmount and plan_eject validate (claim, approval, device state) and return the plan; DiskSession.plan_unmount and plan_eject call them. The plan is not run yet (needs the privileged helper on Midget)."
     },
     {
       "feature": "Disk appeared, disappeared and description-changed callbacks (DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback)",
       "apple": "DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback, DARegisterDiskPeekCallback",
-      "bifrost": "springboard/core/src/disk_events.rs",
+      "bifrost": "springboard/core/src/disk_events.rs, disk_wire.rs, sdk/src/disk_arbitration.rs, src/shell/services/disks.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No event when a USB stick or disk appears or leaves. disk_changed is an app-install stamp and is unrelated to hardware."
+      "note": "Sprint 3: the shell scans /sys/block and /proc/mounts every 2 s and pushes disk_appeared, disk_disappeared and disk_description_changed to apps; DiskSession.register_* run the callbacks on its dispatch queue and replay connected disks as appeared. Host tests only; not yet tried with a real USB disk on Midget. Events go to apps as service events, not the notify bus."
     },
     {
       "feature": "Mount and unmount approval (DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback)",
@@ -52,9 +52,9 @@
     {
       "feature": "Volumes in the Files sidebar",
       "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)",
-      "bifrost": "springboard/apps/files (no volume code); springboard/src/bare/docbroker.rs (grants confined to the account home)",
-      "status": "gap",
-      "note": "docs/bifrost-ui.md:571 states mounted volumes and the Volumes section are not matched. Document grants cannot reach a mounted volume."
+      "bifrost": "springboard/src/shell/services/disks.rs (data and events); Files app UI not done (apps owned elsewhere)",
+      "status": "partial",
+      "note": "Sprint 3: the data feed for a Volumes section exists (list, describe, appear and disappear events). The Files sidebar does not use it yet, and document grants still cannot reach a mounted volume."
     },
     {
       "feature": "Sandbox access to udev data for apps",
