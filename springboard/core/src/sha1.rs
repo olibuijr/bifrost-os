@@ -62,7 +62,7 @@ impl Sha1 {
 
     fn block(&mut self, block: &[u8; 64]) {
         let mut w = [0u32; 80];
-        for (i, c) in block.chunks_exact(4).enumerate() {
+        for (i, c) in block.as_chunks::<4>().0.iter().enumerate() {
             w[i] = u32::from_be_bytes([c[0], c[1], c[2], c[3]]);
         }
         for t in 16..80 {

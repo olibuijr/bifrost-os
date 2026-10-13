@@ -83,7 +83,7 @@ impl StreamConfig {
             return Err(Error::BadChannels(channels));
         }
         let frame = format.width() * channels as u32;
-        if period_bytes % frame != 0 || buffer_bytes % frame != 0 {
+        if !period_bytes.is_multiple_of(frame) || !buffer_bytes.is_multiple_of(frame) {
             return Err(Error::Misaligned { frame_bytes: frame });
         }
         if period_bytes > buffer_bytes {

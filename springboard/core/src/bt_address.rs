@@ -35,7 +35,7 @@ impl FromStr for BdAddr {
     type Err = AddrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let groups: Vec<&str> = s.split(|c| c == ':' || c == '-').collect();
+        let groups: Vec<&str> = s.split([':', '-']).collect();
         if groups.len() != 6 || groups.iter().any(|g| g.len() != 2) {
             return Err(AddrError::BadFormat);
         }

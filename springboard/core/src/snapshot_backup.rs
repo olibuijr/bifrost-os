@@ -22,7 +22,7 @@ pub fn next_due(last: Option<u64>, now: u64) -> u64 {
 
 /// Whether a snapshot should be taken at `now`, given the time of the last one.
 pub fn is_due(last: Option<u64>, now: u64) -> bool {
-    last.map_or(true, |l| now >= l + INTERVAL)
+    last.is_none_or( |l| now >= l + INTERVAL)
 }
 
 /// The newest snapshot taken at or before `wanted`, the version a restore picks.

@@ -96,7 +96,7 @@ impl StreamFormat {
     /// Frames in `seconds` at this rate (rounded to the nearest frame).
     pub fn frames_for(&self, seconds: f64) -> u64 {
         let f = seconds * self.sample_rate;
-        if f <= 0.0 || f != f {
+        if f <= 0.0 || f.is_nan() {
             0
         } else {
             (f + 0.5) as u64

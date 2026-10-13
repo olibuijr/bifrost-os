@@ -44,6 +44,12 @@ pub struct Occlusion {
     suspended: bool,
 }
 
+impl Default for Occlusion {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Occlusion {
     /// A new app is on screen, not covered and not focused.
     pub fn new() -> Self {

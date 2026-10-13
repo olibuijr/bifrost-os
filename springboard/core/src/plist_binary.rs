@@ -31,7 +31,7 @@ pub fn parse(bytes: &[u8]) -> Result<Plist, String> {
     let count = usize::try_from(count).map_err(|_| "binary property list has too many objects".to_string())?;
     let table = usize::try_from(table).map_err(|_| "offset table out of range".to_string())?;
     let table_len = count.checked_mul(offset_size).ok_or_else(|| "offset table out of range".to_string())?;
-    if count == 0 || table.checked_add(table_len).map_or(true, |end| end > bytes.len() - TRAILER) {
+    if count == 0 || table.checked_add(table_len).is_none_or( |end| end > bytes.len() - TRAILER) {
         return Err("offset table out of range".into());
     }
     let top = usize::try_from(top).map_err(|_| "top object out of range".to_string())?;
@@ -116,7 +116,7 @@ impl<'a> Reader<'a> {
             0x6 => {
                 let (n, start) = self.length(info, body)?;
                 let bytes = self.slice(start, n.checked_mul(2).ok_or_else(|| "string too long".to_string())?)?;
-                let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
                 let s = String::from_utf16(&units).map_err(|_| "bad UTF-16 string".to_string())?;
                 Ok(Plist::Str(s))
             }

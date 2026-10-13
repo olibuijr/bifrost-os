@@ -296,7 +296,7 @@ impl Renderer {
         self.voices.clear();
         self.channels = [Channel::default(); 16];
         let idx = self.events.partition_point(|&(due, _)| due < target);
-        let controls: Vec<Message> = self.events[..idx].iter().map(|&(_, m)| m).filter(|m| is_control(m)).collect();
+        let controls: Vec<Message> = self.events[..idx].iter().map(|&(_, m)| m).filter(is_control).collect();
         for m in controls {
             self.apply(m);
         }

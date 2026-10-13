@@ -58,7 +58,7 @@ impl AppLinks {
             if !claim.enabled || claim.host != host || !prefix_matches(&claim.prefix, path) {
                 continue;
             }
-            if best.map_or(true, |b| claim.prefix.len() > b.prefix.len()) {
+            if best.is_none_or( |b| claim.prefix.len() > b.prefix.len()) {
                 best = Some(claim);
             }
         }
@@ -69,13 +69,13 @@ impl AppLinks {
 /// The host (without port) and the path of an http or https address. The path defaults to `/`.
 fn split_address(url: &str) -> Option<(&str, &str)> {
     let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
-    let end = rest.find(|c: char| c == '/' || c == '?' || c == '#').unwrap_or(rest.len());
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let (authority, tail) = rest.split_at(end);
     let host = authority.split(':').next().unwrap_or("");
     if host.is_empty() {
         return None;
     }
-    let path_end = tail.find(|c: char| c == '?' || c == '#').unwrap_or(tail.len());
+    let path_end = tail.find(['?', '#']).unwrap_or(tail.len());
     let path = &tail[..path_end];
     Some((host, if path.is_empty() { "/" } else { path }))
 }

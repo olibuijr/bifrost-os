@@ -90,7 +90,7 @@ impl fmt::Display for ImageError {
 /// Checks a byte count against a block size and returns the block count. Zero bytes and partial blocks are rejected.
 fn block_count_for(byte_size: u64, block_size: BlockSize) -> Result<u64, ImageError> {
     let block = block_size.bytes();
-    if byte_size == 0 || byte_size % block != 0 {
+    if byte_size == 0 || !byte_size.is_multiple_of(block) {
         return Err(ImageError::InvalidBlockCount);
     }
     Ok(byte_size / block)
@@ -225,7 +225,7 @@ pub fn inspect(head: &[u8], length: u64) -> Inspection {
     }
     let blocks = u32::from_le_bytes([pvd[80], pvd[81], pvd[82], pvd[83]]);
     let block_size = u16::from_le_bytes([pvd[128], pvd[129]]);
-    let name = String::from_utf8_lossy(&pvd[40..72]).trim_end_matches(|c: char| c == ' ' || c == '\0').to_string();
+    let name = String::from_utf8_lossy(&pvd[40..72]).trim_end_matches([' ', '\0']).to_string();
     Inspection {
         length,
         contents: ImageContents::Iso9660,

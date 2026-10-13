@@ -99,7 +99,7 @@ impl LineSettings {
     pub fn transmit_micros(&self, bytes: usize) -> u64 {
         let bits = bytes as u64 * self.frame_bits() as u64 * 1_000_000;
         let baud = self.baud as u64;
-        (bits + baud - 1) / baud
+        bits.div_ceil(baud)
     }
 }
 

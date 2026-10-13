@@ -197,7 +197,7 @@ pub fn composite(anim: &GifAnimation) -> Vec<Vec<u8>> {
 fn read_table(buf: &[u8], pos: usize, flags: u8) -> Result<(Vec<[u8; 3]>, usize), GifError> {
     let bytes = 3usize << ((flags & 7) + 1);
     let raw = buf.get(pos..pos + bytes).ok_or(GifError::Truncated)?;
-    let table = raw.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let table = raw.as_chunks::<3>().0.iter().map(|c| [c[0], c[1], c[2]]).collect();
     Ok((table, pos + bytes))
 }
 

@@ -58,7 +58,7 @@ impl Matching {
     }
 
     pub fn matches(&self, device: &Device) -> bool {
-        if self.class.as_deref().map_or(false, |c| c != device.class.as_str()) {
+        if self.class.as_deref().is_some_and( |c| c != device.class.as_str()) {
             return false;
         }
         self.properties.iter().all(|(k, v)| device.property(k) == Some(v.as_str()))
@@ -120,7 +120,7 @@ pub fn scan_in(root: &Path, class: &str, keys: &[&str]) -> Vec<Device> {
             let mut device = Device::new(class, name);
             for key in keys {
                 if let Ok(text) = fs::read_to_string(dir.join(name).join(*key)) {
-                    device = device.with_property(*key, text.trim());
+                    device = device.with_property(key, text.trim());
                 }
             }
             device

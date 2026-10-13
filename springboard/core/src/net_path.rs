@@ -70,7 +70,7 @@ impl Path {
         } else {
             Status::Satisfied
         };
-        let expensive = interfaces.iter().find(|i| i.kind != IfaceKind::Loopback).map_or(false, |i| i.kind == IfaceKind::Cellular);
+        let expensive = interfaces.iter().find(|i| i.kind != IfaceKind::Loopback).is_some_and( |i| i.kind == IfaceKind::Cellular);
         Path { status, interfaces, expensive, ipv4, ipv6 }
     }
 

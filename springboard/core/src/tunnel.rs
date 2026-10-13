@@ -319,7 +319,7 @@ impl RoutePolicy {
     pub fn decide(&self, addr: Ipv4Addr) -> RouteAction {
         let mut best: Option<(u8, RouteAction)> = None;
         for (route, action) in &self.rules {
-            if route.contains(addr) && best.map_or(true, |(prefix, _)| route.prefix() >= prefix) {
+            if route.contains(addr) && best.is_none_or( |(prefix, _)| route.prefix() >= prefix) {
                 best = Some((route.prefix(), *action));
             }
         }

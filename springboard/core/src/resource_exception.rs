@@ -30,7 +30,7 @@ impl Diagnostic {
 
 /// A memory exception: the peak is above the limit. A limit of zero means no limit.
 pub fn classify_memory(limit_bytes: u64, peak_bytes: u64) -> Option<Diagnostic> {
-    (limit_bytes > 0 && peak_bytes > limit_bytes).then(|| Diagnostic::Memory { limit_bytes, peak_bytes })
+    (limit_bytes > 0 && peak_bytes > limit_bytes).then_some(Diagnostic::Memory { limit_bytes, peak_bytes })
 }
 
 /// A CPU exception: the CPU time over the window is above `limit_percent` of the wall-clock time. One core is 100
@@ -41,7 +41,7 @@ pub fn classify_cpu(limit_percent: u32, cpu_ms: u64, wall_ms: u64) -> Option<Dia
     }
     // Compared as cpu_ms * 100 > limit * wall_ms, widened so the product cannot overflow.
     let over = (cpu_ms as u128) * 100 > (limit_percent as u128) * (wall_ms as u128);
-    over.then(|| Diagnostic::Cpu { limit_percent, cpu_ms, wall_ms })
+    over.then_some(Diagnostic::Cpu { limit_percent, cpu_ms, wall_ms })
 }
 
 #[cfg(test)]
