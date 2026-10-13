@@ -19,6 +19,7 @@ pub mod sketch;
 pub mod smart;
 
 mod parity;
+mod pdf;
 mod picker;
 pub mod store;
 pub mod system;
@@ -150,6 +151,7 @@ enum Act {
     SortCheckedNow,
     ShareMd,
     ShareText,
+    SharePdf,
     /// move the open note to a folder ("" is no folder)
     MoveTo(String),
     Style(md::Block),
@@ -1464,6 +1466,7 @@ impl Notes {
             (pin.to_string(), Act::TogglePin, false),
             ("Share as Markdown (.md)".to_string(), Act::ShareMd, false),
             ("Share as Text (.txt)".to_string(), Act::ShareText, false),
+            ("Share as PDF (.pdf)".to_string(), Act::SharePdf, false),
             ("Title".to_string(), Act::Style(md::Block::Title), false),
             ("Heading".to_string(), Act::Style(md::Block::Heading), false),
             ("Subheading".to_string(), Act::Style(md::Block::Subheading), false),
@@ -1698,6 +1701,17 @@ impl Notes {
                 if let Screen::Editor(i) = self.screen {
                     let note = &self.notes[i];
                     self.share_req = Some(springboard::shell::share::Item::Text { title: note.title().to_string(), body: md::to_plain(&note.text) });
+                }
+            }
+            Act::SharePdf => {
+                if let Screen::Editor(i) = self.screen {
+                    self.save(t, true);
+                    let note = &self.notes[i];
+                    let bytes = pdf::render(note.title(), &md::to_plain(&note.text));
+                    match store::export_file(&self.dir, note, "pdf", &bytes) {
+                        Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
+                        Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
+                    }
                 }
             }
             Act::MoveTo(dest) => self.move_open_note(&dest, t),
@@ -3736,6 +3750,12 @@ mod tests {
         let item = n.take_share().expect("a text share");
         assert_eq!(item.file_name(), "My List.txt");
         assert_eq!(item.clip_text(), "My List\n\nMy List\n[x] milk\n\u{2022} eggs");
+        n.run(&ui, Act::SharePdf, 2200.0);
+        let Some(springboard::shell::share::Item::File(pdf_path)) = n.take_share() else { panic!("a PDF share") };
+        assert_eq!(pdf_path.file_name().unwrap(), "My List.pdf");
+        let bytes = std::fs::read(&pdf_path).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(String::from_utf8_lossy(&bytes).contains("([x] milk) Tj"), "checklist lines keep their plain text");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

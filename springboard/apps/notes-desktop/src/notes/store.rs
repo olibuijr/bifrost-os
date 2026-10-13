@@ -218,13 +218,19 @@ pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
 /// returns the file; the name is the sanitised title, the content the
 /// note's Markdown (attachments are not bundled).
 pub fn export_md(dir: &Path, note: &Note) -> io::Result<PathBuf> {
+    export_file(dir, note, "md", note.text.as_bytes())
+}
+
+/// Writes `bytes` as `<title>.<ext>` under `<dir>/.export` and returns the
+/// file. The name is the note's sanitised title.
+pub fn export_file(dir: &Path, note: &Note, ext: &str, bytes: &[u8]) -> io::Result<PathBuf> {
     let name: String = note.title().chars().filter(|c| !c.is_control() && !"/\\:*?\"<>|".contains(*c)).take(40).collect();
     let name = name.trim().trim_start_matches(['.', '#', ' ']).trim().to_string();
     let name = if name.is_empty() { "Note".to_string() } else { name };
     let out = dir.join(".export");
     std::fs::create_dir_all(&out)?;
-    let path = out.join(format!("{name}.md"));
-    std::fs::write(&path, &note.text)?;
+    let path = out.join(format!("{name}.{ext}"));
+    std::fs::write(&path, bytes)?;
     Ok(path)
 }
 
