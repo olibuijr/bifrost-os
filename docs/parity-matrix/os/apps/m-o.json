@@ -20,8 +20,9 @@
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop",
    "status": "partial",
-   "note": "no mail app; defaultapps.rs names a mail handler only round 75, host only: live window, accounts, new-mail poll; was gap.",
-   "rea": []
+   "note": "Mail window (main.rs 83 lines) over the bifrost_mail library, with app menu, keyboard and paste; mail features live in the library",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Maps.app",
@@ -38,10 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no maps app",
-   "rea": []
+   "bifrost": "springboard/apps/maps-desktop",
+   "status": "partial",
+   "note": "model library only (Web Mercator tiles, tile cache, geocoding, view and pins, routes via OSRM or straight-line estimate); no window or main.rs yet, so nothing to launch; needs an app shell over the library",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Messages.app",
@@ -58,10 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no messages app; catalog id bifrost.messages only",
-   "rea": []
+   "bifrost": "springboard/apps/messages-desktop",
+   "status": "partial",
+   "note": "Matrix chat app: homeserver accounts in the passwords group, rooms, timelines, background sync, paste; lacks iMessage/SMS service, tapbacks, effects, Shared with You",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Mission Control.app",
@@ -81,7 +84,8 @@
    "bifrost": "springboard/src/shell/overview.rs",
    "status": "partial",
    "note": "Overview, the shell's window overview",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Music.app",
@@ -100,8 +104,9 @@
    "doc": "",
    "bifrost": "springboard/apps/music-desktop",
    "status": "partial",
-   "note": "Music app",
-   "rea": []
+   "note": "Music app: library and playback (app.rs 560 lines, music.rs 2100 lines); no streaming service",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/News.app",
@@ -121,7 +126,8 @@
    "bifrost": "springboard/apps/news-desktop",
    "status": "partial",
    "note": "News app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Notes.app",
@@ -141,7 +147,8 @@
    "bifrost": "springboard/apps/notes-desktop",
    "status": "partial",
    "note": "Notes app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Magnifier.app",
@@ -161,7 +168,8 @@
    "bifrost": "springboard/src/shell/magnifier.rs",
    "status": "partial",
    "note": "Magnifier (bifrost.magnifier) in the shell",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Migration Assistant.app",
@@ -176,12 +184,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no migration assistant. Build: copy accounts, apps and files from another machine or backup; share steps with setup-assistant",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no migration assistant",
-   "rea": []
+   "note": "no migration assistant. Build: copy accounts, apps and files from another machine or backup; share steps with setup-assistant",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }
