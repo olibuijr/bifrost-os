@@ -44,6 +44,13 @@ On ext4 the guard still protects shell-package updates only and refuses base
 upgrades. Direct administrator pacman commands are outside this policy. EFI
 loader/firmware corruption and disk failure are outside snapshot recovery.
 
+Two other fallbacks come before this one. If `bifrost-wm` exits three times within 60 s, the session restarts it in safe mode
+(`docs/window-server.md`, "Safe mode"); three more exits in safe mode end the session and the Bootweave supervisor counts a
+failed start. After three quick failed starts it shows the "BifrOSt could not start" screen with Restart and Recovery. The
+Recovery button only writes the `recovery-requested` mark so far; it has no recovery environment to start (`docs/boot/11-failure-screens.md`).
+The update guard also builds the unified kernel image `EFI/BIFROST/bifrost.efi` for the generation it stages
+(`bifrost-update-guard uki`), and the loader's rollback choice (`EFI/BIFROST/rollback.txt`, `boot_policy.rs`) uses the previous one.
+
 Read status with `bifrost pc midget recovery` or `bifrost-update-guard status`.
 Explicit administrator recovery is `sudo bifrost-update-guard rollback`.
 The unit exits when probation finishes, so it adds no permanent polling thread.

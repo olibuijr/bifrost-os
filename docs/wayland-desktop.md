@@ -1,7 +1,7 @@
 # BifrOSt PC Wayland port
 
-The firmware splash and Plymouth run before a Wayland server exists. Their
-framebuffer output hands off to the Wayland compositor after userspace starts.
+The EFI loader frame and Bootweave run before a Wayland server exists (no Plymouth). The retained
+frame hands off to `bifrost-wm` after userspace starts; `docs/boot-architecture.md` has the boot side.
 The live installer and installed desktop share `/usr/lib/bifrost/session`.
 
 ## Runtime
@@ -17,13 +17,15 @@ The desktop is a wlr-layer-shell background. Every built-in app has an
 xdg-shell toplevel, its existing BifrOSt titlebar and layout, and its own released
 SHM buffers. Native Linux apps share the compositor, input focus and window
 stack. The compositor supports XWayland for X11 clients. Applications is the
-last dock button; Super+Space opens the installed `.desktop` application menu.
-`bifrost-apps firefox` opens Firefox. The app launcher forwards only the session
+last dock button. The compositor owns the key chords (`docs/window-server.md`, "Key bindings"): Super+Space opens
+the search panel, Super+A runs `bifrost-apps` (the installed `.desktop` application menu). `bifrost-apps firefox` opens Firefox. The app launcher forwards only the session
 variables it needs and drops root privileges before invoking the application.
 
 BifrOSt locks through `ext-session-lock-v1`, which blocks external app input and
 keeps the session locked if the lock client dies. Screenshot tools use compositor
-capture rather than the old shell framebuffer, so Linux windows are included.
+capture (`wlr-screencopy` and `ext-image-copy-capture`, GLES readback in `wm/src/capture.rs`) rather than the old shell
+framebuffer, so Linux windows are included. If `bifrost-wm` exits three times within 60 s the session restarts it in
+safe mode (GLES, no direct apps, no chrome clients); three more exits hand over to the recovery flow.
 
 ## Performance boundaries
 
@@ -37,8 +39,9 @@ rendering measures functional behavior, not physical Intel GPU throughput.
 ## Build and delivery
 
 Build PC shell and installer with `--profile fast --features desktop-wayland`.
-`bifrost pc publish` includes the feature and packages the compositor/session
-requirements. The normal update remains pacman plus System Update. The ISO
+`bifrost pc publish` includes the feature, packages the compositor/session
+requirements and syncs the 8079 package mirror (`tools/pc_mirror.py`: core and extra plus every package a guarded `pacman -Su` needs, fetched from the Arch
+upstream, then checked). The normal update remains pacman plus System Update. The ISO
 build includes the same session files and dependencies; ISO rebuilding is
 necessary here because the live boot and installer entry points changed.
 
@@ -86,6 +89,9 @@ Copy-on-write and SHM transfers remain; this is not a fully GPU raster renderer.
 
 ### GPU presenter (0.4.56)
 
-The desktop background, lock surface, menu bar, dock and menus now present GBM dma-bufs through
+The desktop background, lock surface, menu bar, dock and menus present GBM dma-bufs through
 linux-dmabuf-v1, rendered by `gpu::wl::Presenter` (wallpaper, GPU glass, content layer). SHM remains
 for built-in app windows and as the fallback (`BIFROST_GPU=0`). Details: `docs/gpu-first.md`.
+
+Live blur and materials for all clients are composed by the window server, not the presenter (the presenter's live
+backdrop was removed in sprint 6); see `docs/gpu-first.md` and `docs/window-server.md`.

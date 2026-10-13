@@ -34,15 +34,15 @@ state enum order), `choose_mode` (preferred, exact size with nearest refresh wit
   `pub(crate)` and calls `sync_toplevels()`; `cursor_image` stores the seat's image in `session.cursor`.
 - Smithay's `delegate_xdg_activation!` and `delegate_cursor_shape!` are invoked in `session_protocols.rs`.
 - Backend hooks, all in `SessionState::hooks` (`SessionHooks`): `capture` (pixels of a region as XRGB8888 rows),
-  `set_mode` (DRM modeset, returns whether it took), `set_power` (DPMS). Nothing sets them yet. A request that needs a
+  `set_mode` (DRM modeset, returns whether it took), `set_power` (DPMS). Update 2026-10-13: the DRM and headless backends now set `capture` (`wm/src/capture.rs`, GLES readback); `set_mode` and `set_power` are still open. A request that needs a
   missing hook is refused (`failed`), never faked.
 
-## Known gap: frames are not written into client buffers
+## Known gap: frames are not written into client buffers (history; closed by commit 8a4fafca, `write_shm` now writes the pool)
 
 `write_shm` in `session_protocols.rs` is a stub that returns an error. Copying a captured frame into a client's wl_shm
 buffer needs a raw write into the pool, which is `unsafe` (`with_buffer_contents_mut` hands out a raw pointer). This
 crate keeps `unsafe` out of its code, so every `copy` and `capture` is answered `failed` (after the buffer has been
-checked and the capture hook has run). Screenshots with grim therefore fail until this is decided (see todo_left).
+checked and the capture hook has run). Screenshots with grim failed until this was decided; `write_shm` and the capture hook now exist (see `docs/window-server.md`, "Screen capture").
 
 ## Verification
 
@@ -69,7 +69,7 @@ Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session (history: ran labwc bef
 4. Output: `wlr-randr` must list the panel with its modes; `wlr-randr --output <name> --mode 1920x1080@60` must answer
    ok when the mode is the current one (a different mode fails until the DRM modeset hook exists).
 5. Power: `wlopm --off <name>` fails until the DPMS hook exists; with the hook it turns the panel off and on.
-6. Screenshots: `grim /tmp/shot.png` fails with the stub (expected, see the gap above); the log shows `failed`.
+6. Screenshots: `grim /tmp/shot.png` now works on the DRM backend (the stub is gone); on the Vulkan scanout it still fails (no readback).
 
 ## todo_left
 

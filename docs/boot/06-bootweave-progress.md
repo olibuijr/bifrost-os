@@ -1,5 +1,7 @@
 # Bootweave continues the bar and writes the timing record (boot task 06)
 
+> Status 2026-10-13: the bar is no longer drawn (the position is still published to /run/bifrost/bootweave/progress). The boot-03 todo notes are closed, the tasks have merged.
+
 Contract: `docs/boot-architecture.md` ("The progress bar", "Stages and owners", "Testing"). Owner file:
 `springboard/bootweave/supervisor.rs` (the `bootweave` binary, `/usr/bin/bifrost-bootweave`). Depends on
 `bootweave-frame` (task 02 renderer, task 03 progress model and record codec).

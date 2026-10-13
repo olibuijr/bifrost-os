@@ -39,9 +39,9 @@ tests were written with hand-worked expected values but were not run by this age
 
 | Contract item | Status |
 |---|---|
-| labwc keybindings (Ctrl+Super arrows, maximize, centre) | rules done in `wm.rs`; key binding and dispatch not wired |
-| Super+Space, Super+A to the shell control port | not done (input layer, `input.rs`) |
-| Alt+Tab cycle, Alt+F4 close | not done (input layer) |
+| former labwc keybindings (Ctrl+Super arrows, maximize, centre) | rules in `wm.rs`; bound and dispatched in `keybindings.rs` (done) |
+| Super+Space, Super+A to the shell control port | done (`keybindings.rs`: quicksearch line, `bifrost-apps`) |
+| Alt+Tab cycle, Alt+F4 close | done (`keybindings.rs`) |
 | xdg-decoration, server-side titlebars as compose nodes | policy and geometry done in `decorations.rs`; no xdg-decoration handler, no compose nodes |
 | Window open, close and minimize run by the server | timing and pose done in `window_anim.rs`; not driven from the render loop |
 | Minimize to the Dock's published rect | `Anim` takes the target rect; the Dock publish path is not wired |

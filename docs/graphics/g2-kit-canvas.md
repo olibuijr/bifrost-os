@@ -105,8 +105,8 @@ Midget (Intel HD 530, Mesa ANV, Vulkan 1.4): the session (history: ran labwc bef
 2. Set the session to the window server: write `bifrost-wm` to `/etc/bifrost/compositor` on Midget (over `ssh midget`),
    then restart the session.
 3. Start an SDK app with the switches on: `BIFROST_WM_RENDERER=vulkan BIFROST_DIRECT=1 <app>`.
-4. Take a screenshot with `bifrost pc midget screen /tmp/kit.png` and compare with the labwc screenshot of the same
-   app. Glyphs, toolbars, the source list and the menu should look the same to the eye.
+4. Take a screenshot with `bifrost pc midget screen /tmp/kit.png` and compare with a screenshot of the same
+   app on the GLES path (the labwc comparison is no longer possible). Glyphs, toolbars, the source list and the menu should look the same to the eye.
 5. `python3 tools/midget.py recovery` must say `phase=accepted` after any update.
 
 If the app draws blank on the GPU path, the Canvas route is not the cause on its own: the app still draws through the

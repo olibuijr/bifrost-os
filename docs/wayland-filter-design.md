@@ -1,46 +1,46 @@
 # Wayland protocol filter for native apps (design, S5)
 
-Status: design only. No code changes. Implementation is a later task.
+Status: design only; nothing is implemented (checked 2026-10-13: no proxy, no `wp_security_context_v1` in `wm/`). Implementation is a later task.
 
 ## Problem
 
 Native (non-SDK) packages receive the real compositor socket. Their sandbox
 binds it into the child namespace and exports `WAYLAND_DISPLAY`, so any
 protocol the compositor advertises is reachable from the app. The compositor
-was labwc (wlroots, removed), now `bifrost-wm`, per `docs/wayland-desktop.md`. Under wlroots that set
-includes screen capture, input injection, overlay surfaces, and window
-enumeration. `docs/app-isolation.md` (lines 32-33) lists privileged-protocol
+is `bifrost-wm` (labwc is removed), per `docs/wayland-desktop.md`. It serves the wlroots-style session protocols
+(`wm/src/session_protocols.rs`), so the set includes screen capture, input injection, overlay surfaces, and window
+enumeration. `docs/app-isolation.md` lists privileged-protocol
 filtering as future work; this document is that plan.
 
 ## Current state (verified against code)
 
-- `springboard/src/bare/app_policy.rs:263-281`: when `native` is true, the
+- `springboard/src/bare/app_policy.rs` (`command`, the `if native` block): when `native` is true, the
   sandbox validates `WAYLAND_DISPLAY` (no `/`), binds
-  `$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY` with `--bind` at line 275, binds
-  `session.json` read-only (line 271-274), binds `/dev/dri` with `--dev-bind-try`,
+  `$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY` with `--bind`, binds
+  `session.json` read-only, binds `/dev/dri` with `--dev-bind-try`,
   and sets `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `WINIT_UNIX_BACKEND=wayland`
-  (lines 280-281). The socket is passed through unchanged.
-- Who passes `native = true`: the Browser launch (`springboard/src/shell/desk.rs:398`)
-  and generic native packages (`desk.rs:685`). SDK apps go through
-  `springboard/src/shell/apphost.rs:215` with `native = false`. They get no
+  (the same block). The socket is passed through unchanged.
+- Who passes `native = true`: the Browser launch with a URL (`springboard/src/shell/desk.rs`, the native Browser
+  branch of the open-URL path) and generic native packages (`desk.rs`, the launch near `native_children`). SDK apps
+  go through `springboard/src/shell/apphost.rs` with `native = false`. They get no
   Wayland socket and `--disable-userns`, so they are not affected by this design.
-- `/tmp` is a private tmpfs (`app_policy.rs:217-218`). `/run` is a directory
+- `/tmp` is a private tmpfs (`app_policy.rs`). `/run` is a directory
   skeleton, so the host runtime directory is not mounted.
-- Capability `network` keeps the host network namespace (`app_policy.rs:188-189`,
+- Capability `network` keeps the host network namespace (`app_policy.rs`,
   `--share-net`). Abstract UNIX sockets live in the network namespace,
   not the mount namespace, so tmpfs isolation does not hide them. See residual
   risks.
-- The trusted shell (`springboard/src/bare/wayland.rs:7-15`) binds
+- The trusted shell (`springboard/src/bare/wayland.rs`) binds
   `zwlr_layer_shell_v1`, `zwlr_foreign_toplevel_manager_v1`,
   `ext_session_lock_manager_v1`, `zwlr_output_power_manager_v1`,
   `ext_idle_notifier_v1`, `xdg_activation_v1`, and `wp_cursor_shape_manager_v1`.
   The shell must keep the raw socket; the filter applies only to sandboxed children.
 - WayVNC for Remote does not go through `app_policy::command`. It runs as the
-  `bifrost-remote` systemd unit (`app_policy.rs:306-322`) and connects with the
-  session environment (`springboard/apps/remote/assets/server.py:71`). It needs
+  `bifrost-remote` systemd unit (`app_policy.rs`, `--unit=bifrost-remote`) and connects with the
+  session environment (`springboard/apps/remote/assets/server.py`). It needs
   screencopy on the real socket and must remain unfiltered.
-- `session.json` is written by `packaging/arch/wayland/session` (line 39-43
-  waits for it). Its exact contents are not verified here; it must be
+- `session.json` is written by `packaging/arch/wayland/session` (it
+  waits for it before starting the shell). Its exact contents are not verified here; it must be
   audited for socket paths or secrets before it stays visible to children.
 
 ## Threat model
@@ -102,10 +102,10 @@ to both sides.
 - Implementation options (decide in the implementation task): a small Rust
   binary built on the `wayland-server` and `wayland-backend` crates, with
   `wayland-client` for upstream. The shell already depends on `wayland-client`
-  0.31 (`springboard/Cargo.toml:24`). Pin versions when implementing.
-- Preferred future option: if labwc implements `wp_security_context_v1`,
-  the shell can ask the compositor to restrict the child's connection instead
-  of proxying. Verify labwc support first; the proxy remains the fallback.
+  0.31 (`springboard/Cargo.toml`, optional, `desktop-wayland` feature). Pin versions when implementing.
+- Preferred future option: if `bifrost-wm` implements `wp_security_context_v1` (it does not today; Smithay has the
+  building blocks), the shell can ask the compositor to restrict the child's connection instead
+  of proxying. The proxy remains the fallback.
 
 The shell (trusted) keeps the raw socket and is not proxied.
 
@@ -154,7 +154,7 @@ recorded reason.
 
 ## Rollout plan
 
-1. Inventory (no behaviour change). On Midget, record the globals labwc
+1. Inventory (no behaviour change). On Midget, record the globals `bifrost-wm`
    advertises (read-only `wayland-info`-style probe from the shell's session).
    Save output under `out/wayland-filter/`. Confirm `wp_security_context_v1`
    and XWayland status.
@@ -165,9 +165,9 @@ recorded reason.
    Browser must render, type, paste, resize, close, and open URLs. Rollback
    switch: a shell-config flag that disables enforcement; a release with the
    flag off is still fail-closed for the launch path itself.
-4. Enforce for all native packages (`desk.rs:685` path). Keep the flag until
+4. Enforce for all native packages (the generic launch path in `desk.rs`). Keep the flag until
    one full Final QA run is green.
-5. Remove the flag. Update `docs/app-isolation.md` lines 32-33 to say the
+5. Remove the flag. Update `docs/app-isolation.md` to say the
    filter is in place, with the list of blocked protocols and residual risks.
    Publish through `bifrost pc publish` with a CHANGELOG entry, per AGENTS.md.
 
@@ -192,7 +192,7 @@ Host (no device needed; run in the implementation task, not here):
 PC VM and Midget (live, per `docs/bifrost-pc-workflow.md`):
 
 - Negative probes from inside the sandbox, using the child's environment:
-  screencopy capture (for example `grim`) fails; virtual keyboard or pointer
+  screencopy capture (for example `grim`, which works on the raw socket now that `bifrost-wm` serves screencopy) fails; virtual keyboard or pointer
   injection fails; foreign-toplevel listing is empty; layer-shell surfaces are
   rejected; output configuration and gamma change fail; data-control clipboard
   fails.
@@ -226,13 +226,13 @@ Keep Browser and the native-package tests in the desktop path.
 - The proxy is a new privileged-adjacent component parsing untrusted protocol
   input. It needs its own review, fuzz/negative tests, and a crash policy
   (child fails closed, never falls back to raw).
-- Protocol names come from wlroots and ext-* staging sets; labwc's
-  advertised set must be checked against them during the inventory step.
-  This document does not claim labwc advertises any specific global.
+- Protocol names come from wlroots and ext-* staging sets; the set `bifrost-wm`
+  advertises must be checked against them during the inventory step.
+  This document does not claim `bifrost-wm` advertises any specific global beyond those named in `session_protocols.rs`.
 
 ## Open questions
 
-- Does labwc implement `wp_security_context_v1`? (Decides proxy vs compositor
+- Should `bifrost-wm` implement `wp_security_context_v1`? (Decides proxy vs compositor
   restriction.)
 - Does the Browser need `zwlr_layer_shell_v1` or `zwp_text_input_manager_v3`
   for its own UI, or can it use xdg-shell only?

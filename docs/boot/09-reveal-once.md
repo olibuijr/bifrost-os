@@ -1,5 +1,7 @@
 # 09 Reveal once: the window server holds the boot frame until desktop-ready
 
+> Status 2026-10-13: under bifrost-wm (the only window server; labwc is removed) the reveal and fade run in the window server (wm/src/boot.rs). The kms.rs path with BIFROST_BOOT_FADE described here is the bare (no compositor) path.
+
 Contract: `docs/boot-architecture.md`, "Reveal once" (the boot frame stays on screen until the wallpaper, the menu bar
 and the Dock have each presented a complete frame, with a 4 s ceiling; then one 450 ms fade and `desktop-faded`).
 Task: `tasks/boot/09-reveal-once.md`. Branch `boot/09-reveal-once`.

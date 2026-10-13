@@ -104,7 +104,7 @@ The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly 
    this step only proves scanout.
 5. Check the flips: the log should show no `kms:` errors while the desktop runs; `vulkan scanout` lines repeating
    means the commit path failed; the log line says which step (`render`, `sync_file` or `kms`).
-6. Revert with `echo labwc | sudo tee /etc/bifrost/compositor` and `sudo rm /etc/bifrost/renderer`, restart, and
+6. Revert with `sudo rm /etc/bifrost/renderer` (labwc is removed; `bifrost-wm` stays), restart, and
    confirm the desktop comes back on the GLES path.
 
 ## Build

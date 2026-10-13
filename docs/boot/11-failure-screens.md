@@ -1,5 +1,7 @@
 # Boot 11: failure screens and pstore
 
+> Status 2026-10-13: the Recovery button still has no target (bootweave/supervisor.rs, TODO(boot-11)); it only writes recovery-requested.
+
 Owner: boot-11. Branch `boot/11-failure-screens`. Contract: `docs/boot-architecture.md` ("Text-free on every path",
 "One frame"). Task: `tasks/boot/11-failure-screens.md`.
 

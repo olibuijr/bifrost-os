@@ -13,7 +13,7 @@ direct path (connection and backing, input and frame). Nothing is wired into a r
 
 ## G2: make it run end to end
 
-Goal: on Midget, `bifrost-wm` composites the desktop with Vulkan, at least one SDK app draws on the GPU and talks to
+Goal (the plan as written; `bifrost-wm` is now the only window server): on Midget, `bifrost-wm` composites the desktop with Vulkan, at least one SDK app draws on the GPU and talks to
 the window server directly, and the bench shows the frame budgets. Facts this plan rests on (0.5.44 + G1):
 
 - `wm/src/drm.rs` renders through Smithay's `GlesRenderer` and `DrmCompositor` (`Drm::render` builds `scene::build`
@@ -21,6 +21,9 @@ the window server directly, and the bench shows the frame budgets. Facts this pl
 - `wm/src/handlers.rs` implements compositor, shm, seat, data device, output, xdg-shell, layer-shell, idle-notify and
   dmabuf only. Not yet: presentation-time, foreign-toplevel, screencopy, cursor-shape, xdg-activation, output
   management, decorations, pointer gestures and constraints, explicit sync, XWayland, keybindings.
+  (History: at 0.5.44. Since then wave 5 and the session sprints landed lock, idle, foreign-toplevel, screencopy and
+  ext-image-copy-capture, cursor-shape, activation, decorations, explicit sync, XWayland and `keybindings.rs`; see
+  `docs/window-server.md`.)
 - `App::draw` takes `&mut Surface` in 58 places across 21 apps; the SDK kit draws on `Surface` in 12 files
   (`widgets.rs` 50 uses, `glyphs.rs`, `view/*`).
 - The shell hosts 9 built-in apps in-process (`AppId`: Settings, Terminal, Deildu, Photos, Files, Camera, Browser,
@@ -68,7 +71,8 @@ window list; snapshots are blessed from GPU renders.
 
 Done: `bifrost-wm` is the only window server; labwc is removed. The fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow.
 
-Midget acceptance (`docs/wayland-desktop.md`) and the budgets pass for a week of use; the session starts
-`bifrost-wm` only; labwc (removed), the shell's per-app toplevels, the shell-side presenter (`src/gpu/wl.rs`) and the
+The shell-side live backdrop is deleted (sprint 6, `Presenter::under` and `BIFROST_WM_MATERIALS` are gone). Still open:
+Midget acceptance (`docs/wayland-desktop.md`) and the budgets for a week of use; the shell's per-app toplevels, the
+shell-side presenter (`src/gpu/wl.rs`, still in the tree) and the
 shared-memory frame path for direct-capable apps are removed (the CPU path stays only for machines without Vulkan);
 docs, the website architecture chapter and the parity rows are updated.

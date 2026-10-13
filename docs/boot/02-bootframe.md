@@ -1,5 +1,7 @@
 # Boot task 02: `bootweave-frame`, one boot frame for every stage
 
+> Status 2026-10-13: the progress bar described here was dropped on 2026-10-12; the frame is the mark alone and render_bar is a no-op (docs/boot-architecture.md, One frame). The rest stands.
+
 Contract: `docs/boot-architecture.md`, "One frame". Task: `tasks/boot/02-bootframe.md`. Branch `boot/02-bootframe`.
 Not built or tested by the agent (owner rule: the lead builds once after every wave is merged). Everything below is
 checked by reading the code against the APIs it calls.

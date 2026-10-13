@@ -14,6 +14,7 @@ component is removed.
 | Early splash and handoff | Rust EFI frame plus Bootweave | Rust Bootweave supervisor | No black/text transition on OVMF and hardware |
 | Live installer display | Wayland session (`bifrost-wm`) | `bifrost-installer` direct DRM/KMS | Installer owns the card and completes install |
 | Installed desktop display | `bifrost-wm` (native compositor) | `bifrost-wm` | Shell, apps, input, hotplug and recovery |
+| Compositor failure fallback | `session` script: `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then `bifrost-update-guard` recovery | same | Fault-tested on Midget (not yet) |
 | Service startup | systemd units and scripts | Rust BifrOSt supervisor | Boot, restart, logs, recovery and updates |
 
 ## Removal rule
