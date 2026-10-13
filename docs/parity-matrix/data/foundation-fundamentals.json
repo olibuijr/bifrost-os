@@ -31,9 +31,9 @@
     {
       "feature": "Dates and Times",
       "apple": "Date, Calendar, DateComponents, TimeZone, DateInterval",
-      "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter)",
+      "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter); springboard/sdk/src/calendar_system.rs (Calendar, DateComponents, CalendarIdentifier); springboard/sdk/src/time_zone.rs (TimeZone)",
       "status": "partial",
-      "note": "Gregorian only, no time-zone database, no DateInterval; docs/bifrost-ui.md 'Locale and localization' lists these gaps"
+      "note": "Gregorian, Buddhist, Japanese, tabular Islamic, Hebrew and ISO 8601 calendars and TZif time zones exist; no DateInterval, no week-of-year ranges or weekday ordinal components; host tests only, not checked on Midget"
     },
     {
       "feature": "Units and Measurement",
@@ -45,9 +45,9 @@
     {
       "feature": "Data Formatting",
       "apple": "NumberFormatter, DateFormatter, RelativeDateTimeFormatter, ByteCountFormatter, MeasurementFormatter, ListFormatter",
-      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display)",
+      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display); springboard/sdk/src/formatters/ (spellOut and ordinal numbers, DateComponentsFormatter, named relative days)",
       "status": "partial",
-      "note": "en and is only; no stringsdict plurals, no duration, person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "en, is and de number separators (dates and wording en and is); no stringsdict plurals, duration is English only, no person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Filters and Sorting",
@@ -88,7 +88,7 @@
   "gaps": [
     "Predicate and expression engine (NSPredicate, Predicate)",
     "Regular expression and natural-language text analysis API",
-    "Time zones and non-Gregorian calendars",
+    "Non-Gregorian week/era arithmetic beyond the supported components",
     "Progress tree (ProgressManager, Subprogress)",
     "IndexSet, ordered and counted sets, Decimal, UUID, NSNumber wrappers",
     "More unit dimensions and formatter types (duration, person name, ISO8601); languages beyond en and is"

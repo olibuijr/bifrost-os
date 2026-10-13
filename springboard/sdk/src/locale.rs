@@ -81,12 +81,17 @@ impl Locale {
         if self.language == "is" { Lang::Is } else { Lang::En }
     }
 
+    /// Comma-decimal locales: Icelandic and German (`is`, `de`).
+    fn comma_decimal(&self) -> bool {
+        self.lang() == Lang::Is || self.language == "de"
+    }
+
     pub fn decimal_separator(&self) -> char {
-        if self.lang() == Lang::Is { ',' } else { '.' }
+        if self.comma_decimal() { ',' } else { '.' }
     }
 
     pub fn grouping_separator(&self) -> char {
-        if self.lang() == Lang::Is { '.' } else { ',' }
+        if self.comma_decimal() { '.' } else { ',' }
     }
 
     /// `usesMetricSystem`: false only for the US.
@@ -185,7 +190,7 @@ impl NumberFormatter {
             body.push(self.locale.decimal_separator());
             body.push_str(frac);
         }
-        let is = self.locale.lang() == Lang::Is;
+        let is = self.locale.comma_decimal();
         let sign = if neg { "-" } else { "" };
         match self.style {
             NumberStyle::Decimal => format!("{sign}{body}"),
