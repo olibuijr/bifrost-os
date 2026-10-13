@@ -920,8 +920,16 @@ Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springbo
 - Reduce Motion (`appearance::reduce_motion`, override with `Window::set_reduce_motion`): frame changes are instant, opacity and background cross-fade over 0.12 s.
 - Units: `Window::tick`, `Timing` and `next_wake` are seconds; `ViewApp::next_wake` is milliseconds like `App`.
 
-Gaps, decided: no key-path or `CAAnimation` objects (typed properties only); no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); no keyframe, group or additive animations; no `beginTime`/`repeatCount`/`autoreverses`; springs retarget by position only (anim.rs keeps no velocity, so a retargeted spring does not carry momentum); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
+Key-path animations (below) cover the animation objects; `Window::animate` keeps the typed frame/opacity/background diff, and a retargeted spring now carries its velocity. Gaps, decided: no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
 
+### Key-path animations
+
+Code: `springboard/ui/src/{keypath_anim,anim_value,anim_transaction}.rs` (engine, pure), `springboard/sdk/src/view/keyanim.rs` (views). Details and the row-by-row status are in `docs/parity/ca-animation.md`.
+
+- `KeyAnimation` (basic from/to/by, keyframes with key times, timing functions and calculation modes, path animations with rotation mode, springs with mass, stiffness, damping and initial velocity, groups) on string key paths; `AnimValue` is scalar, point, size, rect, colour or transform; sub-paths such as `position.x`, `frame.size.width`, `transform.rotation.z` resolve through the compound value.
+- `Window::add_animation(view, anim, key)`, `remove_animation`, `animation_keys`, `presentation_value` and `model_value`. Animations never change the model; `AnimationDelegate` hears start and stop(finished).
+- Transactions nest: `begin_transaction`, `commit_transaction`, `flush_transactions`, `set_animation_duration`, `set_animation_timing_function`, `set_transaction_disable_actions`, `set_transaction_completion`, `set_transaction_value`. `Window::animate` and `disable_actions` open the same scopes, and `set_value_animated(view, key, value)` animates under them (a running spring on the key is retargeted with its velocity).
+- Gap: do not animate one property with both `animate` diffs and key animations.
 
 ## Auto Layout (constraints)
 

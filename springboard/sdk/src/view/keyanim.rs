@@ -143,7 +143,7 @@ fn walk_mut(v: &mut dyn View, f: &mut dyn FnMut(&mut dyn View)) {
 }
 
 impl<S: Responder> Window<S> {
-    /// `add(_:forKey:)`: runs `anim` on view `id`. Under the same `key` an earlier animation is replaced (and told it
+    /// Adds an animation by key: runs `anim` on view `id`. Under the same `key` an earlier animation is replaced (and told it
     /// did not finish); without a key one is generated. Returns the key, or `None` when the view does not exist.
     /// The animation's clock starts at the next [`Window::tick`]; its delegate hears start and stop.
     pub fn add_animation(&mut self, id: u64, anim: KeyAnimation, key: Option<&str>) -> Option<String> {
@@ -161,7 +161,7 @@ impl<S: Responder> Window<S> {
         Some(k)
     }
 
-    /// `removeAnimation(forKey:)`.
+    /// Removes the animation under `key`.
     pub fn remove_animation(&mut self, id: u64, key: &str) -> bool {
         let Some(va) = self.anim.keyed.views.get_mut(&id) else { return false };
         let ok = va.set.remove(key);
@@ -169,7 +169,7 @@ impl<S: Responder> Window<S> {
         ok
     }
 
-    /// `removeAllAnimations()`.
+    /// Removes every animation of the view.
     pub fn remove_all_animations(&mut self, id: u64) {
         if let Some(va) = self.anim.keyed.views.get_mut(&id) {
             va.set.remove_all();
@@ -177,22 +177,22 @@ impl<S: Responder> Window<S> {
         self.settle_view(id);
     }
 
-    /// `animationKeys()`.
+    /// Keys of the animations on the view.
     pub fn animation_keys(&self, id: u64) -> Vec<String> {
         self.anim.keyed.views.get(&id).map(|v| v.set.keys()).unwrap_or_default()
     }
 
-    /// The animation under `key`, if any (`animation(forKey:)`).
+    /// The animation under `key`, if any .
     pub fn animation_for_key(&self, id: u64, key: &str) -> Option<&KeyAnimation> {
         self.anim.keyed.views.get(&id)?.set.get(key)
     }
 
-    /// The value of `key` as the view shows it now, animations included (the presentation layer's value).
+    /// The value of `key` as the view shows it now, animations included .
     pub fn presentation_value(&self, id: u64, key: &str) -> Option<AnimValue> {
         read_key(&view_state(self.root(), id)?, key)
     }
 
-    /// The value of `key` without animations (the model layer's value).
+    /// The value of `key` without animations .
     pub fn model_value(&self, id: u64, key: &str) -> Option<AnimValue> {
         match self.anim.keyed.views.get(&id) {
             Some(va) => read_key(&va.model, key),
@@ -271,38 +271,38 @@ impl<S: Responder> Window<S> {
         }
     }
 
-    /// `CATransaction.begin()`.
+    /// Opens a nested transaction.
     pub fn begin_transaction(&mut self) {
         self.anim.keyed.tx.begin();
     }
-    /// `CATransaction.commit()`.
+    /// Closes the innermost transaction; false when none is open.
     pub fn commit_transaction(&mut self) -> bool {
         self.anim.keyed.tx.commit()
     }
-    /// `CATransaction.flush()`.
+    /// Commits the implicit transaction.
     pub fn flush_transactions(&mut self) {
         self.anim.keyed.tx.flush();
     }
-    /// `CATransaction.setAnimationDuration`.
+    /// Sets the animation duration of the current transaction.
     pub fn set_animation_duration(&mut self, secs: f32) {
         self.anim.keyed.tx.set_animation_duration(secs);
     }
     pub fn animation_duration(&self) -> f32 {
         self.anim.keyed.tx.animation_duration()
     }
-    /// `CATransaction.setAnimationTimingFunction`.
+    /// Sets the timing function of the current transaction.
     pub fn set_animation_timing_function(&mut self, t: TimingFunction) {
         self.anim.keyed.tx.set_animation_timing_function(t);
     }
-    /// `CATransaction.setDisableActions`.
+    /// Turns implicit animation off (or on) for the current transaction.
     pub fn set_transaction_disable_actions(&mut self, on: bool) {
         self.anim.keyed.tx.set_disable_actions(on);
     }
-    /// `CATransaction.setCompletionBlock`: runs after the transaction is committed and its animations stopped.
+    /// Sets a block that runs after the transaction is committed and its animations stopped.
     pub fn set_transaction_completion(&mut self, f: impl FnOnce() + 'static) {
         self.anim.keyed.tx.set_completion_block(f);
     }
-    /// `CATransaction.setValue(_:forKey:)`.
+    /// Stores a named value in the current transaction.
     pub fn set_transaction_value(&mut self, key: &str, v: TxValue) {
         self.anim.keyed.tx.set_value_for_key(key, v);
     }
