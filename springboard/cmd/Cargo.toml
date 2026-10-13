@@ -7,3 +7,5 @@ description = "Command-line tools for BifrOSt (one binary per tool in src/bin/, 
 [dependencies]
 bifrost-core = { path = "../core" }
 bifrost-ui = { path = "../ui" }
+# the shell's PNG writer, settings store and data directory (screencapture, pmset)
+springboard = { path = ".." }
