@@ -1400,7 +1400,7 @@ impl Shell {
             self.quicksearch.set_icons(&self.ui, icons);
         }
         let root = self.files_locations.first().map_or_else(|| crate::files::fs::home(), |l| l.path.clone());
-        self.quicksearch.refresh_sources(&self.data_dir.join("appdata/is.olibuijr.contacts/Contacts/contacts.tsv"), &self.deildu_dir, root);
+        self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, root);
         self.quicksearch.open(&self.ui, self.h, y0, y, t, range);
     }
 

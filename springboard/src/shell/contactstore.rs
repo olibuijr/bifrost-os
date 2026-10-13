@@ -2,7 +2,7 @@
 use super::prefs::{escape_field as escape, unescape_field as unescape};
 use std::collections::HashSet;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const HEADER: &str = "springboard-contacts-v1";
 pub const MAX_NAME: usize = 160;
@@ -143,6 +143,12 @@ pub fn new_id(contacts: &[Contact]) -> Option<u64> {
     }
     let ids: HashSet<_> = contacts.iter().map(|c| c.id).collect();
     (1..=MAX_ITEMS as u64 + 1).find(|id| !ids.contains(id))
+}
+
+/// The contacts file of the person's book under the shell's data directory. The Contacts app writes it and the
+/// shell reads it for search and for the `contacts` service.
+pub fn store_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("appdata/is.olibuijr.contacts/Contacts/contacts.tsv")
 }
 
 pub fn load_checked(path: &Path) -> io::Result<Vec<Contact>> {
