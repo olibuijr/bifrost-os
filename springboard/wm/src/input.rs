@@ -447,7 +447,23 @@ impl WmState {
 
     pub fn key(&mut self, code: Keycode, state: KeyState, time: u32) {
         let keyboard = self.seat.get_keyboard().expect("keyboard");
-        keyboard.input::<(), _>(self, code, state, SERIAL_COUNTER.next_serial(), time, |_, _, _| FilterResult::Forward);
+        // compositor chords are taken before any client sees them; the action runs on the press only
+        let bound = keyboard.input::<Option<crate::keybindings::Action>, _>(
+            self,
+            code,
+            state,
+            SERIAL_COUNTER.next_serial(),
+            time,
+            |_, mods, handle| {
+                match crate::keybindings::action(handle.modified_sym().raw(), crate::keybindings::Mods::from(mods)) {
+                    Some(a) => FilterResult::Intercept((state == KeyState::Pressed).then_some(a)),
+                    None => FilterResult::Forward,
+                }
+            },
+        );
+        if let Some(Some(action)) = bound {
+            self.run_action(action);
+        }
     }
 
     fn gesture_begin(&mut self, g: Gesture, fingers: u32, time: u32) {

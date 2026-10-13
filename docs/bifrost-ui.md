@@ -2066,3 +2066,11 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Window server session parity: key bindings and frame capture (`bifrost-wm`)
+
+Mirrors WindowServer global hotkeys and ScreenCaptureKit / `CGWindowListCreateImage` single-frame capture. Status stays partial until checked on Midget.
+
+- `keybindings::action(keysym, Mods) -> Option<Action>` (pure): Super+Space `Spotlight` (sends `spotlight` to the shell control port 127.0.0.1:7777), Super+A `Apps` (starts `/usr/bin/bifrost-apps`), Alt+Tab `NextWindow`, Alt+F4 `CloseWindow` (xdg close request to the focused toplevel), Ctrl+Super+Left/Right/Up/Down `Tile(Arrow)` (half, half, maximize, centre via `tiling.rs`). Modifiers match exactly. `WmState::key` takes these chords before any client sees them; the action runs on the press and the release is swallowed too.
+- Screencopy: `session_protocols::write_shm` now writes into the client's wl_shm buffer. The `capture` hook returns RGBA rows (R, G, B, A in memory); `rgba_to_shm` converts to XRGB8888 (alpha forced to 0xff) or ARGB8888 (B, G, R, A in memory, the fix for swapped red and blue), honouring the buffer stride; `crop_rgba` clips a region out of a full-output frame. Other formats are refused.
+- Not done: no backend sets the `capture` hook yet (the render server readback of the composed output, wallpaper and all layers, still has to be wired), so grim, `bifrost-apps --screenshot` and the MCP screenshot tool still get `failed`. Cursor capture sessions and ScreenCaptureKit streams are not covered.
