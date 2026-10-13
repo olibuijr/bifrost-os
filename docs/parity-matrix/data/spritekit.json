@@ -38,16 +38,16 @@
     {
       "feature": "Actions",
       "apple": "SKAction, Getting Started with Actions",
-      "bifrost": "springboard/sdk/src/view/animation.rs; wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
+      "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/sk_action.rs (node action tree and runner); wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
       "status": "partial",
-      "note": "Window::animate interpolates frame, opacity and background when a closure changes them; there are no composable action objects (sequence, group, repeat, remove) run by a node Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Window::animate interpolates frame, opacity and background when a closure changes them. sk_action.rs adds composable actions (wait, report, sequence, group, counted and endless repeat) run by a Runner that reports fired ids; no node or window runs it yet. built on parity/team-a-07; not yet verified on Midget"
     },
     {
       "feature": "Timing curves and springs",
       "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
-      "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs",
+      "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes)",
       "status": "partial",
-      "note": "curves and springs exist as pure functions; keyframe sequences with per-key interpolation modes do not"
+      "note": "curves and springs exist as pure functions. sk_action.rs adds keyframe sequences with linear or hold interpolation between keys; per-key timing modes and key-level easing are not modelled. built on parity/team-a-07; not yet verified on Midget"
     },
     {
       "feature": "Node constraints",
@@ -121,14 +121,15 @@
     }
   ],
   "gaps": [
+    "No node or scene runs actions: sk_action.rs is a pure model with no SDK binding, so apps cannot attach an action to a view or node yet",
     "No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).",
     "No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.",
     "No particle emitter system (SKEmitterNode).",
     "No tile map system (SKTileMapNode and its tile set and rules).",
-    "No app-facing node actions (SKAction sequence, group, repeat) or keyframe sequences (SKKeyframeSequence).",
     "No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.",
     "No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).",
     "No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).",
-    "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer."
+    "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer.",
+    "No per-key easing in keyframe sequences (SKKeyframeSequence timing modes); only linear and hold interpolation exist"
   ]
 }
