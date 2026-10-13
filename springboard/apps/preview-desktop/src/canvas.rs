@@ -15,6 +15,8 @@ pub enum Tool {
     Note,
     Rect,
     Rounded,
+    /// A freehand stroke, for a signature.
+    Sign,
 }
 
 impl Tool {
@@ -26,8 +28,16 @@ impl Tool {
             Tool::Note => Some(MarkKind::Note),
             Tool::Rect => Some(MarkKind::Rect),
             Tool::Rounded => Some(MarkKind::Rounded),
+            Tool::Sign => Some(MarkKind::Ink),
         }
     }
+}
+
+/// What the sidebar lists: the page thumbnails, or the PDF outline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Pages,
+    Outline,
 }
 
 /// Everything a toolbar button or a menu item does.
@@ -47,12 +57,22 @@ pub enum Action {
     Saturate,
     Desaturate,
     ResetColour,
+    ShowPages,
+    ShowOutline,
+    MovePageUp,
+    MovePageDown,
+    DeletePage,
     ExportPng,
     ExportJpeg,
+    ExportPdf,
+    ExportAt25,
+    ExportAt50,
+    ExportAt100,
+    ExportAt200,
 }
 
-/// Every action, in toolbar order. A menu item's id is its index here.
-pub const ACTIONS: [Action; 20] = [
+/// Every action. A menu item's id is its index here.
+pub const ACTIONS: &[Action] = &[
     Action::Previous,
     Action::Next,
     Action::ZoomOut,
@@ -66,13 +86,49 @@ pub const ACTIONS: [Action; 20] = [
     Action::UseTool(Tool::Note),
     Action::UseTool(Tool::Rect),
     Action::UseTool(Tool::Rounded),
+    Action::UseTool(Tool::Sign),
     Action::Brighter,
     Action::Darker,
     Action::Saturate,
     Action::Desaturate,
     Action::ResetColour,
+    Action::ShowPages,
+    Action::ShowOutline,
+    Action::MovePageUp,
+    Action::MovePageDown,
+    Action::DeletePage,
     Action::ExportPng,
     Action::ExportJpeg,
+    Action::ExportPdf,
+    Action::ExportAt25,
+    Action::ExportAt50,
+    Action::ExportAt100,
+    Action::ExportAt200,
+];
+
+/// The toolbar buttons, in order. The rest are in the menus only.
+const TOOLBAR: &[Action] = &[
+    Action::Previous,
+    Action::Next,
+    Action::ZoomOut,
+    Action::ZoomIn,
+    Action::FitWindow,
+    Action::ActualSize,
+    Action::RotateLeft,
+    Action::RotateRight,
+    Action::UseTool(Tool::Pan),
+    Action::UseTool(Tool::Highlight),
+    Action::UseTool(Tool::Note),
+    Action::UseTool(Tool::Rect),
+    Action::UseTool(Tool::Rounded),
+    Action::UseTool(Tool::Sign),
+    Action::ShowPages,
+    Action::ShowOutline,
+    Action::Brighter,
+    Action::Darker,
+    Action::Saturate,
+    Action::Desaturate,
+    Action::ResetColour,
 ];
 
 impl Action {
@@ -99,19 +155,41 @@ impl Action {
             Action::UseTool(Tool::Note) => "Note",
             Action::UseTool(Tool::Rect) => "Rectangle",
             Action::UseTool(Tool::Rounded) => "Rounded",
+            Action::UseTool(Tool::Sign) => "Sign",
             Action::Brighter => "Brighter",
             Action::Darker => "Darker",
             Action::Saturate => "Saturate",
             Action::Desaturate => "Desaturate",
             Action::ResetColour => "Reset Colour",
+            Action::ShowPages => "Pages",
+            Action::ShowOutline => "Outline",
+            Action::MovePageUp => "Move Page Up",
+            Action::MovePageDown => "Move Page Down",
+            Action::DeletePage => "Delete Page",
             Action::ExportPng => "Export PNG",
             Action::ExportJpeg => "Export JPEG",
+            Action::ExportPdf => "Export PDF",
+            Action::ExportAt25 => "Export at 25%",
+            Action::ExportAt50 => "Export at 50%",
+            Action::ExportAt100 => "Export at 100%",
+            Action::ExportAt200 => "Export at 200%",
         }
     }
 
-    /// The toolbar buttons, in the order of `ACTIONS`.
-    pub fn toolbar() -> [Action; 20] {
-        ACTIONS
+    /// The scale of an export-size action.
+    pub fn export_scale(self) -> Option<f32> {
+        match self {
+            Action::ExportAt25 => Some(0.25),
+            Action::ExportAt50 => Some(0.5),
+            Action::ExportAt100 => Some(1.0),
+            Action::ExportAt200 => Some(2.0),
+            _ => None,
+        }
+    }
+
+    /// The toolbar buttons, in order.
+    pub fn toolbar() -> &'static [Action] {
+        TOOLBAR
     }
 }
 
@@ -144,7 +222,7 @@ pub fn buttons(ui: &Ui, lay: &Layout) -> Vec<(Action, i32, i32)> {
     let gap = ui.pt(ui::SPACE_XS);
     let mut x = lay.side as f32 + pad;
     let mut out = Vec::new();
-    for action in Action::toolbar() {
+    for action in Action::toolbar().iter().copied() {
         let w = ui.measure(action.label(), ui::MAC_BODY_PT, Weight::Regular) + 2.0 * pad;
         if x + w > lay.w as f32 - pad {
             break;
@@ -170,12 +248,18 @@ pub fn rows(ui: &Ui, doc: &Document) -> Vec<(i32, i32)> {
     out
 }
 
+/// The outline rows in content coordinates: one line each.
+pub fn outline_rows(ui: &Ui, doc: &Document) -> Vec<(i32, i32)> {
+    let row = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    (0..doc.outline.len()).map(|i| (i as i32 * row, row)).collect()
+}
+
 /// The sidebar's total content height.
 pub fn rows_height(rows: &[(i32, i32)]) -> i32 {
     rows.last().map_or(0, |(top, h)| top + h)
 }
 
-/// The page under a sidebar point, if any.
+/// The row under a sidebar point, if any.
 pub fn sidebar_hit(lay: &Layout, rows: &[(i32, i32)], scroll: f32, x: f32, y: f32) -> Option<usize> {
     if x < 0.0 || x >= lay.side as f32 || y < lay.bar as f32 {
         return None;
@@ -225,6 +309,12 @@ pub fn to_source(placed: &Placed, quarters: u8, x: f32, y: f32) -> (f32, f32) {
     model::unrot_point(u, v, quarters)
 }
 
+/// The canvas point of a source-page point over a placed picture.
+fn screen_point(placed: &Placed, quarters: u8, u: f32, v: f32) -> (f32, f32) {
+    let (a, b) = model::rot_point(u, v, quarters);
+    (placed.x as f32 + a * placed.w as f32, placed.y as f32 + b * placed.h as f32)
+}
+
 /// The canvas rectangle of a source-page rectangle over a placed picture.
 fn to_screen(placed: &Placed, quarters: u8, r: Norm) -> (f32, f32, f32, f32) {
     let t = model::rot_rect(r, quarters);
@@ -236,17 +326,17 @@ fn to_screen(placed: &Placed, quarters: u8, r: Norm) -> (f32, f32, f32, f32) {
     )
 }
 
-/// The rendered picture of one page, kept while nothing that changes it has changed.
+/// The rendered picture of one page, kept while nothing that changes it has changed. The key names the source page.
 pub struct PictureCache {
     key: (usize, Adjust, u8, usize, usize),
     pub img: Image,
 }
 
-/// Looks up or makes the scaled, adjusted and turned picture for the current view.
-pub fn picture_for<'a>(cache: &'a mut Option<PictureCache>, page: usize, src: &Image, adjust: &Adjust, quarters: u8, w: usize, h: usize) -> &'a Image {
-    let key = (page, *adjust, quarters, w, h);
+/// Looks up or makes the scaled, adjusted and turned picture of source page `src` for the current view.
+pub fn picture_for<'a>(cache: &'a mut Option<PictureCache>, src: usize, picture: &Image, adjust: &Adjust, quarters: u8, w: usize, h: usize) -> &'a Image {
+    let key = (src, *adjust, quarters, w, h);
     if cache.as_ref().map(|c| c.key) != Some(key) {
-        let base = crate::document::adjusted(src, adjust);
+        let base = crate::document::adjusted(picture, adjust);
         let turned = model::rotate(&base, quarters);
         let img = if (turned.w, turned.h) == (w, h) { turned } else { turned.resized(w, h) };
         *cache = Some(PictureCache { key, img });
@@ -260,6 +350,8 @@ pub struct Scene<'a> {
     pub view: View,
     pub tool: Tool,
     pub adjust: Adjust,
+    /// The sidebar's list.
+    pub side: Side,
     /// The mark being dragged out, drawn with the saved ones.
     pub draft: Option<Mark>,
     /// The note whose text the keyboard is editing.
@@ -273,36 +365,40 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
     let (cx, cy, cw, ch) = lay.canvas();
     fill(s, cx, cy, cw, ch, ui::CONTENT_BG.now());
     let mut placed = None;
+    let mut shown_src = None;
     match scene.doc {
         None => {
             let msg = if scene.status.is_empty() { "Open an image or a PDF to view it." } else { scene.status };
             centred_text(s, ui, msg, lay, ui::LABEL_2.now());
         }
         Some(doc) => {
-            let page_no = scene.view.page.min(doc.pages.len().saturating_sub(1));
-            match doc.picture(page_no) {
-                Some(img) => {
-                    let q = scene.view.quarters;
-                    let (rw, rh) = model::turn_size(img.w, img.h, q);
-                    let scale = scene.view.zoom.scale(rw, rh, cw as usize, ch as usize);
-                    let target_w = ((rw as f32 * scale).round() as usize).max(1);
-                    let target_h = ((rh as f32 * scale).round() as usize).max(1);
-                    let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
-                    let shown = picture_for(cache, page_no, &img, &scene.adjust, q, target_w, target_h);
-                    s.blit(shown, p.x, p.y, 255, 255);
-                    for m in doc.marks.iter().filter(|m| m.page == page_no).chain(scene.draft.iter()) {
-                        draw_mark(s, &p, q, m);
+            let page_no = scene.view.page.min(doc.count().saturating_sub(1));
+            if let (Some(src), Some((w, h))) = (doc.source_of(page_no), doc.page_size(page_no)) {
+                let q = scene.view.quarters;
+                let (rw, rh) = model::turn_size(w, h, q);
+                let scale = scene.view.zoom.scale(rw, rh, cw as usize, ch as usize);
+                let target_w = ((rw as f32 * scale).round() as usize).max(1);
+                let target_h = ((rh as f32 * scale).round() as usize).max(1);
+                let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
+                match doc.picture(page_no) {
+                    Some(img) => {
+                        let shown = picture_for(cache, src, &img, &scene.adjust, q, target_w, target_h);
+                        s.blit(shown, p.x, p.y, 255, 255);
                     }
-                    placed = Some(p);
+                    // a PDF page is still on its way from the worker: the paper shows first
+                    None => fill(s, p.x, p.y, p.w as i32, p.h as i32, rgba(255, 255, 255, 255)),
                 }
-                None => {}
+                for m in doc.marks.iter().filter(|m| m.page == src).chain(scene.draft.iter()) {
+                    draw_mark(s, &p, q, m);
+                }
+                placed = Some(p);
+                shown_src = Some(src);
             }
         }
     }
     // a note's text sits beside its marker on picture pages
-    if let (Some(doc), Some(p)) = (scene.doc, placed) {
-        let page_no = scene.view.page;
-        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == page_no && m.kind == MarkKind::Note) {
+    if let (Some(doc), Some(p), Some(src)) = (scene.doc, placed, shown_src) {
+        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == src && m.kind == MarkKind::Note) {
             if m.text.is_empty() && scene.editing != Some(i) {
                 continue;
             }
@@ -323,6 +419,21 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
 }
 
 fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
+    if m.kind == MarkKind::Ink {
+        // a stroke: a 2 pixel dot at every step along each segment
+        for pair in m.ink.windows(2) {
+            let (ax, ay) = screen_point(p, quarters, pair[0].0, pair[0].1);
+            let (bx, by) = screen_point(p, quarters, pair[1].0, pair[1].1);
+            let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
+            for k in 0..=steps {
+                let t = k as f32 / steps as f32;
+                let x = (ax + (bx - ax) * t) as i32;
+                let y = (ay + (by - ay) * t) as i32;
+                fill(s, x - 1, y - 1, 2, 2, m.color);
+            }
+        }
+        return;
+    }
     let (x, y, w, h) = to_screen(p, quarters, m.rect);
     let (x, y, w, h) = (x as i32, y as i32, w.max(1.0) as i32, h.max(1.0) as i32);
     match m.kind {
@@ -342,6 +453,7 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
         MarkKind::Note => {
             fill(s, x, y, 14, 14, MARK_BLUE);
         }
+        MarkKind::Ink => {}
     }
 }
 
@@ -351,6 +463,13 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     }
     fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_FILL);
     let Some(doc) = scene.doc else { return };
+    match scene.side {
+        Side::Pages => draw_pages(s, ui, lay, scene, doc),
+        Side::Outline => draw_outline(s, ui, lay, scene, doc),
+    }
+}
+
+fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
     let rows = rows(ui, doc);
     let pad = ui.pt(ui::SPACE_S) as i32;
     for (i, &(top, h)) in rows.iter().enumerate() {
@@ -381,12 +500,53 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     }
 }
 
+fn draw_outline(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
+    let rows = outline_rows(ui, doc);
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let indent = ui.pt(ui::SPACE_L) as i32;
+    for (item, &(top, h)) in doc.outline.iter().zip(rows.iter()) {
+        let y = lay.bar + top - scene.view.sidebar_scroll as i32;
+        if y + h < lay.bar || y > lay.h {
+            continue;
+        }
+        let here = item.page.and_then(|p| doc.display_of(p)) == Some(scene.view.page);
+        if here {
+            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+        }
+        let x = pad + indent * item.level as i32;
+        let text = fit_text(ui, &item.title, ui::MAC_BODY_PT, (lay.side - x - pad).max(0) as f32);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, x, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
+    }
+}
+
+/// `text`, shortened with an ellipsis until it fits `max_w` points wide.
+fn fit_text(ui: &Ui, text: &str, pt: f32, max_w: f32) -> String {
+    if ui.measure(text, pt, Weight::Regular) <= max_w {
+        return text.to_string();
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while !chars.is_empty() {
+        chars.pop();
+        let candidate: String = chars.iter().collect::<String>() + "…";
+        if ui.measure(&candidate, pt, Weight::Regular) <= max_w {
+            return candidate;
+        }
+    }
+    String::new()
+}
+
 fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     fill(s, 0, 0, lay.w, lay.bar, ui::CONTENT_BG.now());
     fill(s, 0, lay.bar - 1, lay.w, 1, ui::SEPARATOR_C.now());
     let y = (lay.bar - ui.pt(ui::MAC_BODY_PT * 1.5) as i32) / 2;
     for (action, x, w) in buttons(ui, lay) {
-        let active = matches!(action, Action::UseTool(t) if t == scene.tool);
+        let active = match action {
+            Action::UseTool(t) => t == scene.tool,
+            Action::ShowPages => scene.side == Side::Pages,
+            Action::ShowOutline => scene.side == Side::Outline,
+            _ => false,
+        };
         let color = if active { ui::TINT } else { ui::LABEL.now() };
         if active {
             s.fill_rrect(x as f32, (y - 4) as f32, w as f32, (lay.bar - 2 * y + 8) as f32, ui.pt(ui::SPACE_S), ui::FILL);
@@ -430,6 +590,19 @@ mod tests {
     }
 
     #[test]
+    fn every_toolbar_button_is_a_menu_action() {
+        for a in Action::toolbar() {
+            assert!(ACTIONS.contains(a), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn export_sizes_have_their_scales() {
+        assert_eq!(Action::ExportAt50.export_scale(), Some(0.5));
+        assert_eq!(Action::ExportPng.export_scale(), None);
+    }
+
+    #[test]
     fn placed_picture_is_centred_and_pan_is_clamped() {
         let p = place((160, 48, 800, 600), 400, 300, 1.0, (0.0, 0.0));
         assert_eq!((p.x, p.y), (160 + 200, 48 + 150));
@@ -465,5 +638,6 @@ mod tests {
         assert_eq!(Tool::Pan.mark_kind(), None);
         assert_eq!(Tool::Note.mark_kind(), Some(MarkKind::Note));
         assert_eq!(Tool::Rounded.mark_kind(), Some(MarkKind::Rounded));
+        assert_eq!(Tool::Sign.mark_kind(), Some(MarkKind::Ink));
     }
 }

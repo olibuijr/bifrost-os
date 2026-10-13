@@ -22,3 +22,4 @@ pub mod shading;
 pub mod sink;
 mod tables;
 pub mod type1;
+pub mod writer;

@@ -220,6 +220,8 @@ pub enum MarkKind {
     Note,
     Rect,
     Rounded,
+    /// A freehand stroke: a signature or a drawing. Its points are in `Mark::ink`.
+    Ink,
 }
 
 impl MarkKind {
@@ -229,6 +231,7 @@ impl MarkKind {
             MarkKind::Note => "note",
             MarkKind::Rect => "rect",
             MarkKind::Rounded => "rounded",
+            MarkKind::Ink => "ink",
         }
     }
 
@@ -238,6 +241,7 @@ impl MarkKind {
             "note" => Some(MarkKind::Note),
             "rect" => Some(MarkKind::Rect),
             "rounded" => Some(MarkKind::Rounded),
+            "ink" => Some(MarkKind::Ink),
             _ => None,
         }
     }
@@ -254,6 +258,8 @@ pub struct Mark {
     pub color: u32,
     /// The note text. Empty for the other kinds.
     pub text: String,
+    /// The points of a stroke, in the same normalised coordinates as `rect`. Empty for the other kinds.
+    pub ink: Vec<(f32, f32)>,
 }
 
 /// A note's marker on an exported picture, in pixels.
@@ -313,7 +319,7 @@ pub fn to_sidecar(marks: &[Mark]) -> String {
             m.rect.w,
             m.rect.h,
             m.color,
-            escape(&m.text)
+            if m.kind == MarkKind::Ink { encode_ink(&m.ink) } else { escape(&m.text) }
         ));
     }
     out
@@ -338,11 +344,29 @@ fn parse_line(line: &str) -> Option<Mark> {
     let w = f.next()?.parse::<f32>().ok()?;
     let h = f.next()?.parse::<f32>().ok()?;
     let color = u32::from_str_radix(f.next()?, 16).ok()?;
-    let text = unescape(f.next().unwrap_or(""));
+    let field = f.next().unwrap_or("");
+    let (text, ink) = if kind == MarkKind::Ink { (String::new(), decode_ink(field)) } else { (unescape(field), Vec::new()) };
     if ![x, y, w, h].iter().all(|v| v.is_finite()) {
         return None;
     }
-    Some(Mark { kind, page, rect: Norm { x, y, w, h }, color, text })
+    Some(Mark { kind, page, rect: Norm { x, y, w, h }, color, text, ink })
+}
+
+/// A stroke's points as text: `x,y` pairs separated by spaces. Numbers print in their shortest form, so they read back
+/// exactly.
+fn encode_ink(points: &[(f32, f32)]) -> String {
+    points.iter().map(|(x, y)| format!("{x},{y}")).collect::<Vec<_>>().join(" ")
+}
+
+/// Reads the points `encode_ink` wrote. Malformed pairs are skipped.
+fn decode_ink(text: &str) -> Vec<(f32, f32)> {
+    text.split_whitespace()
+        .filter_map(|pair| {
+            let (x, y) = pair.split_once(',')?;
+            Some((x.parse::<f32>().ok()?, y.parse::<f32>().ok()?))
+        })
+        .filter(|&(x, y)| x.is_finite() && y.is_finite())
+        .collect()
 }
 
 /// The file name for a document's sidecar: a 64-bit FNV-1a hash of its path, so the same file
@@ -376,6 +400,10 @@ fn over(dst: u32, src: u32) -> u32 {
 pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
     let (w, h) = (img.w, img.h);
     for m in marks.iter().filter(|m| m.page == page) {
+        if m.kind == MarkKind::Ink {
+            burn_ink(img, m, quarters);
+            continue;
+        }
         let r = rot_rect(m.rect, quarters);
         let x0 = ((r.x * w as f32).round() as i64).clamp(0, w as i64) as usize;
         let y0 = ((r.y * h as f32).round() as i64).clamp(0, h as i64) as usize;
@@ -408,6 +436,38 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                             let i = y * w + x;
                             img.px[i] = over(img.px[i], c);
                         }
+                    }
+                }
+            }
+            MarkKind::Ink => {}
+        }
+    }
+}
+
+/// Draws a stroke onto a turned picture: a 2 by 2 dot every pixel along each segment between its points.
+fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
+    let (w, h) = (img.w as f32, img.h as f32);
+    let pts: Vec<(f32, f32)> = m
+        .ink
+        .iter()
+        .map(|&(u, v)| {
+            let (a, b) = rot_point(u, v, quarters);
+            (a * w, b * h)
+        })
+        .collect();
+    for pair in pts.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let steps = (b.0 - a.0).abs().max((b.1 - a.1).abs()).ceil().max(1.0) as usize;
+        for k in 0..=steps {
+            let t = k as f32 / steps as f32;
+            let x = (a.0 + (b.0 - a.0) * t).round() as i64;
+            let y = (a.1 + (b.1 - a.1) * t).round() as i64;
+            for dy in 0..2i64 {
+                for dx in 0..2i64 {
+                    let (px, py) = (x + dx, y + dy);
+                    if px >= 0 && py >= 0 && (px as usize) < img.w && (py as usize) < img.h {
+                        let i = py as usize * img.w + px as usize;
+                        img.px[i] = over(img.px[i], m.color);
                     }
                 }
             }
@@ -511,8 +571,8 @@ mod tests {
     #[test]
     fn sidecar_round_trips_text_with_tabs_and_newlines() {
         let marks = vec![
-            Mark { kind: MarkKind::Note, page: 2, rect: Norm { x: 0.1, y: 0.2, w: 0.0, h: 0.0 }, color: MARK_BLUE, text: "a\tb\nc\\d".into() },
-            Mark { kind: MarkKind::Highlight, page: 0, rect: Norm { x: 0.3, y: 0.4, w: 0.2, h: 0.05 }, color: HIGHLIGHT, text: String::new() },
+            Mark { kind: MarkKind::Note, page: 2, rect: Norm { x: 0.1, y: 0.2, w: 0.0, h: 0.0 }, color: MARK_BLUE, text: "a\tb\nc\\d".into(), ink: Vec::new() },
+            Mark { kind: MarkKind::Highlight, page: 0, rect: Norm { x: 0.3, y: 0.4, w: 0.2, h: 0.05 }, color: HIGHLIGHT, text: String::new(), ink: Vec::new() },
         ];
         let text = to_sidecar(&marks);
         assert_eq!(parse_sidecar(&text), marks);
@@ -538,8 +598,8 @@ mod tests {
     fn burn_outlines_a_rectangle_and_tints_a_highlight() {
         let mut picture = Image { w: 10, h: 10, px: vec![pack(255, 255, 255, 255); 100] };
         let marks = vec![
-            Mark { kind: MarkKind::Rect, page: 0, rect: Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, color: MARK_BLUE, text: String::new() },
-            Mark { kind: MarkKind::Highlight, page: 1, rect: Norm { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }, color: HIGHLIGHT, text: String::new() },
+            Mark { kind: MarkKind::Rect, page: 0, rect: Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, color: MARK_BLUE, text: String::new(), ink: Vec::new() },
+            Mark { kind: MarkKind::Highlight, page: 1, rect: Norm { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }, color: HIGHLIGHT, text: String::new(), ink: Vec::new() },
         ];
         burn(&mut picture, &marks, 0, 0);
         assert_ne!(picture.px[0], pack(255, 255, 255, 255));
@@ -549,4 +609,22 @@ mod tests {
         assert_eq!(picture.px[99], pack(255, 255, 255, 255));
     }
 
+    #[test]
+    fn ink_strokes_round_trip_and_burn_in() {
+        let stroke = Mark {
+            kind: MarkKind::Ink,
+            page: 0,
+            rect: Norm { x: 0.1, y: 0.1, w: 0.8, h: 0.5 },
+            color: MARK_BLUE,
+            text: String::new(),
+            ink: vec![(0.1, 0.1), (0.5, 0.6), (0.9, 0.2)],
+        };
+        assert_eq!(parse_sidecar(&to_sidecar(std::slice::from_ref(&stroke))), vec![stroke.clone()]);
+        assert_eq!(decode_ink("0.5,0.25 x,y 0.75,1"), vec![(0.5, 0.25), (0.75, 1.0)]);
+        let mut picture = Image { w: 10, h: 10, px: vec![pack(255, 255, 255, 255); 100] };
+        burn(&mut picture, &[stroke], 0, 0);
+        // the first point is drawn, and the picture away from the stroke is untouched
+        assert_ne!(picture.px[1 * 10 + 1], pack(255, 255, 255, 255));
+        assert_eq!(picture.px[9 * 10 + 9], pack(255, 255, 255, 255));
+    }
 }
